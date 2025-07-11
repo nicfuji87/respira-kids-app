@@ -144,14 +144,87 @@ respira-kids-app/
 └── docs/                   # Documentação
 ```
 
-## 🎨 Design System
+## 🎨 Design System - Respira Kids
 
-O projeto utiliza um design system baseado em:
+O projeto utiliza um design system customizado baseado na identidade visual da Respira Kids:
 
-- **Cores**: Paleta focada em tons de azul e verde (saúde respiratória)
-- **Tipografia**: Fonte legível e acessível
-- **Componentes**: Biblioteca de componentes reutilizáveis
-- **Responsividade**: Mobile-first approach
+### 🌈 Paleta de Cores
+
+#### Cores Primárias
+
+```css
+--azul-respira: 174 46% 70%; /* #92D3C7 - Cor primária */
+--vermelho-kids: 13 83% 78%; /* #F39D94 - Cor secundária */
+--bege-fundo: 44 93% 93%; /* #FDF0DE - Background */
+--roxo-titulo: 292 53% 20%; /* #4E1963 - Títulos */
+--amarelo-pipa: 50 99% 56%; /* #FDCD1F - Warning/Destaque */
+--verde-pipa: 86 49% 77%; /* #C6E09F - Success */
+--cinza-secundario: 0 0% 48%; /* #7A7A7A - Texto secundário */
+--branco: 0 0% 100%; /* #FFFFFF - Cards */
+```
+
+#### Mapeamento Semântico
+
+```css
+--primary: var(--azul-respira);
+--secondary: var(--vermelho-kids);
+--background: var(--bege-fundo);
+--foreground: var(--roxo-titulo);
+--muted-foreground: var(--cinza-secundario);
+--card: var(--branco);
+--success: var(--verde-pipa);
+--warning: var(--amarelo-pipa);
+```
+
+### 🧩 Componentes UI Obrigatórios
+
+#### Classes Tailwind Padrão
+
+```tsx
+// Botões principais
+<Button className="bg-primary text-primary-foreground">
+
+// Botões secundários
+<Button variant="secondary" className="bg-secondary text-secondary-foreground">
+
+// Cards
+<Card className="bg-card text-card-foreground border border-border">
+
+// Backgrounds principais
+<div className="bg-background text-foreground">
+
+// Textos secundários
+<p className="text-muted-foreground">
+
+// Estados de sucesso
+<div className="bg-success text-success-foreground">
+
+// Avisos
+<div className="bg-warning text-warning-foreground">
+```
+
+#### Utilitários Especiais
+
+```css
+.respira-gradient          /* Gradiente azul-respira → verde-pipa */
+.respira-text-gradient     /* Gradiente de texto azul-respira → roxo-titulo */
+.theme-transition          /* Transições suaves entre temas */
+.animate-respira-pulse     /* Animação de pulso personalizada */
+```
+
+### 🎯 Diretrizes de Uso
+
+1. **Sempre usar as variáveis CSS** em vez de cores hardcoded
+2. **Respeitar a hierarquia semântica** (primary, secondary, etc.)
+3. **Aplicar animações** com moderação usando `.animate-respira-pulse`
+4. **Manter consistência** com as classes padrão do Shadcn UI
+5. **Suporte ao modo escuro** automático com as variáveis CSS
+
+### 📱 Responsividade
+
+- **Mobile-first approach** com breakpoints do Tailwind
+- **Componentes adaptativos** que se ajustam a diferentes telas
+- **Tipografia responsiva** com classes `text-*` dinâmicas
 
 ## 🔄 Fluxo de Desenvolvimento
 
