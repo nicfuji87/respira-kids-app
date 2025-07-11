@@ -1,62 +1,73 @@
-/* src/index.css - TEMA RESPIRA KIDS PARA SHADCN */
+/* src/index.css - TEMA RESPIRA KIDS PERSONALIZADO */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Respira KIDS Color System */
-    --background: 44 93% 93%; /* Bege Fundo */
+    /* Tema claro com cores Respira Kids */
+    --background: 44 93% 97%; /* Bege muito claro */
     --foreground: 292 53% 20%; /* Roxo Título */
     --card: 0 0% 100%; /* Branco */
     --card-foreground: 292 53% 20%; /* Roxo Título */
     --popover: 0 0% 100%; /* Branco */
     --popover-foreground: 292 53% 20%; /* Roxo Título */
-    --primary: 174 46% 70%; /* Azul Respira */
+    --primary: 174 46% 65%; /* Azul Respira */
     --primary-foreground: 0 0% 100%; /* Branco */
-    --secondary: 13 83% 78%; /* Vermelho Kids */
+    --secondary: 44 93% 93%; /* Bege Fundo */
     --secondary-foreground: 292 53% 20%; /* Roxo Título */
-    --muted: 174 46% 85%; /* Azul Respira Claro */
-    --muted-foreground: 0 0% 48%; /* Cinza Secundário */
-    --accent: 86 49% 77%; /* Verde Pipa */
+    --muted: 44 93% 93%; /* Bege Fundo */
+    --muted-foreground: 0 0% 45%; /* Cinza Secundário */
+    --accent: 86 49% 75%; /* Verde Pipa */
     --accent-foreground: 292 53% 20%; /* Roxo Título */
     --destructive: 0 84% 60%; /* Vermelho Erro */
     --destructive-foreground: 0 0% 100%; /* Branco */
-    --border: 174 46% 85%; /* Azul Respira Claro */
-    --input: 0 0% 100%; /* Branco */
-    --ring: 174 46% 70%; /* Azul Respira */
-    --radius: 0.5rem;
+    --border: 44 30% 88%; /* Bege mais escuro para bordas */
+    --input: 44 30% 88%; /* Bege mais escuro para inputs */
+    --ring: 174 46% 65%; /* Azul Respira */
+    --radius: 0.65rem; /* Radius do tema fornecido */
+    --chart-1: 174 46% 65%; /* Azul Respira */
+    --chart-2: 13 83% 75%; /* Vermelho Kids */
+    --chart-3: 86 49% 75%; /* Verde Pipa */
+    --chart-4: 50 99% 56%; /* Amarelo Pipa */
+    --chart-5: 292 53% 60%; /* Roxo Claro */
 
     /* Cores específicas Respira KIDS */
-    --azul-respira: 174 46% 70%;
-    --vermelho-kids: 13 83% 78%;
+    --azul-respira: 174 46% 65%;
+    --vermelho-kids: 13 83% 75%;
     --bege-fundo: 44 93% 93%;
     --roxo-titulo: 292 53% 20%;
     --amarelo-pipa: 50 99% 56%;
-    --verde-pipa: 86 49% 77%;
-    --cinza-secundario: 0 0% 48%;
+    --verde-pipa: 86 49% 75%;
+    --cinza-secundario: 0 0% 45%;
   }
 
   .dark {
+    /* Tema escuro com cores Respira Kids */
     --background: 292 53% 8%; /* Roxo muito escuro */
-    --foreground: 44 93% 93%; /* Bege Fundo */
+    --foreground: 44 93% 97%; /* Bege muito claro */
     --card: 292 53% 12%; /* Roxo escuro */
-    --card-foreground: 44 93% 93%; /* Bege Fundo */
+    --card-foreground: 44 93% 97%; /* Bege muito claro */
     --popover: 292 53% 12%; /* Roxo escuro */
-    --popover-foreground: 44 93% 93%; /* Bege Fundo */
-    --primary: 174 46% 70%; /* Azul Respira (mantém) */
+    --popover-foreground: 44 93% 97%; /* Bege muito claro */
+    --primary: 174 46% 70%; /* Azul Respira mais brilhante */
     --primary-foreground: 292 53% 8%; /* Roxo muito escuro */
-    --secondary: 13 83% 78%; /* Vermelho Kids (mantém) */
-    --secondary-foreground: 292 53% 8%; /* Roxo muito escuro */
+    --secondary: 292 53% 15%; /* Roxo médio */
+    --secondary-foreground: 44 93% 97%; /* Bege muito claro */
     --muted: 292 53% 15%; /* Roxo médio */
-    --muted-foreground: 0 0% 70%; /* Cinza claro */
-    --accent: 86 49% 77%; /* Verde Pipa (mantém) */
+    --muted-foreground: 0 0% 65%; /* Cinza claro */
+    --accent: 86 49% 75%; /* Verde Pipa */
     --accent-foreground: 292 53% 8%; /* Roxo muito escuro */
-    --destructive: 0 84% 60%; /* Vermelho Erro */
+    --destructive: 0 84% 65%; /* Vermelho Erro mais brilhante */
     --destructive-foreground: 0 0% 100%; /* Branco */
     --border: 292 53% 20%; /* Roxo Título */
-    --input: 292 53% 15%; /* Roxo médio */
+    --input: 292 53% 20%; /* Roxo Título */
     --ring: 174 46% 70%; /* Azul Respira */
+    --chart-1: 174 46% 70%; /* Azul Respira */
+    --chart-2: 13 83% 78%; /* Vermelho Kids */
+    --chart-3: 86 49% 77%; /* Verde Pipa */
+    --chart-4: 50 99% 56%; /* Amarelo Pipa */
+    --chart-5: 292 53% 70%; /* Roxo Claro */
   }
 }
 
@@ -80,11 +91,17 @@
   }
 
   .theme-transition {
-    @apply transition-colors duration-200 ease-in-out;
+    @apply transition-colors duration-300 ease-in-out;
   }
 
   .animate-respira-pulse {
-    animation: respira-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation: respira-pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .respira-shadow {
+    box-shadow:
+      0 4px 6px -1px rgba(174, 46, 70, 0.1),
+      0 2px 4px -1px rgba(174, 46, 70, 0.06);
   }
 }
 
@@ -95,7 +112,7 @@
     transform: scale(1);
   }
   50% {
-    opacity: 0.8;
+    opacity: 0.85;
     transform: scale(1.02);
   }
 }
