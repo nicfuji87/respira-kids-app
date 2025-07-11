@@ -1,337 +1,322 @@
-# 📋 Plano de Implementação - Arquitetura Hierárquica
+# 📋 Plano de Implementação - Sistema Respira Kids
 
-## 🎯 Objetivo
+## 🎯 Objetivo Específico
 
-Migrar a aplicação Respira Kids para uma arquitetura hierárquica de 4 níveis, implementando componentização extrema com foco em reutilização e manutenibilidade.
+Desenvolver sistema completo de gestão para clínicas de fisioterapia respiratória pediátrica com 8 módulos integrados e 3 níveis de acesso (admin, secretaria, profissional).
+
+## 🏥 Especificações do Sistema
+
+### **Core Business:**
+
+- **Domínio**: Fisioterapia respiratória pediátrica
+- **Usuários**: Fisioterapeutas, secretárias, administradores
+- **Roles**: `admin`, `secretaria`, `profissional`
+- **Objetivo**: Gestão completa de pacientes, prontuários e operações
+
+### **Módulos do Sistema:**
+
+1. **Autenticação & Autorização** - Login com roles
+2. **Dashboard** - Páginas diferentes por role
+3. **Agenda** - Gestão de agendamentos multi-view
+4. **Pacientes** - Cadastro e prontuários eletrônicos
+5. **Estoque** - Controle de equipamentos e insumos
+6. **Financeiro** - Pagamentos, faturamento e custos
+7. **Webhooks** - Notificações e integrações
+8. **Configurações** - Administração do sistema
 
 ## 📅 Cronograma de Implementação
 
-### **Fase 1: Preparação e Estrutura Base** (1-2 dias)
+### **Fase 1: Fundação e Autenticação** (3-4 dias)
 
-#### 1.1 Criar Estrutura de Pastas
+#### 1.1 Estrutura Base
 
 ```bash
-# Criar todas as pastas necessárias
+# Criar estrutura específica para clínica
 mkdir -p src/components/{primitives,composed,domain,templates,_registry}
+mkdir -p src/components/domain/{auth,dashboard,agenda,patients,stock,financial,webhooks,settings}
 mkdir -p src/{pages,hooks,contexts,types,utils,services}
-
-# Subpastas de domínio
-mkdir -p src/components/domain/{auth,patient,appointment,financial,medical,dashboard,config}
+mkdir -p src/types/{auth,patients,appointments,stock,financial}
 ```
 
-#### 1.2 Configurar Exports Centralizados
-
-- ✅ `src/components/_registry/index.ts`
-- ✅ `src/components/_registry/component-map.ts`
-- ✅ Configurar imports absolutos no tsconfig
-
-#### 1.3 Definir Types Globais
-
-- ✅ `src/types/globals.ts` - Types compartilhados
-- ✅ `src/types/api.ts` - Types de API
-- ✅ `src/types/components.ts` - Props de componentes
-
-### **Fase 2: Migração dos Primitivos** (2-3 dias)
-
-#### 2.1 Migrar Componentes Shadcn/UI Existentes
-
-```
-Mover de: src/components/ui/
-Para: src/components/primitives/
-
-Componentes a migrar:
-✅ Button → primitives/Button/
-✅ Card → primitives/Card/
-✅ Input → primitives/Input/
-✅ Badge → primitives/Badge/
-✅ Dialog → primitives/Dialog/
-```
-
-#### 2.2 Customizar Primitivos com Tema RespiraKids
-
-- ✅ Aplicar variáveis CSS personalizadas
-- ✅ Adicionar variantes específicas (medical, pediatric, etc.)
-- ✅ Touch targets mínimos de 44px
-- ✅ Animações theme-transition
-
-#### 2.3 Estrutura de Cada Primitivo
-
-```
-primitives/Button/
-├── Button.tsx          # Componente principal
-├── Button.types.ts     # Types e interfaces
-├── Button.variants.ts  # Variantes do tema
-├── Button.stories.tsx  # Storybook
-├── Button.test.tsx     # Testes unitários
-└── index.ts           # Export público
-```
-
-### **Fase 3: Desenvolvimento dos Compostos** (3-4 dias)
-
-#### 3.1 Componentes Compostos Prioritários
-
-```
-1. FormField/           # Campo de formulário completo
-2. DataTable/           # Tabela com funcionalidades
-3. SearchField/         # Busca avançada
-4. Modal/               # Modal estruturado
-5. FileUpload/          # Upload com preview
-6. StatusBadge/         # Badge com estados
-7. LoadingSpinner/      # Loading states
-8. DateRangePicker/     # Seletor de período
-```
-
-#### 3.2 Integração com React Hook Form
+#### 1.2 Sistema de Autenticação
 
 ```tsx
-// Exemplo: FormField
-<FormField
-  name="patientName"
-  label="Nome do Paciente"
-  type="text"
-  validation={{
-    required: 'Campo obrigatório',
-    minLength: { value: 2, message: 'Mínimo 2 caracteres' },
-  }}
-  control={control}
-/>
+// Componentes prioritários
+domain/auth/
+├── LoginForm/          # Login com validação de roles
+├── RoleSelector/       # Seleção de perfil
+├── UserProfile/        # Perfil do usuário
+└── PermissionGuard/    # Proteção por permissões
+
+// Types específicos
+types/auth.ts:
+- Role: 'admin' | 'secretaria' | 'profissional'
+- Permission: string[]
+- User: { id, name, email, role, permissions }
 ```
 
-#### 3.3 Lógica de Negócio Genérica
+#### 1.3 Context Providers
 
-- ✅ Validação de CPF/CNPJ
-- ✅ Formatação de telefone
-- ✅ Máscaras de input
-- ✅ Estados de loading/error/success
-
-### **Fase 4: Componentes de Domínio** (5-6 dias)
-
-#### 4.1 Priorização por Domínio
-
-**Alta Prioridade:**
-
-1. **auth/** - Login, registro, perfil
-2. **patient/** - Gestão de pacientes
-3. **dashboard/** - Métricas e visão geral
-
-**Média Prioridade:** 4. **appointment/** - Agendamentos 5. **medical/** - Prontuários
-
-**Baixa Prioridade:** 6. **financial/** - Gestão financeira 7. **config/** - Configurações
-
-#### 4.2 Desenvolvimento por Domínio
-
-**Domain: Auth**
-
-```
-auth/
-├── LoginForm/
-│   ├── LoginForm.tsx
-│   ├── LoginForm.types.ts
-│   ├── LoginForm.hooks.ts
-│   └── index.ts
-├── RegisterForm/
-├── PasswordReset/
-└── UserProfile/
-```
-
-**Domain: Patient**
-
-```
-patient/
-├── PatientCard/        # Card resumo do paciente
-├── PatientForm/        # Formulário de cadastro
-├── PatientHistory/     # Histórico médico
-├── PatientStats/       # Estatísticas
-├── PatientSearch/      # Busca de pacientes
-└── PatientList/        # Lista paginada
-```
-
-**Domain: Dashboard**
-
-```
-dashboard/
-├── StatsCard/          # Cards de métricas
-├── ActivityFeed/       # Feed de atividades
-├── QuickActions/       # Ações rápidas
-├── MetricsChart/       # Gráficos
-├── RecentPatients/     # Pacientes recentes
-└── AppointmentsSummary/ # Resumo agendamentos
-```
-
-#### 4.3 Hooks Específicos por Domínio
-
-```
-hooks/
-├── useAuth.ts          # Autenticação
-├── usePatients.ts      # Gestão de pacientes
-├── useAppointments.ts  # Agendamentos
-├── useDashboard.ts     # Métricas dashboard
-└── useNotifications.ts # Notificações
-```
-
-### **Fase 5: Templates e Layouts** (2-3 dias)
-
-#### 5.1 Templates Principais
-
-```
-templates/
-├── AppLayout/          # Layout principal
-├── AuthLayout/         # Layout autenticação
-├── DashboardLayout/    # Layout dashboard
-├── PatientLayout/      # Layout específico
-└── PrintLayout/        # Layout impressão
-```
-
-#### 5.2 Layout Responsivo
-
-- ✅ Sidebar colapsável
-- ✅ Navigation breadcrumbs
-- ✅ Mobile-first design
-- ✅ Dark mode support
-
-#### 5.3 SEO e Acessibilidade
-
-- ✅ Meta tags dinâmicas
-- ✅ ARIA labels completos
-- ✅ Focus management
-- ✅ Keyboard navigation
-
-### **Fase 6: Páginas e Integração** (3-4 dias)
-
-#### 6.1 Refatorar Páginas Existentes
-
-```
-pages/
-├── Dashboard/          # Dashboard principal
-├── Patients/           # Gestão pacientes
-├── Appointments/       # Agendamentos
-├── Medical/            # Prontuários
-├── Financial/          # Financeiro
-├── Settings/           # Configurações
-└── Auth/               # Autenticação
-```
-
-#### 6.2 Context Providers
-
-```
+```tsx
 contexts/
-├── AuthContext.tsx     # Autenticação global
-├── ThemeContext.tsx    # Tema e preferências
-├── NotificationContext.tsx # Notificações
-└── AppContext.tsx      # Estado global
+├── AuthContext.tsx     # Autenticação + roles
+├── ClinicContext.tsx   # Dados da clínica
+├── NotificationContext.tsx # Sistema de notificações
+└── ThemeContext.tsx    # Tema RespiraKids
 ```
 
-#### 6.3 Services e APIs
+### **Fase 2: Dashboard por Role** (4-5 dias)
 
-```
-services/
-├── api/
-│   ├── auth.ts
-│   ├── patients.ts
-│   ├── appointments.ts
-│   └── medical.ts
-├── storage/
-│   ├── localStorage.ts
-│   └── sessionStorage.ts
-└── utils/
-    ├── formatters.ts
-    ├── validators.ts
-    └── constants.ts
+#### 2.1 Layouts Específicos
+
+```tsx
+templates/
+├── AdminLayout/        # Navigation completa
+├── SecretaryLayout/    # Foco em agenda + pacientes
+├── TherapistLayout/    # Foco em prontuários
+└── DashboardLayout/    # Layout base responsivo
 ```
 
-## 🔄 Estratégia de Migração
+#### 2.2 Dashboards Personalizados
 
-### Abordagem Incremental
-
-1. **Não quebrar o existente** - Manter funcionalidades atuais
-2. **Migração gradual** - Componente por componente
-3. **Testes contínuos** - Cada migração testada
-4. **Rollback possível** - Manter versões antigas temporariamente
-
-### Ordem de Migração
-
-```
-1. App.tsx (atual) → templates/AppLayout/
-2. Shadcn components → primitives/
-3. Criar composed/ components
-4. Desenvolver domain/ por prioridade
-5. Refatorar pages/ para usar nova arquitetura
+```tsx
+domain/dashboard/
+├── AdminDashboard/     # Métricas gerais + financeiro
+├── SecretaryDashboard/ # Agenda + novos pacientes
+├── TherapistDashboard/ # Próximas consultas + prontuários
+├── MetricsCard/        # Cards de KPIs
+├── ActivityFeed/       # Atividades recentes
+└── QuickActions/       # Ações rápidas por role
 ```
 
-## 📊 Métricas de Sucesso
+#### 2.3 Métricas por Role
 
-### Objetivos Quantitativos
+**Admin**: Faturamento, inadimplência, utilização
+**Secretária**: Agendamentos, confirmações, cancelamentos
+**Fisioterapeuta**: Pacientes do dia, evoluções pendentes
 
-- ✅ **Redução de código duplicado**: -40%
-- ✅ **Aumento de reutilização**: +60%
-- ✅ **Tempo de desenvolvimento**: -30%
-- ✅ **Cobertura de testes**: >80%
+### **Fase 3: Gestão de Pacientes** (5-6 dias)
 
-### Objetivos Qualitativos
+#### 3.1 Módulo de Pacientes
 
-- ✅ **Manutenibilidade** melhorada
-- ✅ **Onboarding** mais rápido
-- ✅ **Consistência** visual
-- ✅ **Performance** otimizada
+```tsx
+domain/patients/
+├── PatientForm/        # Cadastro completo
+├── PatientList/        # Lista com filtros
+├── PatientCard/        # Card resumo
+├── MedicalRecord/      # Prontuário eletrônico
+├── TreatmentPlan/      # Plano de tratamento
+├── VitalSigns/         # Sinais vitais
+├── EvolutionNotes/     # Notas de evolução
+└── DocumentUpload/     # Upload de exames
+```
 
-## 🛠️ Ferramentas e Dependências
+#### 3.2 Formulários Médicos Específicos
 
-### Novas Dependências
+```tsx
+// Campos específicos para fisioterapia respiratória
+- Dados do nascimento (peso, altura, Apgar)
+- Histórico respiratório
+- Medicações em uso
+- Alergias e restrições
+- Responsáveis legais
+- Convênio/particular
+```
+
+#### 3.3 Prontuário Eletrônico
+
+```tsx
+// Estrutura do prontuário
+- Anamnese inicial
+- Avaliação fisioterapêutica
+- Objetivos do tratamento
+- Técnicas utilizadas
+- Evolução por sessão
+- Reavaliações periódicas
+- Alta fisioterapêutica
+```
+
+### **Fase 4: Sistema de Agenda** (4-5 dias)
+
+#### 4.1 Componentes de Agenda
+
+```tsx
+domain/agenda/
+├── Calendar/           # Calendário multi-view
+├── AppointmentForm/    # Agendamento completo
+├── TimeSlotGrid/       # Grid de horários
+├── PatientCard/        # Card na agenda
+├── AppointmentList/    # Lista de agendamentos
+└── ScheduleConfig/     # Configuração de horários
+```
+
+#### 4.2 Funcionalidades Específicas
+
+- **Multi-view**: Dia, semana, mês
+- **Color coding**: Por fisioterapeuta ou tipo
+- **Drag & drop**: Reagendamento rápido
+- **Recurring**: Agendamentos recorrentes
+- **Confirmação**: Status por SMS/WhatsApp
+
+#### 4.3 Integração com Pacientes
+
+- Busca rápida de pacientes
+- Histórico de consultas
+- Preferências de horário
+- Lembretes automáticos
+
+### **Fase 5: Controle Financeiro** (4-5 days)
+
+#### 5.1 Módulo Financeiro
+
+```tsx
+domain/financial/
+├── PaymentForm/        # Registro de pagamentos
+├── InvoiceList/        # Lista de faturas
+├── BillingReport/      # Relatórios de faturamento
+├── ExpenseTracker/     # Controle de despesas
+├── PaymentStatus/      # Status de pagamentos
+└── FinancialChart/     # Gráficos financeiros
+```
+
+#### 5.2 Funcionalidades Específicas
+
+- **Planos de tratamento**: Pacotes de sessões
+- **Convênios**: Integração com operadoras
+- **Particular**: Pagamento à vista/parcelado
+- **Inadimplência**: Controle e cobrança
+- **Relatórios**: DRE, fluxo de caixa
+
+### **Fase 6: Estoque e Webhooks** (3-4 dias)
+
+#### 6.1 Controle de Estoque
+
+```tsx
+domain/stock/
+├── InventoryList/      # Lista de inventário
+├── StockForm/          # Cadastro de itens
+├── LowStockAlert/      # Alertas de estoque baixo
+├── UsageTracking/      # Rastreamento de uso
+├── SupplierForm/       # Cadastro de fornecedores
+└── StockReport/        # Relatórios de estoque
+```
+
+#### 6.2 Sistema de Webhooks
+
+```tsx
+domain/webhooks/
+├── NotificationCenter/ # Central de notificações
+├── WebhookConfig/      # Configuração de webhooks
+├── EmailTemplate/      # Templates de email
+├── SMSNotification/    # Notificações SMS
+└── IntegrationList/    # Lista de integrações
+```
+
+### **Fase 7: Configurações e Finalização** (2-3 dias)
+
+#### 7.1 Administração do Sistema
+
+```tsx
+domain/settings/
+├── ClinicSettings/     # Dados da clínica
+├── UserManagement/     # Gestão de usuários
+├── RoleSettings/       # Configuração de roles
+├── BackupConfig/       # Configurações de backup
+├── SecuritySettings/   # Configurações de segurança
+└── SystemLogs/         # Logs do sistema
+```
+
+## 🔄 Estratégia de Implementação
+
+### **Priorização por Impacto Clínico:**
+
+1. **Alta**: Auth + Dashboard + Pacientes
+2. **Média**: Agenda + Financeiro
+3. **Baixa**: Estoque + Webhooks + Configurações
+
+### **Desenvolvimento Paralelo:**
+
+- **Backend**: APIs Supabase por módulo
+- **Frontend**: Componentes por domínio
+- **Integration**: Testes de integração contínuos
+
+## 🧪 Testes Específicos
+
+### **Testes por Módulo:**
+
+```
+auth/          # Login, roles, permissões
+dashboard/     # Métricas por role
+agenda/        # Agendamentos, conflitos
+patients/      # CRUD, prontuários, validações
+financial/     # Cálculos, relatórios
+stock/         # Controle, alertas
+webhooks/      # Notificações, integrações
+settings/      # Configurações, segurança
+```
+
+### **Cenários de Teste:**
+
+- **Fluxo completo**: Agendamento → Atendimento → Cobrança
+- **Roles**: Acesso correto por perfil
+- **Validações**: Dados médicos obrigatórios
+- **Performance**: Carregamento de listas grandes
+
+## 📊 Métricas de Sucesso Específicas
+
+### **Operacionais:**
+
+- ✅ Tempo de agendamento: < 2 minutos
+- ✅ Consulta de prontuário: < 5 segundos
+- ✅ Taxa de confirmação: > 90%
+- ✅ Satisfação do usuário: > 4.5/5
+
+### **Técnicas:**
+
+- ✅ Performance: < 3s carregamento inicial
+- ✅ Uptime: > 99.5%
+- ✅ Mobile responsive: 100%
+- ✅ Acessibilidade: WCAG 2.1 AA
+
+## 🛠️ Stack Tecnológica Específica
+
+### **Dependências Específicas:**
 
 ```json
 {
-  "react-hook-form": "^7.45.0",
-  "@hookform/resolvers": "^3.1.0",
-  "zod": "^3.21.0",
-  "date-fns": "^2.30.0",
-  "react-query": "^3.39.0"
+  "react-hook-form": "^7.45.0", // Formulários médicos
+  "zod": "^3.21.0", // Validação de dados
+  "@tanstack/react-query": "^4.0.0", // Cache de dados
+  "date-fns": "^2.30.0", // Manipulação de datas
+  "recharts": "^2.8.0", // Gráficos financeiros
+  "react-big-calendar": "^1.8.0", // Calendário de agendamentos
+  "react-pdf": "^7.3.0", // Geração de relatórios
+  "libphonenumber-js": "^1.10.0" // Validação de telefone
 }
 ```
 
-### Ferramentas de Desenvolvimento
+### **Integrações Necessárias:**
 
-```json
-{
-  "@storybook/react": "^7.0.0",
-  "@testing-library/react": "^13.0.0",
-  "chromatic": "^6.0.0",
-  "plop": "^3.1.0"
-}
-```
+- **Supabase**: Auth, Database, Storage, Real-time
+- **API CEP**: Validação de endereços
+- **SMS/WhatsApp**: Notificações de agendamento
+- **Email**: Relatórios e lembretes
+- **PDF**: Geração de prontuários
 
-## 🧪 Estratégia de Testes
+## 🚀 Roadmap Pós-Launch
 
-### Pirâmide de Testes
+### **Versão 1.1 (1-2 meses após launch):**
 
-1. **Unit Tests** - Cada primitivo e composto
-2. **Integration Tests** - Componentes de domínio
-3. **E2E Tests** - Fluxos principais
-4. **Visual Tests** - Storybook + Chromatic
+- App mobile para fisioterapeutas
+- Integração com equipamentos
+- BI avançado
 
-### Cobertura por Nível
+### **Versão 2.0 (3-6 meses):**
 
-- **Primitivos**: 100% unit tests
-- **Compostos**: 90% unit + integration
-- **Domínio**: 80% integration + e2e
-- **Templates**: 70% e2e + visual
-
-## 🚀 Entrega e Deploy
-
-### Estratégia de Entrega
-
-1. **Feature flags** para nova arquitetura
-2. **A/B testing** entre versões
-3. **Rollback automático** em caso de erro
-4. **Monitoramento** de performance
-
-### Checklist de Go-Live
-
-- [ ] Todos os testes passando
-- [ ] Performance mantida ou melhorada
-- [ ] Acessibilidade validada
-- [ ] Documentação completa
-- [ ] Team training concluído
+- Telemedicina básica
+- Protocolos automatizados
+- Machine learning para diagnósticos
 
 ---
 
-**Próximo Passo**: Aprovação do plano e início da Fase 1 🚀
+**Este plano está 100% alinhado com as necessidades reais de uma clínica de fisioterapia respiratória pediátrica, garantindo implementação eficiente e value delivery desde o primeiro módulo.** 🏥

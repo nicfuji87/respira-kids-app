@@ -2,7 +2,14 @@
 
 ## Visão Geral
 
-O Respira Kids utiliza uma arquitetura hierárquica de 4 níveis baseada em **Atomic Design** e **Domain-Driven Design**, promovendo máxima reutilização e manutenibilidade.
+O **Respira Kids** é um sistema de gestão completa para clínicas de fisioterapia respiratória pediátrica, utilizando arquitetura hierárquica de 4 níveis baseada em **Atomic Design** e **Domain-Driven Design**.
+
+## 🏥 Core Business
+
+- **Domínio**: Fisioterapia respiratória pediátrica
+- **Usuários**: Fisioterapeutas, secretárias, administradores
+- **Objetivo**: Gestão completa de pacientes, prontuários e operações da clínica
+- **Roles**: `admin`, `secretaria`, `profissional` (não há acesso para pacientes)
 
 ## 📁 Estrutura de Pastas
 
@@ -11,291 +18,253 @@ src/
 ├── components/
 │   ├── primitives/     # Nível 1: Componentes básicos (shadcn/ui customizados)
 │   ├── composed/       # Nível 2: Combinações funcionais
-│   ├── domain/         # Nível 3: Componentes específicos do negócio
-│   ├── templates/      # Nível 4: Layouts e estruturas de página
+│   ├── domain/         # Nível 3: Componentes específicos dos módulos
+│   ├── templates/      # Nível 4: Layouts por role e funcionalidade
 │   └── _registry/      # Mapa de componentes e exports
-├── pages/              # Páginas principais
-├── hooks/              # Custom hooks reutilizáveis
-├── contexts/           # Context providers globais
-├── types/              # Definições TypeScript
-├── utils/              # Funções utilitárias
-├── services/           # APIs e serviços externos
+├── pages/              # Páginas por módulo
+├── hooks/              # Custom hooks por domínio
+├── contexts/           # Context providers (auth, roles, etc.)
+├── types/              # Definições TypeScript dos módulos
+├── utils/              # Funções utilitárias específicas da clínica
+├── services/           # APIs e integrações (Supabase, webhooks)
 └── lib/                # Configurações e bibliotecas
 ```
 
 ## 🧱 Nível 1: Primitivos (src/components/primitives/)
 
-**Propósito**: Componentes básicos reutilizáveis baseados em shadcn/ui
+**Propósito**: Componentes básicos reutilizáveis com tema RespiraKids
 
-### Características:
-
-- ✅ CSS variables personalizadas (--azul-respira, --roxo-titulo, etc.)
-- ✅ Touch targets mínimos de 44px (mobile-friendly)
-- ✅ Variantes adaptadas ao tema RespiraKids
-- ✅ Transições suaves (theme-transition)
-- ✅ Acessibilidade (ARIA labels, foco, contraste)
-
-### Estrutura:
+### Componentes Específicos para Clínica:
 
 ```
 primitives/
-├── Button/
-│   ├── Button.tsx
-│   ├── Button.stories.tsx
-│   ├── Button.test.tsx
-│   └── index.ts
-├── Input/
-├── Card/
-├── Badge/
-├── Dialog/
-├── Form/
-└── index.ts          # Export centralizado
+├── Button/             # Botões com variantes médicas
+├── Input/              # Inputs com validação médica
+├── Card/               # Cards para informações clínicas
+├── Badge/              # Status de pacientes/agendamentos
+├── DatePicker/         # Seletor de datas para agenda
+├── TimePicker/         # Seletor de horários
+├── FileUpload/         # Upload de documentos médicos
+├── DataTable/          # Tabelas para listagens
+├── Form/               # Formulários médicos
+└── Modal/              # Modais para ações importantes
 ```
 
-### Exemplos:
+### Características Específicas:
 
-```tsx
-// Button customizado com tema RespiraKids
-<Button variant="primary" size="lg" className="animate-respira-pulse">
-  Acessar Sistema
-</Button>
-
-// Input com validação visual
-<Input
-  variant="medical"
-  status="error"
-  errorMessage="Campo obrigatório"
-/>
-```
+- ✅ Validações médicas (CPF, telefone, datas)
+- ✅ Touch targets para tablets (uso clínico)
+- ✅ Cores do tema RespiraKids
+- ✅ Acessibilidade para ambiente médico
 
 ## 🔗 Nível 2: Compostos (src/components/composed/)
 
-**Propósito**: Componentes que combinam primitivos para funcionalidades específicas
-
-### Características:
-
-- ✅ Integração com react-hook-form
-- ✅ Lógica de negócio genérica
-- ✅ Estilização consistente
-- ✅ Reutilizáveis em qualquer domínio
-- ✅ Validação integrada
-
-### Estrutura:
+**Propósito**: Componentes funcionais específicos para operações da clínica
 
 ```
 composed/
-├── DataTable/         # Tabela com filtros e paginação
-├── SearchField/       # Campo de busca avançada
-├── FormField/         # Campo de formulário completo
-├── Modal/             # Modal com header/footer
-├── FileUpload/        # Upload com preview
-├── DateRangePicker/   # Seletor de período
-├── StatusBadge/       # Badge com estados
-└── LoadingSpinner/    # Loading states
-```
-
-### Exemplos:
-
-```tsx
-// Campo de formulário completo
-<FormField
-  name="patientName"
-  label="Nome do Paciente"
-  type="text"
-  validation={{ required: "Campo obrigatório" }}
-  placeholder="Digite o nome completo"
-/>
-
-// Tabela com funcionalidades
-<DataTable
-  data={patients}
-  columns={patientColumns}
-  searchable
-  filterable
-  exportable
-/>
+├── PatientSearchBar/   # Busca de pacientes com filtros
+├── AppointmentSlots/   # Slots de horários disponíveis
+├── MedicalForm/        # Formulários com validação médica
+├── StatusIndicator/    # Indicadores de status (presente, faltou, etc.)
+├── PaymentStatus/      # Status de pagamentos
+├── StockAlert/         # Alertas de estoque baixo
+├── NotificationBell/   # Sistema de notificações
+├── RoleGuard/          # Proteção baseada em roles
+└── DataExport/         # Exportação de relatórios
 ```
 
 ## 🏥 Nível 3: Domínio (src/components/domain/)
 
-**Propósito**: Componentes específicos do negócio organizados por área
+**Propósito**: Componentes específicos por módulo do sistema
 
-### Organização por Domínio:
+### Organização por Módulos:
 
 ```
 domain/
-├── auth/              # Autenticação e autorização
-│   ├── LoginForm/
-│   ├── RegisterForm/
-│   ├── PasswordReset/
-│   └── UserProfile/
-├── patient/           # Gestão de pacientes
-│   ├── PatientCard/
-│   ├── PatientForm/
-│   ├── PatientHistory/
-│   └── PatientStats/
-├── appointment/       # Agendamentos
-│   ├── Calendar/
-│   ├── AppointmentForm/
-│   ├── TimeSlots/
-│   └── AppointmentCard/
-├── financial/         # Gestão financeira
-│   ├── InvoiceForm/
-│   ├── PaymentStatus/
-│   ├── FinancialChart/
-│   └── BillingHistory/
-├── medical/           # Prontuários médicos
-│   ├── MedicalRecord/
-│   ├── TreatmentPlan/
-│   ├── VitalSigns/
-│   └── MedicationList/
-├── dashboard/         # Dashboard e métricas
-│   ├── StatsCard/
-│   ├── ActivityFeed/
-│   ├── QuickActions/
-│   └── MetricsChart/
-└── config/            # Configurações
-    ├── SettingsPanel/
-    ├── NotificationSettings/
-    ├── ThemeSettings/
-    └── BackupSettings/
-```
-
-### Exemplos:
-
-```tsx
-// Componente específico de paciente
-<PatientCard
-  patient={patient}
-  showActions
-  onEdit={handleEdit}
-  onViewHistory={handleHistory}
-/>
-
-// Calendário de agendamentos
-<AppointmentCalendar
-  appointments={appointments}
-  onSlotSelect={handleSlotSelect}
-  availableSlots={availableSlots}
-/>
+├── auth/               # Autenticação & Autorização
+│   ├── LoginForm/      # Login com validação de roles
+│   ├── RoleSelector/   # Seleção de perfil de acesso
+│   ├── UserProfile/    # Perfil do usuário logado
+│   └── PermissionGuard/ # Proteção por permissões
+├── dashboard/          # Dashboard por Role
+│   ├── AdminDashboard/ # Dashboard administrativo
+│   ├── SecretaryDashboard/ # Dashboard da secretária
+│   ├── TherapistDashboard/ # Dashboard do fisioterapeuta
+│   ├── MetricsCard/    # Cards de métricas da clínica
+│   ├── ActivityFeed/   # Feed de atividades recentes
+│   └── QuickActions/   # Ações rápidas por role
+├── agenda/             # Gestão de Agendamentos
+│   ├── Calendar/       # Calendário multi-view
+│   ├── AppointmentForm/ # Formulário de agendamento
+│   ├── TimeSlotGrid/   # Grid de horários
+│   ├── PatientCard/    # Card do paciente na agenda
+│   ├── AppointmentList/ # Lista de agendamentos
+│   └── ScheduleConfig/ # Configuração de horários
+├── patients/           # Cadastro e Prontuários
+│   ├── PatientForm/    # Cadastro de pacientes
+│   ├── PatientList/    # Lista de pacientes
+│   ├── PatientCard/    # Card resumo do paciente
+│   ├── MedicalRecord/  # Prontuário eletrônico
+│   ├── TreatmentPlan/  # Plano de tratamento
+│   ├── VitalSigns/     # Sinais vitais
+│   ├── EvolutionNotes/ # Notas de evolução
+│   └── DocumentUpload/ # Upload de documentos
+├── stock/              # Controle de Estoque
+│   ├── InventoryList/  # Lista de inventário
+│   ├── StockForm/      # Cadastro de itens
+│   ├── LowStockAlert/  # Alertas de estoque baixo
+│   ├── UsageTracking/  # Rastreamento de uso
+│   ├── SupplierForm/   # Cadastro de fornecedores
+│   └── StockReport/    # Relatórios de estoque
+├── financial/          # Controle Financeiro
+│   ├── PaymentForm/    # Formulário de pagamentos
+│   ├── InvoiceList/    # Lista de faturas
+│   ├── BillingReport/ # Relatórios de faturamento
+│   ├── ExpenseTracker/ # Controle de despesas
+│   ├── PaymentStatus/ # Status de pagamentos
+│   └── FinancialChart/ # Gráficos financeiros
+├── webhooks/           # Sistema de Notificações
+│   ├── NotificationCenter/ # Central de notificações
+│   ├── WebhookConfig/ # Configuração de webhooks
+│   ├── EmailTemplate/ # Templates de email
+│   ├── SMSNotification/ # Notificações SMS
+│   └── IntegrationList/ # Lista de integrações
+└── settings/           # Configurações do Sistema
+    ├── ClinicSettings/ # Configurações da clínica
+    ├── UserManagement/ # Gestão de usuários
+    ├── RoleSettings/   # Configuração de roles
+    ├── BackupConfig/   # Configurações de backup
+    ├── SecuritySettings/ # Configurações de segurança
+    └── SystemLogs/     # Logs do sistema
 ```
 
 ## 📄 Nível 4: Templates (src/components/templates/)
 
-**Propósito**: Layouts e estruturas de página completas
-
-### Características:
-
-- ✅ Layout responsivo
-- ✅ Estrutura de navegação
-- ✅ Containers de conteúdo
-- ✅ SEO otimizado
-- ✅ Breadcrumbs automáticos
-
-### Estrutura:
+**Propósito**: Layouts específicos por role e funcionalidade
 
 ```
 templates/
-├── AppLayout/         # Layout principal da aplicação
-├── AuthLayout/        # Layout para autenticação
-├── DashboardLayout/   # Layout do dashboard
-├── PatientLayout/     # Layout específico para pacientes
-├── SettingsLayout/    # Layout de configurações
-└── PrintLayout/       # Layout para impressão
+├── AdminLayout/        # Layout para administradores
+├── SecretaryLayout/    # Layout para secretárias
+├── TherapistLayout/    # Layout para fisioterapeutas
+├── AuthLayout/         # Layout de autenticação
+├── DashboardLayout/    # Layout genérico de dashboard
+├── PatientLayout/      # Layout específico para pacientes
+├── AgendaLayout/       # Layout da agenda/calendário
+├── ReportLayout/       # Layout para relatórios
+└── PrintLayout/        # Layout para impressão
 ```
 
-### Exemplos:
+### Características dos Layouts:
+
+- ✅ **Navigation contextual** por role
+- ✅ **Sidebar específica** para cada usuário
+- ✅ **Breadcrumbs médicos** (Paciente > Consulta > Prontuário)
+- ✅ **Quick actions** relevantes ao role
+- ✅ **Notificações contextuais**
+
+## 👥 Sistema de Roles e Permissões
+
+### **Admin**
+
+- Acesso total ao sistema
+- Gestão de usuários e configurações
+- Relatórios financeiros completos
+- Configuração de webhooks e integrações
+
+### **Secretária**
+
+- Gestão de agendamentos
+- Cadastro de pacientes
+- Controle básico financeiro
+- Relatórios operacionais
+
+### **Profissional (Fisioterapeuta)**
+
+- Agenda pessoal
+- Prontuários eletrônicos
+- Planos de tratamento
+- Controle de estoque básico
+
+## 🗺️ Registry e Exports
 
 ```tsx
-// Layout principal
-<AppLayout
-  user={currentUser}
-  navigation={mainNavigation}
-  breadcrumbs={breadcrumbs}
->
-  <PatientManagement />
-</AppLayout>
+// _registry/domain-map.ts
+export const DOMAIN_MAP = {
+  auth: ['LoginForm', 'RoleSelector', 'UserProfile'],
+  dashboard: ['AdminDashboard', 'SecretaryDashboard', 'TherapistDashboard'],
+  agenda: ['Calendar', 'AppointmentForm', 'TimeSlotGrid'],
+  patients: ['PatientForm', 'MedicalRecord', 'TreatmentPlan'],
+  stock: ['InventoryList', 'StockForm', 'LowStockAlert'],
+  financial: ['PaymentForm', 'InvoiceList', 'BillingReport'],
+  webhooks: ['NotificationCenter', 'WebhookConfig'],
+  settings: ['ClinicSettings', 'UserManagement', 'RoleSettings'],
+};
 
-// Layout específico
-<DashboardLayout
-  widgets={dashboardWidgets}
-  filters={dashboardFilters}
->
-  <StatsOverview />
-</DashboardLayout>
-```
-
-## 🗺️ Registry (\_registry/)
-
-**Propósito**: Mapeamento e exports centralizados
-
-```tsx
-// _registry/index.ts
-export * from '../primitives';
-export * from '../composed';
-export * from '../domain';
-export * from '../templates';
-
-// _registry/component-map.ts
-export const COMPONENT_MAP = {
-  primitives: ['Button', 'Input', 'Card'],
-  composed: ['DataTable', 'FormField'],
-  domain: ['PatientCard', 'AppointmentCalendar'],
-  templates: ['AppLayout', 'DashboardLayout'],
+// _registry/role-components.ts
+export const ROLE_COMPONENTS = {
+  admin: ['AdminDashboard', 'UserManagement', 'SystemSettings'],
+  secretaria: ['SecretaryDashboard', 'AgendaManager', 'PatientRegistry'],
+  profissional: ['TherapistDashboard', 'MedicalRecords', 'TreatmentPlans'],
 };
 ```
 
-## 🎯 Benefícios da Arquitetura
+## 🎯 Fluxos Principais do Sistema
 
-### 1. **Componentização Extrema**
+### **Fluxo de Agendamento:**
 
-- Mais componentes, menos código duplicado
-- Reutilização máxima em todos os níveis
-- Manutenção centralizada
+1. Secretária acessa `AgendaLayout`
+2. Usa `AppointmentForm` para criar agendamento
+3. `TimeSlotGrid` mostra disponibilidade
+4. `NotificationCenter` envia confirmação
 
-### 2. **Desenvolvimento Escalável**
+### **Fluxo de Atendimento:**
 
-- Fácil adicionar novos domínios
-- Padrões consistentes
-- Onboarding rápido de desenvolvedores
+1. Fisioterapeuta acessa `TherapistLayout`
+2. Visualiza agenda em `TherapistDashboard`
+3. Abre `MedicalRecord` do paciente
+4. Atualiza `EvolutionNotes` e `TreatmentPlan`
 
-### 3. **Testabilidade**
+### **Fluxo Administrativo:**
 
-- Testes isolados por nível
-- Mocks simplificados
-- Cobertura completa
+1. Admin acessa `AdminLayout`
+2. Monitora métricas em `AdminDashboard`
+3. Gerencia usuários via `UserManagement`
+4. Configura sistema em `ClinicSettings`
 
-### 4. **Performance**
+## 🔧 Integrações Específicas
 
-- Tree-shaking automático
-- Lazy loading por domínio
-- Bundle splitting otimizado
+### **Supabase:**
 
-## 📋 Convenções de Nomenclatura
+- Autenticação com roles
+- Database para pacientes/agendamentos
+- Real-time para notificações
+- Storage para documentos médicos
 
-### Arquivos:
+### **APIs Externas:**
 
-- **PascalCase**: `PatientCard.tsx`
-- **kebab-case**: `patient-card.stories.tsx`
-- **Index files**: `index.ts` para exports
+- Validação de CPF
+- Envio de SMS/Email
+- Backup em nuvem
+- Relatórios PDF
 
-### Componentes:
+## 📊 Métricas de Negócio
 
-- **Primitivos**: `Button`, `Input`, `Card`
-- **Compostos**: `DataTable`, `FormField`, `SearchInput`
-- **Domínio**: `PatientCard`, `AppointmentCalendar`
-- **Templates**: `AppLayout`, `DashboardLayout`
+### **Operacionais:**
 
-### Props:
+- Taxa de comparecimento às consultas
+- Tempo médio de atendimento
+- Utilização da agenda
+- Satisfação dos pacientes
 
-- **Interfaces**: `ButtonProps`, `PatientCardProps`
-- **Types**: `PatientStatus`, `AppointmentType`
-- **Eventos**: `onSubmit`, `onCancel`, `onPatientSelect`
+### **Financeiras:**
 
-## 🚀 Migração Gradual
+- Faturamento mensal
+- Inadimplência
+- Custo por paciente
+- ROI dos tratamentos
 
-1. **Fase 1**: Criar estrutura de pastas
-2. **Fase 2**: Migrar componentes shadcn/ui para primitives/
-3. **Fase 3**: Criar componentes composed/
-4. **Fase 4**: Desenvolver componentes domain/
-5. **Fase 5**: Implementar templates/
+---
+
+**Esta arquitetura está 100% alinhada com as necessidades específicas de uma clínica de fisioterapia respiratória pediátrica, garantindo eficiência operacional e qualidade no atendimento.** 🏥
