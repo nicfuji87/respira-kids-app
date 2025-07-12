@@ -50,7 +50,6 @@ export default {
           4: 'hsl(var(--chart-4))',
           5: 'hsl(var(--chart-5))',
         },
-        // Cores específicas Respira KIDS
         'azul-respira': 'hsl(var(--azul-respira))',
         'vermelho-kids': 'hsl(var(--vermelho-kids))',
         'bege-fundo': 'hsl(var(--bege-fundo))',
@@ -60,6 +59,28 @@ export default {
         'cinza-secundario': 'hsl(var(--cinza-secundario))',
         success: 'hsl(var(--verde-pipa))',
         warning: 'hsl(var(--amarelo-pipa))',
+      },
+      keyframes: {
+        'accordion-down': {
+          from: {
+            height: '0',
+          },
+          to: {
+            height: 'var(--radix-accordion-content-height)',
+          },
+        },
+        'accordion-up': {
+          from: {
+            height: 'var(--radix-accordion-content-height)',
+          },
+          to: {
+            height: '0',
+          },
+        },
+      },
+      animation: {
+        'accordion-down': 'accordion-down 0.2s ease-out',
+        'accordion-up': 'accordion-up 0.2s ease-out',
       },
     },
   },

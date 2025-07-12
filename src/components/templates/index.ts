@@ -1,0 +1,39 @@
+// AI dev note: Registry de componentes TEMPLATES (Nível 4)
+// Layouts completos e estruturas de página responsivas
+
+// Auth Templates
+export { SignUpTemplate } from './auth/SignUpTemplate';
+
+// Dashboard Templates
+export { AdminDashboardTemplate } from './dashboard/AdminDashboardTemplate';
+export { SecretariaDashboardTemplate } from './dashboard/SecretariaDashboardTemplate';
+export { ProfissionalDashboardTemplate } from './dashboard/ProfissionalDashboardTemplate';
+
+// Registry para uso em roteamento e aplicação
+export const TemplateComponents = {
+  // Auth
+  SignUpTemplate: 'SignUpTemplate',
+
+  // Dashboard
+  AdminDashboardTemplate: 'AdminDashboardTemplate',
+  SecretariaDashboardTemplate: 'SecretariaDashboardTemplate',
+  ProfissionalDashboardTemplate: 'ProfissionalDashboardTemplate',
+} as const;
+
+export type TemplateComponentName = keyof typeof TemplateComponents;
+
+// Registry por área de aplicação
+export const AuthTemplates = {
+  SignUpTemplate: 'SignUpTemplate',
+} as const;
+
+export const DashboardTemplates = {
+  AdminDashboardTemplate: 'AdminDashboardTemplate',
+  SecretariaDashboardTemplate: 'SecretariaDashboardTemplate',
+  ProfissionalDashboardTemplate: 'ProfissionalDashboardTemplate',
+} as const;
+
+// Types para props dos templates
+export type { AdminUser } from './dashboard/AdminDashboardTemplate';
+export type { SecretariaUser } from './dashboard/SecretariaDashboardTemplate';
+export type { ProfissionalUser } from './dashboard/ProfissionalDashboardTemplate';
