@@ -9,6 +9,16 @@ export { AdminDashboardTemplate } from './dashboard/AdminDashboardTemplate';
 export { SecretariaDashboardTemplate } from './dashboard/SecretariaDashboardTemplate';
 export { ProfissionalDashboardTemplate } from './dashboard/ProfissionalDashboardTemplate';
 
+// Layout Templates
+export { DesktopLayout } from './dashboard/DesktopLayout';
+export { MobileLayout } from './dashboard/MobileLayout';
+export { ResponsiveLayout } from './dashboard/ResponsiveLayout';
+
+// Type exports
+export type { DesktopLayoutProps } from './dashboard/DesktopLayout';
+export type { MobileLayoutProps } from './dashboard/MobileLayout';
+export type { ResponsiveLayoutProps } from './dashboard/ResponsiveLayout';
+
 // Registry para uso em roteamento e aplicação
 export const TemplateComponents = {
   // Auth
@@ -18,6 +28,11 @@ export const TemplateComponents = {
   AdminDashboardTemplate: 'AdminDashboardTemplate',
   SecretariaDashboardTemplate: 'SecretariaDashboardTemplate',
   ProfissionalDashboardTemplate: 'ProfissionalDashboardTemplate',
+
+  // Layouts
+  DesktopLayout: 'DesktopLayout',
+  MobileLayout: 'MobileLayout',
+  ResponsiveLayout: 'ResponsiveLayout',
 } as const;
 
 export type TemplateComponentName = keyof typeof TemplateComponents;
@@ -31,6 +46,12 @@ export const DashboardTemplates = {
   AdminDashboardTemplate: 'AdminDashboardTemplate',
   SecretariaDashboardTemplate: 'SecretariaDashboardTemplate',
   ProfissionalDashboardTemplate: 'ProfissionalDashboardTemplate',
+} as const;
+
+export const LayoutTemplates = {
+  DesktopLayout: 'DesktopLayout',
+  MobileLayout: 'MobileLayout',
+  ResponsiveLayout: 'ResponsiveLayout',
 } as const;
 
 // Types para props dos templates

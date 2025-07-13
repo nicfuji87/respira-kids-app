@@ -1,19 +1,10 @@
 import { useState } from 'react';
+import { BrowserRouter } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  SignUpTemplate,
-  AdminDashboardTemplate,
-  SecretariaDashboardTemplate,
-  ProfissionalDashboardTemplate,
-} from '@/components/templates';
+import { SignUpTemplate } from '@/components/templates';
 import { LoginPage } from '@/components/domain';
+import { AppRouter } from '@/components/AppRouter';
 import { Toaster } from '@/components/primitives/toaster';
-import { signOut } from '@/lib/auth';
-import type {
-  AdminUser,
-  SecretariaUser,
-  ProfissionalUser,
-} from '@/components/templates';
 
 type AuthMode = 'login' | 'signup';
 type AuthStep =
@@ -39,20 +30,6 @@ function App() {
   const [authStep, setAuthStep] = useState<AuthStep>('signup');
   const [userEmail, setUserEmail] = useState<string>('');
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      // Reset estados após logout
-      setAuthMode('login');
-      setAuthStep('signup');
-      setUserEmail('');
-    } catch (error) {
-      console.error('Erro no logout:', error);
-      // Fallback: forçar reload da página
-      window.location.reload();
-    }
-  };
-
   // Loading state
   if (loading) {
     return (
@@ -65,74 +42,62 @@ function App() {
     );
   }
 
+  // AI dev note: Verificação melhorada - garantir que pessoa e role estão disponíveis
+  // Isso evita race condition onde AppRouter renderiza com userRole undefined
+  if (
+    isAuthenticated &&
+    user &&
+    !needsEmailConfirmation &&
+    !needsApproval &&
+    !needsProfileCompletion
+  ) {
+    if (canAccessDashboard && user?.pessoa?.role) {
+      console.log('✅ App: Renderizando AppRouter com role:', user.pessoa.role);
+      return (
+        <BrowserRouter>
+          <AppRouter />
+          <Toaster />
+        </BrowserRouter>
+      );
+    } else if (canAccessDashboard && user?.pessoa && !user?.pessoa?.role) {
+      // Estado transitório: pessoa existe mas role ainda não
+      console.log('⏳ App: Aguardando role estar disponível...');
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-bege-fundo to-background flex items-center justify-center p-4">
+          <div className="text-center space-y-4">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-muted-foreground">
+              Carregando perfil do usuário...
+            </p>
+          </div>
+        </div>
+      );
+    } else {
+      // Usuário autenticado mas dados da pessoa não carregaram ainda
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-bege-fundo to-background flex items-center justify-center p-4">
+          <div className="text-center space-y-4">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-muted-foreground">
+              Carregando dados do usuário...
+            </p>
+          </div>
+        </div>
+      );
+    }
+  }
+
   // Roteamento principal baseado no status real do usuário
-  if (canAccessDashboard && user?.pessoa) {
-    const userRole = user?.pessoa?.role;
-    const userName = user?.pessoa?.nome || user?.email || 'Usuário';
-    const userEmail = user?.email || '';
-
-    // Direcionar para dashboard baseado no role
-    if (userRole === 'admin') {
-      const adminUser: AdminUser = {
-        name: userName,
-        email: userEmail,
-        role: 'admin',
-        avatar: undefined,
-      };
-      return (
-        <AdminDashboardTemplate
-          currentUser={adminUser}
-          currentModule="dashboard"
-          onModuleChange={() => {}}
-          onLogout={handleLogout}
-        />
-      );
-    }
-
-    if (userRole === 'secretaria') {
-      const secretariaUser: SecretariaUser = {
-        name: userName,
-        email: userEmail,
-        role: 'secretaria',
-        avatar: undefined,
-      };
-      return (
-        <SecretariaDashboardTemplate
-          currentUser={secretariaUser}
-          onLogout={handleLogout}
-        />
-      );
-    }
-
-    if (userRole === 'profissional') {
-      const profissionalUser: ProfissionalUser = {
-        name: userName,
-        email: userEmail,
-        role: 'profissional',
-        avatar: undefined,
-      };
-      return (
-        <ProfissionalDashboardTemplate
-          currentUser={profissionalUser}
-          onLogout={handleLogout}
-        />
-      );
-    }
-
-    // Fallback para admin se role não identificado
-    const fallbackUser: AdminUser = {
-      name: userName,
-      email: userEmail,
-      role: 'admin',
-      avatar: undefined,
-    };
+  if (canAccessDashboard && user?.pessoa?.role) {
+    console.log(
+      '✅ App: Renderizando AppRouter com role (check 2):',
+      user.pessoa.role
+    );
     return (
-      <AdminDashboardTemplate
-        currentUser={fallbackUser}
-        currentModule="dashboard"
-        onModuleChange={() => {}}
-        onLogout={handleLogout}
-      />
+      <BrowserRouter>
+        <AppRouter />
+        <Toaster />
+      </BrowserRouter>
     );
   }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/primitives/button';
 import {
   Card,
@@ -7,9 +7,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/primitives/card';
-import { LogOut, Calendar, Users, FileText, Activity } from 'lucide-react';
+import { Calendar, Users, FileText, Activity } from 'lucide-react';
+import { ResponsiveLayout } from './ResponsiveLayout';
 
-// AI dev note: ProfissionalDashboardTemplate - Dashboard simples para role profissional
+// AI dev note: ProfissionalDashboardTemplate - Dashboard responsivo para role profissional
+// Usa ResponsiveLayout para alternar entre desktop e mobile
 
 export interface ProfissionalUser {
   name: string;
@@ -27,51 +29,35 @@ interface ProfissionalDashboardTemplateProps {
 export const ProfissionalDashboardTemplate =
   React.memo<ProfissionalDashboardTemplateProps>(
     ({ currentUser, onLogout, className }) => {
+      const [currentPath, setCurrentPath] = useState('/dashboard');
+
+      const handleNavigation = (path: string) => {
+        setCurrentPath(path);
+        // Aqui você implementaria a navegação real
+        console.log('Navegando para:', path);
+      };
+
+      const breadcrumbItems = [{ label: 'Dashboard', href: '/dashboard' }];
+
       return (
-        <div
-          className={`min-h-screen bg-gradient-to-br from-bege-fundo to-background ${className || ''}`}
+        <ResponsiveLayout
+          userName={currentUser.name}
+          userEmail={currentUser.email}
+          userRole={currentUser.role}
+          userAvatar={currentUser.avatar}
+          currentPath={currentPath}
+          onNavigate={handleNavigation}
+          breadcrumbItems={breadcrumbItems}
+          notificationCount={5}
+          onNotificationClick={() => console.log('Notificações')}
+          onProfileClick={() => console.log('Perfil')}
+          onSettingsClick={() => console.log('Configurações')}
+          onLogout={onLogout}
+          className={className}
         >
-          {/* Header */}
-          <header className="bg-white border-b shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between items-center h-16">
-                <div className="flex items-center space-x-4">
-                  <img
-                    src="/public/images/logos/logo-respira-kids.png"
-                    alt="Respira Kids"
-                    className="h-8 w-auto"
-                  />
-                  <h1 className="text-xl font-semibold text-roxo-titulo">
-                    Dashboard - Profissional
-                  </h1>
-                </div>
-
-                <div className="flex items-center space-x-4">
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">
-                      {currentUser.name}
-                    </p>
-                    <p className="text-xs text-gray-500">{currentUser.email}</p>
-                  </div>
-
-                  <Button
-                    onClick={onLogout}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    <span>Sair</span>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          {/* Main Content */}
-          <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          <div className="space-y-6">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-roxo-titulo mb-2">
+              <h2 className="text-2xl font-bold text-foreground mb-2">
                 Bem-vindo, {currentUser.name}!
               </h2>
               <p className="text-muted-foreground">
@@ -152,7 +138,10 @@ export const ProfissionalDashboardTemplate =
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Button className="h-20 flex flex-col items-center justify-center space-y-2">
+                  <Button
+                    className="h-20 flex flex-col items-center justify-center space-y-2"
+                    onClick={() => handleNavigation('/prontuarios/novo')}
+                  >
                     <FileText className="h-6 w-6" />
                     <span>Novo Prontuário</span>
                   </Button>
@@ -160,6 +149,7 @@ export const ProfissionalDashboardTemplate =
                   <Button
                     variant="outline"
                     className="h-20 flex flex-col items-center justify-center space-y-2"
+                    onClick={() => handleNavigation('/avaliacoes')}
                   >
                     <Activity className="h-6 w-6" />
                     <span>Avaliação</span>
@@ -168,6 +158,7 @@ export const ProfissionalDashboardTemplate =
                   <Button
                     variant="outline"
                     className="h-20 flex flex-col items-center justify-center space-y-2"
+                    onClick={() => handleNavigation('/pacientes')}
                   >
                     <Users className="h-6 w-6" />
                     <span>Meus Pacientes</span>
@@ -176,6 +167,7 @@ export const ProfissionalDashboardTemplate =
                   <Button
                     variant="outline"
                     className="h-20 flex flex-col items-center justify-center space-y-2"
+                    onClick={() => handleNavigation('/agenda')}
                   >
                     <Calendar className="h-6 w-6" />
                     <span>Agenda</span>
@@ -183,8 +175,8 @@ export const ProfissionalDashboardTemplate =
                 </div>
               </CardContent>
             </Card>
-          </main>
-        </div>
+          </div>
+        </ResponsiveLayout>
       );
     }
   );

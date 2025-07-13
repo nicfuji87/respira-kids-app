@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { User } from '@supabase/supabase-js';
+import type { User, Session } from '@supabase/supabase-js';
 
 /**
  * Tipos
@@ -11,6 +11,7 @@ export interface AuthUser extends User {
     is_approved: boolean;
     profile_complete: boolean;
     role: string | null;
+    foto_perfil: string | null;
   };
 }
 
@@ -100,21 +101,50 @@ export async function signOut() {
 }
 
 /**
- * Buscar dados da pessoa associada ao usuário
+ * Buscar dados da pessoa associada ao usuário com timeout
  */
-export async function getUserPessoa(userId: string) {
-  const { data, error } = await supabase
-    .from('pessoas')
-    .select('id, nome, is_approved, profile_complete, role')
-    .eq('auth_user_id', userId)
-    .single();
+export async function getUserPessoa(userId: string, timeout = 8000) {
+  console.log('🔍 Iniciando busca de dados da pessoa para userId:', userId);
 
-  if (error && error.code !== 'PGRST116') {
-    // PGRST116 = not found
-    throw new Error(error.message);
-  }
+  return new Promise<{
+    id: string;
+    nome: string;
+    is_approved: boolean;
+    profile_complete: boolean;
+    role: string | null;
+    foto_perfil: string | null;
+  } | null>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      console.error('❌ Timeout ao buscar dados da pessoa após', timeout, 'ms');
+      reject(new Error('Timeout ao buscar dados da pessoa'));
+    }, timeout);
 
-  return data;
+    const executeQuery = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pessoas')
+          .select('id, nome, is_approved, profile_complete, role, foto_perfil')
+          .eq('auth_user_id', userId)
+          .single();
+
+        clearTimeout(timeoutId);
+        console.log('✅ Query pessoas concluída. Data:', data, 'Error:', error);
+
+        if (error && error.code !== 'PGRST116') {
+          // PGRST116 = not found
+          reject(new Error(error.message));
+        } else {
+          resolve(data);
+        }
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error('❌ Erro na query pessoas:', error);
+        reject(error);
+      }
+    };
+
+    executeQuery();
+  });
 }
 
 /**
@@ -225,7 +255,9 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
 
   // Buscar dados da pessoa
   try {
+    console.log('🔍 Chamando getUserPessoa para userId:', user.id);
     const pessoa = await getUserPessoa(user.id);
+    console.log('🔍 getUserPessoa retornou:', pessoa);
 
     if (!pessoa) {
       console.log('❌ Pessoa não encontrada, redirecionando para aprovação');
@@ -276,7 +308,7 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
 
     // Usuário pode acessar dashboard
     console.log('✅ Usuário pode acessar dashboard');
-    return {
+    const finalResult = {
       isAuthenticated: true,
       needsEmailConfirmation: false,
       needsApproval: false,
@@ -284,11 +316,17 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
       canAccessDashboard: true,
       user: authUser,
     };
+    console.log('🏁 checkUserStatus retornando resultado final:', finalResult);
+    return finalResult;
   } catch (error) {
     console.error('❌ Erro ao verificar status do usuário:', error);
+    console.error(
+      '❌ Stack trace:',
+      error instanceof Error ? error.stack : 'No stack'
+    );
 
     // Em caso de erro, assumir que precisa de aprovação
-    return {
+    const errorResult = {
       isAuthenticated: true,
       needsEmailConfirmation: false,
       needsApproval: true,
@@ -296,42 +334,81 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
       canAccessDashboard: false,
       user: user as AuthUser,
     };
+    console.log(
+      '🏁 checkUserStatus retornando resultado de erro:',
+      errorResult
+    );
+    return errorResult;
   }
 }
 
 /**
- * Obter sessão atual
+ * Obter sessão atual com timeout
  */
-export async function getSession() {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+export async function getSession(timeout = 3000) {
+  return new Promise<Session | null>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Timeout ao recuperar sessão'));
+    }, timeout);
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return session;
+    supabase.auth
+      .getSession()
+      .then(({ data: { session }, error }) => {
+        clearTimeout(timeoutId);
+        if (error) {
+          reject(new Error(error.message));
+        } else {
+          resolve(session);
+        }
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
 }
 
 /**
- * Obter usuário atual
+ * Obter usuário atual com retry logic
  */
-export async function getCurrentUser() {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+export async function getCurrentUser(
+  retryCount = 0,
+  maxRetries = 3
+): Promise<User | null> {
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-  // Se não há usuário ou erro de sessão, retornar null ao invés de erro
-  if (error && error.message === 'Auth session missing!') {
+    // Se não há usuário ou erro de sessão, retornar null ao invés de erro
+    if (error && error.message === 'Auth session missing!') {
+      return null;
+    }
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return user;
+  } catch {
+    // AI dev note: Retry logic para casos de sessão sendo restaurada
+    if (retryCount < maxRetries) {
+      console.log(
+        `🔄 Tentando recuperar usuário (${retryCount + 1}/${maxRetries})...`
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1000 * (retryCount + 1))
+      ); // Backoff exponencial
+      return getCurrentUser(retryCount + 1, maxRetries);
+    }
+
+    // Se esgotar tentativas, retornar null ao invés de erro
+    console.log(
+      '❌ Não foi possível recuperar usuário após',
+      maxRetries,
+      'tentativas'
+    );
     return null;
   }
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return user;
 }

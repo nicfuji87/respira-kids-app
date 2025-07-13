@@ -9,6 +9,20 @@ export { CompleteProfilePage } from './auth/CompleteProfilePage';
 
 // Dashboard domain exports
 export { AdminDashboard } from './dashboard/AdminDashboard';
+export { DashboardSidebar } from './dashboard/DashboardSidebar';
+export { DashboardTopBar } from './dashboard/DashboardTopBar';
+export { MobileBottomTabs } from './dashboard/MobileBottomTabs';
+export { MobileHeader } from './dashboard/MobileHeader';
+
+// Profile domain exports
+export { EditProfileForm, MyProfileSection } from './profile';
+
+// Type exports
+export type { DashboardSidebarProps } from './dashboard/DashboardSidebar';
+export type { DashboardTopBarProps } from './dashboard/DashboardTopBar';
+export type { MobileBottomTabsProps } from './dashboard/MobileBottomTabs';
+export type { MobileHeaderProps } from './dashboard/MobileHeader';
+export type { EditProfileFormProps, MyProfileSectionProps } from './profile';
 
 // Registry para uso em templates e roteamento
 export const DomainComponents = {
@@ -18,6 +32,14 @@ export const DomainComponents = {
 
   // Dashboard
   AdminDashboard: 'AdminDashboard',
+  DashboardSidebar: 'DashboardSidebar',
+  DashboardTopBar: 'DashboardTopBar',
+  MobileBottomTabs: 'MobileBottomTabs',
+  MobileHeader: 'MobileHeader',
+
+  // Profile
+  EditProfileForm: 'EditProfileForm',
+  MyProfileSection: 'MyProfileSection',
 } as const;
 
 export type DomainComponentName = keyof typeof DomainComponents;
@@ -30,4 +52,13 @@ export const AuthComponents = {
 
 export const DashboardComponents = {
   AdminDashboard: 'AdminDashboard',
+  DashboardSidebar: 'DashboardSidebar',
+  DashboardTopBar: 'DashboardTopBar',
+  MobileBottomTabs: 'MobileBottomTabs',
+  MobileHeader: 'MobileHeader',
+} as const;
+
+export const ProfileComponents = {
+  EditProfileForm: 'EditProfileForm',
+  MyProfileSection: 'MyProfileSection',
 } as const;
