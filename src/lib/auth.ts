@@ -273,6 +273,15 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
     }
 
     console.log('✅ Pessoa encontrada:', pessoa);
+    console.log('🔍 DEBUG: AuthUser sendo criado', {
+      'user.id': user.id,
+      'user.email': user.email,
+      'pessoa.id': pessoa.id,
+      'pessoa.nome': pessoa.nome,
+      'pessoa.role': pessoa.role,
+      'pessoa.is_approved': pessoa.is_approved,
+      'pessoa.profile_complete': pessoa.profile_complete,
+    });
 
     const authUser = { ...user, pessoa } as AuthUser;
 

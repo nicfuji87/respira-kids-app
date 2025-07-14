@@ -24,30 +24,39 @@ export function useNavigation(userRole?: UserRole) {
   // Gerar breadcrumb baseado na rota atual
   const breadcrumbItems: BreadcrumbItem[] = useMemo(() => {
     const pathSegments = currentPath.split('/').filter(Boolean);
-    const items: BreadcrumbItem[] = [
-      { label: 'Dashboard', href: '/dashboard' },
-    ];
 
-    if (pathSegments.length > 1) {
-      const routeMap: Record<string, string> = {
-        agenda: 'Agenda',
-        pacientes: 'Pacientes',
-        estoque: 'Estoque',
-        financeiro: 'Financeiro',
-        configuracoes: 'Configurações',
-        usuarios: 'Usuários',
-        relatorios: 'Relatórios',
-        webhooks: 'Webhooks',
-      };
+    const routeMap: Record<string, string> = {
+      dashboard: 'Dashboard',
+      agenda: 'Agenda',
+      pacientes: 'Pacientes',
+      estoque: 'Estoque',
+      financeiro: 'Financeiro',
+      configuracoes: 'Configurações',
+      usuarios: 'Usuários',
+      relatorios: 'Relatórios',
+      webhooks: 'Webhooks',
+    };
 
-      pathSegments.slice(1).forEach((segment, index) => {
-        const label = routeMap[segment] || segment;
-        const href = '/' + pathSegments.slice(0, index + 2).join('/');
-        items.push({ label, href });
-      });
+    // Se não há segmentos ou está na raiz, mostrar Dashboard
+    if (pathSegments.length === 0 || currentPath === '/') {
+      return [
+        {
+          label: 'Dashboard',
+          href: '/dashboard',
+        },
+      ];
     }
 
-    return items;
+    // Para outras rotas, mostrar apenas o nome da página atual
+    const currentSegment = pathSegments[0]; // primeiro segmento após '/'
+    const currentLabel = routeMap[currentSegment] || currentSegment;
+
+    return [
+      {
+        label: currentLabel,
+        href: currentPath,
+      },
+    ];
   }, [currentPath]);
 
   return {

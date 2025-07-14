@@ -1,60 +1,39 @@
-// AI dev note: Registry de componentes TEMPLATES (Nível 4)
-// Layouts completos e estruturas de página responsivas
+// AI dev note: Registry de Templates - Export organizado por categoria
+// Mantém organização clara e facilita importações
 
 // Auth Templates
 export { SignUpTemplate } from './auth/SignUpTemplate';
 
-// Dashboard Templates
-export { AdminDashboardTemplate } from './dashboard/AdminDashboardTemplate';
-export { SecretariaDashboardTemplate } from './dashboard/SecretariaDashboardTemplate';
-export { ProfissionalDashboardTemplate } from './dashboard/ProfissionalDashboardTemplate';
+// Calendar Templates (Fase 3 + Fase 4)
+export { CalendarTemplate } from './dashboard/CalendarTemplate';
+export { AdminCalendarTemplate } from './dashboard/AdminCalendarTemplate';
+export { ProfissionalCalendarTemplate } from './dashboard/ProfissionalCalendarTemplate';
+export { SecretariaCalendarTemplate } from './dashboard/SecretariaCalendarTemplate';
+export { ResponsiveCalendarTemplate } from './dashboard/ResponsiveCalendarTemplate';
+export {
+  CalendarTemplateWithData,
+  SimpleCalendarTemplate,
+} from './dashboard/CalendarTemplateWithData';
 
-// Layout Templates
-export { DesktopLayout } from './dashboard/DesktopLayout';
-export { MobileLayout } from './dashboard/MobileLayout';
-export { ResponsiveLayout } from './dashboard/ResponsiveLayout';
-
-// Type exports
-export type { DesktopLayoutProps } from './dashboard/DesktopLayout';
-export type { MobileLayoutProps } from './dashboard/MobileLayout';
-export type { ResponsiveLayoutProps } from './dashboard/ResponsiveLayout';
-
-// Registry para uso em roteamento e aplicação
-export const TemplateComponents = {
-  // Auth
-  SignUpTemplate: 'SignUpTemplate',
-
-  // Dashboard
-  AdminDashboardTemplate: 'AdminDashboardTemplate',
-  SecretariaDashboardTemplate: 'SecretariaDashboardTemplate',
-  ProfissionalDashboardTemplate: 'ProfissionalDashboardTemplate',
-
-  // Layouts
-  DesktopLayout: 'DesktopLayout',
-  MobileLayout: 'MobileLayout',
-  ResponsiveLayout: 'ResponsiveLayout',
-} as const;
-
-export type TemplateComponentName = keyof typeof TemplateComponents;
-
-// Registry por área de aplicação
-export const AuthTemplates = {
-  SignUpTemplate: 'SignUpTemplate',
-} as const;
-
-export const DashboardTemplates = {
-  AdminDashboardTemplate: 'AdminDashboardTemplate',
-  SecretariaDashboardTemplate: 'SecretariaDashboardTemplate',
-  ProfissionalDashboardTemplate: 'ProfissionalDashboardTemplate',
-} as const;
-
-export const LayoutTemplates = {
-  DesktopLayout: 'DesktopLayout',
-  MobileLayout: 'MobileLayout',
-  ResponsiveLayout: 'ResponsiveLayout',
-} as const;
-
-// Types para props dos templates
-export type { AdminUser } from './dashboard/AdminDashboardTemplate';
-export type { SecretariaUser } from './dashboard/SecretariaDashboardTemplate';
-export type { ProfissionalUser } from './dashboard/ProfissionalDashboardTemplate';
+// Types para Calendar Templates (aliased para evitar conflitos)
+export type { CalendarTemplateProps } from './dashboard/CalendarTemplate';
+export type {
+  AdminCalendarTemplateProps,
+  AdminUser,
+} from './dashboard/AdminCalendarTemplate';
+export type {
+  ProfissionalCalendarTemplateProps,
+  ProfissionalUser,
+} from './dashboard/ProfissionalCalendarTemplate';
+export type {
+  SecretariaCalendarTemplateProps,
+  SecretariaUser,
+} from './dashboard/SecretariaCalendarTemplate';
+export type {
+  ResponsiveCalendarTemplateProps,
+  ResponsiveCalendarUser,
+} from './dashboard/ResponsiveCalendarTemplate';
+export type {
+  CalendarTemplateWithDataProps,
+  SimpleCalendarTemplateProps,
+} from './dashboard/CalendarTemplateWithData';

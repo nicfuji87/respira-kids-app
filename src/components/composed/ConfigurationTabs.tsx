@@ -7,6 +7,7 @@ import {
 } from '@/components/primitives/tabs';
 import { DevelopmentPlaceholder } from './DevelopmentPlaceholder';
 import { MyProfileSection } from '@/components/domain/profile';
+import { CompanyForm } from './CompanyForm';
 import {
   User,
   Building,
@@ -52,15 +53,9 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       {
         id: 'company',
         label: 'Empresa',
-        roles: ['admin', 'profissional'],
+        roles: ['admin', 'profissional', 'secretaria'],
         icon: Building,
-        content: (
-          <DevelopmentPlaceholder
-            title="Empresa"
-            description="Configure informações da empresa, dados fiscais e configurações organizacionais."
-            icon={<Building className="h-12 w-12 text-primary/50" />}
-          />
-        ),
+        content: <CompanyForm />,
       },
       {
         id: 'system',

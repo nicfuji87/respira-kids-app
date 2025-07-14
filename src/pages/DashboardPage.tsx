@@ -15,9 +15,12 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
+import { CalendarTemplateWithData } from '@/components/templates/dashboard/CalendarTemplateWithData';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 // AI dev note: DashboardPage com dados reais do Supabase
-// Página principal do dashboard com métricas e ações rápidas
+// Página principal do dashboard com métricas e calendário
 
 interface DashboardMetrics {
   agendamentosHoje: number;
@@ -33,6 +36,9 @@ interface DashboardMetrics {
 }
 
 export const DashboardPage: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     agendamentosHoje: 0,
     pacientesAtivos: 0,
@@ -82,6 +88,14 @@ export const DashboardPage: React.FC = () => {
     loadMetrics();
   }, []);
 
+  const handleNavigateToAgenda = () => {
+    navigate('/agenda');
+  };
+
+  const handleNavigateToPacientes = () => {
+    navigate('/pacientes');
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -105,6 +119,20 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Bem-vindo, {user?.pessoa?.nome || 'Usuário'}
+          </p>
+        </div>
+        <Button onClick={handleNavigateToAgenda}>
+          <Calendar className="h-4 w-4 mr-2" />
+          Ver Agenda Completa
+        </Button>
+      </div>
+
       {/* Métricas principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
@@ -167,8 +195,8 @@ export const DashboardPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Grid com conteúdo principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Grid principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Próximos agendamentos */}
         <Card>
           <CardHeader>
@@ -200,45 +228,68 @@ export const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Ações rápidas */}
-        <Card>
+        {/* Calendário compacto */}
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Ações Rápidas</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Agenda do Mês
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <Button className="h-20 flex flex-col items-center justify-center space-y-2">
-                <Calendar className="h-6 w-6" />
-                <span className="text-sm">Nova Sessão</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center justify-center space-y-2"
-              >
-                <Users className="h-6 w-6" />
-                <span className="text-sm">Novo Paciente</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center justify-center space-y-2"
-              >
-                <FileText className="h-6 w-6" />
-                <span className="text-sm">Relatório</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center justify-center space-y-2"
-              >
-                <Activity className="h-6 w-6" />
-                <span className="text-sm">Avaliação</span>
-              </Button>
+            <div className="h-96 overflow-hidden">
+              <CalendarTemplateWithData
+                responsive={true}
+                initialView="month"
+                className="scale-95"
+              />
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Ações rápidas */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Ações Rápidas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Button
+              className="h-20 flex flex-col items-center justify-center space-y-2"
+              onClick={handleNavigateToAgenda}
+            >
+              <Calendar className="h-6 w-6" />
+              <span className="text-sm">Nova Sessão</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-20 flex flex-col items-center justify-center space-y-2"
+              onClick={handleNavigateToPacientes}
+            >
+              <Users className="h-6 w-6" />
+              <span className="text-sm">Novo Paciente</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-20 flex flex-col items-center justify-center space-y-2"
+            >
+              <FileText className="h-6 w-6" />
+              <span className="text-sm">Relatório</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-20 flex flex-col items-center justify-center space-y-2"
+            >
+              <Activity className="h-6 w-6" />
+              <span className="text-sm">Avaliação</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

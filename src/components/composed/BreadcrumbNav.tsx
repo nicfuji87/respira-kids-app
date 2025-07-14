@@ -1,5 +1,15 @@
 import React from 'react';
-import { ChevronRight, Home } from 'lucide-react';
+import {
+  ChevronRight,
+  Home,
+  Calendar,
+  Users,
+  Package,
+  DollarSign,
+  Settings,
+  FileText,
+  Webhook,
+} from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +27,23 @@ export interface BreadcrumbNavProps {
   onItemClick?: (item: BreadcrumbItem, index: number) => void;
   className?: string;
 }
+
+// Helper function to get icon based on label
+const getIconForLabel = (label: string) => {
+  const iconMap: Record<string, React.ReactNode> = {
+    Dashboard: <Home className="h-4 w-4" />,
+    Agenda: <Calendar className="h-4 w-4" />,
+    Pacientes: <Users className="h-4 w-4" />,
+    Estoque: <Package className="h-4 w-4" />,
+    Financeiro: <DollarSign className="h-4 w-4" />,
+    Configurações: <Settings className="h-4 w-4" />,
+    Usuários: <Users className="h-4 w-4" />,
+    Relatórios: <FileText className="h-4 w-4" />,
+    Webhooks: <Webhook className="h-4 w-4" />,
+  };
+
+  return iconMap[label] || <Home className="h-4 w-4" />;
+};
 
 export const BreadcrumbNav = React.memo<BreadcrumbNavProps>(
   ({ items, onItemClick, className }) => {
@@ -42,10 +69,7 @@ export const BreadcrumbNav = React.memo<BreadcrumbNavProps>(
               onClick={() => onItemClick?.(item, index)}
               disabled={!item.href && index === items.length - 1}
             >
-              {index === 0 && <Home className="h-4 w-4 mr-1" />}
-              {item.icon && index > 0 && (
-                <div className="mr-1">{item.icon}</div>
-              )}
+              <div className="mr-1">{getIconForLabel(item.label)}</div>
               {item.label}
             </Button>
           </React.Fragment>

@@ -17,12 +17,29 @@ export { MobileHeader } from './dashboard/MobileHeader';
 // Profile domain exports
 export { EditProfileForm, MyProfileSection } from './profile';
 
+// Calendar domain exports
+export {
+  CalendarHeader,
+  MonthView,
+  WeekView,
+  DayView,
+  AgendaView,
+  EventManager,
+} from './calendar';
+
 // Type exports
 export type { DashboardSidebarProps } from './dashboard/DashboardSidebar';
 export type { DashboardTopBarProps } from './dashboard/DashboardTopBar';
 export type { MobileBottomTabsProps } from './dashboard/MobileBottomTabs';
 export type { MobileHeaderProps } from './dashboard/MobileHeader';
 export type { EditProfileFormProps, MyProfileSectionProps } from './profile';
+export type {
+  MonthViewProps,
+  WeekViewProps,
+  DayViewProps,
+  AgendaViewProps,
+  EventManagerProps,
+} from './calendar';
 
 // Registry para uso em templates e roteamento
 export const DomainComponents = {
@@ -40,6 +57,14 @@ export const DomainComponents = {
   // Profile
   EditProfileForm: 'EditProfileForm',
   MyProfileSection: 'MyProfileSection',
+
+  // Calendar
+  CalendarHeader: 'CalendarHeader',
+  MonthView: 'MonthView',
+  WeekView: 'WeekView',
+  DayView: 'DayView',
+  AgendaView: 'AgendaView',
+  EventManager: 'EventManager',
 } as const;
 
 export type DomainComponentName = keyof typeof DomainComponents;
@@ -61,4 +86,13 @@ export const DashboardComponents = {
 export const ProfileComponents = {
   EditProfileForm: 'EditProfileForm',
   MyProfileSection: 'MyProfileSection',
+} as const;
+
+export const CalendarDomainComponents = {
+  CalendarHeader: 'CalendarHeader',
+  MonthView: 'MonthView',
+  WeekView: 'WeekView',
+  DayView: 'DayView',
+  AgendaView: 'AgendaView',
+  EventManager: 'EventManager',
 } as const;
