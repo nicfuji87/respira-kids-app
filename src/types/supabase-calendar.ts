@@ -97,7 +97,88 @@ export interface SupabasePermissaoAgendamento {
   updated_at: string;
 }
 
-// Interfaces para dados enriquecidos (com joins)
+// AI dev note: Interface para dados da view vw_agendamentos_completos (estrutura flat)
+export interface SupabaseAgendamentoCompletoFlat {
+  id: string;
+  data_hora: string;
+  observacao: string | null;
+  valor_servico: string; // numeric vem como string do Supabase
+  id_pagamento_externo: string | null;
+  link_nfe: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+  // Paciente
+  paciente_id: string;
+  paciente_nome: string;
+  paciente_email: string | null;
+  paciente_telefone: number | null;
+  paciente_role: string | null;
+  paciente_foto_perfil: string | null;
+  paciente_is_approved: boolean;
+  paciente_profile_complete: boolean;
+  paciente_ativo: boolean;
+  // Responsável Legal
+  responsavel_legal_id: string | null;
+  responsavel_legal_nome: string | null;
+  responsavel_legal_email: string | null;
+  responsavel_legal_telefone: number | null;
+  // Responsável Financeiro
+  responsavel_financeiro_id: string | null;
+  responsavel_financeiro_nome: string | null;
+  responsavel_financeiro_email: string | null;
+  responsavel_financeiro_telefone: number | null;
+  // Profissional
+  profissional_id: string;
+  profissional_nome: string;
+  profissional_email: string | null;
+  profissional_telefone: number | null;
+  profissional_role: string | null;
+  profissional_foto_perfil: string | null;
+  profissional_especialidade: string | null;
+  profissional_registro_profissional: string | null;
+  profissional_bio_profissional: string | null;
+  profissional_is_approved: boolean;
+  profissional_profile_complete: boolean;
+  profissional_ativo: boolean;
+  // Comissão
+  comissao_tipo_recebimento: string | null;
+  comissao_valor_fixo: string | null;
+  comissao_valor_percentual: string | null;
+  comissao_valor_calculado: string;
+  // Tipo Serviço
+  tipo_servico_id: string;
+  tipo_servico_nome: string;
+  tipo_servico_descricao: string | null;
+  tipo_servico_duracao_minutos: number;
+  tipo_servico_valor: string;
+  tipo_servico_cor: string;
+  tipo_servico_ativo: boolean;
+  // Local Atendimento
+  local_atendimento_id: string | null;
+  local_atendimento_nome: string | null;
+  local_atendimento_tipo_local: string | null;
+  local_atendimento_ativo: boolean | null;
+  // Status Consulta
+  status_consulta_id: string;
+  status_consulta_codigo: string;
+  status_consulta_descricao: string;
+  status_consulta_cor: string;
+  // Status Pagamento
+  status_pagamento_id: string;
+  status_pagamento_codigo: string;
+  status_pagamento_descricao: string;
+  status_pagamento_cor: string;
+  // Agendado Por
+  agendado_por_id: string;
+  agendado_por_nome: string;
+  agendado_por_email: string | null;
+  // Auditoria
+  criado_por_nome: string | null;
+  atualizado_por_nome: string | null;
+}
+
+// Interfaces para dados enriquecidos (com joins) - MANTIDO PARA COMPATIBILIDADE
 export interface SupabaseAgendamentoCompleto extends SupabaseAgendamento {
   paciente: SupabasePessoa;
   profissional: SupabasePessoa;

@@ -24,7 +24,7 @@ export interface ResponsiveCalendarTemplateProps {
   // Events data
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
-  onEventEdit: (event: CalendarEvent) => void;
+  onEventEdit?: (event: CalendarEvent) => void;
   onEventDelete: (eventId: string) => void;
 
   // View configuration
@@ -45,7 +45,6 @@ export interface ResponsiveCalendarTemplateProps {
     name: string;
     specialization?: string;
   }[];
-  showStatistics?: boolean;
   showPatientNames?: boolean;
   canManageAllEvents?: boolean;
 }
@@ -65,9 +64,8 @@ export const ResponsiveCalendarTemplate =
       mobileView = 'day',
       desktopView = 'week',
       availableProfessionals = [],
-      showStatistics = true,
       showPatientNames = true,
-      canManageAllEvents = true,
+      canManageAllEvents = false,
     }) => {
       // State for responsive behavior
       const [isMobile, setIsMobile] = useState(false);
@@ -159,7 +157,6 @@ export const ResponsiveCalendarTemplate =
               <AdminCalendarTemplate
                 {...baseProps}
                 currentUser={currentUser as AdminUser}
-                showStatistics={showStatistics && !isMobile} // Hide stats on mobile
               />
             );
 
@@ -168,9 +165,7 @@ export const ResponsiveCalendarTemplate =
               <ProfissionalCalendarTemplate
                 {...baseProps}
                 currentUser={currentUser as ProfissionalUser}
-                showPatientNames={showPatientNames}
                 showOnlyMyEvents={true}
-                canEditOtherEvents={false}
               />
             );
 
@@ -178,6 +173,7 @@ export const ResponsiveCalendarTemplate =
             return (
               <SecretariaCalendarTemplate
                 {...baseProps}
+                onEventEdit={onEventEdit || (() => {})}
                 currentUser={currentUser as SecretariaUser}
                 availableProfessionals={availableProfessionals}
                 canManageAllEvents={canManageAllEvents}
@@ -186,14 +182,12 @@ export const ResponsiveCalendarTemplate =
             );
 
           default:
-            // Fallback to base template
             return (
               <CalendarTemplate
                 {...baseProps}
-                canCreateEvents={true}
-                canEditEvents={true}
-                canDeleteEvents={true}
-                showEventManager={true}
+                canCreateEvents={false}
+                canEditEvents={false}
+                canDeleteEvents={false}
               />
             );
         }

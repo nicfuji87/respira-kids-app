@@ -4,6 +4,7 @@
 import { supabase } from './supabase';
 import type {
   SupabaseAgendamentoCompleto,
+  SupabaseAgendamentoCompletoFlat,
   SupabasePessoa,
   SupabaseTipoServico,
   SupabaseConsultaStatus,
@@ -16,11 +17,76 @@ import type {
 } from '@/types/supabase-calendar';
 import {
   mapAgendamentoToCalendarEvent,
+  mapAgendamentoFlatToCompleto,
   calculateCalendarStats,
 } from './calendar-mappers';
 import type { CalendarEvent } from '@/types/calendar';
 
-// AI dev note: Busca agendamentos com joins completos para o período especificado
+// AI dev note: Busca agendamentos usando a view vw_agendamentos_completos
+export const fetchAgendamentosFromView = async (
+  filters: CalendarFilters
+): Promise<SupabaseAgendamentoCompleto[]> => {
+  let query = supabase
+    .from('vw_agendamentos_completos')
+    .select('*')
+    .gte('data_hora', filters.startDate.toISOString())
+    .lte('data_hora', filters.endDate.toISOString())
+    .eq('ativo', true)
+    .order('data_hora', { ascending: true });
+
+  // Aplicar filtros específicos
+  if (filters.profissionalId) {
+    query = query.eq('profissional_id', filters.profissionalId);
+  }
+
+  if (filters.pacienteId) {
+    query = query.eq('paciente_id', filters.pacienteId);
+  }
+
+  if (filters.tipoServicoId) {
+    query = query.eq('tipo_servico_id', filters.tipoServicoId);
+  }
+
+  if (filters.statusConsultaId) {
+    query = query.eq('status_consulta_id', filters.statusConsultaId);
+  }
+
+  if (filters.statusPagamentoId) {
+    query = query.eq('status_pagamento_id', filters.statusPagamentoId);
+  }
+
+  if (filters.localId) {
+    query = query.eq('local_atendimento_id', filters.localId);
+  }
+
+  console.log('🔍 DEBUG: Query Supabase na view sendo executada', {
+    'filters.startDate': filters.startDate.toISOString(),
+    'filters.endDate': filters.endDate.toISOString(),
+    'filters.profissionalId': filters.profissionalId,
+    view: 'vw_agendamentos_completos',
+  });
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Erro ao buscar agendamentos da view:', error);
+    throw error;
+  }
+
+  console.log('🔍 DEBUG: Resultado da query na view', {
+    'data.length': data?.length || 0,
+    data: data,
+  });
+
+  // Converter estrutura flat da view para estrutura aninhada
+  const agendamentos = (data as SupabaseAgendamentoCompletoFlat[]).map(
+    mapAgendamentoFlatToCompleto
+  );
+
+  return agendamentos;
+};
+
+// AI dev note: Busca agendamentos com joins completos para o período especificado - FUNÇÃO ORIGINAL (BACKUP)
 export const fetchAgendamentos = async (
   filters: CalendarFilters
 ): Promise<SupabaseAgendamentoCompleto[]> => {
@@ -104,14 +170,14 @@ export const fetchAgendamentos = async (
     data: data,
   });
 
-  return data || [];
+  return data as SupabaseAgendamentoCompleto[];
 };
 
-// AI dev note: Busca agendamentos e converte para CalendarEvent
+// AI dev note: Helper para buscar eventos e converter para CalendarEvent
 export const fetchCalendarEvents = async (
   filters: CalendarFilters
 ): Promise<CalendarEvent[]> => {
-  const agendamentos = await fetchAgendamentos(filters);
+  const agendamentos = await fetchAgendamentosFromView(filters);
   return agendamentos.map(mapAgendamentoToCalendarEvent);
 };
 
@@ -127,10 +193,15 @@ export const fetchUserAgendamentos = async (
     userRole,
   });
 
+  // AI dev note: Null-safety check para userRole
+  if (!userRole || typeof userRole !== 'string') {
+    throw new Error(`Role inválido ou não definido: ${userRole}`);
+  }
+
   switch (userRole) {
     case 'admin':
       // Admin pode ver todos os agendamentos
-      return fetchAgendamentos(filters);
+      return fetchAgendamentosFromView(filters);
 
     case 'profissional': {
       // Profissional vê apenas seus próprios agendamentos
@@ -139,7 +210,7 @@ export const fetchUserAgendamentos = async (
         profissionalId: userId,
       };
       console.log('🔍 DEBUG: Filtros para profissional', profissionalFilters);
-      return fetchAgendamentos(profissionalFilters);
+      return fetchAgendamentosFromView(profissionalFilters);
     }
 
     case 'secretaria': {
@@ -148,14 +219,23 @@ export const fetchUserAgendamentos = async (
         await fetchProfissionaisAutorizados(userId);
       const agendamentosPorProfissional = await Promise.all(
         profissionaisAutorizados.map((profId) =>
-          fetchAgendamentos({ ...filters, profissionalId: profId })
+          fetchAgendamentosFromView({ ...filters, profissionalId: profId })
         )
       );
-      return agendamentosPorProfissional.flat();
+
+      // Combinar e ordenar por data
+      const todosAgendamentos = agendamentosPorProfissional
+        .flat()
+        .sort(
+          (a, b) =>
+            new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime()
+        );
+
+      return todosAgendamentos;
     }
 
     default:
-      return [];
+      throw new Error(`Role não suportado: ${userRole}`);
   }
 };
 

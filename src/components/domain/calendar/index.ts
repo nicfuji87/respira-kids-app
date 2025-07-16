@@ -8,6 +8,7 @@ export { WeekView } from './WeekView';
 export { DayView } from './DayView';
 export { AgendaView } from './AgendaView';
 export { EventManager } from './EventManager';
+export { EventListModal } from './EventListModal';
 
 // Type exports
 export type { MonthViewProps } from './MonthView';
@@ -15,6 +16,7 @@ export type { WeekViewProps } from './WeekView';
 export type { DayViewProps } from './DayView';
 export type { AgendaViewProps } from './AgendaView';
 export type { EventManagerProps } from './EventManager';
+export type { EventListModalProps } from './EventListModal';
 
 // Registry para uso em templates
 export const CalendarComponents = {
@@ -24,6 +26,7 @@ export const CalendarComponents = {
   DayView: 'DayView',
   AgendaView: 'AgendaView',
   EventManager: 'EventManager',
+  EventListModal: 'EventListModal',
 } as const;
 
 export type CalendarComponentName = keyof typeof CalendarComponents;

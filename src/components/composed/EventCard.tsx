@@ -15,7 +15,7 @@ import { eventColorMap } from '@/types/calendar';
 export interface EventCardProps {
   event: CalendarEvent;
   onClick?: (event: CalendarEvent) => void;
-  variant?: 'default' | 'compact' | 'detailed';
+  variant?: 'default' | 'compact' | 'detailed' | 'month';
   className?: string;
   showTime?: boolean;
   showLocation?: boolean;
@@ -73,6 +73,46 @@ export const EventCard = React.memo<EventCardProps>(
           )}
           {event.title}
         </Badge>
+      );
+    }
+
+    // Variante compacta para vista mensal
+    if (variant === 'month') {
+      // Extrair nome do paciente do título (formato: "Tipo Servico - Nome Paciente")
+      const pacienteNome = event.title.includes(' - ')
+        ? event.title.split(' - ')[1]
+        : event.title;
+
+      // Usar cor hex diretamente do metadata se disponível, senão mapear a cor do evento
+      const corHex =
+        (event.metadata?.tipoServicoCor as string) ||
+        (event.color ? `var(--${event.color}-500)` : '#3B82F6');
+
+      return (
+        <div
+          className={cn(
+            'flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity py-0.5',
+            className
+          )}
+          onClick={handleClick}
+          title={event.title}
+        >
+          {/* Bolinha colorida */}
+          <div
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ backgroundColor: corHex }}
+          />
+
+          {/* Horário */}
+          {!event.allDay && (
+            <span className="text-xs font-medium flex-shrink-0">
+              {formatTime(event.start)}
+            </span>
+          )}
+
+          {/* Nome do paciente */}
+          <span className="text-xs truncate flex-1">{pacienteNome}</span>
+        </div>
       );
     }
 

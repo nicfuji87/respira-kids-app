@@ -6,6 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import type { CalendarEvent, EventColor } from '@/types/calendar';
 import type {
   SupabaseAgendamentoCompleto,
+  SupabaseAgendamentoCompletoFlat,
   SupabasePessoa,
   CalendarStats,
   CalendarPermissions,
@@ -47,11 +48,175 @@ export const mapEventColorToHex = (eventColor: EventColor): string => {
   return colorMap[eventColor];
 };
 
+// AI dev note: Converte dados flat da view para estrutura aninhada
+export const mapAgendamentoFlatToCompleto = (
+  flat: SupabaseAgendamentoCompletoFlat
+): SupabaseAgendamentoCompleto => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔄 Mapeando agendamento flat→completo:', {
+      id: flat.id,
+      data_hora: flat.data_hora,
+      paciente_nome: flat.paciente_nome,
+      profissional_nome: flat.profissional_nome,
+      tipo_servico_nome: flat.tipo_servico_nome,
+    });
+  }
+
+  const mapped = {
+    id: flat.id,
+    data_hora: flat.data_hora,
+    paciente_id: flat.paciente_id,
+    profissional_id: flat.profissional_id,
+    tipo_servico_id: flat.tipo_servico_id,
+    local_id: flat.local_atendimento_id,
+    status_consulta_id: flat.status_consulta_id,
+    status_pagamento_id: flat.status_pagamento_id,
+    valor_servico: parseFloat(flat.valor_servico || '0'),
+    id_pagamento_externo: flat.id_pagamento_externo,
+    link_nfe: flat.link_nfe,
+    observacao: flat.observacao,
+    agendado_por: flat.agendado_por_id,
+    criado_por: null, // Não disponível na view
+    atualizado_por: null, // Não disponível na view
+    created_at: flat.created_at,
+    updated_at: flat.updated_at,
+    // Objetos aninhados
+    paciente: {
+      id: flat.paciente_id,
+      nome: flat.paciente_nome,
+      email: flat.paciente_email,
+      telefone: flat.paciente_telefone ? BigInt(flat.paciente_telefone) : null,
+      role: flat.paciente_role as
+        | 'admin'
+        | 'profissional'
+        | 'secretaria'
+        | null,
+      auth_user_id: null, // Não disponível na view
+      especialidade: null,
+      registro_profissional: null,
+      bio_profissional: null,
+      foto_perfil: flat.paciente_foto_perfil,
+      is_approved: flat.paciente_is_approved,
+      profile_complete: flat.paciente_profile_complete,
+      ativo: flat.paciente_ativo,
+      bloqueado: false, // Assumindo false se não disponível
+      created_at: flat.created_at,
+      updated_at: flat.updated_at,
+    },
+    profissional: {
+      id: flat.profissional_id,
+      nome: flat.profissional_nome,
+      email: flat.profissional_email,
+      telefone: flat.profissional_telefone
+        ? BigInt(flat.profissional_telefone)
+        : null,
+      role: flat.profissional_role as
+        | 'admin'
+        | 'profissional'
+        | 'secretaria'
+        | null,
+      auth_user_id: null, // Não disponível na view
+      especialidade: flat.profissional_especialidade,
+      registro_profissional: flat.profissional_registro_profissional,
+      bio_profissional: flat.profissional_bio_profissional,
+      foto_perfil: flat.profissional_foto_perfil,
+      is_approved: flat.profissional_is_approved,
+      profile_complete: flat.profissional_profile_complete,
+      ativo: flat.profissional_ativo,
+      bloqueado: false, // Assumindo false se não disponível
+      created_at: flat.created_at,
+      updated_at: flat.updated_at,
+    },
+    tipo_servico: {
+      id: flat.tipo_servico_id,
+      nome: flat.tipo_servico_nome,
+      descricao: flat.tipo_servico_descricao,
+      duracao_minutos: flat.tipo_servico_duracao_minutos,
+      valor: parseFloat(flat.tipo_servico_valor || '0'),
+      cor: flat.tipo_servico_cor,
+      ativo: flat.tipo_servico_ativo,
+      criado_por: null, // Não disponível na view
+      atualizado_por: null, // Não disponível na view
+      created_at: flat.created_at,
+      updated_at: flat.updated_at,
+    },
+    local_atendimento: flat.local_atendimento_id
+      ? {
+          id: flat.local_atendimento_id,
+          nome: flat.local_atendimento_nome || '',
+          tipo_local: flat.local_atendimento_tipo_local as
+            | 'clinica'
+            | 'domiciliar'
+            | 'externa',
+          ativo: flat.local_atendimento_ativo || false,
+          id_endereco: null, // Não disponível na view
+          numero_endereco: null, // Não disponível na view
+          complemento_endereco: null, // Não disponível na view
+          criado_por: null, // Não disponível na view
+          atualizado_por: null, // Não disponível na view
+          created_at: flat.created_at,
+          updated_at: flat.updated_at,
+        }
+      : null,
+    status_consulta: {
+      id: flat.status_consulta_id,
+      codigo: flat.status_consulta_codigo,
+      descricao: flat.status_consulta_descricao,
+      cor: flat.status_consulta_cor,
+      created_at: flat.created_at,
+      updated_at: flat.updated_at,
+    },
+    status_pagamento: {
+      id: flat.status_pagamento_id,
+      codigo: flat.status_pagamento_codigo,
+      descricao: flat.status_pagamento_descricao,
+      cor: flat.status_pagamento_cor,
+      created_at: flat.created_at,
+      updated_at: flat.updated_at,
+    },
+    agendado_por_pessoa: {
+      id: flat.agendado_por_id,
+      nome: flat.agendado_por_nome,
+      email: flat.agendado_por_email,
+      telefone: null, // Não disponível na view
+      role: null, // Não disponível na view
+      auth_user_id: null, // Não disponível na view
+      especialidade: null,
+      registro_profissional: null,
+      bio_profissional: null,
+      foto_perfil: null,
+      is_approved: true, // Assumindo true se conseguiu agendar
+      profile_complete: true, // Assumindo true se conseguiu agendar
+      ativo: true, // Assumindo true se conseguiu agendar
+      bloqueado: false,
+      created_at: flat.created_at,
+      updated_at: flat.updated_at,
+    },
+  };
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('✅ Agendamento mapeado com sucesso:', {
+      id: mapped.id,
+      titulo_gerado: `${mapped.tipo_servico.nome} - ${mapped.paciente.nome}`,
+      data_inicio: mapped.data_hora,
+      duracao: mapped.tipo_servico.duracao_minutos,
+    });
+  }
+
+  return mapped;
+};
+
 // AI dev note: Converte SupabaseAgendamentoCompleto para CalendarEvent
 export const mapAgendamentoToCalendarEvent = (
   agendamento: SupabaseAgendamentoCompleto
 ): CalendarEvent => {
-  const start = new Date(agendamento.data_hora);
+  // AI dev note: Tratar horário como local removendo timezone para evitar conversão
+  // Remove qualquer timezone (+00, Z, etc) para que seja interpretado como horário local
+  const localDateString = agendamento.data_hora.replace(
+    /[+-]\d{2}:\d{2}$|[+-]\d{2}$|Z$/i,
+    ''
+  );
+  const start = new Date(localDateString);
   const end = new Date(
     start.getTime() + agendamento.tipo_servico.duracao_minutos * 60000
   );
@@ -79,11 +244,9 @@ export const mapAgendamentoToCalendarEvent = (
       statusConsulta: agendamento.status_consulta.descricao,
       statusPagamento: agendamento.status_pagamento.descricao,
       valorServico: agendamento.valor_servico,
-      agendadoPor: agendamento.agendado_por_pessoa.nome,
-      pacienteNome: agendamento.paciente.nome,
-      profissionalNome: agendamento.profissional.nome,
-      tipoServicoNome: agendamento.tipo_servico.nome,
-      duracao: agendamento.tipo_servico.duracao_minutos,
+      localId: agendamento.local_id,
+      observacao: agendamento.observacao,
+      tipoServicoCor: agendamento.tipo_servico.cor, // Cor original do tipo de serviço
     },
   };
 };
@@ -128,7 +291,6 @@ export const mapPessoaToAdminUser = (pessoa: SupabasePessoa): AdminUser => {
     name: pessoa.nome,
     email: pessoa.email || '',
     role: 'admin',
-    avatar: pessoa.foto_perfil || undefined,
   };
 };
 
@@ -141,7 +303,6 @@ export const mapPessoaToProfissionalUser = (
     name: pessoa.nome,
     email: pessoa.email || '',
     role: 'profissional',
-    avatar: pessoa.foto_perfil || undefined,
     specialization: pessoa.especialidade || undefined,
     registrationNumber: pessoa.registro_profissional || undefined,
   };
