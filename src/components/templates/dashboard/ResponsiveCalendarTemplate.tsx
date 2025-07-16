@@ -187,7 +187,6 @@ export const ResponsiveCalendarTemplate =
                 {...baseProps}
                 canCreateEvents={false}
                 canEditEvents={false}
-                canDeleteEvents={false}
               />
             );
         }

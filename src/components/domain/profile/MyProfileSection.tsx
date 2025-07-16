@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -41,7 +41,7 @@ export const MyProfileSection = React.memo<MyProfileSectionProps>(
     const [error, setError] = useState<string | null>(null);
 
     // Carregar dados do perfil
-    const loadProfileData = async () => {
+    const loadProfileData = useCallback(async () => {
       if (!user) {
         setError('Usuário não autenticado');
         setLoading(false);
@@ -64,12 +64,12 @@ export const MyProfileSection = React.memo<MyProfileSectionProps>(
       } finally {
         setLoading(false);
       }
-    };
+    }, [user]);
 
     // Carregar dados na inicialização e quando user mudar
     useEffect(() => {
       loadProfileData();
-    }, [user]);
+    }, [loadProfileData]);
 
     // Salvar alterações do perfil
     const handleSubmit = async (

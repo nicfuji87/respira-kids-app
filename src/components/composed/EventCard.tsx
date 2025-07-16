@@ -5,8 +5,10 @@ import { MapPin, Clock, Users } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
+
 import { cn } from '@/lib/utils';
 import type { CalendarEvent, EventColor } from '@/types/calendar';
+
 import { eventColorMap } from '@/types/calendar';
 
 // AI dev note: EventCard combina Card e Badge primitives
@@ -15,7 +17,7 @@ import { eventColorMap } from '@/types/calendar';
 export interface EventCardProps {
   event: CalendarEvent;
   onClick?: (event: CalendarEvent) => void;
-  variant?: 'default' | 'compact' | 'detailed' | 'month';
+  variant?: 'default' | 'compact' | 'detailed' | 'month' | 'eventList';
   className?: string;
   showTime?: boolean;
   showLocation?: boolean;
@@ -113,6 +115,130 @@ export const EventCard = React.memo<EventCardProps>(
           {/* Nome do paciente */}
           <span className="text-xs truncate flex-1">{pacienteNome}</span>
         </div>
+      );
+    }
+
+    // Variante para lista de eventos do modal
+    if (variant === 'eventList') {
+      // Extrair dados do metadata
+      const profissionalNome =
+        (event.metadata?.profissionalNome as string) || '';
+      const responsavelLegalNome =
+        (event.metadata?.responsavelLegalNome as string) || null;
+      const statusConsulta = (event.metadata?.statusConsulta as string) || '';
+      const statusPagamento = (event.metadata?.statusPagamento as string) || '';
+      const statusConsultaCor =
+        (event.metadata?.statusConsultaCor as string) || '#3B82F6';
+      const statusPagamentoCor =
+        (event.metadata?.statusPagamentoCor as string) || '#3B82F6';
+      const possuiEvolucao =
+        (event.metadata?.possuiEvolucao as string) || 'não';
+      const tipoServicoCor =
+        (event.metadata?.tipoServicoCor as string) || '#3B82F6';
+
+      // Extrair nome do paciente do título
+      const pacienteNome = event.title.includes(' - ')
+        ? event.title.split(' - ')[1]
+        : event.title;
+
+      // Extrair nome do serviço do título
+      const tipoServicoNome = event.title.includes(' - ')
+        ? event.title.split(' - ')[0]
+        : event.title;
+
+      const isValidHexColor = (color: string) => /^#[0-9A-F]{6}$/i.test(color);
+
+      return (
+        <Card
+          className={cn(
+            'cursor-pointer border-l-4 hover:shadow-md transition-shadow p-4',
+            className
+          )}
+          onClick={handleClick}
+          style={{
+            borderLeftColor: isValidHexColor(tipoServicoCor)
+              ? tipoServicoCor
+              : '#3B82F6',
+          }}
+        >
+          <div className="space-y-3">
+            {/* Linha 1: Nome do paciente */}
+            <div className="font-semibold text-foreground">{pacienteNome}</div>
+
+            {/* Linha 2: Responsável legal (se existir) */}
+            {responsavelLegalNome && (
+              <div className="text-sm text-muted-foreground">
+                {responsavelLegalNome}
+              </div>
+            )}
+
+            {/* Linha 3: Horário e Serviço com badges inline */}
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">
+                {showTime && !event.allDay && formatTime(event.start)}
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {tipoServicoNome}
+                </span>
+
+                {/* Badges de status - empilhados no mobile, inline no desktop */}
+                <div className="flex flex-wrap gap-1">
+                  {/* Status da consulta */}
+                  <Badge
+                    className="text-xs px-1.5 py-0.5 h-5"
+                    style={{
+                      backgroundColor: isValidHexColor(statusConsultaCor)
+                        ? statusConsultaCor
+                        : '#3B82F6',
+                      color: '#FFFFFF',
+                      border: 'none',
+                    }}
+                  >
+                    {statusConsulta}
+                  </Badge>
+
+                  {/* Status do pagamento */}
+                  <Badge
+                    className="text-xs px-1.5 py-0.5 h-5"
+                    style={{
+                      backgroundColor: isValidHexColor(statusPagamentoCor)
+                        ? statusPagamentoCor
+                        : '#3B82F6',
+                      color: '#FFFFFF',
+                      border: 'none',
+                    }}
+                  >
+                    {statusPagamento}
+                  </Badge>
+
+                  {/* Badge de evolução - apenas se não possui */}
+                  {possuiEvolucao === 'não' && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-1.5 py-0.5 h-5 bg-yellow-50 text-yellow-800 border-yellow-200"
+                    >
+                      Evoluir
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Linha 4: Profissional */}
+            <div className="text-sm text-muted-foreground">
+              Dr(a). {profissionalNome}
+            </div>
+
+            {/* Linha 5: Local */}
+            {showLocation && event.location && (
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                <span>{event.location}</span>
+              </div>
+            )}
+          </div>
+        </Card>
       );
     }
 

@@ -16,20 +16,21 @@ import type {
   CalendarFilters,
   CalendarPermissions,
   CalendarStats,
+  CreateAgendamento,
   UpdateAgendamento,
 } from '@/types/supabase-calendar';
 import {
-  fetchUserAgendamentos,
-  fetchProfissionaisAutorizados,
-  createAgendamento,
-  updateAgendamento,
-  deleteAgendamento,
+  fetchUserCalendarEvents,
   fetchTiposServico,
   fetchConsultaStatus,
   fetchPagamentoStatus,
   fetchLocaisAtendimento,
   fetchProfissionais,
   fetchPacientes,
+  fetchProfissionaisAutorizados,
+  createAgendamento,
+  updateAgendamento,
+  deleteAgendamento,
 } from '@/lib/calendar-services';
 import {
   mapAgendamentoToCalendarEvent,
@@ -126,38 +127,22 @@ export const useCalendarData = (
         });
       }
 
-      const agendamentos = await fetchUserAgendamentos(
+      const calendarEvents = await fetchUserCalendarEvents(
         filters,
         user.pessoa.id,
         user.pessoa?.role as 'admin' | 'profissional' | 'secretaria'
       );
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('📅 Agendamentos carregados do Supabase:', {
-          agendamentosCount: agendamentos.length,
-          agendamentos: agendamentos.map((ag) => ({
-            id: ag.id,
-            data_hora: ag.data_hora,
-            paciente_nome: ag.paciente.nome,
-            profissional_nome: ag.profissional.nome,
-            tipo_servico_nome: ag.tipo_servico.nome,
-            status: ag.status_consulta.descricao,
-          })),
-        });
-      }
-
-      const calendarEvents = agendamentos.map(mapAgendamentoToCalendarEvent);
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 Mapeamento para CalendarEvents:', {
-          originalCount: agendamentos.length,
-          mappedCount: calendarEvents.length,
-          calendarEvents: calendarEvents.map((event) => ({
+        console.log('📅 Eventos do calendário carregados:', {
+          eventsCount: calendarEvents.length,
+          events: calendarEvents.map((event) => ({
             id: event.id,
             title: event.title,
             start: event.start.toISOString(),
             end: event.end.toISOString(),
             color: event.color,
+            metadata: event.metadata,
           })),
         });
       }
@@ -178,7 +163,7 @@ export const useCalendarData = (
     } finally {
       setLoading(false);
     }
-  }, [user, dateRange]);
+  }, [user, dateRange, view, currentDate]);
 
   // AI dev note: Recarrega eventos quando date range muda
   useEffect(() => {
@@ -235,8 +220,8 @@ export const useCalendarPermissions = () => {
 
       try {
         setLoading(true);
+        // AI dev note: Buscar permissões para secretária
         let allowedProfessionals: string[] = [];
-
         if (user.pessoa?.role === 'secretaria') {
           allowedProfessionals = await fetchProfissionaisAutorizados(
             user.pessoa.id
@@ -264,7 +249,7 @@ export const useCalendarPermissions = () => {
 };
 
 // AI dev note: Hook para estatísticas do calendário
-export const useCalendarStats = (filters?: Partial<CalendarFilters>) => {
+export const useCalendarStats = () => {
   const { user } = useAuth();
   const [stats] = useState<CalendarStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -290,7 +275,7 @@ export const useCalendarStats = (filters?: Partial<CalendarFilters>) => {
     } finally {
       setLoading(false);
     }
-  }, [user, filters]);
+  }, [user]);
 
   useEffect(() => {
     loadStats();
@@ -321,7 +306,7 @@ export const useCalendarEvents = () => {
         const agendamentoData = mapCalendarEventToAgendamento(
           event,
           user.pessoa.id
-        );
+        ) as CreateAgendamento;
         const novoAgendamento = await createAgendamento(agendamentoData);
         return mapAgendamentoToCalendarEvent(novoAgendamento);
       } catch (err) {

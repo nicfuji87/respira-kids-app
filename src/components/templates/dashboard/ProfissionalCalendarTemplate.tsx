@@ -30,7 +30,7 @@ export const ProfissionalCalendarTemplate =
       currentUser,
       events,
       onEventSave,
-      onEventDelete,
+
       initialView = 'day', // Profissional typically prefers day view
       initialDate = new Date(),
       className,
@@ -77,10 +77,6 @@ export const ProfissionalCalendarTemplate =
         onEventSave(professionalEvent);
       };
 
-      const handleEventDelete = (eventId: string) => {
-        onEventDelete(eventId);
-      };
-
       return (
         <div
           className={cn(
@@ -92,10 +88,10 @@ export const ProfissionalCalendarTemplate =
           <CalendarTemplate
             events={getFilteredEvents()}
             onEventSave={handleEventSave}
-            onEventDelete={handleEventDelete}
             initialView={initialView}
             initialDate={initialDate}
             className="w-full h-full"
+            userRole={currentUser.role}
             {...professionalPermissions}
           />
         </div>

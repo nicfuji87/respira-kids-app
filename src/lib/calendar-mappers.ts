@@ -218,21 +218,29 @@ export const mapAgendamentoToCalendarEvent = (
   );
   const start = new Date(localDateString);
   const end = new Date(
-    start.getTime() + agendamento.tipo_servico.duracao_minutos * 60000
+    start.getTime() + (agendamento.tipo_servico?.duracao_minutos || 60) * 60000
   );
+
+  // AI dev note: Defensive coding - verificar se dados relacionados existem
+  const pacienteNome = agendamento.paciente?.nome || 'Paciente não encontrado';
+  const profissionalNome =
+    agendamento.profissional?.nome || 'Profissional não encontrado';
+  const tipoServicoNome =
+    agendamento.tipo_servico?.nome || 'Serviço não encontrado';
 
   return {
     id: agendamento.id,
-    title: `${agendamento.tipo_servico.nome} - ${agendamento.paciente.nome}`,
+    title: `${tipoServicoNome} - ${pacienteNome}`,
     description:
-      agendamento.observacao ||
-      `Atendimento com ${agendamento.profissional.nome}`,
+      agendamento.observacao || `Atendimento com ${profissionalNome}`,
     start,
     end,
-    color: mapSupabaseColorToEventColor(agendamento.tipo_servico.cor),
+    color: mapSupabaseColorToEventColor(
+      agendamento.tipo_servico?.cor || '#3B82F6'
+    ),
     attendees: [
-      agendamento.paciente.email,
-      agendamento.profissional.email,
+      agendamento.paciente?.email,
+      agendamento.profissional?.email,
     ].filter(Boolean) as string[],
     location: agendamento.local_atendimento?.nome || 'Local não definido',
     allDay: false,
@@ -241,12 +249,67 @@ export const mapAgendamentoToCalendarEvent = (
       pacienteId: agendamento.paciente_id,
       profissionalId: agendamento.profissional_id,
       tipoServicoId: agendamento.tipo_servico_id,
-      statusConsulta: agendamento.status_consulta.descricao,
-      statusPagamento: agendamento.status_pagamento.descricao,
+      statusConsulta:
+        agendamento.status_consulta?.descricao || 'Status não encontrado',
+      statusPagamento:
+        agendamento.status_pagamento?.descricao || 'Status não encontrado',
       valorServico: agendamento.valor_servico,
       localId: agendamento.local_id,
       observacao: agendamento.observacao,
-      tipoServicoCor: agendamento.tipo_servico.cor, // Cor original do tipo de serviço
+      tipoServicoCor: agendamento.tipo_servico?.cor || '#3B82F6', // Cor original do tipo de serviço
+      // Dados adicionais
+      profissionalNome,
+      statusConsultaCor: agendamento.status_consulta?.cor || '#3B82F6',
+      statusPagamentoCor: agendamento.status_pagamento?.cor || '#3B82F6',
+    },
+  };
+};
+
+// AI dev note: Converte dados flat da view diretamente para CalendarEvent
+export const mapAgendamentoFlatToCalendarEvent = (
+  flat: SupabaseAgendamentoCompletoFlat
+): CalendarEvent => {
+  // AI dev note: Tratar horário como local removendo timezone para evitar conversão
+  const localDateString = flat.data_hora.replace(
+    /[+-]\d{2}:\d{2}$|[+-]\d{2}$|Z$/i,
+    ''
+  );
+  const start = new Date(localDateString);
+  const end = new Date(
+    start.getTime() + flat.tipo_servico_duracao_minutos * 60000
+  );
+
+  return {
+    id: flat.id,
+    title: `${flat.tipo_servico_nome} - ${flat.paciente_nome}`,
+    description: flat.observacao || `Atendimento com ${flat.profissional_nome}`,
+    start,
+    end,
+    color: mapSupabaseColorToEventColor(flat.tipo_servico_cor),
+    attendees: [flat.paciente_email, flat.profissional_email].filter(
+      Boolean
+    ) as string[],
+    location: flat.local_atendimento_nome || 'Local não definido',
+    allDay: false,
+    // Metadados específicos da view flat
+    metadata: {
+      pacienteId: flat.paciente_id,
+      profissionalId: flat.profissional_id,
+      tipoServicoId: flat.tipo_servico_id,
+      statusConsulta: flat.status_consulta_descricao,
+      statusPagamento: flat.status_pagamento_descricao,
+      valorServico: parseFloat(flat.valor_servico || '0'),
+      localId: flat.local_atendimento_id,
+      observacao: flat.observacao,
+      tipoServicoCor: flat.tipo_servico_cor,
+      // Dados extras da view flat
+      profissionalNome: flat.profissional_nome,
+      responsavelLegalNome: flat.responsavel_legal_nome,
+      statusConsultaCor: flat.status_consulta_cor,
+      statusPagamentoCor: flat.status_pagamento_cor,
+      possuiEvolucao: flat.possui_evolucao,
+      // AI dev note: Dados completos para AppointmentDetailsManager
+      appointmentData: flat,
     },
   };
 };
@@ -256,21 +319,35 @@ export const mapCalendarEventToAgendamento = (
   event: Omit<CalendarEvent, 'id'> & { id?: string },
   currentUserId: string
 ) => {
+  const isUpdate = !!event.id;
+
+  // AI dev note: Para atualizações, undefined significa "não alterar o campo"
+  // Para criações, campos obrigatórios devem ter valores válidos
   const baseData = {
     data_hora: event.start.toISOString(),
-    paciente_id: (event.metadata?.pacienteId as string) || '',
-    profissional_id: (event.metadata?.profissionalId as string) || '',
-    tipo_servico_id: (event.metadata?.tipoServicoId as string) || '',
+    paciente_id: isUpdate
+      ? (event.metadata?.pacienteId as string) || undefined
+      : (event.metadata?.pacienteId as string) || '',
+    profissional_id: isUpdate
+      ? (event.metadata?.profissionalId as string) || undefined
+      : (event.metadata?.profissionalId as string) || '',
+    tipo_servico_id: isUpdate
+      ? (event.metadata?.tipoServicoId as string) || undefined
+      : (event.metadata?.tipoServicoId as string) || '',
     local_id: (event.metadata?.localId as string) || undefined,
-    status_consulta_id: (event.metadata?.statusConsultaId as string) || '',
-    status_pagamento_id: (event.metadata?.statusPagamentoId as string) || '',
+    status_consulta_id: isUpdate
+      ? (event.metadata?.statusConsultaId as string) || undefined
+      : (event.metadata?.statusConsultaId as string) || '',
+    status_pagamento_id: isUpdate
+      ? (event.metadata?.statusPagamentoId as string) || undefined
+      : (event.metadata?.statusPagamentoId as string) || '',
     valor_servico: (event.metadata?.valorServico as number) || 0,
     observacao: event.description || undefined,
     agendado_por: currentUserId,
   };
 
   // For updates, always include atualizado_por
-  if (event.id) {
+  if (isUpdate) {
     return {
       ...baseData,
       atualizado_por: currentUserId,

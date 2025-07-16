@@ -28,7 +28,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     currentUser,
     events,
     onEventSave,
-    onEventDelete,
+
     initialView = 'month',
     initialDate = new Date(),
     className,
@@ -76,20 +76,16 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
       onEventSave(adminEvent);
     };
 
-    const handleEventDelete = (eventId: string) => {
-      onEventDelete(eventId);
-    };
-
     return (
       <div className={cn('admin-calendar-template w-full h-full', className)}>
         {/* Main Calendar */}
         <CalendarTemplate
           events={getFilteredEvents()}
           onEventSave={handleEventSave}
-          onEventDelete={handleEventDelete}
           initialView={initialView}
           initialDate={initialDate}
           className="w-full h-full"
+          userRole={currentUser.role}
           {...adminPermissions}
         />
       </div>

@@ -1,0 +1,669 @@
+import React, { useState, useEffect } from 'react';
+import { X, MapPin } from 'lucide-react';
+
+import { Button } from '@/components/primitives/button';
+import { Input } from '@/components/primitives/input';
+import { Label } from '@/components/primitives/label';
+import { Textarea } from '@/components/primitives/textarea';
+import { Separator } from '@/components/primitives/separator';
+import { ScrollArea } from '@/components/primitives/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
+import {
+  DatePicker,
+  StatusPaymentDisplay,
+  LocationSelect,
+  type LocationOption,
+} from '@/components/composed';
+import { cn } from '@/lib/utils';
+import {
+  fetchConsultaStatus,
+  fetchTiposServico,
+  fetchRelatoriosEvolucao,
+  saveRelatorioEvolucao,
+} from '@/lib/calendar-services';
+import type {
+  SupabaseAgendamentoCompletoFlat,
+  SupabaseConsultaStatus,
+  SupabaseTipoServico,
+  SupabaseRelatorioEvolucaoCompleto,
+} from '@/types/supabase-calendar';
+import { useAuth } from '@/hooks/useAuth';
+
+// AI dev note: AppointmentDetailsManager é um DOMAIN que combina COMPOSED específicos
+// para gerenciar detalhes completos de agendamentos médicos com permissões por role
+
+export interface AppointmentDetailsManagerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  appointment?: SupabaseAgendamentoCompletoFlat | null;
+  userRole: 'admin' | 'profissional' | 'secretaria' | null;
+  locaisAtendimento: LocationOption[];
+  isLoadingLocais?: boolean;
+  onSave: (appointmentData: AppointmentUpdateData) => void;
+  onPaymentAction?: (appointmentId: string) => void;
+  onNfeAction?: (appointmentId: string, linkNfe?: string) => void;
+  onPatientClick?: (patientId: string | null) => void;
+  onProfessionalClick?: (professionalId: string) => void;
+  className?: string;
+}
+
+export interface AppointmentUpdateData {
+  id: string;
+  data_hora?: string;
+  local_id?: string;
+  valor_servico?: number;
+  status_consulta_id?: string;
+  tipo_servico_id?: string;
+}
+
+interface FormData {
+  dataHora: string;
+  timeHora: string;
+  localId: string;
+  valorServico: string;
+  statusConsultaId: string;
+  tipoServicoId: string;
+  evolucaoServico: string;
+}
+
+export const AppointmentDetailsManager =
+  React.memo<AppointmentDetailsManagerProps>(
+    ({
+      isOpen,
+      onClose,
+      appointment,
+      userRole,
+      locaisAtendimento,
+      isLoadingLocais = false,
+      onSave,
+      onPaymentAction,
+      onNfeAction,
+      onPatientClick,
+      onProfessionalClick,
+      className,
+    }) => {
+      const [formData, setFormData] = useState<FormData>({
+        dataHora: '',
+        timeHora: '',
+        localId: '',
+        valorServico: '',
+        statusConsultaId: '',
+        tipoServicoId: '',
+        evolucaoServico: '',
+      });
+
+      const [isEdited, setIsEdited] = useState(false);
+      const [consultaStatusOptions, setConsultaStatusOptions] = useState<
+        SupabaseConsultaStatus[]
+      >([]);
+      const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+      const [tipoServicoOptions, setTipoServicoOptions] = useState<
+        SupabaseTipoServico[]
+      >([]);
+      const [isLoadingTipoServico, setIsLoadingTipoServico] = useState(false);
+
+      // Estados para evolução
+      const [evolucoes, setEvolucoes] = useState<
+        SupabaseRelatorioEvolucaoCompleto[]
+      >([]);
+      const [isLoadingEvolucoes, setIsLoadingEvolucoes] = useState(false);
+      const [isSavingEvolucao, setIsSavingEvolucao] = useState(false);
+
+      const { user } = useAuth();
+
+      // Carregar opções de status de consulta
+      useEffect(() => {
+        const loadConsultaStatus = async () => {
+          setIsLoadingStatus(true);
+          try {
+            const status = await fetchConsultaStatus();
+            setConsultaStatusOptions(status);
+          } catch (error) {
+            console.error('Erro ao carregar status de consulta:', error);
+          } finally {
+            setIsLoadingStatus(false);
+          }
+        };
+
+        if (isOpen) {
+          loadConsultaStatus();
+        }
+      }, [isOpen]);
+
+      // Carregar opções de tipos de serviço
+      useEffect(() => {
+        const loadTiposServico = async () => {
+          setIsLoadingTipoServico(true);
+          try {
+            const tipos = await fetchTiposServico();
+            setTipoServicoOptions(tipos);
+          } catch (error) {
+            console.error('Erro ao carregar tipos de serviço:', error);
+          } finally {
+            setIsLoadingTipoServico(false);
+          }
+        };
+
+        if (isOpen) {
+          loadTiposServico();
+        }
+      }, [isOpen]);
+
+      // Inicializar formulário quando appointment mudar
+      useEffect(() => {
+        if (appointment && isOpen) {
+          // AI dev note: Extrair data/hora sem conversão de timezone para manter horário exato do Supabase
+          const dateTimeString = appointment.data_hora;
+          const [datePart, timePart] = dateTimeString.split('T');
+          const timeWithoutTz = timePart.replace(/[+-]\d{2}$/, ''); // Remove timezone info (+00, -03, etc)
+
+          console.log(
+            '[DEBUG] AppointmentDetailsManager - data_hora original do Supabase:',
+            dateTimeString
+          );
+          console.log(
+            '[DEBUG] AppointmentDetailsManager - data extraída:',
+            datePart,
+            'hora extraída:',
+            timeWithoutTz
+          );
+
+          setFormData({
+            dataHora: datePart,
+            timeHora: timeWithoutTz.substring(0, 5), // HH:mm format
+            localId: appointment.local_atendimento_id || '',
+            valorServico: appointment.valor_servico,
+            statusConsultaId: appointment.status_consulta_id,
+            tipoServicoId: appointment.tipo_servico_id,
+            evolucaoServico: '',
+          });
+          setIsEdited(false);
+        }
+      }, [appointment, isOpen]);
+
+      // Carregar evoluções existentes quando appointment mudar
+      useEffect(() => {
+        const loadEvolucoes = async () => {
+          if (!appointment || !isOpen) return;
+
+          setIsLoadingEvolucoes(true);
+          try {
+            const evolucoesList = await fetchRelatoriosEvolucao(appointment.id);
+            setEvolucoes(evolucoesList);
+          } catch (error) {
+            console.error('Erro ao carregar evoluções:', error);
+          } finally {
+            setIsLoadingEvolucoes(false);
+          }
+        };
+
+        loadEvolucoes();
+      }, [appointment, isOpen]);
+
+      const handleInputChange = (field: keyof FormData, value: string) => {
+        setFormData((prev) => ({ ...prev, [field]: value }));
+        setIsEdited(true);
+      };
+
+      // AI dev note: Helper para sanitizar campos UUID vazios
+      const sanitizeUuid = (value: string): string | undefined => {
+        return value && value.trim() !== '' ? value : undefined;
+      };
+
+      const handleSaveAll = async () => {
+        if (!appointment || !user) return;
+
+        setIsSavingEvolucao(true);
+
+        try {
+          // Validar campos obrigatórios
+          if (!formData.dataHora || !formData.timeHora) {
+            throw new Error('Data e hora são obrigatórias');
+          }
+
+          // Salvar agendamento primeiro
+          const dataHoraCompleta = `${formData.dataHora}T${formData.timeHora}:00`;
+          console.log(
+            '[DEBUG] AppointmentDetailsManager - Salvando alterações completas'
+          );
+
+          const updateData: AppointmentUpdateData = {
+            id: appointment.id,
+            data_hora: dataHoraCompleta,
+            local_id: sanitizeUuid(formData.localId),
+            status_consulta_id: sanitizeUuid(formData.statusConsultaId),
+            tipo_servico_id: sanitizeUuid(formData.tipoServicoId),
+          };
+
+          // Só admin/secretaria pode alterar valor
+          if (
+            (userRole === 'admin' || userRole === 'secretaria') &&
+            formData.valorServico !== appointment.valor_servico
+          ) {
+            updateData.valor_servico = parseFloat(formData.valorServico);
+          }
+
+          // Salvar agendamento através da callback do parent (para manter o flow existente)
+          onSave(updateData);
+
+          // Se há evolução, salvar também
+          if (formData.evolucaoServico.trim()) {
+            // AI dev note: Guard clause - verificar se user.pessoa?.id existe antes de salvar evolução
+            if (!user.pessoa?.id) {
+              throw new Error(
+                'Usuário não possui pessoa associada. Contate o administrador.'
+              );
+            }
+
+            await saveRelatorioEvolucao({
+              id_agendamento: appointment.id,
+              conteudo: formData.evolucaoServico.trim(),
+              criado_por: user.pessoa.id,
+            });
+
+            // Recarregar evoluções
+            const evolucoesList = await fetchRelatoriosEvolucao(appointment.id);
+            setEvolucoes(evolucoesList);
+
+            // Limpar campo de evolução
+            setFormData((prev) => ({ ...prev, evolucaoServico: '' }));
+          }
+
+          setIsEdited(false);
+          console.log('[DEBUG] Todas as alterações salvas com sucesso');
+        } catch (error) {
+          console.error('Erro ao salvar alterações:', error);
+
+          // Tratar erro RLS especificamente
+          if (
+            error &&
+            typeof error === 'object' &&
+            'code' in error &&
+            error.code === '42501'
+          ) {
+            throw new Error(
+              'Você não tem permissão para salvar evolução. Contate o administrador.'
+            );
+          }
+
+          // AI dev note: Tratar erro de foreign key (usuário não existe na tabela pessoas)
+          if (
+            error &&
+            typeof error === 'object' &&
+            'code' in error &&
+            error.code === '23503'
+          ) {
+            throw new Error(
+              'Erro de referência de usuário. Verifique se seu perfil está completo.'
+            );
+          }
+
+          throw error;
+        } finally {
+          setIsSavingEvolucao(false);
+        }
+      };
+
+      if (!appointment) {
+        return null;
+      }
+
+      return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+          <DialogContent
+            className={cn(
+              'max-w-[95vw] sm:max-w-[600px] lg:max-w-[700px]',
+              className
+            )}
+          >
+            <DialogHeader>
+              <div className="flex items-center justify-between">
+                <DialogTitle>Detalhes do Agendamento</DialogTitle>
+                <Button variant="outline" onClick={onClose} size="sm">
+                  <X className="h-4 w-4 mr-2" />
+                  Fechar
+                </Button>
+              </div>
+            </DialogHeader>
+
+            <ScrollArea className="max-h-[70vh] sm:max-h-[600px] pr-2 sm:pr-6">
+              <div className="space-y-6 py-4 overflow-x-auto">
+                {/* Paciente */}
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <Label className="text-sm font-medium">Paciente:</Label>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => onPatientClick?.(appointment.paciente_id)}
+                      className="h-auto p-0 text-left justify-start font-bold cursor-pointer text-sm"
+                    >
+                      {appointment.paciente_nome}
+                    </Button>
+                  </div>
+                  {appointment.responsavel_legal_nome &&
+                    appointment.responsavel_legal_id && (
+                      <div className="flex items-start gap-2">
+                        <Label className="text-sm font-medium">
+                          Responsável Legal:
+                        </Label>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() =>
+                            onPatientClick?.(appointment.responsavel_legal_id)
+                          }
+                          className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
+                        >
+                          {appointment.responsavel_legal_nome}
+                        </Button>
+                      </div>
+                    )}
+                </div>
+
+                <Separator />
+
+                {/* Data e Hora - Layout Inline */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="data">Data</Label>
+                    <DatePicker
+                      value={formData.dataHora}
+                      onChange={(value) => handleInputChange('dataHora', value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="time">Horário</Label>
+                    <Input
+                      id="time"
+                      type="time"
+                      value={formData.timeHora}
+                      onChange={(e) =>
+                        handleInputChange('timeHora', e.target.value)
+                      }
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+
+                {/* Local e Valor - Layout Inline Responsivo */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Local */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      <LocationSelect
+                        value={formData.localId}
+                        onChange={(value) =>
+                          handleInputChange('localId', value)
+                        }
+                        locais={locaisAtendimento}
+                        isLoading={isLoadingLocais}
+                        placeholder="Selecione o local"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Valor e Status de Pagamento */}
+                  <div className="space-y-4">
+                    {userRole === 'admin' || userRole === 'secretaria' ? (
+                      <>
+                        {/* AI dev note: Para admin/secretaria, exibir APENAS valor_servico, NUNCA comissão */}
+                        {console.log(
+                          '[DEBUG] AppointmentDetailsManager - Role admin/secretaria: mostrando valor_servico, ocultando comissão'
+                        )}
+                        <Label className="text-sm font-medium">
+                          Valor do Serviço
+                        </Label>
+                        <Input
+                          id="valor"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.valorServico}
+                          onChange={(e) =>
+                            handleInputChange('valorServico', e.target.value)
+                          }
+                          placeholder="0.00"
+                        />
+                        <StatusPaymentDisplay
+                          status={appointment.status_pagamento_descricao}
+                          statusColor={appointment.status_pagamento_cor}
+                          valor={appointment.valor_servico}
+                          userRole={userRole}
+                          linkNfe={appointment.link_nfe}
+                          onPaymentAction={() =>
+                            onPaymentAction?.(appointment.id)
+                          }
+                          onNfeAction={() =>
+                            onNfeAction?.(
+                              appointment.id,
+                              appointment.link_nfe || undefined
+                            )
+                          }
+                        />
+                      </>
+                    ) : userRole === 'profissional' ? (
+                      <>
+                        {/* AI dev note: Para profissional, exibir APENAS comissão, NUNCA valor do serviço */}
+                        {console.log(
+                          '[DEBUG] AppointmentDetailsManager - Role profissional: ocultando valor_servico, mostrando apenas comissão'
+                        )}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">Valor:</span>
+                          <span className="text-sm font-medium">
+                            R${' '}
+                            {parseFloat(
+                              appointment.comissao_valor_calculado
+                            ).toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                        <StatusPaymentDisplay
+                          status={appointment.status_pagamento_descricao}
+                          statusColor={appointment.status_pagamento_cor}
+                          valor={appointment.comissao_valor_calculado}
+                          userRole={userRole}
+                          linkNfe={appointment.link_nfe}
+                          onPaymentAction={() =>
+                            onPaymentAction?.(appointment.id)
+                          }
+                          onNfeAction={() =>
+                            onNfeAction?.(
+                              appointment.id,
+                              appointment.link_nfe || undefined
+                            )
+                          }
+                          hideValue={true}
+                        />
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Serviço e Status - Layout Inline Responsivo */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Serviço */}
+                  <div className="space-y-3">
+                    {/* AI dev note: Substituído badge por Select editável para todos os roles conforme solicitado */}
+                    <Label className="text-sm font-medium">
+                      Tipo de Serviço
+                    </Label>
+                    <Select
+                      value={formData.tipoServicoId}
+                      onValueChange={(value) =>
+                        handleInputChange('tipoServicoId', value)
+                      }
+                      disabled={isLoadingTipoServico}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar tipo de serviço..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tipoServicoOptions.map((tipo) => (
+                          <SelectItem key={tipo.id} value={tipo.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: tipo.cor }}
+                              />
+                              {tipo.nome}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Status da Consulta */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Status</Label>
+                    <Select
+                      value={formData.statusConsultaId}
+                      onValueChange={(value) =>
+                        handleInputChange('statusConsultaId', value)
+                      }
+                      disabled={isLoadingStatus}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Alterar status..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {consultaStatusOptions.map((status) => (
+                          <SelectItem key={status.id} value={status.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: status.cor }}
+                              />
+                              {status.descricao}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Responsável pelo Atendimento */}
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <Label className="text-sm font-medium">
+                      Responsável pelo Atendimento:
+                    </Label>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() =>
+                        onProfessionalClick?.(appointment.profissional_id)
+                      }
+                      className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
+                    >
+                      {appointment.profissional_nome}
+                    </Button>
+                  </div>
+                  {appointment.profissional_especialidade && (
+                    <div className="text-sm text-muted-foreground">
+                      {appointment.profissional_especialidade}
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Evolução do Paciente */}
+                <div className="space-y-4">
+                  <Label htmlFor="evolucao" className="text-sm font-medium">
+                    Evolução do Paciente
+                  </Label>
+
+                  {/* Campo para nova evolução - apenas admin e profissional podem salvar */}
+                  {userRole !== 'secretaria' && (
+                    <div className="space-y-3">
+                      <Textarea
+                        id="evolucao"
+                        value={formData.evolucaoServico}
+                        onChange={(e) =>
+                          handleInputChange('evolucaoServico', e.target.value)
+                        }
+                        placeholder="Adicione observações sobre a evolução do atendimento..."
+                        rows={3}
+                      />
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={handleSaveAll}
+                          disabled={
+                            isSavingEvolucao ||
+                            (!isEdited && !formData.evolucaoServico.trim())
+                          }
+                          size="sm"
+                        >
+                          {isSavingEvolucao
+                            ? 'Salvando...'
+                            : 'Salvar Alterações'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Histórico de evoluções */}
+                  {isLoadingEvolucoes ? (
+                    <div className="text-sm text-muted-foreground">
+                      Carregando evoluções...
+                    </div>
+                  ) : evolucoes.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Histórico de Evoluções
+                      </div>
+                      <div className="space-y-3 max-h-48 overflow-y-auto">
+                        {evolucoes.map((evolucao) => (
+                          <div
+                            key={evolucao.id}
+                            className="border rounded-lg p-3 bg-muted/30"
+                          >
+                            <div className="text-sm text-muted-foreground mb-2">
+                              {evolucao.criado_por_nome ||
+                                'Usuário desconhecido'}{' '}
+                              •{' '}
+                              {new Date(evolucao.created_at).toLocaleString(
+                                'pt-BR'
+                              )}
+                            </div>
+                            <div className="text-sm whitespace-pre-wrap">
+                              {evolucao.conteudo}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      Nenhuma evolução registrada ainda.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
+      );
+    }
+  );
+
+AppointmentDetailsManager.displayName = 'AppointmentDetailsManager';

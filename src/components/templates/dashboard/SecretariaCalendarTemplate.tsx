@@ -57,7 +57,7 @@ export const SecretariaCalendarTemplate =
       currentUser,
       events,
       onEventSave,
-      onEventDelete,
+
       initialView = 'week', // Secretaria typically prefers week view
       initialDate = new Date(),
       className,
@@ -138,10 +138,6 @@ export const SecretariaCalendarTemplate =
         };
 
         onEventSave(secretariaEvent);
-      };
-
-      const handleEventDelete = (eventId: string) => {
-        onEventDelete(eventId);
       };
 
       // Get professional statistics
@@ -272,13 +268,12 @@ export const SecretariaCalendarTemplate =
           <CalendarTemplate
             events={getFilteredEvents()}
             onEventSave={handleEventSave}
-            onEventDelete={handleEventDelete}
             initialView={initialView}
             initialDate={initialDate}
             canCreateEvents={secretariaPermissions.canCreateEvents}
             canEditEvents={secretariaPermissions.canEditEvents}
-            canDeleteEvents={secretariaPermissions.canDeleteEvents}
             showEventManager={true}
+            userRole={currentUser.role}
             className={className}
           />
         </div>

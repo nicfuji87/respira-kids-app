@@ -46,12 +46,10 @@ export const CalendarTemplateWithData =
         currentView,
         currentDate,
         events,
-        loading: eventsLoading,
         refresh: refreshEvents,
       } = useCalendarData(initialView, initialDate);
 
-      const { permissions, loading: permissionsLoading } =
-        useCalendarPermissions();
+      const { permissions } = useCalendarPermissions();
       const { createEvent, updateEvent, deleteEvent } = useCalendarEvents();
       const { formData } = useCalendarFormData();
 
@@ -179,8 +177,6 @@ export const CalendarTemplateWithData =
               name: p.nome,
               specialization: p.especialidade || undefined,
             }))}
-            showStatistics={!eventsLoading && !permissionsLoading}
-            showPatientNames={userRole !== 'secretaria'}
             canManageAllEvents={permissions.canViewAllEvents}
           />
         );
@@ -193,7 +189,6 @@ export const CalendarTemplateWithData =
             <AdminCalendarTemplate
               {...commonTemplateProps}
               currentUser={{ ...mockUserData, role: 'admin' as const }}
-              showStatistics={!eventsLoading && !permissionsLoading}
               showAllProfessionals={true}
               showSystemEvents={true}
             />
@@ -209,9 +204,7 @@ export const CalendarTemplateWithData =
                 specialization: 'Fisioterapeuta',
                 registrationNumber: '',
               }}
-              showPatientNames={true}
               showOnlyMyEvents={true}
-              canEditOtherEvents={false}
             />
           );
 

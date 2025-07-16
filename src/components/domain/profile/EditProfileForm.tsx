@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -118,7 +118,7 @@ export const EditProfileForm = React.memo<EditProfileFormProps>(
     const { toast } = useToast();
 
     // Preparar dados iniciais
-    const getInitialValues = (): Partial<EditProfileFormData> => {
+    const getInitialValues = useCallback((): Partial<EditProfileFormData> => {
       if (!initialData) return {};
 
       return {
@@ -136,7 +136,7 @@ export const EditProfileForm = React.memo<EditProfileFormProps>(
         bio_profissional: initialData.bio_profissional || '',
         role: (initialData.role as EditProfileFormData['role']) || undefined,
       };
-    };
+    }, [initialData]);
 
     const form = useForm<EditProfileFormData>({
       resolver: zodResolver(editProfileSchema),
@@ -146,7 +146,7 @@ export const EditProfileForm = React.memo<EditProfileFormProps>(
     // Atualizar form quando dados iniciais mudarem
     useEffect(() => {
       form.reset(getInitialValues());
-    }, [initialData, form]);
+    }, [getInitialValues, form]);
 
     // Carregar endereço inicial se existir
     useEffect(() => {

@@ -60,7 +60,7 @@ export const EventListModal = React.memo<EventListModalProps>(
                     <EventCard
                       key={event.id}
                       event={event}
-                      variant="detailed"
+                      variant="eventList"
                       onClick={handleEventClick}
                       showTime={true}
                       showLocation={true}

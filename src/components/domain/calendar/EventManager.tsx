@@ -58,7 +58,7 @@ export const EventManager = React.memo<EventManagerProps>(
   }) => {
     const isEditing = !!event;
 
-    const getInitialFormData = (): EventFormData => {
+    const getInitialFormData = React.useCallback((): EventFormData => {
       if (event) {
         return {
           title: event.title,
@@ -93,7 +93,7 @@ export const EventManager = React.memo<EventManagerProps>(
         location: '',
         color: 'blue',
       };
-    };
+    }, [event, initialDate, initialTime]);
 
     const [formData, setFormData] = useState<EventFormData>(getInitialFormData);
 
@@ -102,7 +102,7 @@ export const EventManager = React.memo<EventManagerProps>(
       if (isOpen) {
         setFormData(getInitialFormData());
       }
-    }, [isOpen, event, initialDate, initialTime]);
+    }, [isOpen, getInitialFormData]);
 
     const handleInputChange = (
       field: keyof EventFormData,
@@ -151,7 +151,12 @@ export const EventManager = React.memo<EventManagerProps>(
 
     return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className={cn('sm:max-w-[500px]', className)}>
+        <DialogContent
+          className={cn(
+            'max-w-[95vw] sm:max-w-[500px] lg:max-w-[600px]',
+            className
+          )}
+        >
           <DialogHeader>
             <DialogTitle>
               {isEditing ? 'Editar Evento' : 'Novo Evento'}

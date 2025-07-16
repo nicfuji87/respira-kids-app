@@ -53,26 +53,29 @@ export const FileUpload = React.memo<FileUploadProps>(
       }
     }, [value]);
 
-    const validateFile = (file: File): string | null => {
-      if (maxSize && file.size > maxSize) {
-        return `Arquivo muito grande. Máximo ${(maxSize / 1024 / 1024).toFixed(1)}MB`;
-      }
+    const validateFile = useCallback(
+      (file: File): string | null => {
+        if (maxSize && file.size > maxSize) {
+          return `Arquivo muito grande. Máximo ${(maxSize / 1024 / 1024).toFixed(1)}MB`;
+        }
 
-      if (
-        accept &&
-        !accept.split(',').some((type) => {
-          const cleanType = type.trim();
-          if (cleanType.endsWith('/*')) {
-            return file.type.startsWith(cleanType.slice(0, -1));
-          }
-          return file.type === cleanType;
-        })
-      ) {
-        return 'Tipo de arquivo não permitido';
-      }
+        if (
+          accept &&
+          !accept.split(',').some((type) => {
+            const cleanType = type.trim();
+            if (cleanType.endsWith('/*')) {
+              return file.type.startsWith(cleanType.slice(0, -1));
+            }
+            return file.type === cleanType;
+          })
+        ) {
+          return 'Tipo de arquivo não permitido';
+        }
 
-      return null;
-    };
+        return null;
+      },
+      [maxSize, accept]
+    );
 
     const handleFileChange = useCallback(
       (file: File | null) => {
@@ -89,7 +92,7 @@ export const FileUpload = React.memo<FileUploadProps>(
 
         onFileSelect(file);
       },
-      [onFileSelect, maxSize, accept]
+      [onFileSelect, validateFile]
     );
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

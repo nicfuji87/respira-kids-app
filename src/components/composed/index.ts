@@ -29,6 +29,9 @@ export { ViewToggle } from './ViewToggle';
 export { TimeSlot } from './TimeSlot';
 export { ColorPicker } from './ColorPicker';
 export { CalendarGrid } from './CalendarGrid';
+export { StatusPaymentDisplay } from './StatusPaymentDisplay';
+export { ContactLink } from './ContactLink';
+export { LocationSelect } from './LocationSelect';
 
 // Type exports
 export type { NavigationItemProps } from './NavigationItem';
@@ -44,6 +47,9 @@ export type { EventCardProps } from './EventCard';
 export type { ViewToggleProps } from './ViewToggle';
 export type { ColorPickerProps } from './ColorPicker';
 export type { CalendarGridProps } from './CalendarGrid';
+export type { StatusPaymentDisplayProps } from './StatusPaymentDisplay';
+export type { ContactLinkProps } from './ContactLink';
+export type { LocationSelectProps, LocationOption } from './LocationSelect';
 
 // Registry para uso em templates e páginas
 export const ComposedComponents = {
@@ -72,6 +78,9 @@ export const ComposedComponents = {
   TimeSlot: 'TimeSlot',
   ColorPicker: 'ColorPicker',
   CalendarGrid: 'CalendarGrid',
+  StatusPaymentDisplay: 'StatusPaymentDisplay',
+  ContactLink: 'ContactLink',
+  LocationSelect: 'LocationSelect',
 } as const;
 
 export type ComposedComponentName = keyof typeof ComposedComponents;

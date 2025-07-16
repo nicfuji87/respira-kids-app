@@ -18,10 +18,15 @@ import {
   WeekView,
   DayView,
   AgendaView,
-  EventManager,
+  AppointmentDetailsManager,
 } from '@/components/domain/calendar';
 
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
+import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
+import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
+import { useCalendarFormData } from '@/hooks/useCalendarData';
+import { updateAgendamentoDetails } from '@/lib/calendar-services';
+import { useToast } from '@/components/primitives/use-toast';
 
 // AI dev note: CalendarTemplate combina componentes Domain do calendário
 // Template base que gerencia estado e comunicação entre componentes
@@ -30,7 +35,6 @@ export interface CalendarTemplateProps {
   // Events data
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
-  onEventDelete: (eventId: string) => void;
 
   // View configuration
   initialView?: CalendarView;
@@ -42,27 +46,47 @@ export interface CalendarTemplateProps {
   // Permissions
   canCreateEvents?: boolean;
   canEditEvents?: boolean;
-  canDeleteEvents?: boolean;
 
   // Features
   showDatePicker?: boolean;
   showViewToggle?: boolean;
   showCreateButton?: boolean;
   showEventManager?: boolean;
+
+  // Appointment Details (for medical appointments)
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
+  locaisAtendimento?: Array<{
+    id: string;
+    nome: string;
+    tipo_local: string;
+    ativo: boolean;
+  }>;
+  isLoadingLocais?: boolean;
+  onPatientClick?: (patientId: string | null) => void;
+  onProfessionalClick?: (professionalId: string) => void;
+  onPaymentAction?: (appointmentId: string) => void;
+  onNfeAction?: (appointmentId: string, linkNfe?: string) => void;
 }
 
 export const CalendarTemplate = React.memo<CalendarTemplateProps>(
   ({
     events,
-    onEventSave,
-    onEventDelete,
+    // onEventSave, // AI dev note: Temporariamente comentado para evitar double update
+
     initialView = 'month',
     initialDate = new Date(),
     canCreateEvents = true,
     canEditEvents = true,
-    canDeleteEvents = true,
+
     className,
     showEventManager = true,
+    userRole,
+    locaisAtendimento = [],
+    isLoadingLocais = false,
+    onPatientClick,
+    onProfessionalClick,
+    onPaymentAction,
+    onNfeAction,
   }) => {
     // State management
     const [currentDate, setCurrentDate] = useState<Date>(initialDate);
@@ -71,6 +95,12 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       null
     );
     const [isEventManagerOpen, setIsEventManagerOpen] = useState(false);
+
+    // Load form data for locations
+    const { formData } = useCalendarFormData();
+
+    // Toast notifications
+    const { toast } = useToast();
 
     // Navigation handlers
     const handlePreviousClick = useCallback(() => {
@@ -149,23 +179,15 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       [canCreateEvents]
     );
 
-    const handleEventSave = useCallback(
-      (eventData: Omit<CalendarEvent, 'id'> & { id?: string }) => {
-        onEventSave(eventData);
-        setIsEventManagerOpen(false);
-        setSelectedEvent(null);
-      },
-      [onEventSave]
-    );
-
-    const handleEventDelete = useCallback(
-      (eventId: string) => {
-        onEventDelete(eventId);
-        setIsEventManagerOpen(false);
-        setSelectedEvent(null);
-      },
-      [onEventDelete]
-    );
+    // AI dev note: handleEventSave temporariamente comentado para evitar double update flow
+    // const handleEventSave = useCallback(
+    //   (eventData: Omit<CalendarEvent, 'id'> & { id?: string }) => {
+    //     onEventSave(eventData);
+    //     setIsEventManagerOpen(false);
+    //     setSelectedEvent(null);
+    //   },
+    //   [onEventSave]
+    // );
 
     const handleEventManagerClose = useCallback(() => {
       setIsEventManagerOpen(false);
@@ -279,15 +301,77 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
         {/* Calendar Content */}
         <div className="flex-1 min-h-0">{renderCurrentView()}</div>
 
-        {/* Event Manager Modal */}
+        {/* Appointment Details Modal */}
         {showEventManager && (
-          <EventManager
+          <AppointmentDetailsManager
             isOpen={isEventManagerOpen}
             onClose={handleEventManagerClose}
-            event={selectedEvent}
-            onSave={handleEventSave}
-            onDelete={canDeleteEvents ? handleEventDelete : undefined}
-            initialDate={currentDate}
+            appointment={
+              selectedEvent?.metadata?.appointmentData as
+                | SupabaseAgendamentoCompletoFlat
+                | undefined
+            }
+            userRole={userRole || null}
+            locaisAtendimento={formData.locaisAtendimento || locaisAtendimento}
+            isLoadingLocais={isLoadingLocais}
+            onSave={async (data: AppointmentUpdateData) => {
+              // AI dev note: Bypass específico para AppointmentDetailsManager - usar updateAgendamentoDetails diretamente
+              try {
+                console.log(
+                  '[DEBUG] CalendarTemplate - AppointmentDetailsManager onSave:',
+                  data
+                );
+                const updatedAppointment = await updateAgendamentoDetails(data);
+                console.log(
+                  '[DEBUG] CalendarTemplate - Agendamento atualizado:',
+                  updatedAppointment
+                );
+
+                // Show success toast
+                toast({
+                  title: 'Agendamento atualizado',
+                  description: 'As alterações foram salvas com sucesso',
+                  variant: 'default',
+                });
+
+                // AI dev note: Não trigger handleEventSave para evitar double update
+                // O updateAgendamentoDetails já salvou tudo necessário
+                // Apenas fechar o modal e refresh será feito pelo parent
+                handleEventManagerClose();
+              } catch (error) {
+                console.error(
+                  '[ERROR] CalendarTemplate - Erro ao salvar appointment details:',
+                  error
+                );
+
+                // Tratar erro RLS especificamente
+                let errorMessage =
+                  'Não foi possível salvar as alterações. Tente novamente.';
+
+                if (
+                  error &&
+                  typeof error === 'object' &&
+                  'code' in error &&
+                  error.code === '42501'
+                ) {
+                  errorMessage =
+                    'Você não tem permissão para salvar evolução. Contate o administrador.';
+                } else if (error instanceof Error) {
+                  errorMessage = error.message;
+                }
+
+                // Show error toast
+                toast({
+                  title: 'Erro ao salvar',
+                  description: errorMessage,
+                  variant: 'destructive',
+                });
+              }
+            }}
+            onPaymentAction={onPaymentAction}
+            onNfeAction={onNfeAction}
+            onPatientClick={onPatientClick}
+            onProfessionalClick={onProfessionalClick}
           />
         )}
       </div>

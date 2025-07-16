@@ -176,6 +176,8 @@ export interface SupabaseAgendamentoCompletoFlat {
   // Auditoria
   criado_por_nome: string | null;
   atualizado_por_nome: string | null;
+  // Evolução
+  possui_evolucao: string; // 'sim' ou 'não'
 }
 
 // Interfaces para dados enriquecidos (com joins) - MANTIDO PARA COMPATIBILIDADE
@@ -244,4 +246,45 @@ export interface CalendarStats {
   eventosPorStatus: Record<string, number>;
   eventosPorTipoServico: Record<string, number>;
   valorTotalServicos: number;
+}
+
+// AI dev note: Types para Relatórios de Evolução
+export interface SupabaseRelatoriosTipo {
+  id: string;
+  codigo: string;
+  descricao: string;
+  created_at: string;
+}
+
+export interface SupabaseRelatorioEvolucao {
+  id: string;
+  id_agendamento: string;
+  tipo_relatorio_id: string;
+  pdf_url: string | null;
+  conteudo: string | null;
+  criado_por: string | null;
+  atualizado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// AI dev note: Interface completa de evolução com dados de usuário para histórico
+export interface SupabaseRelatorioEvolucaoCompleto
+  extends SupabaseRelatorioEvolucao {
+  criado_por_nome: string | null;
+  atualizado_por_nome: string | null;
+  tipo_relatorio: SupabaseRelatoriosTipo;
+}
+
+// Types para inserção/atualização de evolução
+export interface SaveEvolucaoData {
+  id_agendamento: string;
+  conteudo: string;
+  criado_por: string;
+}
+
+export interface UpdateEvolucaoData {
+  id: string;
+  conteudo: string;
+  atualizado_por: string;
 }
