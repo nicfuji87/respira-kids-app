@@ -257,7 +257,8 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
               currentDate={currentDate}
               events={filteredEvents}
               onEventClick={handleEventClick}
-              onDateClick={handleDateChange}
+              onTimeSlotClick={handleTimeSlotClick}
+              userRole={userRole}
             />
           );
         case 'day':
@@ -267,6 +268,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
               events={filteredEvents}
               onEventClick={handleEventClick}
               onTimeSlotClick={handleTimeSlotClick}
+              userRole={userRole}
             />
           );
         case 'agenda':

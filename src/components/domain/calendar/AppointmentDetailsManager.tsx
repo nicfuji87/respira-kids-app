@@ -4,7 +4,6 @@ import { X, MapPin } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
-import { Textarea } from '@/components/primitives/textarea';
 import { Separator } from '@/components/primitives/separator';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import {
@@ -24,6 +23,8 @@ import {
   DatePicker,
   StatusPaymentDisplay,
   LocationSelect,
+  SessionMediaManager,
+  EvolutionEditor,
   type LocationOption,
 } from '@/components/composed';
 import { cn } from '@/lib/utils';
@@ -444,6 +445,12 @@ export const AppointmentDetailsManager =
                           valor={appointment.valor_servico}
                           userRole={userRole}
                           linkNfe={appointment.link_nfe}
+                          hideValue={
+                            userRole === 'admin' || userRole === 'secretaria'
+                          }
+                          inlineButtons={
+                            userRole === 'admin' || userRole === 'secretaria'
+                          }
                           onPaymentAction={() =>
                             onPaymentAction?.(appointment.id)
                           }
@@ -592,35 +599,6 @@ export const AppointmentDetailsManager =
                     Evolução do Paciente
                   </Label>
 
-                  {/* Campo para nova evolução - apenas admin e profissional podem salvar */}
-                  {userRole !== 'secretaria' && (
-                    <div className="space-y-3">
-                      <Textarea
-                        id="evolucao"
-                        value={formData.evolucaoServico}
-                        onChange={(e) =>
-                          handleInputChange('evolucaoServico', e.target.value)
-                        }
-                        placeholder="Adicione observações sobre a evolução do atendimento..."
-                        rows={3}
-                      />
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={handleSaveAll}
-                          disabled={
-                            isSavingEvolucao ||
-                            (!isEdited && !formData.evolucaoServico.trim())
-                          }
-                          size="sm"
-                        >
-                          {isSavingEvolucao
-                            ? 'Salvando...'
-                            : 'Salvar Alterações'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Histórico de evoluções */}
                   {isLoadingEvolucoes ? (
                     <div className="text-sm text-muted-foreground">
@@ -645,9 +623,12 @@ export const AppointmentDetailsManager =
                                 'pt-BR'
                               )}
                             </div>
-                            <div className="text-sm whitespace-pre-wrap">
-                              {evolucao.conteudo}
-                            </div>
+                            <div
+                              className="text-sm whitespace-pre-wrap"
+                              dangerouslySetInnerHTML={{
+                                __html: evolucao.conteudo || '',
+                              }}
+                            />
                           </div>
                         ))}
                       </div>
@@ -657,6 +638,43 @@ export const AppointmentDetailsManager =
                       Nenhuma evolução registrada ainda.
                     </div>
                   )}
+
+                  {/* Campo para nova evolução - apenas admin e profissional podem salvar */}
+                  {userRole !== 'secretaria' && (
+                    <div className="space-y-3">
+                      <EvolutionEditor
+                        value={formData.evolucaoServico}
+                        onChange={(value) =>
+                          handleInputChange('evolucaoServico', value)
+                        }
+                        placeholder="Digite ou grave a evolução do atendimento..."
+                        disabled={isSavingEvolucao}
+                      />
+
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={handleSaveAll}
+                          disabled={
+                            isSavingEvolucao ||
+                            (!isEdited && !formData.evolucaoServico.trim())
+                          }
+                          size="sm"
+                        >
+                          {isSavingEvolucao
+                            ? 'Salvando...'
+                            : 'Salvar Alterações'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mídias da Sessão (Fotos e Vídeos) */}
+                  <SessionMediaManager
+                    agendamentoId={appointment.id}
+                    userRole={userRole}
+                    criadoPor={user?.pessoa?.id}
+                    disabled={isSavingEvolucao}
+                  />
                 </div>
               </div>
             </ScrollArea>

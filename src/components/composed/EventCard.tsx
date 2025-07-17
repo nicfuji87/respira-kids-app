@@ -17,11 +17,12 @@ import { eventColorMap } from '@/types/calendar';
 export interface EventCardProps {
   event: CalendarEvent;
   onClick?: (event: CalendarEvent) => void;
-  variant?: 'default' | 'compact' | 'detailed' | 'month' | 'eventList';
+  variant?: 'default' | 'compact' | 'detailed' | 'month' | 'week' | 'eventList';
   className?: string;
   showTime?: boolean;
   showLocation?: boolean;
   showAttendees?: boolean;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const EventCard = React.memo<EventCardProps>(
@@ -33,6 +34,7 @@ export const EventCard = React.memo<EventCardProps>(
     showTime = true,
     showLocation = false,
     showAttendees = false,
+    userRole,
   }) => {
     const handleClick = () => {
       onClick?.(event);
@@ -114,6 +116,86 @@ export const EventCard = React.memo<EventCardProps>(
 
           {/* Nome do paciente */}
           <span className="text-xs truncate flex-1">{pacienteNome}</span>
+        </div>
+      );
+    }
+
+    // Variante para vista semanal
+    if (variant === 'week') {
+      // Extrair dados do evento
+      const pacienteNome = event.title.includes(' - ')
+        ? event.title.split(' - ')[1]
+        : event.title;
+
+      const tipoServicoNome = event.title.includes(' - ')
+        ? event.title.split(' - ')[0]
+        : 'Serviço não informado';
+
+      const profissionalNome =
+        (event.metadata?.profissionalNome as string) ||
+        'Profissional não informado';
+      const statusConsulta =
+        (event.metadata?.statusConsulta as string) || 'Status não informado';
+
+      // Usar cor hex diretamente do metadata se disponível, senão mapear a cor do evento
+      const corHex =
+        (event.metadata?.tipoServicoCor as string) ||
+        (event.color ? `var(--${event.color}-500)` : '#3B82F6');
+
+      // Verificar se há erro nos dados
+      const hasError = !event.metadata || !pacienteNome;
+
+      // Renderizar baseado no role e altura disponível
+      let content;
+      if (hasError) {
+        content = (
+          <div className="truncate text-center">
+            Erro de dados no agendamento
+          </div>
+        );
+      } else if (userRole === 'profissional') {
+        content = (
+          <div className="space-y-0.5 overflow-hidden">
+            <div className="truncate font-medium">{pacienteNome}</div>
+            <div className="truncate text-xs opacity-90">{tipoServicoNome}</div>
+            <div className="truncate text-xs opacity-75">{statusConsulta}</div>
+          </div>
+        );
+      } else if (userRole === 'admin' || userRole === 'secretaria') {
+        content = (
+          <div className="space-y-0.5 overflow-hidden">
+            <div className="truncate font-medium">{pacienteNome}</div>
+            <div className="truncate text-xs opacity-90">
+              {profissionalNome}
+            </div>
+          </div>
+        );
+      } else {
+        // Fallback para role não definido
+        content = <div className="truncate font-medium">{pacienteNome}</div>;
+      }
+
+      // Tooltip com informações completas
+      const tooltipContent = hasError
+        ? 'Erro de dados no agendamento'
+        : userRole === 'profissional'
+          ? `${pacienteNome} - ${tipoServicoNome} - ${statusConsulta}`
+          : userRole === 'admin' || userRole === 'secretaria'
+            ? `${pacienteNome} - ${profissionalNome}`
+            : pacienteNome;
+
+      return (
+        <div
+          className={cn(
+            'w-full h-full rounded-md p-2 cursor-pointer hover:opacity-90 transition-opacity',
+            'border border-white/20 shadow-sm text-white text-xs',
+            className
+          )}
+          style={{ backgroundColor: corHex }}
+          onClick={handleClick}
+          title={tooltipContent}
+        >
+          {content}
         </div>
       );
     }

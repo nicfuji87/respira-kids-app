@@ -1,16 +1,12 @@
-import React from 'react';
-import { format, isSameDay } from 'date-fns';
+import React, { useState, useMemo } from 'react';
+import { format, isSameDay, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/primitives/card';
+import { Card, CardContent } from '@/components/primitives/card';
 import { ScrollArea } from '@/components/primitives/scroll-area';
-import { TimeSlot } from '@/components/composed';
 import { cn } from '@/lib/utils';
+import { CurrentTimeIndicator, WeekEventBlock } from '@/components/composed';
+import { EventListModal } from '../calendar';
 import type { CalendarEvent } from '@/types/calendar';
 
 // AI dev note: DayView combina TimeSlot Composed
@@ -22,27 +18,98 @@ export interface DayViewProps {
   onEventClick?: (event: CalendarEvent) => void;
   onTimeSlotClick?: (time: string, date: Date) => void;
   className?: string;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const DayView = React.memo<DayViewProps>(
-  ({ currentDate, events, onEventClick, onTimeSlotClick, className }) => {
-    // Gerar horários das 7h às 22h
-    const timeSlots = Array.from({ length: 16 }, (_, i) => {
-      const hour = i + 7;
-      return `${hour.toString().padStart(2, '0')}:00`;
+  ({
+    currentDate,
+    events,
+    onEventClick,
+    onTimeSlotClick,
+    className,
+    userRole,
+  }) => {
+    // Estado para modal de eventos múltiplos
+    const [modalState, setModalState] = useState<{
+      isOpen: boolean;
+      date: Date | null;
+      events: CalendarEvent[];
+    }>({
+      isOpen: false,
+      date: null,
+      events: [],
     });
 
-    const getEventsForTime = (time: string) => {
+    // Constantes do grid
+    const startHour = 7;
+    const endHour = 22;
+    const hourHeight = 64;
+
+    // Gerar array de horários
+    const timeSlots = useMemo(() => {
+      return Array.from({ length: endHour - startHour }, (_, i) => {
+        const hour = i + startHour;
+        return `${hour.toString().padStart(2, '0')}:00`;
+      });
+    }, [startHour, endHour]);
+
+    // Filtrar eventos do dia atual
+    const dayEvents = useMemo(() => {
+      return events.filter((event) => isSameDay(event.start, currentDate));
+    }, [events, currentDate]);
+
+    // Detecta eventos sobrepostos e calcula posicionamento
+    const getEventsWithOverlapData = (events: CalendarEvent[]) => {
+      return events.map((event) => {
+        // Encontra eventos que se sobrepõem com este
+        const overlapping = events.filter((otherEvent) => {
+          if (otherEvent.id === event.id) return false;
+
+          const eventStart = event.start.getTime();
+          const eventEnd = event.end.getTime();
+          const otherStart = otherEvent.start.getTime();
+          const otherEnd = otherEvent.end.getTime();
+
+          // Verifica sobreposição
+          return eventStart < otherEnd && eventEnd > otherStart;
+        });
+
+        // Todos os eventos sobrepostos incluindo o atual
+        const allOverlapping = [event, ...overlapping].sort(
+          (a, b) => a.start.getTime() - b.start.getTime()
+        );
+
+        return {
+          event,
+          overlapIndex: allOverlapping.findIndex((e) => e.id === event.id),
+          totalOverlapping: allOverlapping.length,
+        };
+      });
+    };
+
+    // Agrupa eventos por time slot para detectar múltiplos
+    const getEventsPerTimeSlot = (events: CalendarEvent[], time: string) => {
       const [hours] = time.split(':').map(Number);
       return events.filter((event) => {
-        if (!isSameDay(event.start, currentDate)) return false;
-
         const eventHour = event.start.getHours();
         return eventHour === hours;
       });
     };
 
     const handleTimeSlotClick = (time: string) => {
+      const slotEvents = getEventsPerTimeSlot(dayEvents, time);
+
+      // Se há mais de 2 eventos, abre modal
+      if (slotEvents.length > 2) {
+        setModalState({
+          isOpen: true,
+          date: currentDate,
+          events: slotEvents,
+        });
+        return;
+      }
+
       onTimeSlotClick?.(time, currentDate);
     };
 
@@ -50,38 +117,125 @@ export const DayView = React.memo<DayViewProps>(
       onEventClick?.(event);
     };
 
+    const closeModal = () => {
+      setModalState({ isOpen: false, date: null, events: [] });
+    };
+
     const dayLabel = format(currentDate, "EEEE, dd 'de' MMMM", {
       locale: ptBR,
     });
 
+    const isCurrentDay = isToday(currentDate);
+    const eventsWithOverlap = getEventsWithOverlapData(dayEvents);
+
     return (
-      <Card className={cn('w-full', className)}>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold capitalize">
-            {dayLabel}
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="p-0">
-          <ScrollArea className="h-[600px] w-full">
-            <div className="px-4 pb-4">
-              {timeSlots.map((time) => {
-                const timeEvents = getEventsForTime(time);
-
-                return (
-                  <TimeSlot
-                    key={time}
-                    time={time}
-                    events={timeEvents}
-                    onSlotClick={handleTimeSlotClick}
-                    onEventClick={handleEventClick}
-                  />
-                );
-              })}
+      <>
+        <Card className={cn('overflow-hidden', className)}>
+          <CardContent className="p-0">
+            {/* Header com dia */}
+            <div className="border-b bg-muted/50 p-4">
+              <h2
+                className={cn(
+                  'text-lg font-semibold capitalize',
+                  isCurrentDay && 'text-primary'
+                )}
+              >
+                {dayLabel}
+                {isCurrentDay && (
+                  <span className="ml-2 text-sm font-normal text-primary">
+                    (Hoje)
+                  </span>
+                )}
+              </h2>
             </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+
+            {/* Grid de horários */}
+            <ScrollArea className="h-[calc(100vh-8rem)]">
+              <div className="relative">
+                <div className="grid grid-cols-[auto_1fr] min-h-full">
+                  {/* Coluna de horários */}
+                  <div className="border-r bg-muted/20 w-20">
+                    {timeSlots.map((time) => (
+                      <div
+                        key={time}
+                        className="border-b text-xs text-muted-foreground font-medium p-3"
+                        style={{ height: `${hourHeight}px` }}
+                      >
+                        {time}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Coluna de eventos */}
+                  <div
+                    className="relative"
+                    style={{ minHeight: `${timeSlots.length * hourHeight}px` }}
+                  >
+                    {/* Slots de horário clicáveis */}
+                    {timeSlots.map((time) => {
+                      const slotEvents = getEventsPerTimeSlot(dayEvents, time);
+                      const hasMultipleEvents = slotEvents.length > 2;
+
+                      return (
+                        <div
+                          key={time}
+                          className={cn(
+                            'border-b hover:bg-muted/10 cursor-pointer',
+                            'transition-colors group relative'
+                          )}
+                          style={{ height: `${hourHeight}px` }}
+                          onClick={() => handleTimeSlotClick(time)}
+                        >
+                          {hasMultipleEvents && (
+                            <div className="absolute top-1 right-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-medium z-10">
+                              +{slotEvents.length - 2}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Eventos renderizados sobre os slots */}
+                    {eventsWithOverlap.map(
+                      ({ event, overlapIndex, totalOverlapping }) => (
+                        <WeekEventBlock
+                          key={event.id}
+                          event={event}
+                          startHour={startHour}
+                          endHour={endHour}
+                          hourHeight={hourHeight}
+                          onClick={handleEventClick}
+                          overlapIndex={overlapIndex}
+                          totalOverlapping={Math.min(totalOverlapping, 3)} // Máximo 3 visíveis na view dia
+                          userRole={userRole}
+                        />
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {/* Indicador de tempo atual */}
+                <CurrentTimeIndicator
+                  startHour={startHour}
+                  endHour={endHour}
+                  className="ml-20" // Offset para pular coluna de horários (w-20)
+                />
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        {/* Modal para eventos múltiplos */}
+        {modalState.date && (
+          <EventListModal
+            isOpen={modalState.isOpen}
+            onClose={closeModal}
+            events={modalState.events}
+            date={modalState.date}
+            onEventClick={handleEventClick}
+          />
+        )}
+      </>
     );
   }
 );

@@ -14,6 +14,7 @@ export interface StatusPaymentDisplayProps {
   onPaymentAction?: () => void;
   onNfeAction?: () => void;
   hideValue?: boolean;
+  inlineButtons?: boolean;
   className?: string;
 }
 
@@ -27,6 +28,7 @@ export const StatusPaymentDisplay = React.memo<StatusPaymentDisplayProps>(
     onPaymentAction,
     onNfeAction,
     hideValue = false,
+    inlineButtons = false,
     className,
   }) => {
     const canManagePayments = userRole === 'admin' || userRole === 'secretaria';
@@ -87,7 +89,9 @@ export const StatusPaymentDisplay = React.memo<StatusPaymentDisplayProps>(
     };
 
     return (
-      <div className={`space-y-2 ${className || ''}`}>
+      <div
+        className={`${inlineButtons ? 'flex items-center gap-2' : 'space-y-2'} ${className || ''}`}
+      >
         <div className="flex items-center gap-2">
           <Badge
             style={{ backgroundColor: statusColor, color: 'white' }}

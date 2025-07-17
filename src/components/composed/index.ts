@@ -29,9 +29,14 @@ export { ViewToggle } from './ViewToggle';
 export { TimeSlot } from './TimeSlot';
 export { ColorPicker } from './ColorPicker';
 export { CalendarGrid } from './CalendarGrid';
+export { CurrentTimeIndicator } from './CurrentTimeIndicator';
+export { WeekEventBlock } from './WeekEventBlock';
+export { WeekTimeGrid } from './WeekTimeGrid';
 export { StatusPaymentDisplay } from './StatusPaymentDisplay';
 export { ContactLink } from './ContactLink';
 export { LocationSelect } from './LocationSelect';
+export { SessionMediaManager } from './SessionMediaManager';
+export { EvolutionEditor } from './EvolutionEditor';
 
 // Type exports
 export type { NavigationItemProps } from './NavigationItem';
@@ -47,9 +52,14 @@ export type { EventCardProps } from './EventCard';
 export type { ViewToggleProps } from './ViewToggle';
 export type { ColorPickerProps } from './ColorPicker';
 export type { CalendarGridProps } from './CalendarGrid';
+export type { CurrentTimeIndicatorProps } from './CurrentTimeIndicator';
+export type { WeekEventBlockProps } from './WeekEventBlock';
+export type { WeekTimeGridProps } from './WeekTimeGrid';
 export type { StatusPaymentDisplayProps } from './StatusPaymentDisplay';
 export type { ContactLinkProps } from './ContactLink';
 export type { LocationSelectProps, LocationOption } from './LocationSelect';
+export type { SessionMediaManagerProps } from './SessionMediaManager';
+export type { EvolutionEditorProps } from './EvolutionEditor';
 
 // Registry para uso em templates e páginas
 export const ComposedComponents = {
@@ -78,9 +88,14 @@ export const ComposedComponents = {
   TimeSlot: 'TimeSlot',
   ColorPicker: 'ColorPicker',
   CalendarGrid: 'CalendarGrid',
+  CurrentTimeIndicator: 'CurrentTimeIndicator',
+  WeekEventBlock: 'WeekEventBlock',
+  WeekTimeGrid: 'WeekTimeGrid',
   StatusPaymentDisplay: 'StatusPaymentDisplay',
   ContactLink: 'ContactLink',
   LocationSelect: 'LocationSelect',
+  SessionMediaManager: 'SessionMediaManager',
+  EvolutionEditor: 'EvolutionEditor',
 } as const;
 
 export type ComposedComponentName = keyof typeof ComposedComponents;
