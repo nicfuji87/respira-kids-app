@@ -175,15 +175,18 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       (field: keyof AppointmentFormData, value: string | number) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
 
-        // Limpar erro do campo ao modificar
-        if (errors[field as keyof FormErrors]) {
-          setErrors((prev) => ({
-            ...prev,
-            [field as keyof FormErrors]: undefined,
-          }));
-        }
+        // Limpar erro do campo ao modificar usando functional update
+        setErrors((prev) => {
+          if (prev[field as keyof FormErrors]) {
+            return {
+              ...prev,
+              [field as keyof FormErrors]: undefined,
+            };
+          }
+          return prev;
+        });
       },
-      [errors]
+      []
     );
 
     // Handler para mudança de tipo de serviço (atualiza valor automaticamente)
@@ -222,8 +225,9 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       [updateField, formData.data_hora, checkScheduleConflicts]
     );
 
-    // Validar formulário
-    const validateForm = (): boolean => {
+    // Salvar agendamento
+    const handleSave = useCallback(async () => {
+      // Validar formulário inline para evitar dependência desnecessária
       const newErrors: FormErrors = {};
 
       if (!formData.data_hora)
@@ -250,13 +254,13 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         }
       }
 
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-    };
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return false;
+      }
 
-    // Salvar agendamento
-    const handleSave = useCallback(async () => {
-      if (!validateForm()) return;
+      setErrors({});
+
       if (!user?.pessoa?.id) {
         setErrors({ general: 'Usuário não encontrado' });
         return;
@@ -307,7 +311,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       } finally {
         setIsLoading(false);
       }
-    }, [formData, user, validateForm, onSave, onClose, toast]);
+    }, [formData, user, onSave, onClose, toast]);
 
     const formatCurrency = (value: number): string => {
       return new Intl.NumberFormat('pt-BR', {
