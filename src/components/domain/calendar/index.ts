@@ -1,15 +1,15 @@
-// AI dev note: Registry de componentes Domain do calendário
-// Componentes que combinam Composed para criar funcionalidades específicas
+// AI dev note: Registry de componentes Domain/Calendar
+// Componentes que combinam Composed para funcionalidades completas de calendário
 
-// Calendar domain exports
 export { CalendarHeader } from './CalendarHeader';
 export { MonthView } from './MonthView';
 export { WeekView } from './WeekView';
 export { DayView } from './DayView';
 export { AgendaView } from './AgendaView';
+export { EventListModal } from './EventListModal';
 export { EventManager } from './EventManager';
 export { AppointmentDetailsManager } from './AppointmentDetailsManager';
-export { EventListModal } from './EventListModal';
+export { AppointmentFormManager } from './AppointmentFormManager';
 
 // Type exports
 export type { MonthViewProps } from './MonthView';

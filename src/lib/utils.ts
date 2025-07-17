@@ -5,6 +5,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// AI dev note: Função para normalizar texto removendo acentos e caracteres especiais
+// Útil para busca que ignore acentuação (José → jose)
+
+/**
+ * Remove acentos e normaliza texto para busca
+ * Exemplo: "José María" → "jose maria"
+ */
+export function normalizeText(text: string): string {
+  if (!text) return '';
+
+  return text
+    .normalize('NFD') // Decompor caracteres acentuados
+    .replace(/[\u0300-\u036f]/g, '') // Remover diacríticos (acentos)
+    .toLowerCase()
+    .trim();
+}
+
 // AI dev note: Funções utilitárias para formatação de documentos
 // Seguindo padrão brasileiro de CNPJ e Inscrição Estadual
 

@@ -1,44 +1,60 @@
-// AI dev note: Registry de componentes Composed
-// Componentes que combinam Primitives com lógica específica
-
-// Auth components
+// Authentication
 export { AuthCard } from './AuthCard';
 export { LoginForm } from './LoginForm';
 export { SignUpForm } from './SignUpForm';
-export { UserApprovalCard } from './UserApprovalCard';
 export { CompleteProfileForm } from './CompleteProfileForm';
-export { DatePicker } from './DatePicker';
-export type { ApprovalStatus } from './UserApprovalCard';
 
-// Dashboard components
-export { NavigationItem } from './NavigationItem';
+// User Management
+export { UserApprovalCard } from './UserApprovalCard';
 export { UserProfileDropdown } from './UserProfileDropdown';
-export { BreadcrumbNav } from './BreadcrumbNav';
-export { NotificationBadge } from './NotificationBadge';
-
-// Configuration components
-export { DevelopmentPlaceholder } from './DevelopmentPlaceholder';
-export { ConfigurationTabs } from './ConfigurationTabs';
-export { AvatarUpload } from './AvatarUpload';
 export { ProfileFormFields } from './ProfileFormFields';
-export { CompanyForm } from './CompanyForm';
 
-// Calendar components
-export { EventCard } from './EventCard';
-export { ViewToggle } from './ViewToggle';
-export { TimeSlot } from './TimeSlot';
-export { ColorPicker } from './ColorPicker';
+// Calendar and Date
 export { CalendarGrid } from './CalendarGrid';
-export { CurrentTimeIndicator } from './CurrentTimeIndicator';
+export { DatePicker } from './DatePicker';
+export { TimeSlot } from './TimeSlot';
+export { EventCard } from './EventCard';
 export { WeekEventBlock } from './WeekEventBlock';
 export { WeekTimeGrid } from './WeekTimeGrid';
-export { StatusPaymentDisplay } from './StatusPaymentDisplay';
+export { CurrentTimeIndicator } from './CurrentTimeIndicator';
+
+// Forms and Company
+export { CompanyForm } from './CompanyForm';
+export { ColorPicker } from './ColorPicker';
+export { AvatarUpload } from './AvatarUpload';
+
+// Navigation
+export { BreadcrumbNav } from './BreadcrumbNav';
+export { NavigationItem } from './NavigationItem';
+export { NotificationBadge } from './NotificationBadge';
+export { ViewToggle } from './ViewToggle';
+
+// Contact and Status
 export { ContactLink } from './ContactLink';
-export { LocationSelect } from './LocationSelect';
-export { SessionMediaManager } from './SessionMediaManager';
+export { StatusPaymentDisplay } from './StatusPaymentDisplay';
+
+// Configuration
+export { ConfigurationTabs } from './ConfigurationTabs';
+
+// Development
+export { DevelopmentPlaceholder } from './DevelopmentPlaceholder';
+
+// Evolution and Media
 export { EvolutionEditor } from './EvolutionEditor';
+export { SessionMediaManager } from './SessionMediaManager';
+
+// Location
+export { LocationSelect } from './LocationSelect';
+
+// Medical Appointment Components
+export { PatientSelect } from './PatientSelect';
+export { ProfessionalSelect } from './ProfessionalSelect';
+export { ServiceTypeSelect } from './ServiceTypeSelect';
+export { ConsultaStatusSelect } from './ConsultaStatusSelect';
+export { PagamentoStatusSelect } from './PagamentoStatusSelect';
 
 // Type exports
+export type { ApprovalStatus } from './UserApprovalCard';
 export type { NavigationItemProps } from './NavigationItem';
 export type { UserProfileProps } from './UserProfileDropdown';
 export type { BreadcrumbNavProps, BreadcrumbItem } from './BreadcrumbNav';

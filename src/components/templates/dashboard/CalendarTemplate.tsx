@@ -19,6 +19,7 @@ import {
   DayView,
   AgendaView,
   AppointmentDetailsManager,
+  AppointmentFormManager,
 } from '@/components/domain/calendar';
 
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
@@ -95,6 +96,9 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       null
     );
     const [isEventManagerOpen, setIsEventManagerOpen] = useState(false);
+    const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
+    const [newEventDate, setNewEventDate] = useState<Date | undefined>();
+    const [newEventTime, setNewEventTime] = useState<string | undefined>();
 
     // Load form data for locations
     const { formData } = useCalendarFormData();
@@ -162,18 +166,18 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
 
     const handleNewEventClick = useCallback(() => {
       if (canCreateEvents) {
-        setSelectedEvent(null);
-        setIsEventManagerOpen(true);
+        setNewEventDate(currentDate);
+        setNewEventTime(undefined);
+        setIsAppointmentFormOpen(true);
       }
-    }, [canCreateEvents]);
+    }, [canCreateEvents, currentDate]);
 
     const handleTimeSlotClick = useCallback(
-      (_time: string, date: Date) => {
+      (time: string, date: Date) => {
         if (canCreateEvents) {
-          setSelectedEvent(null);
-          // Set initial date/time based on clicked slot
-          setCurrentDate(date);
-          setIsEventManagerOpen(true);
+          setNewEventDate(date);
+          setNewEventTime(time);
+          setIsAppointmentFormOpen(true);
         }
       },
       [canCreateEvents]
@@ -192,6 +196,18 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     const handleEventManagerClose = useCallback(() => {
       setIsEventManagerOpen(false);
       setSelectedEvent(null);
+    }, []);
+
+    const handleAppointmentFormClose = useCallback(() => {
+      setIsAppointmentFormOpen(false);
+      setNewEventDate(undefined);
+      setNewEventTime(undefined);
+    }, []);
+
+    const handleAppointmentFormSave = useCallback((appointmentId: string) => {
+      console.log('Novo agendamento criado:', appointmentId);
+      // Callback para refresh ou outras ações após criação
+      // O refresh será gerenciado pelo componente pai
     }, []);
 
     // Filter events based on current view and date
@@ -303,7 +319,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
         {/* Calendar Content */}
         <div className="flex-1 min-h-0">{renderCurrentView()}</div>
 
-        {/* Appointment Details Modal */}
+        {/* Appointment Details Modal - Para editar agendamentos existentes */}
         {showEventManager && (
           <AppointmentDetailsManager
             isOpen={isEventManagerOpen}
@@ -376,6 +392,15 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
             onProfessionalClick={onProfessionalClick}
           />
         )}
+
+        {/* Appointment Form Modal - Para criar novos agendamentos */}
+        <AppointmentFormManager
+          isOpen={isAppointmentFormOpen}
+          onClose={handleAppointmentFormClose}
+          initialDate={newEventDate}
+          initialTime={newEventTime}
+          onSave={handleAppointmentFormSave}
+        />
       </div>
     );
   }
