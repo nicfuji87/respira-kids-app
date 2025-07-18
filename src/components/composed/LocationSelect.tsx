@@ -66,7 +66,7 @@ export const LocationSelect = React.memo<LocationSelectProps>(
                 .filter((local) => local.id && local.id.trim() !== '')
                 .map((local) => (
                   <SelectItem key={local.id} value={local.id}>
-                    {local.nome} ({local.tipo_local})
+                    {local.nome}
                   </SelectItem>
                 ))
             )}

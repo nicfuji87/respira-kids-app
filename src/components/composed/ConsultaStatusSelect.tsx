@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
-import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
 import { fetchConsultaStatus } from '@/lib/calendar-services';
 import type { SupabaseConsultaStatus } from '@/types/supabase-calendar';
@@ -83,15 +82,7 @@ export const ConsultaStatusSelect = React.memo<ConsultaStatusSelectProps>(
             style={{ color: status.cor }}
             fill={status.cor}
           />
-
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">{status.descricao}</span>
-            {status.codigo && (
-              <Badge variant="outline" className="text-xs w-fit">
-                {status.codigo.toUpperCase()}
-              </Badge>
-            )}
-          </div>
+          <span className="font-medium">{status.descricao}</span>
         </div>
       );
     };

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, DollarSign } from 'lucide-react';
 
 import {
   Select,
@@ -8,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
-import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
 import { fetchTiposServico } from '@/lib/calendar-services';
 import type { SupabaseTipoServico } from '@/types/supabase-calendar';
@@ -59,25 +57,6 @@ export const ServiceTypeSelect = React.memo<ServiceTypeSelectProps>(
     // Encontrar tipo de serviço selecionado
     const selectedServiceType = serviceTypes.find((s) => s.id === value);
 
-    const formatCurrency = (value: number): string => {
-      return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-      }).format(value);
-    };
-
-    const formatDuration = (minutes: number): string => {
-      if (minutes < 60) {
-        return `${minutes}min`;
-      }
-      const hours = Math.floor(minutes / 60);
-      const remainingMinutes = minutes % 60;
-      if (remainingMinutes === 0) {
-        return `${hours}h`;
-      }
-      return `${hours}h ${remainingMinutes}min`;
-    };
-
     const handleValueChange = (serviceId: string) => {
       const serviceData = serviceTypes.find((s) => s.id === serviceId);
       onValueChange(serviceId, serviceData);
@@ -91,30 +70,7 @@ export const ServiceTypeSelect = React.memo<ServiceTypeSelectProps>(
             className="h-4 w-4 rounded-full border border-border"
             style={{ backgroundColor: serviceType.cor }}
           />
-
-          <div className="flex flex-col gap-1 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{serviceType.nome}</span>
-            </div>
-
-            {serviceType.descricao && (
-              <p className="text-sm text-muted-foreground line-clamp-2">
-                {serviceType.descricao}
-              </p>
-            )}
-
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                <span>{formatDuration(serviceType.duracao_minutos)}</span>
-              </div>
-
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <DollarSign className="h-3 w-3" />
-                <span>{formatCurrency(serviceType.valor)}</span>
-              </div>
-            </div>
-          </div>
+          <span className="font-medium">{serviceType.nome}</span>
         </div>
       );
     };
@@ -129,9 +85,6 @@ export const ServiceTypeSelect = React.memo<ServiceTypeSelectProps>(
             style={{ backgroundColor: selectedServiceType.cor }}
           />
           <span>{selectedServiceType.nome}</span>
-          <Badge variant="outline" className="text-xs">
-            {formatCurrency(selectedServiceType.valor)}
-          </Badge>
         </div>
       );
     };

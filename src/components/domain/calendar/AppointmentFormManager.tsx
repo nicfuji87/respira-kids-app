@@ -22,6 +22,7 @@ import {
   ServiceTypeSelect,
   ConsultaStatusSelect,
   PagamentoStatusSelect,
+  LocationSelect,
 } from '@/components/composed';
 import { cn } from '@/lib/utils';
 import {
@@ -35,9 +36,12 @@ import type {
   CalendarFilters,
 } from '@/types/supabase-calendar';
 import { useAuth } from '@/hooks/useAuth';
+import { useCalendarFormData } from '@/hooks/useCalendarData';
 
 // AI dev note: AppointmentFormManager combina todos os Composed para formulário completo de agendamento
-// Gerencia validação, conflitos e integração com Supabase para agendamentos médicos
+// Integração com Supabase para criação de agendamentos
+// Validação completa de formulário com tratamento de erros
+// DEBUG: Logs adicionados para diagnosticar re-renders que afetam PatientSelect
 
 export interface AppointmentFormManagerProps {
   isOpen: boolean;
@@ -75,8 +79,12 @@ interface FormErrors {
 
 export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
   ({ isOpen, onClose, initialDate, initialTime, onSave, className }) => {
+    console.log('🏗️ [DEBUG] AppointmentFormManager - render, isOpen:', isOpen);
+
     const { user } = useAuth();
     const { toast } = useToast();
+    const { formData: calendarFormData, loading: formDataLoading } =
+      useCalendarFormData();
 
     const [formData, setFormData] = useState<AppointmentFormData>({
       data_hora: '',
@@ -95,13 +103,28 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     const [hasConflict, setHasConflict] = useState(false);
     const [conflictDetails, setConflictDetails] = useState<string>('');
 
+    // Log para mudanças no formData
+    useEffect(() => {
+      console.log('📝 [DEBUG] formData changed:', {
+        paciente_id: formData.paciente_id,
+        profissional_id: formData.profissional_id,
+        data_hora: formData.data_hora,
+        // Não loggar todos os campos para não poluir o console
+      });
+    }, [formData]);
+
     // Reset form quando dialog abre/fecha
     useEffect(() => {
+      console.log(
+        '🔄 [DEBUG] AppointmentFormManager - useEffect isOpen changed:',
+        isOpen
+      );
       if (isOpen) {
         const defaultDate = initialDate || new Date();
         const defaultTime = initialTime || '09:00';
         const dateTimeString = `${format(defaultDate, 'yyyy-MM-dd')}T${defaultTime}`;
 
+        console.log('🏁 [DEBUG] AppointmentFormManager - resetting form data');
         setFormData({
           data_hora: dateTimeString,
           paciente_id: '',
@@ -173,11 +196,36 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     // Atualizar campo específico
     const updateField = useCallback(
       (field: keyof AppointmentFormData, value: string | number) => {
-        setFormData((prev) => ({ ...prev, [field]: value }));
+        console.log(
+          '🔧 [DEBUG] updateField called - field:',
+          field,
+          'value:',
+          value
+        );
+
+        setFormData((prev) => {
+          console.log(
+            '📍 [DEBUG] updateField - current formData before update:',
+            {
+              paciente_id: prev.paciente_id,
+              profissional_id: prev.profissional_id,
+            }
+          );
+          const newData = { ...prev, [field]: value };
+          console.log('💾 [DEBUG] updateField - new formData after update:', {
+            paciente_id: newData.paciente_id,
+            profissional_id: newData.profissional_id,
+          });
+          return newData;
+        });
 
         // Limpar erro do campo ao modificar usando functional update
         setErrors((prev) => {
           if (prev[field as keyof FormErrors]) {
+            console.log(
+              '🧹 [DEBUG] updateField - clearing error for field:',
+              field
+            );
             return {
               ...prev,
               [field as keyof FormErrors]: undefined,
@@ -186,7 +234,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           return prev;
         });
       },
-      []
+      [] // AI dev note: Dependências removidas para evitar re-renders infinitos
     );
 
     // Handler para mudança de tipo de serviço (atualiza valor automaticamente)
@@ -313,13 +361,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       }
     }, [formData, user, onSave, onClose, toast]);
 
-    const formatCurrency = (value: number): string => {
-      return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-      }).format(value);
-    };
-
     return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
         <DialogContent
@@ -439,11 +480,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
                   placeholder="0,00"
                   className={cn(errors.valor_servico && 'border-destructive')}
                 />
-                {formData.valor_servico > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {formatCurrency(formData.valor_servico)}
-                  </p>
-                )}
                 {errors.valor_servico && (
                   <p className="text-sm text-destructive">
                     {errors.valor_servico}
@@ -479,16 +515,15 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
               </div>
             </div>
 
-            {/* Local de Atendimento - Desabilitado temporariamente até integração completa */}
-            {/* <div className="space-y-2">
-               <Label>Local de Atendimento</Label>
-               <LocationSelect
-                 value={formData.local_id}
-                 onChange={(value: string) => updateField('local_id', value)}
-                 locais={[]}
-                 isLoading={false}
-               />
-             </div> */}
+            {/* Local de Atendimento */}
+            <div className="space-y-2">
+              <LocationSelect
+                value={formData.local_id}
+                onChange={(value: string) => updateField('local_id', value)}
+                locais={calendarFormData.locaisAtendimento}
+                isLoading={formDataLoading}
+              />
+            </div>
 
             {/* Observações */}
             <div className="space-y-2">

@@ -11,7 +11,8 @@ import {
 import { Badge } from '@/components/primitives/badge';
 import { Avatar } from '@/components/primitives/avatar';
 import { cn } from '@/lib/utils';
-import { fetchProfissionais } from '@/lib/calendar-services';
+import { fetchProfissionaisForUser } from '@/lib/calendar-services';
+import { useAuth } from '@/hooks/useAuth';
 import type { SupabasePessoa } from '@/types/supabase-calendar';
 
 // AI dev note: ProfessionalSelect combina Select e Avatar para seleção de profissionais
@@ -37,25 +38,58 @@ export const ProfessionalSelect = React.memo<ProfessionalSelectProps>(
     required = false,
     error,
   }) => {
+    const { user } = useAuth();
     const [professionals, setProfessionals] = useState<SupabasePessoa[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Buscar profissionais do Supabase
+    // Buscar profissionais do Supabase baseado em permissões do usuário
     useEffect(() => {
       const loadProfessionals = async () => {
+        // Se usuário existe mas dados pessoa ainda não carregaram, aguardar um pouco
+        if (user && !user.pessoa) {
+          setTimeout(() => {
+            loadProfessionals();
+          }, 1000); // Aguardar 1 segundo para dados carregarem
+          return;
+        }
+
+        // Verificar se usuário está logado e tem role válido
+        if (!user?.pessoa?.id || !user?.pessoa?.role) {
+          setProfessionals([]);
+          return;
+        }
+
+        const userRole = user.pessoa.role as
+          | 'admin'
+          | 'profissional'
+          | 'secretaria';
+
+        // Validar role permitido
+        if (!['admin', 'profissional', 'secretaria'].includes(userRole)) {
+          setProfessionals([]);
+          return;
+        }
+
         setIsLoading(true);
         try {
-          const data = await fetchProfissionais();
+          const data = await fetchProfissionaisForUser(
+            user.pessoa.id,
+            userRole
+          );
           setProfessionals(data);
         } catch (error) {
-          console.error('Erro ao carregar profissionais:', error);
+          console.error(
+            '❌ [ProfessionalSelect] Erro ao carregar profissionais:',
+            error
+          );
+          setProfessionals([]);
         } finally {
           setIsLoading(false);
         }
       };
 
       loadProfessionals();
-    }, []);
+    }, [user, user?.pessoa?.id, user?.pessoa?.role]);
 
     // Encontrar profissional selecionado
     const selectedProfessional = professionals.find((p) => p.id === value);
@@ -152,6 +186,25 @@ export const ProfessionalSelect = React.memo<ProfessionalSelectProps>(
       );
     };
 
+    const getEmptyMessage = () => {
+      if (!user?.pessoa?.role) {
+        return 'Faça login para ver os profissionais.';
+      }
+
+      const userRole = user.pessoa.role as string;
+
+      switch (userRole) {
+        case 'secretaria':
+          return 'Nenhum profissional autorizado. Contate o administrador.';
+        case 'admin':
+          return 'Nenhum profissional cadastrado no sistema.';
+        case 'profissional':
+          return 'Perfil profissional não encontrado.';
+        default:
+          return 'Nenhum profissional disponível.';
+      }
+    };
+
     return (
       <div className={cn('space-y-2', className)}>
         <Select
@@ -171,9 +224,7 @@ export const ProfessionalSelect = React.memo<ProfessionalSelectProps>(
           <SelectContent className="max-h-80">
             {professionals.length === 0 ? (
               <div className="p-4 text-center text-sm text-muted-foreground">
-                {isLoading
-                  ? 'Carregando profissionais...'
-                  : 'Nenhum profissional disponível.'}
+                {isLoading ? 'Carregando profissionais...' : getEmptyMessage()}
               </div>
             ) : (
               professionals.map((professional) => (

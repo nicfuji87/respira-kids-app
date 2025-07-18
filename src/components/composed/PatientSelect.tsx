@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, User, Phone, Mail, Check } from 'lucide-react';
+import { User, Phone, Mail, Check, ChevronsUpDown } from 'lucide-react';
 
 import {
   Command,
   CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
   CommandList,
 } from '@/components/primitives/command';
@@ -13,14 +14,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/primitives/popover';
-import { Input } from '@/components/primitives/input';
+import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { cn, normalizeText } from '@/lib/utils';
 import { fetchPacientes } from '@/lib/calendar-services';
 import type { SupabasePessoa } from '@/types/supabase-calendar';
 
-// AI dev note: PatientSelect agora usa autocomplete com Input para busca direta
-// Busca por nome do paciente, responsável legal, responsável financeiro com normalização de acentos
+// AI dev note: PatientSelect corrigido com Combobox pattern do shadcn/ui
+// Usa CommandInput para manter foco apropriadamente durante autocomplete
+// DEBUG: Logs mantidos para verificar correção da perda de foco
 
 export interface PatientSelectProps {
   value?: string;
@@ -33,7 +35,11 @@ export interface PatientSelectProps {
 }
 
 interface PatientOption extends SupabasePessoa {
-  // Campos adicionais para responsáveis (se existirem)
+  // Campos da nova view pacientes_com_responsaveis_view
+  nomes_responsaveis?: string; // Responsáveis concatenados com ' | '
+  access_type?: string; // Tipo de acesso para RLS
+
+  // Campos anteriores para compatibilidade (se existirem)
   responsavel_legal_nome?: string;
   responsavel_legal_email?: string;
   responsavel_legal_telefone?: number;
@@ -47,7 +53,14 @@ function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
   useEffect(() => {
+    console.log(
+      '🔄 [DEBUG] useDebounce - input value:',
+      value,
+      'delay:',
+      delay
+    );
     const handler = setTimeout(() => {
+      console.log('⏰ [DEBUG] useDebounce - setting debounced value:', value);
       setDebouncedValue(value);
     }, delay);
 
@@ -66,101 +79,319 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     className,
     placeholder = 'Digite o nome do paciente...',
     disabled = false,
-    required = false,
     error,
   }) => {
+    console.log('🏗️ [DEBUG] PatientSelect - render with value:', value);
+
     const [patients, setPatients] = useState<PatientOption[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [displayValue, setDisplayValue] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
-    // Debounce da busca para otimizar performance
-    const debouncedSearch = useDebounce(searchTerm, 300);
+    // AI dev note: Debounce otimizado - reduzido para 200ms para melhor UX
+    const debouncedSearch = useDebounce(searchTerm, 200);
 
     // Buscar pacientes do Supabase
     useEffect(() => {
+      console.log('🚀 [DEBUG] PatientSelect useEffect - INICIANDO EXECUÇÃO');
+
       const loadPatients = async () => {
+        console.log(
+          '📡 [DEBUG] loadPatients - função chamada, setando loading=true'
+        );
         setIsLoading(true);
+
         try {
+          console.log('🔄 [DEBUG] loadPatients - chamando fetchPacientes()');
           const data = await fetchPacientes();
-          setPatients(data as PatientOption[]);
+          console.log(
+            '✅ [DEBUG] loadPatients - fetchPacientes retornou:',
+            typeof data,
+            Array.isArray(data) ? data.length : 'não é array'
+          );
+
+          if (Array.isArray(data)) {
+            console.log(
+              '📋 [DEBUG] loadPatients - primeiros 3 pacientes:',
+              data.slice(0, 3).map((p) => ({ id: p.id, nome: p.nome }))
+            );
+            setPatients(data as PatientOption[]);
+          } else {
+            console.error(
+              '❌ [DEBUG] loadPatients - fetchPacientes não retornou array:',
+              data
+            );
+            setPatients([]);
+          }
         } catch (error) {
-          console.error('Erro ao carregar pacientes:', error);
+          console.error('❌ [DEBUG] loadPatients - ERRO CAPTURADO:', error);
+          console.error(
+            '❌ [DEBUG] loadPatients - erro stack:',
+            error instanceof Error ? error.stack : 'sem stack'
+          );
+          setPatients([]);
         } finally {
+          console.log(
+            '🏁 [DEBUG] loadPatients - finalizando, setando loading=false'
+          );
           setIsLoading(false);
         }
       };
 
-      loadPatients();
+      console.log(
+        '📞 [DEBUG] PatientSelect useEffect - chamando loadPatients()'
+      );
+      loadPatients().catch((error) => {
+        console.error(
+          '💥 [DEBUG] PatientSelect useEffect - erro não capturado na função loadPatients:',
+          error
+        );
+      });
+
+      console.log(
+        '✅ [DEBUG] PatientSelect useEffect - FIM DA EXECUÇÃO DO useEffect'
+      );
     }, []);
 
-    // Atualizar display value quando value prop mudar
-    useEffect(() => {
-      if (value && patients.length > 0) {
-        const selectedPatient = patients.find((p) => p.id === value);
-        if (selectedPatient) {
-          setDisplayValue(selectedPatient.nome);
-        }
-      } else if (!value) {
-        setDisplayValue('');
-        setSearchTerm('');
-      }
+    // Encontrar paciente selecionado para display
+    const selectedPatient = useMemo(() => {
+      if (!value || patients.length === 0) return null;
+      return patients.find((p) => p.id === value) || null;
     }, [value, patients]);
 
     // Filtrar pacientes baseado na busca com normalização de acentos
+    // AI dev note: Busca unificada - procura tanto no nome do paciente quanto dos responsáveis
     const filteredPatients = useMemo(() => {
+      console.log(
+        '🔍 [DEBUG] filteredPatients - debouncedSearch:',
+        `"${debouncedSearch}"`,
+        'length:',
+        debouncedSearch.trim().length
+      );
+      console.log(
+        '👥 [DEBUG] filteredPatients - total de pacientes carregados:',
+        patients.length
+      );
+      console.log('⏳ [DEBUG] filteredPatients - isLoading:', isLoading);
+
+      // AI dev note: Não filtrar se ainda estiver carregando pacientes
+      if (isLoading) {
+        console.log(
+          '⌛ [DEBUG] filteredPatients - ainda carregando, aguardando...'
+        );
+        return [];
+      }
+
+      // Verificar se os pacientes foram carregados
+      if (patients.length === 0) {
+        console.log(
+          '📭 [DEBUG] filteredPatients - nenhum paciente carregado ainda'
+        );
+        return [];
+      }
+
       // Só mostrar sugestões se tiver 2+ caracteres
       if (!debouncedSearch.trim() || debouncedSearch.trim().length < 2) {
+        console.log(
+          '⏹️ [DEBUG] filteredPatients - muito poucos caracteres, retornando array vazio'
+        );
         return [];
       }
 
       const normalizedSearch = normalizeText(debouncedSearch);
+      console.log(
+        '🔤 [DEBUG] filteredPatients - normalized search:',
+        `"${normalizedSearch}"`
+      );
 
-      return patients.filter((patient) => {
+      // Debug: testar normalização com alguns pacientes
+      if (patients.length > 0) {
+        console.log(
+          '🧪 [DEBUG] filteredPatients - testando busca unificada nos primeiros 3 pacientes:'
+        );
+        patients.slice(0, 3).forEach((p, index) => {
+          const normalizedNome = normalizeText(p.nome || '');
+          const normalizedResponsaveis = normalizeText(
+            p.nomes_responsaveis || ''
+          );
+          const nomeMatch = normalizedNome.includes(normalizedSearch);
+          const responsavelMatch =
+            normalizedResponsaveis.includes(normalizedSearch);
+          console.log(
+            `  ${index + 1}. "${p.nome}" | Responsáveis: "${p.nomes_responsaveis || 'nenhum'}"`
+          );
+          console.log(
+            `      Nome match: ${nomeMatch} | Responsável match: ${responsavelMatch}`
+          );
+        });
+      }
+
+      const filtered = patients.filter((patient) => {
+        // AI dev note: Verificar se o campo nome existe e não é nulo
+        if (!patient.nome) {
+          return false;
+        }
+
         // Buscar por nome do paciente (normalizado)
-        if (normalizeText(patient.nome || '').includes(normalizedSearch))
+        const normalizedNome = normalizeText(patient.nome);
+        if (normalizedNome.includes(normalizedSearch)) {
+          console.log(
+            '✅ [DEBUG] filteredPatients - match por nome do paciente:',
+            patient.nome
+          );
           return true;
+        }
+
+        // AI dev note: NOVA FUNCIONALIDADE - Buscar por nome dos responsáveis
+        if (patient.nomes_responsaveis) {
+          const normalizedResponsaveis = normalizeText(
+            patient.nomes_responsaveis
+          );
+          if (normalizedResponsaveis.includes(normalizedSearch)) {
+            console.log(
+              '✅ [DEBUG] filteredPatients - match por nome do responsável:',
+              patient.nomes_responsaveis
+            );
+            console.log(
+              '    👶 [DEBUG] - paciente correspondente:',
+              patient.nome
+            );
+            return true;
+          }
+        }
 
         // Buscar por email do paciente (normalizado)
-        if (normalizeText(patient.email || '').includes(normalizedSearch))
-          return true;
-
-        // Buscar por nome do responsável legal (normalizado)
         if (
-          normalizeText(patient.responsavel_legal_nome || '').includes(
+          patient.email &&
+          normalizeText(patient.email).includes(normalizedSearch)
+        ) {
+          console.log(
+            '✅ [DEBUG] filteredPatients - match por email:',
+            patient.email
+          );
+          return true;
+        }
+
+        // Busca por responsável legal (nome e email)
+        if (
+          patient.responsavel_legal_nome &&
+          normalizeText(patient.responsavel_legal_nome).includes(
             normalizedSearch
           )
-        )
+        ) {
+          console.log(
+            '✅ [DEBUG] filteredPatients - match por resp. legal (nome):',
+            patient.responsavel_legal_nome
+          );
           return true;
+        }
 
-        // Buscar por email do responsável legal (normalizado)
         if (
-          normalizeText(patient.responsavel_legal_email || '').includes(
+          patient.responsavel_legal_email &&
+          normalizeText(patient.responsavel_legal_email).includes(
             normalizedSearch
           )
-        )
+        ) {
+          console.log(
+            '✅ [DEBUG] filteredPatients - match por resp. legal (email):',
+            patient.responsavel_legal_email
+          );
           return true;
+        }
 
-        // Buscar por nome do responsável financeiro (normalizado)
+        // Busca por responsável financeiro (nome e email)
         if (
-          normalizeText(patient.responsavel_financeiro_nome || '').includes(
+          patient.responsavel_financeiro_nome &&
+          normalizeText(patient.responsavel_financeiro_nome).includes(
             normalizedSearch
           )
-        )
+        ) {
+          console.log(
+            '✅ [DEBUG] filteredPatients - match por resp. financeiro (nome):',
+            patient.responsavel_financeiro_nome
+          );
           return true;
+        }
 
-        // Buscar por email do responsável financeiro (normalizado)
         if (
-          normalizeText(patient.responsavel_financeiro_email || '').includes(
+          patient.responsavel_financeiro_email &&
+          normalizeText(patient.responsavel_financeiro_email).includes(
             normalizedSearch
           )
-        )
+        ) {
+          console.log(
+            '✅ [DEBUG] filteredPatients - match por resp. financeiro (email):',
+            patient.responsavel_financeiro_email
+          );
           return true;
+        }
 
         return false;
       });
-    }, [patients, debouncedSearch]);
+
+      console.log(
+        '📊 [DEBUG] filteredPatients - resultado:',
+        filtered.length,
+        'pacientes filtrados'
+      );
+      if (filtered.length > 0) {
+        console.log(
+          '🔍 [DEBUG] Primeiros 3 pacientes filtrados com detalhes de responsáveis:'
+        );
+        filtered.slice(0, 3).forEach((p, idx) => {
+          console.log(`  ${idx + 1}. Paciente: "${p.nome}"`);
+          console.log(
+            `     nomes_responsaveis: "${p.nomes_responsaveis || 'vazio'}"`
+          );
+          console.log(
+            `     responsavel_legal_nome: "${p.responsavel_legal_nome || 'vazio'}"`
+          );
+          console.log(
+            `     responsavel_financeiro_nome: "${p.responsavel_financeiro_nome || 'vazio'}"`
+          );
+        });
+      }
+      if (filtered.length > 0) {
+        console.log(
+          '👥 [DEBUG] filteredPatients - primeiros resultados:',
+          filtered.slice(0, 3).map((p) => p.nome)
+        );
+      } else {
+        console.log(
+          '❌ [DEBUG] filteredPatients - nenhum paciente passou no filtro'
+        );
+
+        // Debug especial: testar especificamente busca unificada
+        if (normalizedSearch.length >= 2) {
+          console.log(
+            '🔬 [DEBUG] filteredPatients - debug especial para busca unificada:'
+          );
+          const allMatches = patients.filter((p) => {
+            const nomeMatch =
+              p.nome && normalizeText(p.nome).includes(normalizedSearch);
+            const responsavelMatch =
+              p.nomes_responsaveis &&
+              normalizeText(p.nomes_responsaveis).includes(normalizedSearch);
+            return nomeMatch || responsavelMatch;
+          });
+          console.log(
+            `  📝 Total de matches (paciente + responsável): ${allMatches.length}`
+          );
+          allMatches.forEach((p, index) => {
+            const matchType = normalizeText(p.nome || '').includes(
+              normalizedSearch
+            )
+              ? 'paciente'
+              : 'responsável';
+            console.log(
+              `  🧪 ${index + 1}. "${p.nome}" via ${matchType} | Responsáveis: "${p.nomes_responsaveis || 'nenhum'}"`
+            );
+          });
+        }
+      }
+
+      return filtered;
+    }, [patients, debouncedSearch, isLoading]); // AI dev note: Adicionado isLoading como dependência
 
     const formatPhoneNumber = (
       phone: number | bigint | null | undefined
@@ -173,47 +404,72 @@ export const PatientSelect = React.memo<PatientSelectProps>(
       return phoneStr;
     };
 
-    const handleInputChange = useCallback(
-      (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newValue = e.target.value;
-        setDisplayValue(newValue);
-        setSearchTerm(newValue);
-
-        // Abrir popover se tiver 2+ caracteres
-        if (newValue.length >= 2) {
-          setIsOpen(true);
-        } else {
-          setIsOpen(false);
-        }
-
-        // Limpar seleção se input foi alterado
-        if (value && newValue !== patients.find((p) => p.id === value)?.nome) {
-          onValueChange('');
-        }
-      },
-      [value, patients, onValueChange]
-    );
-
     const handlePatientSelect = useCallback(
       (patient: PatientOption) => {
-        setDisplayValue(patient.nome);
-        setSearchTerm(patient.nome);
-        setIsOpen(false);
+        console.log(
+          '✅ [DEBUG] handlePatientSelect - paciente selecionado:',
+          patient.nome,
+          'id:',
+          patient.id
+        );
+        console.log(
+          '📤 [DEBUG] handlePatientSelect - chamando onValueChange com id:',
+          patient.id
+        );
         onValueChange(patient.id);
+        setIsOpen(false);
       },
       [onValueChange]
     );
 
-    const handleInputFocus = useCallback(() => {
-      if (searchTerm.length >= 2) {
-        setIsOpen(true);
-      }
-    }, [searchTerm]);
+    const handleOpenChange = useCallback((open: boolean) => {
+      console.log('👁️ [DEBUG] Popover onOpenChange:', open);
+      setIsOpen(open);
+    }, []);
+
+    // AI dev note: Callback para mudanças no campo de busca
+    const handleSearchChange = useCallback((search: string) => {
+      console.log(
+        '🔍 [DEBUG] handleSearchChange - search value:',
+        `"${search}"`
+      );
+      setSearchTerm(search);
+    }, []);
 
     const renderPatientInfo = (patient: PatientOption) => {
       const hasResponsaveis =
-        patient.responsavel_legal_nome || patient.responsavel_financeiro_nome;
+        patient.responsavel_legal_nome ||
+        patient.responsavel_financeiro_nome ||
+        patient.nomes_responsaveis;
       const isSelected = value === patient.id;
+
+      // AI dev note: Detectar se match foi via responsável e qual tipo
+      const normalizedSearch = normalizeText(debouncedSearch);
+      const matchViaNome =
+        patient.nome && normalizeText(patient.nome).includes(normalizedSearch);
+
+      // Detectar match específico por tipo de responsável
+      const matchViaRespLegal =
+        !matchViaNome &&
+        patient.responsavel_legal_nome &&
+        normalizeText(patient.responsavel_legal_nome).includes(
+          normalizedSearch
+        );
+      const matchViaRespFinanceiro =
+        !matchViaNome &&
+        patient.responsavel_financeiro_nome &&
+        normalizeText(patient.responsavel_financeiro_nome).includes(
+          normalizedSearch
+        );
+      const matchViaRespGenerico =
+        !matchViaNome &&
+        !matchViaRespLegal &&
+        !matchViaRespFinanceiro &&
+        patient.nomes_responsaveis &&
+        normalizeText(patient.nomes_responsaveis).includes(normalizedSearch);
+
+      const matchViaResponsavel =
+        matchViaRespLegal || matchViaRespFinanceiro || matchViaRespGenerico;
 
       return (
         <div className="flex items-center gap-3 w-full">
@@ -225,7 +481,37 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           <div className="flex flex-col gap-1 flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-medium truncate">{patient.nome}</span>
+              {/* AI dev note: Badges específicos por tipo de responsável */}
+              {matchViaRespLegal && (
+                <Badge variant="secondary" className="text-xs">
+                  via resp. legal
+                </Badge>
+              )}
+              {matchViaRespFinanceiro && (
+                <Badge
+                  variant="outline"
+                  className="text-xs border-orange-300 text-orange-700"
+                >
+                  via resp. financeiro
+                </Badge>
+              )}
+              {matchViaRespGenerico && (
+                <Badge variant="secondary" className="text-xs">
+                  via responsável
+                </Badge>
+              )}
             </div>
+
+            {/* AI dev note: Mostrar responsáveis quando relevante para a busca */}
+            {patient.nomes_responsaveis &&
+              (matchViaResponsavel || hasResponsaveis) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <User className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">
+                    Responsável: {patient.nomes_responsaveis}
+                  </span>
+                </div>
+              )}
 
             {patient.email && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -241,16 +527,24 @@ export const PatientSelect = React.memo<PatientSelectProps>(
               </div>
             )}
 
-            {hasResponsaveis && (
+            {/* Badges específicos por tipo de responsável com cores distintivas */}
+            {(patient.responsavel_legal_nome ||
+              patient.responsavel_financeiro_nome) && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {patient.responsavel_legal_nome && (
-                  <Badge variant="outline" className="text-xs">
-                    Resp. Legal: {patient.responsavel_legal_nome}
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-blue-300 text-blue-700"
+                  >
+                    Legal: {patient.responsavel_legal_nome}
                   </Badge>
                 )}
                 {patient.responsavel_financeiro_nome && (
-                  <Badge variant="outline" className="text-xs">
-                    Resp. Financ.: {patient.responsavel_financeiro_nome}
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-orange-300 text-orange-700"
+                  >
+                    Financeiro: {patient.responsavel_financeiro_nome}
                   </Badge>
                 )}
               </div>
@@ -262,21 +556,26 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
     return (
       <div className={cn('space-y-2', className)}>
-        <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <Popover open={isOpen} onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={displayValue}
-                onChange={handleInputChange}
-                onFocus={handleInputFocus}
-                placeholder={isLoading ? 'Carregando...' : placeholder}
-                disabled={disabled || isLoading}
-                required={required}
-                className={cn('pl-10', error && 'border-destructive')}
-                autoComplete="off"
-              />
-            </div>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={isOpen}
+              disabled={disabled || isLoading}
+              className={cn(
+                'w-full justify-between text-left font-normal',
+                !selectedPatient && 'text-muted-foreground',
+                error && 'border-destructive'
+              )}
+            >
+              {selectedPatient ? (
+                <span className="truncate">{selectedPatient.nome}</span>
+              ) : (
+                <span>{isLoading ? 'Carregando...' : placeholder}</span>
+              )}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
           </PopoverTrigger>
 
           <PopoverContent
@@ -284,6 +583,12 @@ export const PatientSelect = React.memo<PatientSelectProps>(
             align="start"
           >
             <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Digite para buscar pacientes..."
+                value={searchTerm}
+                onValueChange={handleSearchChange}
+                className="h-9"
+              />
               <CommandList>
                 {filteredPatients.length === 0 ? (
                   <CommandEmpty>

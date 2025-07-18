@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Circle, CreditCard } from 'lucide-react';
+import { Circle } from 'lucide-react';
 
 import {
   Select,
@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
-import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
 import { fetchPagamentoStatus } from '@/lib/calendar-services';
 import type { SupabasePagamentoStatus } from '@/types/supabase-calendar';
@@ -78,23 +77,12 @@ export const PagamentoStatusSelect = React.memo<PagamentoStatusSelectProps>(
     const renderStatusInfo = (status: SupabasePagamentoStatus) => {
       return (
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Circle
-              className="h-4 w-4"
-              style={{ color: status.cor }}
-              fill={status.cor}
-            />
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">{status.descricao}</span>
-            {status.codigo && (
-              <Badge variant="outline" className="text-xs w-fit">
-                {status.codigo.toUpperCase()}
-              </Badge>
-            )}
-          </div>
+          <Circle
+            className="h-4 w-4"
+            style={{ color: status.cor }}
+            fill={status.cor}
+          />
+          <span className="font-medium">{status.descricao}</span>
         </div>
       );
     };
@@ -109,7 +97,6 @@ export const PagamentoStatusSelect = React.memo<PagamentoStatusSelectProps>(
             style={{ color: selectedStatus.cor }}
             fill={selectedStatus.cor}
           />
-          <CreditCard className="h-3 w-3 text-muted-foreground" />
           <span>{selectedStatus.descricao}</span>
         </div>
       );
