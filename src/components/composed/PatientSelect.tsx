@@ -579,17 +579,17 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           </PopoverTrigger>
 
           <PopoverContent
-            className="w-[--radix-popover-trigger-width] p-0"
+            className="w-[--radix-popover-trigger-width] p-1"
             align="start"
           >
-            <Command shouldFilter={false}>
+            <Command shouldFilter={false} className="overflow-hidden">
               <CommandInput
                 placeholder="Digite para buscar pacientes..."
                 value={searchTerm}
                 onValueChange={handleSearchChange}
                 className="h-9"
               />
-              <CommandList>
+              <CommandList className="overflow-y-auto">
                 {filteredPatients.length === 0 ? (
                   <CommandEmpty>
                     {isLoading

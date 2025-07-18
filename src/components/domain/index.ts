@@ -27,6 +27,9 @@ export {
   EventManager,
 } from './calendar';
 
+// Pacientes domain exports
+export { PatientDetailsManager } from './pacientes/PatientDetailsManager';
+
 // Type exports
 export type { DashboardSidebarProps } from './dashboard/DashboardSidebar';
 export type { DashboardTopBarProps } from './dashboard/DashboardTopBar';

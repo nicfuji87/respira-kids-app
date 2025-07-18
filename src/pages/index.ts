@@ -4,6 +4,7 @@
 export { DashboardPage } from './DashboardPage';
 export { AgendaPage } from './AgendaPage';
 export { PacientesPage } from './PacientesPage';
+export { PatientDetailsPage } from './PatientDetailsPage';
 
 // Placeholder pages for other modules
 export { EstoquePage } from './EstoquePage';

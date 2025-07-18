@@ -67,6 +67,10 @@ export const ResponsiveCalendarTemplate =
       showPatientNames = true,
       canManageAllEvents = false,
     }) => {
+      // AI dev note: Mark unused parameters as intentionally ignored for future use
+      void showPatientNames;
+      void canManageAllEvents;
+
       // State for responsive behavior
       const [isMobile, setIsMobile] = useState(false);
 
@@ -173,11 +177,8 @@ export const ResponsiveCalendarTemplate =
             return (
               <SecretariaCalendarTemplate
                 {...baseProps}
-                onEventEdit={onEventEdit || (() => {})}
                 currentUser={currentUser as SecretariaUser}
                 availableProfessionals={availableProfessionals}
-                canManageAllEvents={canManageAllEvents}
-                showPatientDetails={showPatientNames}
               />
             );
 

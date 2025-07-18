@@ -15,12 +15,17 @@ export interface AdminCalendarTemplateProps {
   currentUser: AdminUser;
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
-  onEventDelete: (eventId: string) => void;
   initialView?: 'month' | 'week' | 'day' | 'agenda';
   initialDate?: Date;
   className?: string;
   showAllProfessionals?: boolean;
   showSystemEvents?: boolean;
+
+  // Permissions - passed from parent to avoid hardcoded overrides
+  canCreateEvents?: boolean;
+  canEditEvents?: boolean;
+  canDeleteEvents?: boolean;
+  canViewAllEvents?: boolean;
 }
 
 export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
@@ -28,21 +33,16 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     currentUser,
     events,
     onEventSave,
-
     initialView = 'month',
     initialDate = new Date(),
     className,
     showAllProfessionals = true,
     showSystemEvents = true,
+    canCreateEvents = true,
+    canEditEvents = true,
+    canDeleteEvents = true,
+    canViewAllEvents = true,
   }) => {
-    // AI dev note: Admin tem permissões completas
-    const adminPermissions = {
-      canCreateEvents: true,
-      canEditEvents: true,
-      canDeleteEvents: true,
-      canViewAllEvents: true,
-    };
-
     const getFilteredEvents = () => {
       let filteredEvents = [...events];
 
@@ -86,7 +86,12 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
           initialDate={initialDate}
           className="w-full h-full"
           userRole={currentUser.role}
-          {...adminPermissions}
+          {...{
+            canCreateEvents,
+            canEditEvents,
+            canDeleteEvents,
+            canViewAllEvents,
+          }}
         />
       </div>
     );

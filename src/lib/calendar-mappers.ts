@@ -463,7 +463,7 @@ export const calculateCalendarPermissions = (
 
     case 'profissional':
       return {
-        canCreateEvents: true,
+        canCreateEvents: false,
         canEditEvents: true,
         canDeleteEvents: true,
         canViewAllEvents: false,

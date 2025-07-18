@@ -31,8 +31,6 @@ export interface SecretariaCalendarTemplateProps {
   // Events data
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
-  onEventEdit: (event: CalendarEvent) => void;
-  onEventDelete: (eventId: string) => void;
 
   // View configuration
   initialView?: CalendarView;
@@ -47,8 +45,12 @@ export interface SecretariaCalendarTemplateProps {
     name: string;
     specialization?: string;
   }[];
-  canManageAllEvents?: boolean;
-  showPatientDetails?: boolean;
+
+  // Permissions - passed from parent to avoid hardcoded overrides
+  canCreateEvents?: boolean;
+  canEditEvents?: boolean;
+  canDeleteEvents?: boolean;
+  canViewAllEvents?: boolean;
 }
 
 export const SecretariaCalendarTemplate =
@@ -57,25 +59,19 @@ export const SecretariaCalendarTemplate =
       currentUser,
       events,
       onEventSave,
-
       initialView = 'week', // Secretaria typically prefers week view
       initialDate = new Date(),
       className,
       availableProfessionals = [],
-      canManageAllEvents = true,
+      canCreateEvents = true,
+      canEditEvents = true,
+      canDeleteEvents = false, // Default for secretaria
+      canViewAllEvents = false,
     }) => {
       // State for filters
       const [selectedProfessional, setSelectedProfessional] =
         useState<string>('all');
       const [showFilters, setShowFilters] = useState(false);
-
-      // Secretaria has event management permissions
-      const secretariaPermissions = {
-        canCreateEvents: true,
-        canEditEvents: canManageAllEvents,
-        canDeleteEvents: canManageAllEvents,
-        showEventManager: true,
-      };
 
       // Get authorized professionals
       const getAuthorizedProfessionals = () => {
@@ -270,8 +266,10 @@ export const SecretariaCalendarTemplate =
             onEventSave={handleEventSave}
             initialView={initialView}
             initialDate={initialDate}
-            canCreateEvents={secretariaPermissions.canCreateEvents}
-            canEditEvents={secretariaPermissions.canEditEvents}
+            canCreateEvents={canCreateEvents}
+            canEditEvents={canEditEvents}
+            canDeleteEvents={canDeleteEvents}
+            canViewAllEvents={canViewAllEvents}
             showEventManager={true}
             userRole={currentUser.role}
             className={className}

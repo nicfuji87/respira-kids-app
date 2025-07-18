@@ -47,6 +47,8 @@ export interface CalendarTemplateProps {
   // Permissions
   canCreateEvents?: boolean;
   canEditEvents?: boolean;
+  canDeleteEvents?: boolean;
+  canViewAllEvents?: boolean;
 
   // Features
   showDatePicker?: boolean;
@@ -78,6 +80,8 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     initialDate = new Date(),
     canCreateEvents = true,
     canEditEvents = true,
+    canDeleteEvents = true,
+    canViewAllEvents = true,
 
     className,
     showEventManager = true,
@@ -89,6 +93,10 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     onPaymentAction,
     onNfeAction,
   }) => {
+    // AI dev note: These permissions are received but will be used in future implementations
+    void canDeleteEvents;
+    void canViewAllEvents;
+
     // State management
     const [currentDate, setCurrentDate] = useState<Date>(initialDate);
     const [currentView, setCurrentView] = useState<CalendarView>(initialView);

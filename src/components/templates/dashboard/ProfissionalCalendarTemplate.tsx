@@ -17,11 +17,16 @@ export interface ProfissionalCalendarTemplateProps {
   currentUser: ProfissionalUser;
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
-  onEventDelete: (eventId: string) => void;
   initialView?: 'month' | 'week' | 'day' | 'agenda';
   initialDate?: Date;
   className?: string;
   showOnlyMyEvents?: boolean;
+
+  // Permissions - passed from parent to avoid hardcoded overrides
+  canCreateEvents?: boolean;
+  canEditEvents?: boolean;
+  canDeleteEvents?: boolean;
+  canViewAllEvents?: boolean;
 }
 
 export const ProfissionalCalendarTemplate =
@@ -30,11 +35,14 @@ export const ProfissionalCalendarTemplate =
       currentUser,
       events,
       onEventSave,
-
       initialView = 'day', // Profissional typically prefers day view
       initialDate = new Date(),
       className,
       showOnlyMyEvents = true,
+      canCreateEvents = false,
+      canEditEvents = true,
+      canDeleteEvents = true,
+      canViewAllEvents = false,
     }) => {
       // AI dev note: Filtrar eventos se necessário
       const getFilteredEvents = () => {
@@ -50,14 +58,6 @@ export const ProfissionalCalendarTemplate =
             event.attendees?.includes(currentUser.email)
           );
         });
-      };
-
-      // AI dev note: Permissões específicas do profissional
-      const professionalPermissions = {
-        canCreateEvents: true,
-        canEditEvents: true,
-        canDeleteEvents: true,
-        canViewAllEvents: false,
       };
 
       const handleEventSave = (
@@ -92,7 +92,10 @@ export const ProfissionalCalendarTemplate =
             initialDate={initialDate}
             className="w-full h-full"
             userRole={currentUser.role}
-            {...professionalPermissions}
+            canCreateEvents={canCreateEvents}
+            canEditEvents={canEditEvents}
+            canDeleteEvents={canDeleteEvents}
+            canViewAllEvents={canViewAllEvents}
           />
         </div>
       );
