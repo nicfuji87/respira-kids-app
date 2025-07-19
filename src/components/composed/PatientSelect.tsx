@@ -437,10 +437,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     }, []);
 
     const renderPatientInfo = (patient: PatientOption) => {
-      const hasResponsaveis =
-        patient.responsavel_legal_nome ||
-        patient.responsavel_financeiro_nome ||
-        patient.nomes_responsaveis;
       const isSelected = value === patient.id;
 
       // AI dev note: Detectar se match foi via responsável e qual tipo
@@ -467,9 +463,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
         !matchViaRespFinanceiro &&
         patient.nomes_responsaveis &&
         normalizeText(patient.nomes_responsaveis).includes(normalizedSearch);
-
-      const matchViaResponsavel =
-        matchViaRespLegal || matchViaRespFinanceiro || matchViaRespGenerico;
 
       return (
         <div className="flex items-center gap-3 w-full">
@@ -501,17 +494,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
                 </Badge>
               )}
             </div>
-
-            {/* AI dev note: Mostrar responsáveis quando relevante para a busca */}
-            {patient.nomes_responsaveis &&
-              (matchViaResponsavel || hasResponsaveis) && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <User className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">
-                    Responsável: {patient.nomes_responsaveis}
-                  </span>
-                </div>
-              )}
 
             {patient.email && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -1,274 +1,196 @@
-import { supabase } from './supabase';
+import { supabase } from '@/lib/supabase';
 import type {
-  SessionMedia,
-  CreateSessionMedia,
-  UpdateSessionMedia,
-  MediaUploadResult,
+  SessionMediaWithDocument,
+  SessionMediaGroup,
+  MediaFilters,
 } from '@/types/session-media';
 
-// AI dev note: API Supabase para sistema de mídias de sessão
-// Gerencia upload para bucket respira-sessions e CRUD na tabela midias_sessao
-
-const BUCKET_NAME = 'respira-sessions';
+// AI dev note: API view-only para session_media + document_storage
+// Busca mídias agrupadas por sessão/agendamento para MediaGallery da Fase 4
 
 /**
- * Upload de arquivo para o bucket respira-sessions
+ * Buscar todas as mídias de um paciente agrupadas por sessão
  */
-export const uploadSessionMedia = async (
-  file: File,
-  agendamentoId: string
-): Promise<MediaUploadResult> => {
+export async function fetchMediaByPatient(
+  patientId: string,
+  filters?: MediaFilters
+): Promise<SessionMediaGroup[]> {
   try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${agendamentoId}/${Date.now()}.${fileExt}`;
-
-    const { error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
-
-    if (error) {
-      console.error('Erro no upload:', error);
-      return {
-        success: false,
-        error: error.message,
-        file,
-      };
-    }
-
-    // Gerar URL assinada (bucket privado)
-    const { data: signedUrlData, error: urlError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(fileName, 3600); // 1 hora de validade
-
-    if (urlError || !signedUrlData?.signedUrl) {
-      console.error('Erro ao gerar URL assinada:', urlError);
-      return {
-        success: false,
-        error: urlError?.message || 'Erro ao gerar URL de acesso',
-        file,
-      };
-    }
-
-    return {
-      success: true,
-      url: signedUrlData.signedUrl,
-      file,
-    };
-  } catch (error) {
-    console.error('Erro no upload de mídia:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
-      file,
-    };
-  }
-};
-
-/**
- * Salvar referência da mídia na tabela midias_sessao
- */
-export const createSessionMediaRecord = async (
-  mediaData: CreateSessionMedia
-): Promise<SessionMedia | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('midias_sessao')
-      .insert(mediaData)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Erro ao salvar mídia no DB:', error);
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Erro ao criar registro de mídia:', error);
-    throw error;
-  }
-};
-
-/**
- * Gerar URL assinada para uma mídia existente
- */
-const generateSignedUrlForMedia = async (
-  media: SessionMedia
-): Promise<string> => {
-  try {
-    // Extrair o path do arquivo da URL armazenada
-    const url = new URL(media.url_arquivo);
-    const pathParts = url.pathname.split('/');
-    // Formato esperado: /storage/v1/object/public/respira-sessions/agendamentoId/arquivo.ext
-    const filePath = pathParts.slice(-2).join('/'); // agendamentoId/arquivo.ext
-
-    const { data: signedUrlData, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(filePath, 3600); // 1 hora de validade
-
-    if (error || !signedUrlData?.signedUrl) {
-      console.error('Erro ao gerar URL assinada para mídia existente:', error);
-      return media.url_arquivo; // Fallback para URL original
-    }
-
-    return signedUrlData.signedUrl;
-  } catch (error) {
-    console.error('Erro ao processar URL da mídia:', error);
-    return media.url_arquivo; // Fallback para URL original
-  }
-};
-
-/**
- * Buscar todas as mídias de uma sessão
- */
-export const fetchSessionMedias = async (
-  agendamentoId: string
-): Promise<SessionMedia[]> => {
-  try {
-    const { data, error } = await supabase
-      .from('midias_sessao')
-      .select('*')
-      .eq('id_agendamento', agendamentoId)
+    let query = supabase
+      .from('session_media')
+      .select(
+        `
+        *,
+        document:document_storage(*),
+        agendamento:agendamentos(
+          id,
+          data_hora,
+          profissional:pessoas!profissional_id(nome),
+          tipo_servico:tipo_servicos(nome)
+        )
+      `
+      )
+      .eq('ativo', true)
+      .eq('visivel_paciente', true)
+      .in('agendamento.paciente_id', [patientId])
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Erro ao buscar mídias:', error);
-      throw error;
+    // Aplicar filtros
+    if (filters?.tipo_midia && filters.tipo_midia !== 'all') {
+      query = query.eq('tipo_midia', filters.tipo_midia);
     }
 
-    // Gerar URLs assinadas para todas as mídias
-    const mediasWithSignedUrls = await Promise.all(
-      (data || []).map(async (media) => ({
-        ...media,
-        url_arquivo: await generateSignedUrlForMedia(media),
-      }))
+    if (filters?.momento_sessao && filters.momento_sessao !== 'all') {
+      query = query.eq('momento_sessao', filters.momento_sessao);
+    }
+
+    if (filters?.data_inicio) {
+      query = query.gte('agendamento.data_hora', filters.data_inicio);
+    }
+
+    if (filters?.data_fim) {
+      query = query.lte('agendamento.data_hora', filters.data_fim);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar mídias do paciente:', error);
+      throw new Error(error.message);
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Agrupar por agendamento/sessão
+    const groupedMedia = data.reduce(
+      (acc: Record<string, SessionMediaGroup>, item) => {
+        const agendamentoId = item.agendamento_id;
+
+        if (!acc[agendamentoId]) {
+          acc[agendamentoId] = {
+            agendamento_id: agendamentoId,
+            data_sessao: item.agendamento?.data_hora || '',
+            profissional_nome:
+              item.agendamento?.profissional?.nome || 'Não informado',
+            tipo_servico:
+              item.agendamento?.tipo_servico?.nome || 'Não informado',
+            medias: [],
+          };
+        }
+
+        acc[agendamentoId].medias.push({
+          ...item,
+          document: item.document,
+        } as SessionMediaWithDocument);
+
+        return acc;
+      },
+      {}
     );
 
-    return mediasWithSignedUrls;
-  } catch (error) {
-    console.error('Erro ao buscar mídias da sessão:', error);
-    throw error;
+    // Converter para array e ordenar por data (mais recente primeiro)
+    return Object.values(groupedMedia).sort(
+      (a, b) =>
+        new Date(b.data_sessao).getTime() - new Date(a.data_sessao).getTime()
+    );
+  } catch (err) {
+    console.error('Erro ao buscar mídias do paciente:', err);
+    throw err;
   }
-};
+}
 
 /**
- * Atualizar descrição de uma mídia
+ * Buscar mídias de uma sessão específica
  */
-export const updateSessionMediaRecord = async (
-  mediaData: UpdateSessionMedia
-): Promise<SessionMedia | null> => {
+export async function fetchMediaBySession(
+  agendamentoId: string
+): Promise<SessionMediaWithDocument[]> {
   try {
     const { data, error } = await supabase
-      .from('midias_sessao')
-      .update({
-        descricao: mediaData.descricao,
-        atualizado_por: mediaData.atualizado_por,
-      })
-      .eq('id', mediaData.id)
-      .select()
-      .single();
+      .from('session_media')
+      .select(
+        `
+        *,
+        document:document_storage(*)
+      `
+      )
+      .eq('agendamento_id', agendamentoId)
+      .eq('ativo', true)
+      .eq('visivel_paciente', true)
+      .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Erro ao atualizar mídia:', error);
-      throw error;
+      console.error('Erro ao buscar mídias da sessão:', error);
+      throw new Error(error.message);
     }
 
-    return data;
-  } catch (error) {
-    console.error('Erro ao atualizar mídia:', error);
-    throw error;
+    return (data || []).map((item) => ({
+      ...item,
+      document: item.document,
+    })) as SessionMediaWithDocument[];
+  } catch (err) {
+    console.error('Erro ao buscar mídias da sessão:', err);
+    throw err;
   }
-};
+}
 
 /**
- * Remover mídia (arquivo do storage + registro do DB)
+ * Contar total de mídias do paciente
  */
-export const deleteSessionMedia = async (mediaId: string): Promise<boolean> => {
+export async function countMediaByPatient(patientId: string): Promise<number> {
   try {
-    // Primeiro buscar a mídia para obter a URL
-    const { data: media, error: fetchError } = await supabase
-      .from('midias_sessao')
-      .select('url_arquivo')
-      .eq('id', mediaId)
-      .single();
+    const { count, error } = await supabase
+      .from('session_media')
+      .select('*', { count: 'exact', head: true })
+      .eq('ativo', true)
+      .eq('visivel_paciente', true)
+      .in('agendamento.paciente_id', [patientId]);
 
-    if (fetchError || !media) {
-      console.error('Erro ao buscar mídia para remoção:', fetchError);
-      throw fetchError || new Error('Mídia não encontrada');
+    if (error) {
+      console.error('Erro ao contar mídias do paciente:', error);
+      return 0;
     }
 
-    // Extrair o path do arquivo da URL
-    const url = new URL(media.url_arquivo);
-    const filePath = url.pathname.split('/').slice(-2).join('/'); // agendamentoId/arquivo.ext
-
-    // Remover do storage
-    const { error: storageError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .remove([filePath]);
-
-    if (storageError) {
-      console.error('Erro ao remover arquivo do storage:', storageError);
-      // Continua mesmo com erro no storage para limpar o DB
-    }
-
-    // Remover do DB
-    const { error: dbError } = await supabase
-      .from('midias_sessao')
-      .delete()
-      .eq('id', mediaId);
-
-    if (dbError) {
-      console.error('Erro ao remover mídia do DB:', dbError);
-      throw dbError;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Erro ao deletar mídia:', error);
-    throw error;
+    return count || 0;
+  } catch (err) {
+    console.error('Erro ao contar mídias do paciente:', err);
+    return 0;
   }
-};
+}
 
 /**
- * Upload completo: arquivo + registro no DB
+ * Verificar se o usuário pode baixar mídias (admin/secretaria)
  */
-export const uploadAndSaveSessionMedia = async (
-  file: File,
-  agendamentoId: string,
-  descricao?: string,
-  criadoPor?: string
-): Promise<SessionMedia | null> => {
-  try {
-    // 1. Upload do arquivo
-    const uploadResult = await uploadSessionMedia(file, agendamentoId);
+export function canDownloadMedia(userRole?: string): boolean {
+  return userRole === 'admin' || userRole === 'secretaria';
+}
 
-    if (!uploadResult.success || !uploadResult.url) {
-      throw new Error(uploadResult.error || 'Falha no upload');
+/**
+ * Gerar URL de download segura (se permitido)
+ */
+export async function getMediaDownloadUrl(
+  media: SessionMediaWithDocument,
+  userRole?: string
+): Promise<string | null> {
+  if (!canDownloadMedia(userRole)) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(media.document.bucket_name)
+      .createSignedUrl(media.document.caminho_arquivo, 300); // 5 minutos
+
+    if (error) {
+      console.error('Erro ao gerar URL de download:', error);
+      return null;
     }
 
-    // 2. Determinar tipo de mídia
-    const tipoMidia = file.type.startsWith('image/')
-      ? 'foto'
-      : file.type.startsWith('video/')
-        ? 'video'
-        : 'audio';
-
-    // 3. Salvar no DB
-    const mediaData: CreateSessionMedia = {
-      id_agendamento: agendamentoId,
-      url_arquivo: uploadResult.url,
-      tipo_midia: tipoMidia,
-      descricao: descricao || null,
-      criado_por: criadoPor || null,
-    };
-
-    const savedMedia = await createSessionMediaRecord(mediaData);
-    return savedMedia;
-  } catch (error) {
-    console.error('Erro no upload completo de mídia:', error);
-    throw error;
+    return data?.signedUrl || null;
+  } catch (err) {
+    console.error('Erro ao gerar URL de download:', err);
+    return null;
   }
-};
+}

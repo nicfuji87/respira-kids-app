@@ -5,6 +5,8 @@ export { Label } from './label';
 export { Textarea } from './textarea';
 export { FileUpload } from './file-upload';
 export { MediaUpload } from './media-upload';
+export { MediaViewer } from './media-viewer';
+export type { MediaViewerProps } from './media-viewer';
 export { RichTextEditor } from './rich-text-editor';
 export { AudioRecorder } from './audio-recorder';
 export {

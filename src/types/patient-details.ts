@@ -1,0 +1,180 @@
+// AI dev note: Tipos específicos para detalhes completos de pacientes
+// Interfaces para todos os componentes da página de detalhes do paciente
+
+import type { SupabasePessoa } from './supabase-calendar';
+import type { SessionMedia } from './session-media';
+
+// Interface estendida do paciente com dados de responsáveis
+export interface PatientDetails extends SupabasePessoa {
+  // Dados pessoais adicionais
+  cpf_cnpj?: string | null;
+  data_nascimento?: string | null;
+  sexo?: 'M' | 'F' | 'O' | null;
+  numero_endereco?: string | null;
+  complemento_endereco?: string | null;
+
+  // Campos de consentimento
+  autorizacao_uso_cientifico?: boolean;
+  autorizacao_uso_redes_sociais?: boolean;
+  autorizacao_uso_nome?: boolean;
+
+  // Dados de responsáveis (vindos de views/joins)
+  nomes_responsaveis?: string;
+  responsavel_legal_nome?: string;
+  responsavel_legal_email?: string;
+  responsavel_legal_telefone?: number;
+  responsavel_financeiro_nome?: string;
+  responsavel_financeiro_email?: string;
+  responsavel_financeiro_telefone?: number;
+
+  // Dados de endereço
+  endereco?: {
+    cep: string;
+    logradouro: string;
+    bairro: string;
+    cidade: string;
+    estado: string;
+  } | null;
+
+  // Origem da indicação
+  origem_indicacao?: string | null;
+
+  // Anamnese
+  anamnese?: string | null;
+}
+
+// Interface para métricas do paciente
+export interface PatientMetrics {
+  total_consultas: number;
+  total_faturado: number;
+  valor_pendente: number;
+  valor_em_atraso: number;
+  dias_em_atraso: number;
+  ultima_consulta: string | null;
+  dias_desde_ultima_consulta: number | null;
+  // Novos campos para métricas expandidas
+  consultas_finalizadas?: number;
+  consultas_agendadas?: number;
+  consultas_canceladas?: number;
+  valor_pago?: number;
+}
+
+// Interface para consultas recentes
+export interface RecentConsultation {
+  id: string;
+  data_hora: string;
+  servico_nome: string;
+  local_nome: string;
+  valor_servico: number;
+  status_consulta: string;
+  status_pagamento: string;
+  status_cor_consulta: string;
+  status_cor_pagamento: string;
+  profissional_nome?: string;
+  possui_evolucao?: string;
+}
+
+// Interface para dados de consentimento
+export interface PatientConsent {
+  autorizacao_uso_cientifico: boolean;
+  autorizacao_uso_redes_sociais: boolean;
+  autorizacao_uso_nome: boolean;
+}
+
+// Interface para props do PatientConsentForm
+export interface PatientConsentFormProps {
+  patientId: string;
+  initialValues: PatientConsent;
+  onUpdate: (consent: PatientConsent) => Promise<void>;
+  disabled?: boolean;
+  className?: string;
+}
+
+// Interface para props do PatientMetrics
+export interface PatientMetricsProps {
+  patientId: string;
+  className?: string;
+}
+
+// Interface para props das consultas recentes
+export interface RecentConsultationsProps {
+  patientId: string;
+  onConsultationClick?: (consultationId: string) => void;
+  className?: string;
+}
+
+// Interface para galeria de mídia
+export interface MediaGalleryProps {
+  patientId: string;
+  className?: string;
+}
+
+// Interface para histórico do paciente com IA
+export interface PatientHistoryProps {
+  patientId: string;
+  className?: string;
+}
+
+// Interface para anamnese
+export interface PatientAnamnesisProps {
+  patientId: string;
+  initialValue?: string;
+  onUpdate: (anamnese: string) => Promise<void>;
+  className?: string;
+}
+
+// Interface para histórico do paciente
+export interface PatientHistoryProps {
+  patientId: string;
+  className?: string;
+}
+
+// Interface para relatório de evolução
+export interface RelatorioEvolucao {
+  id: string;
+  id_agendamento: string;
+  tipo_relatorio_id: string;
+  pdf_url?: string | null;
+  conteudo?: string | null;
+  criado_por?: string | null;
+  atualizado_por?: string | null;
+  created_at: string;
+  updated_at: string;
+  transcricao?: boolean | null;
+}
+
+// Interface para seção de informações pessoais
+export interface PatientPersonalInfoProps {
+  patient: PatientDetails;
+  className?: string;
+}
+
+// Interface para mídia agrupada por sessão
+export interface SessionMediaGroup {
+  agendamento_id: string;
+  data_hora: string;
+  medias: SessionMedia[];
+}
+
+// Interface para API responses
+export interface PatientDetailsResponse {
+  patient: PatientDetails | null;
+  error?: string;
+}
+
+export interface PatientMetricsResponse {
+  metrics: PatientMetrics;
+  error?: string;
+}
+
+export interface RecentConsultationsResponse {
+  consultations: RecentConsultation[];
+  total_count: number;
+  has_more: boolean;
+  error?: string;
+}
+
+export interface SessionMediaResponse {
+  media_groups: SessionMediaGroup[];
+  error?: string;
+}

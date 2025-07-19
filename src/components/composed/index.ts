@@ -53,6 +53,16 @@ export { ServiceTypeSelect } from './ServiceTypeSelect';
 export { ConsultaStatusSelect } from './ConsultaStatusSelect';
 export { PagamentoStatusSelect } from './PagamentoStatusSelect';
 
+// Patient Management Components
+export { PatientConsentForm } from './PatientConsentForm';
+export { PatientPersonalInfo } from './PatientPersonalInfo';
+export { PatientCompleteInfo } from './PatientCompleteInfo';
+export { PatientMetrics } from './PatientMetrics';
+export { RecentConsultations } from './RecentConsultations';
+export { PatientAnamnesis } from './PatientAnamnesis';
+export { PatientHistory } from './PatientHistory';
+export { MediaGallery } from './MediaGallery';
+
 // Type exports
 export type { ApprovalStatus } from './UserApprovalCard';
 export type { NavigationItemProps } from './NavigationItem';
@@ -76,6 +86,17 @@ export type { ContactLinkProps } from './ContactLink';
 export type { LocationSelectProps, LocationOption } from './LocationSelect';
 export type { SessionMediaManagerProps } from './SessionMediaManager';
 export type { EvolutionEditorProps } from './EvolutionEditor';
+
+// Patient Management Type exports
+export type {
+  PatientConsentFormProps,
+  PatientPersonalInfoProps,
+  PatientMetricsProps,
+  RecentConsultationsProps,
+  PatientAnamnesisProps,
+  PatientHistoryProps,
+} from '@/types/patient-details';
+export type { MediaGalleryProps } from '@/types/session-media';
 
 // Registry para uso em templates e páginas
 export const ComposedComponents = {

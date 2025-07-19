@@ -195,7 +195,24 @@ export const getMobileNavigationForRole = (
 };
 
 // Função para verificar se usuário tem acesso a uma rota
+// AI dev note: Suporte a rotas dinâmicas - se tem acesso a /pacientes, tem acesso a /pacientes/:id
 export const hasAccessToRoute = (route: string, role: UserRole): boolean => {
-  const item = navigationConfig.find((item) => item.href === route);
-  return item ? item.roles.includes(role) : false;
+  // Verificação direta para rota exata
+  const exactMatch = navigationConfig.find((item) => item.href === route);
+  if (exactMatch) {
+    return exactMatch.roles.includes(role);
+  }
+
+  // Verificação para rotas dinâmicas - prefix matching
+  // Ex: /pacientes/:id → verifica acesso a /pacientes
+  const pathSegments = route.split('/').filter(Boolean);
+  if (pathSegments.length > 1) {
+    const basePath = `/${pathSegments[0]}`;
+    const baseMatch = navigationConfig.find((item) => item.href === basePath);
+    if (baseMatch) {
+      return baseMatch.roles.includes(role);
+    }
+  }
+
+  return false;
 };
