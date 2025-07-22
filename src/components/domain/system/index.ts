@@ -2,4 +2,5 @@
 export { PersonTypesManagement } from './PersonTypesManagement';
 export { ConsultaStatusManagement } from './ConsultaStatusManagement';
 export { PagamentoStatusManagement } from './PagamentoStatusManagement';
-export { TipoServicosManagement } from './TipoServicosManagement'; 
+export { TipoServicosManagement } from './TipoServicosManagement';
+export { LocaisAtendimentoManagement } from './LocaisAtendimentoManagement'; 

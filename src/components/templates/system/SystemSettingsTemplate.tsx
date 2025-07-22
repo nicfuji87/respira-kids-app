@@ -16,7 +16,8 @@ import {
   PersonTypesManagement, 
   ConsultaStatusManagement, 
   PagamentoStatusManagement,
-  TipoServicosManagement 
+  TipoServicosManagement,
+  LocaisAtendimentoManagement
 } from '@/components/domain/system';
 import {
   Users,
@@ -64,13 +65,9 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       icon: MapPin,
       description: 'Gerenciar locais onde os atendimentos são realizados',
       content: (
-        <DevelopmentPlaceholder
-          title="Locais de Atendimento"
-          description="Configuração de locais onde são realizados os atendimentos (clínica, domiciliar, externa)."
-          icon={<MapPin className="h-12 w-12 text-primary/50" />}
-        />
+        <LocaisAtendimentoManagement />
       ),
-      implemented: false
+      implemented: true
     },
     {
       id: 'servicos',
