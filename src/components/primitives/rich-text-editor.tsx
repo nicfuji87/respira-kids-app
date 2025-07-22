@@ -25,6 +25,7 @@ export interface RichTextEditorProps {
   minHeight?: number;
   maxHeight?: number;
   error?: string;
+  editorBackgroundColor?: string;
 }
 
 export const RichTextEditor = React.memo<RichTextEditorProps>(
@@ -37,6 +38,7 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
     minHeight = 120,
     maxHeight = 400,
     error,
+    editorBackgroundColor,
   }) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const isUpdatingRef = useRef(false);
@@ -287,6 +289,9 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
           style={{
             minHeight: `${minHeight}px`,
             maxHeight: `${maxHeight}px`,
+            ...(editorBackgroundColor && {
+              backgroundColor: editorBackgroundColor,
+            }),
           }}
           data-placeholder={placeholder}
           suppressContentEditableWarning={true}

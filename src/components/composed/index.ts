@@ -53,6 +53,13 @@ export { ServiceTypeSelect } from './ServiceTypeSelect';
 export { ConsultaStatusSelect } from './ConsultaStatusSelect';
 export { PagamentoStatusSelect } from './PagamentoStatusSelect';
 
+// Professional Dashboard Components
+export { ProfessionalMetrics } from './ProfessionalMetrics';
+export { AppointmentsList } from './AppointmentsList';
+export { ConsultationsToEvolve } from './ConsultationsToEvolve';
+export { MaterialRequestCard } from './MaterialRequestCard';
+export { FaturamentoChart } from './FaturamentoChart';
+
 // Patient Management Components
 export { PatientConsentForm } from './PatientConsentForm';
 export { PatientPersonalInfo } from './PatientPersonalInfo';

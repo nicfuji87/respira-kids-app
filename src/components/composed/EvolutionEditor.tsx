@@ -247,6 +247,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
               error={error}
               minHeight={150}
               maxHeight={500}
+              editorBackgroundColor="white"
             />
           </TabsContent>
 

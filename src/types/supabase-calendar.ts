@@ -288,3 +288,9 @@ export interface UpdateEvolucaoData {
   conteudo: string;
   atualizado_por: string;
 }
+
+export interface UpdateEvolucaoData {
+  id: string;
+  conteudo: string;
+  atualizado_por: string;
+}

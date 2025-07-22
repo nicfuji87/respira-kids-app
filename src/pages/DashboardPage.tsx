@@ -16,8 +16,19 @@ import {
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { CalendarTemplateWithData } from '@/components/templates/dashboard/CalendarTemplateWithData';
+import { ProfessionalDashboard } from '@/components/domain';
+import { AppointmentDetailsManager } from '@/components/domain/calendar';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
+import { useCalendarFormData } from '@/hooks/useCalendarData';
+import type {
+  UpcomingAppointment,
+  ConsultationToEvolve,
+  MaterialRequest,
+} from '@/lib/professional-dashboard-api';
+import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
+import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
 
 // AI dev note: DashboardPage com dados reais do Supabase
 // Página principal do dashboard com métricas e calendário
@@ -39,6 +50,10 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // AI dev note: TODOS os hooks devem ser chamados ANTES da renderização condicional
+  // para respeitar a "Rules of Hooks" do React
+
+  // Estados para dashboard legado (sempre inicializados)
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     agendamentosHoje: 0,
     pacientesAtivos: 0,
@@ -48,46 +63,44 @@ export const DashboardPage: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  // Simular carregamento de dados reais
-  useEffect(() => {
-    const loadMetrics = async () => {
-      // Aqui conectaria com Supabase para buscar dados reais
-      // Por enquanto, usando dados fictícios baseados nos dados inseridos
+  // Estados para modal de detalhes do agendamento
+  const [isAppointmentDetailsOpen, setIsAppointmentDetailsOpen] =
+    useState(false);
+  const [selectedAppointmentData, setSelectedAppointmentData] =
+    useState<SupabaseAgendamentoCompletoFlat | null>(null);
 
-      setTimeout(() => {
-        setMetrics({
-          agendamentosHoje: 3,
-          pacientesAtivos: 5,
-          sessoesMes: 24,
-          faturamentoMes: 3850.0,
-          proximosAgendamentos: [
-            {
-              paciente: 'Ana Silva',
-              horario: '09:00',
-              servico: 'Fisioterapia Respiratória',
-              status: 'agendado',
-            },
-            {
-              paciente: 'Maria Oliveira',
-              horario: '14:00',
-              servico: 'Fisioterapia Respiratória',
-              status: 'agendado',
-            },
-            {
-              paciente: 'Maria Oliveira',
-              horario: '10:00 (Seg)',
-              servico: 'Fisioterapia Neurológica',
-              status: 'agendado',
-            },
-          ],
-        });
-        setLoading(false);
-      }, 1000);
-    };
+  // Dados do usuário
+  const userRole = user?.pessoa?.role;
+  const professionalId = user?.pessoa?.id;
+  const professionalName = user?.pessoa?.nome || 'Profissional';
 
-    loadMetrics();
-  }, []);
+  // Hook para dados do calendário (locais de atendimento)
+  const { formData } = useCalendarFormData();
 
+  // Função para buscar dados completos do agendamento
+  const fetchAppointmentDetails = async (
+    appointmentId: string
+  ): Promise<SupabaseAgendamentoCompletoFlat | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .eq('id', appointmentId)
+        .single();
+
+      if (error) {
+        console.error('Erro ao buscar detalhes do agendamento:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro ao buscar detalhes do agendamento:', error);
+      return null;
+    }
+  };
+
+  // Handler para navegação
   const handleNavigateToAgenda = () => {
     navigate('/agenda');
   };
@@ -95,6 +108,191 @@ export const DashboardPage: React.FC = () => {
   const handleNavigateToPacientes = () => {
     navigate('/pacientes');
   };
+
+  const handleNavigateToRelatorios = () => {
+    navigate('/relatorios');
+  };
+
+  // Handlers específicos do dashboard profissional
+  const handleAppointmentClick = async (appointment: UpcomingAppointment) => {
+    console.log('Clicou no agendamento:', appointment);
+
+    setIsAppointmentDetailsOpen(true);
+
+    try {
+      const appointmentDetails = await fetchAppointmentDetails(appointment.id);
+      if (appointmentDetails) {
+        setSelectedAppointmentData(appointmentDetails);
+      } else {
+        // Se não conseguir buscar os dados, fechar o modal e navegar para agenda
+        setIsAppointmentDetailsOpen(false);
+        navigate('/agenda');
+      }
+    } catch (error) {
+      console.error('Erro ao abrir detalhes do agendamento:', error);
+      setIsAppointmentDetailsOpen(false);
+      navigate('/agenda');
+    }
+  };
+
+  const handleConsultationClick = async (
+    consultation: ConsultationToEvolve
+  ) => {
+    console.log('Clicou na consulta:', consultation);
+
+    setIsAppointmentDetailsOpen(true);
+
+    try {
+      const appointmentDetails = await fetchAppointmentDetails(consultation.id);
+      if (appointmentDetails) {
+        setSelectedAppointmentData(appointmentDetails);
+      } else {
+        // Se não conseguir buscar os dados, fechar o modal e navegar para paciente
+        setIsAppointmentDetailsOpen(false);
+        navigate(`/pacientes/${consultation.id}`);
+      }
+    } catch (error) {
+      console.error('Erro ao abrir detalhes da consulta:', error);
+      setIsAppointmentDetailsOpen(false);
+      navigate(`/pacientes/${consultation.id}`);
+    }
+  };
+
+  const handleCreateEvolutionClick = async (consultationId: string) => {
+    console.log('Criar evolução para:', consultationId);
+
+    setIsAppointmentDetailsOpen(true);
+
+    try {
+      const appointmentDetails = await fetchAppointmentDetails(consultationId);
+      if (appointmentDetails) {
+        setSelectedAppointmentData(appointmentDetails);
+      } else {
+        // Se não conseguir buscar os dados, fechar o modal e navegar para paciente
+        setIsAppointmentDetailsOpen(false);
+        navigate(`/pacientes/${consultationId}?tab=evolucao`);
+      }
+    } catch (error) {
+      console.error('Erro ao abrir detalhes da consulta para evolução:', error);
+      setIsAppointmentDetailsOpen(false);
+      navigate(`/pacientes/${consultationId}?tab=evolucao`);
+    }
+  };
+
+  const handleMaterialRequestClick = (request: MaterialRequest) => {
+    console.log('Clicou na solicitação:', request);
+    // Navegar para detalhes da solicitação
+  };
+
+  const handleCreateMaterialRequest = () => {
+    console.log('Criar nova solicitação de material');
+    // Abrir modal ou navegar para formulário
+  };
+
+  // Handlers do modal de detalhes do agendamento
+  const handleAppointmentDetailsClose = () => {
+    setIsAppointmentDetailsOpen(false);
+    setSelectedAppointmentData(null);
+  };
+
+  const handleAppointmentDetailsSave = async (data: AppointmentUpdateData) => {
+    try {
+      console.log('Salvando alterações do agendamento:', data);
+      // O AppointmentDetailsManager já tem sua própria lógica de salvamento
+      // Aqui podemos adicionar refresh dos dados se necessário
+    } catch (error) {
+      console.error('Erro ao salvar alterações do agendamento:', error);
+    }
+  };
+
+  // Handlers para navegação de pessoas
+  const handlePatientClick = (patientId: string | null) => {
+    if (patientId) {
+      navigate(`/pessoa/${patientId}`);
+    }
+  };
+
+  const handleProfessionalClick = (professionalId: string) => {
+    navigate(`/pessoa/${professionalId}`);
+  };
+
+  // useEffect para dashboard legado (sempre executado, mas só atualiza se necessário)
+  useEffect(() => {
+    // Só carregar métricas se NÃO for profissional
+    if (userRole !== 'profissional') {
+      const loadMetrics = async () => {
+        setTimeout(() => {
+          setMetrics({
+            agendamentosHoje: 3,
+            pacientesAtivos: 5,
+            sessoesMes: 24,
+            faturamentoMes: 3850.0,
+            proximosAgendamentos: [
+              {
+                paciente: 'Ana Silva',
+                horario: '09:00',
+                servico: 'Fisioterapia Respiratória',
+                status: 'agendado',
+              },
+              {
+                paciente: 'Maria Oliveira',
+                horario: '14:00',
+                servico: 'Fisioterapia Respiratória',
+                status: 'agendado',
+              },
+              {
+                paciente: 'Maria Oliveira',
+                horario: '10:00 (Seg)',
+                servico: 'Fisioterapia Neurológica',
+                status: 'agendado',
+              },
+            ],
+          });
+          setLoading(false);
+        }, 1000);
+      };
+
+      loadMetrics();
+    } else {
+      // Para profissional, marcar como não loading
+      setLoading(false);
+    }
+  }, [userRole]);
+
+  // RENDERIZAÇÃO CONDICIONAL (após todos os hooks)
+
+  // Dashboard específico para profissional
+  if (userRole === 'profissional' && professionalId) {
+    return (
+      <>
+        <ProfessionalDashboard
+          professionalId={professionalId}
+          professionalName={professionalName}
+          onAppointmentClick={handleAppointmentClick}
+          onConsultationClick={handleConsultationClick}
+          onCreateEvolutionClick={handleCreateEvolutionClick}
+          onMaterialRequestClick={handleMaterialRequestClick}
+          onCreateMaterialRequest={handleCreateMaterialRequest}
+        />
+
+        {/* Modal de detalhes do agendamento */}
+        <AppointmentDetailsManager
+          isOpen={isAppointmentDetailsOpen}
+          onClose={handleAppointmentDetailsClose}
+          appointment={selectedAppointmentData}
+          userRole={userRole}
+          locaisAtendimento={formData.locaisAtendimento || []}
+          isLoadingLocais={false}
+          onSave={handleAppointmentDetailsSave}
+          onPatientClick={handlePatientClick}
+          onProfessionalClick={handleProfessionalClick}
+        />
+      </>
+    );
+  }
+
+  // Dashboard legado para outras roles (admin, secretaria)
+  // TODO: Implementar dashboards específicos para admin e secretaria
 
   if (loading) {
     return (
@@ -124,7 +322,8 @@ export const DashboardPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
-            Bem-vindo, {user?.pessoa?.nome || 'Usuário'}
+            Bem-vindo, {user?.pessoa?.nome || 'Usuário'} (
+            {userRole || 'role não definida'})
           </p>
         </div>
         <Button onClick={handleNavigateToAgenda}>
@@ -275,6 +474,7 @@ export const DashboardPage: React.FC = () => {
             <Button
               variant="outline"
               className="h-20 flex flex-col items-center justify-center space-y-2"
+              onClick={handleNavigateToRelatorios}
             >
               <FileText className="h-6 w-6" />
               <span className="text-sm">Relatório</span>

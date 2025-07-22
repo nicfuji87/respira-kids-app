@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, MapPin } from 'lucide-react';
+import { X, MapPin, Edit, Save, XCircle } from 'lucide-react';
 
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
+import { Badge } from '@/components/primitives/badge';
 import { Separator } from '@/components/primitives/separator';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import {
@@ -27,12 +28,14 @@ import {
   EvolutionEditor,
   type LocationOption,
 } from '@/components/composed';
+import { Textarea } from '@/components/primitives/textarea';
 import { cn } from '@/lib/utils';
 import {
   fetchConsultaStatus,
   fetchTiposServico,
   fetchRelatoriosEvolucao,
   saveRelatorioEvolucao,
+  updateRelatorioEvolucao,
 } from '@/lib/calendar-services';
 import type {
   SupabaseAgendamentoCompletoFlat,
@@ -121,6 +124,13 @@ export const AppointmentDetailsManager =
       >([]);
       const [isLoadingEvolucoes, setIsLoadingEvolucoes] = useState(false);
       const [isSavingEvolucao, setIsSavingEvolucao] = useState(false);
+
+      // Estados para edição de evoluções
+      const [editingEvolucaoId, setEditingEvolucaoId] = useState<string | null>(
+        null
+      );
+      const [editingContent, setEditingContent] = useState<string>('');
+      const [isSavingEdit, setIsSavingEdit] = useState(false);
 
       const { user } = useAuth();
 
@@ -216,6 +226,59 @@ export const AppointmentDetailsManager =
       const handleInputChange = (field: keyof FormData, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
         setIsEdited(true);
+      };
+
+      // Funções para edição de evoluções
+      const canEditEvolucao = (
+        evolucao: SupabaseRelatorioEvolucaoCompleto
+      ): boolean => {
+        if (!user?.pessoa?.id) return false;
+
+        // Admin pode editar todas
+        if (userRole === 'admin') return true;
+
+        // Profissional pode editar apenas suas próprias
+        if (userRole === 'profissional') {
+          return evolucao.criado_por === user.pessoa.id;
+        }
+
+        // Secretaria não pode editar nenhuma
+        return false;
+      };
+
+      const handleStartEdit = (evolucao: SupabaseRelatorioEvolucaoCompleto) => {
+        setEditingEvolucaoId(evolucao.id);
+        setEditingContent(evolucao.conteudo || '');
+      };
+
+      const handleCancelEdit = () => {
+        setEditingEvolucaoId(null);
+        setEditingContent('');
+      };
+
+      const handleSaveEdit = async () => {
+        if (!editingEvolucaoId || !user?.pessoa?.id || !appointment) return;
+
+        setIsSavingEdit(true);
+        try {
+          await updateRelatorioEvolucao({
+            id: editingEvolucaoId,
+            conteudo: editingContent,
+            atualizado_por: user.pessoa.id,
+          });
+
+          // Recarregar evoluções
+          const evolucoesList = await fetchRelatoriosEvolucao(appointment.id);
+          setEvolucoes(evolucoesList);
+
+          // Limpar estado de edição
+          setEditingEvolucaoId(null);
+          setEditingContent('');
+        } catch (error) {
+          console.error('Erro ao salvar edição da evolução:', error);
+        } finally {
+          setIsSavingEdit(false);
+        }
       };
 
       // AI dev note: Helper para sanitizar campos UUID vazios
@@ -332,10 +395,20 @@ export const AppointmentDetailsManager =
             <DialogHeader>
               <div className="flex items-center justify-between">
                 <DialogTitle>Detalhes do Agendamento</DialogTitle>
-                <Button variant="outline" onClick={onClose} size="sm">
-                  <X className="h-4 w-4 mr-2" />
-                  Fechar
-                </Button>
+                <div className="flex items-center gap-2">
+                  {!isLoadingEvolucoes && evolucoes.length === 0 && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-2 py-1 bg-yellow-50 text-yellow-800 border-yellow-200"
+                    >
+                      Evolução Pendente
+                    </Badge>
+                  )}
+                  <Button variant="outline" onClick={onClose} size="sm">
+                    <X className="h-4 w-4 mr-2" />
+                    Fechar
+                  </Button>
+                </div>
               </div>
             </DialogHeader>
 
@@ -626,20 +699,76 @@ export const AppointmentDetailsManager =
                             key={evolucao.id}
                             className="border rounded-lg p-3 bg-muted/30"
                           >
-                            <div className="text-sm text-muted-foreground mb-2">
-                              {evolucao.criado_por_nome ||
-                                'Usuário desconhecido'}{' '}
-                              •{' '}
-                              {new Date(evolucao.created_at).toLocaleString(
-                                'pt-BR'
-                              )}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm text-muted-foreground">
+                                {evolucao.criado_por_nome ||
+                                  'Usuário desconhecido'}{' '}
+                                •{' '}
+                                {new Date(evolucao.created_at).toLocaleString(
+                                  'pt-BR'
+                                )}
+                                {evolucao.atualizado_por && (
+                                  <span className="ml-2 text-xs">
+                                    (editado)
+                                  </span>
+                                )}
+                              </div>
+                              {canEditEvolucao(evolucao) &&
+                                editingEvolucaoId !== evolucao.id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleStartEdit(evolucao)}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                )}
                             </div>
-                            <div
-                              className="text-sm whitespace-pre-wrap"
-                              dangerouslySetInnerHTML={{
-                                __html: evolucao.conteudo || '',
-                              }}
-                            />
+
+                            {editingEvolucaoId === evolucao.id ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={editingContent}
+                                  onChange={(e) =>
+                                    setEditingContent(e.target.value)
+                                  }
+                                  className="min-h-[80px] text-sm"
+                                  disabled={isSavingEdit}
+                                />
+                                <div className="flex items-center gap-2 justify-end">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleCancelEdit}
+                                    disabled={isSavingEdit}
+                                    className="h-6 px-2"
+                                  >
+                                    <XCircle className="h-3 w-3 mr-1" />
+                                    Cancelar
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleSaveEdit}
+                                    disabled={
+                                      isSavingEdit || !editingContent.trim()
+                                    }
+                                    className="h-6 px-2"
+                                  >
+                                    <Save className="h-3 w-3 mr-1" />
+                                    {isSavingEdit ? 'Salvando...' : 'Salvar'}
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                className="text-sm whitespace-pre-wrap"
+                                dangerouslySetInnerHTML={{
+                                  __html: evolucao.conteudo || '',
+                                }}
+                              />
+                            )}
                           </div>
                         ))}
                       </div>

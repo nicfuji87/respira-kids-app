@@ -9,6 +9,7 @@ export { CompleteProfilePage } from './auth/CompleteProfilePage';
 
 // Dashboard domain exports
 export { AdminDashboard } from './dashboard/AdminDashboard';
+export { ProfessionalDashboard } from './dashboard/ProfessionalDashboard';
 export { DashboardSidebar } from './dashboard/DashboardSidebar';
 export { DashboardTopBar } from './dashboard/DashboardTopBar';
 export { MobileBottomTabs } from './dashboard/MobileBottomTabs';

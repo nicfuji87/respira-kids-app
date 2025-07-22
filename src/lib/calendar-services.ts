@@ -17,6 +17,7 @@ import type {
   SupabaseRelatorioEvolucaoCompleto,
   SupabaseRelatorioEvolucao,
   SaveEvolucaoData,
+  UpdateEvolucaoData,
 } from '@/types/supabase-calendar';
 import {
   mapAgendamentoToCalendarEvent,
@@ -1073,6 +1074,37 @@ export const saveRelatorioEvolucao = async (
     return data;
   } catch (error) {
     console.error('Erro ao salvar evolução:', error);
+    throw error;
+  }
+};
+
+export const updateRelatorioEvolucao = async (
+  evolucaoData: UpdateEvolucaoData
+): Promise<SupabaseRelatorioEvolucao> => {
+  try {
+    console.log('[DEBUG] updateRelatorioEvolucao - dados:', evolucaoData);
+
+    // Atualizar evolução existente
+    const { data, error } = await supabase
+      .from('relatorio_evolucao')
+      .update({
+        conteudo: evolucaoData.conteudo,
+        atualizado_por: evolucaoData.atualizado_por,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', evolucaoData.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Erro ao atualizar relatório de evolução:', error);
+      throw error;
+    }
+
+    console.log('[DEBUG] updateRelatorioEvolucao - sucesso:', data);
+    return data;
+  } catch (error) {
+    console.error('Erro ao atualizar evolução:', error);
     throw error;
   }
 };
