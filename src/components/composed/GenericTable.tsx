@@ -25,31 +25,33 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// AI dev note: GenericTable reutilizável para CRUD de entidades do sistema
-// Inclui busca, paginação, ações personalizáveis e renderização flexível
+// AI dev note: GenericTable reutilizável para listagens
+// Combina Table primitive com funcionalidades de busca, paginação e ações
 
-export interface GenericTableColumn<T = any> {
+export interface GenericTableColumn<T> {
   key: string;
   label: string;
-  sortable?: boolean;
   render?: (item: T) => React.ReactNode;
   className?: string;
+  sortable?: boolean;
 }
 
-export interface GenericTableProps<T = any> {
-  title: string;
+export interface GenericTableProps<T> {
+  title?: string;
   description?: string;
   data: T[];
   columns: GenericTableColumn<T>[];
   loading?: boolean;
-  searchPlaceholder?: string;
   onAdd?: () => void;
   onFilter?: () => void;
   addButtonText?: string;
   filterButtonText?: string;
+  searchPlaceholder?: string;
   emptyMessage?: string;
-  itemsPerPage?: number;
   className?: string;
+  itemsPerPage?: number;
+  onSearch?: (query: string) => void;
+  searchQuery?: string;
 }
 
 export const GenericTable = <T extends Record<string, any>>({

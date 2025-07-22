@@ -41,10 +41,8 @@ export const PersonTypesManagement: React.FC = () => {
   // Form
   const form = useForm<PessoaTipoCreateInput>({
     defaultValues: {
-      codigo: '',
       nome: '',
-      descricao: '',
-      ativo: true
+      descricao: ''
     }
   });
 
@@ -74,10 +72,8 @@ export const PersonTypesManagement: React.FC = () => {
   const handleAdd = () => {
     // Garantir que o form seja resetado corretamente
     const defaultValues = {
-      codigo: '',
       nome: '',
-      descricao: '',
-      ativo: true
+      descricao: ''
     };
     
     form.reset(defaultValues);
@@ -92,10 +88,8 @@ export const PersonTypesManagement: React.FC = () => {
   const handleEdit = (item: PessoaTipo) => {
     // Garantir que todos os valores sejam válidos para evitar React.Children.only error
     const formValues = {
-      codigo: item.codigo || '',
       nome: item.nome || '',
-      descricao: item.descricao || '',
-      ativo: Boolean(item.ativo) // Garantir que seja boolean
+      descricao: item.descricao || ''
     };
     
     form.reset(formValues);
@@ -110,12 +104,28 @@ export const PersonTypesManagement: React.FC = () => {
       let result;
       
       if (editingItem) {
+        // Ao editar, preservar código e status originais
         result = await updatePessoaTipo({
           ...formData,
-          id: editingItem.id
+          id: editingItem.id,
+          codigo: editingItem.codigo, // Preservar código original
+          ativo: editingItem.ativo    // Preservar status original
         });
       } else {
-        result = await createPessoaTipo(formData);
+        // Ao criar, gerar código automático baseado no nome
+        const codigo = formData.nome
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+          .replace(/[^a-z0-9]/g, '_')      // Substitui caracteres especiais por _
+          .replace(/_+/g, '_')             // Remove múltiplos _ consecutivos
+          .replace(/^_|_$/g, '');          // Remove _ do início e fim
+          
+        result = await createPessoaTipo({
+          ...formData,
+          codigo,
+          ativo: true // Novo registro sempre ativo
+        });
       }
 
       if (result.success) {
@@ -239,14 +249,6 @@ export const PersonTypesManagement: React.FC = () => {
   // === FORM FIELDS ===
   const formFields: FormField[] = [
     {
-      name: 'codigo',
-      label: 'Código',
-      type: 'text',
-      placeholder: 'Ex: PACIENTE, PROFISSIONAL',
-      required: true,
-      description: 'Código único para identificar o tipo'
-    },
-    {
       name: 'nome',
       label: 'Nome',
       type: 'text',
@@ -258,11 +260,6 @@ export const PersonTypesManagement: React.FC = () => {
       label: 'Descrição',
       type: 'textarea',
       placeholder: 'Descrição opcional do tipo de pessoa'
-    },
-    {
-      name: 'ativo',
-      label: 'Status',
-      type: 'switch'
     }
   ];
 

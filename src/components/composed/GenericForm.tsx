@@ -1,5 +1,4 @@
 import React from 'react';
-import { Button } from '@/components/primitives/button';
 import {
   Dialog,
   DialogContent,
@@ -18,28 +17,29 @@ import {
 } from '@/components/primitives/form';
 import { Input } from '@/components/primitives/input';
 import { Textarea } from '@/components/primitives/textarea';
+import { Button } from '@/components/primitives/button';
 import { Switch } from '@/components/primitives/switch';
-import { ColorPicker } from './ColorPicker';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
+import { ColorPicker } from './ColorPicker';
 import type { UseFormReturn } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 
-// AI dev note: GenericForm reutilizável para modais de CRUD
+// AI dev note: GenericForm reutilizável para CRUD
 // Suporta diferentes tipos de campos e validação automática
 
 export interface FormField {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'select' | 'switch' | 'color' | 'number';
+  type: 'text' | 'email' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'color';
   placeholder?: string;
   required?: boolean;
-  options?: { value: string; label: string }[];
+  options?: Array<{ value: string; label: string }>;
   disabled?: boolean;
   description?: string;
 }
@@ -47,7 +47,9 @@ export interface FormField {
 export interface GenericFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: any) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onSubmit: (data: any) => void | Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<any>;
   fields: FormField[];
   title: string;
@@ -70,7 +72,7 @@ export const GenericForm = React.memo<GenericFormProps>(
     isEditing = false,
     loading = false,
     submitText,
-    cancelText = "Cancelar"
+    cancelText = 'Cancelar',
   }) => {
     const defaultSubmitText = isEditing ? 'Salvar' : 'Criar';
 

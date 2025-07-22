@@ -217,6 +217,7 @@ export async function updateLocalAtendimento(
       };
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = {
       updated_at: new Date().toISOString(),
       atualizado_por: userId || null
