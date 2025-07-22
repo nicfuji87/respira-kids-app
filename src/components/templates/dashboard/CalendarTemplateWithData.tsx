@@ -26,6 +26,8 @@ export interface CalendarTemplateWithDataProps {
   onEventClick?: (event: CalendarEvent) => void;
   onEventSave?: (event: CalendarEvent) => void;
   onEventDelete?: (eventId: string) => void;
+  onPatientClick?: (patientId: string | null) => void;
+  onProfessionalClick?: (professionalId: string) => void;
 }
 
 export const CalendarTemplateWithData =
@@ -38,6 +40,8 @@ export const CalendarTemplateWithData =
       onEventClick,
       onEventSave,
       onEventDelete,
+      onPatientClick,
+      onProfessionalClick,
     }) => {
       const { user } = useAuth();
 
@@ -127,6 +131,8 @@ export const CalendarTemplateWithData =
         onEventEdit: handleEventEdit,
         onEventDelete: handleEventDelete,
         onEventClick: handleEventClick,
+        onPatientClick,
+        onProfessionalClick,
         initialView: currentView,
         initialDate: currentDate,
         className: cn('calendar-with-data', className),
@@ -141,6 +147,7 @@ export const CalendarTemplateWithData =
         | 'admin'
         | 'profissional'
         | 'secretaria';
+
       const mockUserData = {
         id: user.pessoa.id,
         name: user.pessoa.nome || 'Usuário',

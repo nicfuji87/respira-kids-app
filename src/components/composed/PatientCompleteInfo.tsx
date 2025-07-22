@@ -25,21 +25,35 @@ import type { PatientPersonalInfoProps } from '@/types/patient-details';
 
 export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
   ({ patient, className }) => {
-    // Calcular idade se data de nascimento disponível
+    // AI dev note: Calcular idade com suporte a meses para bebês menores de 1 ano
     const calculateAge = (birthDate: string) => {
       const today = new Date();
       const birth = new Date(birthDate);
-      let age = today.getFullYear() - birth.getFullYear();
+      let ageInYears = today.getFullYear() - birth.getFullYear();
       const monthDiff = today.getMonth() - birth.getMonth();
 
       if (
         monthDiff < 0 ||
         (monthDiff === 0 && today.getDate() < birth.getDate())
       ) {
-        age--;
+        ageInYears--;
       }
 
-      return age;
+      // Se tem menos de 1 ano, calcular em meses
+      if (ageInYears < 1) {
+        let ageInMonths = (today.getFullYear() - birth.getFullYear()) * 12;
+        ageInMonths -= birth.getMonth();
+        ageInMonths += today.getMonth();
+
+        // Ajustar se o dia atual for menor que o dia de nascimento
+        if (today.getDate() < birth.getDate()) {
+          ageInMonths--;
+        }
+
+        return { value: Math.max(0, ageInMonths), unit: 'meses' };
+      }
+
+      return { value: ageInYears, unit: 'anos' };
     };
 
     // Função para formatar telefone
@@ -62,9 +76,13 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
       return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
     };
 
-    // Lógica de fallback: responsável -> paciente
-    const displayEmail = patient.responsavel_legal_email || patient.email;
-    const displayPhone = patient.responsavel_legal_telefone || patient.telefone;
+    // AI dev note: Lógica de prioridade: paciente -> responsável legal (fallback)
+    const displayEmail = patient.email || patient.responsavel_legal_email;
+    const displayPhone = patient.telefone
+      ? formatPhone(patient.telefone)
+      : patient.responsavel_legal_telefone
+        ? formatPhone(patient.responsavel_legal_telefone)
+        : null;
 
     // Verificar se responsável legal e financeiro são a mesma pessoa
     const sameResponsible =
@@ -119,7 +137,10 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                 <div className="flex-1">
                   <p className="text-sm font-medium">Idade</p>
                   <p className="text-sm text-muted-foreground">
-                    {calculateAge(patient.data_nascimento)} anos
+                    {(() => {
+                      const age = calculateAge(patient.data_nascimento);
+                      return `${age.value} ${age.unit}`;
+                    })()}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Nascimento:{' '}
@@ -164,7 +185,7 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                 <div className="flex-1">
                   <p className="text-sm font-medium">Telefone</p>
                   <p className="text-sm text-muted-foreground">
-                    {formatPhone(displayPhone)}
+                    {displayPhone}
                   </p>
                 </div>
               </div>

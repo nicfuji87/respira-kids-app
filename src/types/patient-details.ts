@@ -43,6 +43,13 @@ export interface PatientDetails extends SupabasePessoa {
   anamnese?: string | null;
 }
 
+// Interface genérica para qualquer pessoa (paciente/responsável/profissional)
+export interface PersonDetails extends PatientDetails {
+  // Campos específicos para identificar tipo de pessoa
+  tipo_pessoa?: string; // codigo do tipo: 'paciente', 'responsavel', 'profissional', etc.
+  pessoa_tipo_nome?: string; // nome do tipo: 'Paciente', 'Responsável', 'Profissional', etc.
+}
+
 // Interface para métricas do paciente
 export interface PatientMetrics {
   total_consultas: number;

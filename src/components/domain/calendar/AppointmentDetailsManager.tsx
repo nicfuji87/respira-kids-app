@@ -348,7 +348,12 @@ export const AppointmentDetailsManager =
                     <Button
                       variant="link"
                       size="sm"
-                      onClick={() => onPatientClick?.(appointment.paciente_id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onPatientClick?.(appointment.paciente_id);
+                      }}
                       className="h-auto p-0 text-left justify-start font-bold cursor-pointer text-sm"
                     >
                       {appointment.paciente_nome}
@@ -363,9 +368,12 @@ export const AppointmentDetailsManager =
                         <Button
                           variant="link"
                           size="sm"
-                          onClick={() =>
-                            onPatientClick?.(appointment.responsavel_legal_id)
-                          }
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onPatientClick?.(appointment.responsavel_legal_id);
+                          }}
                           className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
                         >
                           {appointment.responsavel_legal_nome}
@@ -576,9 +584,12 @@ export const AppointmentDetailsManager =
                     <Button
                       variant="link"
                       size="sm"
-                      onClick={() =>
-                        onProfessionalClick?.(appointment.profissional_id)
-                      }
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onProfessionalClick?.(appointment.profissional_id);
+                      }}
                       className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
                     >
                       {appointment.profissional_nome}

@@ -51,6 +51,10 @@ export interface SecretariaCalendarTemplateProps {
   canEditEvents?: boolean;
   canDeleteEvents?: boolean;
   canViewAllEvents?: boolean;
+
+  // Navigation handlers
+  onPatientClick?: (patientId: string | null) => void;
+  onProfessionalClick?: (professionalId: string) => void;
 }
 
 export const SecretariaCalendarTemplate =
@@ -67,6 +71,8 @@ export const SecretariaCalendarTemplate =
       canEditEvents = true,
       canDeleteEvents = false, // Default for secretaria
       canViewAllEvents = false,
+      onPatientClick,
+      onProfessionalClick,
     }) => {
       // State for filters
       const [selectedProfessional, setSelectedProfessional] =
@@ -272,6 +278,8 @@ export const SecretariaCalendarTemplate =
             canViewAllEvents={canViewAllEvents}
             showEventManager={true}
             userRole={currentUser.role}
+            onPatientClick={onPatientClick}
+            onProfessionalClick={onProfessionalClick}
             className={className}
           />
         </div>

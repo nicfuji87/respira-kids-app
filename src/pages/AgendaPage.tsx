@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CalendarTemplateWithData } from '@/components/templates';
 import { useAuth } from '@/hooks/useAuth';
 import type { CalendarEvent } from '@/types/calendar';
@@ -6,6 +7,7 @@ import type { CalendarEvent } from '@/types/calendar';
 // AI dev note: AgendaPage simplificada - apenas calendário sem headers ou estatísticas
 export const AgendaPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const handleEventClick = (event: CalendarEvent) => {
     console.log('Event clicked:', event);
@@ -17,6 +19,17 @@ export const AgendaPage: React.FC = () => {
 
   const handleEventDelete = (eventId: string) => {
     console.log('Event deleted:', eventId);
+  };
+
+  // Handlers para navegação para detalhes de pessoas
+  const handlePatientClick = (patientId: string | null) => {
+    if (patientId) {
+      navigate(`/pessoa/${patientId}`);
+    }
+  };
+
+  const handleProfessionalClick = (professionalId: string) => {
+    navigate(`/pessoa/${professionalId}`);
   };
 
   // Error state
@@ -50,6 +63,8 @@ export const AgendaPage: React.FC = () => {
           onEventClick={handleEventClick}
           onEventSave={handleEventSave}
           onEventDelete={handleEventDelete}
+          onPatientClick={handlePatientClick}
+          onProfessionalClick={handleProfessionalClick}
         />
       </Suspense>
     </div>

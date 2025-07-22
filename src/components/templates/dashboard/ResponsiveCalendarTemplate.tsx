@@ -47,6 +47,10 @@ export interface ResponsiveCalendarTemplateProps {
   }[];
   showPatientNames?: boolean;
   canManageAllEvents?: boolean;
+
+  // Navigation handlers
+  onPatientClick?: (patientId: string | null) => void;
+  onProfessionalClick?: (professionalId: string) => void;
 }
 
 export const ResponsiveCalendarTemplate =
@@ -66,6 +70,8 @@ export const ResponsiveCalendarTemplate =
       availableProfessionals = [],
       showPatientNames = true,
       canManageAllEvents = false,
+      onPatientClick,
+      onProfessionalClick,
     }) => {
       // AI dev note: Mark unused parameters as intentionally ignored for future use
       void showPatientNames;
@@ -153,6 +159,8 @@ export const ResponsiveCalendarTemplate =
           initialView: getInitialViewForRole(),
           initialDate,
           className: isMobile ? 'mobile-calendar' : 'desktop-calendar',
+          onPatientClick,
+          onProfessionalClick,
         };
 
         switch (currentUser.role) {

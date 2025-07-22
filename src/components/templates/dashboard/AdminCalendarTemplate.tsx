@@ -26,6 +26,10 @@ export interface AdminCalendarTemplateProps {
   canEditEvents?: boolean;
   canDeleteEvents?: boolean;
   canViewAllEvents?: boolean;
+
+  // Navigation handlers
+  onPatientClick?: (patientId: string | null) => void;
+  onProfessionalClick?: (professionalId: string) => void;
 }
 
 export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
@@ -42,6 +46,8 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     canEditEvents = true,
     canDeleteEvents = true,
     canViewAllEvents = true,
+    onPatientClick,
+    onProfessionalClick,
   }) => {
     const getFilteredEvents = () => {
       let filteredEvents = [...events];
@@ -86,6 +92,8 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
           initialDate={initialDate}
           className="w-full h-full"
           userRole={currentUser.role}
+          onPatientClick={onPatientClick}
+          onProfessionalClick={onProfessionalClick}
           {...{
             canCreateEvents,
             canEditEvents,

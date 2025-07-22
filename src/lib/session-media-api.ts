@@ -141,12 +141,32 @@ export async function fetchMediaBySession(
  */
 export async function countMediaByPatient(patientId: string): Promise<number> {
   try {
+    // AI dev note: Primeiro buscar agendamentos do paciente
+    const { data: agendamentos, error: agendamentosError } = await supabase
+      .from('agendamentos')
+      .select('id')
+      .eq('paciente_id', patientId);
+
+    if (agendamentosError) {
+      console.error(
+        'Erro ao buscar agendamentos do paciente:',
+        agendamentosError
+      );
+      return 0;
+    }
+
+    if (!agendamentos || agendamentos.length === 0) {
+      return 0;
+    }
+
+    // AI dev note: Contar mídias dos agendamentos encontrados
+    const agendamentoIds = agendamentos.map((a) => a.id);
     const { count, error } = await supabase
       .from('session_media')
       .select('*', { count: 'exact', head: true })
       .eq('ativo', true)
       .eq('visivel_paciente', true)
-      .in('agendamento.paciente_id', [patientId]);
+      .in('agendamento_id', agendamentoIds);
 
     if (error) {
       console.error('Erro ao contar mídias do paciente:', error);

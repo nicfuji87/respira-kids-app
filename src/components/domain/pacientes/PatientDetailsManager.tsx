@@ -19,12 +19,19 @@ import {
   savePatientAnamnesis,
 } from '@/lib/patient-api';
 import {
+  fetchPersonDetails,
+  fetchPersonAnamnesis,
+  savePersonAnamnesis,
+} from '@/lib/person-api';
+
+import {
   fetchAgendamentoById,
   updateAgendamentoDetails,
   fetchLocaisAtendimento,
 } from '@/lib/calendar-services';
 import { useAuth } from '@/hooks/useAuth';
-import type { PatientDetails } from '@/types/patient-details';
+import { useNavigate } from 'react-router-dom';
+import type { PatientDetails, PersonDetails } from '@/types/patient-details';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
 import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
 import { cn } from '@/lib/utils';
@@ -34,13 +41,20 @@ import { cn } from '@/lib/utils';
 // Métricas e consultas com dados reais do Supabase
 
 export interface PatientDetailsManagerProps {
-  patientId: string;
+  patientId?: string; // Para compatibilidade backward
+  personId?: string; // Para uso genérico com qualquer pessoa
   onBack?: () => void;
   className?: string;
 }
 
 export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
-  ({ patientId, onBack, className }) => {
+  ({ patientId, personId, onBack, className }) => {
+    // AI dev note: Determinar ID correto - personId tem prioridade, fallback para patientId
+    const actualId = personId || patientId;
+
+    if (!actualId) {
+      throw new Error('PatientDetailsManager requer patientId ou personId');
+    }
     const [patient, setPatient] = useState<PatientDetails | null>(null);
     const [anamnesis, setAnamnesis] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
@@ -56,20 +70,43 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
     const [isLoadingLocais, setIsLoadingLocais] = useState(false);
 
     const { user } = useAuth();
+    const navigate = useNavigate();
 
     useEffect(() => {
       const loadPatientDetails = async () => {
-        if (!patientId) return;
+        if (!actualId) return;
 
         try {
           setIsLoading(true);
           setError(null);
 
-          // AI dev note: Carregar dados do paciente e anamnese em paralelo
-          const [patientResponse, anamnesisData] = await Promise.all([
-            fetchPatientDetails(patientId),
-            fetchPatientAnamnesis(patientId),
-          ]);
+          // AI dev note: Carregar dados da pessoa/paciente baseado no tipo de ID
+          let patientResponse;
+          let anamnesisData;
+
+          if (personId) {
+            // Se personId foi fornecido, usar API de pessoa genérica
+            const [personResp, personAnamnesis] = await Promise.all([
+              fetchPersonDetails(
+                actualId,
+                user?.role as 'admin' | 'profissional' | 'secretaria'
+              ),
+              fetchPersonAnamnesis(actualId),
+            ]);
+            patientResponse = {
+              patient: personResp.person,
+              error: personResp.error,
+            };
+            anamnesisData = personAnamnesis;
+          } else {
+            // Se apenas patientId foi fornecido, usar API de paciente tradicional
+            const [patientResp, patientAnamnesis] = await Promise.all([
+              fetchPatientDetails(actualId),
+              fetchPatientAnamnesis(actualId),
+            ]);
+            patientResponse = patientResp;
+            anamnesisData = patientAnamnesis;
+          }
 
           if (patientResponse.error) {
             setError(patientResponse.error);
@@ -88,7 +125,7 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       };
 
       loadPatientDetails();
-    }, [patientId]);
+    }, [actualId, personId, user?.role]);
 
     // Carregar locais de atendimento
     useEffect(() => {
@@ -109,7 +146,11 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
 
     // Handler para atualização de anamnese
     const handleAnamnesisUpdate = async (content: string) => {
-      await savePatientAnamnesis(patientId, content);
+      if (personId) {
+        await savePersonAnamnesis(actualId, content);
+      } else {
+        await savePatientAnamnesis(actualId, content);
+      }
       setAnamnesis(content);
     };
 
@@ -136,6 +177,17 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       } catch (error) {
         console.error('Erro ao salvar agendamento:', error);
       }
+    };
+
+    // Handlers para navegação para detalhes de pessoas
+    const handlePatientClick = (patientId: string | null) => {
+      if (patientId) {
+        navigate(`/pessoa/${patientId}`);
+      }
+    };
+
+    const handleProfessionalClick = (professionalId: string) => {
+      navigate(`/pessoa/${professionalId}`);
     };
 
     // Loading state
@@ -190,27 +242,33 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
         {/* Informações Completas do Paciente - usando component PatientCompleteInfo unificado */}
         <PatientCompleteInfo patient={patient} />
 
-        {/* Métricas do Paciente - com dados reais */}
-        <PatientMetrics patientId={patientId} />
+        {/* Seções específicas apenas para pacientes */}
+        {(!personId ||
+          (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
+          <>
+            {/* Métricas do Paciente - com dados reais */}
+            <PatientMetrics patientId={actualId} />
 
-        {/* Consultas Recentes - com dados reais */}
-        <RecentConsultations
-          patientId={patientId}
-          onConsultationClick={handleConsultationClick}
-        />
+            {/* Consultas Recentes - com dados reais */}
+            <RecentConsultations
+              patientId={actualId}
+              onConsultationClick={handleConsultationClick}
+            />
 
-        {/* Anamnese do Paciente */}
-        <PatientAnamnesis
-          patientId={patientId}
-          initialValue={anamnesis}
-          onUpdate={handleAnamnesisUpdate}
-        />
+            {/* Anamnese do Paciente */}
+            <PatientAnamnesis
+              patientId={actualId}
+              initialValue={anamnesis}
+              onUpdate={handleAnamnesisUpdate}
+            />
 
-        {/* Histórico Compilado com IA */}
-        <PatientHistory patientId={patientId} />
+            {/* Histórico Compilado com IA */}
+            <PatientHistory patientId={actualId} />
 
-        {/* Galeria de Mídias */}
-        <MediaGallery patientId={patientId} />
+            {/* Galeria de Mídias */}
+            <MediaGallery patientId={actualId} />
+          </>
+        )}
 
         {/* Modal de Detalhes do Agendamento */}
         <AppointmentDetailsManager
@@ -223,6 +281,8 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
           locaisAtendimento={locaisAtendimento}
           isLoadingLocais={isLoadingLocais}
           onSave={handleAppointmentSave}
+          onPatientClick={handlePatientClick}
+          onProfessionalClick={handleProfessionalClick}
         />
       </div>
     );

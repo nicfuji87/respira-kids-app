@@ -27,6 +27,10 @@ export interface ProfissionalCalendarTemplateProps {
   canEditEvents?: boolean;
   canDeleteEvents?: boolean;
   canViewAllEvents?: boolean;
+
+  // Navigation handlers
+  onPatientClick?: (patientId: string | null) => void;
+  onProfessionalClick?: (professionalId: string) => void;
 }
 
 export const ProfissionalCalendarTemplate =
@@ -43,6 +47,8 @@ export const ProfissionalCalendarTemplate =
       canEditEvents = true,
       canDeleteEvents = true,
       canViewAllEvents = false,
+      onPatientClick,
+      onProfessionalClick,
     }) => {
       // AI dev note: Filtrar eventos se necessário
       const getFilteredEvents = () => {
@@ -92,6 +98,8 @@ export const ProfissionalCalendarTemplate =
             initialDate={initialDate}
             className="w-full h-full"
             userRole={currentUser.role}
+            onPatientClick={onPatientClick}
+            onProfessionalClick={onProfessionalClick}
             canCreateEvents={canCreateEvents}
             canEditEvents={canEditEvents}
             canDeleteEvents={canDeleteEvents}
