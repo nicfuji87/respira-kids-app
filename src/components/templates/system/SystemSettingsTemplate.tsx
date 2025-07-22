@@ -11,8 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/primitives/card';
-import { DevelopmentPlaceholder } from '@/components/composed/DevelopmentPlaceholder';
-import { PersonTypesManagement, ConsultaStatusManagement } from '@/components/domain/system';
+import { DevelopmentPlaceholder } from '@/components/composed';
+import { PersonTypesManagement, ConsultaStatusManagement, PagamentoStatusManagement } from '@/components/domain/system';
 import {
   Users,
   CheckSquare,
@@ -95,13 +95,9 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       icon: CreditCard,
       description: 'Definir status possíveis para pagamentos',
       content: (
-        <DevelopmentPlaceholder
-          title="Status de Pagamento"
-          description="Configuração dos status disponíveis para pagamentos (pago, pendente, atrasado, etc)."
-          icon={<CreditCard className="h-12 w-12 text-primary/50" />}
-        />
+        <PagamentoStatusManagement />
       ),
-      implemented: false
+      implemented: true
     },
     {
       id: 'contratos',
