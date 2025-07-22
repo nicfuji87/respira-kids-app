@@ -47,13 +47,13 @@ export const navigationConfig: NavigationConfig[] = [
     icon: Users,
     label: 'Pessoa',
     href: '/pessoa',
-    roles: ['admin', 'profissional', 'secretaria'],
+    roles: ['admin', 'secretaria'],
   },
   {
     icon: Package,
     label: 'Estoque',
     href: '/estoque',
-    roles: ['admin', 'profissional', 'secretaria'],
+    roles: ['admin', 'secretaria'],
   },
   {
     icon: DollarSign,
@@ -139,12 +139,6 @@ export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
       icon: Users,
       label: 'Pacientes',
       href: '/pacientes',
-      roles: ['profissional'],
-    },
-    {
-      icon: Package,
-      label: 'Estoque',
-      href: '/estoque',
       roles: ['profissional'],
     },
     {
