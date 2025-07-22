@@ -234,6 +234,20 @@ export const LocaisAtendimentoManagement: React.FC = () => {
       key: 'endereco',
       label: 'Endereço',
       render: (item) => {
+        // Se tem endereço cadastrado, mostrar o endereço completo
+        if (item.endereco) {
+          const enderecoCompleto = [
+            item.endereco.logradouro,
+            item.numero_endereco,
+            item.endereco.bairro,
+            item.endereco.cidade,
+            item.endereco.estado
+          ].filter(Boolean).join(', ');
+          
+          return enderecoCompleto || '-';
+        }
+        
+        // Fallback para número e complemento apenas (casos antigos)
         const enderecoParts = [
           item.numero_endereco,
           item.complemento_endereco

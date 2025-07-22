@@ -5,12 +5,6 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/primitives/tabs';
-import { 
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/primitives/card';
 import { DevelopmentPlaceholder } from '@/components/composed';
 import { 
   PersonTypesManagement, 
@@ -109,16 +103,6 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       implemented: true
     },
     {
-      id: 'enderecos',
-      label: 'Endereços',
-      icon: MapPin,
-      description: 'Gerenciar endereços cadastrados no sistema',
-      content: (
-        <EnderecoManagement />
-      ),
-      implemented: true
-    },
-    {
       id: 'contratos',
       label: 'Contratos',
       icon: FileText,
@@ -136,20 +120,6 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
 
   return (
     <div className={cn("w-full space-y-6", className)}>
-      {/* Header */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wrench className="h-5 w-5" />
-            Configurações do Sistema
-          </CardTitle>
-          <CardDescription>
-            Gerencie as configurações fundamentais da Respira Kids. 
-            Estas configurações afetam todo o sistema e são compartilhadas entre todos os usuários.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1 h-auto p-1">
