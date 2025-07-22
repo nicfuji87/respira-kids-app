@@ -17,7 +17,8 @@ import {
   ConsultaStatusManagement, 
   PagamentoStatusManagement,
   TipoServicosManagement,
-  LocaisAtendimentoManagement
+  LocaisAtendimentoManagement,
+  EnderecoManagement
 } from '@/components/domain/system';
 import {
   Users,
@@ -70,6 +71,16 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       implemented: true
     },
     {
+      id: 'enderecos',
+      label: 'Endereços',
+      icon: MapPin,
+      description: 'Gerenciar endereços utilizados no sistema',
+      content: (
+        <EnderecoManagement />
+      ),
+      implemented: true
+    },
+    {
       id: 'servicos',
       label: 'Serviços',
       icon: Wrench,
@@ -94,6 +105,16 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       description: 'Definir status possíveis para pagamentos',
       content: (
         <PagamentoStatusManagement />
+      ),
+      implemented: true
+    },
+    {
+      id: 'enderecos',
+      label: 'Endereços',
+      icon: MapPin,
+      description: 'Gerenciar endereços cadastrados no sistema',
+      content: (
+        <EnderecoManagement />
       ),
       implemented: true
     },

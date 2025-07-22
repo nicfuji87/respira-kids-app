@@ -163,3 +163,5 @@ export type {
   GenericFormProps, 
   FormField 
 } from './GenericForm';
+
+export { CepSearch } from './CepSearch';

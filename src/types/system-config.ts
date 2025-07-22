@@ -126,6 +126,27 @@ export interface PessoaTipoUpdateInput extends Partial<PessoaTipoCreateInput> {
   id: string;
 }
 
+// === ENDEREÇOS ===
+export interface Endereco extends BaseEntity {
+  cep: string;
+  logradouro: string;
+  bairro: string;
+  cidade: string;
+  estado: string;
+}
+
+export interface EnderecoCreateInput {
+  cep: string;
+  logradouro: string;
+  bairro: string;
+  cidade: string;
+  estado: string;
+}
+
+export interface EnderecoUpdateInput extends Partial<EnderecoCreateInput> {
+  id: string;
+}
+
 // === CONTRACT TEMPLATES ===
 export interface ContractTemplate extends AuditableEntity {
   nome: string;
@@ -158,6 +179,7 @@ export type SystemEntity =
   | ConsultaStatus 
   | PagamentoStatus 
   | PessoaTipo 
+  | Endereco
   | ContractTemplate;
 
 export type SystemEntityType = 
@@ -166,6 +188,7 @@ export type SystemEntityType =
   | 'consulta_status'
   | 'pagamento_status'
   | 'pessoa_tipos'
+  | 'enderecos'
   | 'contract_templates';
 
 export interface SystemEntityConfig {
@@ -256,6 +279,13 @@ export const SYSTEM_ENTITIES_CONFIG: Record<SystemEntityType, SystemEntityConfig
     displayName: 'Tipos de Pessoa',
     description: 'Categorizar tipos de pessoas no sistema',
     hasStatus: true,
+    hasAudit: false,
+  },
+  enderecos: {
+    tableName: 'enderecos',
+    displayName: 'Endereços',
+    description: 'Gerenciar endereços utilizados no sistema',
+    hasStatus: false,
     hasAudit: false,
   },
   contract_templates: {
