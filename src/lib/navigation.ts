@@ -41,7 +41,7 @@ export const navigationConfig: NavigationConfig[] = [
     icon: Users,
     label: 'Pacientes',
     href: '/pacientes',
-    roles: ['admin', 'profissional', 'secretaria'],
+    roles: ['admin', 'secretaria'],
   },
   {
     icon: Users,
@@ -133,12 +133,6 @@ export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
       icon: Calendar,
       label: 'Agenda',
       href: '/agenda',
-      roles: ['profissional'],
-    },
-    {
-      icon: Users,
-      label: 'Pacientes',
-      href: '/pacientes',
       roles: ['profissional'],
     },
     {
