@@ -1,0 +1,180 @@
+import React, { useState } from 'react';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/primitives/tabs';
+import { 
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/primitives/card';
+import { DevelopmentPlaceholder } from '@/components/composed/DevelopmentPlaceholder';
+import { PersonTypesManagement } from '@/components/domain/system/PersonTypesManagement';
+import {
+  Users,
+  MapPin,
+  Briefcase,
+  CheckCircle,
+  CreditCard,
+  FileText,
+  Settings
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+// AI dev note: SystemSettingsTemplate é o template principal para configurações do sistema
+// Organiza todas as entidades em abas usando componentes Domain
+
+interface TabConfig {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  content: React.ReactNode;
+  implemented: boolean;
+}
+
+export interface SystemSettingsTemplateProps {
+  className?: string;
+}
+
+export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
+  className
+}) => {
+  const [activeTab, setActiveTab] = useState('pessoa-tipos');
+
+  const tabsConfig: TabConfig[] = [
+    {
+      id: 'pessoa-tipos',
+      label: 'Tipos de Pessoa',
+      icon: Users,
+      description: 'Categorizar tipos de pessoas no sistema',
+      content: <PersonTypesManagement />,
+      implemented: true
+    },
+    {
+      id: 'locais',
+      label: 'Locais',
+      icon: MapPin,
+      description: 'Gerenciar locais onde os atendimentos são realizados',
+      content: (
+        <DevelopmentPlaceholder
+          title="Locais de Atendimento"
+          description="Configuração de locais onde são realizados os atendimentos (clínica, domiciliar, externa)."
+          icon={<MapPin className="h-12 w-12 text-primary/50" />}
+        />
+      ),
+      implemented: false
+    },
+    {
+      id: 'servicos',
+      label: 'Serviços',
+      icon: Briefcase,
+      description: 'Configurar serviços oferecidos pela clínica',
+      content: (
+        <DevelopmentPlaceholder
+          title="Tipos de Serviços"
+          description="Gestão de serviços oferecidos, incluindo duração, valores e configurações."
+          icon={<Briefcase className="h-12 w-12 text-primary/50" />}
+        />
+      ),
+      implemented: false
+    },
+    {
+      id: 'status-consulta',
+      label: 'Status Consulta',
+      icon: CheckCircle,
+      description: 'Definir status possíveis para consultas',
+      content: (
+        <DevelopmentPlaceholder
+          title="Status de Consulta"
+          description="Configuração dos status disponíveis para as consultas (agendado, finalizado, cancelado, etc)."
+          icon={<CheckCircle className="h-12 w-12 text-primary/50" />}
+        />
+      ),
+      implemented: false
+    },
+    {
+      id: 'status-pagamento',
+      label: 'Status Pagamento',
+      icon: CreditCard,
+      description: 'Definir status possíveis para pagamentos',
+      content: (
+        <DevelopmentPlaceholder
+          title="Status de Pagamento"
+          description="Configuração dos status disponíveis para pagamentos (pago, pendente, atrasado, etc)."
+          icon={<CreditCard className="h-12 w-12 text-primary/50" />}
+        />
+      ),
+      implemented: false
+    },
+    {
+      id: 'contratos',
+      label: 'Contratos',
+      icon: FileText,
+      description: 'Gerenciar modelos de contratos editáveis',
+      content: (
+        <DevelopmentPlaceholder
+          title="Templates de Contrato"
+          description="Gestão de modelos de contratos com variáveis dinâmicas e versionamento."
+          icon={<FileText className="h-12 w-12 text-primary/50" />}
+        />
+      ),
+      implemented: false
+    }
+  ];
+
+  return (
+    <div className={cn("w-full space-y-6", className)}>
+      {/* Header */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Configurações do Sistema
+          </CardTitle>
+          <CardDescription>
+            Gerencie as configurações fundamentais da Respira Kids. 
+            Estas configurações afetam todo o sistema e são compartilhadas entre todos os usuários.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1 h-auto p-1">
+          {tabsConfig.map((tab) => {
+            const IconComponent = tab.icon;
+            return (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                className={cn(
+                  "flex flex-col items-center gap-2 h-16 text-xs p-2",
+                  !tab.implemented && "opacity-70"
+                )}
+              >
+                <IconComponent className="h-5 w-5 flex-shrink-0" />
+                <span className="truncate text-center">{tab.label}</span>
+                {!tab.implemented && (
+                  <span className="text-xs text-muted-foreground">Em breve</span>
+                )}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+
+        {tabsConfig.map((tab) => (
+          <TabsContent key={tab.id} value={tab.id} className="mt-6">
+            {/* Tab content */}
+            {tab.content}
+          </TabsContent>
+        ))}
+      </Tabs>
+    </div>
+  );
+};
+
+SystemSettingsTemplate.displayName = 'SystemSettingsTemplate'; 

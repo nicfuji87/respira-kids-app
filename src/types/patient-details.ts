@@ -153,6 +153,7 @@ export interface RelatorioEvolucao {
 // Interface para seção de informações pessoais
 export interface PatientPersonalInfoProps {
   patient: PatientDetails;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
   className?: string;
 }
 

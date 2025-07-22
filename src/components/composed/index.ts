@@ -143,3 +143,23 @@ export const ComposedComponents = {
 } as const;
 
 export type ComposedComponentName = keyof typeof ComposedComponents;
+
+export { AIConfigurationCard } from './AIConfigurationCard';
+
+// System Configuration Components
+export { StatusBadge } from './StatusBadge';
+export { CRUDActions } from './CRUDActions';
+export { GenericTable } from './GenericTable';
+export { GenericForm } from './GenericForm';
+
+// Type exports for system components
+export type { StatusBadgeProps } from './StatusBadge';
+export type { CRUDActionsProps } from './CRUDActions';
+export type { 
+  GenericTableProps, 
+  GenericTableColumn 
+} from './GenericTable';
+export type { 
+  GenericFormProps, 
+  FormField 
+} from './GenericForm';

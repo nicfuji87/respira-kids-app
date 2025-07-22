@@ -8,6 +8,8 @@ import {
 import { DevelopmentPlaceholder } from './DevelopmentPlaceholder';
 import { MyProfileSection } from '@/components/domain/profile';
 import { CompanyForm } from './CompanyForm';
+
+import { SystemSettingsTemplate } from '@/components/templates/system/SystemSettingsTemplate';
 import {
   User,
   Building,
@@ -62,13 +64,7 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
         label: 'Sistema',
         roles: ['admin'],
         icon: Settings,
-        content: (
-          <DevelopmentPlaceholder
-            title="Sistema"
-            description="Configurações gerais do sistema, backup, logs e manutenção."
-            icon={<Settings className="h-12 w-12 text-primary/50" />}
-          />
-        ),
+        content: <SystemSettingsTemplate />,
       },
       {
         id: 'integrations',

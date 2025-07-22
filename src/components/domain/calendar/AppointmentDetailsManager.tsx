@@ -37,6 +37,10 @@ import {
   saveRelatorioEvolucao,
   updateRelatorioEvolucao,
 } from '@/lib/calendar-services';
+import {
+  generatePatientHistoryAI,
+  checkAIHistoryStatus,
+} from '@/lib/patient-api';
 import type {
   SupabaseAgendamentoCompletoFlat,
   SupabaseConsultaStatus,
@@ -340,6 +344,27 @@ export const AppointmentDetailsManager =
             // Recarregar evoluções
             const evolucoesList = await fetchRelatoriosEvolucao(appointment.id);
             setEvolucoes(evolucoesList);
+
+            // Trigger automático: gerar histórico com IA se ativo
+            try {
+              const { isActive } = await checkAIHistoryStatus(user.pessoa.id);
+              if (isActive) {
+                // Executar em background sem bloquear a UI
+                generatePatientHistoryAI(appointment.paciente_id, user.pessoa.id)
+                  .then((result) => {
+                    if (result.success) {
+                      console.log('[DEBUG] Histórico do paciente atualizado automaticamente pela IA');
+                    } else {
+                      console.warn('[DEBUG] Falha na geração automática de histórico:', result.error);
+                    }
+                  })
+                  .catch((error) => {
+                    console.error('[DEBUG] Erro na geração automática de histórico:', error);
+                  });
+              }
+            } catch (error) {
+              console.warn('[DEBUG] Erro ao verificar status da IA para histórico:', error);
+            }
 
             // Limpar campo de evolução
             setFormData((prev) => ({ ...prev, evolucaoServico: '' }));

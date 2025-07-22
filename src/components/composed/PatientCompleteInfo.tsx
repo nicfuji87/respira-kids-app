@@ -24,7 +24,7 @@ import type { PatientPersonalInfoProps } from '@/types/patient-details';
 // Substitui múltiplos cards por um único card organizado em seções
 
 export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
-  ({ patient, className }) => {
+  ({ patient, userRole, className }) => {
     // AI dev note: Calcular idade com suporte a meses para bebês menores de 1 ano
     const calculateAge = (birthDate: string) => {
       const today = new Date();
@@ -165,8 +165,8 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
               </div>
             )}
 
-            {/* Email */}
-            {displayEmail && (
+            {/* Email - oculto para role profissional */}
+            {displayEmail && userRole !== 'profissional' && (
               <div className="flex items-start gap-3">
                 <Mail className="h-4 w-4 text-muted-foreground mt-1" />
                 <div className="flex-1">
@@ -178,8 +178,8 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
               </div>
             )}
 
-            {/* Telefone */}
-            {displayPhone && (
+            {/* Telefone - oculto para role profissional */}
+            {displayPhone && userRole !== 'profissional' && (
               <div className="flex items-start gap-3">
                 <Phone className="h-4 w-4 text-muted-foreground mt-1" />
                 <div className="flex-1">
@@ -259,12 +259,12 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                       <p className="text-sm font-medium">
                         {patient.responsavel_legal_nome}
                       </p>
-                      {patient.responsavel_legal_email && (
+                      {patient.responsavel_legal_email && userRole !== 'profissional' && (
                         <p className="text-sm text-muted-foreground">
                           📧 {patient.responsavel_legal_email}
                         </p>
                       )}
-                      {patient.responsavel_legal_telefone && (
+                      {patient.responsavel_legal_telefone && userRole !== 'profissional' && (
                         <p className="text-sm text-muted-foreground">
                           📱 {formatPhone(patient.responsavel_legal_telefone)}
                         </p>
@@ -284,12 +284,12 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           <p className="text-sm font-medium">
                             {patient.responsavel_legal_nome}
                           </p>
-                          {patient.responsavel_legal_email && (
+                          {patient.responsavel_legal_email && userRole !== 'profissional' && (
                             <p className="text-sm text-muted-foreground">
                               📧 {patient.responsavel_legal_email}
                             </p>
                           )}
-                          {patient.responsavel_legal_telefone && (
+                          {patient.responsavel_legal_telefone && userRole !== 'profissional' && (
                             <p className="text-sm text-muted-foreground">
                               📱{' '}
                               {formatPhone(patient.responsavel_legal_telefone)}
@@ -309,12 +309,12 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           <p className="text-sm font-medium">
                             {patient.responsavel_financeiro_nome}
                           </p>
-                          {patient.responsavel_financeiro_email && (
+                          {patient.responsavel_financeiro_email && userRole !== 'profissional' && (
                             <p className="text-sm text-muted-foreground">
                               📧 {patient.responsavel_financeiro_email}
                             </p>
                           )}
-                          {patient.responsavel_financeiro_telefone && (
+                          {patient.responsavel_financeiro_telefone && userRole !== 'profissional' && (
                             <p className="text-sm text-muted-foreground">
                               📱{' '}
                               {formatPhone(

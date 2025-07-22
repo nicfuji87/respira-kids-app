@@ -47,7 +47,7 @@ export const navigationConfig: NavigationConfig[] = [
     icon: Users,
     label: 'Pessoa',
     href: '/pessoa',
-    roles: ['admin', 'secretaria'],
+    roles: ['admin', 'secretaria', 'profissional'],
   },
   {
     icon: Package,

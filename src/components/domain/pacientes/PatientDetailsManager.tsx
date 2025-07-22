@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
-import {
+import { 
   PatientCompleteInfo,
   PatientMetrics,
   RecentConsultations,
@@ -13,8 +13,8 @@ import {
   type LocationOption,
 } from '@/components/composed';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
-import {
-  fetchPatientDetails,
+import { 
+  fetchPatientDetails, 
   fetchPatientAnamnesis,
   savePatientAnamnesis,
 } from '@/lib/patient-api';
@@ -103,11 +103,11 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
             const [patientResp, patientAnamnesis] = await Promise.all([
               fetchPatientDetails(actualId),
               fetchPatientAnamnesis(actualId),
-            ]);
+          ]);
             patientResponse = patientResp;
             anamnesisData = patientAnamnesis;
           }
-
+          
           if (patientResponse.error) {
             setError(patientResponse.error);
           } else if (patientResponse.patient) {
@@ -240,32 +240,35 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
         </div>
 
         {/* Informações Completas do Paciente - usando component PatientCompleteInfo unificado */}
-        <PatientCompleteInfo patient={patient} />
+        <PatientCompleteInfo 
+          patient={patient}
+            userRole={user?.role as 'admin' | 'profissional' | 'secretaria' || null}
+        />
 
         {/* Seções específicas apenas para pacientes */}
         {(!personId ||
           (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
           <>
-            {/* Métricas do Paciente - com dados reais */}
+        {/* Métricas do Paciente - com dados reais */}
             <PatientMetrics patientId={actualId} />
 
-            {/* Consultas Recentes - com dados reais */}
-            <RecentConsultations
+        {/* Consultas Recentes - com dados reais */}
+        <RecentConsultations 
               patientId={actualId}
               onConsultationClick={handleConsultationClick}
-            />
+        />
 
-            {/* Anamnese do Paciente */}
-            <PatientAnamnesis
+        {/* Anamnese do Paciente */}
+        <PatientAnamnesis
               patientId={actualId}
-              initialValue={anamnesis}
-              onUpdate={handleAnamnesisUpdate}
-            />
+          initialValue={anamnesis}
+          onUpdate={handleAnamnesisUpdate}
+        />
 
-            {/* Histórico Compilado com IA */}
+        {/* Histórico Compilado com IA */}
             <PatientHistory patientId={actualId} />
 
-            {/* Galeria de Mídias */}
+        {/* Galeria de Mídias */}
             <MediaGallery patientId={actualId} />
           </>
         )}
