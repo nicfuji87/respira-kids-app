@@ -12,15 +12,14 @@ import {
   CardTitle,
 } from '@/components/primitives/card';
 import { DevelopmentPlaceholder } from '@/components/composed/DevelopmentPlaceholder';
-import { PersonTypesManagement } from '@/components/domain/system/PersonTypesManagement';
+import { PersonTypesManagement, ConsultaStatusManagement } from '@/components/domain/system';
 import {
   Users,
+  CheckSquare,
   MapPin,
-  Briefcase,
-  CheckCircle,
   CreditCard,
+  Wrench,
   FileText,
-  Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -71,13 +70,13 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
     {
       id: 'servicos',
       label: 'Serviços',
-      icon: Briefcase,
+      icon: Wrench,
       description: 'Configurar serviços oferecidos pela clínica',
       content: (
         <DevelopmentPlaceholder
           title="Tipos de Serviços"
           description="Gestão de serviços oferecidos, incluindo duração, valores e configurações."
-          icon={<Briefcase className="h-12 w-12 text-primary/50" />}
+          icon={<Wrench className="h-12 w-12 text-primary/50" />}
         />
       ),
       implemented: false
@@ -85,16 +84,10 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
     {
       id: 'status-consulta',
       label: 'Status Consulta',
-      icon: CheckCircle,
+      icon: CheckSquare,
       description: 'Definir status possíveis para consultas',
-      content: (
-        <DevelopmentPlaceholder
-          title="Status de Consulta"
-          description="Configuração dos status disponíveis para as consultas (agendado, finalizado, cancelado, etc)."
-          icon={<CheckCircle className="h-12 w-12 text-primary/50" />}
-        />
-      ),
-      implemented: false
+      content: <ConsultaStatusManagement />,
+      implemented: true
     },
     {
       id: 'status-pagamento',
@@ -132,7 +125,7 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
+            <Wrench className="h-5 w-5" />
             Configurações do Sistema
           </CardTitle>
           <CardDescription>
