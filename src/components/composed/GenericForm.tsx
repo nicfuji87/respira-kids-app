@@ -89,73 +89,97 @@ export const GenericForm = React.memo<GenericFormProps>(
                 {field.required && <span className="text-destructive ml-1">*</span>}
               </FormLabel>
               <FormControl>
-                {field.type === 'text' && (
-                  <Input
-                    {...formField}
-                    placeholder={field.placeholder}
-                    disabled={field.disabled || loading}
-                  />
-                )}
-                
-                {field.type === 'number' && (
-                  <Input
-                    {...formField}
-                    type="number"
-                    placeholder={field.placeholder}
-                    disabled={field.disabled || loading}
-                    value={formField.value || ''}
-                    onChange={(e) => formField.onChange(Number(e.target.value) || 0)}
-                  />
-                )}
-                
-                {field.type === 'textarea' && (
-                  <Textarea
-                    {...formField}
-                    placeholder={field.placeholder}
-                    disabled={field.disabled || loading}
-                    rows={3}
-                  />
-                )}
-                
-                {field.type === 'select' && (
-                  <Select
-                    value={formField.value}
-                    onValueChange={formField.onChange}
-                    disabled={field.disabled || loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={field.placeholder} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {field.options?.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                
-                {field.type === 'switch' && (
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      checked={formField.value}
-                      onCheckedChange={formField.onChange}
-                      disabled={field.disabled || loading}
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      {formField.value ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </div>
-                )}
-                
-                {field.type === 'color' && (
-                  <ColorPicker
-                    value={formField.value}
-                    onChange={formField.onChange}
-                    disabled={field.disabled || loading}
-                  />
-                )}
+                {(() => {
+                  // Garantir que sempre retornamos exatamente um elemento
+                  switch (field.type) {
+                    case 'text':
+                    case 'email':
+                    case 'password':
+                      return (
+                        <Input
+                          {...formField}
+                          type={field.type}
+                          placeholder={field.placeholder}
+                          disabled={field.disabled || loading}
+                        />
+                      );
+                    
+                    case 'number':
+                      return (
+                        <Input
+                          {...formField}
+                          type="number"
+                          placeholder={field.placeholder}
+                          disabled={field.disabled || loading}
+                          value={formField.value || ''}
+                          onChange={(e) => formField.onChange(Number(e.target.value) || 0)}
+                        />
+                      );
+                    
+                    case 'textarea':
+                      return (
+                        <Textarea
+                          {...formField}
+                          placeholder={field.placeholder}
+                          disabled={field.disabled || loading}
+                          rows={3}
+                        />
+                      );
+                    
+                    case 'select':
+                      return (
+                        <Select
+                          value={formField.value}
+                          onValueChange={formField.onChange}
+                          disabled={field.disabled || loading}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={field.placeholder} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options?.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      );
+                    
+                    case 'switch':
+                      return (
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            checked={formField.value}
+                            onCheckedChange={formField.onChange}
+                            disabled={field.disabled || loading}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {formField.value ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </div>
+                      );
+                    
+                    case 'color':
+                      return (
+                        <ColorPicker
+                          value={formField.value}
+                          onChange={formField.onChange}
+                          disabled={field.disabled || loading}
+                        />
+                      );
+                    
+                    default:
+                      // Fallback para tipos não implementados
+                      return (
+                        <Input
+                          {...formField}
+                          placeholder={field.placeholder}
+                          disabled={field.disabled || loading}
+                        />
+                      );
+                  }
+                })()}
               </FormControl>
               
               {field.description && (
