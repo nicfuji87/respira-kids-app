@@ -12,7 +12,12 @@ import {
   CardTitle,
 } from '@/components/primitives/card';
 import { DevelopmentPlaceholder } from '@/components/composed';
-import { PersonTypesManagement, ConsultaStatusManagement, PagamentoStatusManagement } from '@/components/domain/system';
+import { 
+  PersonTypesManagement, 
+  ConsultaStatusManagement, 
+  PagamentoStatusManagement,
+  TipoServicosManagement 
+} from '@/components/domain/system';
 import {
   Users,
   CheckSquare,
@@ -73,13 +78,9 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       icon: Wrench,
       description: 'Configurar serviços oferecidos pela clínica',
       content: (
-        <DevelopmentPlaceholder
-          title="Tipos de Serviços"
-          description="Gestão de serviços oferecidos, incluindo duração, valores e configurações."
-          icon={<Wrench className="h-12 w-12 text-primary/50" />}
-        />
+        <TipoServicosManagement />
       ),
-      implemented: false
+      implemented: true
     },
     {
       id: 'status-consulta',
