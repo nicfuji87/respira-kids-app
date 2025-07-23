@@ -141,10 +141,19 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
     // Primeira tab como default
     const defaultTab = allowedTabs[0].id;
 
+    // Grid dinâmico baseado no número de abas disponíveis
+    const getGridCols = (tabCount: number) => {
+      if (tabCount <= 3) return 'grid-cols-1 md:grid-cols-3';
+      if (tabCount <= 4) return 'grid-cols-2 md:grid-cols-4'; 
+      if (tabCount <= 5) return 'grid-cols-2 md:grid-cols-5';
+      if (tabCount <= 6) return 'grid-cols-3 md:grid-cols-6';
+      return 'grid-cols-3 md:grid-cols-7';
+    };
+
     return (
       <div className={className}>
         <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-1 md:grid-cols-7 gap-1 h-auto md:h-9 p-1">
+          <TabsList className={`grid w-full ${getGridCols(allowedTabs.length)} gap-1 h-auto md:h-9 p-1`}>
             {allowedTabs.map((tab) => {
               const IconComponent = tab.icon;
               return (
