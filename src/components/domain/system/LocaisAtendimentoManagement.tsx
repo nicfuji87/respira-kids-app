@@ -63,7 +63,7 @@ export const LocaisAtendimentoManagement: React.FC = () => {
           variant: 'destructive',
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Erro',
         description: 'Erro inesperado ao carregar locais de atendimento',
