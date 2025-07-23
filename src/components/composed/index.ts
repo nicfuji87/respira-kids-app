@@ -7,6 +7,8 @@ export { CompleteProfileForm } from './CompleteProfileForm';
 // User Management
 export { UserApprovalCard } from './UserApprovalCard';
 export { UserProfileDropdown } from './UserProfileDropdown';
+export { VariableInserter } from './VariableInserter';
+export { ContractTemplateEditor } from './ContractTemplateEditor';
 export { ProfileFormFields } from './ProfileFormFields';
 
 // Calendar and Date

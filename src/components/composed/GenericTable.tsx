@@ -54,6 +54,7 @@ export interface GenericTableProps<T> {
   searchQuery?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const GenericTable = <T extends Record<string, any>>({
   title,
   description,

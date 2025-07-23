@@ -5,14 +5,14 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/primitives/tabs';
-import { DevelopmentPlaceholder } from '@/components/composed';
 import { 
   PersonTypesManagement, 
   ConsultaStatusManagement, 
   PagamentoStatusManagement,
   TipoServicosManagement,
   LocaisAtendimentoManagement,
-  EnderecoManagement
+  EnderecoManagement,
+  ContractTemplateManagement
 } from '@/components/domain/system';
 import {
   Users,
@@ -108,13 +108,9 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       icon: FileText,
       description: 'Gerenciar modelos de contratos editáveis',
       content: (
-        <DevelopmentPlaceholder
-          title="Templates de Contrato"
-          description="Gestão de modelos de contratos com variáveis dinâmicas e versionamento."
-          icon={<FileText className="h-12 w-12 text-primary/50" />}
-        />
+        <ContractTemplateManagement />
       ),
-      implemented: false
+      implemented: true
     }
   ];
 

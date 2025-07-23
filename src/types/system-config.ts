@@ -152,7 +152,7 @@ export interface ContractTemplate extends AuditableEntity {
   nome: string;
   descricao?: string;
   conteudo_template: string;
-  variaveis_disponiveis?: Record<string, unknown>;
+  variaveis_disponiveis?: string[];
   versao: number;
   ativo: boolean;
   template_principal_id?: string;
@@ -162,7 +162,7 @@ export interface ContractTemplateCreateInput {
   nome: string;
   descricao?: string;
   conteudo_template: string;
-  variaveis_disponiveis?: Record<string, unknown>;
+  variaveis_disponiveis?: string[];
   versao?: number;
   ativo?: boolean;
   template_principal_id?: string;
