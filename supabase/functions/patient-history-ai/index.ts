@@ -100,13 +100,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Environment variables
-    const openaiApiKey = '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';
-    const openaiOrgId = 'org-KpJ3rIctHdoHymRichWwsJtS';
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    const openaiOrgId = Deno.env.get('OPENAI_ORG_ID');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Supabase configuration missing');
+    if (!openaiApiKey || !supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Required environment variables missing (OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
     }
 
     // Supabase client
