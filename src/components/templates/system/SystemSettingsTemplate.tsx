@@ -21,6 +21,7 @@ import {
   CreditCard,
   Wrench,
   FileText,
+  Home,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -67,7 +68,7 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
     {
       id: 'enderecos',
       label: 'Endereços',
-      icon: MapPin,
+      icon: Home,
       description: 'Gerenciar endereços utilizados no sistema',
       content: (
         <EnderecoManagement />
