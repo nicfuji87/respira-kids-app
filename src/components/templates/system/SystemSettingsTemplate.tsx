@@ -48,7 +48,7 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
   const tabsConfig: TabConfig[] = [
     {
       id: 'pessoa-tipos',
-      label: 'Tipos de Pessoa',
+      label: 'Pessoas',
       icon: Users,
       description: 'Categorizar tipos de pessoas no sistema',
       content: <PersonTypesManagement />,
@@ -86,7 +86,7 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
     },
     {
       id: 'status-consulta',
-      label: 'Status Consulta',
+      label: 'Consultas',
       icon: CheckSquare,
       description: 'Definir status possíveis para consultas',
       content: <ConsultaStatusManagement />,
@@ -94,7 +94,7 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
     },
     {
       id: 'status-pagamento',
-      label: 'Status Pagamento',
+      label: 'Pagamentos',
       icon: CreditCard,
       description: 'Definir status possíveis para pagamentos',
       content: (
@@ -118,7 +118,7 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
     <div className={cn("w-full space-y-6", className)}>
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 h-auto p-1">
           {tabsConfig.map((tab) => {
             const IconComponent = tab.icon;
             return (
@@ -126,12 +126,12 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
                 key={tab.id}
                 value={tab.id}
                 className={cn(
-                  "flex flex-col items-center gap-2 h-16 text-xs p-2",
+                  "flex flex-col items-center gap-1.5 h-14 text-xs p-2",
                   !tab.implemented && "opacity-70"
                 )}
               >
-                <IconComponent className="h-5 w-5 flex-shrink-0" />
-                <span className="truncate text-center">{tab.label}</span>
+                <IconComponent className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate text-center leading-tight">{tab.label}</span>
                 {!tab.implemented && (
                   <span className="text-xs text-muted-foreground">Em breve</span>
                 )}
