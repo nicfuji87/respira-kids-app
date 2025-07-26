@@ -26,7 +26,7 @@ export async function fetchUsuarios(
 
     // Aplicar filtros na query principal
     if (filters.busca) {
-      // Busca flexível: separar palavras e buscar cada uma
+      // Busca flexível: todas as palavras devem estar presentes (AND)
       const searchWords = filters.busca
         .trim()
         .split(/\s+/)
@@ -42,12 +42,11 @@ export async function fetchUsuarios(
           `nome.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`
         );
       } else {
-        // Busca flexível: todas as palavras devem estar presentes (em qualquer ordem)
-        const nameConditions = searchWords
-          .map((word) => `nome.ilike.%${word}%`)
-          .join(',');
-        query = query.or(nameConditions);
-        countQuery = countQuery.or(nameConditions);
+        // Busca com AND: todas as palavras devem estar presentes no nome
+        for (const word of searchWords) {
+          query = query.ilike('nome', `%${word}%`);
+          countQuery = countQuery.ilike('nome', `%${word}%`);
+        }
       }
     }
 

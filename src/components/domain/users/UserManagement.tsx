@@ -150,6 +150,8 @@ export const UserManagement = React.memo<UserManagementProps>(
         bio_profissional: usuario.bio_profissional || '',
         numero_endereco: usuario.numero_endereco || '',
         complemento_endereco: usuario.complemento_endereco || '',
+        id_endereco: usuario.endereco_id || undefined,
+        id_tipo_pessoa: usuario.tipo_pessoa_id || undefined,
       });
 
       console.log('Definindo showEditModal para true');
@@ -532,31 +534,35 @@ export const UserManagement = React.memo<UserManagementProps>(
                   </CardContent>
                 </Card>
 
+                {/* Tipo de Pessoa */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Tipo de Pessoa</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <TypePersonSelect
+                      value={form.watch('id_tipo_pessoa') || ''}
+                      onValueChange={(value) =>
+                        form.setValue('id_tipo_pessoa', value)
+                      }
+                      disabled={updating}
+                    />
+                  </CardContent>
+                </Card>
+
                 {/* Endereço */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Tipo e Endereço</CardTitle>
+                    <CardTitle className="text-lg">Endereço</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Tipo de Pessoa */}
-                      <TypePersonSelect
-                        value={form.watch('id_tipo_pessoa') || ''}
-                        onValueChange={(value) =>
-                          form.setValue('id_tipo_pessoa', value)
-                        }
-                        disabled={updating}
-                      />
-
-                      {/* Seleção de Endereço */}
-                      <AddressSelect
-                        value={form.watch('id_endereco') || ''}
-                        onValueChange={(value) =>
-                          form.setValue('id_endereco', value)
-                        }
-                        disabled={updating}
-                      />
-                    </div>
+                    <AddressSelect
+                      value={form.watch('id_endereco') || ''}
+                      onValueChange={(value) =>
+                        form.setValue('id_endereco', value)
+                      }
+                      disabled={updating}
+                    />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
