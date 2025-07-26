@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Tabs,
   TabsContent,
@@ -26,6 +26,7 @@ import {
   Plug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { checkAdminRole } from '@/lib/integrations-api';
 
 // AI dev note: SystemSettingsTemplate é o template principal para configurações do sistema
 // Organiza todas as entidades em abas usando componentes Domain
@@ -47,6 +48,15 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
   className,
 }) => {
   const [activeTab, setActiveTab] = useState('pessoa-tipos');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkRole = async () => {
+      const adminResult = await checkAdminRole();
+      setIsAdmin(adminResult.success && adminResult.data === true);
+    };
+    checkRole();
+  }, []);
 
   const tabsConfig: TabConfig[] = [
     {
@@ -105,22 +115,36 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       content: <ContractTemplateManagement />,
       implemented: true,
     },
-    {
-      id: 'integracoes',
-      label: 'Integrações',
-      icon: Plug,
-      description: 'Configurar integrações com outros sistemas',
-      content: <IntegrationsTemplate />,
-      implemented: true,
-    },
+    ...(isAdmin
+      ? [
+          {
+            id: 'integracoes',
+            label: 'Integrações',
+            icon: Plug,
+            description: 'Configurar integrações com outros sistemas',
+            content: <IntegrationsTemplate />,
+            implemented: true,
+          },
+        ]
+      : []),
   ];
+
+  // Filtrar abas visíveis baseado no role
+  const visibleTabs = tabsConfig.filter(
+    (tab) => tab.id !== 'integracoes' || isAdmin
+  );
 
   return (
     <div className={cn('w-full space-y-6', className)}>
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-1 h-auto p-1">
-          {tabsConfig.map((tab) => {
+        <TabsList
+          className={`grid w-full gap-1 h-auto p-1`}
+          style={{
+            gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {visibleTabs.map((tab) => {
             const IconComponent = tab.icon;
             return (
               <TabsTrigger
@@ -145,7 +169,7 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
           })}
         </TabsList>
 
-        {tabsConfig.map((tab) => (
+        {visibleTabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="mt-6">
             {/* Tab content */}
             {tab.content}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Plus, Shield, Eye, EyeOff } from 'lucide-react';
+import { Key, Plus, Shield, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
@@ -11,6 +11,7 @@ import {
 } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
 import { Switch } from '@/components/primitives/switch';
+import { Alert, AlertDescription } from '@/components/primitives/alert';
 import {
   Dialog,
   DialogContent,
@@ -22,10 +23,17 @@ import {
 import { useToast } from '@/components/primitives/use-toast';
 import type { ApiKey, ServiceConfig } from '@/types/integrations';
 import { SUPPORTED_SERVICES } from '@/types/integrations';
+import {
+  fetchApiKeys,
+  createApiKey,
+  updateApiKey,
+  checkAdminRole,
+} from '@/lib/integrations-api';
 import { cn } from '@/lib/utils';
 
 // AI dev note: ApiKeysManagement é um componente Domain para gerenciar chaves de API
 // Foca na segurança e não exposição de chaves sensíveis no frontend
+// Agora usa API real com verificação de role admin
 
 export interface ApiKeysManagementProps {
   className?: string;
@@ -35,6 +43,7 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
   ({ className }) => {
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
@@ -45,32 +54,51 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
 
     const { toast } = useToast();
 
-    // Simular carregamento inicial (será substituído pela API real)
+    // Verificar se o usuário é admin e carregar dados
     useEffect(() => {
-      const loadApiKeys = async () => {
+      const loadData = async () => {
         setLoading(true);
         try {
-          // TODO: Implementar fetchApiKeys quando a API estiver pronta
-          console.log('📡 Carregando chaves de API...');
+          // Primeiro verificar se é admin
+          const adminCheck = await checkAdminRole();
 
-          // Dados mockados para desenvolvimento
-          const mockKeys: ApiKey[] = [
-            {
-              id: '1',
-              service_name: 'openai',
-              encrypted_key: '*********************',
-              is_active: true,
-              created_at: '2024-01-15T10:00:00Z',
-              updated_at: '2024-01-15T10:00:00Z',
-            },
-          ];
+          if (!adminCheck.success) {
+            toast({
+              title: 'Erro de autenticação',
+              description: adminCheck.error || 'Erro ao verificar permissões',
+              variant: 'destructive',
+            });
+            setIsAdmin(false);
+            setLoading(false);
+            return;
+          }
 
-          setApiKeys(mockKeys);
+          setIsAdmin(adminCheck.data || false);
+
+          if (!adminCheck.data) {
+            setLoading(false);
+            return; // Não carregar dados se não for admin
+          }
+
+          // Carregar chaves de API se for admin
+          const keysResult = await fetchApiKeys();
+
+          if (keysResult.success && keysResult.data) {
+            setApiKeys(keysResult.data.data);
+          } else {
+            toast({
+              title: 'Erro ao carregar chaves de API',
+              description:
+                keysResult.error ||
+                'Falha ao carregar configurações de integração',
+              variant: 'destructive',
+            });
+          }
         } catch (error) {
-          console.error('❌ Erro ao carregar chaves de API:', error);
+          console.error('❌ Erro ao carregar dados:', error);
           toast({
-            title: 'Erro ao carregar chaves de API',
-            description: 'Falha ao carregar configurações de integração',
+            title: 'Erro inesperado',
+            description: 'Falha ao carregar dados das integrações',
             variant: 'destructive',
           });
         } finally {
@@ -78,7 +106,7 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
         }
       };
 
-      loadApiKeys();
+      loadData();
     }, [toast]);
 
     const handleCreateKey = async () => {
@@ -86,22 +114,43 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
 
       setSaving(true);
       try {
-        // TODO: Implementar createApiKey quando a API estiver pronta
-        console.log('🔑 Criando chave para serviço:', selectedService);
-        console.log('📋 Dados do formulário:', formData);
+        const serviceConfig = SUPPORTED_SERVICES[selectedService];
+        const createData = {
+          service_name: selectedService as 'openai' | 'asaas' | 'evolution',
+          encrypted_key: formData.api_key || '', // A API irá criptografar
+          is_active: true,
+          ...(formData.service_url && { service_url: formData.service_url }),
+          ...(formData.instance_name && {
+            instance_name: formData.instance_name,
+          }),
+        };
 
-        toast({
-          title: 'Chave de API criada',
-          description: `Integração com ${SUPPORTED_SERVICES[selectedService].label} configurada com sucesso`,
-        });
+        const result = await createApiKey(createData);
 
-        // Reset form
-        setFormData({});
-        setSelectedService('');
-        setShowCreateModal(false);
+        if (result.success && result.data) {
+          toast({
+            title: 'Chave de API criada',
+            description: `Integração com ${serviceConfig.label} configurada com sucesso`,
+          });
 
-        // Recarregar lista (será substituído pela chamada real da API)
-        // await loadApiKeys();
+          // Recarregar lista
+          const keysResult = await fetchApiKeys();
+          if (keysResult.success && keysResult.data) {
+            setApiKeys(keysResult.data.data);
+          }
+
+          // Reset form
+          setFormData({});
+          setSelectedService('');
+          setShowCreateModal(false);
+        } else {
+          toast({
+            title: 'Erro ao criar chave de API',
+            description:
+              result.error || 'Falha ao salvar configuração de integração',
+            variant: 'destructive',
+          });
+        }
       } catch (error) {
         console.error('❌ Erro ao criar chave:', error);
         toast({
@@ -141,23 +190,46 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
 
       setSaving(true);
       try {
-        // TODO: Implementar updateApiKey quando a API estiver pronta
-        console.log('🔄 Atualizando chave:', editingKey.id);
-        console.log('📋 Novos dados:', formData);
+        const updateData: Record<string, string | boolean> = {};
 
-        toast({
-          title: 'Chave de API atualizada',
-          description: `Integração com ${SUPPORTED_SERVICES[editingKey.service_name].label} atualizada com sucesso`,
-        });
+        // Só atualizar campos que foram preenchidos
+        if (formData.api_key && formData.api_key.trim() !== '') {
+          updateData.encrypted_key = formData.api_key; // A API irá criptografar
+        }
+        if (formData.service_url !== undefined) {
+          updateData.service_url = formData.service_url;
+        }
+        if (formData.instance_name !== undefined) {
+          updateData.instance_name = formData.instance_name;
+        }
 
-        // Reset form
-        setFormData({});
-        setEditingKey(null);
-        setSelectedService('');
-        setShowEditModal(false);
+        const result = await updateApiKey(editingKey.id, updateData);
 
-        // Recarregar lista (será substituído pela chamada real da API)
-        // await loadApiKeys();
+        if (result.success && result.data) {
+          toast({
+            title: 'Chave de API atualizada',
+            description: `Integração com ${SUPPORTED_SERVICES[editingKey.service_name].label} atualizada com sucesso`,
+          });
+
+          // Recarregar lista
+          const keysResult = await fetchApiKeys();
+          if (keysResult.success && keysResult.data) {
+            setApiKeys(keysResult.data.data);
+          }
+
+          // Reset form
+          setFormData({});
+          setEditingKey(null);
+          setSelectedService('');
+          setShowEditModal(false);
+        } else {
+          toast({
+            title: 'Erro ao atualizar chave de API',
+            description:
+              result.error || 'Falha ao atualizar configuração de integração',
+            variant: 'destructive',
+          });
+        }
       } catch (error) {
         console.error('❌ Erro ao atualizar chave:', error);
         toast({
@@ -172,25 +244,30 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
 
     const toggleKeyStatus = async (apiKey: ApiKey) => {
       try {
-        // TODO: Implementar toggleApiKeyStatus quando a API estiver pronta
-        console.log(
-          '🔄 Alterando status da chave:',
-          apiKey.id,
-          'para:',
-          !apiKey.is_active
-        );
-
-        toast({
-          title: `Integração ${apiKey.is_active ? 'desativada' : 'ativada'}`,
-          description: `${SUPPORTED_SERVICES[apiKey.service_name].label} ${apiKey.is_active ? 'desativado' : 'ativado'} com sucesso`,
+        const result = await updateApiKey(apiKey.id, {
+          is_active: !apiKey.is_active,
         });
 
-        // Atualizar estado local (será substituído pela chamada real da API)
-        setApiKeys((keys) =>
-          keys.map((key) =>
-            key.id === apiKey.id ? { ...key, is_active: !key.is_active } : key
-          )
-        );
+        if (result.success) {
+          toast({
+            title: `Integração ${apiKey.is_active ? 'desativada' : 'ativada'}`,
+            description: `${SUPPORTED_SERVICES[apiKey.service_name].label} ${apiKey.is_active ? 'desativado' : 'ativado'} com sucesso`,
+          });
+
+          // Atualizar estado local
+          setApiKeys((keys) =>
+            keys.map((key) =>
+              key.id === apiKey.id ? { ...key, is_active: !key.is_active } : key
+            )
+          );
+        } else {
+          toast({
+            title: 'Erro ao alterar status',
+            description:
+              result.error || 'Falha ao alterar status da integração',
+            variant: 'destructive',
+          });
+        }
       } catch (error) {
         console.error('❌ Erro ao alterar status:', error);
         toast({
@@ -421,6 +498,20 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
           <div className="text-center py-8">
             <p className="text-muted-foreground">Carregando integrações...</p>
           </div>
+        </div>
+      );
+    }
+
+    if (!isAdmin) {
+      return (
+        <div className={cn('space-y-6', className)}>
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Você não tem permissão para gerenciar chaves de API. Por favor,
+              entre em contato com o administrador.
+            </AlertDescription>
+          </Alert>
         </div>
       );
     }

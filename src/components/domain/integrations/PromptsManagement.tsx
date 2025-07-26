@@ -24,6 +24,12 @@ import { RichTextEditor } from '@/components/primitives/rich-text-editor';
 import { useToast } from '@/components/primitives/use-toast';
 import type { AiPrompt, AiPromptCreate } from '@/types/integrations';
 import { cn } from '@/lib/utils';
+import {
+  checkAdminRole,
+  fetchAiPrompts,
+  createAiPrompt,
+  updateAiPrompt,
+} from '@/lib/integrations-api';
 
 // AI dev note: PromptsManagement é um componente Domain para gerenciar prompts de IA
 // Permite criar, editar e visualizar prompts usados no processamento de IA
@@ -48,46 +54,51 @@ export const PromptsManagement = React.memo<PromptsManagementProps>(
 
     // Simular carregamento inicial (será substituído pela API real)
     useEffect(() => {
-      const loadPrompts = async () => {
+      const loadData = async () => {
         setLoading(true);
         try {
-          // TODO: Implementar fetchPrompts quando a API estiver pronta
-          console.log('📡 Carregando prompts de IA...');
+          // Primeiro verificar se é admin
+          const adminCheck = await checkAdminRole();
 
-          // Dados mockados para desenvolvimento
-          const mockPrompts: AiPrompt[] = [
-            {
-              id: '1',
-              prompt_name: 'evolution_format',
-              prompt_title: 'Formatação de Evolução',
-              prompt_description:
-                'Prompt para formatar evoluções de pacientes de forma estruturada',
-              prompt_content:
-                'Você é um assistente especializado em formatação de evoluções médicas. Sua tarefa é organizar as informações fornecidas de forma clara e estruturada, seguindo o padrão clínico adequado.',
-              is_active: true,
-              created_at: '2024-01-15T10:00:00Z',
-              updated_at: '2024-01-15T10:00:00Z',
-            },
-            {
-              id: '2',
-              prompt_name: 'history_format',
-              prompt_title: 'Formatação de Histórico',
-              prompt_description:
-                'Prompt para formatar histórico de atendimentos de forma cronológica',
-              prompt_content:
-                'Você é um assistente especializado em organização de históricos médicos. Sua tarefa é estruturar o histórico de atendimentos de forma cronológica e clara, destacando informações relevantes.',
-              is_active: true,
-              created_at: '2024-01-15T10:00:00Z',
-              updated_at: '2024-01-15T10:00:00Z',
-            },
-          ];
+          if (!adminCheck.success) {
+            toast({
+              title: 'Erro de autenticação',
+              description: adminCheck.error || 'Erro ao verificar permissões',
+              variant: 'destructive',
+            });
+            setLoading(false);
+            return;
+          }
 
-          setPrompts(mockPrompts);
+          if (!adminCheck.data) {
+            toast({
+              title: 'Acesso negado',
+              description:
+                'Apenas administradores podem gerenciar prompts de IA',
+              variant: 'destructive',
+            });
+            setLoading(false);
+            return;
+          }
+
+          // Carregar prompts se for admin
+          const promptsResult = await fetchAiPrompts();
+
+          if (promptsResult.success && promptsResult.data) {
+            setPrompts(promptsResult.data.data);
+          } else {
+            toast({
+              title: 'Erro ao carregar prompts',
+              description:
+                promptsResult.error || 'Falha ao carregar prompts de IA',
+              variant: 'destructive',
+            });
+          }
         } catch (error) {
-          console.error('❌ Erro ao carregar prompts:', error);
+          console.error('❌ Erro ao carregar dados:', error);
           toast({
-            title: 'Erro ao carregar prompts',
-            description: 'Falha ao carregar prompts de IA',
+            title: 'Erro inesperado',
+            description: 'Falha ao carregar dados dos prompts',
             variant: 'destructive',
           });
         } finally {
@@ -95,7 +106,7 @@ export const PromptsManagement = React.memo<PromptsManagementProps>(
         }
       };
 
-      loadPrompts();
+      loadData();
     }, [toast]);
 
     const handleCreatePrompt = async () => {
@@ -114,20 +125,36 @@ export const PromptsManagement = React.memo<PromptsManagementProps>(
 
       setSaving(true);
       try {
-        // TODO: Implementar createPrompt quando a API estiver pronta
-        console.log('🤖 Criando prompt:', formData);
-
-        toast({
-          title: 'Prompt criado',
-          description: `Prompt "${formData.prompt_title}" criado com sucesso`,
+        const result = await createAiPrompt({
+          prompt_name: formData.prompt_name,
+          prompt_title: formData.prompt_title,
+          prompt_description: formData.prompt_description,
+          prompt_content: formData.prompt_content,
+          is_active: formData.is_active ?? true,
         });
 
-        // Reset form
-        setFormData({});
-        setShowCreateModal(false);
+        if (result.success && result.data) {
+          toast({
+            title: 'Prompt criado',
+            description: `Prompt "${formData.prompt_title}" criado com sucesso`,
+          });
 
-        // Recarregar lista (será substituído pela chamada real da API)
-        // await loadPrompts();
+          // Recarregar lista
+          const promptsResult = await fetchAiPrompts();
+          if (promptsResult.success && promptsResult.data) {
+            setPrompts(promptsResult.data.data);
+          }
+
+          // Reset form
+          setFormData({});
+          setShowCreateModal(false);
+        } else {
+          toast({
+            title: 'Erro ao criar prompt',
+            description: result.error || 'Falha ao salvar prompt de IA',
+            variant: 'destructive',
+          });
+        }
       } catch (error) {
         console.error('❌ Erro ao criar prompt:', error);
         toast({
@@ -168,21 +195,42 @@ export const PromptsManagement = React.memo<PromptsManagementProps>(
 
       setSaving(true);
       try {
-        // TODO: Implementar updatePrompt quando a API estiver pronta
-        console.log('🔄 Atualizando prompt:', editingPrompt.id, formData);
+        const updateData: Record<string, string | boolean> = {};
 
-        toast({
-          title: 'Prompt atualizado',
-          description: `Prompt "${formData.prompt_title}" atualizado com sucesso`,
-        });
+        if (formData.prompt_title)
+          updateData.prompt_title = formData.prompt_title;
+        if (formData.prompt_description !== undefined)
+          updateData.prompt_description = formData.prompt_description;
+        if (formData.prompt_content)
+          updateData.prompt_content = formData.prompt_content;
+        if (formData.is_active !== undefined)
+          updateData.is_active = formData.is_active;
 
-        // Reset form
-        setFormData({});
-        setEditingPrompt(null);
-        setShowEditModal(false);
+        const result = await updateAiPrompt(editingPrompt.id, updateData);
 
-        // Recarregar lista (será substituído pela chamada real da API)
-        // await loadPrompts();
+        if (result.success && result.data) {
+          toast({
+            title: 'Prompt atualizado',
+            description: `Prompt "${formData.prompt_title}" atualizado com sucesso`,
+          });
+
+          // Recarregar lista
+          const promptsResult = await fetchAiPrompts();
+          if (promptsResult.success && promptsResult.data) {
+            setPrompts(promptsResult.data.data);
+          }
+
+          // Reset form
+          setFormData({});
+          setEditingPrompt(null);
+          setShowEditModal(false);
+        } else {
+          toast({
+            title: 'Erro ao atualizar prompt',
+            description: result.error || 'Falha ao atualizar prompt de IA',
+            variant: 'destructive',
+          });
+        }
       } catch (error) {
         console.error('❌ Erro ao atualizar prompt:', error);
         toast({
@@ -197,25 +245,29 @@ export const PromptsManagement = React.memo<PromptsManagementProps>(
 
     const togglePromptStatus = async (prompt: AiPrompt) => {
       try {
-        // TODO: Implementar togglePromptStatus quando a API estiver pronta
-        console.log(
-          '🔄 Alterando status do prompt:',
-          prompt.id,
-          'para:',
-          !prompt.is_active
-        );
-
-        toast({
-          title: `Prompt ${prompt.is_active ? 'desativado' : 'ativado'}`,
-          description: `"${prompt.prompt_title}" ${prompt.is_active ? 'desativado' : 'ativado'} com sucesso`,
+        const result = await updateAiPrompt(prompt.id, {
+          is_active: !prompt.is_active,
         });
 
-        // Atualizar estado local (será substituído pela chamada real da API)
-        setPrompts((prompts) =>
-          prompts.map((p) =>
-            p.id === prompt.id ? { ...p, is_active: !p.is_active } : p
-          )
-        );
+        if (result.success) {
+          toast({
+            title: `Prompt ${prompt.is_active ? 'desativado' : 'ativado'}`,
+            description: `"${prompt.prompt_title}" ${prompt.is_active ? 'desativado' : 'ativado'} com sucesso`,
+          });
+
+          // Atualizar estado local
+          setPrompts((prompts) =>
+            prompts.map((p) =>
+              p.id === prompt.id ? { ...p, is_active: !p.is_active } : p
+            )
+          );
+        } else {
+          toast({
+            title: 'Erro ao alterar status',
+            description: result.error || 'Falha ao alterar status do prompt',
+            variant: 'destructive',
+          });
+        }
       } catch (error) {
         console.error('❌ Erro ao alterar status:', error);
         toast({
