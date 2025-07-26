@@ -28,8 +28,13 @@ export interface UserFiltersProps {
 
 export const UserFilters = React.memo<UserFiltersProps>(
   ({ filters, onChange, className }) => {
-    const activeFiltersCount = Object.values(filters).filter(
-      (value) => value !== undefined && value !== '' && value !== null
+    const activeFiltersCount = Object.entries(filters).filter(
+      ([key, value]) => {
+        // Não contar busca vazia
+        if (key === 'busca' && (!value || value.trim() === '')) return false;
+        // Não contar valores undefined ou null
+        return value !== undefined && value !== null;
+      }
     ).length;
 
     const clearFilters = () => {
@@ -75,11 +80,11 @@ export const UserFilters = React.memo<UserFiltersProps>(
                   Tipo de Pessoa
                 </label>
                 <Select
-                  value={filters.tipo_pessoa || ''}
+                  value={filters.tipo_pessoa || 'all'}
                   onValueChange={(value) =>
                     onChange({
                       ...filters,
-                      tipo_pessoa: value || undefined,
+                      tipo_pessoa: value === 'all' ? undefined : value,
                     })
                   }
                 >
@@ -87,7 +92,7 @@ export const UserFilters = React.memo<UserFiltersProps>(
                     <SelectValue placeholder="Todos os tipos" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos os tipos</SelectItem>
+                    <SelectItem value="all">Todos os tipos</SelectItem>
                     <SelectItem value="paciente">Pacientes</SelectItem>
                     <SelectItem value="medico">Médicos</SelectItem>
                     <SelectItem value="responsavel">Responsáveis</SelectItem>
@@ -101,11 +106,11 @@ export const UserFilters = React.memo<UserFiltersProps>(
                   Função no Sistema
                 </label>
                 <Select
-                  value={filters.role || ''}
+                  value={filters.role || 'all'}
                   onValueChange={(value) =>
                     onChange({
                       ...filters,
-                      role: value || undefined,
+                      role: value === 'all' ? undefined : value,
                     })
                   }
                 >
@@ -113,7 +118,7 @@ export const UserFilters = React.memo<UserFiltersProps>(
                     <SelectValue placeholder="Todas as funções" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todas as funções</SelectItem>
+                    <SelectItem value="all">Todas as funções</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                     <SelectItem value="profissional">Profissional</SelectItem>
                     <SelectItem value="secretaria">Secretaria</SelectItem>
@@ -130,12 +135,13 @@ export const UserFilters = React.memo<UserFiltersProps>(
                   value={
                     filters.is_approved !== undefined
                       ? String(filters.is_approved)
-                      : ''
+                      : 'all'
                   }
                   onValueChange={(value) =>
                     onChange({
                       ...filters,
-                      is_approved: value === '' ? undefined : value === 'true',
+                      is_approved:
+                        value === 'all' ? undefined : value === 'true',
                     })
                   }
                 >
@@ -143,7 +149,7 @@ export const UserFilters = React.memo<UserFiltersProps>(
                     <SelectValue placeholder="Todos os status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos os status</SelectItem>
+                    <SelectItem value="all">Todos os status</SelectItem>
                     <SelectItem value="true">Aprovados</SelectItem>
                     <SelectItem value="false">Pendentes</SelectItem>
                   </SelectContent>
@@ -157,12 +163,12 @@ export const UserFilters = React.memo<UserFiltersProps>(
                 </label>
                 <Select
                   value={
-                    filters.ativo !== undefined ? String(filters.ativo) : ''
+                    filters.ativo !== undefined ? String(filters.ativo) : 'all'
                   }
                   onValueChange={(value) =>
                     onChange({
                       ...filters,
-                      ativo: value === '' ? undefined : value === 'true',
+                      ativo: value === 'all' ? undefined : value === 'true',
                     })
                   }
                 >
@@ -170,7 +176,7 @@ export const UserFilters = React.memo<UserFiltersProps>(
                     <SelectValue placeholder="Todos os usuários" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos os usuários</SelectItem>
+                    <SelectItem value="all">Todos os usuários</SelectItem>
                     <SelectItem value="true">Ativos</SelectItem>
                     <SelectItem value="false">Inativos</SelectItem>
                   </SelectContent>
@@ -186,12 +192,12 @@ export const UserFilters = React.memo<UserFiltersProps>(
                   value={
                     filters.bloqueado !== undefined
                       ? String(filters.bloqueado)
-                      : ''
+                      : 'all'
                   }
                   onValueChange={(value) =>
                     onChange({
                       ...filters,
-                      bloqueado: value === '' ? undefined : value === 'true',
+                      bloqueado: value === 'all' ? undefined : value === 'true',
                     })
                   }
                 >
@@ -199,7 +205,7 @@ export const UserFilters = React.memo<UserFiltersProps>(
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="false">Desbloqueados</SelectItem>
                     <SelectItem value="true">Bloqueados</SelectItem>
                   </SelectContent>

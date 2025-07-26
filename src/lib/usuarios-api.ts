@@ -18,6 +18,8 @@ export async function fetchUsuarios(
   limit: number = ITEMS_PER_PAGE
 ): Promise<ApiResponse<PaginatedUsuarios>> {
   try {
+    console.log('🔍 fetchUsuarios chamado com:', { filters, page, limit });
+
     let query = supabase.from('vw_usuarios_admin').select('*');
 
     let countQuery = supabase
@@ -26,6 +28,7 @@ export async function fetchUsuarios(
 
     // Aplicar filtros na query principal
     if (filters.busca) {
+      console.log('📝 Aplicando filtro de busca:', filters.busca);
       // Busca flexível: todas as palavras devem estar presentes (AND)
       const searchWords = filters.busca
         .trim()
@@ -51,32 +54,38 @@ export async function fetchUsuarios(
     }
 
     if (filters.tipo_pessoa) {
+      console.log('👤 Aplicando filtro tipo_pessoa:', filters.tipo_pessoa);
       query = query.eq('tipo_pessoa_codigo', filters.tipo_pessoa);
       countQuery = countQuery.eq('tipo_pessoa_codigo', filters.tipo_pessoa);
     }
 
     if (filters.role) {
+      console.log('🎭 Aplicando filtro role:', filters.role);
       query = query.eq('role', filters.role);
       countQuery = countQuery.eq('role', filters.role);
     }
 
     if (filters.is_approved !== undefined) {
+      console.log('✅ Aplicando filtro is_approved:', filters.is_approved);
       query = query.eq('is_approved', filters.is_approved);
       countQuery = countQuery.eq('is_approved', filters.is_approved);
     }
 
     if (filters.ativo !== undefined) {
+      console.log('🔄 Aplicando filtro ativo:', filters.ativo);
       query = query.eq('ativo', filters.ativo);
       countQuery = countQuery.eq('ativo', filters.ativo);
     }
 
     if (filters.bloqueado !== undefined) {
+      console.log('🚫 Aplicando filtro bloqueado:', filters.bloqueado);
       query = query.eq('bloqueado', filters.bloqueado);
       countQuery = countQuery.eq('bloqueado', filters.bloqueado);
     }
 
     // Executar count
     const { count } = await countQuery;
+    console.log('📊 Count resultado:', count);
 
     // Buscar dados com paginação
     const offset = (page - 1) * limit;
@@ -88,6 +97,8 @@ export async function fetchUsuarios(
       console.error('❌ Erro ao buscar usuários:', error);
       return { data: null, error: error.message, success: false };
     }
+
+    console.log('✅ Dados retornados:', data?.length, 'de', count, 'total');
 
     const totalPages = Math.ceil((count || 0) / limit);
 
