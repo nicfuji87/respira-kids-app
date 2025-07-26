@@ -72,6 +72,11 @@ export { PatientAnamnesis } from './PatientAnamnesis';
 export { PatientHistory } from './PatientHistory';
 export { MediaGallery } from './MediaGallery';
 
+// User Management Components
+export { UserSearch } from './UserSearch';
+export { UserFilters } from './UserFilters';
+export { UserMetrics } from './UserMetrics';
+
 // Type exports
 export type { ApprovalStatus } from './UserApprovalCard';
 export type { NavigationItemProps } from './NavigationItem';
@@ -157,13 +162,7 @@ export { GenericForm } from './GenericForm';
 // Type exports for system components
 export type { StatusBadgeProps } from './StatusBadge';
 export type { CRUDActionsProps } from './CRUDActions';
-export type { 
-  GenericTableProps, 
-  GenericTableColumn 
-} from './GenericTable';
-export type { 
-  GenericFormProps, 
-  FormField 
-} from './GenericForm';
+export type { GenericTableProps, GenericTableColumn } from './GenericTable';
+export type { GenericFormProps, FormField } from './GenericForm';
 
 export { CepSearch } from './CepSearch';

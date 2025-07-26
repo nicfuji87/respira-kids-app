@@ -1,0 +1,610 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Edit, User, Phone, Mail, Calendar, Save, X } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { Button } from '@/components/primitives/button';
+import { Input } from '@/components/primitives/input';
+import {
+  Avatar,
+  AvatarImage,
+  AvatarFallback,
+} from '@/components/primitives/avatar';
+import { Badge } from '@/components/primitives/badge';
+import { Textarea } from '@/components/primitives/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/primitives/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/primitives/card';
+import { Label } from '@/components/primitives/label';
+import { useToast } from '@/components/primitives/use-toast';
+import {
+  GenericTable,
+  UserSearch,
+  UserFilters,
+  UserMetrics,
+  StatusBadge,
+} from '@/components/composed';
+import type {
+  Usuario,
+  UsuarioFilters,
+  UsuarioMetrics as UsuarioMetricsType,
+  UsuarioUpdate,
+  PaginatedUsuarios,
+} from '@/types/usuarios';
+import {
+  fetchUsuarios,
+  fetchUsuarioMetrics,
+  updateUsuario,
+} from '@/lib/usuarios-api';
+import { cn } from '@/lib/utils';
+
+// AI dev note: Gerencia CRUD completo de usuários com modal de edição detalhado
+
+export interface UserManagementProps {
+  className?: string;
+}
+
+export const UserManagement = React.memo<UserManagementProps>(
+  ({ className }) => {
+    const [usuarios, setUsuarios] = useState<PaginatedUsuarios | null>(null);
+    const [metrics, setMetrics] = useState<UsuarioMetricsType | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [filters, setFilters] = useState<UsuarioFilters>({});
+    const [busca, setBusca] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [editingUser, setEditingUser] = useState<Usuario | null>(null);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [updating, setUpdating] = useState(false);
+
+    const { toast } = useToast();
+
+    // Form para edição
+    const form = useForm<UsuarioUpdate>();
+
+    // Buscar dados
+    const loadData = useCallback(async () => {
+      setLoading(true);
+      try {
+        const [usuariosResult, metricsResult] = await Promise.all([
+          fetchUsuarios({ ...filters, busca }, currentPage),
+          fetchUsuarioMetrics(),
+        ]);
+
+        if (usuariosResult.success) {
+          setUsuarios(usuariosResult.data);
+        } else {
+          toast({
+            title: 'Erro ao carregar usuários',
+            description: usuariosResult.error,
+            variant: 'destructive',
+          });
+        }
+
+        if (metricsResult.success) {
+          setMetrics(metricsResult.data);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        toast({
+          title: 'Erro inesperado',
+          description: 'Falha ao carregar dados dos usuários',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    }, [filters, busca, currentPage, toast]);
+
+    // Carregar dados iniciais
+    useEffect(() => {
+      loadData();
+    }, [loadData]);
+
+    // Reset página quando filtros mudam
+    useEffect(() => {
+      setCurrentPage(1);
+    }, [filters, busca]);
+
+    const handleEditUser = (usuario: Usuario) => {
+      console.log('handleEditUser chamado com:', usuario);
+      console.log('Estado atual showEditModal:', showEditModal);
+
+      setEditingUser(usuario);
+      form.reset({
+        nome: usuario.nome || '',
+        email: usuario.email || '',
+        telefone: usuario.telefone || undefined,
+        cpf_cnpj: usuario.cpf_cnpj || '',
+        data_nascimento: usuario.data_nascimento
+          ? new Date(usuario.data_nascimento).toISOString().split('T')[0]
+          : '',
+        role: usuario.role || undefined,
+        registro_profissional: usuario.registro_profissional || '',
+        especialidade: usuario.especialidade || '',
+        bio_profissional: usuario.bio_profissional || '',
+        numero_endereco: usuario.numero_endereco || '',
+        complemento_endereco: usuario.complemento_endereco || '',
+      });
+
+      console.log('Definindo showEditModal para true');
+      setShowEditModal(true);
+
+      // Verificar se o estado mudou após um pequeno delay
+      setTimeout(() => {
+        console.log('Estado após setShowEditModal:', showEditModal);
+      }, 100);
+    };
+
+    const handleUpdateUser = async (data: UsuarioUpdate) => {
+      if (!editingUser) return;
+
+      setUpdating(true);
+      try {
+        // Converter data_nascimento se fornecida
+        const updateData = { ...data };
+        if (data.data_nascimento) {
+          updateData.data_nascimento = data.data_nascimento;
+        }
+
+        const result = await updateUsuario(editingUser.id, updateData);
+        if (result.success) {
+          toast({
+            title: 'Usuário atualizado com sucesso',
+          });
+          setShowEditModal(false);
+          setEditingUser(null);
+          loadData();
+        } else {
+          toast({
+            title: 'Erro ao atualizar usuário',
+            description: result.error,
+            variant: 'destructive',
+          });
+        }
+      } finally {
+        setUpdating(false);
+      }
+    };
+
+    // Colunas da tabela
+    const columns = [
+      {
+        key: 'avatar',
+        label: '',
+        className: 'w-12',
+        render: (usuario: Usuario) => (
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={usuario.foto_perfil || ''} />
+            <AvatarFallback className="text-xs">
+              {usuario.nome?.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        ),
+      },
+      {
+        key: 'nome',
+        label: 'Nome',
+        render: (usuario: Usuario) => (
+          <div>
+            <div className="font-medium">{usuario.nome}</div>
+            <div className="text-xs text-muted-foreground">
+              {usuario.tipo_pessoa_nome}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: 'contato',
+        label: 'Contato',
+        render: (usuario: Usuario) => (
+          <div className="space-y-1">
+            {usuario.email && (
+              <div className="flex items-center text-xs">
+                <Mail className="h-3 w-3 mr-1" />
+                {usuario.email}
+              </div>
+            )}
+            {usuario.telefone && (
+              <div className="flex items-center text-xs">
+                <Phone className="h-3 w-3 mr-1" />
+                {usuario.telefone}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'role',
+        label: 'Função',
+        render: (usuario: Usuario) =>
+          usuario.role ? (
+            <Badge variant="outline" className="capitalize">
+              {usuario.role}
+            </Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground">Não definida</span>
+          ),
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        render: (usuario: Usuario) => (
+          <div className="space-y-1">
+            <StatusBadge ativo={usuario.ativo} />
+            {!usuario.is_approved && (
+              <Badge
+                variant="outline"
+                className="text-amber-600 border-amber-200"
+              >
+                Pendente
+              </Badge>
+            )}
+            {usuario.bloqueado && (
+              <Badge variant="destructive">Bloqueado</Badge>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'created_at',
+        label: 'Cadastro',
+        render: (usuario: Usuario) => (
+          <div className="flex items-center text-xs">
+            <Calendar className="h-3 w-3 mr-1" />
+            {new Date(usuario.created_at).toLocaleDateString('pt-BR')}
+          </div>
+        ),
+      },
+      {
+        key: 'actions',
+        label: 'Editar',
+        className: 'w-20',
+        render: (usuario: Usuario) => (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              console.log('Editando usuário:', usuario);
+              handleEditUser(usuario);
+            }}
+          >
+            <Edit className="h-3 w-3" />
+          </Button>
+        ),
+      },
+    ];
+
+    return (
+      <div className={cn('space-y-6', className)}>
+        {/* Métricas */}
+        <UserMetrics metrics={metrics} loading={loading} />
+
+        {/* Busca e Filtros */}
+        <div className="flex flex-col md:flex-row gap-4">
+          <UserSearch value={busca} onChange={setBusca} className="flex-1" />
+          <UserFilters filters={filters} onChange={setFilters} />
+        </div>
+
+        {/* Tabela - SEM campo de busca interno */}
+        <GenericTable
+          title="Usuários do Sistema"
+          description="Gerencie todos os usuários cadastrados na plataforma"
+          data={usuarios?.data || []}
+          columns={columns}
+          loading={loading}
+          emptyMessage="Nenhum usuário encontrado"
+          // Removido searchPlaceholder para não exibir campo de busca interno
+        />
+
+        {/* Modal de Edição Detalhado */}
+        <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Detalhes do Usuário
+              </DialogTitle>
+              <DialogDescription>
+                Visualize e edite as informações do usuário selecionado
+              </DialogDescription>
+            </DialogHeader>
+
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleUpdateUser)}
+                className="space-y-6"
+              >
+                {/* Informações Pessoais */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">
+                      Informações Pessoais
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="nome"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome Completo *</FormLabel>
+                            <FormControl>
+                              <Input {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="email" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="telefone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Telefone</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="number"
+                                value={field.value || ''}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    e.target.value
+                                      ? Number(e.target.value)
+                                      : undefined
+                                  )
+                                }
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="cpf_cnpj"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>CPF/CNPJ</FormLabel>
+                            <FormControl>
+                              <Input {...field} value={field.value || ''} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="data_nascimento"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Data de Nascimento</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="date"
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="role"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Função no Sistema</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value || ''}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione uma função" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="">Nenhuma função</SelectItem>
+                                <SelectItem value="admin">
+                                  Administrador
+                                </SelectItem>
+                                <SelectItem value="profissional">
+                                  Profissional
+                                </SelectItem>
+                                <SelectItem value="secretaria">
+                                  Secretaria
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Informações Profissionais */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">
+                      Informações Profissionais
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="registro_profissional"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Registro Profissional</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value || ''}
+                                placeholder="Ex: CREFITO 123456-F"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="especialidade"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Especialidade</FormLabel>
+                            <FormControl>
+                              <Input {...field} value={field.value || ''} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="bio_profissional"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Biografia Profissional</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              value={field.value || ''}
+                              placeholder="Descreva a experiência e formação profissional..."
+                              rows={3}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Endereço */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Endereço</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {editingUser?.endereco_completo && (
+                      <div className="p-3 bg-muted rounded-lg">
+                        <Label className="text-sm font-medium">
+                          Endereço Atual:
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {editingUser.endereco_completo}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="numero_endereco"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Número</FormLabel>
+                            <FormControl>
+                              <Input {...field} value={field.value || ''} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="complemento_endereco"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Complemento</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value || ''}
+                                placeholder="Apto, bloco, sala..."
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowEditModal(false)}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={updating}>
+                    <Save className="h-4 w-4 mr-2" />
+                    {updating ? 'Salvando...' : 'Salvar Alterações'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+);
+
+UserManagement.displayName = 'UserManagement';
