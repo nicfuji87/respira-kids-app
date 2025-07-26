@@ -198,33 +198,21 @@ export const PatientSelect = React.memo<PatientSelectProps>(
         return [];
       }
 
-      const normalizedSearch = normalizeText(debouncedSearch);
-      console.log(
-        '🔤 [DEBUG] filteredPatients - normalized search:',
-        `"${normalizedSearch}"`
+      // AI dev note: Busca flexível - separar palavras para busca AND (todas devem estar presentes)
+      const searchWords = debouncedSearch
+        .trim()
+        .split(/\s+/)
+        .filter((word) => word.length > 0);
+      const normalizedSearchWords = searchWords.map((word) =>
+        normalizeText(word)
       );
 
-      // Debug: testar normalização com alguns pacientes
-      if (patients.length > 0) {
-        console.log(
-          '🧪 [DEBUG] filteredPatients - testando busca unificada nos primeiros 3 pacientes:'
-        );
-        patients.slice(0, 3).forEach((p, index) => {
-          const normalizedNome = normalizeText(p.nome || '');
-          const normalizedResponsaveis = normalizeText(
-            p.nomes_responsaveis || ''
-          );
-          const nomeMatch = normalizedNome.includes(normalizedSearch);
-          const responsavelMatch =
-            normalizedResponsaveis.includes(normalizedSearch);
-          console.log(
-            `  ${index + 1}. "${p.nome}" | Responsáveis: "${p.nomes_responsaveis || 'nenhum'}"`
-          );
-          console.log(
-            `      Nome match: ${nomeMatch} | Responsável match: ${responsavelMatch}`
-          );
-        });
-      }
+      console.log(
+        '🔤 [DEBUG] filteredPatients - search words:',
+        searchWords,
+        'normalized:',
+        normalizedSearchWords
+      );
 
       const filtered = patients.filter((patient) => {
         // AI dev note: Verificar se o campo nome existe e não é nulo
@@ -232,9 +220,16 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           return false;
         }
 
-        // Buscar por nome do paciente (normalizado)
-        const normalizedNome = normalizeText(patient.nome);
-        if (normalizedNome.includes(normalizedSearch)) {
+        // Função helper para verificar se todas as palavras estão presentes em um texto
+        const matchesAllWords = (text: string) => {
+          const normalizedText = normalizeText(text);
+          return normalizedSearchWords.every((word) =>
+            normalizedText.includes(word)
+          );
+        };
+
+        // Buscar por nome do paciente (normalizado) - busca flexível
+        if (matchesAllWords(patient.nome)) {
           console.log(
             '✅ [DEBUG] filteredPatients - match por nome do paciente:',
             patient.nome
@@ -243,28 +238,23 @@ export const PatientSelect = React.memo<PatientSelectProps>(
         }
 
         // AI dev note: NOVA FUNCIONALIDADE - Buscar por nome dos responsáveis
-        if (patient.nomes_responsaveis) {
-          const normalizedResponsaveis = normalizeText(
+        if (
+          patient.nomes_responsaveis &&
+          matchesAllWords(patient.nomes_responsaveis)
+        ) {
+          console.log(
+            '✅ [DEBUG] filteredPatients - match por nome do responsável:',
             patient.nomes_responsaveis
           );
-          if (normalizedResponsaveis.includes(normalizedSearch)) {
-            console.log(
-              '✅ [DEBUG] filteredPatients - match por nome do responsável:',
-              patient.nomes_responsaveis
-            );
-            console.log(
-              '    👶 [DEBUG] - paciente correspondente:',
-              patient.nome
-            );
-            return true;
-          }
+          console.log(
+            '    👶 [DEBUG] - paciente correspondente:',
+            patient.nome
+          );
+          return true;
         }
 
         // Buscar por email do paciente (normalizado)
-        if (
-          patient.email &&
-          normalizeText(patient.email).includes(normalizedSearch)
-        ) {
+        if (patient.email && matchesAllWords(patient.email)) {
           console.log(
             '✅ [DEBUG] filteredPatients - match por email:',
             patient.email
@@ -275,9 +265,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
         // Busca por responsável legal (nome e email)
         if (
           patient.responsavel_legal_nome &&
-          normalizeText(patient.responsavel_legal_nome).includes(
-            normalizedSearch
-          )
+          matchesAllWords(patient.responsavel_legal_nome)
         ) {
           console.log(
             '✅ [DEBUG] filteredPatients - match por resp. legal (nome):',
@@ -288,9 +276,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
         if (
           patient.responsavel_legal_email &&
-          normalizeText(patient.responsavel_legal_email).includes(
-            normalizedSearch
-          )
+          matchesAllWords(patient.responsavel_legal_email)
         ) {
           console.log(
             '✅ [DEBUG] filteredPatients - match por resp. legal (email):',
@@ -302,9 +288,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
         // Busca por responsável financeiro (nome e email)
         if (
           patient.responsavel_financeiro_nome &&
-          normalizeText(patient.responsavel_financeiro_nome).includes(
-            normalizedSearch
-          )
+          matchesAllWords(patient.responsavel_financeiro_nome)
         ) {
           console.log(
             '✅ [DEBUG] filteredPatients - match por resp. financeiro (nome):',
@@ -315,9 +299,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
         if (
           patient.responsavel_financeiro_email &&
-          normalizeText(patient.responsavel_financeiro_email).includes(
-            normalizedSearch
-          )
+          matchesAllWords(patient.responsavel_financeiro_email)
         ) {
           console.log(
             '✅ [DEBUG] filteredPatients - match por resp. financeiro (email):',
@@ -362,25 +344,35 @@ export const PatientSelect = React.memo<PatientSelectProps>(
         );
 
         // Debug especial: testar especificamente busca unificada
-        if (normalizedSearch.length >= 2) {
+        if (normalizedSearchWords.length >= 1) {
           console.log(
             '🔬 [DEBUG] filteredPatients - debug especial para busca unificada:'
           );
           const allMatches = patients.filter((p) => {
-            const nomeMatch =
-              p.nome && normalizeText(p.nome).includes(normalizedSearch);
+            const matchesAllWords = (text: string) => {
+              const normalizedText = normalizeText(text);
+              return normalizedSearchWords.every((word) =>
+                normalizedText.includes(word)
+              );
+            };
+
+            const nomeMatch = p.nome && matchesAllWords(p.nome);
             const responsavelMatch =
-              p.nomes_responsaveis &&
-              normalizeText(p.nomes_responsaveis).includes(normalizedSearch);
+              p.nomes_responsaveis && matchesAllWords(p.nomes_responsaveis);
             return nomeMatch || responsavelMatch;
           });
           console.log(
             `  📝 Total de matches (paciente + responsável): ${allMatches.length}`
           );
           allMatches.forEach((p, index) => {
-            const matchType = normalizeText(p.nome || '').includes(
-              normalizedSearch
-            )
+            const matchesAllWords = (text: string) => {
+              const normalizedText = normalizeText(text);
+              return normalizedSearchWords.every((word) =>
+                normalizedText.includes(word)
+              );
+            };
+
+            const matchType = matchesAllWords(p.nome || '')
               ? 'paciente'
               : 'responsável';
             console.log(
