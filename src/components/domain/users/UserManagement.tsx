@@ -326,7 +326,7 @@ export const UserManagement = React.memo<UserManagementProps>(
 
         {/* Modal de Edição Detalhado */}
         <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
@@ -340,7 +340,7 @@ export const UserManagement = React.memo<UserManagementProps>(
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(handleUpdateUser)}
-                className="space-y-6"
+                className="space-y-6 px-1"
               >
                 {/* Informações Pessoais */}
                 <Card>
@@ -350,7 +350,7 @@ export const UserManagement = React.memo<UserManagementProps>(
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="nome"
@@ -388,15 +388,14 @@ export const UserManagement = React.memo<UserManagementProps>(
                             <FormControl>
                               <Input
                                 {...field}
-                                type="number"
+                                type="tel"
                                 value={field.value || ''}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                  const value = e.target.value;
                                   field.onChange(
-                                    e.target.value
-                                      ? Number(e.target.value)
-                                      : undefined
-                                  )
-                                }
+                                    value ? Number(value) : undefined
+                                  );
+                                }}
                               />
                             </FormControl>
                             <FormMessage />
@@ -427,8 +426,8 @@ export const UserManagement = React.memo<UserManagementProps>(
                             <FormControl>
                               <Input
                                 {...field}
-                                type="date"
                                 value={field.value || ''}
+                                type="date"
                               />
                             </FormControl>
                             <FormMessage />
@@ -443,8 +442,8 @@ export const UserManagement = React.memo<UserManagementProps>(
                           <FormItem>
                             <FormLabel>Função no Sistema</FormLabel>
                             <Select
-                              onValueChange={field.onChange}
                               value={field.value || ''}
+                              onValueChange={field.onChange}
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -452,14 +451,27 @@ export const UserManagement = React.memo<UserManagementProps>(
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="admin">
-                                  Administrador
-                                </SelectItem>
-                                <SelectItem value="profissional">
-                                  Profissional
-                                </SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
                                 <SelectItem value="secretaria">
                                   Secretaria
+                                </SelectItem>
+                                <SelectItem value="medico_pediatra">
+                                  Médico Pediatra
+                                </SelectItem>
+                                <SelectItem value="fonoaudiologo">
+                                  Fonoaudiólogo
+                                </SelectItem>
+                                <SelectItem value="psicologo">
+                                  Psicólogo
+                                </SelectItem>
+                                <SelectItem value="nutricionista">
+                                  Nutricionista
+                                </SelectItem>
+                                <SelectItem value="fisioterapeuta">
+                                  Fisioterapeuta
+                                </SelectItem>
+                                <SelectItem value="terapeuta_ocupacional">
+                                  Terapeuta Ocupacional
                                 </SelectItem>
                               </SelectContent>
                             </Select>
@@ -479,7 +491,7 @@ export const UserManagement = React.memo<UserManagementProps>(
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="registro_profissional"
@@ -564,7 +576,7 @@ export const UserManagement = React.memo<UserManagementProps>(
                       disabled={updating}
                     />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="numero_endereco"
