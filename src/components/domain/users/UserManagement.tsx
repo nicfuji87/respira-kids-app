@@ -76,7 +76,6 @@ export const UserManagement = React.memo<UserManagementProps>(
     const [metrics, setMetrics] = useState<UsuarioMetricsType | null>(null);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState<UsuarioFilters>({});
-    const [busca, setBusca] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [editingUser, setEditingUser] = useState<Usuario | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -92,7 +91,7 @@ export const UserManagement = React.memo<UserManagementProps>(
       setLoading(true);
       try {
         const [usuariosResult, metricsResult] = await Promise.all([
-          fetchUsuarios({ ...filters, busca }, currentPage),
+          fetchUsuarios(filters, currentPage),
           fetchUsuarioMetrics(),
         ]);
 
@@ -119,17 +118,19 @@ export const UserManagement = React.memo<UserManagementProps>(
       } finally {
         setLoading(false);
       }
-    }, [filters, busca, currentPage, toast]);
+    }, [filters, currentPage, toast]);
 
-    // Carregar dados iniciais
+    // Carregar dados quando filtros, busca ou página mudarem
     useEffect(() => {
       loadData();
-    }, [loadData]);
+    }, [filters, currentPage, loadData]);
 
-    // Reset página quando filtros mudam
+    // Reset página quando filtros mudam (mas não quando currentPage muda)
     useEffect(() => {
-      setCurrentPage(1);
-    }, [filters, busca]);
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      }
+    }, [filters, currentPage]);
 
     const handleEditUser = (usuario: Usuario) => {
       console.log('handleEditUser chamado com:', usuario);
@@ -309,7 +310,11 @@ export const UserManagement = React.memo<UserManagementProps>(
 
         {/* Busca e Filtros */}
         <div className="flex flex-col md:flex-row gap-4">
-          <UserSearch value={busca} onChange={setBusca} className="flex-1" />
+          <UserSearch
+            value={filters.busca || ''}
+            onChange={(value) => setFilters({ ...filters, busca: value })}
+            className="flex-1"
+          />
           <UserFilters filters={filters} onChange={setFilters} />
         </div>
 
