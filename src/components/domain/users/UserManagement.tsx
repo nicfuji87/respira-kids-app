@@ -39,13 +39,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/primitives/card';
-import { Label } from '@/components/primitives/label';
 import { useToast } from '@/components/primitives/use-toast';
 import {
-  GenericTable,
   UserSearch,
   UserFilters,
   UserMetrics,
+  GenericTable,
+  TypePersonSelect,
+  AddressSelect,
+  ResponsibleSelect,
   StatusBadge,
 } from '@/components/composed';
 import type {
@@ -317,7 +319,7 @@ export const UserManagement = React.memo<UserManagementProps>(
           columns={columns}
           loading={loading}
           emptyMessage="Nenhum usuário encontrado"
-          // Removido searchPlaceholder para não exibir campo de busca interno
+          showSearch={false}
         />
 
         {/* Modal de Edição Detalhado */}
@@ -533,19 +535,28 @@ export const UserManagement = React.memo<UserManagementProps>(
                 {/* Endereço */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Endereço</CardTitle>
+                    <CardTitle className="text-lg">Tipo e Endereço</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {editingUser?.endereco_completo && (
-                      <div className="p-3 bg-muted rounded-lg">
-                        <Label className="text-sm font-medium">
-                          Endereço Atual:
-                        </Label>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {editingUser.endereco_completo}
-                        </p>
-                      </div>
-                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Tipo de Pessoa */}
+                      <TypePersonSelect
+                        value={form.watch('id_tipo_pessoa') || ''}
+                        onValueChange={(value) =>
+                          form.setValue('id_tipo_pessoa', value)
+                        }
+                        disabled={updating}
+                      />
+
+                      {/* Seleção de Endereço */}
+                      <AddressSelect
+                        value={form.watch('id_endereco') || ''}
+                        onValueChange={(value) =>
+                          form.setValue('id_endereco', value)
+                        }
+                        disabled={updating}
+                      />
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
@@ -582,6 +593,18 @@ export const UserManagement = React.memo<UserManagementProps>(
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Responsáveis (só para pacientes) */}
+                {editingUser?.tipo_pessoa_codigo === 'paciente' && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Responsáveis</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsibleSelect personId={editingUser?.id} />
+                    </CardContent>
+                  </Card>
+                )}
 
                 <DialogFooter>
                   <Button

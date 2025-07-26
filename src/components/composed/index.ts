@@ -76,6 +76,9 @@ export { MediaGallery } from './MediaGallery';
 export { UserSearch } from './UserSearch';
 export { UserFilters } from './UserFilters';
 export { UserMetrics } from './UserMetrics';
+export { TypePersonSelect } from './TypePersonSelect';
+export { AddressSelect } from './AddressSelect';
+export { ResponsibleSelect } from './ResponsibleSelect';
 
 // Type exports
 export type { ApprovalStatus } from './UserApprovalCard';

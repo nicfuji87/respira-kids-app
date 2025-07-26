@@ -26,12 +26,29 @@ export async function fetchUsuarios(
 
     // Aplicar filtros na query principal
     if (filters.busca) {
-      query = query.or(
-        `nome.ilike.%${filters.busca}%,email.ilike.%${filters.busca}%,cpf_cnpj.ilike.%${filters.busca}%`
-      );
-      countQuery = countQuery.or(
-        `nome.ilike.%${filters.busca}%,email.ilike.%${filters.busca}%,cpf_cnpj.ilike.%${filters.busca}%`
-      );
+      // Busca flexível: separar palavras e buscar cada uma
+      const searchWords = filters.busca
+        .trim()
+        .split(/\s+/)
+        .filter((word) => word.length > 0);
+
+      if (searchWords.length === 1) {
+        // Busca simples para uma palavra
+        const searchTerm = searchWords[0];
+        query = query.or(
+          `nome.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`
+        );
+        countQuery = countQuery.or(
+          `nome.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`
+        );
+      } else {
+        // Busca flexível: todas as palavras devem estar presentes (em qualquer ordem)
+        const nameConditions = searchWords
+          .map((word) => `nome.ilike.%${word}%`)
+          .join(',');
+        query = query.or(nameConditions);
+        countQuery = countQuery.or(nameConditions);
+      }
     }
 
     if (filters.tipo_pessoa) {

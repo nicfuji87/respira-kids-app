@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
-import { 
+import {
   Table,
   TableBody,
   TableCell,
@@ -9,20 +9,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/primitives/table';
-import { 
+import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/primitives/card';
-import { 
-  Search, 
-  Plus, 
-  ChevronLeft, 
-  ChevronRight,
-  Filter
-} from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // AI dev note: GenericTable reutilizável para listagens
@@ -52,6 +46,7 @@ export interface GenericTableProps<T> {
   itemsPerPage?: number;
   onSearch?: (query: string) => void;
   searchQuery?: string;
+  showSearch?: boolean; // Nova prop para controlar exibição da busca
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,14 +56,15 @@ export const GenericTable = <T extends Record<string, any>>({
   data,
   columns,
   loading = false,
-  searchPlaceholder = "Buscar...",
+  searchPlaceholder = 'Buscar...',
   onAdd,
   onFilter,
-  addButtonText = "Adicionar",
-  filterButtonText = "Filtros",
-  emptyMessage = "Nenhum item encontrado",
+  addButtonText = 'Adicionar',
+  filterButtonText = 'Filtros',
+  emptyMessage = 'Nenhum item encontrado',
   itemsPerPage = 10,
-  className
+  className,
+  showSearch = false, // Padrão false para não mostrar busca interna
 }: GenericTableProps<T>) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,9 +72,9 @@ export const GenericTable = <T extends Record<string, any>>({
   // Filtrar dados baseado na busca
   const filteredData = useMemo(() => {
     if (!searchTerm) return data;
-    
-    return data.filter(item =>
-      Object.values(item).some(value =>
+
+    return data.filter((item) =>
+      Object.values(item).some((value) =>
         String(value).toLowerCase().includes(searchTerm.toLowerCase())
       )
     );
@@ -87,7 +83,10 @@ export const GenericTable = <T extends Record<string, any>>({
   // Calcular paginação
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedData = filteredData.slice(
+    startIndex,
+    startIndex + itemsPerPage
+  );
 
   // Reset página quando filtro muda
   React.useEffect(() => {
@@ -95,28 +94,28 @@ export const GenericTable = <T extends Record<string, any>>({
   }, [searchTerm]);
 
   return (
-    <Card className={cn("w-full", className)}>
+    <Card className={cn('w-full', className)}>
       <CardHeader>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <CardTitle>{title}</CardTitle>
-            {description && (
-              <CardDescription>{description}</CardDescription>
-            )}
+            {description && <CardDescription>{description}</CardDescription>}
           </div>
-          
+
           <div className="flex items-center gap-2">
             {/* Busca */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={searchPlaceholder}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-64"
-              />
-            </div>
-            
+            {showSearch && (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={searchPlaceholder}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-64"
+                />
+              </div>
+            )}
+
             {/* Filtros */}
             {onFilter && (
               <Button variant="outline" size="sm" onClick={onFilter}>
@@ -124,7 +123,7 @@ export const GenericTable = <T extends Record<string, any>>({
                 {filterButtonText}
               </Button>
             )}
-            
+
             {/* Adicionar */}
             {onAdd && (
               <Button size="sm" onClick={onAdd}>
@@ -135,7 +134,7 @@ export const GenericTable = <T extends Record<string, any>>({
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent>
         {/* Loading state */}
         {loading ? (
@@ -150,10 +149,7 @@ export const GenericTable = <T extends Record<string, any>>({
                 <TableHeader>
                   <TableRow>
                     {columns.map((column) => (
-                      <TableHead 
-                        key={column.key}
-                        className={column.className}
-                      >
+                      <TableHead key={column.key} className={column.className}>
                         {column.label}
                       </TableHead>
                     ))}
@@ -162,8 +158,8 @@ export const GenericTable = <T extends Record<string, any>>({
                 <TableBody>
                   {paginatedData.length === 0 ? (
                     <TableRow>
-                      <TableCell 
-                        colSpan={columns.length} 
+                      <TableCell
+                        colSpan={columns.length}
                         className="h-24 text-center text-muted-foreground"
                       >
                         {emptyMessage}
@@ -173,14 +169,13 @@ export const GenericTable = <T extends Record<string, any>>({
                     paginatedData.map((item, index) => (
                       <TableRow key={item.id || index}>
                         {columns.map((column) => (
-                          <TableCell 
+                          <TableCell
                             key={column.key}
                             className={column.className}
                           >
-                            {column.render 
-                              ? column.render(item) 
-                              : item[column.key]
-                            }
+                            {column.render
+                              ? column.render(item)
+                              : item[column.key]}
                           </TableCell>
                         ))}
                       </TableRow>
@@ -189,33 +184,39 @@ export const GenericTable = <T extends Record<string, any>>({
                 </TableBody>
               </Table>
             </div>
-            
+
             {/* Paginação */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4">
                 <div className="text-sm text-muted-foreground">
-                  Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, filteredData.length)} de {filteredData.length} itens
+                  Mostrando {startIndex + 1} a{' '}
+                  {Math.min(startIndex + itemsPerPage, filteredData.length)} de{' '}
+                  {filteredData.length} itens
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(1, prev - 1))
+                    }
                     disabled={currentPage === 1}
                   >
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     Anterior
                   </Button>
-                  
+
                   <div className="text-sm text-muted-foreground">
                     Página {currentPage} de {totalPages}
                   </div>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                    }
                     disabled={currentPage === totalPages}
                   >
                     Próxima
@@ -231,4 +232,4 @@ export const GenericTable = <T extends Record<string, any>>({
   );
 };
 
-GenericTable.displayName = 'GenericTable'; 
+GenericTable.displayName = 'GenericTable';
