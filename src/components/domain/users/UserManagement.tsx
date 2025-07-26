@@ -448,7 +448,6 @@ export const UserManagement = React.memo<UserManagementProps>(
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="">Nenhuma função</SelectItem>
                                 <SelectItem value="admin">
                                   Administrador
                                 </SelectItem>
