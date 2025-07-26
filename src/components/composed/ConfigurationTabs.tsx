@@ -9,6 +9,7 @@ import { DevelopmentPlaceholder } from './DevelopmentPlaceholder';
 import { MyProfileSection } from '@/components/domain/profile';
 import { CompanyForm } from './CompanyForm';
 import { UserManagement } from '@/components/domain/users';
+import { IntegrationsTemplate } from '@/components/templates/integrations';
 
 import { SystemSettingsTemplate } from '@/components/templates/system/SystemSettingsTemplate';
 import {
@@ -70,15 +71,9 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       {
         id: 'integrations',
         label: 'Integrações',
-        roles: ['admin', 'profissional', 'secretaria'],
+        roles: ['admin'],
         icon: Zap,
-        content: (
-          <DevelopmentPlaceholder
-            title="Integrações"
-            description="Configure integrações com sistemas externos, APIs e webhooks."
-            icon={<Zap className="h-12 w-12 text-primary/50" />}
-          />
-        ),
+        content: <IntegrationsTemplate />,
       },
       {
         id: 'financial',
