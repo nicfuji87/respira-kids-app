@@ -7,7 +7,8 @@ import { OpenAI } from 'https://deno.land/x/openai@v4.24.0/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -33,7 +34,9 @@ const RATE_LIMIT_MAX_REQUESTS = 5;
 function checkRateLimit(clientId: string): boolean {
   const now = Date.now();
   const requests = rateLimitMap.get(clientId) || [];
-  const validRequests = requests.filter(time => now - time < RATE_LIMIT_WINDOW);
+  const validRequests = requests.filter(
+    (time) => now - time < RATE_LIMIT_WINDOW
+  );
 
   if (validRequests.length >= RATE_LIMIT_MAX_REQUESTS) {
     return false;
@@ -44,28 +47,6 @@ function checkRateLimit(clientId: string): boolean {
   return true;
 }
 
-const HISTORY_COMPILATION_PROMPT = `Você é um fisioterapeuta respiratório pediátrico experiente. 
-Compile as seguintes evoluções em um histórico abrangente e estruturado do paciente.
-
-INSTRUÇÕES:
-- Organize cronologicamente quando possível
-- Identifique padrões de progresso ou regressão
-- Destaque marcos importantes no tratamento
-- Sintetize objetivos alcançados e pendentes
-- Use terminologia técnica apropriada
-- Mantenha formato profissional e objetivo
-- Inclua recomendações baseadas na evolução observada
-- LIMITE: máximo {maxCharacters} caracteres no resultado final
-
-ESTRUTURA SUGERIDA:
-1. Resumo da condição inicial
-2. Principais intervenções realizadas
-3. Evolução e progressos observados
-4. Desafios e intercorrências
-5. Status atual e recomendações
-
-Evoluções a compilar:`;
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -74,18 +55,28 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ success: false, error: 'Method not allowed' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
   }
 
   try {
     // Parse request
-    const { patientId, userId, maxCharacters }: PatientHistoryRequest = await req.json();
+    const { patientId, userId, maxCharacters }: PatientHistoryRequest =
+      await req.json();
 
     if (!patientId || !userId) {
       return new Response(
-        JSON.stringify({ success: false, error: 'patientId and userId are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error: 'patientId and userId are required',
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
 
@@ -94,25 +85,63 @@ Deno.serve(async (req: Request) => {
     // Rate limiting
     if (!checkRateLimit(userId)) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Rate limit exceeded. Maximum 5 requests per minute.' }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error: 'Rate limit exceeded. Maximum 5 requests per minute.',
+        }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
 
     // Environment variables
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    const openaiOrgId = Deno.env.get('OPENAI_ORG_ID');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!openaiApiKey || !supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Required environment variables missing (OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error(
+        'Required environment variables missing (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)'
+      );
     }
 
     // Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log(`[INFO] Starting history compilation for patient: ${patientId}`);
+    // Buscar chave OpenAI do banco
+    const { data: apiKeyData, error: keyError } = await supabase
+      .from('api_keys')
+      .select('encrypted_key')
+      .eq('service_name', 'openai')
+      .eq('is_active', true)
+      .single();
+
+    if (keyError || !apiKeyData?.encrypted_key) {
+      throw new Error('OpenAI API key not found or inactive');
+    }
+
+    const openaiApiKey = apiKeyData.encrypted_key;
+    const openaiOrgId = Deno.env.get('OPENAI_ORG_ID'); // Mantém opcional
+
+    // Buscar prompt de histórico do banco
+    const { data: promptData, error: promptError } = await supabase
+      .from('ai_prompts')
+      .select('prompt_content, openai_model')
+      .eq('prompt_name', 'patient_history')
+      .eq('is_active', true)
+      .single();
+
+    if (promptError || !promptData?.prompt_content) {
+      throw new Error('Patient history prompt not found or inactive');
+    }
+
+    const historyPrompt = promptData.prompt_content;
+    const openaiModel = promptData.openai_model || 'gpt-3.5-turbo';
+
+    console.log(
+      `[INFO] Starting history compilation for patient: ${patientId}`
+    );
 
     // Buscar paciente
     const { data: patient, error: patientError } = await supabase
@@ -124,27 +153,34 @@ Deno.serve(async (req: Request) => {
     if (patientError || !patient) {
       return new Response(
         JSON.stringify({ success: false, error: 'Patient not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
 
     // Buscar evoluções usando query SQL direta
-    const { data: evolucoes, error: evolucaoError } = await supabase
-      .rpc('get_patient_evolutions_simple', { patient_uuid: patientId });
+    const { data: evolucoes, error: evolucaoError } = await supabase.rpc(
+      'get_patient_evolutions_simple',
+      { patient_uuid: patientId }
+    );
 
     // Se RPC não existir, usar query manual
     let evolutions = [];
     if (evolucaoError) {
       console.log('[INFO] RPC failed, using manual query');
-      
+
       // Query manual simplificada
       const { data: manualEvolutions, error: manualError } = await supabase
         .from('relatorio_evolucao')
-        .select(`
+        .select(
+          `
           conteudo,
           created_at,
           id_agendamento
-        `)
+        `
+        )
         .order('created_at', { ascending: true });
 
       if (manualError) {
@@ -160,11 +196,11 @@ Deno.serve(async (req: Request) => {
             .eq('id', evo.id_agendamento)
             .eq('paciente_id', patientId)
             .single();
-          
+
           if (agendamento) {
             evolutions.push({
               conteudo: evo.conteudo,
-              created_at: evo.created_at
+              created_at: evo.created_at,
             });
           }
         }
@@ -175,8 +211,14 @@ Deno.serve(async (req: Request) => {
 
     if (!evolutions || evolutions.length === 0) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Nenhuma evolução encontrada para este paciente' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error: 'Nenhuma evolução encontrada para este paciente',
+        }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
 
@@ -189,9 +231,11 @@ Deno.serve(async (req: Request) => {
       .join('\n\n');
 
     // Limitar tamanho
-    const finalEvolutionsText = evolutionsText.length > 12000 
-      ? evolutionsText.substring(0, 12000) + '\n\n[... evoluções truncadas...]'
-      : evolutionsText;
+    const finalEvolutionsText =
+      evolutionsText.length > 12000
+        ? evolutionsText.substring(0, 12000) +
+          '\n\n[... evoluções truncadas...]'
+        : evolutionsText;
 
     // OpenAI
     const openai = new OpenAI({
@@ -199,19 +243,22 @@ Deno.serve(async (req: Request) => {
       organization: openaiOrgId,
     });
 
-    console.log(`[INFO] Compiling history for: ${patient.nome} (${evolutions.length} evolutions)`);
+    console.log(
+      `[INFO] Compiling history for: ${patient.nome} (${evolutions.length} evolutions)`
+    );
 
     const startTime = Date.now();
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: openaiModel,
       messages: [
         {
           role: 'system',
-          content: 'Você é um fisioterapeuta respiratório pediátrico especializado com vasta experiência em análise de evolução de pacientes.',
+          content:
+            'Você é um fisioterapeuta respiratório pediátrico especializado com vasta experiência em análise de evolução de pacientes.',
         },
         {
           role: 'user',
-          content: `${HISTORY_COMPILATION_PROMPT.replace('{maxCharacters}', limitedMaxChars.toString())}\n\nPACIENTE: ${patient.nome}\n\n${finalEvolutionsText}`,
+          content: `${historyPrompt.replace('{maxCharacters}', limitedMaxChars.toString())}\n\nPACIENTE: ${patient.nome}\n\n${finalEvolutionsText}`,
         },
       ],
       max_tokens: Math.min(Math.ceil(limitedMaxChars * 1.3), 2000),
@@ -225,11 +272,14 @@ Deno.serve(async (req: Request) => {
       throw new Error('No compiled history received from OpenAI');
     }
 
-    const finalHistory = compiledHistory.length > limitedMaxChars 
-      ? compiledHistory.substring(0, limitedMaxChars - 3) + '...'
-      : compiledHistory;
+    const finalHistory =
+      compiledHistory.length > limitedMaxChars
+        ? compiledHistory.substring(0, limitedMaxChars - 3) + '...'
+        : compiledHistory;
 
-    console.log(`[INFO] History compilation completed in ${duration}ms (${finalHistory.length} chars)`);
+    console.log(
+      `[INFO] History compilation completed in ${duration}ms (${finalHistory.length} chars)`
+    );
 
     // Salvar histórico (simplificado)
     try {
@@ -262,7 +312,10 @@ Deno.serve(async (req: Request) => {
             });
 
           if (insertError) {
-            console.warn('[WARN] Insert failed, history not saved:', insertError.message);
+            console.warn(
+              '[WARN] Insert failed, history not saved:',
+              insertError.message
+            );
           } else {
             console.log('[INFO] History saved successfully');
           }
@@ -282,7 +335,6 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-
   } catch (error) {
     console.error('[ERROR] Patient history compilation error:', error);
 

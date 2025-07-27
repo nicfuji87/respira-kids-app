@@ -8,12 +8,6 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/primitives/tabs';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/primitives/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -202,38 +196,22 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
               </TabsTrigger>
             </TabsList>
 
-            {/* Dropdown de ações IA */}
+            {/* Botão de melhoria de texto IA */}
             {value.trim() && !disabled && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isEnhancing}
-                    className="flex items-center gap-2"
-                  >
-                    {isEnhancing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Wand2 className="h-4 w-4" />
-                    )}
-                    Formatar texto com IA
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => enhanceText('improve')}>
-                    Melhorar texto
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => enhanceText('medical_format')}
-                  >
-                    Formatação médica
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => enhanceText('summarize')}>
-                    Resumir
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isEnhancing}
+                onClick={() => enhanceText('improve')}
+                className="flex items-center gap-2"
+              >
+                {isEnhancing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="h-4 w-4" />
+                )}
+                Melhorar texto com IA
+              </Button>
             )}
           </div>
 

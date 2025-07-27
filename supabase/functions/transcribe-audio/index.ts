@@ -65,11 +65,31 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Verificar API key
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      throw new Error('OpenAI API key not configured');
+    // Environment variables para Supabase
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Supabase environment variables not configured');
     }
+
+    // Criar cliente Supabase
+    const { createClient } = await import('jsr:@supabase/supabase-js@2');
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Buscar chave OpenAI do banco
+    const { data: apiKeyData, error: keyError } = await supabase
+      .from('api_keys')
+      .select('encrypted_key')
+      .eq('service_name', 'openai')
+      .eq('is_active', true)
+      .single();
+
+    if (keyError || !apiKeyData?.encrypted_key) {
+      throw new Error('OpenAI API key not found or inactive');
+    }
+
+    const openaiApiKey = apiKeyData.encrypted_key;
 
     // Parse request
     const {

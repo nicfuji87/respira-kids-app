@@ -53,6 +53,7 @@ export interface AiPrompt {
   prompt_title: string;
   prompt_description?: string;
   prompt_content: string;
+  openai_model: string; // Modelo OpenAI a ser usado (ex: gpt-3.5-turbo, gpt-4)
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -65,6 +66,7 @@ export interface AiPromptCreate {
   prompt_title: string;
   prompt_description?: string;
   prompt_content: string;
+  openai_model?: string; // Default será gpt-3.5-turbo
   is_active?: boolean;
 }
 
@@ -72,6 +74,7 @@ export interface AiPromptUpdate {
   prompt_title?: string;
   prompt_description?: string;
   prompt_content?: string;
+  openai_model?: string;
   is_active?: boolean;
 }
 
