@@ -48,6 +48,7 @@ export interface AppointmentFormManagerProps {
   onClose: () => void;
   initialDate?: Date;
   initialTime?: string;
+  initialPatientId?: string; // Novo: Para auto-preencher paciente
   onSave?: (appointmentId: string) => void;
   className?: string;
 }
@@ -78,7 +79,15 @@ interface FormErrors {
 }
 
 export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
-  ({ isOpen, onClose, initialDate, initialTime, onSave, className }) => {
+  ({
+    isOpen,
+    onClose,
+    initialDate,
+    initialTime,
+    initialPatientId,
+    onSave,
+    className,
+  }) => {
     console.log('🏗️ [DEBUG] AppointmentFormManager - render, isOpen:', isOpen);
 
     const { user } = useAuth();
@@ -127,7 +136,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         console.log('🏁 [DEBUG] AppointmentFormManager - resetting form data');
         setFormData({
           data_hora: dateTimeString,
-          paciente_id: '',
+          paciente_id: initialPatientId || '',
           profissional_id: '',
           tipo_servico_id: '',
           local_id: '',
@@ -140,7 +149,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setHasConflict(false);
         setConflictDetails('');
       }
-    }, [isOpen, initialDate, initialTime]);
+    }, [isOpen, initialDate, initialTime, initialPatientId]);
 
     // Validar conflitos de horário
     const checkScheduleConflicts = useCallback(

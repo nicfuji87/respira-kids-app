@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Calendar } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
@@ -13,6 +13,7 @@ import {
   type LocationOption,
 } from '@/components/composed';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
+import { AppointmentFormManager } from '@/components/domain/calendar/AppointmentFormManager';
 import {
   fetchPatientDetails,
   fetchPatientAnamnesis,
@@ -70,6 +71,10 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       LocationOption[]
     >([]);
     const [isLoadingLocais, setIsLoadingLocais] = useState(false);
+
+    // Estados para o modal de criação de agendamento
+    const [isNewAppointmentModalOpen, setIsNewAppointmentModalOpen] =
+      useState(false);
 
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -242,6 +247,21 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       }
     };
 
+    // Handlers para modal de novo agendamento
+    const handleNewAppointmentClick = () => {
+      setIsNewAppointmentModalOpen(true);
+    };
+
+    const handleNewAppointmentClose = () => {
+      setIsNewAppointmentModalOpen(false);
+    };
+
+    const handleNewAppointmentSave = (appointmentId: string) => {
+      console.log('Novo agendamento criado:', appointmentId);
+      setIsNewAppointmentModalOpen(false);
+      // TODO: Atualizar lista de consultas recentes se necessário
+    };
+
     // Loading state
     if (isLoading) {
       return (
@@ -281,14 +301,25 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
     return (
       <div className={cn('w-full space-y-6', className)}>
         {/* Header */}
-        <div className="flex items-center gap-4">
-          {onBack && (
-            <Button variant="ghost" size="sm" onClick={onBack}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            {onBack && (
+              <Button variant="ghost" size="sm" onClick={onBack}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar
+              </Button>
+            )}
+            <h1 className="text-2xl font-bold">{patient.nome}</h1>
+          </div>
+
+          {/* Botão Agendar - apenas para pacientes */}
+          {(!personId ||
+            (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
+            <Button onClick={handleNewAppointmentClick} className="gap-2">
+              <Calendar className="h-4 w-4" />
+              Agendar Paciente
             </Button>
           )}
-          <h1 className="text-2xl font-bold">{patient.nome}</h1>
         </div>
 
         {/* Informações Completas do Paciente - usando component PatientCompleteInfo unificado */}
@@ -342,6 +373,14 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
           onNfeAction={handleNfeAction}
           onPatientClick={handlePatientClick}
           onProfessionalClick={handleProfessionalClick}
+        />
+
+        {/* Modal de Novo Agendamento */}
+        <AppointmentFormManager
+          isOpen={isNewAppointmentModalOpen}
+          onClose={handleNewAppointmentClose}
+          initialPatientId={actualId}
+          onSave={handleNewAppointmentSave}
         />
       </div>
     );
