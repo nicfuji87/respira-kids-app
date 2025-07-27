@@ -11,6 +11,7 @@ import {
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 
 // AI dev note: EvolutionEditor composto que combina RichTextEditor + AudioRecorder + IA
 // Interface completa para edição de evoluções médicas com transcrição e enhancement
@@ -45,6 +46,9 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
     placeholder = 'Digite ou grave a evolução do paciente...',
     error,
   }) => {
+    // AI dev note: Adicionar autenticação para Edge Functions
+    const { user } = useAuth();
+
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [isEnhancing, setIsEnhancing] = useState(false);
     const [transcriptionError, setTranscriptionError] = useState<string | null>(
@@ -73,6 +77,17 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
     // Transcrever áudio usando Edge Function
     const transcribeAudio = useCallback(
       async (audioBlob: Blob) => {
+        // AI dev note: Verificar autenticação antes de chamar Edge Function
+        if (!user) {
+          setTranscriptionError('Usuário não autenticado');
+          return;
+        }
+
+        console.log(
+          '🟢 [FRONTEND] Starting transcribe-audio call for user:',
+          user.id
+        );
+
         setIsTranscribing(true);
         setTranscriptionError(null);
 
@@ -81,7 +96,8 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           const audioBase64 = await blobToBase64(audioBlob);
           const audioType = audioBlob.type || 'audio/webm';
 
-          // Chamar Edge Function
+          // Chamar Edge Function com autenticação
+          console.log('🟢 [FRONTEND] Calling transcribe-audio function...');
           const { data, error } = await supabase.functions.invoke(
             'transcribe-audio',
             {
@@ -93,7 +109,13 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
             }
           );
 
+          console.log('🟢 [FRONTEND] transcribe-audio response:', {
+            data,
+            error,
+          });
+
           if (error) {
+            console.error('🔴 [FRONTEND] transcribe-audio error:', error);
             throw error;
           }
 
@@ -118,7 +140,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           setIsTranscribing(false);
         }
       },
-      [value, onChange, blobToBase64]
+      [value, onChange, blobToBase64, user]
     );
 
     // Melhorar texto usando Edge Function
@@ -129,11 +151,23 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           return;
         }
 
+        // AI dev note: Verificar autenticação antes de chamar Edge Function
+        if (!user) {
+          setEnhancementError('Usuário não autenticado');
+          return;
+        }
+
+        console.log(
+          '🟢 [FRONTEND] Starting enhance-text call for user:',
+          user.id
+        );
+
         setIsEnhancing(true);
         setEnhancementError(null);
 
         try {
-          // Chamar Edge Function
+          // Chamar Edge Function com autenticação
+          console.log('🟢 [FRONTEND] Calling enhance-text function...');
           const { data, error } = await supabase.functions.invoke(
             'enhance-text',
             {
@@ -144,7 +178,10 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
             }
           );
 
+          console.log('🟢 [FRONTEND] enhance-text response:', { data, error });
+
           if (error) {
+            console.error('🔴 [FRONTEND] enhance-text error:', error);
             throw error;
           }
 
