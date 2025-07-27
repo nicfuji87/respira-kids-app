@@ -65,31 +65,15 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Environment variables para Supabase
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    console.log('[DEBUG] Starting transcribe-audio function');
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Supabase environment variables not configured');
+    // Verificar API key diretamente de environment variables
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      throw new Error('OpenAI API key not configured');
     }
 
-    // Criar cliente Supabase
-    const { createClient } = await import('jsr:@supabase/supabase-js@2');
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Buscar chave OpenAI do banco
-    const { data: apiKeyData, error: keyError } = await supabase
-      .from('api_keys')
-      .select('encrypted_key')
-      .eq('service_name', 'openai')
-      .eq('is_active', true)
-      .single();
-
-    if (keyError || !apiKeyData?.encrypted_key) {
-      throw new Error('OpenAI API key not found or inactive');
-    }
-
-    const openaiApiKey = apiKeyData.encrypted_key;
+    console.log('[DEBUG] OpenAI API key found');
 
     // Parse request
     const {
@@ -97,6 +81,12 @@ Deno.serve(async (req: Request) => {
       audioType,
       language = 'pt',
     }: TranscribeRequest = await req.json();
+
+    console.log('[DEBUG] Request parsed:', {
+      hasAudioBase64: !!audioBase64,
+      audioType,
+      language,
+    });
 
     if (!audioBase64 || !audioType) {
       return new Response(
@@ -110,6 +100,8 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    console.log('[DEBUG] Configuration loaded successfully');
 
     // Rate limiting baseado no IP
     const clientIp = req.headers.get('x-forwarded-for') || 'unknown';

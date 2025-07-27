@@ -48,38 +48,6 @@ function checkRateLimit(clientId: string): boolean {
   return true;
 }
 
-// Prompts especializados para cada ação
-const PROMPTS = {
-  improve: `Você é um assistente especializado em fisioterapia respiratória pediátrica. 
-Melhore o seguinte texto de evolução médica mantendo:
-- Terminologia médica apropriada
-- Clareza e objetividade
-- Estrutura profissional
-- Todas as informações clínicas importantes
-- Tom profissional e técnico
-
-Texto a melhorar:`,
-
-  summarize: `Você é um assistente especializado em fisioterapia respiratória pediátrica.
-Crie um resumo conciso do seguinte texto de evolução médica mantendo:
-- Informações clínicas essenciais
-- Terminologia médica precisa
-- Estrutura clara e objetiva
-- Principais intervenções e resultados
-
-Texto a resumir:`,
-
-  medical_format: `Você é um assistente especializado em fisioterapia respiratória pediátrica.
-Formate o seguinte texto seguindo padrões médicos profissionais:
-- Use terminologia técnica apropriada
-- Organize em seções lógicas (quando aplicável)
-- Mantenha objetividade científica
-- Use formatação médica padrão
-- Preserve todas as informações clínicas
-
-Texto a formatar:`,
-};
-
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -97,49 +65,19 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Environment variables para Supabase
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    console.log('[DEBUG] Starting enhance-text function');
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Supabase environment variables not configured');
+    // Verificar API key diretamente de environment variables
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      throw new Error('OpenAI API key not configured');
     }
 
-    // Criar cliente Supabase
-    const { createClient } = await import('jsr:@supabase/supabase-js@2');
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Buscar chave OpenAI do banco
-    const { data: apiKeyData, error: keyError } = await supabase
-      .from('api_keys')
-      .select('encrypted_key')
-      .eq('service_name', 'openai')
-      .eq('is_active', true)
-      .single();
-
-    if (keyError || !apiKeyData?.encrypted_key) {
-      throw new Error('OpenAI API key not found or inactive');
-    }
-
-    const openaiApiKey = apiKeyData.encrypted_key;
-
-    // Buscar prompt de melhoria de evolução do banco
-    const { data: promptData, error: promptError } = await supabase
-      .from('ai_prompts')
-      .select('prompt_content, openai_model')
-      .eq('prompt_name', 'evolution_improve')
-      .eq('is_active', true)
-      .single();
-
-    if (promptError || !promptData?.prompt_content) {
-      throw new Error('Evolution improve prompt not found or inactive');
-    }
-
-    const improvePrompt = promptData.prompt_content;
-    const openaiModel = promptData.openai_model || 'gpt-3.5-turbo';
+    console.log('[DEBUG] OpenAI API key found');
 
     // Parse request
     const { text, action }: EnhanceRequest = await req.json();
+    console.log('[DEBUG] Request parsed:', { hasText: !!text, action });
 
     if (!text || !action) {
       return new Response(
@@ -154,11 +92,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (!PROMPTS[action]) {
+    // Validar ação - apenas 'improve' é suportada agora
+    if (action !== 'improve') {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Invalid action. Use: improve, summarize, or medical_format',
+          error: 'Invalid action. Only "improve" is supported.',
         }),
         {
           status: 400,
@@ -166,6 +105,19 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    // Usar prompt padrão por enquanto
+    const improvePrompt = `Você é um fisioterapeuta respiratório pediátrico experiente. 
+Melhore o seguinte texto de evolução médica mantendo:
+- Terminologia médica apropriada
+- Clareza e objetividade
+- Estrutura profissional
+- Todas as informações clínicas importantes
+- Tom profissional e técnico
+
+Texto a melhorar:`;
+
+    console.log('[DEBUG] Configuration loaded successfully');
 
     // Rate limiting baseado no IP
     const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
@@ -207,7 +159,7 @@ Deno.serve(async (req: Request) => {
     // Fazer enhancement
     const startTime = Date.now();
     const response = await openai.chat.completions.create({
-      model: openaiModel, // Usar o modelo encontrado no banco
+      model: 'gpt-3.5-turbo', // Usar o modelo encontrado no banco
       messages: [
         {
           role: 'system',
