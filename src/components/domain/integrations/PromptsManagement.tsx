@@ -5,13 +5,6 @@ import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { Textarea } from '@/components/primitives/textarea';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/primitives/select';
-import {
   Card,
   CardContent,
   CardHeader,
@@ -40,15 +33,6 @@ import {
 
 // AI dev note: PromptsManagement é um componente Domain para gerenciar prompts de IA
 // Permite criar, editar e visualizar prompts usados no processamento de IA
-
-// Modelos OpenAI disponíveis
-const OPENAI_MODELS = [
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-  { value: 'gpt-4', label: 'GPT-4' },
-  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-];
 
 export interface PromptsManagementProps {
   className?: string;
@@ -321,8 +305,7 @@ export const PromptsManagement = React.memo<PromptsManagementProps>(
                     {prompt.prompt_name}
                   </Badge>
                   <Badge variant="secondary" className="text-xs">
-                    {OPENAI_MODELS.find((m) => m.value === prompt.openai_model)
-                      ?.label || prompt.openai_model}
+                    {prompt.openai_model}
                   </Badge>
                 </div>
               </div>
@@ -449,28 +432,21 @@ export const PromptsManagement = React.memo<PromptsManagementProps>(
 
             <div className="space-y-2">
               <Label htmlFor="openai_model">Modelo OpenAI *</Label>
-              <Select
+              <Input
+                id="openai_model"
+                placeholder="Ex: gpt-3.5-turbo, gpt-4, gpt-4o"
                 value={formData.openai_model || 'gpt-3.5-turbo'}
-                onValueChange={(value) =>
+                onChange={(e) =>
                   setFormData((prev) => ({
                     ...prev,
-                    openai_model: value,
+                    openai_model: e.target.value,
                   }))
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o modelo OpenAI" />
-                </SelectTrigger>
-                <SelectContent>
-                  {OPENAI_MODELS.map((model) => (
-                    <SelectItem key={model.value} value={model.value}>
-                      {model.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                required
+              />
               <p className="text-xs text-muted-foreground">
-                Modelo que será usado para processar este prompt
+                Modelo que será usado para processar este prompt (ex:
+                gpt-3.5-turbo, gpt-4, gpt-4o)
               </p>
             </div>
 
@@ -563,9 +539,7 @@ export const PromptsManagement = React.memo<PromptsManagementProps>(
                 <Label className="text-muted-foreground">Modelo OpenAI</Label>
                 <div className="mt-2">
                   <Badge variant="secondary">
-                    {OPENAI_MODELS.find(
-                      (m) => m.value === previewPrompt.openai_model
-                    )?.label || previewPrompt.openai_model}
+                    {previewPrompt.openai_model}
                   </Badge>
                 </div>
               </div>
