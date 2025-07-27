@@ -11,7 +11,16 @@ import { Switch } from '@/components/primitives/switch';
 import { Label } from '@/components/primitives/label';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
-import { Save } from 'lucide-react';
+import {
+  Save,
+  FileText,
+  Loader2,
+  Bot,
+  BotOff,
+  AlertTriangle,
+  Bell,
+  Settings,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchPatientHistory, savePatientHistory } from '@/lib/patient-api';
 import { cn } from '@/lib/utils';
@@ -66,8 +75,9 @@ export const PatientHistory = React.memo<PatientHistoryProps>(
             // setIsAiGenerated(historyResult.isAiGenerated);
             setLastGenerated(historyResult.lastGenerated);
 
-            // Determinar estado do toggle baseado na presença de conteúdo IA
-            setIsAiActive(historyResult.isAiGenerated !== false);
+            // Determinar estado do toggle baseado na presença de histórico
+            // Se há histórico, manter IA ativa por padrão
+            setIsAiActive(true);
           } else {
             // Se não há histórico, deixar IA ativa por padrão para novos pacientes
             setIsAiActive(true);
@@ -160,7 +170,7 @@ export const PatientHistory = React.memo<PatientHistoryProps>(
         <Card className={cn('', className)}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <History className="h-5 w-5" />
+              <FileText className="h-5 w-5" />
               Histórico do Paciente
             </CardTitle>
           </CardHeader>
@@ -177,7 +187,7 @@ export const PatientHistory = React.memo<PatientHistoryProps>(
       <Card className={cn('', className)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
+            <FileText className="h-5 w-5" />
             Histórico do Paciente
           </CardTitle>
         </CardHeader>
