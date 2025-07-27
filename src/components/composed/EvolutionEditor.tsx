@@ -46,8 +46,8 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
     placeholder = 'Digite ou grave a evolução do paciente...',
     error,
   }) => {
-    // AI dev note: Adicionar autenticação para Edge Functions
-    const { user } = useAuth();
+    // AI dev note: Usar autenticação completa para Edge Functions
+    const { user, isAuthenticated, canAccessDashboard, loading } = useAuth();
 
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [isEnhancing, setIsEnhancing] = useState(false);
@@ -78,8 +78,13 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
     const transcribeAudio = useCallback(
       async (audioBlob: Blob) => {
         // AI dev note: Verificar autenticação antes de chamar Edge Function
-        if (!user) {
-          setTranscriptionError('Usuário não autenticado');
+        if (!isAuthenticated || !canAccessDashboard || !user) {
+          setTranscriptionError('Usuário não autenticado ou sem permissões');
+          return;
+        }
+
+        if (loading) {
+          setTranscriptionError('Aguarde... verificando autenticação');
           return;
         }
 
@@ -140,7 +145,15 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           setIsTranscribing(false);
         }
       },
-      [value, onChange, blobToBase64, user]
+      [
+        value,
+        onChange,
+        blobToBase64,
+        user,
+        isAuthenticated,
+        canAccessDashboard,
+        loading,
+      ]
     );
 
     // Melhorar texto usando Edge Function
@@ -152,8 +165,13 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
         }
 
         // AI dev note: Verificar autenticação antes de chamar Edge Function
-        if (!user) {
-          setEnhancementError('Usuário não autenticado');
+        if (!isAuthenticated || !canAccessDashboard || !user) {
+          setEnhancementError('Usuário não autenticado ou sem permissões');
+          return;
+        }
+
+        if (loading) {
+          setEnhancementError('Aguarde... verificando autenticação');
           return;
         }
 
@@ -201,7 +219,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           setIsEnhancing(false);
         }
       },
-      [value, onChange]
+      [value, onChange, isAuthenticated, canAccessDashboard, loading]
     );
 
     // Limpar erros quando o usuário interagir
