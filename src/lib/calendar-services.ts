@@ -969,6 +969,63 @@ export const updateAgendamentoDetails = async (appointmentData: {
   return updatedAppointment;
 };
 
+// AI dev note: Atualiza status de pagamento de um agendamento
+export const updatePaymentStatus = async (
+  agendamentoId: string,
+  statusPagamentoId: string
+): Promise<SupabaseAgendamentoCompletoFlat> => {
+  console.log(
+    '[DEBUG] updatePaymentStatus - id:',
+    agendamentoId,
+    'status:',
+    statusPagamentoId
+  );
+
+  const { error } = await supabase
+    .from('agendamentos')
+    .update({ status_pagamento_id: statusPagamentoId })
+    .eq('id', agendamentoId);
+
+  if (error) {
+    console.error('Erro ao atualizar status de pagamento:', error);
+    throw error;
+  }
+
+  // Buscar dados completos da view
+  const updatedAppointment = await fetchAgendamentoById(agendamentoId);
+  if (!updatedAppointment) {
+    throw new Error('Agendamento atualizado não encontrado');
+  }
+
+  return updatedAppointment;
+};
+
+// AI dev note: Atualiza link da NFe de um agendamento
+export const updateNfeLink = async (
+  agendamentoId: string,
+  linkNfe: string
+): Promise<SupabaseAgendamentoCompletoFlat> => {
+  console.log('[DEBUG] updateNfeLink - id:', agendamentoId, 'link:', linkNfe);
+
+  const { error } = await supabase
+    .from('agendamentos')
+    .update({ link_nfe: linkNfe })
+    .eq('id', agendamentoId);
+
+  if (error) {
+    console.error('Erro ao atualizar link da NFe:', error);
+    throw error;
+  }
+
+  // Buscar dados completos da view
+  const updatedAppointment = await fetchAgendamentoById(agendamentoId);
+  if (!updatedAppointment) {
+    throw new Error('Agendamento atualizado não encontrado');
+  }
+
+  return updatedAppointment;
+};
+
 // AI dev note: Stubs para ações de pagamento (implementação futura)
 export const processManualPayment = async (
   agendamentoId: string

@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
-import { 
+import {
   PatientCompleteInfo,
   PatientMetrics,
   RecentConsultations,
@@ -13,8 +13,8 @@ import {
   type LocationOption,
 } from '@/components/composed';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
-import { 
-  fetchPatientDetails, 
+import {
+  fetchPatientDetails,
   fetchPatientAnamnesis,
   savePatientAnamnesis,
 } from '@/lib/patient-api';
@@ -28,6 +28,8 @@ import {
   fetchAgendamentoById,
   updateAgendamentoDetails,
   fetchLocaisAtendimento,
+  updatePaymentStatus,
+  updateNfeLink,
 } from '@/lib/calendar-services';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -103,11 +105,11 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
             const [patientResp, patientAnamnesis] = await Promise.all([
               fetchPatientDetails(actualId),
               fetchPatientAnamnesis(actualId),
-          ]);
+            ]);
             patientResponse = patientResp;
             anamnesisData = patientAnamnesis;
           }
-          
+
           if (patientResponse.error) {
             setError(patientResponse.error);
           } else if (patientResponse.patient) {
@@ -190,6 +192,56 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       navigate(`/pessoa/${professionalId}`);
     };
 
+    // Handlers para ações de pagamento
+    const handlePaymentAction = async (appointmentId: string) => {
+      try {
+        // TODO: Implementar lógica de pagamento manual com integração Asaas
+        console.log('🔄 Ação de pagamento para agendamento:', appointmentId);
+
+        // Por enquanto, apenas marcamos como pago
+        // Buscar ID do status "pago"
+        const pagoStatusId = 'bb982df2-56ca-4520-870f-659f7581ab0a'; // ID do status "pago"
+
+        await updatePaymentStatus(appointmentId, pagoStatusId);
+
+        // Recarregar dados do agendamento se necessário
+        if (selectedAppointment?.id === appointmentId) {
+          const updatedAppointment = await fetchAgendamentoById(appointmentId);
+          setSelectedAppointment(updatedAppointment);
+        }
+      } catch (error) {
+        console.error('Erro na ação de pagamento:', error);
+      }
+    };
+
+    const handleNfeAction = async (appointmentId: string, linkNfe?: string) => {
+      try {
+        if (linkNfe) {
+          // Se já tem NFe, visualizar
+          console.log('👁️ Visualizando NFe:', linkNfe);
+          window.open(linkNfe, '_blank');
+        } else {
+          // Se não tem NFe, emitir
+          console.log('📄 Emitindo NFe para agendamento:', appointmentId);
+
+          // TODO: Implementar integração com sistema de NFe
+          // Por enquanto, simular um link de NFe
+          const mockNfeLink = `https://nfe.exemplo.com/${appointmentId}`;
+
+          await updateNfeLink(appointmentId, mockNfeLink);
+
+          // Recarregar dados do agendamento se necessário
+          if (selectedAppointment?.id === appointmentId) {
+            const updatedAppointment =
+              await fetchAgendamentoById(appointmentId);
+            setSelectedAppointment(updatedAppointment);
+          }
+        }
+      } catch (error) {
+        console.error('Erro na ação de NFe:', error);
+      }
+    };
+
     // Loading state
     if (isLoading) {
       return (
@@ -240,35 +292,37 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
         </div>
 
         {/* Informações Completas do Paciente - usando component PatientCompleteInfo unificado */}
-        <PatientCompleteInfo 
+        <PatientCompleteInfo
           patient={patient}
-            userRole={user?.role as 'admin' | 'profissional' | 'secretaria' || null}
+          userRole={
+            (user?.role as 'admin' | 'profissional' | 'secretaria') || null
+          }
         />
 
         {/* Seções específicas apenas para pacientes */}
         {(!personId ||
           (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
           <>
-        {/* Métricas do Paciente - com dados reais */}
+            {/* Métricas do Paciente - com dados reais */}
             <PatientMetrics patientId={actualId} />
 
-        {/* Consultas Recentes - com dados reais */}
-        <RecentConsultations 
+            {/* Consultas Recentes - com dados reais */}
+            <RecentConsultations
               patientId={actualId}
               onConsultationClick={handleConsultationClick}
-        />
+            />
 
-        {/* Anamnese do Paciente */}
-        <PatientAnamnesis
+            {/* Anamnese do Paciente */}
+            <PatientAnamnesis
               patientId={actualId}
-          initialValue={anamnesis}
-          onUpdate={handleAnamnesisUpdate}
-        />
+              initialValue={anamnesis}
+              onUpdate={handleAnamnesisUpdate}
+            />
 
-        {/* Histórico Compilado com IA */}
+            {/* Histórico Compilado com IA */}
             <PatientHistory patientId={actualId} />
 
-        {/* Galeria de Mídias */}
+            {/* Galeria de Mídias */}
             <MediaGallery patientId={actualId} />
           </>
         )}
@@ -284,6 +338,8 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
           locaisAtendimento={locaisAtendimento}
           isLoadingLocais={isLoadingLocais}
           onSave={handleAppointmentSave}
+          onPaymentAction={handlePaymentAction}
+          onNfeAction={handleNfeAction}
           onPatientClick={handlePatientClick}
           onProfessionalClick={handleProfessionalClick}
         />
