@@ -67,6 +67,7 @@ export { PatientConsentForm } from './PatientConsentForm';
 export { PatientPersonalInfo } from './PatientPersonalInfo';
 export { PatientCompleteInfo } from './PatientCompleteInfo';
 export { PatientMetrics } from './PatientMetrics';
+export { PatientMetricsWithConsultations } from './PatientMetricsWithConsultations';
 export { RecentConsultations } from './RecentConsultations';
 export { PatientAnamnesis } from './PatientAnamnesis';
 export { PatientHistory } from './PatientHistory';

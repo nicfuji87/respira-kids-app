@@ -18,6 +18,7 @@ export interface NavigationConfig {
   label: string;
   href: string;
   roles: UserRole[];
+  badge?: string | number; // Opcional para exibir badges
 }
 
 export type UserRole = 'admin' | 'profissional' | 'secretaria';

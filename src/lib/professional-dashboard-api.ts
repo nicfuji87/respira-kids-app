@@ -522,7 +522,6 @@ export interface AdminMetrics {
  * Busca métricas administrativas gerais (todos os profissionais)
  */
 export const fetchAdminMetrics = async (
-  startDate: string,
   endDate: string
 ): Promise<AdminMetrics> => {
   try {
@@ -867,14 +866,14 @@ export const fetchAdminFaturamentoComparativo = async (
     // Encontrar melhor mês
     const melhorMes = dadosAnuais.reduce(
       (max, current) =>
-        current.faturamentoTotal > max.faturamentoTotal
+        current.faturamentoTotal > max.faturamento
           ? {
               periodo: current.periodo,
               faturamento: current.faturamentoTotal,
               consultas: current.consultasRealizadas,
             }
           : max,
-      { periodo: dadosAnuais[0].periodo, faturamentoTotal: 0, consultas: 0 }
+      { periodo: dadosAnuais[0].periodo, faturamento: 0, consultas: 0 }
     );
 
     return {

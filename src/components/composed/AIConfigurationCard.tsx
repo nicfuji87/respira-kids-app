@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
   Bot,
@@ -77,7 +77,7 @@ export const AIConfigurationCard: React.FC = () => {
   }, [isAdmin, user?.id]);
 
   // Carregar status da queue
-  const loadQueueStatus = async () => {
+  const loadQueueStatus = useCallback(async () => {
     if (!isAdmin) return;
 
     try {
@@ -93,12 +93,12 @@ export const AIConfigurationCard: React.FC = () => {
       }
 
       setQueueStatus(data);
-    } catch (err) {
-      console.error('Erro ao carregar status da queue:', err);
+    } catch (error) {
+      console.error('Erro ao carregar status da queue:', error);
     } finally {
       setIsLoadingQueue(false);
     }
-  };
+  }, [isAdmin]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -107,7 +107,7 @@ export const AIConfigurationCard: React.FC = () => {
       const interval = setInterval(loadQueueStatus, 30000);
       return () => clearInterval(interval);
     }
-  }, [isAdmin]);
+  }, [isAdmin, loadQueueStatus]);
 
   // Toggle IA
   const handleToggleAI = async (newValue: boolean) => {

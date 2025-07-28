@@ -53,7 +53,8 @@ export interface PersonDetails extends PatientDetails {
 // Interface para métricas do paciente
 export interface PatientMetrics {
   total_consultas: number;
-  total_faturado: number;
+  total_faturado: number; // Novo: apenas cobrança gerada + pendente + pago + atrasado
+  total_agendado?: number; // Novo: total de todos os agendamentos (antigo total_faturado)
   valor_pendente: number;
   valor_em_atraso: number;
   dias_em_atraso: number;

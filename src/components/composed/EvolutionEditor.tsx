@@ -197,7 +197,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           setIsEnhancing(false);
         }
       },
-      [value, onChange, isAuthenticated, canAccessDashboard, loading]
+      [value, onChange, isAuthenticated, canAccessDashboard, loading, user]
     );
 
     // Limpar erros quando o usuário interagir

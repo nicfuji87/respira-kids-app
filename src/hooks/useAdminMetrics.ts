@@ -119,13 +119,13 @@ export const useAdminMetrics = ({
   const refreshMetrics = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchAdminMetrics(startDate, endDate);
+      const data = await fetchAdminMetrics(endDate);
       setMetrics(data);
     } catch (err) {
       console.error('Erro ao buscar métricas administrativas:', err);
       setError('Erro ao carregar métricas administrativas');
     }
-  }, [startDate, endDate]);
+  }, [endDate]);
 
   // Função para buscar próximos agendamentos (com filtros)
   const refreshUpcoming = useCallback(async () => {

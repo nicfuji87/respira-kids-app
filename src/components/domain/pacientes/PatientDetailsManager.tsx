@@ -5,8 +5,7 @@ import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import {
   PatientCompleteInfo,
-  PatientMetrics,
-  RecentConsultations,
+  PatientMetricsWithConsultations,
   PatientAnamnesis,
   PatientHistory,
   MediaGallery,
@@ -334,11 +333,8 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
         {(!personId ||
           (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
           <>
-            {/* Métricas do Paciente - com dados reais */}
-            <PatientMetrics patientId={actualId} />
-
-            {/* Consultas Recentes - com dados reais */}
-            <RecentConsultations
+            {/* Métricas do Paciente com Lista de Consultas - unificado */}
+            <PatientMetricsWithConsultations
               patientId={actualId}
               onConsultationClick={handleConsultationClick}
             />
