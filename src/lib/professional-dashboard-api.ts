@@ -492,3 +492,390 @@ export const fetchMaterialRequests = async (
     throw error;
   }
 };
+
+// === ADMIN DASHBOARD FUNCTIONS ===
+
+/**
+ * Interface para métricas administrativas (todos os profissionais)
+ */
+export interface AdminMetrics {
+  totalPacientes: number;
+  consultasNoMes: number;
+  consultasNoMesAnterior: number;
+  faturamentoTotalMes: number;
+  faturamentoMesAnterior: number;
+  proximosAgendamentos: number;
+  consultasAEvoluir: number;
+  profissionaisAtivos: number;
+  aprovacoesPendentes: number;
+  observacao?: string;
+}
+
+/**
+ * Busca métricas administrativas gerais (todos os profissionais)
+ */
+export const fetchAdminMetrics = async (
+  startDate: string,
+  endDate: string
+): Promise<AdminMetrics> => {
+  try {
+    const hoje = new Date();
+    const mesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+
+    // Buscar consultas do mês atual (todos os profissionais)
+    const { data: consultasAtual, error: errorAtual } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('*')
+      .gte('data_hora', mesAtual.toISOString().split('T')[0])
+      .lte('data_hora', endDate)
+      .eq('ativo', true);
+
+    if (errorAtual) throw errorAtual;
+
+    // Buscar consultas do mês anterior (todos os profissionais)
+    const { data: consultasAnterior, error: errorAnterior } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('*')
+      .gte('data_hora', mesAnterior.toISOString().split('T')[0])
+      .lte('data_hora', fimMesAnterior.toISOString().split('T')[0])
+      .eq('ativo', true);
+
+    if (errorAnterior) throw errorAnterior;
+
+    // Contar próximos agendamentos (próximos 7 dias)
+    const proximosDias = new Date();
+    proximosDias.setDate(hoje.getDate() + 7);
+
+    const { count: proximosAgendamentos, error: errorProximos } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('*', { count: 'exact', head: true })
+      .eq('status_consulta_codigo', 'agendado')
+      .gte('data_hora', hoje.toISOString())
+      .lte('data_hora', proximosDias.toISOString())
+      .eq('ativo', true);
+
+    if (errorProximos) throw errorProximos;
+
+    // Contar consultas a evoluir (todos os profissionais)
+    const { count: consultasEvoluir, error: errorEvoluir } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('*', { count: 'exact', head: true })
+      .eq('status_consulta_codigo', 'finalizado')
+      .eq('possui_evolucao', 'não')
+      .eq('ativo', true);
+
+    if (errorEvoluir) throw errorEvoluir;
+
+    // Buscar ID do tipo "paciente" separadamente
+    const { data: tipoPaciente, error: errorTipoPaciente } = await supabase
+      .from('pessoa_tipos')
+      .select('id')
+      .eq('codigo', 'paciente')
+      .eq('ativo', true)
+      .single();
+
+    if (errorTipoPaciente) throw errorTipoPaciente;
+
+    // Agora buscar pacientes usando o ID encontrado
+    const { count: totalPacientesCount, error: errorPacientesCount } =
+      await supabase
+        .from('pessoas')
+        .select('*', { count: 'exact', head: true })
+        .eq('id_tipo_pessoa', tipoPaciente.id)
+        .eq('ativo', true);
+
+    if (errorPacientesCount) throw errorPacientesCount;
+
+    // Contar profissionais ativos
+    const { count: profissionaisAtivos, error: errorProfissionais } =
+      await supabase
+        .from('pessoas')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'profissional')
+        .eq('is_approved', true)
+        .eq('ativo', true);
+
+    if (errorProfissionais) throw errorProfissionais;
+
+    // Contar aprovações pendentes
+    const { count: aprovacoesPendentes, error: errorAprovacoes } =
+      await supabase
+        .from('pessoas')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_approved', false)
+        .eq('profile_complete', true)
+        .eq('ativo', true);
+
+    if (errorAprovacoes) throw errorAprovacoes;
+
+    const consultasAtuais = consultasAtual || [];
+    const consultasAnteriores = consultasAnterior || [];
+
+    // Calcular faturamento total (usar valor_servico ao invés de comissão)
+    const faturamentoTotalMes = consultasAtuais
+      .filter((c) => c.status_consulta_codigo === 'finalizado')
+      .reduce((sum, c) => sum + parseFloat(c.valor_servico || '0'), 0);
+
+    const faturamentoMesAnterior = consultasAnteriores
+      .filter((c) => c.status_consulta_codigo === 'finalizado')
+      .reduce((sum, c) => sum + parseFloat(c.valor_servico || '0'), 0);
+
+    return {
+      totalPacientes: totalPacientesCount || 0,
+      consultasNoMes: consultasAtuais.length,
+      consultasNoMesAnterior: consultasAnteriores.length,
+      faturamentoTotalMes,
+      faturamentoMesAnterior,
+      proximosAgendamentos: proximosAgendamentos || 0,
+      consultasAEvoluir: consultasEvoluir || 0,
+      profissionaisAtivos: profissionaisAtivos || 0,
+      aprovacoesPendentes: aprovacoesPendentes || 0,
+      observacao: 'Dados consolidados de todos os profissionais',
+    };
+  } catch (error) {
+    console.error('Erro ao buscar métricas administrativas:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca próximos agendamentos (todos os profissionais)
+ */
+export const fetchAllUpcomingAppointments = async (
+  days: number = 7
+): Promise<UpcomingAppointment[]> => {
+  try {
+    const hoje = new Date();
+    const proximosDias = new Date();
+    proximosDias.setDate(hoje.getDate() + days);
+
+    const { data: agendamentos, error } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('*')
+      .eq('status_consulta_codigo', 'agendado')
+      .gte('data_hora', hoje.toISOString())
+      .lte('data_hora', proximosDias.toISOString())
+      .eq('ativo', true)
+      .order('data_hora', { ascending: true })
+      .limit(10);
+
+    if (error) throw error;
+
+    return (agendamentos || []).map((a) => ({
+      id: a.id,
+      dataHora: a.data_hora,
+      pacienteNome: a.paciente_nome,
+      tipoServico: a.tipo_servico_nome,
+      local: a.local_atendimento_nome || 'Local não definido',
+      valor: parseFloat(a.valor_servico || '0'), // Admin vê valor total, não comissão
+      statusConsulta: a.status_consulta_descricao,
+      statusPagamento: a.status_pagamento_descricao,
+      // Campos extras para admin
+      profissionalNome: a.profissional_nome,
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar próximos agendamentos:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca consultas finalizadas que precisam de evolução (todos os profissionais)
+ */
+export const fetchAllConsultationsToEvolve = async (): Promise<
+  ConsultationToEvolve[]
+> => {
+  try {
+    const { data: consultas, error } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('*')
+      .eq('status_consulta_codigo', 'finalizado')
+      .eq('possui_evolucao', 'não')
+      .eq('ativo', true)
+      .order('data_hora', { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+
+    const hoje = new Date();
+
+    return (consultas || []).map((c) => {
+      const dataConsulta = new Date(c.data_hora);
+      const diasPendente = Math.floor(
+        (hoje.getTime() - dataConsulta.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      // Definir prioridade baseada nos dias pendentes
+      let prioridade: 'normal' | 'atencao' | 'urgente' = 'normal';
+      if (diasPendente > 7) {
+        prioridade = 'urgente';
+      } else if (diasPendente > 2) {
+        prioridade = 'atencao';
+      }
+
+      return {
+        id: c.id,
+        dataHora: c.data_hora,
+        pacienteNome: c.paciente_nome,
+        tipoServico: c.tipo_servico_nome,
+        valor: parseFloat(c.valor_servico || '0'), // Admin vê valor total
+        diasPendente,
+        urgente: diasPendente > 7,
+        prioridade,
+        // Campos extras para admin
+        profissionalNome: c.profissional_nome,
+      };
+    });
+  } catch (error) {
+    console.error('Erro ao buscar consultas a evoluir:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca faturamento comparativo anual (todos os profissionais)
+ */
+export const fetchAdminFaturamentoComparativo =
+  async (): Promise<FaturamentoComparativo> => {
+    try {
+      const hoje = new Date();
+      const anoAtual = hoje.getFullYear();
+
+      // Início e fim do ano atual
+      const inicioAno = new Date(anoAtual, 0, 1);
+      const fimAno = new Date(anoAtual, 11, 31);
+
+      // Buscar todas as consultas do ano atual (todos os profissionais)
+      const { data: consultas, error } = await supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .gte('data_hora', inicioAno.toISOString().split('T')[0])
+        .lte('data_hora', fimAno.toISOString().split('T')[0])
+        .eq('ativo', true);
+
+      if (error) throw error;
+
+      const consultasArray = consultas || [];
+
+      // Agrupar por mês
+      const dadosPorMes = new Map<
+        number,
+        {
+          periodo: string;
+          faturamentoTotal: number;
+          faturamentoAReceber: number;
+          consultasRealizadas: number;
+          consultasComEvolucao: number;
+          mes: number;
+          ano: number;
+        }
+      >();
+
+      // Inicializar todos os meses do ano
+      for (let mes = 0; mes < 12; mes++) {
+        dadosPorMes.set(mes, {
+          periodo: new Intl.DateTimeFormat('pt-BR', {
+            month: 'short',
+            year: 'numeric',
+          }).format(new Date(anoAtual, mes, 1)),
+          faturamentoTotal: 0,
+          faturamentoAReceber: 0,
+          consultasRealizadas: 0,
+          consultasComEvolucao: 0,
+          mes: mes + 1,
+          ano: anoAtual,
+        });
+      }
+
+      // Processar consultas
+      consultasArray.forEach((consulta) => {
+        const dataConsulta = new Date(consulta.data_hora);
+        const mes = dataConsulta.getMonth();
+        const dadosMes = dadosPorMes.get(mes)!;
+
+        if (consulta.status_consulta_codigo === 'finalizado') {
+          const valor = parseFloat(consulta.valor_servico || '0');
+          dadosMes.consultasRealizadas += 1;
+
+          if (consulta.possui_evolucao === 'sim') {
+            dadosMes.faturamentoTotal += valor;
+            dadosMes.consultasComEvolucao += 1;
+          } else {
+            dadosMes.faturamentoAReceber += valor;
+          }
+        }
+      });
+
+      const dadosAnuais = Array.from(dadosPorMes.values());
+
+      // Calcular totais
+      const totalFaturamento = dadosAnuais.reduce(
+        (sum, d) => sum + d.faturamentoTotal,
+        0
+      );
+      const totalAReceber = dadosAnuais.reduce(
+        (sum, d) => sum + d.faturamentoAReceber,
+        0
+      );
+      const totalConsultas = dadosAnuais.reduce(
+        (sum, d) => sum + d.consultasRealizadas,
+        0
+      );
+
+      const mesAtualIndex = hoje.getMonth();
+      const mesAtualData = dadosAnuais[mesAtualIndex];
+
+      // Encontrar melhor mês
+      const melhorMes = dadosAnuais.reduce(
+        (max, current) =>
+          current.faturamentoTotal > max.faturamentoTotal
+            ? {
+                periodo: current.periodo,
+                faturamento: current.faturamentoTotal,
+                consultas: current.consultasRealizadas,
+              }
+            : max,
+        { periodo: dadosAnuais[0].periodo, faturamento: 0, consultas: 0 }
+      );
+
+      return {
+        dadosAnuais,
+        resumoAno: {
+          totalFaturamento,
+          totalAReceber,
+          totalConsultas,
+          mediaMovel: totalConsultas > 0 ? totalFaturamento / 12 : 0,
+          mesAtual: {
+            periodo: mesAtualData.periodo,
+            faturamentoTotal: mesAtualData.faturamentoTotal,
+            faturamentoAReceber: mesAtualData.faturamentoAReceber,
+            consultas: mesAtualData.consultasRealizadas,
+          },
+          melhorMes,
+        },
+      };
+    } catch (error) {
+      console.error('Erro ao buscar faturamento comparativo admin:', error);
+      throw error;
+    }
+  };
+
+/**
+ * Busca todas as solicitações de material (todos os profissionais)
+ */
+export const fetchAllMaterialRequests = async (): Promise<
+  MaterialRequest[]
+> => {
+  try {
+    // TODO: Implementar quando tabela material_requests for criada
+    // Por enquanto retorna array vazio
+    console.warn('Tabela material_requests ainda não foi criada no Supabase');
+
+    return [];
+  } catch (error) {
+    console.error('Erro ao buscar todas as solicitações de material:', error);
+    throw error;
+  }
+};

@@ -88,11 +88,6 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           return;
         }
 
-        console.log(
-          '🟢 [FRONTEND] Starting transcribe-audio call for user:',
-          user.id
-        );
-
         setIsTranscribing(true);
         setTranscriptionError(null);
 
@@ -102,7 +97,6 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           const audioType = audioBlob.type || 'audio/webm';
 
           // Chamar Edge Function com autenticação
-          console.log('🟢 [FRONTEND] Calling transcribe-audio function...');
           const { data, error } = await supabase.functions.invoke(
             'transcribe-audio',
             {
@@ -114,13 +108,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
             }
           );
 
-          console.log('🟢 [FRONTEND] transcribe-audio response:', {
-            data,
-            error,
-          });
-
           if (error) {
-            console.error('🔴 [FRONTEND] transcribe-audio error:', error);
             throw error;
           }
 
@@ -175,17 +163,10 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           return;
         }
 
-        console.log(
-          '🟢 [FRONTEND] Starting enhance-text call for user:',
-          user.id
-        );
-
         setIsEnhancing(true);
         setEnhancementError(null);
 
         try {
-          // Chamar Edge Function com autenticação
-          console.log('🟢 [FRONTEND] Calling enhance-text function...');
           const { data, error } = await supabase.functions.invoke(
             'enhance-text',
             {
@@ -196,10 +177,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
             }
           );
 
-          console.log('🟢 [FRONTEND] enhance-text response:', { data, error });
-
           if (error) {
-            console.error('🔴 [FRONTEND] enhance-text error:', error);
             throw error;
           }
 

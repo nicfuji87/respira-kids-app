@@ -4,6 +4,12 @@
 // Auth Templates
 export { SignUpTemplate } from './auth/SignUpTemplate';
 
+// Dashboard Templates (Main)
+export { AdminDashboardTemplate } from './dashboard/AdminDashboardTemplate';
+export { ProfissionalDashboardTemplate } from './dashboard/ProfissionalDashboardTemplate';
+export { SecretariaDashboardTemplate } from './dashboard/SecretariaDashboardTemplate';
+export { ResponsiveLayout } from './dashboard/ResponsiveLayout';
+
 // Calendar Templates (Fase 3 + Fase 4)
 export { CalendarTemplate } from './dashboard/CalendarTemplate';
 export { AdminCalendarTemplate } from './dashboard/AdminCalendarTemplate';
@@ -15,15 +21,19 @@ export {
   SimpleCalendarTemplate,
 } from './dashboard/CalendarTemplateWithData';
 
+// Types para Dashboard Templates
+export type { AdminUser } from './dashboard/AdminDashboardTemplate';
+export type { ProfissionalUser } from './dashboard/ProfissionalDashboardTemplate';
+
 // Types para Calendar Templates (aliased para evitar conflitos)
 export type { CalendarTemplateProps } from './dashboard/CalendarTemplate';
 export type {
   AdminCalendarTemplateProps,
-  AdminUser,
+  AdminUser as AdminCalendarUser,
 } from './dashboard/AdminCalendarTemplate';
 export type {
   ProfissionalCalendarTemplateProps,
-  ProfissionalUser,
+  ProfissionalUser as ProfissionalCalendarUser,
 } from './dashboard/ProfissionalCalendarTemplate';
 export type {
   SecretariaCalendarTemplateProps,

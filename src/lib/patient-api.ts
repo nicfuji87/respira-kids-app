@@ -425,7 +425,11 @@ export async function fetchPatientCompiledHistory(patientId: string): Promise<{
  */
 export async function fetchPatientHistory(
   patientId: string
-): Promise<{ history: string | null; lastGenerated: string | null; isAiGenerated: boolean | null }> {
+): Promise<{
+  history: string | null;
+  lastGenerated: string | null;
+  isAiGenerated: boolean | null;
+}> {
   try {
     // Buscar tipo de relatório para histórico de evolução
     const { data: tipoData, error: tipoError } = await supabase
@@ -442,13 +446,15 @@ export async function fetchPatientHistory(
     // Buscar histórico mais recente por paciente
     const { data, error } = await supabase
       .from('relatorio_evolucao')
-      .select(`
+      .select(
+        `
         conteudo, 
         created_at, 
         transcricao,
         id_agendamento,
         agendamentos!inner(paciente_id)
-      `)
+      `
+      )
       .eq('tipo_relatorio_id', tipoData.id)
       .eq('agendamentos.paciente_id', patientId)
       .order('created_at', { ascending: false })
@@ -481,6 +487,20 @@ export async function savePatientHistory(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Buscar o pessoa_id correspondente ao auth_user_id
+    const { data: pessoaData, error: pessoaError } = await supabase
+      .from('pessoas')
+      .select('id')
+      .eq('auth_user_id', userId)
+      .single();
+
+    if (pessoaError || !pessoaData) {
+      console.error('Erro ao buscar pessoa pelo auth_user_id:', pessoaError);
+      return { success: false, error: 'Usuário não encontrado no sistema' };
+    }
+
+    const pessoaId = pessoaData.id;
+
     // Buscar tipo de relatório para histórico de evolução
     const { data: tipoData, error: tipoError } = await supabase
       .from('relatorios_tipo')
@@ -493,65 +513,67 @@ export async function savePatientHistory(
       return { success: false, error: 'Erro ao identificar tipo de relatório' };
     }
 
-    // Buscar um agendamento do paciente para associar o histórico
-    const { data: agendamento, error: agendamentoError } = await supabase
+    // Buscar agendamentos do paciente
+    const { data: agendamentos, error: agendamentosError } = await supabase
       .from('agendamentos')
       .select('id')
       .eq('paciente_id', patientId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .order('created_at', { ascending: false });
 
-    if (agendamentoError || !agendamento) {
-      console.error('Erro ao buscar agendamento do paciente:', agendamentoError);
-      return { success: false, error: 'Paciente deve ter pelo menos um agendamento' };
+    if (agendamentosError || !agendamentos || agendamentos.length === 0) {
+      console.error(
+        'Erro ao buscar agendamentos do paciente:',
+        agendamentosError
+      );
+      return {
+        success: false,
+        error: 'Paciente deve ter pelo menos um agendamento',
+      };
     }
 
-    // Verificar se já existe histórico
+    const agendamentoIds = agendamentos.map((a) => a.id);
+
+    // Buscar histórico existente de forma simplificada
     const { data: existingHistory } = await supabase
       .from('relatorio_evolucao')
-      .select(`
-        id,
-        agendamentos!inner(paciente_id)
-      `)
+      .select('id, id_agendamento')
       .eq('tipo_relatorio_id', tipoData.id)
-      .eq('agendamentos.paciente_id', patientId)
-      .single();
+      .in('id_agendamento', agendamentoIds)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(); // Usar maybeSingle ao invés de single para evitar erro se não existe
 
-    let result;
-    
     if (existingHistory) {
-      // Atualizar histórico existente
+      // SEMPRE atualizar o histórico existente
       const { error } = await supabase
         .from('relatorio_evolucao')
         .update({
           conteudo: content.substring(0, 1500), // Limitar a 1500 caracteres
           transcricao: false, // Manual = false
-          atualizado_por: userId,
+          atualizado_por: pessoaId, // Usar pessoa_id ao invés de auth_user_id
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingHistory.id);
 
-      result = { error };
+      if (error) {
+        console.error('Erro ao atualizar histórico:', error);
+        return { success: false, error: 'Erro ao atualizar histórico' };
+      }
     } else {
-      // Criar novo histórico
-      const { error } = await supabase
-        .from('relatorio_evolucao')
-        .insert({
-          id_agendamento: agendamento.id,
-          tipo_relatorio_id: tipoData.id,
-          conteudo: content.substring(0, 1500), // Limitar a 1500 caracteres
-          transcricao: false, // Manual = false
-          criado_por: userId,
-          atualizado_por: userId,
-        });
+      // Criar novo histórico apenas se não existe nenhum
+      const { error } = await supabase.from('relatorio_evolucao').insert({
+        id_agendamento: agendamentos[0].id, // Usar o agendamento mais recente
+        tipo_relatorio_id: tipoData.id,
+        conteudo: content.substring(0, 1500), // Limitar a 1500 caracteres
+        transcricao: false, // Manual = false
+        criado_por: pessoaId, // Usar pessoa_id ao invés de auth_user_id
+        atualizado_por: pessoaId, // Usar pessoa_id ao invés de auth_user_id
+      });
 
-      result = { error };
-    }
-
-    if (result.error) {
-      console.error('Erro ao salvar histórico:', result.error);
-      return { success: false, error: 'Erro ao salvar histórico' };
+      if (error) {
+        console.error('Erro ao criar histórico:', error);
+        return { success: false, error: 'Erro ao criar histórico' };
+      }
     }
 
     return { success: true };
@@ -578,17 +600,23 @@ export async function generatePatientHistoryAI(
       .single();
 
     if (userError || !userData?.ai_historico_ativo) {
-      return { success: false, error: 'IA de histórico não está ativa para este usuário' };
+      return {
+        success: false,
+        error: 'IA de histórico não está ativa para este usuário',
+      };
     }
 
     // Chamar Edge Function para gerar histórico
-    const { data, error } = await supabase.functions.invoke('patient-history-ai', {
-      body: {
-        patientId,
-        userId,
-        maxCharacters: 1500,
-      },
-    });
+    const { data, error } = await supabase.functions.invoke(
+      'patient-history-ai',
+      {
+        body: {
+          patientId,
+          userId,
+          maxCharacters: 1500,
+        },
+      }
+    );
 
     if (error) {
       console.error('Erro na Edge Function de histórico IA:', error);
@@ -596,7 +624,10 @@ export async function generatePatientHistoryAI(
     }
 
     if (!data?.success) {
-      return { success: false, error: data?.error || 'Erro desconhecido na geração de histórico' };
+      return {
+        success: false,
+        error: data?.error || 'Erro desconhecido na geração de histórico',
+      };
     }
 
     return {

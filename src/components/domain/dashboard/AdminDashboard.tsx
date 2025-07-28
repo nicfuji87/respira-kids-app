@@ -30,189 +30,52 @@ import {
   MaterialRequestCard,
 } from '@/components/composed';
 import { cn } from '@/lib/utils';
+import { useAdminMetrics } from '@/hooks/useAdminMetrics';
 
 // AI dev note: AdminDashboard é específico para role admin da clínica Respira Kids
 // Interface completa de gestão com métricas, notificações e ações rápidas
+// Integrado com Supabase para dados reais de todos os profissionais
 
 interface AdminDashboardProps {
   className?: string;
   onNavigateToModule?: (module: string) => void;
 }
 
-// AI dev note: Dados simulados - em produção virão do Supabase
-const mockData = {
-  stats: {
-    totalPatients: 847,
-    monthlyAppointments: 142,
-    pendingApprovals: 8,
-    monthlyRevenue: 89750.5,
-    equipmentAlerts: 3,
-    activeStaff: 12,
-  },
-
-  // Dados para FaturamentoChart (todos os profissionais)
-  faturamentoComparativo: {
-    dadosAnuais: [
-      {
-        periodo: 'Jan 2024',
-        faturamentoTotal: 78500,
-        faturamentoAReceber: 5000,
-        consultasRealizadas: 95,
-        consultasComEvolucao: 90,
-        mes: 1,
-        ano: 2024,
-      },
-      {
-        periodo: 'Fev 2024',
-        faturamentoTotal: 82300,
-        faturamentoAReceber: 3200,
-        consultasRealizadas: 102,
-        consultasComEvolucao: 98,
-        mes: 2,
-        ano: 2024,
-      },
-      {
-        periodo: 'Mar 2024',
-        faturamentoTotal: 89750,
-        faturamentoAReceber: 8500,
-        consultasRealizadas: 118,
-        consultasComEvolucao: 110,
-        mes: 3,
-        ano: 2024,
-      },
-    ],
-    resumoAno: {
-      totalFaturamento: 250550,
-      totalAReceber: 16700,
-      totalConsultas: 315,
-      mediaMovel: 83516,
-      mesAtual: {
-        periodo: 'Mar 2024',
-        faturamentoTotal: 89750,
-        faturamentoAReceber: 8500,
-        consultas: 118,
-      },
-      melhorMes: {
-        periodo: 'Mar 2024',
-        faturamento: 89750,
-        consultas: 118,
-      },
-    },
-  },
-
-  // Próximos agendamentos (todos os profissionais)
-  upcomingAppointments: [
-    {
-      id: '1',
-      dataHora: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-      pacienteNome: 'Ana Silva',
-      tipoServico: 'Fisioterapia Respiratória',
-      local: 'Sala 1',
-      valor: 150.0,
-      statusConsulta: 'agendado',
-      statusPagamento: 'pendente',
-    },
-    {
-      id: '2',
-      dataHora: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-      pacienteNome: 'Maria Santos',
-      tipoServico: 'Fisioterapia Neurológica',
-      local: 'Sala 2',
-      valor: 180.0,
-      statusConsulta: 'agendado',
-      statusPagamento: 'pendente',
-    },
-    {
-      id: '3',
-      dataHora: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      pacienteNome: 'Pedro Costa',
-      tipoServico: 'Fisioterapia Respiratória',
-      local: 'Sala 1',
-      valor: 150.0,
-      statusConsulta: 'agendado',
-      statusPagamento: 'pendente',
-    },
-  ],
-
-  // Consultas a evoluir (todos os profissionais)
-  consultationsToEvolve: [
-    {
-      id: 'c1',
-      dataHora: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      pacienteNome: 'Carlos Lima',
-      tipoServico: 'Fisioterapia Respiratória',
-      valor: 150.0,
-      diasPendente: 1,
-      urgente: false,
-      prioridade: 'normal' as const,
-    },
-    {
-      id: 'c2',
-      dataHora: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-      pacienteNome: 'Lucia Rocha',
-      tipoServico: 'Fisioterapia Neurológica',
-      valor: 180.0,
-      diasPendente: 3,
-      urgente: false,
-      prioridade: 'atencao' as const,
-    },
-  ],
-
-  // Solicitações de material (todos os profissionais)
-  materialRequests: [
-    {
-      id: 'm1',
-      descricao:
-        'Materiais para exercícios respiratórios - Exercitadores respiratórios para terapia infantil',
-      prioridade: 'alta' as const,
-      dataSolicitacao: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-      status: 'pendente' as const,
-    },
-    {
-      id: 'm2',
-      descricao:
-        'Bolas de exercício - Bolas de diferentes tamanhos para fisioterapia neurológica',
-      prioridade: 'media' as const,
-      dataSolicitacao: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      status: 'pendente' as const,
-    },
-  ],
-
-  recentActivity: [
-    {
-      id: 1,
-      type: 'appointment',
-      message: 'Nova consulta agendada - João Silva',
-      time: '5 min atrás',
-    },
-    {
-      id: 2,
-      type: 'approval',
-      message: 'Solicitação de aprovação - Maria Santos',
-      time: '12 min atrás',
-    },
-    {
-      id: 3,
-      type: 'payment',
-      message: 'Pagamento recebido - R$ 350,00',
-      time: '25 min atrás',
-    },
-    {
-      id: 4,
-      type: 'equipment',
-      message: 'Manutenção programada - Nebulizador #003',
-      time: '1h atrás',
-    },
-  ],
-  monthlyGoal: {
-    current: 142,
-    target: 180,
-    percentage: 78.9,
-  },
-};
-
 export const AdminDashboard = React.memo<AdminDashboardProps>(
   ({ className, onNavigateToModule }) => {
+    // Calcular datas para métricas (mês atual)
+    const getPeriodDates = () => {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const monthStart = new Date(currentYear, currentMonth, 1);
+      const monthEnd = new Date(currentYear, currentMonth + 1, 0);
+      return {
+        startDate: monthStart.toISOString().split('T')[0],
+        endDate: monthEnd.toISOString().split('T')[0],
+      };
+    };
+
+    const { startDate, endDate } = getPeriodDates();
+
+    // Hook para métricas administrativas (todos os profissionais)
+    const {
+      metrics,
+      upcomingAppointments,
+      consultationsToEvolve,
+      materialRequests,
+      faturamentoComparativo,
+      loading,
+      error,
+      lastUpdate,
+      refreshAll,
+    } = useAdminMetrics({
+      startDate,
+      endDate,
+      autoRefresh: true,
+      refreshInterval: 60, // 1 hora
+    });
+
     const handleModuleClick = (module: string) => {
       if (onNavigateToModule) {
         onNavigateToModule(module);
@@ -227,7 +90,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
         icon: Calendar,
         color: 'text-azul-respira',
         bgColor: 'bg-azul-respira/10',
-        count: mockData.stats.monthlyAppointments,
+        count: metrics?.consultasNoMes || 0,
       },
       {
         id: 'patients',
@@ -236,7 +99,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
         icon: Users,
         color: 'text-verde-pipa',
         bgColor: 'bg-verde-pipa/10',
-        count: mockData.stats.totalPatients,
+        count: metrics?.totalPacientes || 0,
       },
       {
         id: 'approvals',
@@ -245,8 +108,8 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
         icon: FileText,
         color: 'text-amarelo-pipa',
         bgColor: 'bg-amarelo-pipa/10',
-        count: mockData.stats.pendingApprovals,
-        urgent: mockData.stats.pendingApprovals > 5,
+        count: metrics?.aprovacoesPendentes || 0,
+        urgent: (metrics?.aprovacoesPendentes || 0) > 5,
       },
       {
         id: 'stock',
@@ -255,8 +118,11 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
         icon: Package,
         color: 'text-vermelho-kids',
         bgColor: 'bg-vermelho-kids/10',
-        count: mockData.stats.equipmentAlerts,
-        urgent: mockData.stats.equipmentAlerts > 0,
+        count: materialRequests?.length || 0,
+        urgent:
+          materialRequests?.some(
+            (r) => r.prioridade === 'urgente' || r.prioridade === 'alta'
+          ) || false,
       },
       {
         id: 'financial',
@@ -265,7 +131,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
         icon: DollarSign,
         color: 'text-roxo-titulo',
         bgColor: 'bg-roxo-titulo/10',
-        value: `R$ ${mockData.stats.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        value: `R$ ${(metrics?.faturamentoTotalMes || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
       },
       {
         id: 'settings',
@@ -274,7 +140,44 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
         icon: Settings,
         color: 'text-cinza-secundario',
         bgColor: 'bg-cinza-secundario/10',
-        count: mockData.stats.activeStaff,
+        count: metrics?.profissionaisAtivos || 0,
+      },
+    ];
+
+    // Dados para metas (baseado nas métricas reais)
+    const monthlyGoal = {
+      current: metrics?.consultasNoMes || 0,
+      target: 180, // Meta fixa para exemplo
+      percentage: metrics?.consultasNoMes
+        ? Math.min((metrics.consultasNoMes / 180) * 100, 100)
+        : 0,
+    };
+
+    // Dados para atividade recente (mock por enquanto)
+    const recentActivity = [
+      {
+        id: 1,
+        type: 'appointment',
+        message: 'Nova consulta agendada - Ana Silva',
+        time: '5 min atrás',
+      },
+      {
+        id: 2,
+        type: 'approval',
+        message: 'Solicitação de aprovação - Maria Santos',
+        time: '12 min atrás',
+      },
+      {
+        id: 3,
+        type: 'payment',
+        message: 'Pagamento recebido - R$ 350,00',
+        time: '25 min atrás',
+      },
+      {
+        id: 4,
+        type: 'equipment',
+        message: 'Manutenção programada - Nebulizador #003',
+        time: '1h atrás',
       },
     ];
 
@@ -294,16 +197,38 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" className="gap-2">
               <Bell className="h-4 w-4" />
-              {mockData.stats.pendingApprovals +
-                mockData.stats.equipmentAlerts}{' '}
+              {(metrics?.aprovacoesPendentes || 0) +
+                (materialRequests?.length || 0)}{' '}
               pendentes
             </Button>
-            <Button size="sm" className="respira-gradient">
+            <Button
+              size="sm"
+              className="respira-gradient"
+              onClick={() => handleModuleClick('reports')}
+            >
               <Activity className="h-4 w-4 mr-2" />
               Relatório Geral
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshAll}
+              disabled={loading}
+              className="gap-2"
+            >
+              {loading ? 'Atualizando...' : 'Atualizar'}
+            </Button>
           </div>
         </div>
+
+        {/* Error State */}
+        {error && (
+          <Card className="border-destructive">
+            <CardContent className="pt-6">
+              <p className="text-destructive text-sm">{error}</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -352,18 +277,18 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
 
         {/* Gráfico de Faturamento Anual */}
         <FaturamentoChart
-          data={mockData.faturamentoComparativo}
-          loading={false}
-          error={null}
+          data={faturamentoComparativo}
+          loading={loading}
+          error={error}
         />
 
         {/* Grid de Componentes do Dashboard */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Próximos Agendamentos */}
           <AppointmentsList
-            appointments={mockData.upcomingAppointments}
-            loading={false}
-            error={null}
+            appointments={upcomingAppointments}
+            loading={loading}
+            error={error}
             onAppointmentClick={(appointment) => {
               console.log('Agendamento clicado:', appointment);
               handleModuleClick('agenda');
@@ -372,9 +297,9 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
 
           {/* Solicitação de Material */}
           <MaterialRequestCard
-            requests={mockData.materialRequests}
-            loading={false}
-            error={null}
+            requests={materialRequests}
+            loading={loading}
+            error={error}
             onRequestClick={(request) => {
               console.log('Solicitação clicada:', request);
               handleModuleClick('stock');
@@ -388,9 +313,9 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
 
         {/* Consultas a Evoluir */}
         <ConsultationsToEvolve
-          consultations={mockData.consultationsToEvolve}
-          loading={false}
-          error={null}
+          consultations={consultationsToEvolve}
+          loading={loading}
+          error={error}
           onConsultationClick={(consultation) => {
             console.log('Consulta clicada:', consultation);
             handleModuleClick('patients');
@@ -411,8 +336,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
                 Meta Mensal de Consultas
               </CardTitle>
               <CardDescription>
-                Progresso do mês atual - Meta: {mockData.monthlyGoal.target}{' '}
-                consultas
+                Progresso do mês atual - Meta: {monthlyGoal.target} consultas
               </CardDescription>
             </CardHeader>
 
@@ -420,22 +344,18 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Progresso</span>
                 <span className="font-medium">
-                  {mockData.monthlyGoal.current} / {mockData.monthlyGoal.target}
+                  {monthlyGoal.current} / {monthlyGoal.target}
                 </span>
               </div>
 
-              <Progress
-                value={mockData.monthlyGoal.percentage}
-                className="h-3"
-              />
+              <Progress value={monthlyGoal.percentage} className="h-3" />
 
               <div className="flex items-center justify-between text-sm">
                 <span className="text-verde-pipa font-medium">
-                  {mockData.monthlyGoal.percentage.toFixed(1)}% concluído
+                  {monthlyGoal.percentage.toFixed(1)}% concluído
                 </span>
                 <span className="text-muted-foreground">
-                  {mockData.monthlyGoal.target - mockData.monthlyGoal.current}{' '}
-                  restantes
+                  {monthlyGoal.target - monthlyGoal.current} restantes
                 </span>
               </div>
             </CardContent>
@@ -451,7 +371,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
             </CardHeader>
 
             <CardContent className="space-y-4">
-              {mockData.recentActivity.map((activity, index) => (
+              {recentActivity.map((activity, index) => (
                 <div key={activity.id}>
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">
@@ -461,7 +381,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
                       {activity.time}
                     </p>
                   </div>
-                  {index < mockData.recentActivity.length - 1 && (
+                  {index < recentActivity.length - 1 && (
                     <Separator className="mt-4" />
                   )}
                 </div>
@@ -528,6 +448,19 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
             </div>
           </CardContent>
         </Card>
+
+        {/* Footer com informações */}
+        {lastUpdate && (
+          <div className="text-center text-xs text-muted-foreground">
+            Última atualização:{' '}
+            {new Intl.DateTimeFormat('pt-BR', {
+              day: '2-digit',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            }).format(lastUpdate)}
+          </div>
+        )}
       </div>
     );
   }

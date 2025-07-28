@@ -1,350 +1,186 @@
 import React, { useState } from 'react';
-import {
-  Menu,
-  X,
-  Bell,
-  Settings,
-  LogOut,
-  User,
-  ChevronRight,
-  Home,
-  Users,
-  Calendar,
-  FileText,
-  Package,
-  DollarSign,
-  Webhook,
-  Heart,
-} from 'lucide-react';
-
-import { AdminDashboard } from '@/components/domain';
 import { Button } from '@/components/primitives/button';
-import { Badge } from '@/components/primitives/badge';
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from '@/components/primitives/avatar';
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/primitives/card';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/primitives/dropdown-menu';
-import { Toaster } from '@/components/primitives/toaster';
-import { cn } from '@/lib/utils';
+  Calendar,
+  Users,
+  DollarSign,
+  UserCheck,
+  BarChart3,
+} from 'lucide-react';
+import { ResponsiveLayout } from './ResponsiveLayout';
 
-// AI dev note: AdminDashboardTemplate é o layout completo para toda área administrativa
-// Inclui sidebar responsiva, header com notificações, breadcrumbs e navegação
+// AI dev note: AdminDashboardTemplate - Dashboard responsivo para role admin
+// Usa ResponsiveLayout para alternar entre desktop e mobile
+// Baseado no ProfissionalDashboardTemplate mas com métricas administrativas
 
 export interface AdminUser {
   name: string;
   email: string;
-  role: 'admin' | 'secretaria' | 'profissional';
+  role: 'admin';
   avatar?: string;
 }
 
 interface AdminDashboardTemplateProps {
   currentUser: AdminUser;
-  currentModule?: string;
-  onModuleChange?: (module: string) => void;
-  onLogout?: () => void;
+  onLogout: () => void;
   className?: string;
 }
 
-const navigationItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: Home, path: '/admin' },
-  { id: 'patients', label: 'Pacientes', icon: Users, path: '/admin/patients' },
-  { id: 'agenda', label: 'Agenda', icon: Calendar, path: '/admin/agenda' },
-  {
-    id: 'approvals',
-    label: 'Aprovações',
-    icon: FileText,
-    path: '/admin/approvals',
-    badge: 8,
-  },
-  {
-    id: 'stock',
-    label: 'Estoque',
-    icon: Package,
-    path: '/admin/stock',
-    badge: 3,
-    urgent: true,
-  },
-  {
-    id: 'financial',
-    label: 'Financeiro',
-    icon: DollarSign,
-    path: '/admin/financial',
-  },
-  {
-    id: 'webhooks',
-    label: 'Notificações',
-    icon: Webhook,
-    path: '/admin/webhooks',
-  },
-  {
-    id: 'settings',
-    label: 'Configurações',
-    icon: Settings,
-    path: '/admin/settings',
-  },
-];
-
 export const AdminDashboardTemplate = React.memo<AdminDashboardTemplateProps>(
-  ({
-    currentUser,
-    currentModule = 'dashboard',
-    onModuleChange,
-    onLogout,
-    className,
-  }) => {
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+  ({ currentUser, onLogout, className }) => {
+    const [currentPath, setCurrentPath] = useState('/dashboard');
 
-    const handleModuleClick = (moduleId: string) => {
-      if (onModuleChange) {
-        onModuleChange(moduleId);
-      }
-      setSidebarOpen(false); // Fechar sidebar no mobile
+    const handleNavigation = (path: string) => {
+      setCurrentPath(path);
+      // Aqui você implementaria a navegação real
+      console.log('Navegando para:', path);
     };
 
-    const getCurrentModuleLabel = () => {
-      const item = navigationItems.find((item) => item.id === currentModule);
-      return item?.label || 'Dashboard';
-    };
-
-    const breadcrumbs = [
-      { label: 'Administração', href: '/admin' },
-      { label: getCurrentModuleLabel(), href: '#', current: true },
-    ];
+    const breadcrumbItems = [{ label: 'Dashboard', href: '/dashboard' }];
 
     return (
-      <div className={cn('min-h-screen bg-background', className)}>
-        {/* Sidebar Overlay (Mobile) */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* Sidebar */}
-        <aside
-          className={cn(
-            'fixed left-0 top-0 z-50 h-full w-64 bg-card border-r border-border/20 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          )}
-        >
-          {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b border-border/20">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full respira-gradient flex items-center justify-center">
-                <Heart className="h-4 w-4 text-white" />
-              </div>
-              <div>
-                <h2 className="font-bold text-roxo-titulo">Respira Kids</h2>
-                <p className="text-xs text-muted-foreground">Admin</p>
-              </div>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+      <ResponsiveLayout
+        userName={currentUser.name}
+        userEmail={currentUser.email}
+        userRole={currentUser.role}
+        userAvatar={currentUser.avatar}
+        currentPath={currentPath}
+        onNavigate={handleNavigation}
+        breadcrumbItems={breadcrumbItems}
+        notificationCount={8} // Aprovações pendentes
+        onNotificationClick={() => console.log('Notificações')}
+        onProfileClick={() => console.log('Perfil')}
+        onSettingsClick={() => console.log('Configurações')}
+        onLogout={onLogout}
+        className={className}
+      >
+        <div className="space-y-6">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-foreground mb-2">
+              Bem-vindo, {currentUser.name}!
+            </h2>
+            <p className="text-muted-foreground">
+              Gerencie a clínica e acompanhe métricas administrativas.
+            </p>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = item.id === currentModule;
+          {/* Dashboard Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Agendamentos Hoje
+                </CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">23</div>
+                <p className="text-xs text-muted-foreground">
+                  Todos os profissionais
+                </p>
+              </CardContent>
+            </Card>
 
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleModuleClick(item.id)}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  )}
-                >
-                  <Icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="flex-1 text-left">{item.label}</span>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Pacientes
+                </CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">847</div>
+                <p className="text-xs text-muted-foreground">
+                  Ativos no sistema
+                </p>
+              </CardContent>
+            </Card>
 
-                  {item.badge && (
-                    <Badge
-                      variant={item.urgent ? 'destructive' : 'secondary'}
-                      className="text-xs px-1.5 py-0.5"
-                    >
-                      {item.badge}
-                    </Badge>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Aprovações Pendentes
+                </CardTitle>
+                <UserCheck className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">8</div>
+                <p className="text-xs text-muted-foreground">
+                  Usuários aguardando
+                </p>
+              </CardContent>
+            </Card>
 
-          {/* User Profile */}
-          <div className="p-4 border-t border-border/20">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={currentUser.avatar} />
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {currentUser.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium">{currentUser.name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {currentUser.role}
-                    </p>
-                  </div>
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
-                  Perfil
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Configurações
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={onLogout}
-                  className="text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Receita Mensal
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">R$ 89.750</div>
+                <p className="text-xs text-muted-foreground">Meta: R$ 95.000</p>
+              </CardContent>
+            </Card>
           </div>
-        </aside>
 
-        {/* Main Content */}
-        <div className="lg:ml-64">
-          {/* Top Header */}
-          <header className="sticky top-0 z-30 border-b border-border/20 bg-card/80 backdrop-blur-sm">
-            <div className="flex items-center justify-between px-4 h-16">
-              {/* Mobile Menu & Breadcrumbs */}
-              <div className="flex items-center gap-4">
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Ações Rápidas</CardTitle>
+              <CardDescription>
+                Funcionalidades principais para administradores
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  className="lg:hidden"
-                  onClick={() => setSidebarOpen(true)}
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  onClick={() => handleNavigation('/usuarios')}
                 >
-                  <Menu className="h-4 w-4" />
+                  <UserCheck className="h-6 w-6" />
+                  <span>Aprovar Usuários</span>
                 </Button>
 
-                {/* Breadcrumbs */}
-                <nav className="hidden sm:flex" aria-label="Breadcrumb">
-                  <ol className="flex items-center space-x-2">
-                    {breadcrumbs.map((breadcrumb, index) => (
-                      <li key={index} className="flex items-center">
-                        {index > 0 && (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground mx-2" />
-                        )}
-                        <span
-                          className={cn(
-                            'text-sm',
-                            breadcrumb.current
-                              ? 'font-medium text-foreground'
-                              : 'text-muted-foreground hover:text-foreground cursor-pointer'
-                          )}
-                        >
-                          {breadcrumb.label}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                </nav>
-              </div>
-
-              {/* Header Actions */}
-              <div className="flex items-center gap-2">
-                {/* Notifications */}
-                <Button variant="ghost" size="sm" className="relative">
-                  <Bell className="h-4 w-4" />
-                  <Badge
-                    variant="destructive"
-                    className="absolute -top-1 -right-1 h-5 w-5 text-xs p-0 flex items-center justify-center"
-                  >
-                    11
-                  </Badge>
-                </Button>
-
-                {/* Quick Actions */}
                 <Button
                   variant="outline"
-                  size="sm"
-                  onClick={() => handleModuleClick('approvals')}
-                  className="hidden sm:flex gap-2"
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  onClick={() => handleNavigation('/agenda')}
                 >
-                  <FileText className="h-4 w-4" />8 Aprovações
+                  <Calendar className="h-6 w-6" />
+                  <span>Novo Agendamento</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  onClick={() => handleNavigation('/pacientes')}
+                >
+                  <Users className="h-6 w-6" />
+                  <span>Gerenciar Pacientes</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="h-20 flex flex-col items-center justify-center space-y-2"
+                  onClick={() => handleNavigation('/relatorios')}
+                >
+                  <BarChart3 className="h-6 w-6" />
+                  <span>Relatórios</span>
                 </Button>
               </div>
-            </div>
-          </header>
-
-          {/* Page Content */}
-          <main className="flex-1" role="main">
-            {currentModule === 'dashboard' && (
-              <AdminDashboard onNavigateToModule={handleModuleClick} />
-            )}
-
-            {currentModule !== 'dashboard' && (
-              <div className="p-6">
-                <div className="max-w-4xl mx-auto text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center">
-                    {(() => {
-                      const item = navigationItems.find(
-                        (item) => item.id === currentModule
-                      );
-                      const Icon = item?.icon || FileText;
-                      return <Icon className="h-8 w-8 text-muted-foreground" />;
-                    })()}
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-roxo-titulo">
-                      {getCurrentModuleLabel()}
-                    </h2>
-                    <p className="text-muted-foreground mt-2">
-                      Este módulo está em desenvolvimento. Em breve estará
-                      disponível.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => handleModuleClick('dashboard')}
-                    className="mt-4"
-                  >
-                    Voltar ao Dashboard
-                  </Button>
-                </div>
-              </div>
-            )}
-          </main>
+            </CardContent>
+          </Card>
         </div>
-
-        {/* Toast Notifications */}
-        <Toaster />
-      </div>
+      </ResponsiveLayout>
     );
   }
 );

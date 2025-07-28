@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { CalendarTemplateWithData } from '@/components/templates/dashboard/CalendarTemplateWithData';
-import { ProfessionalDashboard } from '@/components/domain';
+import { ProfessionalDashboard, AdminDashboard } from '@/components/domain';
 import { AppointmentDetailsManager } from '@/components/domain/calendar';
 import {
   fetchAgendamentoById,
@@ -323,8 +323,36 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  // Dashboard legado para outras roles (admin, secretaria)
-  // TODO: Implementar dashboards específicos para admin e secretaria
+  // Dashboard específico para admin
+  if (userRole === 'admin') {
+    const handleNavigateToModule = (module: string) => {
+      navigate(`/${module}`);
+    };
+
+    return (
+      <>
+        <AdminDashboard onNavigateToModule={handleNavigateToModule} />
+
+        {/* Modal de detalhes do agendamento */}
+        <AppointmentDetailsManager
+          isOpen={isAppointmentDetailsOpen}
+          onClose={handleAppointmentDetailsClose}
+          appointment={selectedAppointmentData}
+          userRole={userRole}
+          locaisAtendimento={formData.locaisAtendimento || []}
+          isLoadingLocais={false}
+          onSave={handleAppointmentDetailsSave}
+          onPaymentAction={handlePaymentAction}
+          onNfeAction={handleNfeAction}
+          onPatientClick={handlePatientClick}
+          onProfessionalClick={handleProfessionalClick}
+        />
+      </>
+    );
+  }
+
+  // Dashboard legado para outras roles (secretaria)
+  // TODO: Implementar dashboard específico para secretaria
 
   if (loading) {
     return (
