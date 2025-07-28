@@ -30,6 +30,7 @@ import {
   fetchAgendamentosFromView,
 } from '@/lib/calendar-services';
 import { useToast } from '@/components/primitives/use-toast';
+import { ToastAction } from '@/components/primitives/toast';
 import type {
   CreateAgendamento,
   SupabaseTipoServico,
@@ -111,7 +112,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     const [isLoading, setIsLoading] = useState(false);
     const [hasConflict, setHasConflict] = useState(false);
     const [conflictDetails, setConflictDetails] = useState<string>('');
-    const [showPastDateWarning, setShowPastDateWarning] = useState(false);
     const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
 
     // Log para mudanças no formData
@@ -150,7 +150,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setErrors({});
         setHasConflict(false);
         setConflictDetails('');
-        setShowPastDateWarning(false);
         setPastDateConfirmed(false);
       }
     }, [isOpen, initialDate, initialTime, initialPatientId]);
@@ -286,19 +285,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       [updateField, formData.data_hora, checkScheduleConflicts]
     );
 
-    // Handlers para confirmação de data passada
-    const handlePastDateConfirm = () => {
-      setPastDateConfirmed(true);
-      setShowPastDateWarning(false);
-      // Trigger save novamente após confirmação
-      setTimeout(() => handleSave(), 100);
-    };
-
-    const handlePastDateCancel = () => {
-      setShowPastDateWarning(false);
-      setPastDateConfirmed(false);
-    };
-
     // Salvar agendamento
     const handleSave = useCallback(async () => {
       // Validar formulário inline para evitar dependência desnecessária
@@ -324,9 +310,26 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         const appointmentDate = new Date(formData.data_hora);
         const now = new Date();
         if (appointmentDate < now) {
-          // Se é data passada e usuário ainda não confirmou, mostrar aviso
+          // Se é data passada e usuário ainda não confirmou, mostrar toast
           if (!pastDateConfirmed) {
-            setShowPastDateWarning(true);
+            toast({
+              title: 'Data anterior à data atual',
+              description:
+                'Você está agendando para uma data anterior à data atual. Deseja confirmar este agendamento?',
+              variant: 'default',
+              action: (
+                <ToastAction
+                  altText="Confirmar agendamento"
+                  onClick={() => {
+                    setPastDateConfirmed(true);
+                    // Trigger save novamente após confirmação
+                    setTimeout(() => handleSave(), 100);
+                  }}
+                >
+                  Confirmar
+                </ToastAction>
+              ),
+            });
             return false; // Não prosseguir até confirmação
           }
           // Se usuário confirmou, apenas mostrar na UI mas permitir salvar
@@ -434,40 +437,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
               </Alert>
             )}
 
-            {/* Confirmação de data passada */}
-            {showPastDateWarning && (
-              <Alert variant="default" className="border-amber-500 bg-amber-50">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                <AlertDescription className="text-amber-800">
-                  <div className="space-y-3">
-                    <p>
-                      <strong>Atenção:</strong> Você está agendando para uma
-                      data anterior à data atual. Deseja confirmar este
-                      agendamento?
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handlePastDateConfirm}
-                        className="border-amber-600 text-amber-700 hover:bg-amber-100"
-                      >
-                        Confirmar Agendamento
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handlePastDateCancel}
-                        className="border-gray-300"
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
             {/* Data e Hora */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -485,10 +454,11 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
                 {errors.data_hora && (
                   <p className="text-sm text-destructive">{errors.data_hora}</p>
                 )}
-                {isDateInPast() && !showPastDateWarning && (
+                {isDateInPast() && !pastDateConfirmed && (
                   <p className="text-sm text-amber-600 flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3" />
-                    Data anterior à atual - será necessária confirmação
+                    Data anterior à atual - clique em "Criar Agendamento" para
+                    confirmar
                   </p>
                 )}
               </div>
