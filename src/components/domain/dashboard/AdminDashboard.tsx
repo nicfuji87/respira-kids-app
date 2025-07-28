@@ -343,7 +343,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
           </Card>
 
           {/* Grid de Componentes do Dashboard */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             {/* Próximos Agendamentos com Filtro */}
             <Card>
               <CardHeader>
@@ -371,6 +371,13 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
                   loading={loading}
                   error={error}
                   onAppointmentClick={handleAppointmentClick}
+                  userRole={
+                    user?.pessoa?.role as
+                      | 'admin'
+                      | 'profissional'
+                      | 'secretaria'
+                      | null
+                  }
                 />
                 {hasMoreAppointments && (
                   <div className="mt-4 text-center">
@@ -385,21 +392,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
                 )}
               </CardContent>
             </Card>
-
-            {/* Solicitação de Material */}
-            <MaterialRequestCard
-              requests={materialRequests}
-              loading={loading}
-              error={error}
-              onRequestClick={(request) => {
-                console.log('Solicitação clicada:', request);
-                handleModuleClick('stock');
-              }}
-              onCreateRequest={() => {
-                console.log('Criar nova solicitação');
-                handleModuleClick('stock');
-              }}
-            />
           </div>
 
           {/* Consultas a Evoluir com Filtro */}
@@ -438,6 +430,21 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
               />
             </CardContent>
           </Card>
+
+          {/* Solicitação de Material */}
+          <MaterialRequestCard
+            requests={materialRequests}
+            loading={loading}
+            error={error}
+            onRequestClick={(request) => {
+              console.log('Solicitação clicada:', request);
+              handleModuleClick('stock');
+            }}
+            onCreateRequest={() => {
+              console.log('Criar nova solicitação');
+              handleModuleClick('stock');
+            }}
+          />
 
           {/* Footer com informações */}
           {lastUpdate && (

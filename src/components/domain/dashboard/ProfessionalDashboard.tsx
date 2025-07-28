@@ -128,6 +128,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
             loading={loading}
             error={error}
             onAppointmentClick={onAppointmentClick}
+            userRole={userRole}
           />
 
           {/* Solicitação de material */}

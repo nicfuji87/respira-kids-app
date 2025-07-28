@@ -63,6 +63,8 @@ export interface UpcomingAppointment {
   valor: number;
   statusConsulta: string;
   statusPagamento: string;
+  // Campos extras para admin e secretaria
+  profissionalNome?: string;
 }
 
 export interface ConsultationToEvolve {
@@ -266,6 +268,8 @@ export const fetchUpcomingAppointments = async (
       valor: parseFloat(a.comissao_valor_calculado || '0'), // Usar comissao_valor_calculado para profissional
       statusConsulta: a.status_consulta_descricao,
       statusPagamento: a.status_pagamento_descricao,
+      // Campos extras para admin e secretaria
+      profissionalNome: a.profissional_nome,
     }));
   } catch (error) {
     console.error('Erro ao buscar próximos agendamentos:', error);

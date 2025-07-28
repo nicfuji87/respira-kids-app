@@ -15,12 +15,14 @@ import {
   Calendar,
   DollarSign,
   ArrowRight,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UpcomingAppointment } from '@/lib/professional-dashboard-api';
 
 // AI dev note: AppointmentsList - Lista de próximos agendamentos combinando primitives
 // Responsivo com skeleton states e cores da Respira Kids
+// Inclui profissional responsável quando disponível
 
 interface AppointmentsListProps {
   appointments: UpcomingAppointment[];
@@ -29,12 +31,14 @@ interface AppointmentsListProps {
   onAppointmentClick?: (appointment: UpcomingAppointment) => void;
   maxItems?: number;
   className?: string;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 const AppointmentItem = React.memo<{
   appointment: UpcomingAppointment;
   onClick?: (appointment: UpcomingAppointment) => void;
-}>(({ appointment, onClick }) => {
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
+}>(({ appointment, onClick, userRole }) => {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('pt-BR', {
@@ -62,6 +66,9 @@ const AppointmentItem = React.memo<{
         return 'bg-gray-100 text-gray-600 border-gray-200';
     }
   };
+
+  const showProfessionalField =
+    userRole === 'admin' || userRole === 'secretaria';
 
   return (
     <div
@@ -98,7 +105,17 @@ const AppointmentItem = React.memo<{
           </div>
         </div>
 
-        {/* Linha 3: Status e Valor */}
+        {/* Linha 3: Profissional (apenas para admin/secretaria) */}
+        {showProfessionalField && appointment.profissionalNome && (
+          <div className="flex items-center text-sm">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <UserCog className="h-3 w-3" />
+              <span>{appointment.profissionalNome}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Linha 4: Status e Valor */}
         <div className="flex items-center justify-between">
           <Badge
             variant="outline"
@@ -135,6 +152,10 @@ const AppointmentSkeleton = React.memo(() => (
         <Skeleton className="h-3 w-16" />
       </div>
       <div className="flex items-center justify-between">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-5 w-16" />
+      </div>
+      <div className="flex items-center justify-between">
         <Skeleton className="h-5 w-16" />
         <Skeleton className="h-4 w-14" />
       </div>
@@ -152,6 +173,7 @@ export const AppointmentsList = React.memo<AppointmentsListProps>(
     onAppointmentClick,
     maxItems = 3,
     className,
+    userRole,
   }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -210,6 +232,7 @@ export const AppointmentsList = React.memo<AppointmentsListProps>(
                   key={appointment.id}
                   appointment={appointment}
                   onClick={onAppointmentClick}
+                  userRole={userRole}
                 />
               ))}
             </div>
