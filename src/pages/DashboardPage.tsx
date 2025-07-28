@@ -303,6 +303,7 @@ export const DashboardPage: React.FC = () => {
           onCreateEvolutionClick={handleCreateEvolutionClick}
           onMaterialRequestClick={handleMaterialRequestClick}
           onCreateMaterialRequest={handleCreateMaterialRequest}
+          userRole={userRole}
         />
 
         {/* Modal de detalhes do agendamento */}

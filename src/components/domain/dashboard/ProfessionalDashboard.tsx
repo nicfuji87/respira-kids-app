@@ -28,6 +28,7 @@ interface ProfessionalDashboardProps {
   onMaterialRequestClick?: (request: MaterialRequest) => void;
   onCreateMaterialRequest?: () => void;
   className?: string;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
@@ -40,6 +41,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
     onMaterialRequestClick,
     onCreateMaterialRequest,
     className,
+    userRole,
   }) => {
     // Calcular datas para métricas (mês atual)
     const getPeriodDates = () => {
@@ -146,6 +148,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
             error={error}
             onConsultationClick={onConsultationClick}
             onCreateEvolutionClick={onCreateEvolutionClick}
+            userRole={userRole}
           />
         </div>
 

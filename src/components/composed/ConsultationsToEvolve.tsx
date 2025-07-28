@@ -16,12 +16,15 @@ import {
   AlertTriangle,
   ArrowRight,
   DollarSign,
+  UserCog,
+  CreditCard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ConsultationToEvolve } from '@/lib/professional-dashboard-api';
 
 // AI dev note: ConsultationsToEvolve - Lista de consultas que precisam de evolução
 // Combina primitives com destaque para urgência e cores da Respira Kids
+// Suporte para mostrar profissional e status pagamento para admin/secretaria
 
 interface ConsultationsToEvolveProps {
   consultations: ConsultationToEvolve[];
@@ -31,13 +34,15 @@ interface ConsultationsToEvolveProps {
   onCreateEvolutionClick?: (consultationId: string) => void;
   maxItems?: number;
   className?: string;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 const ConsultationItem = React.memo<{
   consultation: ConsultationToEvolve;
   onClick?: (consultation: ConsultationToEvolve) => void;
   onCreateEvolution?: (consultationId: string) => void;
-}>(({ consultation, onClick, onCreateEvolution }) => {
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
+}>(({ consultation, onClick, onCreateEvolution, userRole }) => {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('pt-BR', {
@@ -89,6 +94,45 @@ const ConsultationItem = React.memo<{
     );
   };
 
+  const getPaymentStatusBadge = (statusPagamento?: string) => {
+    if (!statusPagamento) return null;
+
+    const status = statusPagamento.toLowerCase();
+
+    if (status.includes('pago') || status.includes('confirmado')) {
+      return (
+        <Badge
+          variant="default"
+          className="text-xs bg-verde-pipa/10 text-verde-pipa border-verde-pipa/20"
+        >
+          <CreditCard className="h-3 w-3 mr-1" />
+          Pago
+        </Badge>
+      );
+    }
+
+    if (status.includes('pendente') || status.includes('aguardando')) {
+      return (
+        <Badge
+          variant="secondary"
+          className="text-xs bg-amarelo-pipa/10 text-amarelo-pipa border-amarelo-pipa/20"
+        >
+          <Clock className="h-3 w-3 mr-1" />
+          Pendente
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant="outline" className="text-xs">
+        <CreditCard className="h-3 w-3 mr-1" />
+        {statusPagamento}
+      </Badge>
+    );
+  };
+
+  const showAdminFields = userRole === 'admin' || userRole === 'secretaria';
+
   return (
     <div
       className={cn(
@@ -124,7 +168,25 @@ const ConsultationItem = React.memo<{
           </div>
         </div>
 
-        {/* Linha 3: Valor e Ação */}
+        {/* Linha 3: Profissional e Status Pagamento (apenas para admin/secretaria) */}
+        {showAdminFields &&
+          (consultation.profissionalNome || consultation.statusPagamento) && (
+            <div className="flex items-center justify-between text-sm">
+              {consultation.profissionalNome && (
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <UserCog className="h-3 w-3" />
+                  <span>{consultation.profissionalNome}</span>
+                </div>
+              )}
+              {consultation.statusPagamento && (
+                <div className="flex items-center gap-2">
+                  {getPaymentStatusBadge(consultation.statusPagamento)}
+                </div>
+              )}
+            </div>
+          )}
+
+        {/* Linha 4: Valor e Ação */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 text-sm font-medium text-verde-pipa">
             <DollarSign className="h-3 w-3" />
@@ -167,6 +229,10 @@ const ConsultationSkeleton = React.memo(() => (
         <Skeleton className="h-3 w-16" />
       </div>
       <div className="flex items-center justify-between">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-5 w-16" />
+      </div>
+      <div className="flex items-center justify-between">
         <Skeleton className="h-4 w-14" />
         <Skeleton className="h-8 w-24" />
       </div>
@@ -185,6 +251,7 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
     onCreateEvolutionClick,
     maxItems = 3,
     className,
+    userRole,
   }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -250,6 +317,7 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
                   consultation={consultation}
                   onClick={onConsultationClick}
                   onCreateEvolution={onCreateEvolutionClick}
+                  userRole={userRole}
                 />
               ))}
             </div>

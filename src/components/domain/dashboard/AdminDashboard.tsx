@@ -428,6 +428,13 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
                 error={error}
                 onConsultationClick={handleConsultationClick}
                 onCreateEvolutionClick={handleCreateEvolutionClick}
+                userRole={
+                  user?.pessoa?.role as
+                    | 'admin'
+                    | 'profissional'
+                    | 'secretaria'
+                    | null
+                }
               />
             </CardContent>
           </Card>

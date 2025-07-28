@@ -74,6 +74,9 @@ export interface ConsultationToEvolve {
   diasPendente: number;
   urgente: boolean;
   prioridade: 'normal' | 'atencao' | 'urgente'; // normal: 0-2 dias, atencao: 3+ dias, urgente: 7+ dias
+  // Campos extras para admin e secretaria
+  profissionalNome?: string;
+  statusPagamento?: string;
 }
 
 export interface MaterialRequest {
@@ -746,8 +749,9 @@ export const fetchAllConsultationsToEvolve = async (
         diasPendente,
         urgente: diasPendente > 7,
         prioridade,
-        // Campos extras para admin
+        // Campos extras para admin e secretaria
         profissionalNome: c.profissional_nome,
+        statusPagamento: c.status_pagamento_descricao,
       };
     });
   } catch (error) {
@@ -866,7 +870,7 @@ export const fetchAdminFaturamentoComparativo = async (
               consultas: current.consultasRealizadas,
             }
           : max,
-      { periodo: dadosAnuais[0].periodo, faturamento: 0, consultas: 0 }
+      { periodo: dadosAnuais[0].periodo, faturamentoTotal: 0, consultas: 0 }
     );
 
     return {
