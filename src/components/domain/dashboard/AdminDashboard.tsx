@@ -23,6 +23,12 @@ import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { Progress } from '@/components/primitives/progress';
 import { Separator } from '@/components/primitives/separator';
+import {
+  FaturamentoChart,
+  AppointmentsList,
+  ConsultationsToEvolve,
+  MaterialRequestCard,
+} from '@/components/composed';
 import { cn } from '@/lib/utils';
 
 // AI dev note: AdminDashboard é específico para role admin da clínica Respira Kids
@@ -43,6 +49,135 @@ const mockData = {
     equipmentAlerts: 3,
     activeStaff: 12,
   },
+
+  // Dados para FaturamentoChart (todos os profissionais)
+  faturamentoComparativo: {
+    dadosAnuais: [
+      {
+        periodo: 'Jan 2024',
+        faturamentoTotal: 78500,
+        faturamentoAReceber: 5000,
+        consultasRealizadas: 95,
+        consultasComEvolucao: 90,
+        mes: 1,
+        ano: 2024,
+      },
+      {
+        periodo: 'Fev 2024',
+        faturamentoTotal: 82300,
+        faturamentoAReceber: 3200,
+        consultasRealizadas: 102,
+        consultasComEvolucao: 98,
+        mes: 2,
+        ano: 2024,
+      },
+      {
+        periodo: 'Mar 2024',
+        faturamentoTotal: 89750,
+        faturamentoAReceber: 8500,
+        consultasRealizadas: 118,
+        consultasComEvolucao: 110,
+        mes: 3,
+        ano: 2024,
+      },
+    ],
+    resumoAno: {
+      totalFaturamento: 250550,
+      totalAReceber: 16700,
+      totalConsultas: 315,
+      mediaMovel: 83516,
+      mesAtual: {
+        periodo: 'Mar 2024',
+        faturamentoTotal: 89750,
+        faturamentoAReceber: 8500,
+        consultas: 118,
+      },
+      melhorMes: {
+        periodo: 'Mar 2024',
+        faturamento: 89750,
+        consultas: 118,
+      },
+    },
+  },
+
+  // Próximos agendamentos (todos os profissionais)
+  upcomingAppointments: [
+    {
+      id: '1',
+      dataHora: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      pacienteNome: 'Ana Silva',
+      tipoServico: 'Fisioterapia Respiratória',
+      local: 'Sala 1',
+      valor: 150.0,
+      statusConsulta: 'agendado',
+      statusPagamento: 'pendente',
+    },
+    {
+      id: '2',
+      dataHora: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+      pacienteNome: 'Maria Santos',
+      tipoServico: 'Fisioterapia Neurológica',
+      local: 'Sala 2',
+      valor: 180.0,
+      statusConsulta: 'agendado',
+      statusPagamento: 'pendente',
+    },
+    {
+      id: '3',
+      dataHora: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      pacienteNome: 'Pedro Costa',
+      tipoServico: 'Fisioterapia Respiratória',
+      local: 'Sala 1',
+      valor: 150.0,
+      statusConsulta: 'agendado',
+      statusPagamento: 'pendente',
+    },
+  ],
+
+  // Consultas a evoluir (todos os profissionais)
+  consultationsToEvolve: [
+    {
+      id: 'c1',
+      dataHora: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      pacienteNome: 'Carlos Lima',
+      tipoServico: 'Fisioterapia Respiratória',
+      valor: 150.0,
+      diasPendente: 1,
+      urgente: false,
+      prioridade: 'normal' as const,
+    },
+    {
+      id: 'c2',
+      dataHora: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+      pacienteNome: 'Lucia Rocha',
+      tipoServico: 'Fisioterapia Neurológica',
+      valor: 180.0,
+      diasPendente: 3,
+      urgente: false,
+      prioridade: 'atencao' as const,
+    },
+  ],
+
+  // Solicitações de material (todos os profissionais)
+  materialRequests: [
+    {
+      id: 'm1',
+      descricao:
+        'Materiais para exercícios respiratórios - Exercitadores respiratórios para terapia infantil',
+      prioridade: 'alta' as const,
+      dataSolicitacao: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+      status: 'pendente' as const,
+    },
+    {
+      id: 'm2',
+      descricao:
+        'Bolas de exercício - Bolas de diferentes tamanhos para fisioterapia neurológica',
+      prioridade: 'media' as const,
+      dataSolicitacao: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      status: 'pendente' as const,
+    },
+  ],
+
   recentActivity: [
     {
       id: 1,
@@ -214,6 +349,57 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
             );
           })}
         </div>
+
+        {/* Gráfico de Faturamento Anual */}
+        <FaturamentoChart
+          data={mockData.faturamentoComparativo}
+          loading={false}
+          error={null}
+        />
+
+        {/* Grid de Componentes do Dashboard */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Próximos Agendamentos */}
+          <AppointmentsList
+            appointments={mockData.upcomingAppointments}
+            loading={false}
+            error={null}
+            onAppointmentClick={(appointment) => {
+              console.log('Agendamento clicado:', appointment);
+              handleModuleClick('agenda');
+            }}
+          />
+
+          {/* Solicitação de Material */}
+          <MaterialRequestCard
+            requests={mockData.materialRequests}
+            loading={false}
+            error={null}
+            onRequestClick={(request) => {
+              console.log('Solicitação clicada:', request);
+              handleModuleClick('stock');
+            }}
+            onCreateRequest={() => {
+              console.log('Criar nova solicitação');
+              handleModuleClick('stock');
+            }}
+          />
+        </div>
+
+        {/* Consultas a Evoluir */}
+        <ConsultationsToEvolve
+          consultations={mockData.consultationsToEvolve}
+          loading={false}
+          error={null}
+          onConsultationClick={(consultation) => {
+            console.log('Consulta clicada:', consultation);
+            handleModuleClick('patients');
+          }}
+          onCreateEvolutionClick={(consultationId) => {
+            console.log('Criar evolução:', consultationId);
+            handleModuleClick('patients');
+          }}
+        />
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
