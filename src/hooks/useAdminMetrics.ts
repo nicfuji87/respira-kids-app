@@ -14,6 +14,7 @@ import {
 
 // AI dev note: Hook personalizado para métricas do dashboard administrativo
 // Similar ao useProfessionalMetrics mas para dados de todos os profissionais
+// Agora com suporte a filtros por profissional
 
 interface UseAdminMetricsProps {
   startDate: string;
@@ -34,6 +35,22 @@ interface UseAdminMetricsReturn {
   loading: boolean;
   error: string | null;
   lastUpdate: Date | null;
+
+  // Filtros
+  professionalFilters: {
+    faturamento: string[];
+    agendamentos: string[];
+    consultas: string[];
+  };
+  setProfessionalFilters: (filters: {
+    faturamento?: string[];
+    agendamentos?: string[];
+    consultas?: string[];
+  }) => void;
+
+  // Configurações de agendamentos
+  appointmentsLimit: number;
+  setAppointmentsLimit: (limit: number) => void;
 
   // Ações
   refreshMetrics: () => Promise<void>;
@@ -69,6 +86,31 @@ export const useAdminMetrics = ({
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
+  // Estados de filtros
+  const [professionalFilters, setProfessionalFiltersState] = useState({
+    faturamento: [] as string[],
+    agendamentos: [] as string[],
+    consultas: [] as string[],
+  });
+
+  // Estado de configurações
+  const [appointmentsLimit, setAppointmentsLimit] = useState(10);
+
+  // Função para atualizar filtros
+  const setProfessionalFilters = useCallback(
+    (filters: {
+      faturamento?: string[];
+      agendamentos?: string[];
+      consultas?: string[];
+    }) => {
+      setProfessionalFiltersState((prev) => ({
+        ...prev,
+        ...filters,
+      }));
+    },
+    []
+  );
+
   // Função para buscar métricas administrativas
   const refreshMetrics = useCallback(async () => {
     try {
@@ -81,31 +123,41 @@ export const useAdminMetrics = ({
     }
   }, [startDate, endDate]);
 
-  // Função para buscar próximos agendamentos (todos os profissionais)
+  // Função para buscar próximos agendamentos (com filtros)
   const refreshUpcoming = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchAllUpcomingAppointments(7);
+      const data = await fetchAllUpcomingAppointments(
+        7,
+        professionalFilters.agendamentos.length > 0
+          ? professionalFilters.agendamentos
+          : undefined,
+        appointmentsLimit
+      );
       setUpcomingAppointments(data);
     } catch (err) {
       console.error('Erro ao buscar agendamentos:', err);
       setError('Erro ao carregar agendamentos');
     }
-  }, []);
+  }, [professionalFilters.agendamentos, appointmentsLimit]);
 
-  // Função para buscar consultas a evoluir (todos os profissionais)
+  // Função para buscar consultas a evoluir (com filtros)
   const refreshConsultations = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchAllConsultationsToEvolve();
+      const data = await fetchAllConsultationsToEvolve(
+        professionalFilters.consultas.length > 0
+          ? professionalFilters.consultas
+          : undefined
+      );
       setConsultationsToEvolve(data);
     } catch (err) {
       console.error('Erro ao buscar consultas a evoluir:', err);
       setError('Erro ao carregar consultas');
     }
-  }, []);
+  }, [professionalFilters.consultas]);
 
-  // Função para buscar solicitações de material (todos os profissionais)
+  // Função para buscar solicitações de material
   const refreshMaterial = useCallback(async () => {
     try {
       setError(null);
@@ -117,17 +169,21 @@ export const useAdminMetrics = ({
     }
   }, []);
 
-  // Função para buscar faturamento comparativo (todos os profissionais)
+  // Função para buscar faturamento comparativo (com filtros)
   const refreshFaturamento = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchAdminFaturamentoComparativo();
+      const data = await fetchAdminFaturamentoComparativo(
+        professionalFilters.faturamento.length > 0
+          ? professionalFilters.faturamento
+          : undefined
+      );
       setFaturamentoComparativo(data);
     } catch (err) {
       console.error('Erro ao buscar faturamento comparativo:', err);
       setError('Erro ao carregar faturamento');
     }
-  }, []);
+  }, [professionalFilters.faturamento]);
 
   // Função para refrescar todos os dados
   const refreshAll = useCallback(async () => {
@@ -164,6 +220,19 @@ export const useAdminMetrics = ({
     }
   }, [startDate, endDate, refreshAll]);
 
+  // Efeito para atualizar quando filtros mudam
+  useEffect(() => {
+    refreshFaturamento();
+  }, [refreshFaturamento]);
+
+  useEffect(() => {
+    refreshUpcoming();
+  }, [refreshUpcoming]);
+
+  useEffect(() => {
+    refreshConsultations();
+  }, [refreshConsultations]);
+
   // Efeito para refresh automático
   useEffect(() => {
     if (!autoRefresh) return;
@@ -190,6 +259,14 @@ export const useAdminMetrics = ({
     loading,
     error,
     lastUpdate,
+
+    // Filtros
+    professionalFilters,
+    setProfessionalFilters,
+
+    // Configurações
+    appointmentsLimit,
+    setAppointmentsLimit,
 
     // Ações
     refreshMetrics,

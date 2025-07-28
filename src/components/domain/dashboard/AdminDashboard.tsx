@@ -1,16 +1,5 @@
 import React from 'react';
-import {
-  Users,
-  Calendar,
-  FileText,
-  Package,
-  DollarSign,
-  Bell,
-  Settings,
-  Activity,
-  TrendingUp,
-  Clock,
-} from 'lucide-react';
+import { Bell, Activity } from 'lucide-react';
 
 import {
   Card,
@@ -20,14 +9,12 @@ import {
   CardTitle,
 } from '@/components/primitives/card';
 import { Button } from '@/components/primitives/button';
-import { Badge } from '@/components/primitives/badge';
-import { Progress } from '@/components/primitives/progress';
-import { Separator } from '@/components/primitives/separator';
 import {
   FaturamentoChart,
   AppointmentsList,
   ConsultationsToEvolve,
   MaterialRequestCard,
+  ProfessionalFilter,
 } from '@/components/composed';
 import { cn } from '@/lib/utils';
 import { useAdminMetrics } from '@/hooks/useAdminMetrics';
@@ -35,6 +22,7 @@ import { useAdminMetrics } from '@/hooks/useAdminMetrics';
 // AI dev note: AdminDashboard é específico para role admin da clínica Respira Kids
 // Interface completa de gestão com métricas, notificações e ações rápidas
 // Integrado com Supabase para dados reais de todos os profissionais
+// Com filtros por profissional para todos os componentes
 
 interface AdminDashboardProps {
   className?: string;
@@ -69,6 +57,10 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
       error,
       lastUpdate,
       refreshAll,
+      professionalFilters,
+      setProfessionalFilters,
+      appointmentsLimit,
+      setAppointmentsLimit,
     } = useAdminMetrics({
       startDate,
       endDate,
@@ -82,104 +74,9 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
       }
     };
 
-    const quickActions = [
-      {
-        id: 'agenda',
-        title: 'Agenda',
-        description: 'Gerenciar consultas',
-        icon: Calendar,
-        color: 'text-azul-respira',
-        bgColor: 'bg-azul-respira/10',
-        count: metrics?.consultasNoMes || 0,
-      },
-      {
-        id: 'patients',
-        title: 'Pacientes',
-        description: 'Prontuários eletrônicos',
-        icon: Users,
-        color: 'text-verde-pipa',
-        bgColor: 'bg-verde-pipa/10',
-        count: metrics?.totalPacientes || 0,
-      },
-      {
-        id: 'approvals',
-        title: 'Aprovações',
-        description: 'Pendentes de liberação',
-        icon: FileText,
-        color: 'text-amarelo-pipa',
-        bgColor: 'bg-amarelo-pipa/10',
-        count: metrics?.aprovacoesPendentes || 0,
-        urgent: (metrics?.aprovacoesPendentes || 0) > 5,
-      },
-      {
-        id: 'stock',
-        title: 'Estoque',
-        description: 'Equipamentos e suprimentos',
-        icon: Package,
-        color: 'text-vermelho-kids',
-        bgColor: 'bg-vermelho-kids/10',
-        count: materialRequests?.length || 0,
-        urgent:
-          materialRequests?.some(
-            (r) => r.prioridade === 'urgente' || r.prioridade === 'alta'
-          ) || false,
-      },
-      {
-        id: 'financial',
-        title: 'Financeiro',
-        description: 'Faturamento e pagamentos',
-        icon: DollarSign,
-        color: 'text-roxo-titulo',
-        bgColor: 'bg-roxo-titulo/10',
-        value: `R$ ${(metrics?.faturamentoTotalMes || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-      },
-      {
-        id: 'settings',
-        title: 'Configurações',
-        description: 'Sistema e usuários',
-        icon: Settings,
-        color: 'text-cinza-secundario',
-        bgColor: 'bg-cinza-secundario/10',
-        count: metrics?.profissionaisAtivos || 0,
-      },
-    ];
-
-    // Dados para metas (baseado nas métricas reais)
-    const monthlyGoal = {
-      current: metrics?.consultasNoMes || 0,
-      target: 180, // Meta fixa para exemplo
-      percentage: metrics?.consultasNoMes
-        ? Math.min((metrics.consultasNoMes / 180) * 100, 100)
-        : 0,
+    const handleLoadMoreAppointments = () => {
+      setAppointmentsLimit(appointmentsLimit + 10);
     };
-
-    // Dados para atividade recente (mock por enquanto)
-    const recentActivity = [
-      {
-        id: 1,
-        type: 'appointment',
-        message: 'Nova consulta agendada - Ana Silva',
-        time: '5 min atrás',
-      },
-      {
-        id: 2,
-        type: 'approval',
-        message: 'Solicitação de aprovação - Maria Santos',
-        time: '12 min atrás',
-      },
-      {
-        id: 3,
-        type: 'payment',
-        message: 'Pagamento recebido - R$ 350,00',
-        time: '25 min atrás',
-      },
-      {
-        id: 4,
-        type: 'equipment',
-        message: 'Manutenção programada - Nebulizador #003',
-        time: '1h atrás',
-      },
-    ];
 
     return (
       <div className={cn('space-y-6 p-6', className)}>
@@ -230,70 +127,80 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
           </Card>
         )}
 
-        {/* Quick Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {quickActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <Card
-                key={action.id}
-                className={cn(
-                  'relative cursor-pointer border-border/20 hover:shadow-lg transition-all duration-200',
-                  'hover:border-primary/20 hover:-translate-y-1'
-                )}
-                onClick={() => handleModuleClick(action.id)}
-              >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground">
-                    {action.title}
-                  </CardTitle>
-                  <div className={cn('p-2 rounded-lg', action.bgColor)}>
-                    <Icon className={cn('h-4 w-4', action.color)} />
-                  </div>
-                </CardHeader>
-
-                <CardContent>
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <div className="text-2xl font-bold text-foreground">
-                        {action.value || action.count}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {action.description}
-                      </p>
-                    </div>
-
-                    {action.urgent && (
-                      <Badge variant="destructive" className="text-xs">
-                        Urgente
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Gráfico de Faturamento Anual */}
-        <FaturamentoChart
-          data={faturamentoComparativo}
-          loading={loading}
-          error={error}
-        />
+        {/* Gráfico de Faturamento Anual com Filtro */}
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle>Gráfico Anual de Faturamento</CardTitle>
+                <CardDescription>
+                  Faturamento consolidado por mês com comparativo anual
+                </CardDescription>
+              </div>
+              <ProfessionalFilter
+                selectedProfessionals={professionalFilters.faturamento}
+                onSelectionChange={(professionalIds) =>
+                  setProfessionalFilters({ faturamento: professionalIds })
+                }
+                placeholder="Filtrar por profissional..."
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <FaturamentoChart
+              data={faturamentoComparativo}
+              loading={loading}
+              error={error}
+            />
+          </CardContent>
+        </Card>
 
         {/* Grid de Componentes do Dashboard */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Próximos Agendamentos */}
-          <AppointmentsList
-            appointments={upcomingAppointments}
-            loading={loading}
-            error={error}
-            onAppointmentClick={(appointment) => {
-              console.log('Agendamento clicado:', appointment);
-              handleModuleClick('agenda');
-            }}
-          />
+          {/* Próximos Agendamentos com Filtro */}
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <CardTitle>Próximos Agendamentos</CardTitle>
+                    <CardDescription>
+                      Consultas agendadas para os próximos 7 dias
+                    </CardDescription>
+                  </div>
+                </div>
+                <ProfessionalFilter
+                  selectedProfessionals={professionalFilters.agendamentos}
+                  onSelectionChange={(professionalIds) =>
+                    setProfessionalFilters({ agendamentos: professionalIds })
+                  }
+                  placeholder="Filtrar por profissional..."
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <AppointmentsList
+                appointments={upcomingAppointments}
+                loading={loading}
+                error={error}
+                onAppointmentClick={(appointment) => {
+                  console.log('Agendamento clicado:', appointment);
+                  handleModuleClick('agenda');
+                }}
+              />
+              {upcomingAppointments.length >= appointmentsLimit && (
+                <div className="mt-4 text-center">
+                  <Button
+                    variant="ghost"
+                    onClick={handleLoadMoreAppointments}
+                    disabled={loading}
+                  >
+                    Ver mais agendamentos
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Solicitação de Material */}
           <MaterialRequestCard
@@ -311,141 +218,39 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
           />
         </div>
 
-        {/* Consultas a Evoluir */}
-        <ConsultationsToEvolve
-          consultations={consultationsToEvolve}
-          loading={loading}
-          error={error}
-          onConsultationClick={(consultation) => {
-            console.log('Consulta clicada:', consultation);
-            handleModuleClick('patients');
-          }}
-          onCreateEvolutionClick={(consultationId) => {
-            console.log('Criar evolução:', consultationId);
-            handleModuleClick('patients');
-          }}
-        />
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Monthly Goal Progress */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-verde-pipa" />
-                Meta Mensal de Consultas
-              </CardTitle>
-              <CardDescription>
-                Progresso do mês atual - Meta: {monthlyGoal.target} consultas
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Progresso</span>
-                <span className="font-medium">
-                  {monthlyGoal.current} / {monthlyGoal.target}
-                </span>
-              </div>
-
-              <Progress value={monthlyGoal.percentage} className="h-3" />
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-verde-pipa font-medium">
-                  {monthlyGoal.percentage.toFixed(1)}% concluído
-                </span>
-                <span className="text-muted-foreground">
-                  {monthlyGoal.target - monthlyGoal.current} restantes
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-azul-respira" />
-                Atividade Recente
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              {recentActivity.map((activity, index) => (
-                <div key={activity.id}>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                      {activity.message}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.time}
-                    </p>
-                  </div>
-                  {index < recentActivity.length - 1 && (
-                    <Separator className="mt-4" />
-                  )}
-                </div>
-              ))}
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full mt-4"
-                onClick={() => handleModuleClick('activity')}
-              >
-                Ver todas as atividades
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Quick Actions Footer */}
+        {/* Consultas a Evoluir com Filtro */}
         <Card>
           <CardHeader>
-            <CardTitle>Ações Rápidas</CardTitle>
-            <CardDescription>
-              Acesso direto às principais funcionalidades do sistema
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2"
-                onClick={() => handleModuleClick('new-patient')}
-              >
-                <Users className="h-5 w-5" />
-                <span className="text-xs">Novo Paciente</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2"
-                onClick={() => handleModuleClick('schedule')}
-              >
-                <Calendar className="h-5 w-5" />
-                <span className="text-xs">Agendar Consulta</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2"
-                onClick={() => handleModuleClick('reports')}
-              >
-                <FileText className="h-5 w-5" />
-                <span className="text-xs">Relatórios</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2"
-                onClick={() => handleModuleClick('backup')}
-              >
-                <Package className="h-5 w-5" />
-                <span className="text-xs">Backup</span>
-              </Button>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle>Consultas a Evoluir</CardTitle>
+                <CardDescription>
+                  Consultas finalizadas que precisam de relatório de evolução
+                </CardDescription>
+              </div>
+              <ProfessionalFilter
+                selectedProfessionals={professionalFilters.consultas}
+                onSelectionChange={(professionalIds) =>
+                  setProfessionalFilters({ consultas: professionalIds })
+                }
+                placeholder="Filtrar por profissional..."
+              />
             </div>
+          </CardHeader>
+          <CardContent>
+            <ConsultationsToEvolve
+              consultations={consultationsToEvolve}
+              loading={loading}
+              error={error}
+              onConsultationClick={(consultation) => {
+                console.log('Consulta clicada:', consultation);
+                handleModuleClick('patients');
+              }}
+              onCreateEvolutionClick={(consultationId) => {
+                console.log('Criar evolução:', consultationId);
+                handleModuleClick('patients');
+              }}
+            />
           </CardContent>
         </Card>
 

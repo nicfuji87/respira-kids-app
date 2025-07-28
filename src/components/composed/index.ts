@@ -169,3 +169,4 @@ export type { GenericTableProps, GenericTableColumn } from './GenericTable';
 export type { GenericFormProps, FormField } from './GenericForm';
 
 export { CepSearch } from './CepSearch';
+export { ProfessionalFilter } from './ProfessionalFilter';

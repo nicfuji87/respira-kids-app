@@ -641,25 +641,34 @@ export const fetchAdminMetrics = async (
 };
 
 /**
- * Busca próximos agendamentos (todos os profissionais)
+ * Busca próximos agendamentos (todos os profissionais ou filtrados)
  */
 export const fetchAllUpcomingAppointments = async (
-  days: number = 7
+  days: number = 7,
+  professionalIds?: string[],
+  limit: number = 10
 ): Promise<UpcomingAppointment[]> => {
   try {
     const hoje = new Date();
     const proximosDias = new Date();
     proximosDias.setDate(hoje.getDate() + days);
 
-    const { data: agendamentos, error } = await supabase
+    let query = supabase
       .from('vw_agendamentos_completos')
       .select('*')
       .eq('status_consulta_codigo', 'agendado')
       .gte('data_hora', hoje.toISOString())
       .lte('data_hora', proximosDias.toISOString())
-      .eq('ativo', true)
+      .eq('ativo', true);
+
+    // Aplicar filtro de profissionais se fornecido
+    if (professionalIds && professionalIds.length > 0) {
+      query = query.in('profissional_id', professionalIds);
+    }
+
+    const { data: agendamentos, error } = await query
       .order('data_hora', { ascending: true })
-      .limit(10);
+      .limit(limit);
 
     if (error) throw error;
 
@@ -682,18 +691,25 @@ export const fetchAllUpcomingAppointments = async (
 };
 
 /**
- * Busca consultas finalizadas que precisam de evolução (todos os profissionais)
+ * Busca consultas finalizadas que precisam de evolução (todos os profissionais ou filtrados)
  */
-export const fetchAllConsultationsToEvolve = async (): Promise<
-  ConsultationToEvolve[]
-> => {
+export const fetchAllConsultationsToEvolve = async (
+  professionalIds?: string[]
+): Promise<ConsultationToEvolve[]> => {
   try {
-    const { data: consultas, error } = await supabase
+    let query = supabase
       .from('vw_agendamentos_completos')
       .select('*')
       .eq('status_consulta_codigo', 'finalizado')
       .eq('possui_evolucao', 'não')
-      .eq('ativo', true)
+      .eq('ativo', true);
+
+    // Aplicar filtro de profissionais se fornecido
+    if (professionalIds && professionalIds.length > 0) {
+      query = query.in('profissional_id', professionalIds);
+    }
+
+    const { data: consultas, error } = await query
       .order('data_hora', { ascending: false })
       .limit(20);
 
@@ -735,132 +751,139 @@ export const fetchAllConsultationsToEvolve = async (): Promise<
 };
 
 /**
- * Busca faturamento comparativo anual (todos os profissionais)
+ * Busca faturamento comparativo anual (todos os profissionais ou filtrados)
  */
-export const fetchAdminFaturamentoComparativo =
-  async (): Promise<FaturamentoComparativo> => {
-    try {
-      const hoje = new Date();
-      const anoAtual = hoje.getFullYear();
+export const fetchAdminFaturamentoComparativo = async (
+  professionalIds?: string[]
+): Promise<FaturamentoComparativo> => {
+  try {
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear();
 
-      // Início e fim do ano atual
-      const inicioAno = new Date(anoAtual, 0, 1);
-      const fimAno = new Date(anoAtual, 11, 31);
+    // Início e fim do ano atual
+    const inicioAno = new Date(anoAtual, 0, 1);
+    const fimAno = new Date(anoAtual, 11, 31);
 
-      // Buscar todas as consultas do ano atual (todos os profissionais)
-      const { data: consultas, error } = await supabase
-        .from('vw_agendamentos_completos')
-        .select('*')
-        .gte('data_hora', inicioAno.toISOString().split('T')[0])
-        .lte('data_hora', fimAno.toISOString().split('T')[0])
-        .eq('ativo', true);
+    let query = supabase
+      .from('vw_agendamentos_completos')
+      .select('*')
+      .gte('data_hora', inicioAno.toISOString().split('T')[0])
+      .lte('data_hora', fimAno.toISOString().split('T')[0])
+      .eq('ativo', true);
 
-      if (error) throw error;
-
-      const consultasArray = consultas || [];
-
-      // Agrupar por mês
-      const dadosPorMes = new Map<
-        number,
-        {
-          periodo: string;
-          faturamentoTotal: number;
-          faturamentoAReceber: number;
-          consultasRealizadas: number;
-          consultasComEvolucao: number;
-          mes: number;
-          ano: number;
-        }
-      >();
-
-      // Inicializar todos os meses do ano
-      for (let mes = 0; mes < 12; mes++) {
-        dadosPorMes.set(mes, {
-          periodo: new Intl.DateTimeFormat('pt-BR', {
-            month: 'short',
-            year: 'numeric',
-          }).format(new Date(anoAtual, mes, 1)),
-          faturamentoTotal: 0,
-          faturamentoAReceber: 0,
-          consultasRealizadas: 0,
-          consultasComEvolucao: 0,
-          mes: mes + 1,
-          ano: anoAtual,
-        });
-      }
-
-      // Processar consultas
-      consultasArray.forEach((consulta) => {
-        const dataConsulta = new Date(consulta.data_hora);
-        const mes = dataConsulta.getMonth();
-        const dadosMes = dadosPorMes.get(mes)!;
-
-        if (consulta.status_consulta_codigo === 'finalizado') {
-          const valor = parseFloat(consulta.valor_servico || '0');
-          dadosMes.consultasRealizadas += 1;
-
-          if (consulta.possui_evolucao === 'sim') {
-            dadosMes.faturamentoTotal += valor;
-            dadosMes.consultasComEvolucao += 1;
-          } else {
-            dadosMes.faturamentoAReceber += valor;
-          }
-        }
-      });
-
-      const dadosAnuais = Array.from(dadosPorMes.values());
-
-      // Calcular totais
-      const totalFaturamento = dadosAnuais.reduce(
-        (sum, d) => sum + d.faturamentoTotal,
-        0
-      );
-      const totalAReceber = dadosAnuais.reduce(
-        (sum, d) => sum + d.faturamentoAReceber,
-        0
-      );
-      const totalConsultas = dadosAnuais.reduce(
-        (sum, d) => sum + d.consultasRealizadas,
-        0
-      );
-
-      const mesAtualIndex = hoje.getMonth();
-      const mesAtualData = dadosAnuais[mesAtualIndex];
-
-      // Encontrar melhor mês
-      const melhorMes = dadosAnuais.reduce(
-        (max, current) =>
-          current.faturamentoTotal > max.faturamentoTotal
-            ? {
-                periodo: current.periodo,
-                faturamento: current.faturamentoTotal,
-                consultas: current.consultasRealizadas,
-              }
-            : max,
-        { periodo: dadosAnuais[0].periodo, faturamento: 0, consultas: 0 }
-      );
-
-      return {
-        dadosAnuais,
-        resumoAno: {
-          totalFaturamento,
-          totalAReceber,
-          totalConsultas,
-          mediaMovel: totalConsultas > 0 ? totalFaturamento / 12 : 0,
-          mesAtual: {
-            periodo: mesAtualData.periodo,
-            faturamentoTotal: mesAtualData.faturamentoTotal,
-            faturamentoAReceber: mesAtualData.faturamentoAReceber,
-            consultas: mesAtualData.consultasRealizadas,
-          },
-          melhorMes,
-        },
-      };
-    } catch (error) {
-      console.error('Erro ao buscar faturamento comparativo admin:', error);
-      throw error;
+    // Aplicar filtro de profissionais se fornecido
+    if (professionalIds && professionalIds.length > 0) {
+      query = query.in('profissional_id', professionalIds);
     }
-  };
+
+    const { data: consultas, error } = await query;
+
+    if (error) throw error;
+
+    const consultasArray = consultas || [];
+
+    // Agrupar por mês
+    const dadosPorMes = new Map<
+      number,
+      {
+        periodo: string;
+        faturamentoTotal: number;
+        faturamentoAReceber: number;
+        consultasRealizadas: number;
+        consultasComEvolucao: number;
+        mes: number;
+        ano: number;
+      }
+    >();
+
+    // Inicializar todos os meses do ano
+    for (let mes = 0; mes < 12; mes++) {
+      dadosPorMes.set(mes, {
+        periodo: new Intl.DateTimeFormat('pt-BR', {
+          month: 'short',
+          year: 'numeric',
+        }).format(new Date(anoAtual, mes, 1)),
+        faturamentoTotal: 0,
+        faturamentoAReceber: 0,
+        consultasRealizadas: 0,
+        consultasComEvolucao: 0,
+        mes: mes + 1,
+        ano: anoAtual,
+      });
+    }
+
+    // Processar consultas
+    consultasArray.forEach((consulta) => {
+      const dataConsulta = new Date(consulta.data_hora);
+      const mes = dataConsulta.getMonth();
+      const dadosMes = dadosPorMes.get(mes)!;
+
+      if (consulta.status_consulta_codigo === 'finalizado') {
+        const valor = parseFloat(consulta.valor_servico || '0');
+        dadosMes.consultasRealizadas += 1;
+
+        if (consulta.possui_evolucao === 'sim') {
+          dadosMes.faturamentoTotal += valor;
+          dadosMes.consultasComEvolucao += 1;
+        } else {
+          dadosMes.faturamentoAReceber += valor;
+        }
+      }
+    });
+
+    const dadosAnuais = Array.from(dadosPorMes.values());
+
+    // Calcular totais
+    const totalFaturamento = dadosAnuais.reduce(
+      (sum, d) => sum + d.faturamentoTotal,
+      0
+    );
+    const totalAReceber = dadosAnuais.reduce(
+      (sum, d) => sum + d.faturamentoAReceber,
+      0
+    );
+    const totalConsultas = dadosAnuais.reduce(
+      (sum, d) => sum + d.consultasRealizadas,
+      0
+    );
+
+    const mesAtualIndex = hoje.getMonth();
+    const mesAtualData = dadosAnuais[mesAtualIndex];
+
+    // Encontrar melhor mês
+    const melhorMes = dadosAnuais.reduce(
+      (max, current) =>
+        current.faturamentoTotal > max.faturamentoTotal
+          ? {
+              periodo: current.periodo,
+              faturamento: current.faturamentoTotal,
+              consultas: current.consultasRealizadas,
+            }
+          : max,
+      { periodo: dadosAnuais[0].periodo, faturamento: 0, consultas: 0 }
+    );
+
+    return {
+      dadosAnuais,
+      resumoAno: {
+        totalFaturamento,
+        totalAReceber,
+        totalConsultas,
+        mediaMovel: totalConsultas > 0 ? totalFaturamento / 12 : 0,
+        mesAtual: {
+          periodo: mesAtualData.periodo,
+          faturamentoTotal: mesAtualData.faturamentoTotal,
+          faturamentoAReceber: mesAtualData.faturamentoAReceber,
+          consultas: mesAtualData.consultasRealizadas,
+        },
+        melhorMes,
+      },
+    };
+  } catch (error) {
+    console.error('Erro ao buscar faturamento comparativo admin:', error);
+    throw error;
+  }
+};
 
 /**
  * Busca todas as solicitações de material (todos os profissionais)
