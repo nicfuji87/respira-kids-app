@@ -36,6 +36,9 @@ interface UseAdminMetricsReturn {
   error: string | null;
   lastUpdate: Date | null;
 
+  // Controle de agendamentos
+  hasMoreAppointments: boolean;
+
   // Filtros
   professionalFilters: {
     faturamento: string[];
@@ -85,6 +88,7 @@ export const useAdminMetrics = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [hasMoreAppointments, setHasMoreAppointments] = useState(false);
 
   // Estados de filtros
   const [professionalFilters, setProfessionalFiltersState] = useState({
@@ -127,14 +131,15 @@ export const useAdminMetrics = ({
   const refreshUpcoming = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchAllUpcomingAppointments(
+      const { appointments, hasMore } = await fetchAllUpcomingAppointments(
         7,
         professionalFilters.agendamentos.length > 0
           ? professionalFilters.agendamentos
           : undefined,
         appointmentsLimit
       );
-      setUpcomingAppointments(data);
+      setUpcomingAppointments(appointments);
+      setHasMoreAppointments(hasMore);
     } catch (err) {
       console.error('Erro ao buscar agendamentos:', err);
       setError('Erro ao carregar agendamentos');
@@ -259,6 +264,9 @@ export const useAdminMetrics = ({
     loading,
     error,
     lastUpdate,
+
+    // Controle de agendamentos
+    hasMoreAppointments,
 
     // Filtros
     professionalFilters,

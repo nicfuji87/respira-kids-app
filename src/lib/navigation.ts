@@ -13,15 +13,14 @@ import {
 // AI dev note: Configuração de navegação baseada em roles
 // Define quais módulos cada role pode acessar
 
-export type UserRole = 'admin' | 'profissional' | 'secretaria';
-
 export interface NavigationConfig {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   href: string;
   roles: UserRole[];
-  badge?: string | number;
 }
+
+export type UserRole = 'admin' | 'profissional' | 'secretaria';
 
 // Configuração base de navegação
 export const navigationConfig: NavigationConfig[] = [
@@ -44,12 +43,6 @@ export const navigationConfig: NavigationConfig[] = [
     roles: ['admin', 'secretaria'],
   },
   {
-    icon: Users,
-    label: 'Pessoa',
-    href: '/pessoa',
-    roles: ['admin', 'secretaria', 'profissional'],
-  },
-  {
     icon: Package,
     label: 'Estoque',
     href: '/estoque',
@@ -68,12 +61,6 @@ export const navigationConfig: NavigationConfig[] = [
     roles: ['admin', 'profissional', 'secretaria'],
   },
   // Admin only
-  {
-    icon: Users,
-    label: 'Usuários',
-    href: '/usuarios',
-    roles: ['admin'],
-  },
   {
     icon: FileText,
     label: 'Relatórios',
@@ -95,12 +82,6 @@ export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
       icon: LayoutDashboard,
       label: 'Dashboard',
       href: '/dashboard',
-      roles: ['admin'],
-    },
-    {
-      icon: Users,
-      label: 'Usuários',
-      href: '/usuarios',
       roles: ['admin'],
     },
     {

@@ -647,7 +647,7 @@ export const fetchAllUpcomingAppointments = async (
   days: number = 7,
   professionalIds?: string[],
   limit: number = 10
-): Promise<UpcomingAppointment[]> => {
+): Promise<{ appointments: UpcomingAppointment[]; hasMore: boolean }> => {
   try {
     const hoje = new Date();
     const proximosDias = new Date();
@@ -666,13 +666,14 @@ export const fetchAllUpcomingAppointments = async (
       query = query.in('profissional_id', professionalIds);
     }
 
+    // Buscar um a mais que o limite para saber se há mais agendamentos
     const { data: agendamentos, error } = await query
       .order('data_hora', { ascending: true })
-      .limit(limit);
+      .limit(limit + 1);
 
     if (error) throw error;
 
-    return (agendamentos || []).map((a) => ({
+    const appointments = (agendamentos || []).slice(0, limit).map((a) => ({
       id: a.id,
       dataHora: a.data_hora,
       pacienteNome: a.paciente_nome,
@@ -684,6 +685,11 @@ export const fetchAllUpcomingAppointments = async (
       // Campos extras para admin
       profissionalNome: a.profissional_nome,
     }));
+
+    // Se retornou mais que o limite, significa que há mais agendamentos
+    const hasMore = (agendamentos || []).length > limit;
+
+    return { appointments, hasMore };
   } catch (error) {
     console.error('Erro ao buscar próximos agendamentos:', error);
     throw error;

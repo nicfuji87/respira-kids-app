@@ -61,6 +61,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
       setProfessionalFilters,
       appointmentsLimit,
       setAppointmentsLimit,
+      hasMoreAppointments,
     } = useAdminMetrics({
       startDate,
       endDate,
@@ -188,7 +189,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
                   handleModuleClick('agenda');
                 }}
               />
-              {upcomingAppointments.length >= appointmentsLimit && (
+              {hasMoreAppointments && (
                 <div className="mt-4 text-center">
                   <Button
                     variant="ghost"
