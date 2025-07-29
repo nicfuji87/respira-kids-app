@@ -15,28 +15,40 @@ export async function determineApiKey(userRole: string | null): Promise<AsaasApi
   try {
     // Primeiro tenta buscar API individual se usuário for admin/secretaria
     if (userRole === 'admin' || userRole === 'secretaria') {
+      console.log('🔍 Buscando API key individual para usuário:', userRole);
+      
       // Busca API key da empresa associada ao usuário
-      const { data: userWithCompany, error: userError } = await supabase
-        .from('pessoas')
-        .select(`
-          id_empresa,
-          pessoa_empresas!inner(
-            api_token_externo
-          )
-        `)
-        .eq('auth_user_id', (await supabase.auth.getUser()).data.user?.id)
-        .single();
+      const { data: currentUser } = await supabase.auth.getUser();
+      
+      if (currentUser.user?.id) {
+        const { data: userWithCompany, error: userError } = await supabase
+          .from('pessoas')
+          .select(`
+            id_empresa,
+            pessoa_empresas(
+              api_token_externo
+            )
+          `)
+          .eq('auth_user_id', currentUser.user.id)
+          .not('id_empresa', 'is', null)
+          .single();
 
-      const empresaData = Array.isArray(userWithCompany?.pessoa_empresas) 
-        ? userWithCompany.pessoa_empresas[0] 
-        : userWithCompany?.pessoa_empresas;
+        console.log('📊 Resultado da busca de empresa:', { userWithCompany, userError });
 
-      if (!userError && empresaData?.api_token_externo) {
-        return {
-          apiKey: empresaData.api_token_externo,
-          isGlobal: false,
-          baseUrl: 'https://api.asaas.com/v3'
-        };
+        const empresaData = Array.isArray(userWithCompany?.pessoa_empresas) 
+          ? userWithCompany.pessoa_empresas[0] 
+          : userWithCompany?.pessoa_empresas;
+
+        if (!userError && empresaData?.api_token_externo) {
+          console.log('✅ API key individual encontrada');
+          return {
+            apiKey: empresaData.api_token_externo,
+            isGlobal: false,
+            baseUrl: 'https://api.asaas.com/v3'
+          };
+        } else {
+          console.log('ℹ️ API key individual não encontrada:', userError?.message);
+        }
       }
     }
 
@@ -62,6 +74,60 @@ export async function determineApiKey(userRole: string | null): Promise<AsaasApi
   } catch (error) {
     console.error('Erro ao determinar API key do Asaas:', error);
     return null;
+  }
+}
+
+// AI dev note: Busca cliente existente no Asaas por CPF
+export async function searchExistingCustomer(
+  cpfCnpj: string,
+  userRole: string | null
+): Promise<AsaasIntegrationResult> {
+  try {
+    const apiConfig = await determineApiKey(userRole);
+    if (!apiConfig) {
+      return {
+        success: false,
+        error: 'API key do Asaas não configurada'
+      };
+    }
+
+    console.log('🔍 Buscando cliente existente por CPF/CNPJ:', cpfCnpj);
+
+    // Chama Edge Function para buscar cliente
+    const { data, error } = await supabase.functions.invoke('asaas-search-customer', {
+      body: {
+        apiConfig,
+        cpfCnpj
+      }
+    });
+
+    if (error) {
+      console.error('Erro ao chamar Edge Function asaas-search-customer:', error);
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de busca de cliente'
+      };
+    }
+
+    if (!data.success) {
+      return {
+        success: false,
+        error: data.error || 'Erro desconhecido ao buscar cliente'
+      };
+    }
+
+    return {
+      success: true,
+      data: data.customer,
+      asaasCustomerId: data.found ? (data.customer as any)?.id : null
+    };
+
+  } catch (error) {
+    console.error('Erro ao buscar cliente no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao buscar cliente'
+    };
   }
 }
 
@@ -303,43 +369,68 @@ export async function processPayment(
 
     let asaasCustomerId = responsible.id_asaas;
 
-    // 2. Se não tem id_asaas, cria cliente no Asaas
+    // 2. Se não tem id_asaas, verifica se cliente já existe no Asaas
     if (!asaasCustomerId) {
-      console.log('👤 Responsável não tem ID do Asaas, criando cliente...');
+      console.log('👤 Responsável não tem ID do Asaas, verificando se já existe...');
       
-      const customerData: CreateCustomerRequest = {
-        name: responsible.nome,
-        cpfCnpj: responsible.cpf_cnpj,
-        email: responsible.email || undefined,
-        mobilePhone: responsible.telefone ? String(responsible.telefone) : undefined,
-        postalCode: (responsible.enderecos as { cep?: string })?.cep || undefined,
-        externalReference: responsible.id,
-        addressNumber: `${responsible.numero_endereco || ''} ${responsible.complemento_endereco || ''}`.trim() || undefined
-      };
-
-      console.log('📝 Dados para criação do cliente:', customerData);
-
-      const customerResult = await createCustomer(customerData, userRole);
-      if (!customerResult.success) {
-        console.error('❌ Falha ao criar cliente no Asaas:', customerResult.error);
-        return customerResult;
-      }
-
-      asaasCustomerId = customerResult.asaasCustomerId!;
-      console.log('✅ Cliente criado no Asaas:', asaasCustomerId);
-
-      // Atualiza id_asaas no banco
-      console.log('💾 Atualizando ID do Asaas no banco...');
-      const updateResult = await updatePersonAsaasId(responsible.id, asaasCustomerId);
-      if (!updateResult) {
-        console.error('❌ Erro ao salvar ID do cliente Asaas no banco');
-        return {
-          success: false,
-          error: 'Erro ao salvar ID do cliente Asaas'
+      // Primeiro, busca cliente existente por CPF
+      const searchResult = await searchExistingCustomer(responsible.cpf_cnpj, userRole);
+      
+      if (searchResult.success && searchResult.asaasCustomerId) {
+        // Cliente já existe no Asaas, apenas atualiza o ID no Supabase
+        asaasCustomerId = searchResult.asaasCustomerId;
+        console.log('✅ Cliente já existe no Asaas:', asaasCustomerId);
+        
+        // Atualiza id_asaas no banco
+        console.log('💾 Atualizando ID do Asaas existente no banco...');
+        const updateResult = await updatePersonAsaasId(responsible.id, asaasCustomerId);
+        if (!updateResult) {
+          console.error('❌ Erro ao salvar ID do cliente Asaas no banco');
+          return {
+            success: false,
+            error: 'Erro ao salvar ID do cliente Asaas'
+          };
+        }
+        
+        console.log('✅ ID do Asaas atualizado no Supabase');
+      } else {
+        // Cliente não existe, criar novo
+        console.log('🆕 Cliente não existe no Asaas, criando novo...');
+        
+        const customerData: CreateCustomerRequest = {
+          name: responsible.nome,
+          cpfCnpj: responsible.cpf_cnpj,
+          email: responsible.email || undefined,
+          mobilePhone: responsible.telefone ? String(responsible.telefone) : undefined,
+          postalCode: (responsible.enderecos as { cep?: string })?.cep || undefined,
+          externalReference: responsible.id,
+          addressNumber: `${responsible.numero_endereco || ''} ${responsible.complemento_endereco || ''}`.trim() || undefined
         };
+
+        console.log('📝 Dados para criação do cliente:', customerData);
+
+        const customerResult = await createCustomer(customerData, userRole);
+        if (!customerResult.success) {
+          console.error('❌ Falha ao criar cliente no Asaas:', customerResult.error);
+          return customerResult;
+        }
+
+        asaasCustomerId = customerResult.asaasCustomerId!;
+        console.log('✅ Cliente criado no Asaas:', asaasCustomerId);
+
+        // Atualiza id_asaas no banco
+        console.log('💾 Atualizando ID do Asaas no banco...');
+        const updateResult = await updatePersonAsaasId(responsible.id, asaasCustomerId);
+        if (!updateResult) {
+          console.error('❌ Erro ao salvar ID do cliente Asaas no banco');
+          return {
+            success: false,
+            error: 'Erro ao salvar ID do cliente Asaas'
+          };
+        }
       }
 
-      // 3. Desabilita notificações nativas do Asaas
+      // 3. Desabilita notificações nativas do Asaas (para cliente novo ou existente)
       console.log('🔕 Desabilitando notificações nativas do Asaas...');
       const notificationResult = await disableNotifications(asaasCustomerId, userRole);
       if (!notificationResult.success) {

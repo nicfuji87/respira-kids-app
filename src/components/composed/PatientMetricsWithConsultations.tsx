@@ -112,7 +112,7 @@ export const PatientMetricsWithConsultations =
       };
 
       // AI dev note: Gera descrição da cobrança baseada no template especificado
-      const generateChargeDescription = (selectedConsultationData: RecentConsultation[], patientData: Record<string, any>) => {
+      const generateChargeDescription = async (selectedConsultationData: RecentConsultation[], patientData: Record<string, any>) => {
         console.log('🎯 Gerando descrição da cobrança:', {
           consultationsCount: selectedConsultationData.length,
           patientData: patientData
@@ -141,15 +141,38 @@ export const PatientMetricsWithConsultations =
 
         const servicesText = serviceDescriptions.join(', ');
 
-        // Buscar dados do profissional da primeira consulta (assumindo mesmo profissional)
+        // Buscar dados completos do profissional da primeira consulta
         const firstConsultation = selectedConsultationData[0];
         const extendedFirstConsultation = firstConsultation as RecentConsultation & { 
-          profissional_cpf?: string; 
-          profissional_registro?: string; 
+          profissional_id?: string; 
         };
         const profissionalNome = firstConsultation?.profissional_nome || 'Profissional';
-        const profissionalCpf = extendedFirstConsultation.profissional_cpf || '';
-        const profissionalRegistro = extendedFirstConsultation.profissional_registro || '';
+        
+        let profissionalCpf = '';
+        let profissionalRegistro = '';
+
+        // Buscar CPF e registro do profissional no banco
+        if (extendedFirstConsultation.profissional_id) {
+          console.log('🔍 Buscando dados completos do profissional:', extendedFirstConsultation.profissional_id);
+          
+          try {
+            const { data: profissionalData, error: profissionalError } = await supabase
+              .from('pessoas')
+              .select('cpf_cnpj, registro_profissional')
+              .eq('id', extendedFirstConsultation.profissional_id)
+              .single();
+
+            if (!profissionalError && profissionalData) {
+              profissionalCpf = profissionalData.cpf_cnpj || '';
+              profissionalRegistro = profissionalData.registro_profissional || '';
+              console.log('✅ Dados do profissional encontrados:', { profissionalCpf, profissionalRegistro });
+            } else {
+              console.warn('⚠️ Erro ao buscar dados do profissional:', profissionalError);
+            }
+          } catch (error) {
+            console.error('❌ Erro na busca do profissional:', error);
+          }
+        }
 
         // Dados do paciente
         const pacienteNome = patientData?.nome || 'Paciente';
@@ -168,7 +191,8 @@ export const PatientMetricsWithConsultations =
         }).join(', ');
 
         // Template conforme especificado
-        const description = `${servicesText}. Atendimento realizado ao paciente ${pacienteNome} CPF ${pacienteCpf}, pela ${profissionalNome} CPF ${profissionalCpf} ${profissionalRegistro}. Nos dias ${datesAndValues}`;
+        const registroText = profissionalRegistro ? ` ${profissionalRegistro}` : '';
+        const description = `${servicesText}. Atendimento realizado ao paciente ${pacienteNome} CPF ${pacienteCpf}, pela ${profissionalNome} CPF ${profissionalCpf}${registroText}. Nos dias ${datesAndValues}`;
         
         console.log('📝 Descrição gerada:', description);
         return description;
@@ -232,7 +256,7 @@ export const PatientMetricsWithConsultations =
           console.log('💳 Responsável pela cobrança:', responsibleId);
 
           // Gerar descrição da cobrança
-          const description = generateChargeDescription(selectedConsultationData, patientData);
+          const description = await generateChargeDescription(selectedConsultationData, patientData);
 
           // Preparar dados para processamento
           const processData: ProcessPaymentData = {
@@ -361,6 +385,7 @@ export const PatientMetricsWithConsultations =
               status_pagamento_descricao,
               status_pagamento_cor,
               profissional_nome,
+              profissional_id,
               possui_evolucao
             `
               )

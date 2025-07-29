@@ -49,6 +49,7 @@ Deploy das funções necessárias:
 cd respira-kids-app
 
 # Deploy das Edge Functions
+supabase functions deploy asaas-search-customer
 supabase functions deploy asaas-create-customer
 supabase functions deploy asaas-disable-notifications  
 supabase functions deploy asaas-create-payment
@@ -69,8 +70,10 @@ supabase functions deploy asaas-create-payment
    - Fallback para API global
 3. **Verificação do Cliente**:
    - Busca `id_asaas` do responsável pela cobrança
-   - Se não existir, cria cliente no Asaas
-   - Atualiza `id_asaas` na tabela `pessoas`
+   - Se não existir, verifica se cliente já existe no Asaas por CPF
+   - Se cliente existir no Asaas: atualiza `id_asaas` no Supabase
+   - Se não existir: cria novo cliente no Asaas
+   - Sempre atualiza `id_asaas` na tabela `pessoas`
 4. **Desabilitação de Notificações**: Remove notificações nativas do Asaas
 5. **Criação da Cobrança**:
    - Tipo: PIX apenas
@@ -102,10 +105,33 @@ A descrição é gerada automaticamente seguindo o template:
 ### Logs das Edge Functions
 ```bash
 # Ver logs em tempo real
+supabase functions logs asaas-search-customer
 supabase functions logs asaas-create-customer
 supabase functions logs asaas-disable-notifications
 supabase functions logs asaas-create-payment
 ```
+
+## 🔄 Melhorias Implementadas (v2.0)
+
+### ✅ Verificação de Cliente Existente
+O sistema agora verifica se o responsável pela cobrança já possui cadastro no Asaas antes de criar um novo:
+
+1. **Busca por CPF**: Consulta a API do Asaas usando o CPF do responsável
+2. **Atualização Automática**: Se encontrar, atualiza o `id_asaas` no Supabase
+3. **Criação Inteligente**: Só cria novo cliente se não existir
+
+### ✅ Dados Completos do Profissional
+- Busca automática de CPF e registro profissional na descrição da cobrança
+- Template mais preciso com CREFITO quando disponível
+
+### ✅ Logs Aprimorados
+- Emojis para fácil identificação de cada etapa
+- Logs detalhados em todas as operações
+- Debugging simplificado
+
+### ✅ API Key Individual Corrigida
+- Corrigido erro 406 na busca de API keys por empresa
+- Logs detalhados da seleção de API key
 
 ## 🛠️ Resolução de Problemas
 
@@ -124,6 +150,16 @@ supabase functions logs asaas-create-payment
 ### Erro: "Erro 401 ao criar cliente no Asaas"
 - API key inválida ou expirada
 - Verifique permissões da API key no painel do Asaas
+
+### Erro: "Failed to send a request to the Edge Function" (CORS)
+- Edge Functions não estão deployadas
+- Execute: `supabase functions deploy [nome-da-funcao]`
+- Verifique se o projeto Supabase está configurado corretamente
+
+### Erro: "Erro na comunicação com o serviço de criação de cliente"
+- Verifique se todas as Edge Functions foram deployadas
+- Confirme se o Supabase CLI está configurado
+- Teste as funções individualmente nos logs
 
 ## 📚 Recursos Adicionais
 
