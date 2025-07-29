@@ -135,27 +135,31 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Informações principais do topo */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Métricas resumo */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 p-3 md:p-4 bg-muted/30 rounded-lg border">
             {/* Mês Atual */}
             <div className="text-center">
-              <div className="text-sm text-muted-foreground">Mês Atual</div>
-              <div className="font-medium">
+              <div className="text-xs md:text-sm text-muted-foreground">
+                Mês Atual
+              </div>
+              <div className="font-medium text-sm md:text-base">
                 {formatCurrency(data.resumoAno.mesAtual.faturamentoTotal)}
               </div>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <div>{data.resumoAno.mesAtual.consultas} consultas</div>
-                <div className="text-verde-pipa">
-                  A receber:{' '}
-                  {formatCurrency(data.resumoAno.mesAtual.faturamentoAReceber)}
-                </div>
+              <div className="text-xs text-muted-foreground">
+                {data.resumoAno.mesAtual.consultas} consultas
+              </div>
+              <div className="text-xs text-verde-pipa font-medium">
+                A receber:{' '}
+                {formatCurrency(data.resumoAno.mesAtual.faturamentoAReceber)}
               </div>
             </div>
 
             {/* Melhor Mês */}
             <div className="text-center">
-              <div className="text-sm text-muted-foreground">Melhor Mês</div>
-              <div className="font-medium">
+              <div className="text-xs md:text-sm text-muted-foreground">
+                Melhor Mês
+              </div>
+              <div className="font-medium text-sm md:text-base">
                 {formatCurrency(data.resumoAno.melhorMes.faturamento)}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -165,8 +169,10 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
 
             {/* Média Mensal */}
             <div className="text-center">
-              <div className="text-sm text-muted-foreground">Média Mensal</div>
-              <div className="font-medium text-verde-pipa">
+              <div className="text-xs md:text-sm text-muted-foreground">
+                Média Mensal
+              </div>
+              <div className="font-medium text-verde-pipa text-sm md:text-base">
                 {formatCurrency(data.resumoAno.mediaMovel)}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -181,8 +187,10 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
 
             {/* Total do Ano */}
             <div className="text-center">
-              <div className="text-sm text-muted-foreground">Total do Ano</div>
-              <div className="font-medium text-foreground">
+              <div className="text-xs md:text-sm text-muted-foreground">
+                Total do Ano
+              </div>
+              <div className="font-medium text-foreground text-sm md:text-base">
                 {formatCurrency(data.resumoAno.totalFaturamento)}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -192,7 +200,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
           </div>
 
           {/* Gráfico */}
-          <div className="h-[300px]">
+          <div className="h-[250px] md:h-[300px]">
             <ChartContainer config={chartConfig} className="h-full w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart

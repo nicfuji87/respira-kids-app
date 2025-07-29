@@ -72,6 +72,7 @@ export { RecentConsultations } from './RecentConsultations';
 export { PatientAnamnesis } from './PatientAnamnesis';
 export { PatientHistory } from './PatientHistory';
 export { MediaGallery } from './MediaGallery';
+export { BillingResponsibleSelect } from './BillingResponsibleSelect';
 
 // User Management Components
 export { UserSearch } from './UserSearch';

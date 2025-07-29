@@ -266,31 +266,35 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
 
     return (
       <>
-        <div className={cn('space-y-6 p-6', className)}>
+        <div className={cn('space-y-4 md:space-y-6 p-2 md:p-6', className)}>
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-roxo-titulo respira-text-gradient">
+              <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo respira-text-gradient">
                 Dashboard Administrativo
               </h1>
-              <p className="text-muted-foreground mt-1">
+              <p className="text-muted-foreground mt-1 text-sm md:text-base">
                 Visão geral da Clínica Respira Kids
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Bell className="h-4 w-4" />
+            <div className="flex items-center gap-2 md:gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 text-xs md:text-sm"
+              >
+                <Bell className="h-3 w-3 md:h-4 md:w-4" />
                 {(metrics?.aprovacoesPendentes || 0) +
                   (materialRequests?.length || 0)}{' '}
                 pendentes
               </Button>
               <Button
                 size="sm"
-                className="respira-gradient"
+                className="respira-gradient text-xs md:text-sm"
                 onClick={() => handleModuleClick('reports')}
               >
-                <Activity className="h-4 w-4 mr-2" />
+                <Activity className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
                 Relatório Geral
               </Button>
               <Button
@@ -298,7 +302,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
                 size="sm"
                 onClick={refreshAll}
                 disabled={loading}
-                className="gap-2"
+                className="gap-2 text-xs md:text-sm"
               >
                 {loading ? 'Atualizando...' : 'Atualizar'}
               </Button>
@@ -308,7 +312,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
           {/* Error State */}
           {error && (
             <Card className="border-destructive">
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 md:pt-6 p-3 md:p-6">
                 <p className="text-destructive text-sm">{error}</p>
               </CardContent>
             </Card>
@@ -316,24 +320,28 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
 
           {/* Gráfico de Faturamento Anual com Filtro */}
           <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <CardHeader className="p-3 md:p-6">
+              <div className="flex flex-col gap-3 md:gap-4">
                 <div>
-                  <CardTitle>Gráfico Anual de Faturamento</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-lg md:text-xl">
+                    Gráfico Anual de Faturamento
+                  </CardTitle>
+                  <CardDescription className="text-sm">
                     Faturamento consolidado por mês com comparativo anual
                   </CardDescription>
                 </div>
-                <ProfessionalFilter
-                  selectedProfessionals={professionalFilters.faturamento}
-                  onSelectionChange={(professionalIds) =>
-                    setProfessionalFilters({ faturamento: professionalIds })
-                  }
-                  placeholder="Filtrar por profissional..."
-                />
+                <div className="w-full md:w-auto">
+                  <ProfessionalFilter
+                    selectedProfessionals={professionalFilters.faturamento}
+                    onSelectionChange={(professionalIds) =>
+                      setProfessionalFilters({ faturamento: professionalIds })
+                    }
+                    placeholder="Filtrar por profissional..."
+                  />
+                </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 md:p-6 pt-0">
               <FaturamentoChart
                 data={faturamentoComparativo}
                 loading={loading}
@@ -343,29 +351,33 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
           </Card>
 
           {/* Grid de Componentes do Dashboard */}
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid grid-cols-1 gap-4 md:gap-6">
             {/* Próximos Agendamentos com Filtro */}
             <Card>
-              <CardHeader>
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                      <CardTitle>Próximos Agendamentos</CardTitle>
-                      <CardDescription>
-                        Consultas agendadas para os próximos 7 dias
-                      </CardDescription>
-                    </div>
+              <CardHeader className="p-3 md:p-6">
+                <div className="flex flex-col gap-3 md:gap-4">
+                  <div>
+                    <CardTitle className="text-lg md:text-xl">
+                      Próximos Agendamentos
+                    </CardTitle>
+                    <CardDescription className="text-sm">
+                      Consultas agendadas para os próximos 7 dias
+                    </CardDescription>
                   </div>
-                  <ProfessionalFilter
-                    selectedProfessionals={professionalFilters.agendamentos}
-                    onSelectionChange={(professionalIds) =>
-                      setProfessionalFilters({ agendamentos: professionalIds })
-                    }
-                    placeholder="Filtrar por profissional..."
-                  />
+                  <div className="w-full md:w-auto">
+                    <ProfessionalFilter
+                      selectedProfessionals={professionalFilters.agendamentos}
+                      onSelectionChange={(professionalIds) =>
+                        setProfessionalFilters({
+                          agendamentos: professionalIds,
+                        })
+                      }
+                      placeholder="Filtrar por profissional..."
+                    />
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 md:p-6 pt-0">
                 <AppointmentsList
                   appointments={upcomingAppointments}
                   loading={loading}
@@ -380,11 +392,13 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
                   }
                 />
                 {hasMoreAppointments && (
-                  <div className="mt-4 text-center">
+                  <div className="mt-3 md:mt-4 text-center">
                     <Button
                       variant="ghost"
+                      size="sm"
                       onClick={handleLoadMoreAppointments}
                       disabled={loading}
+                      className="text-xs md:text-sm"
                     >
                       Ver mais agendamentos
                     </Button>
@@ -396,24 +410,28 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
 
           {/* Consultas a Evoluir com Filtro */}
           <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <CardHeader className="p-3 md:p-6">
+              <div className="flex flex-col gap-3 md:gap-4">
                 <div>
-                  <CardTitle>Consultas a Evoluir</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-lg md:text-xl">
+                    Consultas a Evoluir
+                  </CardTitle>
+                  <CardDescription className="text-sm">
                     Consultas finalizadas que precisam de relatório de evolução
                   </CardDescription>
                 </div>
-                <ProfessionalFilter
-                  selectedProfessionals={professionalFilters.consultas}
-                  onSelectionChange={(professionalIds) =>
-                    setProfessionalFilters({ consultas: professionalIds })
-                  }
-                  placeholder="Filtrar por profissional..."
-                />
+                <div className="w-full md:w-auto">
+                  <ProfessionalFilter
+                    selectedProfessionals={professionalFilters.consultas}
+                    onSelectionChange={(professionalIds) =>
+                      setProfessionalFilters({ consultas: professionalIds })
+                    }
+                    placeholder="Filtrar por profissional..."
+                  />
+                </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 md:p-6 pt-0">
               <ConsultationsToEvolve
                 consultations={consultationsToEvolve}
                 loading={loading}

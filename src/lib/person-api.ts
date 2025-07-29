@@ -175,6 +175,11 @@ export const fetchPersonDetails = async (
             estado: enderecoData.estado,
           }
         : null,
+
+      // Campos obrigatórios adicionados recentemente
+      responsavel_cobranca_id: data.responsavel_cobranca_id || data.id, // Default para própria pessoa se não definido
+      responsavel_cobranca_nome:
+        data.responsavel_cobranca_nome || data.nome || 'Não definido',
     };
 
     return { person, error: null };

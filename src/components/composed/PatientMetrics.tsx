@@ -179,36 +179,56 @@ export const PatientMetrics = React.memo<PatientMetricsProps>(
           const consultasFinalizadas = data.filter(
             (item) =>
               (item.consulta_status as unknown as { codigo: string })
-                ?.codigo === 'finalizada'
+                ?.codigo === 'finalizado'
           ).length;
           const consultasAgendadas = data.filter(
             (item) =>
               (item.consulta_status as unknown as { codigo: string })
-                ?.codigo === 'agendada'
+                ?.codigo === 'agendado'
           ).length;
           const consultasCanceladas = data.filter(
             (item) =>
               (item.consulta_status as unknown as { codigo: string })
-                ?.codigo === 'cancelada'
+                ?.codigo === 'cancelado'
           ).length;
+
+          // Função auxiliar para converter string de data em timestamp (sem conversão de timezone)
+          const parseDateTime = (dateString: string): number => {
+            const [datePart, timePart] =
+              dateString.split('T').length > 1
+                ? dateString.split('T')
+                : dateString.split(' ');
+
+            const [year, month, day] = datePart.split('-');
+            const [hour, minute, second] = timePart.split('+')[0].split(':');
+
+            const date = new Date(
+              parseInt(year),
+              parseInt(month) - 1,
+              parseInt(day),
+              parseInt(hour),
+              parseInt(minute),
+              parseInt(second || '0')
+            );
+
+            return date.getTime();
+          };
 
           // Última consulta
           const sortedConsultas = data
             .filter(
               (item) =>
                 (item.consulta_status as unknown as { codigo: string })
-                  ?.codigo === 'finalizada'
+                  ?.codigo === 'finalizado'
             )
             .sort(
-              (a, b) =>
-                new Date(b.data_hora).getTime() -
-                new Date(a.data_hora).getTime()
+              (a, b) => parseDateTime(b.data_hora) - parseDateTime(a.data_hora)
             );
 
           const ultimaConsulta = sortedConsultas[0]?.data_hora;
           const diasDesdeUltima = ultimaConsulta
             ? Math.floor(
-                (Date.now() - new Date(ultimaConsulta).getTime()) /
+                (Date.now() - parseDateTime(ultimaConsulta)) /
                   (1000 * 60 * 60 * 24)
               )
             : null;

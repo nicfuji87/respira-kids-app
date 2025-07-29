@@ -44,7 +44,25 @@ const ConsultationItem = React.memo<{
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }>(({ consultation, onClick, onCreateEvolution, userRole }) => {
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    // Parse manual para evitar conversão automática de timezone
+    // Formato esperado: "2025-07-29T09:00:00+00:00" ou "2025-07-29 09:00:00+00"
+    const [datePart, timePart] =
+      dateString.split('T').length > 1
+        ? dateString.split('T')
+        : dateString.split(' ');
+
+    const [year, month, day] = datePart.split('-');
+    const [hour, minute] = timePart.split('+')[0].split(':'); // Remove timezone info
+
+    // Criar data usando valores exatos sem conversão
+    const date = new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hour),
+      parseInt(minute)
+    );
+
     return new Intl.DateTimeFormat('pt-BR', {
       day: '2-digit',
       month: 'short',
@@ -136,7 +154,7 @@ const ConsultationItem = React.memo<{
   return (
     <div
       className={cn(
-        'flex items-center justify-between p-4 border rounded-lg transition-all duration-200',
+        'flex items-center justify-between p-3 md:p-4 border rounded-lg transition-all duration-200',
         'hover:shadow-md hover:border-primary/20',
         (consultation.prioridade === 'urgente' ||
           consultation.diasPendente > 2) &&
@@ -145,12 +163,12 @@ const ConsultationItem = React.memo<{
       )}
       onClick={() => onClick?.(consultation)}
     >
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-1.5 md:space-y-2">
         {/* Linha 1: Paciente e Status */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium text-foreground">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <User className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+            <span className="font-medium text-sm md:text-base text-foreground">
               {consultation.pacienteNome}
             </span>
           </div>
@@ -158,7 +176,7 @@ const ConsultationItem = React.memo<{
         </div>
 
         {/* Linha 2: Serviço e Data */}
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-xs md:text-sm">
           <span className="text-muted-foreground">
             {consultation.tipoServico}
           </span>
@@ -171,7 +189,7 @@ const ConsultationItem = React.memo<{
         {/* Linha 3: Profissional e Status Pagamento (apenas para admin/secretaria) */}
         {showAdminFields &&
           (consultation.profissionalNome || consultation.statusPagamento) && (
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center justify-between text-xs md:text-sm">
               {consultation.profissionalNome && (
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <UserCog className="h-3 w-3" />
@@ -188,7 +206,7 @@ const ConsultationItem = React.memo<{
 
         {/* Linha 4: Valor e Ação */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 text-sm font-medium text-verde-pipa">
+          <div className="flex items-center gap-1 text-xs md:text-sm font-medium text-verde-pipa">
             <DollarSign className="h-3 w-3" />
             {formatCurrency(consultation.valor)}
           </div>
@@ -201,7 +219,7 @@ const ConsultationItem = React.memo<{
                 e.stopPropagation();
                 onCreateEvolution(consultation.id);
               }}
-              className="text-xs"
+              className="text-xs h-7 px-2 md:px-3"
             >
               <FileText className="h-3 w-3 mr-1" />
               Criar Evolução
@@ -210,7 +228,9 @@ const ConsultationItem = React.memo<{
         </div>
       </div>
 
-      {onClick && <ArrowRight className="h-4 w-4 text-muted-foreground ml-3" />}
+      {onClick && (
+        <ArrowRight className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground ml-2 md:ml-3" />
+      )}
     </div>
   );
 });

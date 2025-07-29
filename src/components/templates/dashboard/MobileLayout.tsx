@@ -72,7 +72,7 @@ export const MobileLayout = React.memo<MobileLayoutProps>(
 
         {/* Content area */}
         <main className="flex-1 overflow-auto pt-16 pb-16">
-          <div className="container mx-auto px-4 py-6">{children}</div>
+          <div className="px-2 py-3">{children}</div>
         </main>
 
         {/* Bottom tabs */}

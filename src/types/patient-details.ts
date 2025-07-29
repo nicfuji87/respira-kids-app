@@ -27,6 +27,10 @@ export interface PatientDetails extends SupabasePessoa {
   responsavel_financeiro_email?: string;
   responsavel_financeiro_telefone?: number;
 
+  // AI dev note: Responsável pela cobrança/NFe - obrigatório
+  responsavel_cobranca_id: string;
+  responsavel_cobranca_nome: string;
+
   // Dados de endereço
   endereco?: {
     cep: string;
@@ -80,6 +84,7 @@ export interface RecentConsultation {
   status_cor_pagamento: string;
   profissional_nome?: string;
   possui_evolucao?: string;
+  selectable?: boolean; // Para modo de seleção de cobrança
 }
 
 // Interface para dados de consentimento

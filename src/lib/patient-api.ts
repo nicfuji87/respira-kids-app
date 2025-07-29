@@ -37,6 +37,9 @@ export async function fetchPatientDetails(
     // Endereço agora vem diretamente da view
     const patient: PatientDetails = {
       ...data,
+      // AI dev note: Garantir que responsavel_cobranca_nome está sempre definido
+      responsavel_cobranca_nome:
+        data.responsavel_cobranca_nome || data.nome || 'Não definido',
       endereco: data.cep
         ? {
             cep: data.cep,
@@ -423,9 +426,7 @@ export async function fetchPatientCompiledHistory(patientId: string): Promise<{
  * Buscar histórico do paciente por ID
  * Retorna o histórico mais recente gerado automaticamente ou manualmente
  */
-export async function fetchPatientHistory(
-  patientId: string
-): Promise<{
+export async function fetchPatientHistory(patientId: string): Promise<{
   history: string | null;
   lastGenerated: string | null;
   isAiGenerated: boolean | null;
@@ -686,6 +687,152 @@ export async function updateAIHistoryStatus(
     return { success: true };
   } catch (err) {
     console.error('Erro ao atualizar status da IA:', err);
+    return { success: false, error: 'Erro interno do servidor' };
+  }
+}
+
+/**
+ * Buscar responsáveis do paciente para seleção de cobrança
+ * Inclui o próprio paciente + responsáveis ativos
+ */
+export async function fetchPatientResponsibles(
+  patientId: string
+): Promise<{
+  responsibles: Array<{ id: string; nome: string; ativo: boolean }>;
+  error?: string;
+}> {
+  try {
+    // Buscar o próprio paciente
+    const { data: patientData, error: patientError } = await supabase
+      .from('pessoas')
+      .select('id, nome, ativo')
+      .eq('id', patientId)
+      .single();
+
+    if (patientError) {
+      console.error('Erro ao buscar paciente:', patientError);
+      return { responsibles: [], error: 'Paciente não encontrado' };
+    }
+
+    // Buscar responsáveis ativos do paciente
+    const { data: responsiblesData, error: responsiblesError } = await supabase
+      .from('pessoa_responsaveis')
+      .select(
+        `
+        id_responsavel,
+        pessoas!id_responsavel(id, nome, ativo)
+      `
+      )
+      .eq('id_pessoa', patientId)
+      .eq('ativo', true)
+      .is('data_fim', null); // Responsabilidade ainda ativa
+
+    if (responsiblesError) {
+      console.error('Erro ao buscar responsáveis:', responsiblesError);
+      return { responsibles: [], error: 'Erro ao buscar responsáveis' };
+    }
+
+    // Combinar paciente + responsáveis, removendo duplicatas
+    const allResponsibles = [patientData];
+
+    if (responsiblesData) {
+      responsiblesData.forEach((rel) => {
+        const responsavel = Array.isArray(rel.pessoas)
+          ? rel.pessoas[0]
+          : rel.pessoas;
+        if (responsavel && responsavel.id !== patientId && responsavel.ativo) {
+          allResponsibles.push({
+            id: responsavel.id,
+            nome: responsavel.nome,
+            ativo: responsavel.ativo,
+          });
+        }
+      });
+    }
+
+    return { responsibles: allResponsibles, error: undefined };
+  } catch (err) {
+    console.error('Erro ao buscar responsáveis do paciente:', err);
+    return {
+      responsibles: [],
+      error: err instanceof Error ? err.message : 'Erro desconhecido',
+    };
+  }
+}
+
+/**
+ * Atualizar responsável pela cobrança do paciente
+ * Apenas admin/secretaria podem alterar
+ */
+export async function updateBillingResponsible(
+  patientId: string,
+  responsibleId: string,
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Validação de role
+    if (userRole !== 'admin' && userRole !== 'secretaria') {
+      return {
+        success: false,
+        error:
+          'Acesso negado. Apenas admin/secretaria podem alterar responsável pela cobrança',
+      };
+    }
+
+    // Verificar se o responsável existe e está ativo
+    const { data: responsibleData, error: responsibleError } = await supabase
+      .from('pessoas')
+      .select('id, ativo')
+      .eq('id', responsibleId)
+      .single();
+
+    if (responsibleError || !responsibleData) {
+      return { success: false, error: 'Responsável não encontrado' };
+    }
+
+    if (!responsibleData.ativo) {
+      return { success: false, error: 'Responsável selecionado está inativo' };
+    }
+
+    // Verificar se é uma seleção válida (paciente ou responsável dele)
+    if (responsibleId !== patientId) {
+      const { error: relationError } = await supabase
+        .from('pessoa_responsaveis')
+        .select('id')
+        .eq('id_pessoa', patientId)
+        .eq('id_responsavel', responsibleId)
+        .eq('ativo', true)
+        .is('data_fim', null)
+        .single();
+
+      if (relationError) {
+        return {
+          success: false,
+          error: 'Responsável selecionado não está vinculado ao paciente',
+        };
+      }
+    }
+
+    // Atualizar responsável pela cobrança
+    const { error: updateError } = await supabase
+      .from('pessoas')
+      .update({
+        responsavel_cobranca_id: responsibleId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', patientId);
+
+    if (updateError) {
+      console.error('Erro ao atualizar responsável cobrança:', updateError);
+      return {
+        success: false,
+        error: 'Erro ao atualizar responsável pela cobrança',
+      };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Erro ao atualizar responsável cobrança:', err);
     return { success: false, error: 'Erro interno do servidor' };
   }
 }

@@ -9,6 +9,8 @@ import {
   MapPin,
   User,
   ChevronRight,
+  CreditCard,
+  X,
 } from 'lucide-react';
 import {
   Card,
@@ -20,6 +22,7 @@ import { Badge } from '@/components/primitives/badge';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
+import { Checkbox } from '@/components/primitives/checkbox';
 import {
   Select,
   SelectContent,
@@ -29,6 +32,7 @@ import {
 } from '@/components/primitives/select';
 import { DatePicker } from './DatePicker';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import type {
   PatientMetricsProps,
@@ -54,6 +58,7 @@ interface PatientMetricsWithConsultationsProps extends PatientMetricsProps {
 export const PatientMetricsWithConsultations =
   React.memo<PatientMetricsWithConsultationsProps>(
     ({ patientId, onConsultationClick, className }) => {
+      const { user } = useAuth();
       const [metrics, setMetrics] = useState<PatientMetricsData | null>(null);
       const [consultations, setConsultations] = useState<RecentConsultation[]>(
         []
@@ -66,6 +71,48 @@ export const PatientMetricsWithConsultations =
       const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('todos');
       const [startDate, setStartDate] = useState<string>('');
       const [endDate, setEndDate] = useState<string>('');
+
+      // Estados para seleção de consultas para cobrança
+      const [isSelectionMode, setIsSelectionMode] = useState(false);
+      const [selectedConsultations, setSelectedConsultations] = useState<
+        string[]
+      >([]);
+
+      // Verificar se usuário tem permissão para gerar cobrança (admin ou secretaria)
+      const canGenerateCharge =
+        user?.pessoa?.role === 'admin' || user?.pessoa?.role === 'secretaria';
+
+      // Handlers de seleção
+      const toggleSelectionMode = () => {
+        setIsSelectionMode(!isSelectionMode);
+        setSelectedConsultations([]); // Limpar seleção ao entrar/sair do modo
+      };
+
+      const toggleConsultationSelection = (consultationId: string) => {
+        setSelectedConsultations((prev) =>
+          prev.includes(consultationId)
+            ? prev.filter((id) => id !== consultationId)
+            : [...prev, consultationId]
+        );
+      };
+
+      const selectAllConsultations = () => {
+        const selectableConsultations = consultations
+          .filter((c) => c.status_pagamento?.toLowerCase() === 'pendente')
+          .map((c) => c.id);
+        setSelectedConsultations(selectableConsultations);
+      };
+
+      const clearSelection = () => {
+        setSelectedConsultations([]);
+      };
+
+      // Filtrar consultas selecionáveis (apenas pendentes)
+      const selectableConsultations = consultations.filter(
+        (c) => c.status_pagamento?.toLowerCase() === 'pendente'
+      );
+
+      const selectedCount = selectedConsultations.length;
 
       useEffect(() => {
         const loadData = async () => {
@@ -117,13 +164,13 @@ export const PatientMetricsWithConsultations =
 
             // Query para métricas com filtros aplicados
             let metricsQuery = supabase
-              .from('agendamentos')
+              .from('vw_agendamentos_completos')
               .select(
                 `
               valor_servico,
               data_hora,
-              consulta_status!inner(codigo),
-              pagamento_status!inner(codigo)
+              status_consulta_codigo,
+              status_pagamento_codigo
             `
               )
               .eq('paciente_id', patientId)
@@ -191,9 +238,7 @@ export const PatientMetricsWithConsultations =
             // Calcular Total Faturado (cobrança gerada + pendente + pago + atrasado)
             const totalFaturado = metricsData
               .filter((item) => {
-                const statusCode = (
-                  item.pagamento_status as unknown as { codigo: string }
-                )?.codigo;
+                const statusCode = item.status_pagamento_codigo;
                 return [
                   'cobranca_gerada',
                   'pendente',
@@ -208,33 +253,21 @@ export const PatientMetricsWithConsultations =
 
             // Calcular valores por status de pagamento
             const valorPago = metricsData
-              .filter(
-                (item) =>
-                  (item.pagamento_status as unknown as { codigo: string })
-                    ?.codigo === 'pago'
-              )
+              .filter((item) => item.status_pagamento_codigo === 'pago')
               .reduce(
                 (sum, item) => sum + parseFloat(item.valor_servico || '0'),
                 0
               );
 
             const valorPendente = metricsData
-              .filter(
-                (item) =>
-                  (item.pagamento_status as unknown as { codigo: string })
-                    ?.codigo === 'pendente'
-              )
+              .filter((item) => item.status_pagamento_codigo === 'pendente')
               .reduce(
                 (sum, item) => sum + parseFloat(item.valor_servico || '0'),
                 0
               );
 
             const valorEmAtraso = metricsData
-              .filter(
-                (item) =>
-                  (item.pagamento_status as unknown as { codigo: string })
-                    ?.codigo === 'atrasado'
-              )
+              .filter((item) => item.status_pagamento_codigo === 'atrasado')
               .reduce(
                 (sum, item) => sum + parseFloat(item.valor_servico || '0'),
                 0
@@ -242,38 +275,49 @@ export const PatientMetricsWithConsultations =
 
             // Consultas por status
             const consultasFinalizadas = metricsData.filter(
-              (item) =>
-                (item.consulta_status as unknown as { codigo: string })
-                  ?.codigo === 'finalizada'
+              (item) => item.status_consulta_codigo === 'finalizado'
             ).length;
             const consultasAgendadas = metricsData.filter(
-              (item) =>
-                (item.consulta_status as unknown as { codigo: string })
-                  ?.codigo === 'agendada'
+              (item) => item.status_consulta_codigo === 'agendado'
             ).length;
             const consultasCanceladas = metricsData.filter(
-              (item) =>
-                (item.consulta_status as unknown as { codigo: string })
-                  ?.codigo === 'cancelada'
+              (item) => item.status_consulta_codigo === 'cancelado'
             ).length;
+
+            // Função auxiliar para converter string de data em timestamp (sem conversão de timezone)
+            const parseDateTime = (dateString: string): number => {
+              const [datePart, timePart] =
+                dateString.split('T').length > 1
+                  ? dateString.split('T')
+                  : dateString.split(' ');
+
+              const [year, month, day] = datePart.split('-');
+              const [hour, minute, second] = timePart.split('+')[0].split(':');
+
+              const date = new Date(
+                parseInt(year),
+                parseInt(month) - 1,
+                parseInt(day),
+                parseInt(hour),
+                parseInt(minute),
+                parseInt(second || '0')
+              );
+
+              return date.getTime();
+            };
 
             // Última consulta
             const sortedConsultas = metricsData
-              .filter(
-                (item) =>
-                  (item.consulta_status as unknown as { codigo: string })
-                    ?.codigo === 'finalizada'
-              )
+              .filter((item) => item.status_consulta_codigo === 'finalizado')
               .sort(
                 (a, b) =>
-                  new Date(b.data_hora).getTime() -
-                  new Date(a.data_hora).getTime()
+                  parseDateTime(b.data_hora) - parseDateTime(a.data_hora)
               );
 
             const ultimaConsulta = sortedConsultas[0]?.data_hora;
             const diasDesdeUltima = ultimaConsulta
               ? Math.floor(
-                  (Date.now() - new Date(ultimaConsulta).getTime()) /
+                  (Date.now() - parseDateTime(ultimaConsulta)) /
                     (1000 * 60 * 60 * 24)
                 )
               : null;
@@ -344,6 +388,13 @@ export const PatientMetricsWithConsultations =
         loadData();
       }, [patientId, periodFilter, startDate, endDate]);
 
+      // Limpar seleção quando mudamos filtros
+      useEffect(() => {
+        if (isSelectionMode) {
+          setSelectedConsultations([]);
+        }
+      }, [periodFilter, startDate, endDate, isSelectionMode]);
+
       // Função para formatar valor monetário
       const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -352,15 +403,28 @@ export const PatientMetricsWithConsultations =
         }).format(value);
       };
 
-      // Função para formatar data e hora
+      // Função para formatar data e hora (sem conversão de timezone)
       const formatDateTime = (dateString: string) => {
-        const date = new Date(dateString);
+        // Parse manual para evitar conversão automática de timezone
+        // Formato esperado: "2025-07-29T09:00:00+00:00" ou "2025-07-29 09:00:00+00"
+        const [datePart, timePart] =
+          dateString.split('T').length > 1
+            ? dateString.split('T')
+            : dateString.split(' ');
+
+        const [year, month, day] = datePart.split('-');
+        const [hour, minute] = timePart.split('+')[0].split(':'); // Remove timezone info
+
+        // Criar data usando valores exatos sem conversão
+        const date = new Date(
+          parseInt(year),
+          parseInt(month) - 1,
+          parseInt(day)
+        );
+
         return {
           date: date.toLocaleDateString('pt-BR'),
-          time: date.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
+          time: `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`,
         };
       };
 
@@ -569,13 +633,72 @@ export const PatientMetricsWithConsultations =
 
             {/* Seção de Lista de Consultas */}
             <div className="space-y-4 border-t pt-6">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                <h3 className="text-lg font-medium">Lista de Consultas</h3>
-                {totalCount > 0 && (
-                  <Badge variant="outline" className="ml-auto">
-                    {totalCount} total
-                  </Badge>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  <h3 className="text-lg font-medium">Lista de Consultas</h3>
+                  {totalCount > 0 && (
+                    <Badge variant="outline">{totalCount} total</Badge>
+                  )}
+                </div>
+
+                {/* Botão de seleção para cobrança - apenas para admin/secretaria */}
+                {canGenerateCharge && selectableConsultations.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    {isSelectionMode && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={selectAllConsultations}
+                          disabled={
+                            selectedConsultations.length ===
+                            selectableConsultations.length
+                          }
+                        >
+                          Todas
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={clearSelection}
+                          disabled={selectedConsultations.length === 0}
+                        >
+                          Limpar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={toggleSelectionMode}
+                        >
+                          <X className="h-4 w-4" />
+                          Cancelar
+                        </Button>
+                      </>
+                    )}
+
+                    <Button
+                      variant={selectedCount > 0 ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={
+                        selectedCount > 0
+                          ? () => {
+                              // TODO: Implementar geração de cobrança
+                              console.log(
+                                'Gerar cobrança para:',
+                                selectedConsultations
+                              );
+                            }
+                          : toggleSelectionMode
+                      }
+                      className={selectedCount > 0 ? 'respira-gradient' : ''}
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      {selectedCount > 0
+                        ? `Gerar cobrança de ${selectedCount} consulta${selectedCount > 1 ? 's' : ''}`
+                        : 'Escolher consultas para gerar cobrança'}
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -590,13 +713,47 @@ export const PatientMetricsWithConsultations =
                     const { date, time } = formatDateTime(
                       consultation.data_hora
                     );
+                    const isSelectable =
+                      consultation.status_pagamento?.toLowerCase() ===
+                      'pendente';
+                    const isSelected = selectedConsultations.includes(
+                      consultation.id
+                    );
 
                     return (
                       <div
                         key={consultation.id}
-                        className="flex items-start gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={() => onConsultationClick?.(consultation.id)}
+                        className={cn(
+                          'flex items-start gap-4 p-4 border rounded-lg transition-colors',
+                          !isSelectionMode &&
+                            'hover:bg-muted/50 cursor-pointer',
+                          isSelectionMode && !isSelectable && 'opacity-50',
+                          isSelected && 'ring-2 ring-primary bg-primary/5'
+                        )}
+                        onClick={() => {
+                          if (isSelectionMode && isSelectable) {
+                            toggleConsultationSelection(consultation.id);
+                          } else if (!isSelectionMode) {
+                            onConsultationClick?.(consultation.id);
+                          }
+                        }}
                       >
+                        {/* Checkbox para modo de seleção */}
+                        {isSelectionMode && (
+                          <div className="flex items-center pt-2">
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={!isSelectable}
+                              onCheckedChange={() => {
+                                if (isSelectable) {
+                                  toggleConsultationSelection(consultation.id);
+                                }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        )}
+
                         {/* Ícone de data */}
                         <div className="flex flex-col items-center justify-center w-12 h-12 bg-blue-100 rounded-lg">
                           <Calendar className="h-5 w-5 text-blue-600" />

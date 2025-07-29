@@ -19,6 +19,7 @@ import {
 import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
+import { BillingResponsibleSelect } from './BillingResponsibleSelect';
 
 // AI dev note: PatientCompleteInfo - Component Composed que une informações pessoais, contato, endereço, responsáveis e consentimentos
 // Substitui múltiplos cards por um único card organizado em seções
@@ -259,16 +260,18 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                       <p className="text-sm font-medium">
                         {patient.responsavel_legal_nome}
                       </p>
-                      {patient.responsavel_legal_email && userRole !== 'profissional' && (
-                        <p className="text-sm text-muted-foreground">
-                          📧 {patient.responsavel_legal_email}
-                        </p>
-                      )}
-                      {patient.responsavel_legal_telefone && userRole !== 'profissional' && (
-                        <p className="text-sm text-muted-foreground">
-                          📱 {formatPhone(patient.responsavel_legal_telefone)}
-                        </p>
-                      )}
+                      {patient.responsavel_legal_email &&
+                        userRole !== 'profissional' && (
+                          <p className="text-sm text-muted-foreground">
+                            📧 {patient.responsavel_legal_email}
+                          </p>
+                        )}
+                      {patient.responsavel_legal_telefone &&
+                        userRole !== 'profissional' && (
+                          <p className="text-sm text-muted-foreground">
+                            📱 {formatPhone(patient.responsavel_legal_telefone)}
+                          </p>
+                        )}
                     </div>
                   </div>
                 ) : (
@@ -284,17 +287,21 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           <p className="text-sm font-medium">
                             {patient.responsavel_legal_nome}
                           </p>
-                          {patient.responsavel_legal_email && userRole !== 'profissional' && (
-                            <p className="text-sm text-muted-foreground">
-                              📧 {patient.responsavel_legal_email}
-                            </p>
-                          )}
-                          {patient.responsavel_legal_telefone && userRole !== 'profissional' && (
-                            <p className="text-sm text-muted-foreground">
-                              📱{' '}
-                              {formatPhone(patient.responsavel_legal_telefone)}
-                            </p>
-                          )}
+                          {patient.responsavel_legal_email &&
+                            userRole !== 'profissional' && (
+                              <p className="text-sm text-muted-foreground">
+                                📧 {patient.responsavel_legal_email}
+                              </p>
+                            )}
+                          {patient.responsavel_legal_telefone &&
+                            userRole !== 'profissional' && (
+                              <p className="text-sm text-muted-foreground">
+                                📱{' '}
+                                {formatPhone(
+                                  patient.responsavel_legal_telefone
+                                )}
+                              </p>
+                            )}
                         </div>
                       </div>
                     )}
@@ -309,25 +316,50 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           <p className="text-sm font-medium">
                             {patient.responsavel_financeiro_nome}
                           </p>
-                          {patient.responsavel_financeiro_email && userRole !== 'profissional' && (
-                            <p className="text-sm text-muted-foreground">
-                              📧 {patient.responsavel_financeiro_email}
-                            </p>
-                          )}
-                          {patient.responsavel_financeiro_telefone && userRole !== 'profissional' && (
-                            <p className="text-sm text-muted-foreground">
-                              📱{' '}
-                              {formatPhone(
-                                patient.responsavel_financeiro_telefone
-                              )}
-                            </p>
-                          )}
+                          {patient.responsavel_financeiro_email &&
+                            userRole !== 'profissional' && (
+                              <p className="text-sm text-muted-foreground">
+                                📧 {patient.responsavel_financeiro_email}
+                              </p>
+                            )}
+                          {patient.responsavel_financeiro_telefone &&
+                            userRole !== 'profissional' && (
+                              <p className="text-sm text-muted-foreground">
+                                📱{' '}
+                                {formatPhone(
+                                  patient.responsavel_financeiro_telefone
+                                )}
+                              </p>
+                            )}
                         </div>
                       </div>
                     )}
                   </>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Seção: Responsável pela Cobrança - apenas admin/secretaria */}
+          {(userRole === 'admin' || userRole === 'secretaria') && (
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Responsável pela Cobrança
+              </h4>
+              <BillingResponsibleSelect
+                patientId={patient.id}
+                currentResponsibleId={patient.responsavel_cobranca_id}
+                currentResponsibleName={patient.responsavel_cobranca_nome}
+                userRole={userRole}
+                onUpdate={(responsibleId, responsibleName) => {
+                  // AI dev note: Em implementação futura, poderia atualizar o estado local
+                  // ou disparar um callback para atualizar os dados do paciente
+                  console.log('Responsável atualizado:', {
+                    responsibleId,
+                    responsibleName,
+                  });
+                }}
+              />
             </div>
           )}
 

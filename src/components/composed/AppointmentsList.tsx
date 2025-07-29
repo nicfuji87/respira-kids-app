@@ -40,7 +40,25 @@ const AppointmentItem = React.memo<{
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }>(({ appointment, onClick, userRole }) => {
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    // Parse manual para evitar conversão automática de timezone
+    // Formato esperado: "2025-07-29T09:00:00+00:00" ou "2025-07-29 09:00:00+00"
+    const [datePart, timePart] =
+      dateString.split('T').length > 1
+        ? dateString.split('T')
+        : dateString.split(' ');
+
+    const [year, month, day] = datePart.split('-');
+    const [hour, minute] = timePart.split('+')[0].split(':'); // Remove timezone info
+
+    // Criar data usando valores exatos sem conversão
+    const date = new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hour),
+      parseInt(minute)
+    );
+
     return new Intl.DateTimeFormat('pt-BR', {
       day: '2-digit',
       month: 'short',
@@ -73,29 +91,29 @@ const AppointmentItem = React.memo<{
   return (
     <div
       className={cn(
-        'flex items-center justify-between p-4 border rounded-lg transition-all duration-200',
+        'flex items-center justify-between p-3 md:p-4 border rounded-lg transition-all duration-200',
         'hover:shadow-md hover:border-primary/20',
         onClick && 'cursor-pointer hover:bg-accent/50'
       )}
       onClick={() => onClick?.(appointment)}
     >
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-1.5 md:space-y-2">
         {/* Linha 1: Paciente e Horário */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium text-foreground">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <User className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+            <span className="font-medium text-sm md:text-base text-foreground">
               {appointment.pacienteNome}
             </span>
           </div>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1 text-xs md:text-sm text-muted-foreground">
             <Clock className="h-3 w-3" />
             {formatDate(appointment.dataHora)}
           </div>
         </div>
 
         {/* Linha 2: Serviço e Local */}
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-xs md:text-sm">
           <span className="text-muted-foreground">
             {appointment.tipoServico}
           </span>
@@ -107,7 +125,7 @@ const AppointmentItem = React.memo<{
 
         {/* Linha 3: Profissional (apenas para admin/secretaria) */}
         {showProfessionalField && appointment.profissionalNome && (
-          <div className="flex items-center text-sm">
+          <div className="flex items-center text-xs md:text-sm">
             <div className="flex items-center gap-1 text-muted-foreground">
               <UserCog className="h-3 w-3" />
               <span>{appointment.profissionalNome}</span>
@@ -126,14 +144,16 @@ const AppointmentItem = React.memo<{
           >
             {appointment.statusConsulta}
           </Badge>
-          <div className="flex items-center gap-1 text-sm font-medium text-verde-pipa">
+          <div className="flex items-center gap-1 text-xs md:text-sm font-medium text-verde-pipa">
             <DollarSign className="h-3 w-3" />
             {formatCurrency(appointment.valor)}
           </div>
         </div>
       </div>
 
-      {onClick && <ArrowRight className="h-4 w-4 text-muted-foreground ml-3" />}
+      {onClick && (
+        <ArrowRight className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground ml-2 md:ml-3" />
+      )}
     </div>
   );
 });

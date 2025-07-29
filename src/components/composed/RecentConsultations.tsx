@@ -113,15 +113,24 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
       loadConsultations();
     }, [patientId]);
 
-    // Função para formatar data e hora
+    // Função para formatar data e hora (sem conversão de timezone)
     const formatDateTime = (dateString: string) => {
-      const date = new Date(dateString);
+      // Parse manual para evitar conversão automática de timezone
+      // Formato esperado: "2025-07-29T09:00:00+00:00" ou "2025-07-29 09:00:00+00"
+      const [datePart, timePart] =
+        dateString.split('T').length > 1
+          ? dateString.split('T')
+          : dateString.split(' ');
+
+      const [year, month, day] = datePart.split('-');
+      const [hour, minute] = timePart.split('+')[0].split(':'); // Remove timezone info
+
+      // Criar data usando valores exatos sem conversão
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
       return {
         date: date.toLocaleDateString('pt-BR'),
-        time: date.toLocaleTimeString('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        time: `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`,
       };
     };
 

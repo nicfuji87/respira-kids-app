@@ -325,7 +325,8 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
         <PatientCompleteInfo
           patient={patient}
           userRole={
-            (user?.role as 'admin' | 'profissional' | 'secretaria') || null
+            (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
+            null
           }
         />
 
