@@ -34,6 +34,7 @@ import { ConsultationsToEvolve } from '@/components/composed/ConsultationsToEvol
 import { AppointmentsList } from '@/components/composed/AppointmentsList';
 import { MaterialRequestCard } from '@/components/composed/MaterialRequestCard';
 import { ProfessionalFilter } from '@/components/composed/ProfessionalFilter';
+import { FaturamentoChart } from '@/components/composed/FaturamentoChart';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
 import { fetchAgendamentoById } from '@/lib/calendar-services';
 import type {
@@ -72,6 +73,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     upcomingAppointments,
     consultationsToEvolve,
     materialRequests,
+    faturamentoComparativo,
   } = useAdminMetrics({
     startDate: new Date(
       new Date().setMonth(new Date().getMonth() - 1)
@@ -326,6 +328,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <UserMetrics metrics={null} loading={loading} />
         <ProfessionalMetrics metrics={null} />
       </div>
+
+      {/* AI dev note: Gráfico de faturamento comparativo */}
+      <FaturamentoChart
+        data={faturamentoComparativo}
+        loading={loading}
+        error={error}
+      />
 
       {/* AI dev note: Seção de listas e agendamentos */}
       <div className="grid gap-6 lg:grid-cols-2">

@@ -210,33 +210,36 @@ export const useAdminMetrics = ({
     } finally {
       setLoading(false);
     }
-  }, [
-    refreshMetrics,
-    refreshUpcoming,
-    refreshConsultations,
-    refreshMaterial,
-    refreshFaturamento,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Vazio para evitar re-criações
 
   // Efeito para carregar dados iniciais
   useEffect(() => {
     if (startDate && endDate) {
       refreshAll();
     }
-  }, [startDate, endDate, refreshAll]);
+  }, [startDate, endDate]); // Removido refreshAll das dependências para evitar loop
 
-  // Efeito para atualizar quando filtros mudam
+  // Efeito para atualizar quando filtros de faturamento mudam
   useEffect(() => {
-    refreshFaturamento();
-  }, [refreshFaturamento]);
+    if (professionalFilters.faturamento.length > 0) {
+      refreshFaturamento();
+    }
+  }, [professionalFilters.faturamento]); // Apenas quando filtros mudam
 
+  // Efeito para atualizar quando filtros de agendamentos mudam
   useEffect(() => {
-    refreshUpcoming();
-  }, [refreshUpcoming]);
+    if (professionalFilters.agendamentos.length > 0) {
+      refreshUpcoming();
+    }
+  }, [professionalFilters.agendamentos, appointmentsLimit]); // Apenas quando filtros ou limite mudam
 
+  // Efeito para atualizar quando filtros de consultas mudam
   useEffect(() => {
-    refreshConsultations();
-  }, [refreshConsultations]);
+    if (professionalFilters.consultas.length > 0) {
+      refreshConsultations();
+    }
+  }, [professionalFilters.consultas]); // Apenas quando filtros mudam
 
   // Efeito para refresh automático
   useEffect(() => {
@@ -250,7 +253,7 @@ export const useAdminMetrics = ({
     ); // Converter minutos para milissegundos
 
     return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval, refreshAll]);
+  }, [autoRefresh, refreshInterval]); // Removido refreshAll das dependências
 
   return {
     // Dados
