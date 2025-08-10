@@ -29,7 +29,6 @@ import { useCalendarFormData } from '@/hooks/useCalendarData';
 import type {
   UpcomingAppointment,
   ConsultationToEvolve,
-  MaterialRequest,
 } from '@/lib/professional-dashboard-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
 

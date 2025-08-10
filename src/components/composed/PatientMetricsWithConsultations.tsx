@@ -34,6 +34,8 @@ import { DatePicker } from './DatePicker';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { processPayment } from '@/lib/asaas-api';
+import type { ProcessPaymentData } from '@/types/asaas';
 import type {
   PatientMetricsProps,
   PatientMetrics as PatientMetricsData,
@@ -77,6 +79,8 @@ export const PatientMetricsWithConsultations =
       const [selectedConsultations, setSelectedConsultations] = useState<
         string[]
       >([]);
+      const [isGeneratingCharge, setIsGeneratingCharge] = useState(false);
+      const [chargeError, setChargeError] = useState<string | null>(null);
 
       // Verificar se usuário tem permissão para gerar cobrança (admin ou secretaria)
       const canGenerateCharge =
@@ -105,6 +109,196 @@ export const PatientMetricsWithConsultations =
 
       const clearSelection = () => {
         setSelectedConsultations([]);
+      };
+
+      // AI dev note: Gera descrição da cobrança baseada no template especificado
+      const generateChargeDescription = async (selectedConsultationData: RecentConsultation[], patientData: Record<string, any>) => {
+        console.log('🎯 Gerando descrição da cobrança:', {
+          consultationsCount: selectedConsultationData.length,
+          patientData: patientData
+        });
+
+        // Agrupar consultas por tipo de serviço
+        const serviceGroups = selectedConsultationData.reduce((groups: Record<string, RecentConsultation[]>, consultation) => {
+          const extendedConsultation = consultation as RecentConsultation & { tipo_servico_nome?: string };
+          const serviceType = extendedConsultation.tipo_servico_nome || consultation.servico_nome || 'Atendimento';
+          if (!groups[serviceType]) {
+            groups[serviceType] = [];
+          }
+          groups[serviceType].push(consultation);
+          return groups;
+        }, {});
+
+        console.log('📋 Grupos de serviços:', serviceGroups);
+
+        // Construir descrição dos serviços
+        const serviceDescriptions = Object.entries(serviceGroups).map(([serviceType, consultations]) => {
+          const count = consultations.length;
+          return count === 1 
+            ? `1 sessão de ${serviceType.toLowerCase()}`
+            : `${count} sessões de ${serviceType.toLowerCase()}`;
+        });
+
+        const servicesText = serviceDescriptions.join(', ');
+
+        // Buscar dados completos do profissional da primeira consulta
+        const firstConsultation = selectedConsultationData[0];
+        const extendedFirstConsultation = firstConsultation as RecentConsultation & { 
+          profissional_id?: string; 
+        };
+        const profissionalNome = firstConsultation?.profissional_nome || 'Profissional';
+        
+        let profissionalCpf = '';
+        let profissionalRegistro = '';
+
+        // Buscar CPF e registro do profissional no banco
+        if (extendedFirstConsultation.profissional_id) {
+          console.log('🔍 Buscando dados completos do profissional:', extendedFirstConsultation.profissional_id);
+          
+          try {
+            const { data: profissionalData, error: profissionalError } = await supabase
+              .from('pessoas')
+              .select('cpf_cnpj, registro_profissional')
+              .eq('id', extendedFirstConsultation.profissional_id)
+              .single();
+
+            if (!profissionalError && profissionalData) {
+              profissionalCpf = profissionalData.cpf_cnpj || '';
+              profissionalRegistro = profissionalData.registro_profissional || '';
+              console.log('✅ Dados do profissional encontrados:', { profissionalCpf, profissionalRegistro });
+            } else {
+              console.warn('⚠️ Erro ao buscar dados do profissional:', profissionalError);
+            }
+          } catch (error) {
+            console.error('❌ Erro na busca do profissional:', error);
+          }
+        }
+
+        // Dados do paciente
+        const pacienteNome = patientData?.nome || 'Paciente';
+        const pacienteCpf = patientData?.cpf_cnpj || '';
+
+        console.log('👨‍⚕️ Dados do profissional:', { profissionalNome, profissionalCpf, profissionalRegistro });
+        console.log('👤 Dados do paciente:', { pacienteNome, pacienteCpf });
+
+        // Construir lista de datas e valores
+        const datesAndValues = selectedConsultationData.map(consultation => {
+          const date = new Date(consultation.data_hora).toLocaleDateString('pt-BR');
+          const valueNumber = Number(consultation.valor_servico || 0);
+          const formattedValue = valueNumber.toFixed(2).replace('.', ',');
+          const value = `R$ ${formattedValue}`;
+          return `${date} (${value})`;
+        }).join(', ');
+
+        // Template conforme especificado
+        const registroText = profissionalRegistro ? ` ${profissionalRegistro}` : '';
+        const description = `${servicesText}. Atendimento realizado ao paciente ${pacienteNome} CPF ${pacienteCpf}, pela ${profissionalNome} CPF ${profissionalCpf}${registroText}. Nos dias ${datesAndValues}`;
+        
+        console.log('📝 Descrição gerada:', description);
+        return description;
+      };
+
+      // Handler para gerar cobrança
+      const handleGenerateCharge = async () => {
+        console.log('🚀 Iniciando geração de cobrança...');
+        
+        if (selectedConsultations.length === 0) {
+          console.log('❌ Nenhuma consulta selecionada');
+          return;
+        }
+
+        setIsGeneratingCharge(true);
+        setChargeError(null);
+
+        try {
+          console.log('📋 Consultas selecionadas:', selectedConsultations);
+          
+          // Buscar dados completos das consultas selecionadas
+          const selectedConsultationData = consultations.filter(c => 
+            selectedConsultations.includes(c.id)
+          );
+
+          console.log('📊 Dados das consultas filtradas:', selectedConsultationData);
+
+          if (selectedConsultationData.length === 0) {
+            throw new Error('Nenhuma consulta selecionada encontrada');
+          }
+
+          // Calcular valor total
+          const totalValue = selectedConsultationData.reduce((sum, consultation) => {
+            const value = Number(consultation.valor_servico || 0);
+            return sum + value;
+          }, 0);
+
+          console.log('💰 Valor total calculado:', totalValue);
+
+          if (totalValue <= 0) {
+            throw new Error('Valor total deve ser maior que zero');
+          }
+
+          // Buscar dados completos do paciente com responsável de cobrança
+          console.log('👤 Buscando dados do paciente:', patientId);
+          
+          const { data: patientData, error: patientError } = await supabase
+            .from('pacientes_com_responsaveis_view')
+            .select('*')
+            .eq('id', patientId)
+            .single();
+
+          if (patientError || !patientData) {
+            console.error('❌ Erro ao buscar dados do paciente:', patientError);
+            throw new Error('Erro ao buscar dados do paciente');
+          }
+
+          console.log('✅ Dados do paciente encontrados:', patientData);
+
+          const responsibleId = patientData.responsavel_cobranca_id || patientId;
+          console.log('💳 Responsável pela cobrança:', responsibleId);
+
+          // Gerar descrição da cobrança
+          const description = await generateChargeDescription(selectedConsultationData, patientData);
+
+          // Preparar dados para processamento
+          const processData: ProcessPaymentData = {
+            consultationIds: selectedConsultations,
+            patientId: patientId,
+            responsibleId: responsibleId,
+            totalValue: totalValue,
+            description: description
+          };
+
+          console.log('⚙️ Processando cobrança:', processData);
+
+          // Processar cobrança
+          const result = await processPayment(processData, user?.pessoa?.role || null);
+
+          console.log('📥 Resultado do processamento:', result);
+
+          if (result.success) {
+            console.log('✅ Cobrança criada com sucesso:', result);
+            
+            // Limpar seleção
+            setSelectedConsultations([]);
+            setIsSelectionMode(false);
+            
+            // Recarregar dados das consultas para atualizar status
+            // TODO: Implementar reload das consultas ou mostrar feedback de sucesso
+            console.log('🎉 Exibindo sucesso ao usuário');
+            alert('Cobrança gerada com sucesso! ID do pagamento: ' + result.asaasPaymentId);
+          } else {
+            console.error('❌ Falha no processamento:', result.error);
+            throw new Error(result.error || 'Erro desconhecido ao gerar cobrança');
+          }
+
+        } catch (error) {
+          console.error('💥 Erro ao gerar cobrança:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+          console.error('📝 Mensagem de erro para usuário:', errorMessage);
+          setChargeError(errorMessage);
+        } finally {
+          console.log('🏁 Finalizando geração de cobrança');
+          setIsGeneratingCharge(false);
+        }
       };
 
       // Filtrar consultas selecionáveis (apenas pendentes)
@@ -191,6 +385,7 @@ export const PatientMetricsWithConsultations =
               status_pagamento_descricao,
               status_pagamento_cor,
               profissional_nome,
+              profissional_id,
               possui_evolucao
             `
               )
@@ -680,25 +875,36 @@ export const PatientMetricsWithConsultations =
                     <Button
                       variant={selectedCount > 0 ? 'default' : 'outline'}
                       size="sm"
-                      onClick={
-                        selectedCount > 0
-                          ? () => {
-                              // TODO: Implementar geração de cobrança
-                              console.log(
-                                'Gerar cobrança para:',
-                                selectedConsultations
-                              );
-                            }
-                          : toggleSelectionMode
-                      }
+                      onClick={selectedCount > 0 ? handleGenerateCharge : toggleSelectionMode}
+                      disabled={isGeneratingCharge}
                       className={selectedCount > 0 ? 'respira-gradient' : ''}
                     >
                       <CreditCard className="h-4 w-4 mr-2" />
-                      {selectedCount > 0
+                      {isGeneratingCharge
+                        ? 'Gerando cobrança...'
+                        : selectedCount > 0
                         ? `Gerar cobrança de ${selectedCount} consulta${selectedCount > 1 ? 's' : ''}`
                         : 'Escolher consultas para gerar cobrança'}
                     </Button>
                   </div>
+                )}
+
+                {/* Exibir erro de cobrança se houver */}
+                {chargeError && (
+                  <Alert className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Erro ao gerar cobrança:</strong> {chargeError}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setChargeError(null)}
+                        className="ml-2 h-auto p-1"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
                 )}
               </div>
 
