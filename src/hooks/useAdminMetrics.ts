@@ -256,6 +256,11 @@ export const useAdminMetrics = ({
     }
   }, [professionalFilters.consultas, refreshConsultations]); // Apenas quando filtros mudam
 
+  // Efeito para atualizar quando filtros de faturamento mudam
+  useEffect(() => {
+    refreshFaturamento();
+  }, [professionalFilters.faturamento, refreshFaturamento]); // Sempre executar, mesmo com filtro vazio
+
   // Efeito para refresh automático
   useEffect(() => {
     if (!autoRefresh) return;
