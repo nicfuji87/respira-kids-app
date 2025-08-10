@@ -210,22 +210,37 @@ export const useAdminMetrics = ({
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Vazio para evitar re-criações
+  }, [
+    refreshMetrics,
+    refreshUpcoming,
+    refreshConsultations,
+    refreshMaterial,
+    refreshFaturamento,
+  ]);
 
-  // Efeito para carregar dados iniciais
+  // Efeito para carregar dados iniciais apenas uma vez
   useEffect(() => {
     if (startDate && endDate) {
-      refreshAll();
-    }
-  }, [startDate, endDate]); // Removido refreshAll das dependências para evitar loop
+      // Carregar dados iniciais apenas na montagem
+      setLoading(true);
+      setError(null);
 
-  // Efeito para atualizar quando filtros de faturamento mudam
-  useEffect(() => {
-    if (professionalFilters.faturamento.length > 0) {
-      refreshFaturamento();
+      Promise.all([
+        refreshMetrics(),
+        refreshUpcoming(),
+        refreshConsultations(),
+        refreshMaterial(),
+        refreshFaturamento(),
+      ])
+        .then(() => setLastUpdate(new Date()))
+        .catch((err) => {
+          console.error('Erro ao carregar dados administrativos:', err);
+          setError('Erro ao carregar dados do dashboard administrativo');
+        })
+        .finally(() => setLoading(false));
     }
-  }, [professionalFilters.faturamento]); // Apenas quando filtros mudam
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Executar apenas na montagem do componente
 
   // Efeito para atualizar quando filtros de agendamentos mudam
   useEffect(() => {
