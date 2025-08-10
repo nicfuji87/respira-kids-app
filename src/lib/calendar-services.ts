@@ -65,12 +65,17 @@ export const fetchAgendamentosFromViewAsEvents = async (
   }
 
   if (process.env.NODE_ENV === 'development') {
-  console.log('🔍 DEBUG: Query Supabase na view para CalendarEvents', {
-    'filters.startDate': filters.startDate.toISOString(),
-    'filters.endDate': filters.endDate.toISOString(),
-    'filters.profissionalId': filters.profissionalId,
-    view: 'vw_agendamentos_completos',
-  });
+    console.log('🔍 DEBUG: Query Supabase na view para CalendarEvents', {
+      'filters.startDate': filters.startDate.toISOString(),
+      'filters.endDate': filters.endDate.toISOString(),
+      'filters.profissionalId': filters.profissionalId,
+      rangeInDays: Math.ceil(
+        (filters.endDate.getTime() - filters.startDate.getTime()) /
+          (1000 * 60 * 60 * 24)
+      ),
+      view: 'vw_agendamentos_completos',
+      allFilters: filters,
+    });
   }
 
   const { data, error } = await query;
@@ -83,6 +88,20 @@ export const fetchAgendamentosFromViewAsEvents = async (
   if (process.env.NODE_ENV === 'development') {
     console.log('🔍 DEBUG: Resultado da query na view para CalendarEvents', {
       'data.length': data?.length || 0,
+      dateRange: {
+        start: filters.startDate.toISOString(),
+        end: filters.endDate.toISOString(),
+      },
+      hasData: (data?.length || 0) > 0,
+      firstEvent:
+        data && data.length > 0
+          ? {
+              id: data[0].id,
+              data_hora: data[0].data_hora,
+              profissional_nome: data[0].profissional_nome,
+              paciente_nome: data[0].paciente_nome,
+            }
+          : null,
       data: data,
     });
   }
@@ -133,12 +152,12 @@ export const fetchAgendamentosFromView = async (
   }
 
   if (process.env.NODE_ENV === 'development') {
-  console.log('🔍 DEBUG: Query Supabase na view sendo executada', {
-    'filters.startDate': filters.startDate.toISOString(),
-    'filters.endDate': filters.endDate.toISOString(),
-    'filters.profissionalId': filters.profissionalId,
-    view: 'vw_agendamentos_completos',
-  });
+    console.log('🔍 DEBUG: Query Supabase na view sendo executada', {
+      'filters.startDate': filters.startDate.toISOString(),
+      'filters.endDate': filters.endDate.toISOString(),
+      'filters.profissionalId': filters.profissionalId,
+      view: 'vw_agendamentos_completos',
+    });
   }
 
   const { data, error } = await query;
@@ -265,11 +284,19 @@ export const fetchUserCalendarEvents = async (
   userRole: 'admin' | 'profissional' | 'secretaria'
 ): Promise<CalendarEvent[]> => {
   if (process.env.NODE_ENV === 'development') {
-  console.log('🔍 DEBUG: fetchUserCalendarEvents chamado', {
-    filters,
-    userId,
-    userRole,
-  });
+    console.log('🔍 DEBUG: fetchUserCalendarEvents chamado', {
+      filters,
+      userId,
+      userRole,
+      dateRange: {
+        start: filters.startDate.toISOString(),
+        end: filters.endDate.toISOString(),
+        rangeInDays: Math.ceil(
+          (filters.endDate.getTime() - filters.startDate.getTime()) /
+            (1000 * 60 * 60 * 24)
+        ),
+      },
+    });
   }
 
   // AI dev note: Null-safety check para userRole
@@ -278,9 +305,58 @@ export const fetchUserCalendarEvents = async (
   }
 
   switch (userRole) {
-    case 'admin':
+    case 'admin': {
       // Admin pode ver todos os agendamentos
-      return fetchAgendamentosFromViewAsEvents(filters);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(
+          '🔍 DEBUG: Buscando eventos para ADMIN (sem filtro de profissional)',
+          {
+            'filters.startDate': filters.startDate.toISOString(),
+            'filters.endDate': filters.endDate.toISOString(),
+            'filters sem profissionalId': !filters.profissionalId,
+            userId: userId,
+          }
+        );
+
+        // AI dev note: BYPASS TEMPORÁRIO - teste direto na view sem filtros para debug
+        console.log(
+          '🧪 DEBUG: BYPASS TEMPORÁRIO - testando query direta na view'
+        );
+        try {
+          const { data: rawData, error: rawError } = await supabase
+            .from('vw_agendamentos_completos')
+            .select(
+              'id, data_hora, paciente_nome, profissional_nome, tipo_servico_nome'
+            )
+            .gte('data_hora', filters.startDate.toISOString())
+            .lte('data_hora', filters.endDate.toISOString())
+            .eq('ativo', true)
+            .limit(5);
+
+          console.log('🧪 DEBUG: BYPASS RESULT', {
+            'rawData?.length': rawData?.length || 0,
+            rawError: rawError,
+            'primeiros 3 raw': rawData?.slice(0, 3) || [],
+            'auth user': await supabase.auth.getUser(),
+          });
+        } catch (bypassError) {
+          console.log('🧪 DEBUG: BYPASS ERROR', bypassError);
+        }
+      }
+
+      const adminEvents = await fetchAgendamentosFromViewAsEvents(filters);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DEBUG: Eventos retornados para ADMIN', {
+          eventsCount: adminEvents.length,
+          'primeiros 3 eventos': adminEvents.slice(0, 3).map((e) => ({
+            id: e.id,
+            title: e.title,
+            start: e.start.toISOString(),
+          })),
+        });
+      }
+      return adminEvents;
+    }
 
     case 'profissional': {
       // Profissional vê apenas seus próprios agendamentos
@@ -289,9 +365,25 @@ export const fetchUserCalendarEvents = async (
         profissionalId: userId,
       };
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: Filtros para profissional', profissionalFilters);
+        console.log('🔍 DEBUG: Buscando eventos para PROFISSIONAL', {
+          profissionalFilters,
+          filteredByProfissional: userId,
+        });
       }
-      return fetchAgendamentosFromViewAsEvents(profissionalFilters);
+      const profissionalEvents =
+        await fetchAgendamentosFromViewAsEvents(profissionalFilters);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DEBUG: Eventos retornados para PROFISSIONAL', {
+          eventsCount: profissionalEvents.length,
+          'filtrado por userId': userId,
+          'primeiros 3 eventos': profissionalEvents.slice(0, 3).map((e) => ({
+            id: e.id,
+            title: e.title,
+            start: e.start.toISOString(),
+          })),
+        });
+      }
+      return profissionalEvents;
     }
 
     case 'secretaria': {
@@ -300,7 +392,6 @@ export const fetchUserCalendarEvents = async (
         await fetchProfissionaisAutorizados(userId);
 
       if (profissionaisAutorizados.length === 0) {
-        
         return [];
       }
 
@@ -340,11 +431,11 @@ export const fetchUserAgendamentos = async (
   userRole: 'admin' | 'profissional' | 'secretaria'
 ): Promise<SupabaseAgendamentoCompleto[]> => {
   if (process.env.NODE_ENV === 'development') {
-  console.log('🔍 DEBUG: fetchUserAgendamentos chamado', {
-    filters,
-    userId,
-    userRole,
-  });
+    console.log('🔍 DEBUG: fetchUserAgendamentos chamado', {
+      filters,
+      userId,
+      userRole,
+    });
   }
 
   // AI dev note: Null-safety check para userRole
@@ -582,12 +673,8 @@ export const fetchProfissionaisForUser = async (
   userId: string,
   userRole: 'admin' | 'profissional' | 'secretaria'
 ): Promise<SupabasePessoa[]> => {
-  
-
   switch (userRole) {
     case 'admin': {
-      
-
       // Admin vê todos os profissionais aprovados e com perfil completo
       const { data, error } = await supabase
         .from('pessoas')
@@ -597,8 +684,6 @@ export const fetchProfissionaisForUser = async (
         .eq('is_approved', true)
         .eq('profile_complete', true)
         .order('nome');
-
-      
 
       if (error) {
         console.error(
@@ -613,8 +698,6 @@ export const fetchProfissionaisForUser = async (
     }
 
     case 'secretaria': {
-      
-
       // Secretaria vê apenas profissionais autorizados via permissoes_agendamento
       // Primeiro, buscar IDs dos profissionais autorizados
       const { data: permissoes, error: permissoesError } = await supabase
@@ -622,8 +705,6 @@ export const fetchProfissionaisForUser = async (
         .select('id_profissional')
         .eq('id_secretaria', userId)
         .eq('ativo', true);
-
-      
 
       if (permissoesError) {
         console.error(
@@ -636,11 +717,8 @@ export const fetchProfissionaisForUser = async (
       const profissionaisAutorizados =
         permissoes?.map((p) => p.id_profissional) || [];
 
-      
-
       // Se não há permissões, retorna array vazio
       if (profissionaisAutorizados.length === 0) {
-        
         return [];
       }
 
@@ -655,8 +733,6 @@ export const fetchProfissionaisForUser = async (
         .in('id', profissionaisAutorizados)
         .order('nome');
 
-      
-
       if (error) {
         console.error(
           '❌ [fetchProfissionaisForUser] Erro ao buscar profissionais para secretaria:',
@@ -670,8 +746,6 @@ export const fetchProfissionaisForUser = async (
     }
 
     case 'profissional': {
-      
-
       // Profissional vê apenas a si mesmo
       const { data, error } = await supabase
         .from('pessoas')
@@ -682,11 +756,8 @@ export const fetchProfissionaisForUser = async (
         .eq('is_approved', true)
         .single();
 
-      
-
       if (error) {
         if (error.code === 'PGRST116') {
-          
           // Não encontrado - retorna array vazio
           return [];
         }
@@ -711,8 +782,6 @@ export const fetchProfissionaisForUser = async (
 // View pacientes_com_responsaveis_view inclui nomes dos responsáveis para busca
 // Permite buscar por nome do paciente OU nome do responsável, sempre selecionando o paciente
 export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
-  
-
   // AI dev note: Nova view que inclui dados de responsáveis para busca unificada
   // Campo nomes_responsaveis contém responsáveis concatenados com ' | '
   const { data, error } = await supabase
@@ -728,14 +797,12 @@ export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
   }
 
   const pacientes = data || [];
-  
 
   if (pacientes.length > 0) {
-    
     // trimmed verbose debug output
 
     // Verificar se a view retorna campos específicos de responsável legal e financeiro
-    
+
     const primeiroComResponsavel = pacientes.find((p) => p.nomes_responsaveis);
     if (primeiroComResponsavel) {
       // no-op
@@ -749,7 +816,7 @@ export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
         p.nomes_responsaveis.toLowerCase().includes('henrique');
       return nomeMatch || responsavelMatch;
     });
-    
+
     if (henriqueMatches.length > 0) {
       // trimmed verbose debug output
     }
@@ -852,8 +919,6 @@ export const updateAgendamentoDetails = async (appointmentData: {
     )
   );
 
-  
-
   const { error } = await supabase
     .from('agendamentos')
     .update(cleanUpdateFields)
@@ -880,8 +945,6 @@ export const updatePaymentStatus = async (
   agendamentoId: string,
   statusPagamentoId: string
 ): Promise<SupabaseAgendamentoCompletoFlat> => {
-  
-
   const { error } = await supabase
     .from('agendamentos')
     .update({ status_pagamento_id: statusPagamentoId })
@@ -906,8 +969,6 @@ export const updateNfeLink = async (
   agendamentoId: string,
   linkNfe: string
 ): Promise<SupabaseAgendamentoCompletoFlat> => {
-  
-
   const { error } = await supabase
     .from('agendamentos')
     .update({ link_nfe: linkNfe })
@@ -929,21 +990,18 @@ export const updateNfeLink = async (
 
 // AI dev note: Stubs para ações de pagamento (implementação futura)
 export const processManualPayment = async (): Promise<void> => {
-  
   // TODO: Implementar integração com sistema de pagamento
   // Por enquanto, apenas log
   throw new Error('Funcionalidade de pagamento manual ainda não implementada');
 };
 
 export const issueNfe = async (): Promise<string> => {
-  
   // TODO: Implementar integração com sistema de NFe
   // Por enquanto, apenas log
   throw new Error('Funcionalidade de emissão de NFe ainda não implementada');
 };
 
 export const viewNfe = async (linkNfe: string): Promise<void> => {
-  
   // Abrir NFe em nova aba
   window.open(linkNfe, '_blank');
 };

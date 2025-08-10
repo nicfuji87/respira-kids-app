@@ -7,6 +7,7 @@ export interface ApiKey {
   encrypted_key: string; // Nunca será exposta diretamente no frontend
   service_url?: string; // Para Evolution API
   instance_name?: string; // Para Evolution API
+  label: string; // Label obrigatório para identificação
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -19,6 +20,7 @@ export interface ApiKeyCreate {
   encrypted_key: string;
   service_url?: string;
   instance_name?: string;
+  label: string; // Label obrigatório
   is_active?: boolean;
 }
 
@@ -26,6 +28,7 @@ export interface ApiKeyUpdate {
   encrypted_key?: string;
   service_url?: string;
   instance_name?: string;
+  label?: string;
   is_active?: boolean;
 }
 

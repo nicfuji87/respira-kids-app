@@ -36,6 +36,12 @@ export interface SecretariaCalendarTemplateProps {
   initialView?: CalendarView;
   initialDate?: Date;
 
+  // AI dev note: External state control (repassado do CalendarTemplateWithData)
+  externalCurrentDate?: Date;
+  externalCurrentView?: CalendarView;
+  onExternalDateChange?: (date: Date) => void;
+  onExternalViewChange?: (view: CalendarView) => void;
+
   // Layout
   className?: string;
 
@@ -67,6 +73,11 @@ export const SecretariaCalendarTemplate =
       initialDate = new Date(),
       className,
       availableProfessionals = [],
+      // AI dev note: External state control
+      externalCurrentDate,
+      externalCurrentView,
+      onExternalDateChange,
+      onExternalViewChange,
       canCreateEvents = true,
       canEditEvents = true,
       canDeleteEvents = false, // Default for secretaria
@@ -272,6 +283,11 @@ export const SecretariaCalendarTemplate =
             onEventSave={handleEventSave}
             initialView={initialView}
             initialDate={initialDate}
+            // AI dev note: Repassar props de estado externo para CalendarTemplate
+            externalCurrentDate={externalCurrentDate}
+            externalCurrentView={externalCurrentView}
+            onExternalDateChange={onExternalDateChange}
+            onExternalViewChange={onExternalViewChange}
             canCreateEvents={canCreateEvents}
             canEditEvents={canEditEvents}
             canDeleteEvents={canDeleteEvents}

@@ -49,7 +49,7 @@ import type {
 // AI dev note: Hook principal para dados do calendário
 export const useCalendarData = (
   initialView: CalendarView = 'month',
-  initialDate: Date = new Date(2025, 6, 1) // Julho 2025 onde há dados
+  initialDate: Date = new Date() // AI dev note: Sempre usa data atual como padrão
 ) => {
   const { user } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -98,9 +98,32 @@ export const useCalendarData = (
 
   // AI dev note: Busca eventos do Supabase
   const fetchEvents = useCallback(async () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 DEBUG: useCalendarData.fetchEvents - INICIO', {
+        'user existe': !!user,
+        'user.pessoa existe': !!user?.pessoa,
+        'user.pessoa.id': user?.pessoa?.id || 'UNDEFINED',
+        'user.pessoa.nome': user?.pessoa?.nome || 'UNDEFINED',
+        'user.pessoa.role': user?.pessoa?.role || 'UNDEFINED',
+        'user.email': user?.email || 'UNDEFINED',
+        'user completo': user,
+      });
+    }
+
     if (!user?.pessoa?.id) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: user.pessoa.id não disponível', { user });
+        console.log(
+          '❌ DEBUG: useCalendarData.fetchEvents - ABORTADO - user.pessoa.id não disponível',
+          {
+            user,
+            'user?.pessoa': user?.pessoa,
+            razão: !user
+              ? 'user é null/undefined'
+              : !user.pessoa
+                ? 'user.pessoa é null/undefined'
+                : 'user.pessoa.id é null/undefined',
+          }
+        );
       }
       return;
     }
@@ -115,16 +138,23 @@ export const useCalendarData = (
       };
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: Iniciando fetchUserAgendamentos', {
-          'user.pessoa.id': user.pessoa.id,
-          'user.pessoa.nome': user.pessoa.nome,
-          'user.pessoa.role': user.pessoa?.role,
-          view: view,
-          currentDate: currentDate,
-          'dateRange.start': dateRange.start.toISOString(),
-          'dateRange.end': dateRange.end.toISOString(),
-          filters: filters,
-        });
+        console.log(
+          '🔍 DEBUG: useCalendarData.fetchEvents - CHAMANDO fetchUserCalendarEvents',
+          {
+            'user.pessoa.id': user.pessoa.id,
+            'user.pessoa.nome': user.pessoa.nome,
+            'user.pessoa.role': user.pessoa?.role,
+            view: view,
+            currentDate: currentDate.toISOString(),
+            'dateRange.start': dateRange.start.toISOString(),
+            'dateRange.end': dateRange.end.toISOString(),
+            'range em dias': Math.ceil(
+              (dateRange.end.getTime() - dateRange.start.getTime()) /
+                (1000 * 60 * 60 * 24)
+            ),
+            filters: filters,
+          }
+        );
       }
 
       const calendarEvents = await fetchUserCalendarEvents(
@@ -134,16 +164,41 @@ export const useCalendarData = (
       );
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('📅 Eventos do calendário carregados:', {
+        console.log(
+          '🔍 DEBUG: useCalendarData.fetchEvents - RESPOSTA fetchUserCalendarEvents',
+          {
+            'calendarEvents.length': calendarEvents.length,
+            'calendarEvents existe': !!calendarEvents,
+            'é array': Array.isArray(calendarEvents),
+            'primeiros 3 eventos': calendarEvents.slice(0, 3).map((event) => ({
+              id: event.id,
+              title: event.title,
+              start: event.start.toISOString(),
+              end: event.end.toISOString(),
+              color: event.color,
+              'metadata.profissionalId': event.metadata?.profissionalId,
+              'metadata.pacienteId': event.metadata?.pacienteId,
+            })),
+          }
+        );
+      }
+
+      // AI dev note: Sempre mostra os eventos encontrados, sem redirecionamento automático
+      // Isso permite que o usuário navegue livremente para qualquer período
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📅 DEBUG: useCalendarData.fetchEvents - SETANDO EVENTS', {
           eventsCount: calendarEvents.length,
-          events: calendarEvents.map((event) => ({
-            id: event.id,
-            title: event.title,
-            start: event.start.toISOString(),
-            end: event.end.toISOString(),
-            color: event.color,
-            metadata: event.metadata,
-          })),
+          dateRange: {
+            start: dateRange.start.toISOString(),
+            end: dateRange.end.toISOString(),
+            'range em dias': Math.ceil(
+              (dateRange.end.getTime() - dateRange.start.getTime()) /
+                (1000 * 60 * 60 * 24)
+            ),
+          },
+          view: view,
+          currentDate: currentDate.toISOString(),
         });
       }
 
@@ -165,19 +220,75 @@ export const useCalendarData = (
     }
   }, [user, dateRange, view, currentDate]);
 
-  // AI dev note: Recarrega eventos quando date range muda
+  // AI dev note: Único useEffect para buscar eventos - reage a mudanças de user, dateRange, view, currentDate
   useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 DEBUG: useCalendarData.useEffect - DEPENDÊNCIAS', {
+        'user existe': !!user,
+        'user.pessoa existe': !!user?.pessoa,
+        'user.pessoa.id': user?.pessoa?.id || 'UNDEFINED',
+        'fetchEvents será chamado': !!user?.pessoa?.id,
+        'dateRange.start': dateRange.start.toISOString(),
+        'dateRange.end': dateRange.end.toISOString(),
+        view: view,
+        currentDate: currentDate.toISOString(),
+      });
+    }
+
+    // AI dev note: Só buscar eventos se user.pessoa.id estiver disponível
+    if (user?.pessoa?.id) {
+      fetchEvents();
+    } else {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(
+          '⏳ DEBUG: useCalendarData.useEffect - AGUARDANDO user.pessoa.id'
+        );
+      }
+      // Limpar eventos se user não está disponível
+      setEvents([]);
+      setLoading(false);
+    }
+  }, [
+    fetchEvents,
+    user,
+    user?.pessoa?.id,
+    dateRange.start,
+    dateRange.end,
+    view,
+    currentDate,
+  ]);
 
   // AI dev note: Handlers para mudança de data/vista
-  const handleViewChange = useCallback((view: CalendarView) => {
-    setView(view);
-  }, []);
+  const handleViewChange = useCallback(
+    (newView: CalendarView) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 DEBUG: useCalendarData.handleViewChange', {
+          oldView: view,
+          newView: newView,
+        });
+      }
+      setView(newView);
+    },
+    [view]
+  );
 
-  const handleDateChange = useCallback((date: Date) => {
-    setCurrentDate(date);
-  }, []);
+  const handleDateChange = useCallback(
+    (newDate: Date) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 DEBUG: useCalendarData.handleDateChange', {
+          oldDate: currentDate.toISOString(),
+          newDate: newDate.toISOString(),
+          oldMonth: currentDate.getMonth(),
+          newMonth: newDate.getMonth(),
+          oldYear: currentDate.getFullYear(),
+          newYear: newDate.getFullYear(),
+          dateChanged: currentDate.getTime() !== newDate.getTime(),
+        });
+      }
+      setCurrentDate(newDate);
+    },
+    [currentDate]
+  );
 
   const handleRefresh = useCallback(() => {
     fetchEvents();

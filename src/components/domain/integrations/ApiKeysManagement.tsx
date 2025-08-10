@@ -1,32 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { Key, Plus, Shield, Eye, EyeOff, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/primitives/button';
-import { Input } from '@/components/primitives/input';
-import { Label } from '@/components/primitives/label';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/primitives/card';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Key, AlertTriangle } from 'lucide-react';
+import { useForm } from 'react-hook-form';
 import { Badge } from '@/components/primitives/badge';
-import { Switch } from '@/components/primitives/switch';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/primitives/dialog';
 import { useToast } from '@/components/primitives/use-toast';
-import type { ApiKey, ServiceConfig } from '@/types/integrations';
+import {
+  GenericTable,
+  GenericForm,
+  StatusBadge,
+  CRUDActions,
+  type GenericTableColumn,
+  type FormField,
+} from '@/components/composed';
+import type { ApiKey, ApiKeyCreate } from '@/types/integrations';
 import { SUPPORTED_SERVICES } from '@/types/integrations';
 import {
   fetchApiKeys,
   createApiKey,
   updateApiKey,
+  deleteApiKey,
+  toggleApiKeyStatus,
   checkAdminRole,
 } from '@/lib/integrations-api';
 import { cn } from '@/lib/utils';
@@ -41,466 +34,326 @@ export interface ApiKeysManagementProps {
 
 export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
   ({ className }) => {
-    const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+    const [data, setData] = useState<ApiKey[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
-    const [selectedService, setSelectedService] = useState<string>('');
-    const [formData, setFormData] = useState<Record<string, string>>({});
-    const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
-    const [saving, setSaving] = useState(false);
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [editingItem, setEditingItem] = useState<ApiKey | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const { toast } = useToast();
 
-    // Verificar se o usuário é admin e carregar dados
-    useEffect(() => {
-      const loadData = async () => {
-        setLoading(true);
-        try {
-          // Primeiro verificar se é admin
-          const adminCheck = await checkAdminRole();
+    // Form
+    const form = useForm<ApiKeyCreate>({
+      defaultValues: {
+        service_name: 'openai',
+        encrypted_key: '',
+        label: '',
+        service_url: '',
+        instance_name: '',
+        is_active: true,
+      },
+    });
 
-          if (!adminCheck.success) {
-            toast({
-              title: 'Erro de autenticação',
-              description: adminCheck.error || 'Erro ao verificar permissões',
-              variant: 'destructive',
-            });
-            setIsAdmin(false);
-            setLoading(false);
-            return;
-          }
+    // === LOAD DATA ===
+    const loadData = useCallback(async () => {
+      setLoading(true);
+      try {
+        // Primeiro verificar se é admin
+        const adminCheck = await checkAdminRole();
 
-          setIsAdmin(adminCheck.data || false);
-
-          if (!adminCheck.data) {
-            setLoading(false);
-            return; // Não carregar dados se não for admin
-          }
-
-          // Carregar chaves de API se for admin
-          const keysResult = await fetchApiKeys();
-
-          if (keysResult.success && keysResult.data) {
-            setApiKeys(keysResult.data.data);
-          } else {
-            toast({
-              title: 'Erro ao carregar chaves de API',
-              description:
-                keysResult.error ||
-                'Falha ao carregar configurações de integração',
-              variant: 'destructive',
-            });
-          }
-        } catch (error) {
-          console.error('❌ Erro ao carregar dados:', error);
+        if (!adminCheck.success) {
           toast({
-            title: 'Erro inesperado',
-            description: 'Falha ao carregar dados das integrações',
+            title: 'Erro de autenticação',
+            description: adminCheck.error || 'Erro ao verificar permissões',
             variant: 'destructive',
           });
-        } finally {
+          setIsAdmin(false);
           setLoading(false);
+          return;
         }
-      };
 
-      loadData();
+        setIsAdmin(adminCheck.data || false);
+
+        if (!adminCheck.data) {
+          setLoading(false);
+          return; // Não carregar dados se não for admin
+        }
+
+        // Carregar chaves de API se for admin
+        const result = await fetchApiKeys();
+
+        if (result.success && result.data) {
+          setData(result.data.data);
+        } else {
+          toast({
+            title: 'Erro ao carregar chaves de API',
+            description:
+              result.error || 'Falha ao carregar configurações de integração',
+            variant: 'destructive',
+          });
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar dados:', error);
+        toast({
+          title: 'Erro inesperado',
+          description: 'Falha ao carregar dados das integrações',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
     }, [toast]);
 
-    const handleCreateKey = async () => {
-      if (!selectedService) return;
+    useEffect(() => {
+      loadData();
+    }, [loadData]);
 
-      setSaving(true);
+    // === FORM HANDLERS ===
+    const handleAdd = () => {
+      const defaultValues = {
+        service_name: 'openai' as const,
+        encrypted_key: '',
+        label: '',
+        service_url: '',
+        instance_name: '',
+        is_active: true,
+      };
+
+      form.reset(defaultValues);
+      setEditingItem(null);
+
+      setTimeout(() => {
+        setIsFormOpen(true);
+      }, 50);
+    };
+
+    const handleEdit = (item: ApiKey) => {
+      const formValues = {
+        service_name: item.service_name,
+        encrypted_key: '', // Não pré-popular chave sensível
+        label: item.label || '',
+        service_url: item.service_url || '',
+        instance_name: item.instance_name || '',
+        is_active: item.is_active,
+      };
+
+      form.reset(formValues);
+      setEditingItem(item);
+      setIsFormOpen(true);
+    };
+
+    const handleSubmit = async (formData: ApiKeyCreate) => {
+      setIsSubmitting(true);
+
       try {
-        const serviceConfig = SUPPORTED_SERVICES[selectedService];
-        const createData = {
-          service_name: selectedService as 'openai' | 'asaas' | 'evolution',
-          encrypted_key: formData.api_key || '', // A API irá criptografar
-          is_active: true,
-          ...(formData.service_url && { service_url: formData.service_url }),
-          ...(formData.instance_name && {
+        let result;
+
+        if (editingItem) {
+          // Ao editar, só atualizar campos preenchidos
+          const updateData: Record<string, string | boolean | undefined> = {
+            label: formData.label,
+            service_url: formData.service_url,
             instance_name: formData.instance_name,
-          }),
-        };
+            is_active: formData.is_active,
+          };
 
-        const result = await createApiKey(createData);
-
-        if (result.success && result.data) {
-          toast({
-            title: 'Chave de API criada',
-            description: `Integração com ${serviceConfig.label} configurada com sucesso`,
-          });
-
-          // Recarregar lista
-          const keysResult = await fetchApiKeys();
-          if (keysResult.success && keysResult.data) {
-            setApiKeys(keysResult.data.data);
+          // Só atualizar chave se foi preenchida
+          if (formData.encrypted_key && formData.encrypted_key.trim() !== '') {
+            updateData.encrypted_key = formData.encrypted_key;
           }
 
-          // Reset form
-          setFormData({});
-          setSelectedService('');
-          setShowCreateModal(false);
+          result = await updateApiKey(editingItem.id, updateData);
         } else {
-          toast({
-            title: 'Erro ao criar chave de API',
-            description:
-              result.error || 'Falha ao salvar configuração de integração',
-            variant: 'destructive',
-          });
+          // Ao criar, todos os campos obrigatórios devem estar preenchidos
+          result = await createApiKey(formData);
         }
-      } catch (error) {
-        console.error('❌ Erro ao criar chave:', error);
-        toast({
-          title: 'Erro ao criar chave de API',
-          description: 'Falha ao salvar configuração de integração',
-          variant: 'destructive',
-        });
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    const handleEditKey = (apiKey: ApiKey) => {
-      setEditingKey(apiKey);
-      setSelectedService(apiKey.service_name);
-
-      // Pré-popular formulário com dados existentes (exceto chave sensível)
-      const serviceConfig = SUPPORTED_SERVICES[apiKey.service_name];
-      const initialData: Record<string, string> = {};
-
-      serviceConfig.fields.forEach((field) => {
-        if (field.name === 'service_url' && apiKey.service_url) {
-          initialData[field.name] = apiKey.service_url;
-        } else if (field.name === 'instance_name' && apiKey.instance_name) {
-          initialData[field.name] = apiKey.instance_name;
-        } else if (field.name === 'api_key') {
-          initialData[field.name] = ''; // Não pré-popular chave sensível
-        }
-      });
-
-      setFormData(initialData);
-      setShowEditModal(true);
-    };
-
-    const handleUpdateKey = async () => {
-      if (!editingKey) return;
-
-      setSaving(true);
-      try {
-        const updateData: Record<string, string | boolean> = {};
-
-        // Só atualizar campos que foram preenchidos
-        if (formData.api_key && formData.api_key.trim() !== '') {
-          updateData.encrypted_key = formData.api_key; // A API irá criptografar
-        }
-        if (formData.service_url !== undefined) {
-          updateData.service_url = formData.service_url;
-        }
-        if (formData.instance_name !== undefined) {
-          updateData.instance_name = formData.instance_name;
-        }
-
-        const result = await updateApiKey(editingKey.id, updateData);
-
-        if (result.success && result.data) {
-          toast({
-            title: 'Chave de API atualizada',
-            description: `Integração com ${SUPPORTED_SERVICES[editingKey.service_name].label} atualizada com sucesso`,
-          });
-
-          // Recarregar lista
-          const keysResult = await fetchApiKeys();
-          if (keysResult.success && keysResult.data) {
-            setApiKeys(keysResult.data.data);
-          }
-
-          // Reset form
-          setFormData({});
-          setEditingKey(null);
-          setSelectedService('');
-          setShowEditModal(false);
-        } else {
-          toast({
-            title: 'Erro ao atualizar chave de API',
-            description:
-              result.error || 'Falha ao atualizar configuração de integração',
-            variant: 'destructive',
-          });
-        }
-      } catch (error) {
-        console.error('❌ Erro ao atualizar chave:', error);
-        toast({
-          title: 'Erro ao atualizar chave de API',
-          description: 'Falha ao atualizar configuração de integração',
-          variant: 'destructive',
-        });
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    const toggleKeyStatus = async (apiKey: ApiKey) => {
-      try {
-        const result = await updateApiKey(apiKey.id, {
-          is_active: !apiKey.is_active,
-        });
 
         if (result.success) {
+          const serviceConfig = SUPPORTED_SERVICES[formData.service_name];
           toast({
-            title: `Integração ${apiKey.is_active ? 'desativada' : 'ativada'}`,
-            description: `${SUPPORTED_SERVICES[apiKey.service_name].label} ${apiKey.is_active ? 'desativado' : 'ativado'} com sucesso`,
+            title: 'Sucesso',
+            description: `Integração com ${serviceConfig.label} ${editingItem ? 'atualizada' : 'criada'} com sucesso`,
           });
-
-          // Atualizar estado local
-          setApiKeys((keys) =>
-            keys.map((key) =>
-              key.id === apiKey.id ? { ...key, is_active: !key.is_active } : key
-            )
-          );
+          setIsFormOpen(false);
+          loadData();
         } else {
           toast({
-            title: 'Erro ao alterar status',
-            description:
-              result.error || 'Falha ao alterar status da integração',
+            title: 'Erro',
+            description: result.error || 'Erro ao salvar chave de API',
             variant: 'destructive',
           });
         }
-      } catch (error) {
-        console.error('❌ Erro ao alterar status:', error);
+      } catch {
         toast({
-          title: 'Erro ao alterar status',
-          description: 'Falha ao alterar status da integração',
+          title: 'Erro',
+          description: 'Erro inesperado ao salvar',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    const handleDelete = async (item: ApiKey) => {
+      const result = await deleteApiKey(item.id);
+
+      if (result.success) {
+        const serviceConfig = SUPPORTED_SERVICES[item.service_name];
+        toast({
+          title: 'Sucesso',
+          description: `Integração com ${serviceConfig.label} removida com sucesso`,
+        });
+        loadData();
+      } else {
+        toast({
+          title: 'Erro',
+          description: result.error || 'Erro ao excluir chave de API',
           variant: 'destructive',
         });
       }
     };
 
-    const toggleShowKey = (keyId: string) => {
-      setShowKeys((prev) => ({
-        ...prev,
-        [keyId]: !prev[keyId],
-      }));
+    const handleToggleStatus = async (item: ApiKey) => {
+      const result = await toggleApiKeyStatus(item.id);
+
+      if (result.success) {
+        const serviceConfig = SUPPORTED_SERVICES[item.service_name];
+        toast({
+          title: 'Sucesso',
+          description: `Integração com ${serviceConfig.label} ${!item.is_active ? 'ativada' : 'desativada'}`,
+        });
+        loadData();
+      } else {
+        toast({
+          title: 'Erro',
+          description: result.error || 'Erro ao alterar status',
+          variant: 'destructive',
+        });
+      }
     };
 
-    const renderServiceCard = (serviceKey: string, config: ServiceConfig) => {
-      const existingKey = apiKeys.find(
-        (key) => key.service_name === serviceKey
-      );
+    // === TABLE CONFIGURATION ===
+    const formatEncryptedKey = (key: string) => {
+      if (!key || key.length < 4) return '••••';
+      return `••••${key.slice(-4)}`;
+    };
 
-      return (
-        <Card key={serviceKey} className="relative">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Key className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">{config.label}</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {config.description}
-                  </p>
-                </div>
-              </div>
-
-              {existingKey && (
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={existingKey.is_active ? 'default' : 'secondary'}
-                  >
-                    {existingKey.is_active ? 'Ativo' : 'Inativo'}
-                  </Badge>
-                  <Switch
-                    checked={existingKey.is_active}
-                    onCheckedChange={() => toggleKeyStatus(existingKey)}
-                  />
-                </div>
-              )}
+    const columns: GenericTableColumn<ApiKey>[] = [
+      {
+        key: 'service_name',
+        label: 'Serviço',
+        render: (item) => {
+          const config = SUPPORTED_SERVICES[item.service_name];
+          return (
+            <div className="flex items-center gap-2">
+              <Key className="h-4 w-4 text-primary" />
+              <Badge variant="outline">
+                {config?.label || item.service_name}
+              </Badge>
             </div>
-          </CardHeader>
+          );
+        },
+        className: 'w-32',
+      },
+      {
+        key: 'label',
+        label: 'Label',
+        className: 'font-medium',
+      },
+      {
+        key: 'encrypted_key',
+        label: 'Chave',
+        render: (item) => (
+          <span className="font-mono text-sm text-muted-foreground">
+            {formatEncryptedKey(item.encrypted_key)}
+          </span>
+        ),
+        className: 'w-24',
+      },
+      {
+        key: 'service_url',
+        label: 'URL',
+        render: (item) => item.service_url || '-',
+        className: 'text-muted-foreground text-sm max-w-32 truncate',
+      },
+      {
+        key: 'is_active',
+        label: 'Status',
+        render: (item) => (
+          <button
+            onClick={() => handleToggleStatus(item)}
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+            title={`Clique para ${item.is_active ? 'desativar' : 'ativar'}`}
+          >
+            <StatusBadge ativo={item.is_active} />
+          </button>
+        ),
+        className: 'w-24',
+      },
+      {
+        key: 'created_at',
+        label: 'Criado em',
+        render: (item) => new Date(item.created_at).toLocaleDateString('pt-BR'),
+        className: 'w-32 text-sm text-muted-foreground',
+      },
+      {
+        key: 'actions',
+        label: 'Ações',
+        render: (item) => (
+          <CRUDActions
+            onEdit={() => handleEdit(item)}
+            onDelete={() => handleDelete(item)}
+            onToggleStatus={() => handleToggleStatus(item)}
+            ativo={item.is_active}
+            canToggleStatus={true}
+          />
+        ),
+        className: 'w-16',
+      },
+    ];
 
-          <CardContent className="pt-0">
-            {existingKey ? (
-              <div className="space-y-3">
-                {/* Mostrar campos configurados */}
-                {config.fields.map((field) => (
-                  <div key={field.name} className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      {field.label}
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      {field.type === 'password' ? (
-                        <div className="flex-1 flex items-center gap-2">
-                          <Input
-                            type={
-                              showKeys[existingKey.id] ? 'text' : 'password'
-                            }
-                            value={
-                              showKeys[existingKey.id]
-                                ? existingKey.encrypted_key
-                                : '••••••••••••••••'
-                            }
-                            readOnly
-                            className="font-mono text-sm"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleShowKey(existingKey.id)}
-                          >
-                            {showKeys[existingKey.id] ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      ) : (
-                        <Input
-                          value={
-                            field.name === 'service_url'
-                              ? existingKey.service_url || ''
-                              : field.name === 'instance_name'
-                                ? existingKey.instance_name || ''
-                                : ''
-                          }
-                          readOnly
-                          className="flex-1"
-                        />
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEditKey(existingKey)}
-                    className="flex-1"
-                  >
-                    Editar Configuração
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Integração não configurada
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedService(serviceKey);
-                    setShowCreateModal(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Configurar {config.label}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      );
-    };
-
-    const renderFormModal = (isEdit = false) => {
-      const serviceConfig = selectedService
-        ? SUPPORTED_SERVICES[selectedService]
-        : null;
-      if (!serviceConfig) return null;
-
-      return (
-        <Dialog
-          open={isEdit ? showEditModal : showCreateModal}
-          onOpenChange={isEdit ? setShowEditModal : setShowCreateModal}
-        >
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                {isEdit ? 'Editar' : 'Configurar'} {serviceConfig.label}
-              </DialogTitle>
-              <DialogDescription>
-                {isEdit
-                  ? 'Atualize as configurações da integração'
-                  : 'Configure a integração com segurança'}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {serviceConfig.fields.map((field) => (
-                <div key={field.name} className="space-y-2">
-                  <Label htmlFor={field.name}>
-                    {field.label}
-                    {field.required && (
-                      <span className="text-destructive ml-1">*</span>
-                    )}
-                  </Label>
-                  <Input
-                    id={field.name}
-                    type={field.type}
-                    placeholder={field.placeholder}
-                    value={formData[field.name] || ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        [field.name]: e.target.value,
-                      }))
-                    }
-                    required={field.required}
-                  />
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">
-                      {field.description}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFormData({});
-                  setSelectedService('');
-                  if (isEdit) {
-                    setEditingKey(null);
-                    setShowEditModal(false);
-                  } else {
-                    setShowCreateModal(false);
-                  }
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={isEdit ? handleUpdateKey : handleCreateKey}
-                disabled={saving || !Object.entries(formData).length}
-              >
-                {saving ? 'Salvando...' : isEdit ? 'Atualizar' : 'Configurar'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      );
-    };
-
-    if (loading) {
-      return (
-        <div className={cn('space-y-6', className)}>
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Carregando integrações...</p>
-          </div>
-        </div>
-      );
-    }
+    // === FORM FIELDS ===
+    const formFields: FormField[] = [
+      {
+        name: 'service_name',
+        label: 'Serviço',
+        type: 'select',
+        required: true,
+        options: Object.entries(SUPPORTED_SERVICES).map(([key, config]) => ({
+          value: key,
+          label: config.label,
+        })),
+      },
+      {
+        name: 'label',
+        label: 'Label',
+        type: 'text',
+        placeholder: 'Ex: OpenAI Principal, Asaas Produção',
+        required: true,
+      },
+      {
+        name: 'encrypted_key',
+        label: 'Chave API',
+        type: 'password',
+        placeholder: 'Insira a chave de API',
+        required: !editingItem, // Obrigatório só na criação
+      },
+      {
+        name: 'service_url',
+        label: 'URL do Serviço',
+        type: 'text',
+        placeholder: 'https://api.exemplo.com',
+        description: 'Necessário para Evolution API',
+      },
+      {
+        name: 'instance_name',
+        label: 'Nome da Instância',
+        type: 'text',
+        placeholder: 'nome-instancia',
+        description: 'Necessário para Evolution API',
+      },
+    ];
 
     if (!isAdmin) {
       return (
@@ -517,47 +370,36 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
     }
 
     return (
-      <div className={cn('space-y-6', className)}>
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Chaves de API</h2>
-            <p className="text-sm text-muted-foreground">
-              Configure integrações com serviços externos de forma segura
-            </p>
-          </div>
-        </div>
+      <>
+        <GenericTable
+          title="Chaves de API"
+          description="Configure integrações com serviços externos de forma segura"
+          data={data}
+          columns={columns}
+          loading={loading}
+          onAdd={handleAdd}
+          addButtonText="Nova Chave"
+          searchPlaceholder="Buscar por serviço ou label..."
+          emptyMessage="Nenhuma chave de API encontrada"
+          itemsPerPage={10}
+        />
 
-        {/* Alert de Segurança */}
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="pt-4">
-            <div className="flex items-start gap-3">
-              <Shield className="h-5 w-5 text-orange-600 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-orange-800">
-                  Segurança das Chaves
-                </h3>
-                <p className="text-sm text-orange-700 mt-1">
-                  Todas as chaves de API são criptografadas e armazenadas com
-                  segurança. Nunca compartilhe suas chaves e mantenha-as
-                  atualizadas.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Cards dos Serviços */}
-        <div className="grid gap-6">
-          {Object.entries(SUPPORTED_SERVICES).map(([key, config]) =>
-            renderServiceCard(key, config)
-          )}
-        </div>
-
-        {/* Modais */}
-        {renderFormModal(false)}
-        {renderFormModal(true)}
-      </div>
+        <GenericForm
+          isOpen={isFormOpen}
+          onClose={() => setIsFormOpen(false)}
+          onSubmit={handleSubmit}
+          form={form}
+          fields={formFields}
+          title={editingItem ? 'Editar Chave de API' : 'Nova Chave de API'}
+          description={
+            editingItem
+              ? 'Altere os dados da chave de API. Deixe a chave em branco para mantê-la inalterada.'
+              : 'Preencha os dados para criar uma nova chave de API'
+          }
+          isEditing={!!editingItem}
+          loading={isSubmitting}
+        />
+      </>
     );
   }
 );

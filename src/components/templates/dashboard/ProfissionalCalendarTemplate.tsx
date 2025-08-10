@@ -1,7 +1,7 @@
 import React from 'react';
 import { CalendarTemplate } from './CalendarTemplate';
 import { cn } from '@/lib/utils';
-import type { CalendarEvent } from '@/types/calendar';
+import type { CalendarEvent, CalendarView } from '@/types/calendar';
 
 // AI dev note: Template específico para profissionals - sem painéis de estatísticas
 export interface ProfissionalUser {
@@ -21,6 +21,12 @@ export interface ProfissionalCalendarTemplateProps {
   initialDate?: Date;
   className?: string;
   showOnlyMyEvents?: boolean;
+
+  // AI dev note: External state control (repassado do CalendarTemplateWithData)
+  externalCurrentDate?: Date;
+  externalCurrentView?: CalendarView;
+  onExternalDateChange?: (date: Date) => void;
+  onExternalViewChange?: (view: CalendarView) => void;
 
   // Permissions - passed from parent to avoid hardcoded overrides
   canCreateEvents?: boolean;
@@ -43,6 +49,11 @@ export const ProfissionalCalendarTemplate =
       initialDate = new Date(),
       className,
       showOnlyMyEvents = true,
+      // AI dev note: External state control
+      externalCurrentDate,
+      externalCurrentView,
+      onExternalDateChange,
+      onExternalViewChange,
       canCreateEvents = false,
       canEditEvents = true,
       canDeleteEvents = true,
@@ -96,6 +107,11 @@ export const ProfissionalCalendarTemplate =
             onEventSave={handleEventSave}
             initialView={initialView}
             initialDate={initialDate}
+            // AI dev note: Repassar props de estado externo para CalendarTemplate
+            externalCurrentDate={externalCurrentDate}
+            externalCurrentView={externalCurrentView}
+            onExternalDateChange={onExternalDateChange}
+            onExternalViewChange={onExternalViewChange}
             className="w-full h-full"
             userRole={currentUser.role}
             onPatientClick={onPatientClick}

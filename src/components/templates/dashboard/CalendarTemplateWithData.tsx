@@ -34,7 +34,7 @@ export const CalendarTemplateWithData =
   React.memo<CalendarTemplateWithDataProps>(
     ({
       initialView = 'month',
-      initialDate = new Date(),
+      initialDate = new Date(), // AI dev note: Sempre abre na data atual
       className,
       responsive = true,
       onEventClick,
@@ -50,6 +50,8 @@ export const CalendarTemplateWithData =
         currentView,
         currentDate,
         events,
+        setCurrentDate,
+        setCurrentView,
         refresh: refreshEvents,
       } = useCalendarData(initialView, initialDate);
 
@@ -134,12 +136,34 @@ export const CalendarTemplateWithData =
         onProfessionalClick,
         initialView: currentView,
         initialDate: currentDate,
+        // AI dev note: Forçar uso do estado do useCalendarData ao invés de estado local
+        externalCurrentDate: currentDate,
+        externalCurrentView: currentView,
+        onExternalDateChange: setCurrentDate,
+        onExternalViewChange: setCurrentView,
         className: cn('calendar-with-data', className),
         canCreateEvents: permissions.canCreateEvents,
         canEditEvents: permissions.canEditEvents,
         canDeleteEvents: permissions.canDeleteEvents,
         showEventManager: true,
       };
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DEBUG: CalendarTemplateWithData - COMMON PROPS', {
+          currentDate: currentDate?.toISOString(),
+          currentView: currentView,
+          externalCurrentDate:
+            commonTemplateProps.externalCurrentDate?.toISOString(),
+          externalCurrentView: commonTemplateProps.externalCurrentView,
+          'setCurrentDate existe': !!setCurrentDate,
+          'setCurrentView existe': !!setCurrentView,
+          'onExternalDateChange existe':
+            !!commonTemplateProps.onExternalDateChange,
+          'onExternalViewChange existe':
+            !!commonTemplateProps.onExternalViewChange,
+          userRole: user.pessoa.role,
+        });
+      }
 
       // AI dev note: Mock user data for templates (using user.pessoa directly)
       const userRole = user.pessoa.role as
@@ -158,6 +182,16 @@ export const CalendarTemplateWithData =
 
       // AI dev note: Renderização responsiva baseada no role
       if (responsive) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '🚨 DEBUG: CalendarTemplateWithData - USANDO MODO RESPONSIVO',
+            {
+              responsive,
+              userRole,
+              'vai renderizar': 'ResponsiveCalendarTemplate',
+            }
+          );
+        }
         const userForResponsive =
           userRole === 'admin'
             ? { ...mockUserData, role: 'admin' as const }
@@ -191,6 +225,18 @@ export const CalendarTemplateWithData =
       // AI dev note: Renderização específica por role (não responsivo)
       switch (userRole) {
         case 'admin':
+          if (process.env.NODE_ENV === 'development') {
+            console.log(
+              '🔍 DEBUG: CalendarTemplateWithData - PASSANDO PARA AdminCalendarTemplate',
+              {
+                'commonTemplateProps tem externalCurrentDate':
+                  !!commonTemplateProps.externalCurrentDate,
+                'externalCurrentDate valor':
+                  commonTemplateProps.externalCurrentDate?.toISOString(),
+                'todas as props': Object.keys(commonTemplateProps),
+              }
+            );
+          }
           return (
             <AdminCalendarTemplate
               {...commonTemplateProps}

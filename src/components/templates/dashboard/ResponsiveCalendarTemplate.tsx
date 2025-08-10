@@ -31,6 +31,12 @@ export interface ResponsiveCalendarTemplateProps {
   initialView?: CalendarView;
   initialDate?: Date;
 
+  // AI dev note: External state control (CRÍTICO - precisa repassar)
+  externalCurrentDate?: Date;
+  externalCurrentView?: CalendarView;
+  onExternalDateChange?: (date: Date) => void;
+  onExternalViewChange?: (view: CalendarView) => void;
+
   // Layout
   className?: string;
 
@@ -63,6 +69,11 @@ export const ResponsiveCalendarTemplate =
       onEventDelete,
       initialView,
       initialDate = new Date(),
+      // AI dev note: External state control - CRÍTICO
+      externalCurrentDate,
+      externalCurrentView,
+      onExternalDateChange,
+      onExternalViewChange,
       className,
       breakpoint = 'md',
       mobileView = 'day',
@@ -151,6 +162,18 @@ export const ResponsiveCalendarTemplate =
 
       // Render appropriate template based on role
       const renderRoleTemplate = () => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '🔍 DEBUG: ResponsiveCalendarTemplate - PROPS RECEBIDAS',
+            {
+              externalCurrentDate: externalCurrentDate?.toISOString(),
+              externalCurrentView: externalCurrentView,
+              'onExternalDateChange existe': !!onExternalDateChange,
+              'onExternalViewChange existe': !!onExternalViewChange,
+              'currentUser.role': currentUser.role,
+            }
+          );
+        }
         const baseProps = {
           events,
           onEventSave,
@@ -158,6 +181,11 @@ export const ResponsiveCalendarTemplate =
           onEventDelete,
           initialView: getInitialViewForRole(),
           initialDate,
+          // AI dev note: Repassar props de estado externo - CRÍTICO
+          externalCurrentDate,
+          externalCurrentView,
+          onExternalDateChange,
+          onExternalViewChange,
           className: isMobile ? 'mobile-calendar' : 'desktop-calendar',
           onPatientClick,
           onProfessionalClick,

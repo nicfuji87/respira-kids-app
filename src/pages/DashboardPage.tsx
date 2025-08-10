@@ -29,10 +29,8 @@ import { useCalendarFormData } from '@/hooks/useCalendarData';
 import type {
   UpcomingAppointment,
   ConsultationToEvolve,
-  MaterialRequest,
 } from '@/lib/professional-dashboard-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
-
 
 // AI dev note: DashboardPage com dados reais do Supabase
 // Página principal do dashboard com métricas e calendário
@@ -96,8 +94,6 @@ export const DashboardPage: React.FC = () => {
 
   // Handlers específicos do dashboard profissional
   const handleAppointmentClick = async (appointment: UpcomingAppointment) => {
-    
-
     setIsAppointmentDetailsOpen(true);
 
     try {
@@ -119,8 +115,6 @@ export const DashboardPage: React.FC = () => {
   const handleConsultationClick = async (
     consultation: ConsultationToEvolve
   ) => {
-    
-
     setIsAppointmentDetailsOpen(true);
 
     try {
@@ -140,8 +134,6 @@ export const DashboardPage: React.FC = () => {
   };
 
   const handleCreateEvolutionClick = async (consultationId: string) => {
-    
-
     setIsAppointmentDetailsOpen(true);
 
     try {
@@ -161,12 +153,10 @@ export const DashboardPage: React.FC = () => {
   };
 
   const handleMaterialRequestClick = () => {
-    
     // Navegar para detalhes da solicitação
   };
 
   const handleCreateMaterialRequest = () => {
-    
     // Abrir modal ou navegar para formulário
   };
 
@@ -178,7 +168,6 @@ export const DashboardPage: React.FC = () => {
 
   const handleAppointmentDetailsSave = async () => {
     try {
-      
       // O AppointmentDetailsManager já tem sua própria lógica de salvamento
       // Aqui podemos adicionar refresh dos dados se necessário
     } catch (error) {
@@ -201,7 +190,6 @@ export const DashboardPage: React.FC = () => {
   const handlePaymentAction = async (appointmentId: string) => {
     try {
       // TODO: Implementar lógica de pagamento manual com integração Asaas
-      
 
       // Por enquanto, apenas marcamos como pago
       // Buscar ID do status "pago"
@@ -223,11 +211,10 @@ export const DashboardPage: React.FC = () => {
     try {
       if (linkNfe) {
         // Se já tem NFe, visualizar
-        
+
         window.open(linkNfe, '_blank');
       } else {
         // Se não tem NFe, emitir
-        
 
         // TODO: Implementar integração com sistema de NFe
         // Por enquanto, simular um link de NFe

@@ -41,6 +41,12 @@ export interface CalendarTemplateProps {
   initialView?: CalendarView;
   initialDate?: Date;
 
+  // AI dev note: External state control (usado por CalendarTemplateWithData)
+  externalCurrentDate?: Date;
+  externalCurrentView?: CalendarView;
+  onExternalDateChange?: (date: Date) => void;
+  onExternalViewChange?: (view: CalendarView) => void;
+
   // Layout
   className?: string;
 
@@ -77,7 +83,14 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     // onEventSave, // AI dev note: Temporariamente comentado para evitar double update
 
     initialView = 'month',
-    initialDate = new Date(),
+    initialDate = new Date(), // AI dev note: Sempre abre na data atual
+
+    // AI dev note: External state control
+    externalCurrentDate,
+    externalCurrentView,
+    onExternalDateChange,
+    onExternalViewChange,
+
     canCreateEvents = true,
     canEditEvents = true,
     canDeleteEvents = true,
@@ -97,9 +110,24 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     void canDeleteEvents;
     void canViewAllEvents;
 
-    // State management
-    const [currentDate, setCurrentDate] = useState<Date>(initialDate);
-    const [currentView, setCurrentView] = useState<CalendarView>(initialView);
+    // AI dev note: Use external state when available, otherwise use local state
+    const [localCurrentDate, setLocalCurrentDate] = useState<Date>(initialDate);
+    const [localCurrentView, setLocalCurrentView] =
+      useState<CalendarView>(initialView);
+
+    const currentDate = externalCurrentDate ?? localCurrentDate;
+    const currentView = externalCurrentView ?? localCurrentView;
+    const setCurrentDate = onExternalDateChange ?? setLocalCurrentDate;
+    const setCurrentView = onExternalViewChange ?? setLocalCurrentView;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 DEBUG: CalendarTemplate - ESTADO', {
+        'usando estado externo': !!externalCurrentDate,
+        currentDate: currentDate.toISOString(),
+        currentView: currentView,
+        'events.length': events.length,
+      });
+    }
     const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
       null
     );
@@ -116,50 +144,105 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
 
     // Navigation handlers
     const handlePreviousClick = useCallback(() => {
-      setCurrentDate((prevDate) => {
-        switch (currentView) {
-          case 'month':
-            return subMonths(prevDate, 1);
-          case 'week':
-            return subWeeks(prevDate, 1);
-          case 'day':
-            return subDays(prevDate, 1);
-          case 'agenda':
-            return subWeeks(prevDate, 1);
-          default:
-            return prevDate;
-        }
-      });
-    }, [currentView]);
+      let newDate: Date;
+      switch (currentView) {
+        case 'month':
+          newDate = subMonths(currentDate, 1);
+          break;
+        case 'week':
+          newDate = subWeeks(currentDate, 1);
+          break;
+        case 'day':
+          newDate = subDays(currentDate, 1);
+          break;
+        case 'agenda':
+          newDate = subWeeks(currentDate, 1);
+          break;
+        default:
+          newDate = currentDate;
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 DEBUG: CalendarTemplate.handlePreviousClick', {
+          'usando estado externo': !!onExternalDateChange,
+          oldDate: currentDate.toISOString(),
+          newDate: newDate.toISOString(),
+          view: currentView,
+        });
+      }
+      setCurrentDate(newDate);
+    }, [currentView, currentDate, setCurrentDate, onExternalDateChange]);
 
     const handleNextClick = useCallback(() => {
-      setCurrentDate((prevDate) => {
-        switch (currentView) {
-          case 'month':
-            return addMonths(prevDate, 1);
-          case 'week':
-            return addWeeks(prevDate, 1);
-          case 'day':
-            return addDays(prevDate, 1);
-          case 'agenda':
-            return addWeeks(prevDate, 1);
-          default:
-            return prevDate;
-        }
-      });
-    }, [currentView]);
+      let newDate: Date;
+      switch (currentView) {
+        case 'month':
+          newDate = addMonths(currentDate, 1);
+          break;
+        case 'week':
+          newDate = addWeeks(currentDate, 1);
+          break;
+        case 'day':
+          newDate = addDays(currentDate, 1);
+          break;
+        case 'agenda':
+          newDate = addWeeks(currentDate, 1);
+          break;
+        default:
+          newDate = currentDate;
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 DEBUG: CalendarTemplate.handleNextClick', {
+          'usando estado externo': !!onExternalDateChange,
+          oldDate: currentDate.toISOString(),
+          newDate: newDate.toISOString(),
+          view: currentView,
+        });
+      }
+      setCurrentDate(newDate);
+    }, [currentView, currentDate, setCurrentDate, onExternalDateChange]);
 
     const handleTodayClick = useCallback(() => {
-      setCurrentDate(new Date());
-    }, []);
+      const today = new Date();
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 DEBUG: CalendarTemplate.handleTodayClick', {
+          'usando estado externo': !!onExternalDateChange,
+          today: today.toISOString(),
+        });
+      }
+      setCurrentDate(today);
+    }, [setCurrentDate, onExternalDateChange]);
 
-    const handleDateChange = useCallback((date: Date) => {
-      setCurrentDate(date);
-    }, []);
+    const handleDateChange = useCallback(
+      (date: Date) => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 DEBUG: CalendarTemplate.handleDateChange', {
+            'usando estado externo': !!onExternalDateChange,
+            oldDate: currentDate.toISOString(),
+            newDate: date.toISOString(),
+            oldMonth: currentDate.getMonth(),
+            newMonth: date.getMonth(),
+          });
+        }
+        setCurrentDate(date);
+      },
+      [setCurrentDate, currentDate, onExternalDateChange]
+    );
 
-    const handleViewChange = useCallback((view: CalendarView) => {
-      setCurrentView(view);
-    }, []);
+    const handleViewChange = useCallback(
+      (view: CalendarView) => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 DEBUG: CalendarTemplate.handleViewChange', {
+            'usando estado externo': !!onExternalViewChange,
+            oldView: currentView,
+            newView: view,
+          });
+        }
+        setCurrentView(view);
+      },
+      [setCurrentView, currentView, onExternalViewChange]
+    );
 
     // Event handlers
     const handleEventClick = useCallback(
@@ -174,11 +257,13 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
 
     const handleNewEventClick = useCallback(() => {
       if (canCreateEvents) {
-        setNewEventDate(currentDate);
+        const today = new Date();
+        const defaultDate = currentView === 'agenda' ? today : currentDate;
+        setNewEventDate(defaultDate);
         setNewEventTime(undefined);
         setIsAppointmentFormOpen(true);
       }
-    }, [canCreateEvents, currentDate]);
+    }, [canCreateEvents, currentDate, currentView]);
 
     const handleTimeSlotClick = useCallback(
       (time: string, date: Date) => {
@@ -220,45 +305,112 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
 
     // Filter events based on current view and date
     const getFilteredEvents = useCallback(() => {
-      if (!events || events.length === 0) return [];
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DEBUG: CalendarTemplate.getFilteredEvents - ENTRADA', {
+          'events.length': events?.length || 0,
+          currentView: currentView,
+          currentDate: currentDate.toISOString(),
+          'currentDate.getMonth()': currentDate.getMonth(),
+          'currentDate.getFullYear()': currentDate.getFullYear(),
+          'primeiros 3 eventos':
+            events?.slice(0, 3).map((e) => ({
+              id: e.id,
+              title: e.title,
+              start: e.start.toISOString(),
+              'start.getMonth()': new Date(e.start).getMonth(),
+              'start.getFullYear()': new Date(e.start).getFullYear(),
+            })) || [],
+        });
+      }
+
+      if (!events || events.length === 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '🔍 DEBUG: CalendarTemplate.getFilteredEvents - SEM EVENTOS'
+          );
+        }
+        return [];
+      }
+
+      let filteredEvents: CalendarEvent[] = [];
 
       switch (currentView) {
         case 'month':
-          return events.filter((event) => {
-            const eventDate = new Date(event.start);
-            return (
-              eventDate.getMonth() === currentDate.getMonth() &&
-              eventDate.getFullYear() === currentDate.getFullYear()
+          // AI dev note: SIMPLIFICAÇÃO TEMPORÁRIA - useCalendarData já busca range correto
+          // Remover filtro duplo que pode estar causando perda de eventos
+          if (process.env.NODE_ENV === 'development') {
+            console.log(
+              '🔧 DEBUG: FILTRO SIMPLIFICADO - useCalendarData já filtrou por range, passando eventos direto'
             );
-          });
+            filteredEvents = events; // Passar todos os eventos que chegaram do useCalendarData
+          } else {
+            // Manter filtro original em produção até confirmar que funciona
+            filteredEvents = events.filter((event) => {
+              const eventDate = new Date(event.start);
+              const sameMonth = eventDate.getMonth() === currentDate.getMonth();
+              const sameYear =
+                eventDate.getFullYear() === currentDate.getFullYear();
+              return sameMonth && sameYear;
+            });
+          }
+          break;
         case 'week': {
-          const weekStart = startOfWeek(currentDate, { locale: ptBR });
-          const weekEnd = endOfWeek(currentDate, { locale: ptBR });
-          return events.filter((event) => {
-            const eventDate = new Date(event.start);
-            return eventDate >= weekStart && eventDate <= weekEnd;
-          });
+          if (process.env.NODE_ENV === 'development') {
+            filteredEvents = events; // Simplificado para debug
+          } else {
+            const weekStart = startOfWeek(currentDate, { locale: ptBR });
+            const weekEnd = endOfWeek(currentDate, { locale: ptBR });
+            filteredEvents = events.filter((event) => {
+              const eventDate = new Date(event.start);
+              return eventDate >= weekStart && eventDate <= weekEnd;
+            });
+          }
+          break;
         }
         case 'day':
-          return events.filter((event) => {
-            const eventDate = new Date(event.start);
-            return eventDate.toDateString() === currentDate.toDateString();
-          });
-        case 'agenda': {
-          // Show upcoming events from current date
-          return events
-            .filter((event) => {
+          if (process.env.NODE_ENV === 'development') {
+            filteredEvents = events; // Simplificado para debug
+          } else {
+            filteredEvents = events.filter((event) => {
               const eventDate = new Date(event.start);
-              return eventDate >= currentDate;
-            })
-            .sort(
-              (a, b) =>
-                new Date(a.start).getTime() - new Date(b.start).getTime()
-            );
+              return eventDate.toDateString() === currentDate.toDateString();
+            });
+          }
+          break;
+        case 'agenda': {
+          if (process.env.NODE_ENV === 'development') {
+            filteredEvents = events; // Simplificado para debug
+          } else {
+            // Show upcoming events from current date
+            filteredEvents = events
+              .filter((event) => {
+                const eventDate = new Date(event.start);
+                return eventDate >= currentDate;
+              })
+              .sort(
+                (a, b) =>
+                  new Date(a.start).getTime() - new Date(b.start).getTime()
+              );
+          }
+          break;
         }
         default:
-          return events;
+          filteredEvents = events;
       }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DEBUG: CalendarTemplate.getFilteredEvents - SAÍDA', {
+          'filteredEvents.length': filteredEvents.length,
+          'eventos filtrados': filteredEvents.slice(0, 3).map((e) => ({
+            id: e.id,
+            title: e.title,
+            start: e.start.toISOString(),
+          })),
+          view: currentView,
+        });
+      }
+
+      return filteredEvents;
     }, [events, currentView, currentDate]);
 
     // Render current view

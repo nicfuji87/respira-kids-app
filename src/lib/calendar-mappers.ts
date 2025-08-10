@@ -210,13 +210,9 @@ export const mapAgendamentoFlatToCompleto = (
 export const mapAgendamentoToCalendarEvent = (
   agendamento: SupabaseAgendamentoCompleto
 ): CalendarEvent => {
-  // AI dev note: Tratar horário como local removendo timezone para evitar conversão
-  // Remove qualquer timezone (+00, Z, etc) para que seja interpretado como horário local
-  const localDateString = agendamento.data_hora.replace(
-    /[+-]\d{2}:\d{2}$|[+-]\d{2}$|Z$/i,
-    ''
-  );
-  const start = new Date(localDateString);
+  // AI dev note: Manter timezone UTC conforme está no Supabase para consistência
+  // Usuário especificou: "o horario deve ser exatamente o que está no supabase"
+  const start = new Date(agendamento.data_hora);
   const end = new Date(
     start.getTime() + (agendamento.tipo_servico?.duracao_minutos || 60) * 60000
   );
@@ -269,15 +265,25 @@ export const mapAgendamentoToCalendarEvent = (
 export const mapAgendamentoFlatToCalendarEvent = (
   flat: SupabaseAgendamentoCompletoFlat
 ): CalendarEvent => {
-  // AI dev note: Tratar horário como local removendo timezone para evitar conversão
-  const localDateString = flat.data_hora.replace(
-    /[+-]\d{2}:\d{2}$|[+-]\d{2}$|Z$/i,
-    ''
-  );
-  const start = new Date(localDateString);
+  // AI dev note: Manter timezone UTC conforme está no Supabase para consistência
+  // Usuário especificou: "o horario deve ser exatamente o que está no supabase"
+  const start = new Date(flat.data_hora);
   const end = new Date(
     start.getTime() + flat.tipo_servico_duracao_minutos * 60000
   );
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔄 DEBUG: mapAgendamentoFlatToCalendarEvent', {
+      'flat.id': flat.id,
+      'flat.data_hora (original)': flat.data_hora,
+      'start (parsed)': start.toISOString(),
+      'start.getMonth()': start.getMonth(),
+      'start.getFullYear()': start.getFullYear(),
+      end: end.toISOString(),
+      paciente: flat.paciente_nome,
+      profissional: flat.profissional_nome,
+    });
+  }
 
   return {
     id: flat.id,

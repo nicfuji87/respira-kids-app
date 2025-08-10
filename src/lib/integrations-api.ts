@@ -76,13 +76,13 @@ export async function fetchApiKeys(
       .from('api_keys')
       .select('*', { count: 'exact', head: true });
 
-    // Buscar dados com paginação
+    // Buscar dados com paginação, ordenando por service_name
     const offset = (page - 1) * limit;
     const { data, error } = await supabase
       .from('api_keys')
       .select('*')
       .range(offset, offset + limit - 1)
-      .order('created_at', { ascending: false });
+      .order('service_name', { ascending: true });
 
     if (error) {
       console.error('❌ Erro ao buscar chaves de API:', error);
@@ -193,7 +193,64 @@ export async function updateApiKey(
   }
 }
 
-// Deletar chave de API
+// Toggle status da chave de API (soft delete/enable)
+export async function toggleApiKeyStatus(
+  id: string
+): Promise<ApiResponse<ApiKey>> {
+  try {
+    // Verificar se é admin primeiro
+    const adminCheck = await checkAdminRole();
+    if (!adminCheck.success || !adminCheck.data) {
+      return {
+        data: null,
+        error:
+          'Acesso negado. Apenas administradores podem gerenciar integrações.',
+        success: false,
+      };
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    // Primeiro buscar o status atual
+    const { data: currentKey, error: fetchError } = await supabase
+      .from('api_keys')
+      .select('is_active')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('❌ Erro ao buscar chave de API:', fetchError);
+      return { data: null, error: fetchError.message, success: false };
+    }
+
+    // Inverter o status
+    const newStatus = !currentKey.is_active;
+
+    const { data: updatedKey, error } = await supabase
+      .from('api_keys')
+      .update({
+        is_active: newStatus,
+        updated_by: user?.id,
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Erro ao alterar status da chave de API:', error);
+      return { data: null, error: error.message, success: false };
+    }
+
+    return { data: updatedKey as ApiKey, error: null, success: true };
+  } catch (error) {
+    console.error('❌ Erro inesperado ao alterar status:', error);
+    return { data: null, error: 'Erro inesperado', success: false };
+  }
+}
+
+// Deletar chave de API (soft delete - desativa a chave)
 export async function deleteApiKey(id: string): Promise<ApiResponse<boolean>> {
   try {
     // Verificar se é admin primeiro
@@ -207,7 +264,18 @@ export async function deleteApiKey(id: string): Promise<ApiResponse<boolean>> {
       };
     }
 
-    const { error } = await supabase.from('api_keys').delete().eq('id', id);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    // Soft delete - marcar como inativo
+    const { error } = await supabase
+      .from('api_keys')
+      .update({
+        is_active: false,
+        updated_by: user?.id,
+      })
+      .eq('id', id);
 
     if (error) {
       console.error('❌ Erro ao deletar chave de API:', error);
