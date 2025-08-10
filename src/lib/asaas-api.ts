@@ -2,41 +2,48 @@
 // Funções principais: determineApiKey, createCustomer, disableNotifications, createPayment
 
 import { supabase } from '@/lib/supabase';
-import type { 
+import type {
   AsaasApiConfig,
   CreateCustomerRequest,
   CreatePaymentRequest,
   AsaasIntegrationResult,
-  ProcessPaymentData
+  ProcessPaymentData,
 } from '@/types/asaas';
 
 // AI dev note: Determina qual API key usar - individual da empresa ou global
-export async function determineApiKey(userRole: string | null): Promise<AsaasApiConfig | null> {
+export async function determineApiKey(
+  userRole: string | null
+): Promise<AsaasApiConfig | null> {
   try {
     // Primeiro tenta buscar API individual se usuário for admin/secretaria
     if (userRole === 'admin' || userRole === 'secretaria') {
       console.log('🔍 Buscando API key individual para usuário:', userRole);
-      
+
       // Busca API key da empresa associada ao usuário
       const { data: currentUser } = await supabase.auth.getUser();
-      
+
       if (currentUser.user?.id) {
         const { data: userWithCompany, error: userError } = await supabase
           .from('pessoas')
-          .select(`
+          .select(
+            `
             id_empresa,
             pessoa_empresas(
               api_token_externo
             )
-          `)
+          `
+          )
           .eq('auth_user_id', currentUser.user.id)
           .not('id_empresa', 'is', null)
           .single();
 
-        console.log('📊 Resultado da busca de empresa:', { userWithCompany, userError });
+        console.log('📊 Resultado da busca de empresa:', {
+          userWithCompany,
+          userError,
+        });
 
-        const empresaData = Array.isArray(userWithCompany?.pessoa_empresas) 
-          ? userWithCompany.pessoa_empresas[0] 
+        const empresaData = Array.isArray(userWithCompany?.pessoa_empresas)
+          ? userWithCompany.pessoa_empresas[0]
           : userWithCompany?.pessoa_empresas;
 
         if (!userError && empresaData?.api_token_externo) {
@@ -44,10 +51,13 @@ export async function determineApiKey(userRole: string | null): Promise<AsaasApi
           return {
             apiKey: empresaData.api_token_externo,
             isGlobal: false,
-            baseUrl: 'https://api.asaas.com/v3'
+            baseUrl: 'https://api.asaas.com/v3',
           };
         } else {
-          console.log('ℹ️ API key individual não encontrada:', userError?.message);
+          console.log(
+            'ℹ️ API key individual não encontrada:',
+            userError?.message
+          );
         }
       }
     }
@@ -68,9 +78,8 @@ export async function determineApiKey(userRole: string | null): Promise<AsaasApi
     return {
       apiKey: globalApiKey.encrypted_key,
       isGlobal: true,
-      baseUrl: 'https://api.asaas.com/v3'
+      baseUrl: 'https://api.asaas.com/v3',
     };
-
   } catch (error) {
     console.error('Erro ao determinar API key do Asaas:', error);
     return null;
@@ -87,46 +96,53 @@ export async function searchExistingCustomer(
     if (!apiConfig) {
       return {
         success: false,
-        error: 'API key do Asaas não configurada'
+        error: 'API key do Asaas não configurada',
       };
     }
 
     console.log('🔍 Buscando cliente existente por CPF/CNPJ:', cpfCnpj);
 
     // Chama Edge Function para buscar cliente
-    const { data, error } = await supabase.functions.invoke('asaas-search-customer', {
-      body: {
-        apiConfig,
-        cpfCnpj
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-search-customer',
+      {
+        body: {
+          apiConfig,
+          cpfCnpj,
+        },
       }
-    });
+    );
 
     if (error) {
-      console.error('Erro ao chamar Edge Function asaas-search-customer:', error);
+      console.error(
+        'Erro ao chamar Edge Function asaas-search-customer:',
+        error
+      );
       return {
         success: false,
-        error: 'Erro na comunicação com o serviço de busca de cliente'
+        error: 'Erro na comunicação com o serviço de busca de cliente',
       };
     }
 
     if (!data.success) {
       return {
         success: false,
-        error: data.error || 'Erro desconhecido ao buscar cliente'
+        error: data.error || 'Erro desconhecido ao buscar cliente',
       };
     }
 
     return {
       success: true,
       data: data.customer,
-      asaasCustomerId: data.found ? (data.customer as any)?.id : null
+      asaasCustomerId: data.found
+        ? (data.customer as { id?: string })?.id
+        : undefined,
     };
-
   } catch (error) {
     console.error('Erro ao buscar cliente no Asaas:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao buscar cliente'
+      error: 'Erro inesperado ao buscar cliente',
     };
   }
 }
@@ -141,44 +157,49 @@ export async function createCustomer(
     if (!apiConfig) {
       return {
         success: false,
-        error: 'API key do Asaas não configurada'
+        error: 'API key do Asaas não configurada',
       };
     }
 
     // Chama Edge Function para criar cliente
-    const { data, error } = await supabase.functions.invoke('asaas-create-customer', {
-      body: {
-        apiConfig,
-        customerData
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-create-customer',
+      {
+        body: {
+          apiConfig,
+          customerData,
+        },
       }
-    });
+    );
 
     if (error) {
-      console.error('Erro ao chamar Edge Function asaas-create-customer:', error);
+      console.error(
+        'Erro ao chamar Edge Function asaas-create-customer:',
+        error
+      );
       return {
         success: false,
-        error: 'Erro na comunicação com o serviço de criação de cliente'
+        error: 'Erro na comunicação com o serviço de criação de cliente',
       };
     }
 
     if (!data.success) {
       return {
         success: false,
-        error: data.error || 'Erro desconhecido ao criar cliente'
+        error: data.error || 'Erro desconhecido ao criar cliente',
       };
     }
 
     return {
       success: true,
       data: data.customer,
-      asaasCustomerId: data.customer.id
+      asaasCustomerId: data.customer.id,
     };
-
   } catch (error) {
     console.error('Erro ao criar cliente no Asaas:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao criar cliente'
+      error: 'Erro inesperado ao criar cliente',
     };
   }
 }
@@ -193,36 +214,41 @@ export async function disableNotifications(
     if (!apiConfig) {
       return {
         success: false,
-        error: 'API key do Asaas não configurada'
+        error: 'API key do Asaas não configurada',
       };
     }
 
     // Chama Edge Function para desabilitar notificações
-    const { data, error } = await supabase.functions.invoke('asaas-disable-notifications', {
-      body: {
-        apiConfig,
-        customerId
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-disable-notifications',
+      {
+        body: {
+          apiConfig,
+          customerId,
+        },
       }
-    });
+    );
 
     if (error) {
-      console.error('Erro ao chamar Edge Function asaas-disable-notifications:', error);
+      console.error(
+        'Erro ao chamar Edge Function asaas-disable-notifications:',
+        error
+      );
       return {
         success: false,
-        error: 'Erro na comunicação com o serviço de notificações'
+        error: 'Erro na comunicação com o serviço de notificações',
       };
     }
 
     return {
       success: data.success,
-      error: data.error
+      error: data.error,
     };
-
   } catch (error) {
     console.error('Erro ao desabilitar notificações no Asaas:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao desabilitar notificações'
+      error: 'Erro inesperado ao desabilitar notificações',
     };
   }
 }
@@ -237,44 +263,49 @@ export async function createPayment(
     if (!apiConfig) {
       return {
         success: false,
-        error: 'API key do Asaas não configurada'
+        error: 'API key do Asaas não configurada',
       };
     }
 
     // Chama Edge Function para criar cobrança
-    const { data, error } = await supabase.functions.invoke('asaas-create-payment', {
-      body: {
-        apiConfig,
-        paymentData
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-create-payment',
+      {
+        body: {
+          apiConfig,
+          paymentData,
+        },
       }
-    });
+    );
 
     if (error) {
-      console.error('Erro ao chamar Edge Function asaas-create-payment:', error);
+      console.error(
+        'Erro ao chamar Edge Function asaas-create-payment:',
+        error
+      );
       return {
         success: false,
-        error: 'Erro na comunicação com o serviço de cobrança'
+        error: 'Erro na comunicação com o serviço de cobrança',
       };
     }
 
     if (!data.success) {
       return {
         success: false,
-        error: data.error || 'Erro desconhecido ao criar cobrança'
+        error: data.error || 'Erro desconhecido ao criar cobrança',
       };
     }
 
     return {
       success: true,
       data: data.payment,
-      asaasPaymentId: data.payment.id
+      asaasPaymentId: data.payment.id,
     };
-
   } catch (error) {
     console.error('Erro ao criar cobrança no Asaas:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao criar cobrança'
+      error: 'Erro inesperado ao criar cobrança',
     };
   }
 }
@@ -314,7 +345,10 @@ export async function updateAppointmentsPaymentId(
       .in('id', appointmentIds);
 
     if (error) {
-      console.error('Erro ao atualizar id_pagamento_externo dos agendamentos:', error);
+      console.error(
+        'Erro ao atualizar id_pagamento_externo dos agendamentos:',
+        error
+      );
       return false;
     }
 
@@ -332,14 +366,15 @@ export async function processPayment(
 ): Promise<AsaasIntegrationResult> {
   console.log('🔧 Iniciando processamento de pagamento:', processData);
   console.log('👨‍💼 Role do usuário:', userRole);
-  
+
   try {
     // 1. Busca dados do responsável pela cobrança
     console.log('🔍 Buscando dados do responsável:', processData.responsibleId);
-    
+
     const { data: responsible, error: responsibleError } = await supabase
       .from('pessoas')
-      .select(`
+      .select(
+        `
         id,
         nome,
         cpf_cnpj,
@@ -349,7 +384,8 @@ export async function processPayment(
         numero_endereco,
         complemento_endereco,
         enderecos(cep)
-      `)
+      `
+      )
       .eq('id', processData.responsibleId)
       .single();
 
@@ -357,61 +393,77 @@ export async function processPayment(
       console.error('❌ Erro ao buscar responsável:', responsibleError);
       return {
         success: false,
-        error: 'Responsável pela cobrança não encontrado'
+        error: 'Responsável pela cobrança não encontrado',
       };
     }
 
     console.log('✅ Responsável encontrado:', {
       id: responsible.id,
       nome: responsible.nome,
-      id_asaas: responsible.id_asaas
+      id_asaas: responsible.id_asaas,
     });
 
     let asaasCustomerId = responsible.id_asaas;
 
     // 2. Se não tem id_asaas, verifica se cliente já existe no Asaas
     if (!asaasCustomerId) {
-      console.log('👤 Responsável não tem ID do Asaas, verificando se já existe...');
-      
+      console.log(
+        '👤 Responsável não tem ID do Asaas, verificando se já existe...'
+      );
+
       // Primeiro, busca cliente existente por CPF
-      const searchResult = await searchExistingCustomer(responsible.cpf_cnpj, userRole);
-      
+      const searchResult = await searchExistingCustomer(
+        responsible.cpf_cnpj,
+        userRole
+      );
+
       if (searchResult.success && searchResult.asaasCustomerId) {
         // Cliente já existe no Asaas, apenas atualiza o ID no Supabase
         asaasCustomerId = searchResult.asaasCustomerId;
         console.log('✅ Cliente já existe no Asaas:', asaasCustomerId);
-        
+
         // Atualiza id_asaas no banco
         console.log('💾 Atualizando ID do Asaas existente no banco...');
-        const updateResult = await updatePersonAsaasId(responsible.id, asaasCustomerId);
+        const updateResult = await updatePersonAsaasId(
+          responsible.id,
+          asaasCustomerId
+        );
         if (!updateResult) {
           console.error('❌ Erro ao salvar ID do cliente Asaas no banco');
           return {
             success: false,
-            error: 'Erro ao salvar ID do cliente Asaas'
+            error: 'Erro ao salvar ID do cliente Asaas',
           };
         }
-        
+
         console.log('✅ ID do Asaas atualizado no Supabase');
       } else {
         // Cliente não existe, criar novo
         console.log('🆕 Cliente não existe no Asaas, criando novo...');
-        
+
         const customerData: CreateCustomerRequest = {
           name: responsible.nome,
           cpfCnpj: responsible.cpf_cnpj,
           email: responsible.email || undefined,
-          mobilePhone: responsible.telefone ? String(responsible.telefone) : undefined,
-          postalCode: (responsible.enderecos as { cep?: string })?.cep || undefined,
+          mobilePhone: responsible.telefone
+            ? String(responsible.telefone)
+            : undefined,
+          postalCode:
+            (responsible.enderecos as { cep?: string })?.cep || undefined,
           externalReference: responsible.id,
-          addressNumber: `${responsible.numero_endereco || ''} ${responsible.complemento_endereco || ''}`.trim() || undefined
+          addressNumber:
+            `${responsible.numero_endereco || ''} ${responsible.complemento_endereco || ''}`.trim() ||
+            undefined,
         };
 
         console.log('📝 Dados para criação do cliente:', customerData);
 
         const customerResult = await createCustomer(customerData, userRole);
         if (!customerResult.success) {
-          console.error('❌ Falha ao criar cliente no Asaas:', customerResult.error);
+          console.error(
+            '❌ Falha ao criar cliente no Asaas:',
+            customerResult.error
+          );
           return customerResult;
         }
 
@@ -420,21 +472,30 @@ export async function processPayment(
 
         // Atualiza id_asaas no banco
         console.log('💾 Atualizando ID do Asaas no banco...');
-        const updateResult = await updatePersonAsaasId(responsible.id, asaasCustomerId);
+        const updateResult = await updatePersonAsaasId(
+          responsible.id,
+          asaasCustomerId
+        );
         if (!updateResult) {
           console.error('❌ Erro ao salvar ID do cliente Asaas no banco');
           return {
             success: false,
-            error: 'Erro ao salvar ID do cliente Asaas'
+            error: 'Erro ao salvar ID do cliente Asaas',
           };
         }
       }
 
       // 3. Desabilita notificações nativas do Asaas (para cliente novo ou existente)
       console.log('🔕 Desabilitando notificações nativas do Asaas...');
-      const notificationResult = await disableNotifications(asaasCustomerId, userRole);
+      const notificationResult = await disableNotifications(
+        asaasCustomerId,
+        userRole
+      );
       if (!notificationResult.success) {
-        console.warn('⚠️ Aviso: Não foi possível desabilitar notificações:', notificationResult.error);
+        console.warn(
+          '⚠️ Aviso: Não foi possível desabilitar notificações:',
+          notificationResult.error
+        );
       }
     } else {
       console.log('✅ Responsável já possui ID do Asaas:', asaasCustomerId);
@@ -453,7 +514,7 @@ export async function processPayment(
       value: processData.totalValue,
       dueDate: dueDateString,
       description: processData.description,
-      externalReference: processData.consultationIds.join(',')
+      externalReference: processData.consultationIds.join(','),
     };
 
     console.log('💳 Criando cobrança no Asaas:', paymentData);
@@ -477,7 +538,7 @@ export async function processPayment(
       console.error('❌ Erro ao vincular cobrança aos agendamentos');
       return {
         success: false,
-        error: 'Cobrança criada mas erro ao vincular aos agendamentos'
+        error: 'Cobrança criada mas erro ao vincular aos agendamentos',
       };
     }
 
@@ -487,17 +548,16 @@ export async function processPayment(
       success: true,
       data: paymentResult.data,
       asaasCustomerId,
-      asaasPaymentId: paymentResult.asaasPaymentId
+      asaasPaymentId: paymentResult.asaasPaymentId,
     };
 
     console.log('🎯 Processamento concluído com sucesso:', finalResult);
     return finalResult;
-
   } catch (error) {
     console.error('Erro ao processar cobrança:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao processar cobrança'
+      error: 'Erro inesperado ao processar cobrança',
     };
   }
-} 
+}

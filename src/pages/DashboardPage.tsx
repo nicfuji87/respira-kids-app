@@ -319,7 +319,7 @@ export const DashboardPage: React.FC = () => {
 
     return (
       <>
-        <AdminDashboard onNavigateToModule={handleNavigateToModule} />
+        <AdminDashboard onModuleClick={handleNavigateToModule} />
 
         {/* Modal de detalhes do agendamento */}
         <AppointmentDetailsManager

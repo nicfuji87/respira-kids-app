@@ -1,16 +1,24 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/primitives/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/primitives/dialog';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/primitives/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import {
   CalendarDays,
   Clock,
-  DollarSign,
-  UserPlus,
   AlertTriangle,
   FileText,
   RefreshCw,
@@ -22,22 +30,18 @@ import {
 import { useAdminMetrics } from '@/hooks/useAdminMetrics';
 import { UserMetrics } from '@/components/composed/UserMetrics';
 import { ProfessionalMetrics } from '@/components/composed/ProfessionalMetrics';
-import { RecentConsultations } from '@/components/composed/RecentConsultations';
 import { ConsultationsToEvolve } from '@/components/composed/ConsultationsToEvolve';
 import { AppointmentsList } from '@/components/composed/AppointmentsList';
 import { MaterialRequestCard } from '@/components/composed/MaterialRequestCard';
 import { ProfessionalFilter } from '@/components/composed/ProfessionalFilter';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
-import {
-  updatePaymentStatus,
-  updateNfeLink,
-} from '@/lib/calendar-services';
+import { fetchAgendamentoById } from '@/lib/calendar-services';
 import type {
   UpcomingAppointment,
   ConsultationToEvolve,
 } from '@/lib/professional-dashboard-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
-
+import { useAuth } from '@/hooks/useAuth';
 
 // AI dev note: AdminDashboard é específico para role admin da clínica Respira Kids
 // Interface completa de gestão com métricas, notificações e ações rápidas
@@ -51,14 +55,15 @@ interface AdminDashboardProps {
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onModuleClick,
 }) => {
-  const [selectedProfessionalId, setSelectedProfessionalId] = useState<
-    string | null
-  >(null);
+  const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>(
+    []
+  );
   const [isAppointmentDetailsOpen, setIsAppointmentDetailsOpen] =
     useState(false);
-  const [selectedAppointmentData, setSelectedAppointmentData] = useState<
-    SupabaseAgendamentoCompletoFlat | null
-  >(null);
+  const [selectedAppointmentData, setSelectedAppointmentData] =
+    useState<SupabaseAgendamentoCompletoFlat | null>(null);
+
+  const { user } = useAuth();
 
   const {
     loading,
@@ -67,8 +72,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     upcomingAppointments,
     consultationsToEvolve,
     materialRequests,
-    user,
-  } = useAdminMetrics(selectedProfessionalId);
+  } = useAdminMetrics({
+    startDate: new Date(
+      new Date().setMonth(new Date().getMonth() - 1)
+    ).toISOString(),
+    endDate: new Date().toISOString(),
+  });
 
   // AI dev note: Função para saudação dinâmica baseada no horário
   const getGreeting = () => {
@@ -88,85 +97,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [onModuleClick]
   );
 
-  // Função para extrair dados de agendamento de diferentes tipos
-  const extractAppointmentData = useCallback(
-    (
-      item: UpcomingAppointment | ConsultationToEvolve
-    ): SupabaseAgendamentoCompletoFlat => {
-      if ('agendamento_id' in item) {
-        // É do tipo UpcomingAppointment
-        return {
-          id: item.agendamento_id,
-          data_agendamento: item.data_agendamento,
-          horario_inicio: item.horario_inicio,
-          horario_fim: item.horario_fim,
-          observacoes: item.observacoes,
-          preco_sessao: item.preco_sessao,
-          paciente_id: item.paciente_id,
-          paciente_nome: item.paciente_nome,
-          profissional_id: item.profissional_id,
-          profissional_nome: item.profissional_nome,
-          servico_id: item.servico_id,
-          servico_nome: item.servico_nome,
-          responsavel_legal_nome: item.responsavel_legal_nome,
-          responsavel_legal_email: item.responsavel_legal_email,
-          responsavel_legal_telefone: item.responsavel_legal_telefone,
-          responsavel_financeiro_nome: item.responsavel_financeiro_nome,
-          responsavel_financeiro_email: item.responsavel_financeiro_email,
-          responsavel_financeiro_telefone: item.responsavel_financeiro_telefone,
-          nomes_responsaveis: item.nomes_responsaveis,
-          idade_paciente: item.idade_paciente,
-          status_consulta_id: item.status_consulta_id || null,
-          status_consulta_nome: item.status_consulta_nome || null,
-          status_pagamento_id: item.status_pagamento_id || null,
-          status_pagamento_nome: item.status_pagamento_nome || null,
-          local_atendimento_id: item.local_atendimento_id || null,
-          local_atendimento_nome: item.local_atendimento_nome || null,
-          link_nfe: item.link_nfe || null,
-        };
-      } else {
-        // É do tipo ConsultationToEvolve
-        return {
-          id: item.id,
-          data_agendamento: item.data_agendamento,
-          horario_inicio: item.horario_inicio,
-          horario_fim: item.horario_fim,
-          observacoes: item.observacoes,
-          preco_sessao: item.preco_sessao,
-          paciente_id: item.paciente_id,
-          paciente_nome: item.paciente_nome,
-          profissional_id: item.profissional_id,
-          profissional_nome: item.profissional_nome,
-          servico_id: item.servico_id,
-          servico_nome: item.servico_nome,
-          responsavel_legal_nome: item.responsavel_legal_nome,
-          responsavel_legal_email: item.responsavel_legal_email,
-          responsavel_legal_telefone: item.responsavel_legal_telefone,
-          responsavel_financeiro_nome: item.responsavel_financeiro_nome,
-          responsavel_financeiro_email: item.responsavel_financeiro_email,
-          responsavel_financeiro_telefone: item.responsavel_financeiro_telefone,
-          nomes_responsaveis: item.nomes_responsaveis,
-          idade_paciente: item.idade_paciente,
-          status_consulta_id: item.status_consulta_id || null,
-          status_consulta_nome: item.status_consulta_nome || null,
-          status_pagamento_id: item.status_pagamento_id || null,
-          status_pagamento_nome: item.status_pagamento_nome || null,
-          local_atendimento_id: item.local_atendimento_id || null,
-          local_atendimento_nome: item.local_atendimento_nome || null,
-          link_nfe: item.link_nfe || null,
-        };
+  // Função para buscar dados completos do agendamento
+  const fetchAppointmentDetails = useCallback(
+    async (
+      appointmentId: string
+    ): Promise<SupabaseAgendamentoCompletoFlat | null> => {
+      try {
+        const data = await fetchAgendamentoById(appointmentId);
+        return data;
+      } catch (error) {
+        console.error('Erro ao buscar detalhes do agendamento:', error);
+        return null;
       }
     },
     []
   );
 
+  // Função para lidar com clique em consulta
   const handleAppointmentClick = useCallback(
-    (consultation: UpcomingAppointment | ConsultationToEvolve) => {
-      const appointmentData = extractAppointmentData(consultation);
-      setSelectedAppointmentData(appointmentData);
-      setIsAppointmentDetailsOpen(true);
+    async (item: UpcomingAppointment | ConsultationToEvolve) => {
+      const appointmentData = await fetchAppointmentDetails(item.id);
+      if (appointmentData) {
+        setSelectedAppointmentData(appointmentData);
+        setIsAppointmentDetailsOpen(true);
+      }
     },
-    [extractAppointmentData]
+    [fetchAppointmentDetails]
   );
 
   const handleAppointmentDetailsClose = () => {
@@ -176,7 +132,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleAppointmentDetailsSave = async () => {
     try {
-      
       // O AppointmentDetailsManager já tem sua própria lógica de salvamento
       // Aqui podemos adicionar refresh dos dados se necessário
       refreshAll(); // Atualizar dados após salvar
@@ -186,10 +141,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleEvolutionClick = useCallback(
-    (consultationId: string) => {
-      handleModuleClick(`patients/${consultationId}?tab=evolution`);
+    async (consultationId: string) => {
+      const appointmentData = await fetchAppointmentDetails(consultationId);
+      if (appointmentData) {
+        setSelectedAppointmentData(appointmentData);
+        setIsAppointmentDetailsOpen(true);
+      }
     },
-    [handleModuleClick]
+    [fetchAppointmentDetails]
   );
 
   // AI dev note: Componente reutilizável para métricas de card
@@ -203,7 +162,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }: {
     title: string;
     value: string | number;
-    icon: React.ComponentType<any>;
+    icon: React.ComponentType<{ className?: string; size?: number | string }>;
     description?: string;
     onClick?: () => void;
     className?: string;
@@ -325,9 +284,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <span className="text-sm font-medium">Filtrar por profissional:</span>
         </div>
         <ProfessionalFilter
-          selectedProfessionalId={selectedProfessionalId}
-          onProfessionalChange={setSelectedProfessionalId}
-          showAllOption
+          selectedProfessionals={selectedProfessionals}
+          onSelectionChange={setSelectedProfessionals}
         />
       </div>
 
@@ -365,8 +323,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* AI dev note: Seção de métricas detalhadas */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <UserMetrics />
-        <ProfessionalMetrics selectedProfessionalId={selectedProfessionalId} />
+        <UserMetrics metrics={null} loading={loading} />
+        <ProfessionalMetrics metrics={null} />
       </div>
 
       {/* AI dev note: Seção de listas e agendamentos */}
@@ -389,9 +347,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   appointments={upcomingAppointments || []}
                   loading={loading}
                   onAppointmentClick={handleAppointmentClick}
-                  onPaymentStatusUpdate={updatePaymentStatus}
-                  onNfeLinkUpdate={updateNfeLink}
-                  emptyMessage="Nenhuma consulta nas próximas 24 horas"
+                  maxItems={10}
+                  userRole="admin"
                 />
               </ScrollArea>
             </CardContent>
@@ -416,23 +373,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   consultations={consultationsToEvolve || []}
                   loading={loading}
                   onConsultationClick={handleAppointmentClick}
-                  onEvolutionClick={handleEvolutionClick}
-                  emptyMessage="Todas as consultas estão em dia!"
+                  onCreateEvolutionClick={handleEvolutionClick}
                 />
               </ScrollArea>
             </CardContent>
           </Card>
 
           {/* Solicitação de Material */}
-              <MaterialRequestCard
+          <MaterialRequestCard
             requests={materialRequests}
             loading={loading}
             error={error}
-                                onRequestClick={() => {
-                  handleModuleClick('stock');
-                }}
-                onCreateRequest={() => {
-              
+            onRequestClick={() => {
+              handleModuleClick('stock');
+            }}
+            onCreateRequest={() => {
               handleModuleClick('stock');
             }}
           />
@@ -452,9 +407,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {selectedAppointmentData && (
               <AppointmentDetailsManager
                 isOpen={isAppointmentDetailsOpen}
-                appointmentData={selectedAppointmentData}
+                appointment={selectedAppointmentData}
                 onClose={handleAppointmentDetailsClose}
                 onSave={handleAppointmentDetailsSave}
+                userRole="admin"
+                locaisAtendimento={[]}
               />
             )}
           </div>
