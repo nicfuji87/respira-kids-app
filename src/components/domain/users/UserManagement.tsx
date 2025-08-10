@@ -133,8 +133,7 @@ export const UserManagement = React.memo<UserManagementProps>(
     }, [filters, currentPage]);
 
     const handleEditUser = (usuario: Usuario) => {
-      console.log('handleEditUser chamado com:', usuario);
-      console.log('Estado atual showEditModal:', showEditModal);
+      
 
       setEditingUser(usuario);
       form.reset({
@@ -155,12 +154,12 @@ export const UserManagement = React.memo<UserManagementProps>(
         id_tipo_pessoa: usuario.tipo_pessoa_id || undefined,
       });
 
-      console.log('Definindo showEditModal para true');
+      
       setShowEditModal(true);
 
       // Verificar se o estado mudou após um pequeno delay
       setTimeout(() => {
-        console.log('Estado após setShowEditModal:', showEditModal);
+        
       }, 100);
     };
 
@@ -293,7 +292,7 @@ export const UserManagement = React.memo<UserManagementProps>(
             size="sm"
             variant="ghost"
             onClick={() => {
-              console.log('Editando usuário:', usuario);
+              
               handleEditUser(usuario);
             }}
           >

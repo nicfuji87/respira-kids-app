@@ -89,7 +89,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     onSave,
     className,
   }) => {
-    console.log('🏗️ [DEBUG] AppointmentFormManager - render, isOpen:', isOpen);
+    
 
     const { user } = useAuth();
     const { toast } = useToast();
@@ -116,26 +116,18 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
     // Log para mudanças no formData
     useEffect(() => {
-      console.log('📝 [DEBUG] formData changed:', {
-        paciente_id: formData.paciente_id,
-        profissional_id: formData.profissional_id,
-        data_hora: formData.data_hora,
-        // Não loggar todos os campos para não poluir o console
-      });
+      // removed verbose debug log
     }, [formData]);
 
     // Reset form quando dialog abre/fecha
     useEffect(() => {
-      console.log(
-        '🔄 [DEBUG] AppointmentFormManager - useEffect isOpen changed:',
-        isOpen
-      );
+      
       if (isOpen) {
         const defaultDate = initialDate || new Date();
         const defaultTime = initialTime || '09:00';
         const dateTimeString = `${format(defaultDate, 'yyyy-MM-dd')}T${defaultTime}`;
 
-        console.log('🏁 [DEBUG] AppointmentFormManager - resetting form data');
+        
         setFormData({
           data_hora: dateTimeString,
           paciente_id: initialPatientId || '',
@@ -208,36 +200,19 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     // Atualizar campo específico
     const updateField = useCallback(
       (field: keyof AppointmentFormData, value: string | number) => {
-        console.log(
-          '🔧 [DEBUG] updateField called - field:',
-          field,
-          'value:',
-          value
-        );
+        
 
         setFormData((prev) => {
-          console.log(
-            '📍 [DEBUG] updateField - current formData before update:',
-            {
-              paciente_id: prev.paciente_id,
-              profissional_id: prev.profissional_id,
-            }
-          );
+          
           const newData = { ...prev, [field]: value };
-          console.log('💾 [DEBUG] updateField - new formData after update:', {
-            paciente_id: newData.paciente_id,
-            profissional_id: newData.profissional_id,
-          });
+          
           return newData;
         });
 
         // Limpar erro do campo ao modificar usando functional update
         setErrors((prev) => {
           if (prev[field as keyof FormErrors]) {
-            console.log(
-              '🧹 [DEBUG] updateField - clearing error for field:',
-              field
-            );
+            
             return {
               ...prev,
               [field as keyof FormErrors]: undefined,

@@ -53,14 +53,7 @@ function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
   useEffect(() => {
-    console.log(
-      '🔄 [DEBUG] useDebounce - input value:',
-      value,
-      'delay:',
-      delay
-    );
     const handler = setTimeout(() => {
-      console.log('⏰ [DEBUG] useDebounce - setting debounced value:', value);
       setDebouncedValue(value);
     }, delay);
 
@@ -81,7 +74,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     disabled = false,
     error,
   }) => {
-    console.log('🏗️ [DEBUG] PatientSelect - render with value:', value);
 
     const [patients, setPatients] = useState<PatientOption[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -93,64 +85,36 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
     // Buscar pacientes do Supabase
     useEffect(() => {
-      console.log('🚀 [DEBUG] PatientSelect useEffect - INICIANDO EXECUÇÃO');
+      
 
       const loadPatients = async () => {
-        console.log(
-          '📡 [DEBUG] loadPatients - função chamada, setando loading=true'
-        );
+        
         setIsLoading(true);
 
         try {
-          console.log('🔄 [DEBUG] loadPatients - chamando fetchPacientes()');
+          
           const data = await fetchPacientes();
-          console.log(
-            '✅ [DEBUG] loadPatients - fetchPacientes retornou:',
-            typeof data,
-            Array.isArray(data) ? data.length : 'não é array'
-          );
+          
 
           if (Array.isArray(data)) {
-            console.log(
-              '📋 [DEBUG] loadPatients - primeiros 3 pacientes:',
-              data.slice(0, 3).map((p) => ({ id: p.id, nome: p.nome }))
-            );
+            
             setPatients(data as PatientOption[]);
           } else {
-            console.error(
-              '❌ [DEBUG] loadPatients - fetchPacientes não retornou array:',
-              data
-            );
+            
             setPatients([]);
           }
-        } catch (error) {
-          console.error('❌ [DEBUG] loadPatients - ERRO CAPTURADO:', error);
-          console.error(
-            '❌ [DEBUG] loadPatients - erro stack:',
-            error instanceof Error ? error.stack : 'sem stack'
-          );
+        } catch {
           setPatients([]);
         } finally {
-          console.log(
-            '🏁 [DEBUG] loadPatients - finalizando, setando loading=false'
-          );
+          
           setIsLoading(false);
         }
       };
 
-      console.log(
-        '📞 [DEBUG] PatientSelect useEffect - chamando loadPatients()'
-      );
-      loadPatients().catch((error) => {
-        console.error(
-          '💥 [DEBUG] PatientSelect useEffect - erro não capturado na função loadPatients:',
-          error
-        );
-      });
+      
+      loadPatients().catch(() => {});
 
-      console.log(
-        '✅ [DEBUG] PatientSelect useEffect - FIM DA EXECUÇÃO DO useEffect'
-      );
+      
     }, []);
 
     // Encontrar paciente selecionado para display
@@ -162,39 +126,23 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     // Filtrar pacientes baseado na busca com normalização de acentos
     // AI dev note: Busca unificada - procura tanto no nome do paciente quanto dos responsáveis
     const filteredPatients = useMemo(() => {
-      console.log(
-        '🔍 [DEBUG] filteredPatients - debouncedSearch:',
-        `"${debouncedSearch}"`,
-        'length:',
-        debouncedSearch.trim().length
-      );
-      console.log(
-        '👥 [DEBUG] filteredPatients - total de pacientes carregados:',
-        patients.length
-      );
-      console.log('⏳ [DEBUG] filteredPatients - isLoading:', isLoading);
+      
 
       // AI dev note: Não filtrar se ainda estiver carregando pacientes
       if (isLoading) {
-        console.log(
-          '⌛ [DEBUG] filteredPatients - ainda carregando, aguardando...'
-        );
+        
         return [];
       }
 
       // Verificar se os pacientes foram carregados
       if (patients.length === 0) {
-        console.log(
-          '📭 [DEBUG] filteredPatients - nenhum paciente carregado ainda'
-        );
+        
         return [];
       }
 
       // Só mostrar sugestões se tiver 2+ caracteres
       if (!debouncedSearch.trim() || debouncedSearch.trim().length < 2) {
-        console.log(
-          '⏹️ [DEBUG] filteredPatients - muito poucos caracteres, retornando array vazio'
-        );
+        
         return [];
       }
 
@@ -207,12 +155,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
         normalizeText(word)
       );
 
-      console.log(
-        '🔤 [DEBUG] filteredPatients - search words:',
-        searchWords,
-        'normalized:',
-        normalizedSearchWords
-      );
+      
 
       const filtered = patients.filter((patient) => {
         // AI dev note: Verificar se o campo nome existe e não é nulo
@@ -230,10 +173,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
         // Buscar por nome do paciente (normalizado) - busca flexível
         if (matchesAllWords(patient.nome)) {
-          console.log(
-            '✅ [DEBUG] filteredPatients - match por nome do paciente:',
-            patient.nome
-          );
+          
           return true;
         }
 
@@ -242,23 +182,13 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.nomes_responsaveis &&
           matchesAllWords(patient.nomes_responsaveis)
         ) {
-          console.log(
-            '✅ [DEBUG] filteredPatients - match por nome do responsável:',
-            patient.nomes_responsaveis
-          );
-          console.log(
-            '    👶 [DEBUG] - paciente correspondente:',
-            patient.nome
-          );
+          
           return true;
         }
 
         // Buscar por email do paciente (normalizado)
         if (patient.email && matchesAllWords(patient.email)) {
-          console.log(
-            '✅ [DEBUG] filteredPatients - match por email:',
-            patient.email
-          );
+          
           return true;
         }
 
@@ -267,10 +197,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.responsavel_legal_nome &&
           matchesAllWords(patient.responsavel_legal_nome)
         ) {
-          console.log(
-            '✅ [DEBUG] filteredPatients - match por resp. legal (nome):',
-            patient.responsavel_legal_nome
-          );
+          
           return true;
         }
 
@@ -278,10 +205,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.responsavel_legal_email &&
           matchesAllWords(patient.responsavel_legal_email)
         ) {
-          console.log(
-            '✅ [DEBUG] filteredPatients - match por resp. legal (email):',
-            patient.responsavel_legal_email
-          );
+          
           return true;
         }
 
@@ -290,10 +214,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.responsavel_financeiro_nome &&
           matchesAllWords(patient.responsavel_financeiro_nome)
         ) {
-          console.log(
-            '✅ [DEBUG] filteredPatients - match por resp. financeiro (nome):',
-            patient.responsavel_financeiro_nome
-          );
+          
           return true;
         }
 
@@ -301,53 +222,26 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.responsavel_financeiro_email &&
           matchesAllWords(patient.responsavel_financeiro_email)
         ) {
-          console.log(
-            '✅ [DEBUG] filteredPatients - match por resp. financeiro (email):',
-            patient.responsavel_financeiro_email
-          );
+          
           return true;
         }
 
         return false;
       });
 
-      console.log(
-        '📊 [DEBUG] filteredPatients - resultado:',
-        filtered.length,
-        'pacientes filtrados'
-      );
+      
       if (filtered.length > 0) {
-        console.log(
-          '🔍 [DEBUG] Primeiros 3 pacientes filtrados com detalhes de responsáveis:'
-        );
-        filtered.slice(0, 3).forEach((p, idx) => {
-          console.log(`  ${idx + 1}. Paciente: "${p.nome}"`);
-          console.log(
-            `     nomes_responsaveis: "${p.nomes_responsaveis || 'vazio'}"`
-          );
-          console.log(
-            `     responsavel_legal_nome: "${p.responsavel_legal_nome || 'vazio'}"`
-          );
-          console.log(
-            `     responsavel_financeiro_nome: "${p.responsavel_financeiro_nome || 'vazio'}"`
-          );
-        });
+        
+        // trimmed debug output
       }
       if (filtered.length > 0) {
-        console.log(
-          '👥 [DEBUG] filteredPatients - primeiros resultados:',
-          filtered.slice(0, 3).map((p) => p.nome)
-        );
+        // Results found - show them
       } else {
-        console.log(
-          '❌ [DEBUG] filteredPatients - nenhum paciente passou no filtro'
-        );
+        
 
         // Debug especial: testar especificamente busca unificada
         if (normalizedSearchWords.length >= 1) {
-          console.log(
-            '🔬 [DEBUG] filteredPatients - debug especial para busca unificada:'
-          );
+          
           const allMatches = patients.filter((p) => {
             const matchesAllWords = (text: string) => {
               const normalizedText = normalizeText(text);
@@ -361,24 +255,8 @@ export const PatientSelect = React.memo<PatientSelectProps>(
               p.nomes_responsaveis && matchesAllWords(p.nomes_responsaveis);
             return nomeMatch || responsavelMatch;
           });
-          console.log(
-            `  📝 Total de matches (paciente + responsável): ${allMatches.length}`
-          );
-          allMatches.forEach((p, index) => {
-            const matchesAllWords = (text: string) => {
-              const normalizedText = normalizeText(text);
-              return normalizedSearchWords.every((word) =>
-                normalizedText.includes(word)
-              );
-            };
-
-            const matchType = matchesAllWords(p.nome || '')
-              ? 'paciente'
-              : 'responsável';
-            console.log(
-              `  🧪 ${index + 1}. "${p.nome}" via ${matchType} | Responsáveis: "${p.nomes_responsaveis || 'nenhum'}"`
-            );
-          });
+          
+          allMatches.forEach(() => {});
         }
       }
 
@@ -398,16 +276,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
     const handlePatientSelect = useCallback(
       (patient: PatientOption) => {
-        console.log(
-          '✅ [DEBUG] handlePatientSelect - paciente selecionado:',
-          patient.nome,
-          'id:',
-          patient.id
-        );
-        console.log(
-          '📤 [DEBUG] handlePatientSelect - chamando onValueChange com id:',
-          patient.id
-        );
+        
         onValueChange(patient.id);
         setIsOpen(false);
       },
@@ -415,16 +284,13 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     );
 
     const handleOpenChange = useCallback((open: boolean) => {
-      console.log('👁️ [DEBUG] Popover onOpenChange:', open);
+      
       setIsOpen(open);
     }, []);
 
     // AI dev note: Callback para mudanças no campo de busca
     const handleSearchChange = useCallback((search: string) => {
-      console.log(
-        '🔍 [DEBUG] handleSearchChange - search value:',
-        `"${search}"`
-      );
+      
       setSearchTerm(search);
     }, []);
 

@@ -104,7 +104,6 @@ export async function signOut() {
  * Buscar dados da pessoa associada ao usuário com timeout
  */
 export async function getUserPessoa(userId: string, timeout = 8000) {
-  console.log('🔍 Iniciando busca de dados da pessoa para userId:', userId);
 
   return new Promise<{
     id: string;
@@ -128,7 +127,7 @@ export async function getUserPessoa(userId: string, timeout = 8000) {
           .single();
 
         clearTimeout(timeoutId);
-        console.log('✅ Query pessoas concluída. Data:', data, 'Error:', error);
+        
 
         if (error && error.code !== 'PGRST116') {
           // PGRST116 = not found
@@ -236,13 +235,13 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
     };
   }
 
-  console.log('🔍 Verificando status do usuário:', user.email, user.id);
+  
 
   // Verificar se email foi confirmado
   const needsEmailConfirmation = !user.email_confirmed_at;
 
   if (needsEmailConfirmation) {
-    console.log('❌ Email não confirmado');
+    
     return {
       isAuthenticated: true,
       needsEmailConfirmation: true,
@@ -255,12 +254,12 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
 
   // Buscar dados da pessoa
   try {
-    console.log('🔍 Chamando getUserPessoa para userId:', user.id);
+    
     const pessoa = await getUserPessoa(user.id);
-    console.log('🔍 getUserPessoa retornou:', pessoa);
+    
 
     if (!pessoa) {
-      console.log('❌ Pessoa não encontrada, redirecionando para aprovação');
+      
       // Pessoa não existe - deve ser criada pelo trigger
       return {
         isAuthenticated: true,
@@ -272,24 +271,13 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
       };
     }
 
-    console.log('✅ Pessoa encontrada:', pessoa);
-    console.log('🔍 DEBUG: AuthUser sendo criado', {
-      'user.id': user.id,
-      'user.email': user.email,
-      'pessoa.id': pessoa.id,
-      'pessoa.nome': pessoa.nome,
-      'pessoa.role': pessoa.role,
-      'pessoa.is_approved': pessoa.is_approved,
-      'pessoa.profile_complete': pessoa.profile_complete,
-    });
+    
 
     const authUser = { ...user, pessoa } as AuthUser;
 
     // Verificar aprovação
     if (!pessoa.is_approved) {
-      console.log(
-        '⚠️ Usuário não aprovado, redirecionando para pending-approval'
-      );
+      
       return {
         isAuthenticated: true,
         needsEmailConfirmation: false,
@@ -302,9 +290,7 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
 
     // Verificar se perfil está completo
     if (!pessoa.profile_complete) {
-      console.log(
-        '⚠️ Perfil não completo, redirecionando para complete-profile'
-      );
+      
       return {
         isAuthenticated: true,
         needsEmailConfirmation: false,
@@ -316,7 +302,6 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
     }
 
     // Usuário pode acessar dashboard
-    console.log('✅ Usuário pode acessar dashboard');
     const finalResult = {
       isAuthenticated: true,
       needsEmailConfirmation: false,
@@ -325,7 +310,6 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
       canAccessDashboard: true,
       user: authUser,
     };
-    console.log('🏁 checkUserStatus retornando resultado final:', finalResult);
     return finalResult;
   } catch (error) {
     console.error('❌ Erro ao verificar status do usuário:', error);
@@ -343,10 +327,7 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
       canAccessDashboard: false,
       user: user as AuthUser,
     };
-    console.log(
-      '🏁 checkUserStatus retornando resultado de erro:',
-      errorResult
-    );
+    
     return errorResult;
   }
 }
@@ -403,9 +384,7 @@ export async function getCurrentUser(
   } catch {
     // AI dev note: Retry logic para casos de sessão sendo restaurada
     if (retryCount < maxRetries) {
-      console.log(
-        `🔄 Tentando recuperar usuário (${retryCount + 1}/${maxRetries})...`
-      );
+      
       await new Promise((resolve) =>
         setTimeout(resolve, 1000 * (retryCount + 1))
       ); // Backoff exponencial
@@ -413,11 +392,7 @@ export async function getCurrentUser(
     }
 
     // Se esgotar tentativas, retornar null ao invés de erro
-    console.log(
-      '❌ Não foi possível recuperar usuário após',
-      maxRetries,
-      'tentativas'
-    );
+    
     return null;
   }
 }

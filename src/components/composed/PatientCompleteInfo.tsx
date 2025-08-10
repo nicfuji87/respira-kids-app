@@ -351,13 +351,9 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                 currentResponsibleId={patient.responsavel_cobranca_id}
                 currentResponsibleName={patient.responsavel_cobranca_nome}
                 userRole={userRole}
-                onUpdate={(responsibleId, responsibleName) => {
+                onUpdate={() => {
                   // AI dev note: Em implementação futura, poderia atualizar o estado local
                   // ou disparar um callback para atualizar os dados do paciente
-                  console.log('Responsável atualizado:', {
-                    responsibleId,
-                    responsibleName,
-                  });
                 }}
               />
             </div>

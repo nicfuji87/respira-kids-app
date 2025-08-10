@@ -64,12 +64,14 @@ export const fetchAgendamentosFromViewAsEvents = async (
     query = query.eq('local_atendimento_id', filters.localId);
   }
 
+  if (process.env.NODE_ENV === 'development') {
   console.log('🔍 DEBUG: Query Supabase na view para CalendarEvents', {
     'filters.startDate': filters.startDate.toISOString(),
     'filters.endDate': filters.endDate.toISOString(),
     'filters.profissionalId': filters.profissionalId,
     view: 'vw_agendamentos_completos',
   });
+  }
 
   const { data, error } = await query;
 
@@ -78,10 +80,12 @@ export const fetchAgendamentosFromViewAsEvents = async (
     throw error;
   }
 
-  console.log('🔍 DEBUG: Resultado da query na view para CalendarEvents', {
-    'data.length': data?.length || 0,
-    data: data,
-  });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 DEBUG: Resultado da query na view para CalendarEvents', {
+      'data.length': data?.length || 0,
+      data: data,
+    });
+  }
 
   // Converter estrutura flat da view diretamente para CalendarEvent
   const calendarEvents = (data as SupabaseAgendamentoCompletoFlat[]).map(
@@ -128,12 +132,14 @@ export const fetchAgendamentosFromView = async (
     query = query.eq('local_atendimento_id', filters.localId);
   }
 
+  if (process.env.NODE_ENV === 'development') {
   console.log('🔍 DEBUG: Query Supabase na view sendo executada', {
     'filters.startDate': filters.startDate.toISOString(),
     'filters.endDate': filters.endDate.toISOString(),
     'filters.profissionalId': filters.profissionalId,
     view: 'vw_agendamentos_completos',
   });
+  }
 
   const { data, error } = await query;
 
@@ -142,10 +148,12 @@ export const fetchAgendamentosFromView = async (
     throw error;
   }
 
-  console.log('🔍 DEBUG: Resultado da query na view', {
-    'data.length': data?.length || 0,
-    data: data,
-  });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 DEBUG: Resultado da query na view', {
+      'data.length': data?.length || 0,
+      data: data,
+    });
+  }
 
   // Converter estrutura flat da view para estrutura aninhada
   const agendamentos = (data as SupabaseAgendamentoCompletoFlat[]).map(
@@ -256,11 +264,13 @@ export const fetchUserCalendarEvents = async (
   userId: string,
   userRole: 'admin' | 'profissional' | 'secretaria'
 ): Promise<CalendarEvent[]> => {
+  if (process.env.NODE_ENV === 'development') {
   console.log('🔍 DEBUG: fetchUserCalendarEvents chamado', {
     filters,
     userId,
     userRole,
   });
+  }
 
   // AI dev note: Null-safety check para userRole
   if (!userRole || typeof userRole !== 'string') {
@@ -278,7 +288,9 @@ export const fetchUserCalendarEvents = async (
         ...filters,
         profissionalId: userId,
       };
-      console.log('🔍 DEBUG: Filtros para profissional', profissionalFilters);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DEBUG: Filtros para profissional', profissionalFilters);
+      }
       return fetchAgendamentosFromViewAsEvents(profissionalFilters);
     }
 
@@ -288,7 +300,7 @@ export const fetchUserCalendarEvents = async (
         await fetchProfissionaisAutorizados(userId);
 
       if (profissionaisAutorizados.length === 0) {
-        console.log('🔍 DEBUG: Secretária sem profissionais autorizados');
+        
         return [];
       }
 
@@ -306,10 +318,12 @@ export const fetchUserCalendarEvents = async (
       const agendamentosArrays = await Promise.all(agendamentosPromises);
       const agendamentos = agendamentosArrays.flat();
 
-      console.log('🔍 DEBUG: Agendamentos para secretária', {
-        profissionaisAutorizados,
-        totalAgendamentos: agendamentos.length,
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DEBUG: Agendamentos para secretária', {
+          profissionaisAutorizados,
+          totalAgendamentos: agendamentos.length,
+        });
+      }
 
       return agendamentos;
     }
@@ -325,11 +339,13 @@ export const fetchUserAgendamentos = async (
   userId: string,
   userRole: 'admin' | 'profissional' | 'secretaria'
 ): Promise<SupabaseAgendamentoCompleto[]> => {
+  if (process.env.NODE_ENV === 'development') {
   console.log('🔍 DEBUG: fetchUserAgendamentos chamado', {
     filters,
     userId,
     userRole,
   });
+  }
 
   // AI dev note: Null-safety check para userRole
   if (!userRole || typeof userRole !== 'string') {
@@ -347,7 +363,9 @@ export const fetchUserAgendamentos = async (
         ...filters,
         profissionalId: userId,
       };
-      console.log('🔍 DEBUG: Filtros para profissional', profissionalFilters);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DEBUG: Filtros para profissional', profissionalFilters);
+      }
       return fetchAgendamentosFromView(profissionalFilters);
     }
 
@@ -564,20 +582,11 @@ export const fetchProfissionaisForUser = async (
   userId: string,
   userRole: 'admin' | 'profissional' | 'secretaria'
 ): Promise<SupabasePessoa[]> => {
-  console.log(
-    '📡 [fetchProfissionaisForUser] Iniciando busca com parâmetros:',
-    {
-      userId: userId,
-      userRole: userRole,
-      timestamp: new Date().toISOString(),
-    }
-  );
+  
 
   switch (userRole) {
     case 'admin': {
-      console.log(
-        '👑 [fetchProfissionaisForUser] Executando query para ADMIN - buscar todos os profissionais'
-      );
+      
 
       // Admin vê todos os profissionais aprovados e com perfil completo
       const { data, error } = await supabase
@@ -589,14 +598,7 @@ export const fetchProfissionaisForUser = async (
         .eq('profile_complete', true)
         .order('nome');
 
-      console.log('📊 [fetchProfissionaisForUser] Resultado query ADMIN:', {
-        'data.length': data?.length || 0,
-        error: error,
-        primeiros_3_profissionais:
-          data
-            ?.slice(0, 3)
-            .map((p) => ({ id: p.id, nome: p.nome, role: p.role })) || [],
-      });
+      
 
       if (error) {
         console.error(
@@ -607,18 +609,11 @@ export const fetchProfissionaisForUser = async (
       }
 
       const result = data || [];
-      console.log(
-        '✅ [fetchProfissionaisForUser] ADMIN - retornando',
-        result.length,
-        'profissionais'
-      );
       return result;
     }
 
     case 'secretaria': {
-      console.log(
-        '📋 [fetchProfissionaisForUser] Executando query para SECRETARIA - buscar permissões primeiro'
-      );
+      
 
       // Secretaria vê apenas profissionais autorizados via permissoes_agendamento
       // Primeiro, buscar IDs dos profissionais autorizados
@@ -628,11 +623,7 @@ export const fetchProfissionaisForUser = async (
         .eq('id_secretaria', userId)
         .eq('ativo', true);
 
-      console.log('🔐 [fetchProfissionaisForUser] Permissões da secretaria:', {
-        'permissoes.length': permissoes?.length || 0,
-        permissoes: permissoes,
-        permissoesError: permissoesError,
-      });
+      
 
       if (permissoesError) {
         console.error(
@@ -645,16 +636,11 @@ export const fetchProfissionaisForUser = async (
       const profissionaisAutorizados =
         permissoes?.map((p) => p.id_profissional) || [];
 
-      console.log(
-        '🎯 [fetchProfissionaisForUser] IDs de profissionais autorizados:',
-        profissionaisAutorizados
-      );
+      
 
       // Se não há permissões, retorna array vazio
       if (profissionaisAutorizados.length === 0) {
-        console.log(
-          '⚠️ [fetchProfissionaisForUser] SECRETARIA sem permissões - retornando array vazio'
-        );
+        
         return [];
       }
 
@@ -669,15 +655,7 @@ export const fetchProfissionaisForUser = async (
         .in('id', profissionaisAutorizados)
         .order('nome');
 
-      console.log(
-        '📊 [fetchProfissionaisForUser] Resultado query SECRETARIA:',
-        {
-          'data.length': data?.length || 0,
-          error: error,
-          profissionais:
-            data?.map((p) => ({ id: p.id, nome: p.nome, role: p.role })) || [],
-        }
-      );
+      
 
       if (error) {
         console.error(
@@ -688,18 +666,11 @@ export const fetchProfissionaisForUser = async (
       }
 
       const result = data || [];
-      console.log(
-        '✅ [fetchProfissionaisForUser] SECRETARIA - retornando',
-        result.length,
-        'profissionais'
-      );
       return result;
     }
 
     case 'profissional': {
-      console.log(
-        '👨‍⚕️ [fetchProfissionaisForUser] Executando query para PROFISSIONAL - buscar apenas a si mesmo'
-      );
+      
 
       // Profissional vê apenas a si mesmo
       const { data, error } = await supabase
@@ -711,19 +682,11 @@ export const fetchProfissionaisForUser = async (
         .eq('is_approved', true)
         .single();
 
-      console.log(
-        '📊 [fetchProfissionaisForUser] Resultado query PROFISSIONAL:',
-        {
-          data: data ? { id: data.id, nome: data.nome, role: data.role } : null,
-          error: error,
-        }
-      );
+      
 
       if (error) {
         if (error.code === 'PGRST116') {
-          console.log(
-            '⚠️ [fetchProfissionaisForUser] PROFISSIONAL não encontrado - retornando array vazio'
-          );
+          
           // Não encontrado - retorna array vazio
           return [];
         }
@@ -735,11 +698,6 @@ export const fetchProfissionaisForUser = async (
       }
 
       const result = data ? [data] : [];
-      console.log(
-        '✅ [fetchProfissionaisForUser] PROFISSIONAL - retornando',
-        result.length,
-        'profissionais'
-      );
       return result;
     }
 
@@ -753,9 +711,7 @@ export const fetchProfissionaisForUser = async (
 // View pacientes_com_responsaveis_view inclui nomes dos responsáveis para busca
 // Permite buscar por nome do paciente OU nome do responsável, sempre selecionando o paciente
 export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
-  console.log(
-    '🔄 [DEBUG] fetchPacientes - iniciando query na view pacientes_com_responsaveis_view'
-  );
+  
 
   // AI dev note: Nova view que inclui dados de responsáveis para busca unificada
   // Campo nomes_responsaveis contém responsáveis concatenados com ' | '
@@ -772,45 +728,17 @@ export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
   }
 
   const pacientes = data || [];
-  console.log(
-    '✅ [DEBUG] fetchPacientes - query view unificada concluída, total de pacientes:',
-    pacientes.length
-  );
+  
 
   if (pacientes.length > 0) {
-    console.log(
-      '📋 [DEBUG] fetchPacientes - primeiros 5 pacientes com responsáveis:'
-    );
-    pacientes.slice(0, 5).forEach((p, index) => {
-      console.log(
-        `  ${index + 1}. ID: ${p.id} | Nome: "${p.nome}" | Responsáveis: "${p.nomes_responsaveis || 'nenhum'}"`
-      );
-    });
+    
+    // trimmed verbose debug output
 
     // Verificar se a view retorna campos específicos de responsável legal e financeiro
-    console.log(
-      '🔍 [DEBUG] Verificando se view retorna campos específicos de responsáveis:'
-    );
+    
     const primeiroComResponsavel = pacientes.find((p) => p.nomes_responsaveis);
     if (primeiroComResponsavel) {
-      console.log(
-        '📋 [DEBUG] Primeiro paciente com responsável - campos disponíveis:'
-      );
-      console.log(
-        `  responsavel_legal_nome: "${primeiroComResponsavel.responsavel_legal_nome || 'não disponível'}"`
-      );
-      console.log(
-        `  responsavel_legal_email: "${primeiroComResponsavel.responsavel_legal_email || 'não disponível'}"`
-      );
-      console.log(
-        `  responsavel_financeiro_nome: "${primeiroComResponsavel.responsavel_financeiro_nome || 'não disponível'}"`
-      );
-      console.log(
-        `  responsavel_financeiro_email: "${primeiroComResponsavel.responsavel_financeiro_email || 'não disponível'}"`
-      );
-      console.log(
-        `  nomes_responsaveis (concatenado): "${primeiroComResponsavel.nomes_responsaveis}"`
-      );
+      // no-op
     }
 
     // Teste específico para "henrique" - busca em pacientes E responsáveis
@@ -821,30 +749,12 @@ export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
         p.nomes_responsaveis.toLowerCase().includes('henrique');
       return nomeMatch || responsavelMatch;
     });
-    console.log(
-      '🔍 [DEBUG] fetchPacientes - pacientes/responsáveis com "henrique":',
-      henriqueMatches.length
-    );
+    
     if (henriqueMatches.length > 0) {
-      console.log(
-        '👥 [DEBUG] fetchPacientes - matches encontrados (pacientes + responsáveis):'
-      );
-      henriqueMatches.forEach((p, index) => {
-        const matchType = p.nome?.toLowerCase().includes('henrique')
-          ? 'paciente'
-          : 'responsável';
-        console.log(
-          `  ${index + 1}. "${p.nome}" via ${matchType} | Responsáveis: "${p.nomes_responsaveis || 'nenhum'}"`
-        );
-      });
+      // trimmed verbose debug output
     }
   } else {
-    console.log(
-      '⚠️ [DEBUG] fetchPacientes - nenhum paciente retornado da view unificada'
-    );
-    console.log(
-      'ℹ️ [DEBUG] fetchPacientes - verificar se usuário tem permissão para ver pacientes'
-    );
+    // no-op
   }
 
   // AI dev note: View retorna estrutura compatível + campo nomes_responsaveis
@@ -942,11 +852,7 @@ export const updateAgendamentoDetails = async (appointmentData: {
     )
   );
 
-  console.log('[DEBUG] updateAgendamentoDetails - id:', id);
-  console.log(
-    '[DEBUG] updateAgendamentoDetails - campos limpos:',
-    cleanUpdateFields
-  );
+  
 
   const { error } = await supabase
     .from('agendamentos')
@@ -974,12 +880,7 @@ export const updatePaymentStatus = async (
   agendamentoId: string,
   statusPagamentoId: string
 ): Promise<SupabaseAgendamentoCompletoFlat> => {
-  console.log(
-    '[DEBUG] updatePaymentStatus - id:',
-    agendamentoId,
-    'status:',
-    statusPagamentoId
-  );
+  
 
   const { error } = await supabase
     .from('agendamentos')
@@ -1005,7 +906,7 @@ export const updateNfeLink = async (
   agendamentoId: string,
   linkNfe: string
 ): Promise<SupabaseAgendamentoCompletoFlat> => {
-  console.log('[DEBUG] updateNfeLink - id:', agendamentoId, 'link:', linkNfe);
+  
 
   const { error } = await supabase
     .from('agendamentos')
@@ -1027,27 +928,22 @@ export const updateNfeLink = async (
 };
 
 // AI dev note: Stubs para ações de pagamento (implementação futura)
-export const processManualPayment = async (
-  agendamentoId: string
-): Promise<void> => {
-  console.log(
-    '🔄 Processando pagamento manual para agendamento:',
-    agendamentoId
-  );
+export const processManualPayment = async (): Promise<void> => {
+  
   // TODO: Implementar integração com sistema de pagamento
   // Por enquanto, apenas log
   throw new Error('Funcionalidade de pagamento manual ainda não implementada');
 };
 
-export const issueNfe = async (agendamentoId: string): Promise<string> => {
-  console.log('📄 Emitindo NFe para agendamento:', agendamentoId);
+export const issueNfe = async (): Promise<string> => {
+  
   // TODO: Implementar integração com sistema de NFe
   // Por enquanto, apenas log
   throw new Error('Funcionalidade de emissão de NFe ainda não implementada');
 };
 
 export const viewNfe = async (linkNfe: string): Promise<void> => {
-  console.log('👁️ Visualizando NFe:', linkNfe);
+  
   // Abrir NFe em nova aba
   window.open(linkNfe, '_blank');
 };

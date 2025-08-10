@@ -30,7 +30,6 @@ export function useAuth() {
 
   // Função para atualizar status do usuário
   const updateUserStatus = async (user: User | null) => {
-    console.log('🔄 useAuth: Atualizando status do usuário...', user?.email);
 
     // AI dev note: Melhorada - cache persiste mesmo quando userId muda de null para real ID
     const currentUserId = user?.id || null;
@@ -41,11 +40,11 @@ export function useAuth() {
       (authCache.current.userId === currentUserId ||
         (authCache.current.userId === null && currentUserId))
     ) {
-      console.log('🚀 useAuth: Usando cache para usuário', user?.email);
+      
       // Atualizar cache com o ID real se estava null
       if (authCache.current.userId === null && currentUserId) {
         authCache.current.userId = currentUserId;
-        console.log('💾 useAuth: Cache atualizado com ID real:', currentUserId);
+        
       }
       setUserStatus(authCache.current.status);
       // AI dev note: Cache hit - verificar se userRole está disponível
@@ -62,7 +61,7 @@ export function useAuth() {
     }
 
     // Se não há cache válido, fazer verificação completa
-    console.log('🔍 useAuth: Cache miss, fazendo verificação completa');
+      
 
     try {
       // AI dev note: Timeout para garantir que loading nunca fique infinito
@@ -75,7 +74,6 @@ export function useAuth() {
       const statusPromise = checkUserStatus(user);
 
       const status = await Promise.race([statusPromise, timeoutPromise]);
-      console.log('✅ useAuth: Status obtido com sucesso:', status);
 
       // Salvar no cache se usuário pode acessar dashboard
       if (status.canAccessDashboard && currentUserId) {
@@ -83,7 +81,7 @@ export function useAuth() {
           userId: currentUserId,
           status: status,
         };
-        console.log('💾 useAuth: Status salvo no cache para', user?.email);
+        
       }
 
       setUserStatus(status);
@@ -125,7 +123,7 @@ export function useAuth() {
   const refreshUserStatus = async () => {
     try {
       // Forçar invalidação de cache para refresh manual
-      console.log('🔄 useAuth: Refresh manual - invalidando cache');
+      
       authCache.current = { userId: null, status: null };
 
       const user = await getCurrentUser();
@@ -138,9 +136,7 @@ export function useAuth() {
         errorMessage.includes('Refresh Token') ||
         errorMessage.includes('Auth session missing')
       ) {
-        console.log(
-          'Sessão expirada ou não encontrada - redirecionando para login'
-        );
+        // Expected behavior - suppress refresh token errors
       } else {
         console.error('Erro ao atualizar status:', error);
       }
@@ -156,7 +152,7 @@ export function useAuth() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
-        console.log('🔄 Auth state changed:', event, session?.user?.email);
+        
 
         if (!mounted) return;
 
@@ -188,9 +184,7 @@ export function useAuth() {
               await updateUserStatus(session.user);
             } else {
               // Logout ou token expirado - limpar cache
-              console.log(
-                '🗑️ useAuth: Limpando cache devido a logout/token expirado'
-              );
+              
               authCache.current = { userId: null, status: null };
               setUserStatus({
                 isAuthenticated: false,

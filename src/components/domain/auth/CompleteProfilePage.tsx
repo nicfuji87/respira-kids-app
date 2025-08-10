@@ -77,18 +77,18 @@ export const CompleteProfilePage = React.memo<CompleteProfilePageProps>(
     }, []);
 
     const handleSubmit = async (data: CompleteProfileFormData) => {
-      console.log('handleSubmit iniciado com dados:', data); // Debug log
+      
       setIsLoading(true);
 
       try {
-        console.log('Buscando usuário atual...'); // Debug log
+        
         const currentUser = await getCurrentUser();
 
         if (!currentUser) {
           throw new Error('Usuário não encontrado');
         }
 
-        console.log('Usuário encontrado:', currentUser.id); // Debug log
+        
 
         // Preparar dados para atualização
         const profileData: CompleteProfileData = {
@@ -101,9 +101,9 @@ export const CompleteProfilePage = React.memo<CompleteProfilePageProps>(
           complemento_endereco: data.complemento_endereco,
         };
 
-        console.log('Dados preparados para updateProfile:', profileData); // Debug log
+        
         await updateProfile(currentUser.id, profileData);
-        console.log('updateProfile completado com sucesso!'); // Debug log
+        
 
         toast({
           title: 'Perfil completado com sucesso!',
@@ -114,7 +114,7 @@ export const CompleteProfilePage = React.memo<CompleteProfilePageProps>(
 
         // Aguardar um momento para mostrar o toast
         setTimeout(() => {
-          console.log('Chamando onProfileComplete...'); // Debug log
+          
           if (onProfileComplete) {
             onProfileComplete();
           }

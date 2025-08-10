@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Bell, Activity } from 'lucide-react';
 
 import {
   Card,
@@ -31,7 +30,7 @@ import type {
   ConsultationToEvolve,
 } from '@/lib/professional-dashboard-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
-import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
+
 
 // AI dev note: AdminDashboard é específico para role admin da clínica Respira Kids
 // Interface completa de gestão com métricas, notificações e ações rápidas
@@ -71,7 +70,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
 
     // Hook para métricas administrativas (todos os profissionais)
     const {
-      metrics,
       upcomingAppointments,
       consultationsToEvolve,
       materialRequests,
@@ -104,7 +102,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
 
     // Handlers para clique em agendamentos e consultas
     const handleAppointmentClick = async (appointment: UpcomingAppointment) => {
-      console.log('Admin Dashboard - Clicou no agendamento:', appointment);
 
       setIsAppointmentDetailsOpen(true);
 
@@ -126,7 +123,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
     const handleConsultationClick = async (
       consultation: ConsultationToEvolve
     ) => {
-      console.log('Admin Dashboard - Clicou na consulta:', consultation);
+      
 
       setIsAppointmentDetailsOpen(true);
 
@@ -146,7 +143,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
     };
 
     const handleCreateEvolutionClick = async (consultationId: string) => {
-      console.log('Admin Dashboard - Criar evolução para:', consultationId);
 
       setIsAppointmentDetailsOpen(true);
 
@@ -176,14 +172,9 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
       setSelectedAppointmentData(null);
     };
 
-    const handleAppointmentDetailsSave = async (
-      data: AppointmentUpdateData
-    ) => {
+    const handleAppointmentDetailsSave = async () => {
       try {
-        console.log(
-          'Admin Dashboard - Salvando alterações do agendamento:',
-          data
-        );
+        
         // O AppointmentDetailsManager já tem sua própria lógica de salvamento
         // Aqui podemos adicionar refresh dos dados se necessário
         refreshAll(); // Atualizar dados após salvar
@@ -195,10 +186,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
     // Handlers para ações de pagamento
     const handlePaymentAction = async (appointmentId: string) => {
       try {
-        console.log(
-          '🔄 Admin Dashboard - Ação de pagamento para agendamento:',
-          appointmentId
-        );
+        
 
         // Buscar ID do status "pago"
         const pagoStatusId = 'bb982df2-56ca-4520-870f-659f7581ab0a';
@@ -222,14 +210,11 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
       try {
         if (linkNfe) {
           // Se já tem NFe, visualizar
-          console.log('👁️ Admin Dashboard - Visualizando NFe:', linkNfe);
+          
           window.open(linkNfe, '_blank');
         } else {
           // Se não tem NFe, emitir
-          console.log(
-            '📄 Admin Dashboard - Emitindo NFe para agendamento:',
-            appointmentId
-          );
+          
 
           // TODO: Implementar integração com sistema de NFe
           const mockNfeLink = `https://nfe.exemplo.com/${appointmentId}`;
@@ -264,6 +249,16 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
       }
     };
 
+    // AI dev note: Substitui título/subtítulo do dashboard por saudação dinâmica
+    const getGreeting = () => {
+      const hour = new Date().getHours();
+      if (hour < 12) return 'Bom dia';
+      if (hour < 18) return 'Boa tarde';
+      return 'Boa noite';
+    };
+
+    const firstName = (user?.pessoa?.nome || 'Usuário').split(' ')[0];
+
     return (
       <>
         <div className={cn('space-y-4 md:space-y-6 p-2 md:p-6', className)}>
@@ -271,32 +266,11 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo respira-text-gradient">
-                Dashboard Administrativo
+                {getGreeting()}, {firstName}!
               </h1>
-              <p className="text-muted-foreground mt-1 text-sm md:text-base">
-                Visão geral da Clínica Respira Kids
-              </p>
             </div>
 
             <div className="flex items-center gap-2 md:gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 text-xs md:text-sm"
-              >
-                <Bell className="h-3 w-3 md:h-4 md:w-4" />
-                {(metrics?.aprovacoesPendentes || 0) +
-                  (materialRequests?.length || 0)}{' '}
-                pendentes
-              </Button>
-              <Button
-                size="sm"
-                className="respira-gradient text-xs md:text-sm"
-                onClick={() => handleModuleClick('reports')}
-              >
-                <Activity className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                Relatório Geral
-              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -450,16 +424,15 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(
           </Card>
 
           {/* Solicitação de Material */}
-          <MaterialRequestCard
+              <MaterialRequestCard
             requests={materialRequests}
             loading={loading}
             error={error}
-            onRequestClick={(request) => {
-              console.log('Solicitação clicada:', request);
-              handleModuleClick('stock');
-            }}
-            onCreateRequest={() => {
-              console.log('Criar nova solicitação');
+                                onRequestClick={() => {
+                  handleModuleClick('stock');
+                }}
+                onCreateRequest={() => {
+              
               handleModuleClick('stock');
             }}
           />

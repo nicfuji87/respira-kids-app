@@ -87,7 +87,7 @@ export const DesktopLayout = React.memo<DesktopLayoutProps>(
 
           {/* Content area */}
           <main className="flex-1 overflow-auto">
-            <div className="container mx-auto px-4 py-6 max-w-7xl">
+            <div className="container mx-auto px-4 py-6">
               {children}
             </div>
           </main>

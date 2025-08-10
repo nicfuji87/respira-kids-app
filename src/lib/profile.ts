@@ -140,26 +140,24 @@ export async function updateProfile(
   profileData: CompleteProfileData
 ): Promise<void> {
   try {
-    console.log('updateProfile iniciado para userId:', userId); // Debug log
-    console.log('profileData recebido:', profileData); // Debug log
 
     // 1. Buscar endereço por CEP
-    console.log('Buscando endereço por CEP:', profileData.cep); // Debug log
+    
     const enderecoData = await getAddressByCep(profileData.cep);
 
     if (!enderecoData) {
       throw new Error('Endereço não encontrado para o CEP informado');
     }
 
-    console.log('Endereço encontrado:', enderecoData); // Debug log
+    
 
     // 2. Criar ou buscar endereço
-    console.log('Criando ou buscando endereço...'); // Debug log
+    
     const enderecoId = await getOrCreateEndereco(enderecoData);
-    console.log('Endereço ID:', enderecoId); // Debug log
+    
 
     // 3. Atualizar dados da pessoa
-    console.log('Atualizando dados da pessoa...'); // Debug log
+    
     // Limpar telefone e converter para número
     const cleanTelefone = profileData.telefone.replace(/\D/g, '');
     const telefoneNumber = cleanTelefone ? parseInt(cleanTelefone, 10) : null;
@@ -178,7 +176,7 @@ export async function updateProfile(
       updated_at: new Date().toISOString(),
     };
 
-    console.log('Dados para update:', updateData); // Debug log
+    
 
     const { error: updateError } = await supabase
       .from('pessoas')
@@ -190,7 +188,7 @@ export async function updateProfile(
       throw new Error(updateError.message);
     }
 
-    console.log('Update da pessoa completado com sucesso!'); // Debug log
+    
   } catch (error) {
     console.error('Erro ao atualizar perfil:', error);
     throw error;

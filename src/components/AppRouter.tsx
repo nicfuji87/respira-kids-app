@@ -75,15 +75,10 @@ export const AppRouter: React.FC = () => {
 
   // AI dev note: Só mostrar loading se realmente estiver carregando pela primeira vez
   // Se user existe e canAccessDashboard=true, não precisamos aguardar userRole para navegação
-  console.log(
-    '🔄 AppRouter: Renderizando com userRole:',
-    userRole,
-    'currentPath:',
-    currentPath
-  );
+  
 
   if (loading && !canAccessDashboard) {
-    console.log('⏳ AppRouter: Carregando dados iniciais do usuário...');
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-bege-fundo to-background flex items-center justify-center p-4">
         <div className="text-center space-y-4">
@@ -97,12 +92,7 @@ export const AppRouter: React.FC = () => {
   }
 
   // AI dev note: Log adicional para debug de navegação
-  console.log(
-    '🎯 AppRouter: Estado final - validUserRole:',
-    validUserRole,
-    'loading:',
-    loading
-  );
+  
 
   const handleLogout = async () => {
     try {
@@ -132,8 +122,8 @@ export const AppRouter: React.FC = () => {
       onNavigate={navigateTo}
       breadcrumbItems={breadcrumbItems}
       notificationCount={3}
-      onNotificationClick={() => console.log('Notificações')}
-      onProfileClick={() => console.log('Perfil')}
+      onNotificationClick={() => {}}
+      onProfileClick={() => {}}
       onSettingsClick={() => navigateTo('/configuracoes')}
       onLogout={handleLogout}
     >

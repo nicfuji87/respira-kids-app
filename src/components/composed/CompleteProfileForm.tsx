@@ -94,15 +94,15 @@ export const CompleteProfileForm = React.memo<CompleteProfileFormProps>(
 
     // Validação do WhatsApp com debounce
     const validateWhatsApp = async (telefone: string) => {
-      console.log('validateWhatsApp chamada com:', telefone); // Debug log
+      
 
       // Limpar número: apenas dígitos
       const cleanPhone = telefone.replace(/\D/g, '');
-      console.log('Número limpo:', cleanPhone); // Debug log
+      
 
       // Verificar se tem 11 dígitos (formato brasileiro com DDD)
       if (cleanPhone.length !== 11) {
-        console.log('Número não tem 11 dígitos, cancelando validação'); // Debug log
+        
         setWhatsappValidation({
           isValidating: false,
           isValid: null,
@@ -111,7 +111,7 @@ export const CompleteProfileForm = React.memo<CompleteProfileFormProps>(
         return;
       }
 
-      console.log('Iniciando validação do WhatsApp para:', cleanPhone); // Debug log
+      
       setWhatsappValidation({
         isValidating: true,
         isValid: null,
@@ -122,7 +122,7 @@ export const CompleteProfileForm = React.memo<CompleteProfileFormProps>(
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-        console.log('Fazendo requisição para webhook...'); // Debug log
+        
         const response = await fetch(
           'https://webhooks-i.infusecomunicacao.online/webhook/verificaWhatsApp',
           {
@@ -138,14 +138,14 @@ export const CompleteProfileForm = React.memo<CompleteProfileFormProps>(
         );
 
         clearTimeout(timeoutId);
-        console.log('Resposta recebida:', response.status); // Debug log
+        
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('Dados recebidos:', data); // Debug log
+        
 
         // Verificar formato esperado: [{ exists: boolean, ... }]
         if (
@@ -154,7 +154,7 @@ export const CompleteProfileForm = React.memo<CompleteProfileFormProps>(
           typeof data[0].exists === 'boolean'
         ) {
           const isValid = data[0].exists;
-          console.log('WhatsApp é válido:', isValid); // Debug log
+          
           setWhatsappValidation({
             isValidating: false,
             isValid,
@@ -163,7 +163,7 @@ export const CompleteProfileForm = React.memo<CompleteProfileFormProps>(
               : 'Insira um número válido no WhatsApp',
           });
         } else {
-          console.log('Formato de resposta inválido:', data); // Debug log
+          
           throw new Error('Formato de resposta inválido');
         }
       } catch (error) {
@@ -212,7 +212,7 @@ export const CompleteProfileForm = React.memo<CompleteProfileFormProps>(
           }
 
           timeoutId = setTimeout(() => {
-            console.log('Validando WhatsApp:', telefone); // Debug log
+            
             validateWhatsApp(telefone);
           }, 800); // 800ms debounce
         }

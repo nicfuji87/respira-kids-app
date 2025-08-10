@@ -55,7 +55,7 @@ export const MyProfileSection = React.memo<MyProfileSectionProps>(
         const profile = await getUserProfile(user);
         setProfileData(profile);
 
-        console.log('✅ Perfil carregado:', profile);
+        
       } catch (error) {
         console.error('❌ Erro ao carregar perfil:', error);
         setError(
@@ -83,13 +83,13 @@ export const MyProfileSection = React.memo<MyProfileSectionProps>(
       setSaving(true);
 
       try {
-        console.log('🔄 Salvando perfil:', formData, 'avatar:', avatarFile);
+        
 
         // Upload do avatar se fornecido
         let avatarUrl = profileData?.foto_perfil;
         if (avatarFile) {
           avatarUrl = await uploadAvatar(user, avatarFile);
-          console.log('✅ Avatar uploadado:', avatarUrl);
+          
         }
 
         // Preparar dados para atualização
@@ -111,7 +111,7 @@ export const MyProfileSection = React.memo<MyProfileSectionProps>(
           variant: 'default',
         });
 
-        console.log('✅ Perfil atualizado com sucesso');
+        
       } catch (error) {
         console.error('❌ Erro ao salvar perfil:', error);
 

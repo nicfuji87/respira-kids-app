@@ -41,17 +41,7 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
 
     // AI dev note: Debug logs para desenvolvimento
     if (process.env.NODE_ENV === 'development') {
-      console.log('🗓️ CalendarGrid render:', {
-        view,
-        currentDate: currentDate.toISOString(),
-        eventsCount: events.length,
-        events: events.map((e) => ({
-          id: e.id,
-          title: e.title,
-          start: e.start.toISOString(),
-          end: e.end.toISOString(),
-        })),
-      });
+      // trimmed debug
     }
 
     const handleDateClick = (date: Date) => {
@@ -60,7 +50,7 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
 
     const handleEventClick = (event: CalendarEvent) => {
       if (process.env.NODE_ENV === 'development') {
-        console.log('🎯 Event clicked:', event);
+        // trimmed debug
       }
       onEventClick?.(event);
     };
@@ -91,7 +81,7 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
       );
 
       if (process.env.NODE_ENV === 'development' && dayEvents.length > 0) {
-        console.log(`📅 Events for ${date.toDateString()}:`, dayEvents);
+        // trimmed debug
       }
 
       return dayEvents;

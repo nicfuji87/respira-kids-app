@@ -85,9 +85,8 @@ export const CalendarTemplateWithData =
         [createEvent, updateEvent, refreshEvents, onEventSave]
       );
 
-      const handleEventEdit = useCallback((event: CalendarEvent) => {
+      const handleEventEdit = useCallback(() => {
         // Event editing logic can be implemented here
-        console.log('Edit event:', event);
       }, []);
 
       const handleEventDelete = useCallback(

@@ -34,7 +34,7 @@ export const ProfissionalDashboardTemplate =
       const handleNavigation = (path: string) => {
         setCurrentPath(path);
         // Aqui você implementaria a navegação real
-        console.log('Navegando para:', path);
+        
       };
 
       const breadcrumbItems = [{ label: 'Dashboard', href: '/dashboard' }];
@@ -49,9 +49,9 @@ export const ProfissionalDashboardTemplate =
           onNavigate={handleNavigation}
           breadcrumbItems={breadcrumbItems}
           notificationCount={5}
-          onNotificationClick={() => console.log('Notificações')}
-          onProfileClick={() => console.log('Perfil')}
-          onSettingsClick={() => console.log('Configurações')}
+          onNotificationClick={() => {}}
+          onProfileClick={() => {}}
+          onSettingsClick={() => {}}
           onLogout={onLogout}
           className={className}
         >

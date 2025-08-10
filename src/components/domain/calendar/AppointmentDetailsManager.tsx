@@ -184,16 +184,8 @@ export const AppointmentDetailsManager =
           const [datePart, timePart] = dateTimeString.split('T');
           const timeWithoutTz = timePart.replace(/[+-]\d{2}$/, ''); // Remove timezone info (+00, -03, etc)
 
-          console.log(
-            '[DEBUG] AppointmentDetailsManager - data_hora original do Supabase:',
-            dateTimeString
-          );
-          console.log(
-            '[DEBUG] AppointmentDetailsManager - data extraída:',
-            datePart,
-            'hora extraída:',
-            timeWithoutTz
-          );
+          
+          
 
           setFormData({
             dataHora: datePart,
@@ -303,9 +295,6 @@ export const AppointmentDetailsManager =
 
           // Salvar agendamento primeiro
           const dataHoraCompleta = `${formData.dataHora}T${formData.timeHora}:00`;
-          console.log(
-            '[DEBUG] AppointmentDetailsManager - Salvando alterações completas'
-          );
 
           const updateData: AppointmentUpdateData = {
             id: appointment.id,
@@ -371,7 +360,7 @@ export const AppointmentDetailsManager =
           }
 
           setIsEdited(false);
-          console.log('[DEBUG] Todas as alterações salvas com sucesso');
+          
         } catch (error) {
           console.error('Erro ao salvar alterações:', error);
 
@@ -528,9 +517,7 @@ export const AppointmentDetailsManager =
                     {userRole === 'admin' || userRole === 'secretaria' ? (
                       <>
                         {/* AI dev note: Para admin/secretaria, exibir APENAS valor_servico, NUNCA comissão */}
-                        {console.log(
-                          '[DEBUG] AppointmentDetailsManager - Role admin/secretaria: mostrando valor_servico, ocultando comissão'
-                        )}
+                        
                         <Label className="text-sm font-medium">
                           Valor do Serviço
                         </Label>
@@ -571,9 +558,7 @@ export const AppointmentDetailsManager =
                     ) : userRole === 'profissional' ? (
                       <>
                         {/* AI dev note: Para profissional, exibir APENAS comissão, NUNCA valor do serviço */}
-                        {console.log(
-                          '[DEBUG] AppointmentDetailsManager - Role profissional: ocultando valor_servico, mostrando apenas comissão'
-                        )}
+                        
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">Valor:</span>
                           <span className="text-sm font-medium">

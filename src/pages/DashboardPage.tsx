@@ -32,7 +32,7 @@ import type {
   MaterialRequest,
 } from '@/lib/professional-dashboard-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
-import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
+
 
 // AI dev note: DashboardPage com dados reais do Supabase
 // Página principal do dashboard com métricas e calendário
@@ -96,7 +96,7 @@ export const DashboardPage: React.FC = () => {
 
   // Handlers específicos do dashboard profissional
   const handleAppointmentClick = async (appointment: UpcomingAppointment) => {
-    console.log('Clicou no agendamento:', appointment);
+    
 
     setIsAppointmentDetailsOpen(true);
 
@@ -119,7 +119,7 @@ export const DashboardPage: React.FC = () => {
   const handleConsultationClick = async (
     consultation: ConsultationToEvolve
   ) => {
-    console.log('Clicou na consulta:', consultation);
+    
 
     setIsAppointmentDetailsOpen(true);
 
@@ -140,7 +140,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const handleCreateEvolutionClick = async (consultationId: string) => {
-    console.log('Criar evolução para:', consultationId);
+    
 
     setIsAppointmentDetailsOpen(true);
 
@@ -160,13 +160,13 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const handleMaterialRequestClick = (request: MaterialRequest) => {
-    console.log('Clicou na solicitação:', request);
+  const handleMaterialRequestClick = () => {
+    
     // Navegar para detalhes da solicitação
   };
 
   const handleCreateMaterialRequest = () => {
-    console.log('Criar nova solicitação de material');
+    
     // Abrir modal ou navegar para formulário
   };
 
@@ -176,9 +176,9 @@ export const DashboardPage: React.FC = () => {
     setSelectedAppointmentData(null);
   };
 
-  const handleAppointmentDetailsSave = async (data: AppointmentUpdateData) => {
+  const handleAppointmentDetailsSave = async () => {
     try {
-      console.log('Salvando alterações do agendamento:', data);
+      
       // O AppointmentDetailsManager já tem sua própria lógica de salvamento
       // Aqui podemos adicionar refresh dos dados se necessário
     } catch (error) {
@@ -201,7 +201,7 @@ export const DashboardPage: React.FC = () => {
   const handlePaymentAction = async (appointmentId: string) => {
     try {
       // TODO: Implementar lógica de pagamento manual com integração Asaas
-      console.log('🔄 Ação de pagamento para agendamento:', appointmentId);
+      
 
       // Por enquanto, apenas marcamos como pago
       // Buscar ID do status "pago"
@@ -223,11 +223,11 @@ export const DashboardPage: React.FC = () => {
     try {
       if (linkNfe) {
         // Se já tem NFe, visualizar
-        console.log('👁️ Visualizando NFe:', linkNfe);
+        
         window.open(linkNfe, '_blank');
       } else {
         // Se não tem NFe, emitir
-        console.log('📄 Emitindo NFe para agendamento:', appointmentId);
+        
 
         // TODO: Implementar integração com sistema de NFe
         // Por enquanto, simular um link de NFe
