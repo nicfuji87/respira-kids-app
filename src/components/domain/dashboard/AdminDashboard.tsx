@@ -1,28 +1,34 @@
-import React, { useState } from 'react';
-import { Bell, Activity } from 'lucide-react';
-
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/primitives/card';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/primitives/button';
+import { Badge } from '@/components/primitives/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/primitives/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/primitives/dialog';
+import { ScrollArea } from '@/components/primitives/scroll-area';
+import { Skeleton } from '@/components/primitives/skeleton';
+import { Alert, AlertDescription } from '@/components/primitives/alert';
 import {
-  FaturamentoChart,
-  AppointmentsList,
-  ConsultationsToEvolve,
-  MaterialRequestCard,
-  ProfessionalFilter,
-} from '@/components/composed';
-import { AppointmentDetailsManager } from '@/components/domain/calendar';
-import { cn } from '@/lib/utils';
+  CalendarDays,
+  Clock,
+  DollarSign,
+  UserPlus,
+  AlertTriangle,
+  FileText,
+  RefreshCw,
+  Filter,
+  Users2,
+  Stethoscope,
+  Package,
+} from 'lucide-react';
 import { useAdminMetrics } from '@/hooks/useAdminMetrics';
-import { useCalendarFormData } from '@/hooks/useCalendarData';
-import { useAuth } from '@/hooks/useAuth';
+import { UserMetrics } from '@/components/composed/UserMetrics';
+import { ProfessionalMetrics } from '@/components/composed/ProfessionalMetrics';
+import { RecentConsultations } from '@/components/composed/RecentConsultations';
+import { ConsultationsToEvolve } from '@/components/composed/ConsultationsToEvolve';
+import { AppointmentsList } from '@/components/composed/AppointmentsList';
+import { MaterialRequestCard } from '@/components/composed/MaterialRequestCard';
+import { ProfessionalFilter } from '@/components/composed/ProfessionalFilter';
+import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
 import {
-  fetchAgendamentoById,
   updatePaymentStatus,
   updateNfeLink,
 } from '@/lib/calendar-services';
@@ -31,7 +37,7 @@ import type {
   ConsultationToEvolve,
 } from '@/lib/professional-dashboard-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
-import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
+
 
 // AI dev note: AdminDashboard é específico para role admin da clínica Respira Kids
 // Interface completa de gestão com métricas, notificações e ações rápidas
@@ -39,464 +45,421 @@ import type { AppointmentUpdateData } from '@/components/domain/calendar/Appoint
 // Com filtros por profissional para todos os componentes
 
 interface AdminDashboardProps {
-  className?: string;
-  onNavigateToModule?: (module: string) => void;
+  onModuleClick: (moduleId: string) => void;
 }
 
-export const AdminDashboard = React.memo<AdminDashboardProps>(
-  ({ className, onNavigateToModule }) => {
-    const { user } = useAuth();
-    const { formData } = useCalendarFormData();
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  onModuleClick,
+}) => {
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState<
+    string | null
+  >(null);
+  const [isAppointmentDetailsOpen, setIsAppointmentDetailsOpen] =
+    useState(false);
+  const [selectedAppointmentData, setSelectedAppointmentData] = useState<
+    SupabaseAgendamentoCompletoFlat | null
+  >(null);
 
-    // Estados para modal de detalhes do agendamento
-    const [isAppointmentDetailsOpen, setIsAppointmentDetailsOpen] =
-      useState(false);
-    const [selectedAppointmentData, setSelectedAppointmentData] =
-      useState<SupabaseAgendamentoCompletoFlat | null>(null);
+  const {
+    loading,
+    error,
+    refreshAll,
+    upcomingAppointments,
+    consultationsToEvolve,
+    materialRequests,
+    user,
+  } = useAdminMetrics(selectedProfessionalId);
 
-    // Calcular datas para métricas (mês atual)
-    const getPeriodDates = () => {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      const monthStart = new Date(currentYear, currentMonth, 1);
-      const monthEnd = new Date(currentYear, currentMonth + 1, 0);
-      return {
-        startDate: monthStart.toISOString().split('T')[0],
-        endDate: monthEnd.toISOString().split('T')[0],
-      };
-    };
+  // AI dev note: Função para saudação dinâmica baseada no horário
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
 
-    const { startDate, endDate } = getPeriodDates();
+  // AI dev note: Extrair primeiro nome do usuário
+  const firstName = (user?.pessoa?.nome || 'Usuário').split(' ')[0];
 
-    // Hook para métricas administrativas (todos os profissionais)
-    const {
-      metrics,
-      upcomingAppointments,
-      consultationsToEvolve,
-      materialRequests,
-      faturamentoComparativo,
-      loading,
-      error,
-      lastUpdate,
-      refreshAll,
-      professionalFilters,
-      setProfessionalFilters,
-      appointmentsLimit,
-      setAppointmentsLimit,
-      hasMoreAppointments,
-    } = useAdminMetrics({
-      startDate,
-      endDate,
-      autoRefresh: true,
-      refreshInterval: 60, // 1 hora
-    });
+  const handleModuleClick = useCallback(
+    (moduleId: string) => {
+      onModuleClick(moduleId);
+    },
+    [onModuleClick]
+  );
 
-    const handleModuleClick = (module: string) => {
-      if (onNavigateToModule) {
-        onNavigateToModule(module);
+  // Função para extrair dados de agendamento de diferentes tipos
+  const extractAppointmentData = useCallback(
+    (
+      item: UpcomingAppointment | ConsultationToEvolve
+    ): SupabaseAgendamentoCompletoFlat => {
+      if ('agendamento_id' in item) {
+        // É do tipo UpcomingAppointment
+        return {
+          id: item.agendamento_id,
+          data_agendamento: item.data_agendamento,
+          horario_inicio: item.horario_inicio,
+          horario_fim: item.horario_fim,
+          observacoes: item.observacoes,
+          preco_sessao: item.preco_sessao,
+          paciente_id: item.paciente_id,
+          paciente_nome: item.paciente_nome,
+          profissional_id: item.profissional_id,
+          profissional_nome: item.profissional_nome,
+          servico_id: item.servico_id,
+          servico_nome: item.servico_nome,
+          responsavel_legal_nome: item.responsavel_legal_nome,
+          responsavel_legal_email: item.responsavel_legal_email,
+          responsavel_legal_telefone: item.responsavel_legal_telefone,
+          responsavel_financeiro_nome: item.responsavel_financeiro_nome,
+          responsavel_financeiro_email: item.responsavel_financeiro_email,
+          responsavel_financeiro_telefone: item.responsavel_financeiro_telefone,
+          nomes_responsaveis: item.nomes_responsaveis,
+          idade_paciente: item.idade_paciente,
+          status_consulta_id: item.status_consulta_id || null,
+          status_consulta_nome: item.status_consulta_nome || null,
+          status_pagamento_id: item.status_pagamento_id || null,
+          status_pagamento_nome: item.status_pagamento_nome || null,
+          local_atendimento_id: item.local_atendimento_id || null,
+          local_atendimento_nome: item.local_atendimento_nome || null,
+          link_nfe: item.link_nfe || null,
+        };
+      } else {
+        // É do tipo ConsultationToEvolve
+        return {
+          id: item.id,
+          data_agendamento: item.data_agendamento,
+          horario_inicio: item.horario_inicio,
+          horario_fim: item.horario_fim,
+          observacoes: item.observacoes,
+          preco_sessao: item.preco_sessao,
+          paciente_id: item.paciente_id,
+          paciente_nome: item.paciente_nome,
+          profissional_id: item.profissional_id,
+          profissional_nome: item.profissional_nome,
+          servico_id: item.servico_id,
+          servico_nome: item.servico_nome,
+          responsavel_legal_nome: item.responsavel_legal_nome,
+          responsavel_legal_email: item.responsavel_legal_email,
+          responsavel_legal_telefone: item.responsavel_legal_telefone,
+          responsavel_financeiro_nome: item.responsavel_financeiro_nome,
+          responsavel_financeiro_email: item.responsavel_financeiro_email,
+          responsavel_financeiro_telefone: item.responsavel_financeiro_telefone,
+          nomes_responsaveis: item.nomes_responsaveis,
+          idade_paciente: item.idade_paciente,
+          status_consulta_id: item.status_consulta_id || null,
+          status_consulta_nome: item.status_consulta_nome || null,
+          status_pagamento_id: item.status_pagamento_id || null,
+          status_pagamento_nome: item.status_pagamento_nome || null,
+          local_atendimento_id: item.local_atendimento_id || null,
+          local_atendimento_nome: item.local_atendimento_nome || null,
+          link_nfe: item.link_nfe || null,
+        };
       }
-    };
+    },
+    []
+  );
 
-    const handleLoadMoreAppointments = () => {
-      setAppointmentsLimit(appointmentsLimit + 10);
-    };
-
-    // Handlers para clique em agendamentos e consultas
-    const handleAppointmentClick = async (appointment: UpcomingAppointment) => {
-      console.log('Admin Dashboard - Clicou no agendamento:', appointment);
-
+  const handleAppointmentClick = useCallback(
+    (consultation: UpcomingAppointment | ConsultationToEvolve) => {
+      const appointmentData = extractAppointmentData(consultation);
+      setSelectedAppointmentData(appointmentData);
       setIsAppointmentDetailsOpen(true);
+    },
+    [extractAppointmentData]
+  );
 
-      try {
-        const appointmentDetails = await fetchAgendamentoById(appointment.id);
-        if (appointmentDetails) {
-          setSelectedAppointmentData(appointmentDetails);
-        } else {
-          // Se não conseguir buscar os dados, fechar o modal
-          setIsAppointmentDetailsOpen(false);
-          console.error('Não foi possível carregar os detalhes do agendamento');
-        }
-      } catch (error) {
-        console.error('Erro ao abrir detalhes do agendamento:', error);
-        setIsAppointmentDetailsOpen(false);
-      }
-    };
+  const handleAppointmentDetailsClose = () => {
+    setIsAppointmentDetailsOpen(false);
+    setSelectedAppointmentData(null);
+  };
 
-    const handleConsultationClick = async (
-      consultation: ConsultationToEvolve
-    ) => {
-      console.log('Admin Dashboard - Clicou na consulta:', consultation);
+  const handleAppointmentDetailsSave = async () => {
+    try {
+      
+      // O AppointmentDetailsManager já tem sua própria lógica de salvamento
+      // Aqui podemos adicionar refresh dos dados se necessário
+      refreshAll(); // Atualizar dados após salvar
+    } catch (error) {
+      console.error('Erro ao salvar alterações do agendamento:', error);
+    }
+  };
 
-      setIsAppointmentDetailsOpen(true);
+  const handleEvolutionClick = useCallback(
+    (consultationId: string) => {
+      handleModuleClick(`patients/${consultationId}?tab=evolution`);
+    },
+    [handleModuleClick]
+  );
 
-      try {
-        const appointmentDetails = await fetchAgendamentoById(consultation.id);
-        if (appointmentDetails) {
-          setSelectedAppointmentData(appointmentDetails);
-        } else {
-          // Se não conseguir buscar os dados, fechar o modal
-          setIsAppointmentDetailsOpen(false);
-          console.error('Não foi possível carregar os detalhes da consulta');
-        }
-      } catch (error) {
-        console.error('Erro ao abrir detalhes da consulta:', error);
-        setIsAppointmentDetailsOpen(false);
-      }
-    };
+  // AI dev note: Componente reutilizável para métricas de card
+  const MetricCard = ({
+    title,
+    value,
+    icon: Icon,
+    description,
+    onClick,
+    className = '',
+  }: {
+    title: string;
+    value: string | number;
+    icon: React.ComponentType<any>;
+    description?: string;
+    onClick?: () => void;
+    className?: string;
+  }) => (
+    <Card
+      className={`cursor-pointer hover:shadow-md transition-shadow ${className}`}
+      onClick={onClick}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between space-y-0 pb-2">
+          <div className="text-sm font-medium">{title}</div>
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="text-2xl font-bold">{value}</div>
+        {description && (
+          <p className="text-xs text-muted-foreground mt-1">{description}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
 
-    const handleCreateEvolutionClick = async (consultationId: string) => {
-      console.log('Admin Dashboard - Criar evolução para:', consultationId);
+  // AI dev note: Preparar dados das métricas principais
+  const upcomingCount = upcomingAppointments?.length || 0;
+  const evolutionCount = consultationsToEvolve?.length || 0;
+  const materialRequestsCount = materialRequests?.length || 0;
 
-      setIsAppointmentDetailsOpen(true);
-
-      try {
-        const appointmentDetails = await fetchAgendamentoById(consultationId);
-        if (appointmentDetails) {
-          setSelectedAppointmentData(appointmentDetails);
-        } else {
-          // Se não conseguir buscar os dados, fechar o modal
-          setIsAppointmentDetailsOpen(false);
-          console.error(
-            'Não foi possível carregar os detalhes da consulta para evolução'
-          );
-        }
-      } catch (error) {
-        console.error(
-          'Erro ao abrir detalhes da consulta para evolução:',
-          error
-        );
-        setIsAppointmentDetailsOpen(false);
-      }
-    };
-
-    // Handlers do modal de detalhes do agendamento
-    const handleAppointmentDetailsClose = () => {
-      setIsAppointmentDetailsOpen(false);
-      setSelectedAppointmentData(null);
-    };
-
-    const handleAppointmentDetailsSave = async (
-      data: AppointmentUpdateData
-    ) => {
-      try {
-        console.log(
-          'Admin Dashboard - Salvando alterações do agendamento:',
-          data
-        );
-        // O AppointmentDetailsManager já tem sua própria lógica de salvamento
-        // Aqui podemos adicionar refresh dos dados se necessário
-        refreshAll(); // Atualizar dados após salvar
-      } catch (error) {
-        console.error('Erro ao salvar alterações do agendamento:', error);
-      }
-    };
-
-    // Handlers para ações de pagamento
-    const handlePaymentAction = async (appointmentId: string) => {
-      try {
-        console.log(
-          '🔄 Admin Dashboard - Ação de pagamento para agendamento:',
-          appointmentId
-        );
-
-        // Buscar ID do status "pago"
-        const pagoStatusId = 'bb982df2-56ca-4520-870f-659f7581ab0a';
-
-        await updatePaymentStatus(appointmentId, pagoStatusId);
-
-        // Recarregar dados do agendamento se necessário
-        if (selectedAppointmentData?.id === appointmentId) {
-          const updatedAppointment = await fetchAgendamentoById(appointmentId);
-          setSelectedAppointmentData(updatedAppointment);
-        }
-
-        // Atualizar dados do dashboard
-        refreshAll();
-      } catch (error) {
-        console.error('Erro na ação de pagamento:', error);
-      }
-    };
-
-    const handleNfeAction = async (appointmentId: string, linkNfe?: string) => {
-      try {
-        if (linkNfe) {
-          // Se já tem NFe, visualizar
-          console.log('👁️ Admin Dashboard - Visualizando NFe:', linkNfe);
-          window.open(linkNfe, '_blank');
-        } else {
-          // Se não tem NFe, emitir
-          console.log(
-            '📄 Admin Dashboard - Emitindo NFe para agendamento:',
-            appointmentId
-          );
-
-          // TODO: Implementar integração com sistema de NFe
-          const mockNfeLink = `https://nfe.exemplo.com/${appointmentId}`;
-
-          await updateNfeLink(appointmentId, mockNfeLink);
-
-          // Recarregar dados do agendamento se necessário
-          if (selectedAppointmentData?.id === appointmentId) {
-            const updatedAppointment =
-              await fetchAgendamentoById(appointmentId);
-            setSelectedAppointmentData(updatedAppointment);
-          }
-
-          // Atualizar dados do dashboard
-          refreshAll();
-        }
-      } catch (error) {
-        console.error('Erro na ação de NFe:', error);
-      }
-    };
-
-    // Handlers para navegação de pessoas
-    const handlePatientClick = (patientId: string | null) => {
-      if (patientId && onNavigateToModule) {
-        onNavigateToModule(`pacientes/${patientId}`);
-      }
-    };
-
-    const handleProfessionalClick = (professionalId: string) => {
-      if (onNavigateToModule) {
-        onNavigateToModule(`pessoa/${professionalId}`);
-      }
-    };
-
+  // AI dev note: Skeleton loading para o estado inicial
+  if (loading && !upcomingAppointments) {
     return (
-      <>
-        <div className={cn('space-y-4 md:space-y-6 p-2 md:p-6', className)}>
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo respira-text-gradient">
-                Dashboard Administrativo
-              </h1>
-              <p className="text-muted-foreground mt-1 text-sm md:text-base">
-                Visão geral da Clínica Respira Kids
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 md:gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 text-xs md:text-sm"
-              >
-                <Bell className="h-3 w-3 md:h-4 md:w-4" />
-                {(metrics?.aprovacoesPendentes || 0) +
-                  (materialRequests?.length || 0)}{' '}
-                pendentes
-              </Button>
-              <Button
-                size="sm"
-                className="respira-gradient text-xs md:text-sm"
-                onClick={() => handleModuleClick('reports')}
-              >
-                <Activity className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                Relatório Geral
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={refreshAll}
-                disabled={loading}
-                className="gap-2 text-xs md:text-sm"
-              >
-                {loading ? 'Atualizando...' : 'Atualizar'}
-              </Button>
-            </div>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
+          <div>
+            <Skeleton className="h-8 w-64" />
           </div>
+          <div className="flex items-center gap-2 md:gap-3">
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
 
-          {/* Error State */}
-          {error && (
-            <Card className="border-destructive">
-              <CardContent className="pt-4 md:pt-6 p-3 md:p-6">
-                <p className="text-destructive text-sm">{error}</p>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <Skeleton className="h-4 w-20 mb-2" />
+                <Skeleton className="h-8 w-12" />
               </CardContent>
             </Card>
-          )}
+          ))}
+        </div>
 
-          {/* Gráfico de Faturamento Anual com Filtro */}
+        <div className="grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader className="p-3 md:p-6">
-              <div className="flex flex-col gap-3 md:gap-4">
-                <div>
-                  <CardTitle className="text-lg md:text-xl">
-                    Gráfico Anual de Faturamento
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    Faturamento consolidado por mês com comparativo anual
-                  </CardDescription>
-                </div>
-                <div className="w-full md:w-auto">
-                  <ProfessionalFilter
-                    selectedProfessionals={professionalFilters.faturamento}
-                    onSelectionChange={(professionalIds) =>
-                      setProfessionalFilters({ faturamento: professionalIds })
-                    }
-                    placeholder="Filtrar por profissional..."
-                  />
-                </div>
-              </div>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
             </CardHeader>
-            <CardContent className="p-3 md:p-6 pt-0">
-              <FaturamentoChart
-                data={faturamentoComparativo}
-                loading={loading}
-                error={error}
-              />
+            <CardContent>
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
             </CardContent>
           </Card>
-
-          {/* Grid de Componentes do Dashboard */}
-          <div className="grid grid-cols-1 gap-4 md:gap-6">
-            {/* Próximos Agendamentos com Filtro */}
-            <Card>
-              <CardHeader className="p-3 md:p-6">
-                <div className="flex flex-col gap-3 md:gap-4">
-                  <div>
-                    <CardTitle className="text-lg md:text-xl">
-                      Próximos Agendamentos
-                    </CardTitle>
-                    <CardDescription className="text-sm">
-                      Consultas agendadas para os próximos 7 dias
-                    </CardDescription>
-                  </div>
-                  <div className="w-full md:w-auto">
-                    <ProfessionalFilter
-                      selectedProfessionals={professionalFilters.agendamentos}
-                      onSelectionChange={(professionalIds) =>
-                        setProfessionalFilters({
-                          agendamentos: professionalIds,
-                        })
-                      }
-                      placeholder="Filtrar por profissional..."
-                    />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 md:p-6 pt-0">
-                <AppointmentsList
-                  appointments={upcomingAppointments}
-                  loading={loading}
-                  error={error}
-                  onAppointmentClick={handleAppointmentClick}
-                  userRole={
-                    user?.pessoa?.role as
-                      | 'admin'
-                      | 'profissional'
-                      | 'secretaria'
-                      | null
-                  }
-                />
-                {hasMoreAppointments && (
-                  <div className="mt-3 md:mt-4 text-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleLoadMoreAppointments}
-                      disabled={loading}
-                      className="text-xs md:text-sm"
-                    >
-                      Ver mais agendamentos
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Consultas a Evoluir com Filtro */}
           <Card>
-            <CardHeader className="p-3 md:p-6">
-              <div className="flex flex-col gap-3 md:gap-4">
-                <div>
-                  <CardTitle className="text-lg md:text-xl">
-                    Consultas a Evoluir
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    Consultas finalizadas que precisam de relatório de evolução
-                  </CardDescription>
-                </div>
-                <div className="w-full md:w-auto">
-                  <ProfessionalFilter
-                    selectedProfessionals={professionalFilters.consultas}
-                    onSelectionChange={(professionalIds) =>
-                      setProfessionalFilters({ consultas: professionalIds })
-                    }
-                    placeholder="Filtrar por profissional..."
-                  />
-                </div>
-              </div>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
             </CardHeader>
-            <CardContent className="p-3 md:p-6 pt-0">
-              <ConsultationsToEvolve
-                consultations={consultationsToEvolve}
-                loading={loading}
-                error={error}
-                onConsultationClick={handleConsultationClick}
-                onCreateEvolutionClick={handleCreateEvolutionClick}
-                userRole={
-                  user?.pessoa?.role as
-                    | 'admin'
-                    | 'profissional'
-                    | 'secretaria'
-                    | null
-                }
-              />
+            <CardContent>
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* AI dev note: Header dinâmico com saudação personalizada */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo respira-text-gradient">
+            {getGreeting()}, {firstName}!
+          </h1>
+        </div>
+        <div className="flex items-center gap-2 md:gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshAll}
+            disabled={loading}
+            className="gap-2 text-xs md:text-sm"
+          >
+            <RefreshCw
+              className={`h-3 w-3 md:h-4 md:w-4 ${
+                loading ? 'animate-spin' : ''
+              }`}
+            />
+            {loading ? 'Atualizando...' : 'Atualizar'}
+          </Button>
+        </div>
+      </div>
+
+      {/* AI dev note: Filtro de profissional para toda a interface */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Filtrar por profissional:</span>
+        </div>
+        <ProfessionalFilter
+          selectedProfessionalId={selectedProfessionalId}
+          onProfessionalChange={setSelectedProfessionalId}
+          showAllOption
+        />
+      </div>
+
+      {/* AI dev note: Cards de métricas principais */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          title="Próximas Consultas"
+          value={upcomingCount}
+          icon={CalendarDays}
+          description="Próximas 24h"
+          onClick={() => handleModuleClick('calendar')}
+        />
+        <MetricCard
+          title="Evoluções Pendentes"
+          value={evolutionCount}
+          icon={FileText}
+          description="Necessitam evolução"
+          onClick={() => handleModuleClick('patients')}
+        />
+        <MetricCard
+          title="Solicitações de Material"
+          value={materialRequestsCount}
+          icon={Package}
+          description="Pendentes de aprovação"
+          onClick={() => handleModuleClick('stock')}
+        />
+        <MetricCard
+          title="Total de Pacientes"
+          value="267"
+          icon={Users2}
+          description="Cadastrados"
+          onClick={() => handleModuleClick('patients')}
+        />
+      </div>
+
+      {/* AI dev note: Seção de métricas detalhadas */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <UserMetrics />
+        <ProfessionalMetrics selectedProfessionalId={selectedProfessionalId} />
+      </div>
+
+      {/* AI dev note: Seção de listas e agendamentos */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+          {/* Lista de Próximas Consultas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Próximas Consultas
+                {upcomingCount > 0 && (
+                  <Badge variant="secondary">{upcomingCount}</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px]">
+                <AppointmentsList
+                  appointments={upcomingAppointments || []}
+                  loading={loading}
+                  onAppointmentClick={handleAppointmentClick}
+                  onPaymentStatusUpdate={updatePaymentStatus}
+                  onNfeLinkUpdate={updateNfeLink}
+                  emptyMessage="Nenhuma consulta nas próximas 24 horas"
+                />
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          {/* Consultas para Evolução */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Stethoscope className="h-5 w-5" />
+                Consultas para Evolução
+                {evolutionCount > 0 && (
+                  <Badge variant="destructive">{evolutionCount}</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[200px]">
+                <ConsultationsToEvolve
+                  consultations={consultationsToEvolve || []}
+                  loading={loading}
+                  onConsultationClick={handleAppointmentClick}
+                  onEvolutionClick={handleEvolutionClick}
+                  emptyMessage="Todas as consultas estão em dia!"
+                />
+              </ScrollArea>
             </CardContent>
           </Card>
 
           {/* Solicitação de Material */}
-          <MaterialRequestCard
+              <MaterialRequestCard
             requests={materialRequests}
             loading={loading}
             error={error}
-            onRequestClick={(request) => {
-              console.log('Solicitação clicada:', request);
-              handleModuleClick('stock');
-            }}
-            onCreateRequest={() => {
-              console.log('Criar nova solicitação');
+                                onRequestClick={() => {
+                  handleModuleClick('stock');
+                }}
+                onCreateRequest={() => {
+              
               handleModuleClick('stock');
             }}
           />
-
-          {/* Footer com informações */}
-          {lastUpdate && (
-            <div className="text-center text-xs text-muted-foreground">
-              Última atualização:{' '}
-              {new Intl.DateTimeFormat('pt-BR', {
-                day: '2-digit',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit',
-              }).format(lastUpdate)}
-            </div>
-          )}
         </div>
+      </div>
 
-        {/* Modal de detalhes do agendamento */}
-        <AppointmentDetailsManager
-          isOpen={isAppointmentDetailsOpen}
-          onClose={handleAppointmentDetailsClose}
-          appointment={selectedAppointmentData}
-          userRole={
-            user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria' | null
-          }
-          locaisAtendimento={formData.locaisAtendimento || []}
-          isLoadingLocais={false}
-          onSave={handleAppointmentDetailsSave}
-          onPaymentAction={handlePaymentAction}
-          onNfeAction={handleNfeAction}
-          onPatientClick={handlePatientClick}
-          onProfessionalClick={handleProfessionalClick}
-        />
-      </>
-    );
-  }
-);
-
-AdminDashboard.displayName = 'AdminDashboard';
+      {/* AI dev note: Modal de detalhes do agendamento */}
+      <Dialog
+        open={isAppointmentDetailsOpen}
+        onOpenChange={setIsAppointmentDetailsOpen}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Agendamento</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto max-h-[80vh]">
+            {selectedAppointmentData && (
+              <AppointmentDetailsManager
+                isOpen={isAppointmentDetailsOpen}
+                appointmentData={selectedAppointmentData}
+                onClose={handleAppointmentDetailsClose}
+                onSave={handleAppointmentDetailsSave}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
