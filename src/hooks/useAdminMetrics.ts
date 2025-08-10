@@ -247,14 +247,14 @@ export const useAdminMetrics = ({
     if (professionalFilters.agendamentos.length > 0) {
       refreshUpcoming();
     }
-  }, [professionalFilters.agendamentos, appointmentsLimit]); // Apenas quando filtros ou limite mudam
+  }, [professionalFilters.agendamentos, appointmentsLimit, refreshUpcoming]); // Apenas quando filtros ou limite mudam
 
   // Efeito para atualizar quando filtros de consultas mudam
   useEffect(() => {
     if (professionalFilters.consultas.length > 0) {
       refreshConsultations();
     }
-  }, [professionalFilters.consultas]); // Apenas quando filtros mudam
+  }, [professionalFilters.consultas, refreshConsultations]); // Apenas quando filtros mudam
 
   // Efeito para refresh automático
   useEffect(() => {
@@ -268,7 +268,7 @@ export const useAdminMetrics = ({
     ); // Converter minutos para milissegundos
 
     return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval]); // Removido refreshAll das dependências
+  }, [autoRefresh, refreshInterval, refreshAll]); // Dependências completas
 
   return {
     // Dados

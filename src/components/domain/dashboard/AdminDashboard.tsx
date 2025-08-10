@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import {
@@ -17,22 +17,17 @@ import { ScrollArea } from '@/components/primitives/scroll-area';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import {
-  CalendarDays,
   Clock,
   AlertTriangle,
-  FileText,
   RefreshCw,
   Filter,
-  Users2,
   Stethoscope,
-  Package,
 } from 'lucide-react';
 import { useAdminMetrics } from '@/hooks/useAdminMetrics';
 import { UserMetrics } from '@/components/composed/UserMetrics';
 import { ProfessionalMetrics } from '@/components/composed/ProfessionalMetrics';
 import { ConsultationsToEvolve } from '@/components/composed/ConsultationsToEvolve';
 import { AppointmentsList } from '@/components/composed/AppointmentsList';
-import { MaterialRequestCard } from '@/components/composed/MaterialRequestCard';
 import { ProfessionalFilter } from '@/components/composed/ProfessionalFilter';
 import { FaturamentoChart } from '@/components/composed/FaturamentoChart';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
@@ -49,13 +44,10 @@ import { useAuth } from '@/hooks/useAuth';
 // Integrado com Supabase para dados reais de todos os profissionais
 // Com filtros por profissional para todos os componentes
 
-interface AdminDashboardProps {
-  onModuleClick: (moduleId: string) => void;
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface AdminDashboardProps {}
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({
-  onModuleClick,
-}) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>(
     []
   );
@@ -72,14 +64,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     refreshAll,
     upcomingAppointments,
     consultationsToEvolve,
-    materialRequests,
     faturamentoComparativo,
+    setProfessionalFilters,
   } = useAdminMetrics({
     startDate: new Date(
       new Date().setMonth(new Date().getMonth() - 1)
     ).toISOString(),
     endDate: new Date().toISOString(),
   });
+
+  // Atualizar filtros quando seleção de profissionais mudar
+  useEffect(() => {
+    setProfessionalFilters({
+      faturamento: selectedProfessionals,
+      agendamentos: selectedProfessionals,
+      consultas: selectedProfessionals,
+    });
+  }, [selectedProfessionals, setProfessionalFilters]);
 
   // AI dev note: Função para saudação dinâmica baseada no horário
   const getGreeting = () => {
@@ -91,13 +92,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // AI dev note: Extrair primeiro nome do usuário
   const firstName = (user?.pessoa?.nome || 'Usuário').split(' ')[0];
-
-  const handleModuleClick = useCallback(
-    (moduleId: string) => {
-      onModuleClick(moduleId);
-    },
-    [onModuleClick]
-  );
 
   // Função para buscar dados completos do agendamento
   const fetchAppointmentDetails = useCallback(
@@ -153,43 +147,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [fetchAppointmentDetails]
   );
 
-  // AI dev note: Componente reutilizável para métricas de card
-  const MetricCard = ({
-    title,
-    value,
-    icon: Icon,
-    description,
-    onClick,
-    className = '',
-  }: {
-    title: string;
-    value: string | number;
-    icon: React.ComponentType<{ className?: string; size?: number | string }>;
-    description?: string;
-    onClick?: () => void;
-    className?: string;
-  }) => (
-    <Card
-      className={`cursor-pointer hover:shadow-md transition-shadow ${className}`}
-      onClick={onClick}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between space-y-0 pb-2">
-          <div className="text-sm font-medium">{title}</div>
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-
   // AI dev note: Preparar dados das métricas principais
   const upcomingCount = upcomingAppointments?.length || 0;
   const evolutionCount = consultationsToEvolve?.length || 0;
-  const materialRequestsCount = materialRequests?.length || 0;
 
   // AI dev note: Skeleton loading para o estado inicial
   if (loading && !upcomingAppointments) {
@@ -291,38 +251,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         />
       </div>
 
-      {/* AI dev note: Cards de métricas principais */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title="Próximas Consultas"
-          value={upcomingCount}
-          icon={CalendarDays}
-          description="Próximas 24h"
-          onClick={() => handleModuleClick('calendar')}
-        />
-        <MetricCard
-          title="Evoluções Pendentes"
-          value={evolutionCount}
-          icon={FileText}
-          description="Necessitam evolução"
-          onClick={() => handleModuleClick('patients')}
-        />
-        <MetricCard
-          title="Solicitações de Material"
-          value={materialRequestsCount}
-          icon={Package}
-          description="Pendentes de aprovação"
-          onClick={() => handleModuleClick('stock')}
-        />
-        <MetricCard
-          title="Total de Pacientes"
-          value="267"
-          icon={Users2}
-          description="Cadastrados"
-          onClick={() => handleModuleClick('patients')}
-        />
-      </div>
-
       {/* AI dev note: Seção de métricas detalhadas */}
       <div className="grid gap-6 lg:grid-cols-2">
         <UserMetrics metrics={null} loading={loading} />
@@ -387,19 +315,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </ScrollArea>
             </CardContent>
           </Card>
-
-          {/* Solicitação de Material */}
-          <MaterialRequestCard
-            requests={materialRequests}
-            loading={loading}
-            error={error}
-            onRequestClick={() => {
-              handleModuleClick('stock');
-            }}
-            onCreateRequest={() => {
-              handleModuleClick('stock');
-            }}
-          />
         </div>
       </div>
 

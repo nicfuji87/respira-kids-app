@@ -313,13 +313,9 @@ export const DashboardPage: React.FC = () => {
 
   // Dashboard específico para admin
   if (userRole === 'admin') {
-    const handleNavigateToModule = (module: string) => {
-      navigate(`/${module}`);
-    };
-
     return (
       <>
-        <AdminDashboard onModuleClick={handleNavigateToModule} />
+        <AdminDashboard />
 
         {/* Modal de detalhes do agendamento */}
         <AppointmentDetailsManager
