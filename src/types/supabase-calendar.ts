@@ -178,6 +178,12 @@ export interface SupabaseAgendamentoCompletoFlat {
   atualizado_por_nome: string | null;
   // Evolução
   possui_evolucao: string; // 'sim' ou 'não'
+  // Empresa de Faturamento (NOVO)
+  empresa_fatura_id: string;
+  empresa_fatura_razao_social: string;
+  empresa_fatura_nome_fantasia: string | null;
+  empresa_fatura_cnpj: string;
+  empresa_fatura_ativo: boolean;
 }
 
 // Interfaces para dados enriquecidos (com joins) - MANTIDO PARA COMPATIBILIDADE

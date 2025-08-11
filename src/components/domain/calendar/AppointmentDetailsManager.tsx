@@ -74,6 +74,7 @@ export interface AppointmentUpdateData {
   valor_servico?: number;
   status_consulta_id?: string;
   tipo_servico_id?: string;
+  empresa_fatura?: string;
 }
 
 interface FormData {
@@ -84,6 +85,7 @@ interface FormData {
   statusConsultaId: string;
   tipoServicoId: string;
   evolucaoServico: string;
+  empresaFaturaId: string;
 }
 
 export const AppointmentDetailsManager =
@@ -110,6 +112,7 @@ export const AppointmentDetailsManager =
         statusConsultaId: '',
         tipoServicoId: '',
         evolucaoServico: '',
+        empresaFaturaId: '',
       });
 
       const [isEdited, setIsEdited] = useState(false);
@@ -121,6 +124,12 @@ export const AppointmentDetailsManager =
         SupabaseTipoServico[]
       >([]);
       const [isLoadingTipoServico, setIsLoadingTipoServico] = useState(false);
+
+      // Estado para empresas de faturamento (NOVO)
+      const [empresasOptions, setEmpresasOptions] = useState<
+        Array<{ id: string; razao_social: string; nome_fantasia?: string }>
+      >([]);
+      const [isLoadingEmpresas, setIsLoadingEmpresas] = useState(false);
 
       // Estados para evolução
       const [evolucoes, setEvolucoes] = useState<
@@ -176,6 +185,37 @@ export const AppointmentDetailsManager =
         }
       }, [isOpen]);
 
+      // Carregar opções de empresas de faturamento (NOVO)
+      useEffect(() => {
+        const loadEmpresas = async () => {
+          setIsLoadingEmpresas(true);
+          try {
+            // Buscar empresas ativas usando Supabase
+            const { supabase } = await import('@/lib/supabase');
+            const { data: empresas, error } = await supabase
+              .from('pessoa_empresas')
+              .select('id, razao_social, nome_fantasia')
+              .eq('ativo', true)
+              .order('razao_social');
+
+            if (error) {
+              console.error('Erro ao carregar empresas:', error);
+              return;
+            }
+
+            setEmpresasOptions(empresas || []);
+          } catch (error) {
+            console.error('Erro ao carregar empresas:', error);
+          } finally {
+            setIsLoadingEmpresas(false);
+          }
+        };
+
+        if (isOpen) {
+          loadEmpresas();
+        }
+      }, [isOpen]);
+
       // Inicializar formulário quando appointment mudar
       useEffect(() => {
         if (appointment && isOpen) {
@@ -183,9 +223,6 @@ export const AppointmentDetailsManager =
           const dateTimeString = appointment.data_hora;
           const [datePart, timePart] = dateTimeString.split('T');
           const timeWithoutTz = timePart.replace(/[+-]\d{2}$/, ''); // Remove timezone info (+00, -03, etc)
-
-          
-          
 
           setFormData({
             dataHora: datePart,
@@ -195,6 +232,7 @@ export const AppointmentDetailsManager =
             statusConsultaId: appointment.status_consulta_id,
             tipoServicoId: appointment.tipo_servico_id,
             evolucaoServico: '',
+            empresaFaturaId: appointment.empresa_fatura_id || '',
           });
           setIsEdited(false);
         }
@@ -302,6 +340,7 @@ export const AppointmentDetailsManager =
             local_id: sanitizeUuid(formData.localId),
             status_consulta_id: sanitizeUuid(formData.statusConsultaId),
             tipo_servico_id: sanitizeUuid(formData.tipoServicoId),
+            empresa_fatura: sanitizeUuid(formData.empresaFaturaId),
           };
 
           // Só admin/secretaria pode alterar valor
@@ -339,20 +378,34 @@ export const AppointmentDetailsManager =
               const { isActive } = await checkAIHistoryStatus(user.pessoa.id);
               if (isActive) {
                 // Executar em background sem bloquear a UI
-                generatePatientHistoryAI(appointment.paciente_id, user.pessoa.id)
+                generatePatientHistoryAI(
+                  appointment.paciente_id,
+                  user.pessoa.id
+                )
                   .then((result) => {
                     if (result.success) {
-                      console.log('[DEBUG] Histórico do paciente atualizado automaticamente pela IA');
+                      console.log(
+                        '[DEBUG] Histórico do paciente atualizado automaticamente pela IA'
+                      );
                     } else {
-                      console.warn('[DEBUG] Falha na geração automática de histórico:', result.error);
+                      console.warn(
+                        '[DEBUG] Falha na geração automática de histórico:',
+                        result.error
+                      );
                     }
                   })
                   .catch((error) => {
-                    console.error('[DEBUG] Erro na geração automática de histórico:', error);
+                    console.error(
+                      '[DEBUG] Erro na geração automática de histórico:',
+                      error
+                    );
                   });
               }
             } catch (error) {
-              console.warn('[DEBUG] Erro ao verificar status da IA para histórico:', error);
+              console.warn(
+                '[DEBUG] Erro ao verificar status da IA para histórico:',
+                error
+              );
             }
 
             // Limpar campo de evolução
@@ -360,7 +413,6 @@ export const AppointmentDetailsManager =
           }
 
           setIsEdited(false);
-          
         } catch (error) {
           console.error('Erro ao salvar alterações:', error);
 
@@ -517,7 +569,7 @@ export const AppointmentDetailsManager =
                     {userRole === 'admin' || userRole === 'secretaria' ? (
                       <>
                         {/* AI dev note: Para admin/secretaria, exibir APENAS valor_servico, NUNCA comissão */}
-                        
+
                         <Label className="text-sm font-medium">
                           Valor do Serviço
                         </Label>
@@ -558,7 +610,7 @@ export const AppointmentDetailsManager =
                     ) : userRole === 'profissional' ? (
                       <>
                         {/* AI dev note: Para profissional, exibir APENAS comissão, NUNCA valor do serviço */}
-                        
+
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">Valor:</span>
                           <span className="text-sm font-medium">
@@ -684,6 +736,42 @@ export const AppointmentDetailsManager =
                     </div>
                   )}
                 </div>
+
+                {/* Empresa de Faturamento - Visível apenas para admin e secretaria */}
+                {(userRole === 'admin' || userRole === 'secretaria') && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">
+                      Empresa para Faturamento:
+                    </Label>
+                    <Select
+                      value={formData.empresaFaturaId}
+                      onValueChange={(value) =>
+                        handleInputChange('empresaFaturaId', value)
+                      }
+                      disabled={isLoadingEmpresas}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar empresa para faturamento..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {empresasOptions.map((empresa) => (
+                          <SelectItem key={empresa.id} value={empresa.id}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {empresa.razao_social}
+                              </span>
+                              {empresa.nome_fantasia && (
+                                <span className="text-sm text-muted-foreground">
+                                  {empresa.nome_fantasia}
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <Separator />
 
