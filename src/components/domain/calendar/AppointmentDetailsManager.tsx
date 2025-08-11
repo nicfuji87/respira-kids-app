@@ -738,6 +738,13 @@ export const AppointmentDetailsManager =
                 </div>
 
                 {/* Empresa de Faturamento - Visível apenas para admin e secretaria */}
+                {/* Debug: Log do userRole */}
+                {console.log(
+                  '🔍 [AppointmentDetails] userRole:',
+                  userRole,
+                  'shouldShow:',
+                  userRole === 'admin' || userRole === 'secretaria'
+                )}
                 {(userRole === 'admin' || userRole === 'secretaria') && (
                   <div className="space-y-3">
                     <Label className="text-sm font-medium">

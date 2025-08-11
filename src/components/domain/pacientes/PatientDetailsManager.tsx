@@ -200,7 +200,6 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
     const handlePaymentAction = async (appointmentId: string) => {
       try {
         // TODO: Implementar lógica de pagamento manual com integração Asaas
-        
 
         // Por enquanto, apenas marcamos como pago
         // Buscar ID do status "pago"
@@ -222,11 +221,10 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       try {
         if (linkNfe) {
           // Se já tem NFe, visualizar
-          
+
           window.open(linkNfe, '_blank');
         } else {
           // Se não tem NFe, emitir
-          
 
           // TODO: Implementar integração com sistema de NFe
           // Por enquanto, simular um link de NFe
@@ -360,7 +358,8 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
           onClose={() => setIsAppointmentModalOpen(false)}
           appointment={selectedAppointment}
           userRole={
-            (user?.role as 'admin' | 'profissional' | 'secretaria') || null
+            (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
+            null
           }
           locaisAtendimento={locaisAtendimento}
           isLoadingLocais={isLoadingLocais}
