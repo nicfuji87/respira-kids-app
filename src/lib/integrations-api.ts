@@ -60,13 +60,18 @@ export async function checkAdminRole(): Promise<ApiResponse<boolean>> {
 // AI dev note: Buscar empresa do usuário para gerenciar token Asaas
 async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
   try {
+    console.log('🔐 Verificando usuário autenticado...');
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
+      console.log('❌ Usuário não autenticado');
       return null;
     }
+
+    console.log('✅ Usuário autenticado:', user.id);
+    console.log('👤 Buscando dados da pessoa na tabela pessoas...');
 
     const { data: pessoa, error: pessoaError } = await supabase
       .from('pessoas')
@@ -74,9 +79,20 @@ async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
       .eq('auth_user_id', user.id)
       .single();
 
-    if (pessoaError || !pessoa?.id_empresa) {
+    console.log('📊 Resultado da busca de pessoa:', { pessoa, pessoaError });
+
+    if (pessoaError) {
+      console.log('❌ Erro ao buscar pessoa:', pessoaError.message);
       return null;
     }
+
+    if (!pessoa?.id_empresa) {
+      console.log('❌ Pessoa não tem empresa associada (id_empresa é null)');
+      return null;
+    }
+
+    console.log('✅ Pessoa tem empresa associada:', pessoa.id_empresa);
+    console.log('🏢 Buscando dados da empresa na tabela pessoa_empresas...');
 
     const { data: empresa, error: empresaError } = await supabase
       .from('pessoa_empresas')
@@ -85,9 +101,27 @@ async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
       .eq('ativo', true)
       .single();
 
+    console.log('📊 Resultado da busca de empresa:', { empresa, empresaError });
+
     if (empresaError) {
+      console.log('❌ Erro ao buscar empresa:', empresaError.message);
       return null;
     }
+
+    if (!empresa) {
+      console.log('❌ Empresa não encontrada ou inativa');
+      return null;
+    }
+
+    console.log('✅ Empresa encontrada:', {
+      id: empresa.id,
+      razao_social: empresa.razao_social,
+      ativo: empresa.ativo,
+      tem_token: !!empresa.api_token_externo,
+      token_preview: empresa.api_token_externo
+        ? `${empresa.api_token_externo.slice(0, 10)}...`
+        : 'null',
+    });
 
     return empresa;
   } catch (error) {
@@ -143,12 +177,22 @@ export async function fetchApiKeys(
     }
 
     // Buscar token Asaas da empresa do usuário
+    console.log('🔍 Buscando empresa do usuário para Asaas...');
     const company = await getUserCompanyForAsaas();
+    console.log('🏢 Empresa encontrada:', company);
+
     const allData: ApiKey[] = [...(apiKeysData as ApiKey[])];
 
     // Adicionar Asaas se houver empresa
     if (company) {
-      allData.push(mapCompanyToApiKey(company));
+      console.log('✅ Adicionando Asaas à lista de integrações');
+      const asaasApiKey = mapCompanyToApiKey(company);
+      console.log('🔑 Dados do Asaas mapeados:', asaasApiKey);
+      allData.push(asaasApiKey);
+    } else {
+      console.log(
+        '❌ Nenhuma empresa encontrada para o usuário - Asaas não será exibido'
+      );
     }
 
     // Ordenar por service_name
@@ -158,6 +202,18 @@ export async function fetchApiKeys(
     const offset = (page - 1) * limit;
     const paginatedData = allData.slice(offset, offset + limit);
     const totalPages = Math.ceil(allData.length / limit);
+
+    console.log('📋 Dados finais de integrações:', {
+      total_items: allData.length,
+      items_pagina: paginatedData.length,
+      servicos: allData.map((item) => item.service_name),
+      dados_pagina: paginatedData.map((item) => ({
+        service: item.service_name,
+        id: item.id,
+        label: item.label,
+        active: item.is_active,
+      })),
+    });
 
     return {
       data: {
