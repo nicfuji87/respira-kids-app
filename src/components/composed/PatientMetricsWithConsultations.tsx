@@ -610,8 +610,8 @@ export const PatientMetricsWithConsultations =
                   item.profissional_nome || 'Profissional não especificado',
                 possui_evolucao: item.possui_evolucao || 'não',
                 empresa_fatura_nome:
-                  item.empresa_fatura_nome_fantasia ||
                   item.empresa_fatura_razao_social ||
+                  item.empresa_fatura_nome_fantasia ||
                   'Empresa não especificada',
               }));
 
@@ -1068,7 +1068,6 @@ export const PatientMetricsWithConsultations =
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                     <Building2 className="h-3 w-3" />
                                     <span>
-                                      Faturamento:{' '}
                                       {consultation.empresa_fatura_nome}
                                     </span>
                                   </div>
