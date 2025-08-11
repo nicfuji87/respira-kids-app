@@ -76,11 +76,6 @@ export const DashboardPage: React.FC = () => {
   const professionalId = user?.pessoa?.id;
   const professionalName = user?.pessoa?.nome || 'Profissional';
 
-  // Debug do userRole
-  console.log('🔍 [DashboardPage] user:', user);
-  console.log('🔍 [DashboardPage] user.pessoa:', user?.pessoa);
-  console.log('🔍 [DashboardPage] userRole:', userRole);
-
   // Hook para dados do calendário (locais de atendimento)
   const { formData } = useCalendarFormData();
 
