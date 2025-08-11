@@ -258,14 +258,16 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                       </Badge>
                     </div>
                     <div className="flex-1 space-y-1">
-                      {patient.responsavel_legal_id && onResponsibleClick ? (
+                      {onResponsibleClick ? (
                         <Button
                           variant="link"
                           size="sm"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            onResponsibleClick(patient.responsavel_legal_id!);
+                            if (patient.responsavel_legal_id) {
+                              onResponsibleClick(patient.responsavel_legal_id);
+                            }
                           }}
                           className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
                         >
@@ -300,17 +302,18 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           Legal
                         </Badge>
                         <div className="flex-1 space-y-1">
-                          {patient.responsavel_legal_id &&
-                          onResponsibleClick ? (
+                          {onResponsibleClick ? (
                             <Button
                               variant="link"
                               size="sm"
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                onResponsibleClick(
-                                  patient.responsavel_legal_id!
-                                );
+                                if (patient.responsavel_legal_id) {
+                                  onResponsibleClick(
+                                    patient.responsavel_legal_id
+                                  );
+                                }
                               }}
                               className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
                             >
@@ -347,17 +350,18 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           Financeiro
                         </Badge>
                         <div className="flex-1 space-y-1">
-                          {patient.responsavel_financeiro_id &&
-                          onResponsibleClick ? (
+                          {onResponsibleClick ? (
                             <Button
                               variant="link"
                               size="sm"
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                onResponsibleClick(
-                                  patient.responsavel_financeiro_id!
-                                );
+                                if (patient.responsavel_financeiro_id) {
+                                  onResponsibleClick(
+                                    patient.responsavel_financeiro_id
+                                  );
+                                }
                               }}
                               className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
                             >
