@@ -491,6 +491,10 @@ export const AppointmentDetailsManager =
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        console.log('🔍 [DEBUG] Click no Paciente:', {
+                          pacienteId: appointment.paciente_id,
+                          onPatientClick: !!onPatientClick,
+                        });
                         onPatientClick?.(appointment.paciente_id);
                       }}
                       className="h-auto p-0 text-left justify-start font-bold cursor-pointer text-sm"
@@ -511,6 +515,14 @@ export const AppointmentDetailsManager =
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            console.log(
+                              '🔍 [DEBUG] Click no Responsável Legal:',
+                              {
+                                responsavelLegalId:
+                                  appointment.responsavel_legal_id,
+                                onProfessionalClick: !!onProfessionalClick,
+                              }
+                            );
                             if (appointment.responsavel_legal_id) {
                               onProfessionalClick?.(
                                 appointment.responsavel_legal_id
@@ -727,6 +739,13 @@ export const AppointmentDetailsManager =
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        console.log(
+                          '🔍 [DEBUG] Click no Responsável pelo Atendimento:',
+                          {
+                            profissionalId: appointment.profissional_id,
+                            onProfessionalClick: !!onProfessionalClick,
+                          }
+                        );
                         onProfessionalClick?.(appointment.profissional_id);
                       }}
                       className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
