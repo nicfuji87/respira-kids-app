@@ -41,7 +41,8 @@ export const fetchPersonDetails = async (
       created_at,
       updated_at,
       id_tipo_pessoa,
-      id_endereco
+      id_endereco,
+      responsavel_cobranca_id
     `;
 
     // Incluir email e telefone apenas se usuário tiver permissão
@@ -66,7 +67,8 @@ export const fetchPersonDetails = async (
         created_at,
         updated_at,
         id_tipo_pessoa,
-        id_endereco
+        id_endereco,
+        responsavel_cobranca_id
       `;
     }
 
@@ -90,27 +92,45 @@ export const fetchPersonDetails = async (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = personData as any;
 
-    // AI dev note: Buscar tipo de pessoa e endereço separadamente para evitar erro 406
-    const [tipoResult, enderecoResult] = await Promise.all([
-      supabase
-        .from('pessoa_tipos')
-        .select('codigo, nome')
-        .eq('id', data.id_tipo_pessoa)
-        .single(),
-      data.id_endereco
-        ? supabase
-            .from('enderecos')
-            .select('cep, logradouro, bairro, cidade, estado')
-            .eq('id', data.id_endereco)
-            .single()
-        : Promise.resolve({ data: null, error: null }),
-    ]);
+    // AI dev note: Buscar tipo de pessoa, endereço e responsável pela cobrança separadamente para evitar erro 406
+    const [tipoResult, enderecoResult, responsavelCobrancaResult] =
+      await Promise.all([
+        supabase
+          .from('pessoa_tipos')
+          .select('codigo, nome')
+          .eq('id', data.id_tipo_pessoa)
+          .single(),
+        data.id_endereco
+          ? supabase
+              .from('enderecos')
+              .select('cep, logradouro, bairro, cidade, estado')
+              .eq('id', data.id_endereco)
+              .single()
+          : Promise.resolve({ data: null, error: null }),
+        data.responsavel_cobranca_id
+          ? supabase
+              .from('pessoas')
+              .select('nome')
+              .eq('id', data.responsavel_cobranca_id)
+              .single()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
 
     const { data: tipoData } = tipoResult;
     const { data: enderecoData } = enderecoResult;
+    const { data: responsavelCobrancaData } = responsavelCobrancaResult;
 
     // AI dev note: Buscar dados de responsáveis se for paciente
     let nomes_responsaveis: string | undefined = undefined;
+    let responsavel_legal_id: string | undefined = undefined;
+    let responsavel_legal_nome: string | undefined = undefined;
+    let responsavel_legal_email: string | undefined = undefined;
+    let responsavel_legal_telefone: number | undefined = undefined;
+    let responsavel_financeiro_id: string | undefined = undefined;
+    let responsavel_financeiro_nome: string | undefined = undefined;
+    let responsavel_financeiro_email: string | undefined = undefined;
+    let responsavel_financeiro_telefone: number | undefined = undefined;
+
     const personType = tipoData?.codigo;
 
     if (personType === 'paciente') {
@@ -118,19 +138,48 @@ export const fetchPersonDetails = async (
         .from('pessoa_responsaveis')
         .select(
           `
-          pessoas!pessoa_responsaveis_id_responsavel_fkey(nome),
-          tipo_responsabilidade
+          id_responsavel,
+          tipo_responsabilidade,
+          pessoas!pessoa_responsaveis_id_responsavel_fkey(id, nome, email, telefone)
         `
         )
         .eq('id_pessoa', personId)
         .eq('ativo', true);
 
       if (responsaveisData && responsaveisData.length > 0) {
-        nomes_responsaveis = responsaveisData
+        const nomes: string[] = [];
+
+        responsaveisData.forEach((r) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((r) => (r.pessoas as any)?.nome)
-          .filter((nome) => nome)
-          .join(' | ');
+          const pessoa = r.pessoas as any;
+          if (pessoa?.nome) {
+            nomes.push(pessoa.nome);
+
+            // Mapear responsável legal
+            if (
+              r.tipo_responsabilidade === 'legal' ||
+              r.tipo_responsabilidade === 'ambos'
+            ) {
+              responsavel_legal_id = pessoa.id;
+              responsavel_legal_nome = pessoa.nome;
+              responsavel_legal_email = pessoa.email;
+              responsavel_legal_telefone = pessoa.telefone;
+            }
+
+            // Mapear responsável financeiro
+            if (
+              r.tipo_responsabilidade === 'financeiro' ||
+              r.tipo_responsabilidade === 'ambos'
+            ) {
+              responsavel_financeiro_id = pessoa.id;
+              responsavel_financeiro_nome = pessoa.nome;
+              responsavel_financeiro_email = pessoa.email;
+              responsavel_financeiro_telefone = pessoa.telefone;
+            }
+          }
+        });
+
+        nomes_responsaveis = nomes.length > 0 ? nomes.join(' | ') : undefined;
       }
     }
 
@@ -161,6 +210,16 @@ export const fetchPersonDetails = async (
       updated_at: data.updated_at,
       nomes_responsaveis,
 
+      // Campos de responsáveis individuais
+      responsavel_legal_id,
+      responsavel_legal_nome,
+      responsavel_legal_email,
+      responsavel_legal_telefone,
+      responsavel_financeiro_id,
+      responsavel_financeiro_nome,
+      responsavel_financeiro_email,
+      responsavel_financeiro_telefone,
+
       // Campos específicos de PersonDetails
       tipo_pessoa: personType,
       pessoa_tipo_nome: tipoData?.nome,
@@ -179,7 +238,7 @@ export const fetchPersonDetails = async (
       // Campos obrigatórios adicionados recentemente
       responsavel_cobranca_id: data.responsavel_cobranca_id || data.id, // Default para própria pessoa se não definido
       responsavel_cobranca_nome:
-        data.responsavel_cobranca_nome || data.nome || 'Não definido',
+        responsavelCobrancaData?.nome || data.nome || 'Não definido',
     };
 
     return { person, error: null };
