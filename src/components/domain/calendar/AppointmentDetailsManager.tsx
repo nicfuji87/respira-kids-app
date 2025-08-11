@@ -511,7 +511,11 @@ export const AppointmentDetailsManager =
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            onPatientClick?.(appointment.responsavel_legal_id);
+                            if (appointment.responsavel_legal_id) {
+                              onProfessionalClick?.(
+                                appointment.responsavel_legal_id
+                              );
+                            }
                           }}
                           className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
                         >
