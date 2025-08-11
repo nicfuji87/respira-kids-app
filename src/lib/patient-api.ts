@@ -398,11 +398,26 @@ export async function fetchPatientCompiledHistory(patientId: string): Promise<{
     }
 
     // Buscar histórico mais recente
+    // AI dev note: Corrigida consulta incorreta que usava patientId como id_agendamento
+
+    // Primeiro, buscar agendamentos do paciente
+    const { data: agendamentos, error: agendamentosError } = await supabase
+      .from('agendamentos')
+      .select('id')
+      .eq('paciente_id', patientId);
+
+    if (agendamentosError || !agendamentos || agendamentos.length === 0) {
+      return { history: null, lastGenerated: null };
+    }
+
+    const agendamentoIds = agendamentos.map((a) => a.id);
+
+    // Segundo, buscar relatório compilado usando os IDs dos agendamentos
     const { data, error } = await supabase
       .from('relatorio_evolucao')
       .select('conteudo, created_at')
       .eq('tipo_relatorio_id', tipoData.id)
-      .eq('id_agendamento', patientId)
+      .in('id_agendamento', agendamentoIds)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -445,19 +460,31 @@ export async function fetchPatientHistory(patientId: string): Promise<{
     }
 
     // Buscar histórico mais recente por paciente
+    // AI dev note: Abordagem robusta com duas queries para evitar erro 406 de join mal formado
+
+    // Primeiro, buscar agendamentos do paciente
+    const { data: agendamentos, error: agendamentosError } = await supabase
+      .from('agendamentos')
+      .select('id')
+      .eq('paciente_id', patientId);
+
+    if (agendamentosError) {
+      console.error('Erro ao buscar agendamentos:', agendamentosError);
+      return { history: null, lastGenerated: null, isAiGenerated: null };
+    }
+
+    if (!agendamentos || agendamentos.length === 0) {
+      return { history: null, lastGenerated: null, isAiGenerated: null };
+    }
+
+    const agendamentoIds = agendamentos.map((a) => a.id);
+
+    // Segundo, buscar histórico usando os IDs dos agendamentos
     const { data, error } = await supabase
       .from('relatorio_evolucao')
-      .select(
-        `
-        conteudo, 
-        created_at, 
-        transcricao,
-        id_agendamento,
-        agendamentos!inner(paciente_id)
-      `
-      )
+      .select('conteudo, created_at, transcricao')
       .eq('tipo_relatorio_id', tipoData.id)
-      .eq('agendamentos.paciente_id', patientId)
+      .in('id_agendamento', agendamentoIds)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -695,9 +722,7 @@ export async function updateAIHistoryStatus(
  * Buscar responsáveis do paciente para seleção de cobrança
  * Inclui o próprio paciente + responsáveis ativos
  */
-export async function fetchPatientResponsibles(
-  patientId: string
-): Promise<{
+export async function fetchPatientResponsibles(patientId: string): Promise<{
   responsibles: Array<{ id: string; nome: string; ativo: boolean }>;
   error?: string;
 }> {

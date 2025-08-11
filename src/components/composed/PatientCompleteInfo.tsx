@@ -249,199 +249,198 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
             </div>
           )}
 
-          {/* Seção: Responsáveis */}
-          {(patient.responsavel_legal_nome ||
-            patient.responsavel_financeiro_nome) && (
+          {/* Seção: Responsáveis - sempre exibida */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Responsáveis
+            </h4>
             <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Responsáveis
-              </h4>
-              <div className="space-y-4">
-                {sameResponsible && patient.responsavel_legal_nome ? (
-                  // Responsável Legal e Financeiro são a mesma pessoa
-                  <div className="flex items-start gap-3">
-                    <div className="flex gap-1">
-                      <Badge variant="outline" className="text-xs">
-                        Legal
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        Financeiro
-                      </Badge>
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      {onResponsibleClick ? (
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log(
-                              '🔍 [DEBUG] Click no Responsável Legal (mesmo):',
-                              {
-                                responsavelLegalId:
-                                  patient.responsavel_legal_id,
-                                onResponsibleClick: !!onResponsibleClick,
-                              }
-                            );
-                            if (patient.responsavel_legal_id) {
-                              onResponsibleClick(patient.responsavel_legal_id);
-                            } else {
-                              console.warn(
-                                '⚠️ responsavel_legal_id não disponível'
-                              );
+              {!patient.responsavel_legal_nome &&
+              !patient.responsavel_financeiro_nome ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum responsável cadastrado
+                </p>
+              ) : sameResponsible && patient.responsavel_legal_nome ? (
+                // Responsável Legal e Financeiro são a mesma pessoa
+                <div className="flex items-start gap-3">
+                  <div className="flex gap-1">
+                    <Badge variant="outline" className="text-xs">
+                      Legal
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      Financeiro
+                    </Badge>
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    {onResponsibleClick ? (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log(
+                            '🔍 [DEBUG] Click no Responsável Legal (mesmo):',
+                            {
+                              responsavelLegalId: patient.responsavel_legal_id,
+                              onResponsibleClick: !!onResponsibleClick,
                             }
-                          }}
-                          className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
-                        >
-                          {patient.responsavel_legal_nome}
-                        </Button>
-                      ) : (
-                        <p className="text-sm font-medium">
-                          {patient.responsavel_legal_nome}
+                          );
+                          if (patient.responsavel_legal_id) {
+                            onResponsibleClick(patient.responsavel_legal_id);
+                          } else {
+                            console.warn(
+                              '⚠️ responsavel_legal_id não disponível'
+                            );
+                          }
+                        }}
+                        className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
+                      >
+                        {patient.responsavel_legal_nome}
+                      </Button>
+                    ) : (
+                      <p className="text-sm font-medium">
+                        {patient.responsavel_legal_nome}
+                      </p>
+                    )}
+                    {patient.responsavel_legal_email &&
+                      userRole !== 'profissional' && (
+                        <p className="text-sm text-muted-foreground">
+                          📧 {patient.responsavel_legal_email}
                         </p>
                       )}
-                      {patient.responsavel_legal_email &&
-                        userRole !== 'profissional' && (
-                          <p className="text-sm text-muted-foreground">
-                            📧 {patient.responsavel_legal_email}
-                          </p>
-                        )}
-                      {patient.responsavel_legal_telefone &&
-                        userRole !== 'profissional' && (
-                          <p className="text-sm text-muted-foreground">
-                            📱 {formatPhone(patient.responsavel_legal_telefone)}
-                          </p>
-                        )}
-                    </div>
+                    {patient.responsavel_legal_telefone &&
+                      userRole !== 'profissional' && (
+                        <p className="text-sm text-muted-foreground">
+                          📱 {formatPhone(patient.responsavel_legal_telefone)}
+                        </p>
+                      )}
                   </div>
-                ) : (
-                  // Responsáveis diferentes
-                  <>
-                    {/* Responsável Legal */}
-                    {patient.responsavel_legal_nome && (
-                      <div className="flex items-start gap-3">
-                        <Badge variant="outline" className="mt-1">
-                          Legal
-                        </Badge>
-                        <div className="flex-1 space-y-1">
-                          {onResponsibleClick ? (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log(
-                                  '🔍 [DEBUG] Click no Responsável Legal (separado):',
-                                  {
-                                    responsavelLegalId:
-                                      patient.responsavel_legal_id,
-                                    onResponsibleClick: !!onResponsibleClick,
-                                  }
-                                );
-                                if (patient.responsavel_legal_id) {
-                                  onResponsibleClick(
-                                    patient.responsavel_legal_id
-                                  );
-                                } else {
-                                  console.warn(
-                                    '⚠️ responsavel_legal_id não disponível'
-                                  );
+                </div>
+              ) : (
+                // Responsáveis diferentes
+                <>
+                  {/* Responsável Legal */}
+                  {patient.responsavel_legal_nome && (
+                    <div className="flex items-start gap-3">
+                      <Badge variant="outline" className="mt-1">
+                        Legal
+                      </Badge>
+                      <div className="flex-1 space-y-1">
+                        {onResponsibleClick ? (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log(
+                                '🔍 [DEBUG] Click no Responsável Legal (separado):',
+                                {
+                                  responsavelLegalId:
+                                    patient.responsavel_legal_id,
+                                  onResponsibleClick: !!onResponsibleClick,
                                 }
-                              }}
-                              className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
-                            >
-                              {patient.responsavel_legal_nome}
-                            </Button>
-                          ) : (
-                            <p className="text-sm font-medium">
-                              {patient.responsavel_legal_nome}
+                              );
+                              if (patient.responsavel_legal_id) {
+                                onResponsibleClick(
+                                  patient.responsavel_legal_id
+                                );
+                              } else {
+                                console.warn(
+                                  '⚠️ responsavel_legal_id não disponível'
+                                );
+                              }
+                            }}
+                            className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
+                          >
+                            {patient.responsavel_legal_nome}
+                          </Button>
+                        ) : (
+                          <p className="text-sm font-medium">
+                            {patient.responsavel_legal_nome}
+                          </p>
+                        )}
+                        {patient.responsavel_legal_email &&
+                          userRole !== 'profissional' && (
+                            <p className="text-sm text-muted-foreground">
+                              📧 {patient.responsavel_legal_email}
                             </p>
                           )}
-                          {patient.responsavel_legal_email &&
-                            userRole !== 'profissional' && (
-                              <p className="text-sm text-muted-foreground">
-                                📧 {patient.responsavel_legal_email}
-                              </p>
-                            )}
-                          {patient.responsavel_legal_telefone &&
-                            userRole !== 'profissional' && (
-                              <p className="text-sm text-muted-foreground">
-                                📱{' '}
-                                {formatPhone(
-                                  patient.responsavel_legal_telefone
-                                )}
-                              </p>
-                            )}
-                        </div>
+                        {patient.responsavel_legal_telefone &&
+                          userRole !== 'profissional' && (
+                            <p className="text-sm text-muted-foreground">
+                              📱{' '}
+                              {formatPhone(patient.responsavel_legal_telefone)}
+                            </p>
+                          )}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {/* Responsável Financeiro */}
-                    {patient.responsavel_financeiro_nome && (
-                      <div className="flex items-start gap-3">
-                        <Badge variant="outline" className="mt-1">
-                          Financeiro
-                        </Badge>
-                        <div className="flex-1 space-y-1">
-                          {onResponsibleClick ? (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log(
-                                  '🔍 [DEBUG] Click no Responsável Financeiro:',
-                                  {
-                                    responsavelFinanceiroId:
-                                      patient.responsavel_financeiro_id,
-                                    onResponsibleClick: !!onResponsibleClick,
-                                  }
-                                );
-                                if (patient.responsavel_financeiro_id) {
-                                  onResponsibleClick(
-                                    patient.responsavel_financeiro_id
-                                  );
-                                } else {
-                                  console.warn(
-                                    '⚠️ responsavel_financeiro_id não disponível'
-                                  );
+                  {/* Responsável Financeiro */}
+                  {patient.responsavel_financeiro_nome && (
+                    <div className="flex items-start gap-3">
+                      <Badge variant="outline" className="mt-1">
+                        Financeiro
+                      </Badge>
+                      <div className="flex-1 space-y-1">
+                        {onResponsibleClick ? (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log(
+                                '🔍 [DEBUG] Click no Responsável Financeiro:',
+                                {
+                                  responsavelFinanceiroId:
+                                    patient.responsavel_financeiro_id,
+                                  onResponsibleClick: !!onResponsibleClick,
                                 }
-                              }}
-                              className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
-                            >
-                              {patient.responsavel_financeiro_nome}
-                            </Button>
-                          ) : (
-                            <p className="text-sm font-medium">
-                              {patient.responsavel_financeiro_nome}
+                              );
+                              if (patient.responsavel_financeiro_id) {
+                                onResponsibleClick(
+                                  patient.responsavel_financeiro_id
+                                );
+                              } else {
+                                console.warn(
+                                  '⚠️ responsavel_financeiro_id não disponível'
+                                );
+                              }
+                            }}
+                            className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
+                          >
+                            {patient.responsavel_financeiro_nome}
+                          </Button>
+                        ) : (
+                          <p className="text-sm font-medium">
+                            {patient.responsavel_financeiro_nome}
+                          </p>
+                        )}
+                        {patient.responsavel_financeiro_email &&
+                          userRole !== 'profissional' && (
+                            <p className="text-sm text-muted-foreground">
+                              📧 {patient.responsavel_financeiro_email}
                             </p>
                           )}
-                          {patient.responsavel_financeiro_email &&
-                            userRole !== 'profissional' && (
-                              <p className="text-sm text-muted-foreground">
-                                📧 {patient.responsavel_financeiro_email}
-                              </p>
-                            )}
-                          {patient.responsavel_financeiro_telefone &&
-                            userRole !== 'profissional' && (
-                              <p className="text-sm text-muted-foreground">
-                                📱{' '}
-                                {formatPhone(
-                                  patient.responsavel_financeiro_telefone
-                                )}
-                              </p>
-                            )}
-                        </div>
+                        {patient.responsavel_financeiro_telefone &&
+                          userRole !== 'profissional' && (
+                            <p className="text-sm text-muted-foreground">
+                              📱{' '}
+                              {formatPhone(
+                                patient.responsavel_financeiro_telefone
+                              )}
+                            </p>
+                          )}
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Seção: Responsável pela Cobrança - apenas admin/secretaria */}
           {(userRole === 'admin' || userRole === 'secretaria') && (
