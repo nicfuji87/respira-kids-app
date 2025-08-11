@@ -27,6 +27,17 @@ import { BillingResponsibleSelect } from './BillingResponsibleSelect';
 
 export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
   ({ patient, userRole, className, onResponsibleClick }) => {
+    // 🔍 DEBUG: Verificar dados dos responsáveis
+    console.log('🔍 [DEBUG] PatientCompleteInfo dados:', {
+      patient_id: patient.id,
+      patient_nome: patient.nome,
+      responsavel_legal_id: patient.responsavel_legal_id,
+      responsavel_legal_nome: patient.responsavel_legal_nome,
+      responsavel_financeiro_id: patient.responsavel_financeiro_id,
+      responsavel_financeiro_nome: patient.responsavel_financeiro_nome,
+      onResponsibleClick: !!onResponsibleClick,
+    });
+
     // AI dev note: Calcular idade com suporte a meses para bebês menores de 1 ano
     const calculateAge = (birthDate: string) => {
       const today = new Date();
@@ -265,8 +276,20 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            console.log(
+                              '🔍 [DEBUG] Click no Responsável Legal (mesmo):',
+                              {
+                                responsavelLegalId:
+                                  patient.responsavel_legal_id,
+                                onResponsibleClick: !!onResponsibleClick,
+                              }
+                            );
                             if (patient.responsavel_legal_id) {
                               onResponsibleClick(patient.responsavel_legal_id);
+                            } else {
+                              console.warn(
+                                '⚠️ responsavel_legal_id não disponível'
+                              );
                             }
                           }}
                           className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
@@ -309,9 +332,21 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                console.log(
+                                  '🔍 [DEBUG] Click no Responsável Legal (separado):',
+                                  {
+                                    responsavelLegalId:
+                                      patient.responsavel_legal_id,
+                                    onResponsibleClick: !!onResponsibleClick,
+                                  }
+                                );
                                 if (patient.responsavel_legal_id) {
                                   onResponsibleClick(
                                     patient.responsavel_legal_id
+                                  );
+                                } else {
+                                  console.warn(
+                                    '⚠️ responsavel_legal_id não disponível'
                                   );
                                 }
                               }}
@@ -357,9 +392,21 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                console.log(
+                                  '🔍 [DEBUG] Click no Responsável Financeiro:',
+                                  {
+                                    responsavelFinanceiroId:
+                                      patient.responsavel_financeiro_id,
+                                    onResponsibleClick: !!onResponsibleClick,
+                                  }
+                                );
                                 if (patient.responsavel_financeiro_id) {
                                   onResponsibleClick(
                                     patient.responsavel_financeiro_id
+                                  );
+                                } else {
+                                  console.warn(
+                                    '⚠️ responsavel_financeiro_id não disponível'
                                   );
                                 }
                               }}

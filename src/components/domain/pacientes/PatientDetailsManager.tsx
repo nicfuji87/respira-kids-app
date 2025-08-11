@@ -325,7 +325,16 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
             (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
             null
           }
-          onResponsibleClick={handleProfessionalClick}
+          onResponsibleClick={(responsibleId) => {
+            console.log(
+              '🔍 [DEBUG] PatientDetailsManager - onResponsibleClick chamado:',
+              {
+                responsibleId,
+                handleProfessionalClick: !!handleProfessionalClick,
+              }
+            );
+            handleProfessionalClick(responsibleId);
+          }}
         />
 
         {/* Seções específicas apenas para pacientes */}
