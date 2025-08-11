@@ -1,5 +1,7 @@
 // AI dev note: API para gerenciamento de integrações - chaves de API e prompts de IA
 // Seguindo padrões de segurança e verificação de roles
+// Asaas usa tabela pessoa_empresas (campo api_token_externo)
+// Evolution API e OpenAI usam tabela api_keys
 
 import { supabase } from './supabase';
 import type {
@@ -13,6 +15,7 @@ import type {
   PaginatedApiKeys,
   PaginatedAiPrompts,
 } from '../types/integrations';
+import type { CompanyData } from '../types/company';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -51,6 +54,62 @@ export async function checkAdminRole(): Promise<ApiResponse<boolean>> {
 }
 
 // ============================================================================
+// FUNÇÕES AUXILIARES PARA ASAAS (pessoa_empresas)
+// ============================================================================
+
+// AI dev note: Buscar empresa do usuário para gerenciar token Asaas
+async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return null;
+    }
+
+    const { data: pessoa, error: pessoaError } = await supabase
+      .from('pessoas')
+      .select('id_empresa')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (pessoaError || !pessoa?.id_empresa) {
+      return null;
+    }
+
+    const { data: empresa, error: empresaError } = await supabase
+      .from('pessoa_empresas')
+      .select('*')
+      .eq('id', pessoa.id_empresa)
+      .eq('ativo', true)
+      .single();
+
+    if (empresaError) {
+      return null;
+    }
+
+    return empresa;
+  } catch (error) {
+    console.error('❌ Erro ao buscar empresa do usuário:', error);
+    return null;
+  }
+}
+
+// AI dev note: Converter dados da empresa para formato ApiKey para Asaas
+function mapCompanyToApiKey(company: CompanyData): ApiKey {
+  return {
+    id: company.id,
+    service_name: 'asaas',
+    encrypted_key: company.api_token_externo || '',
+    label: `${company.razao_social} - Asaas`,
+    is_active: company.ativo,
+    created_at: company.created_at,
+    updated_at: company.updated_at,
+  };
+}
+
+// ============================================================================
 // API KEYS
 // ============================================================================
 
@@ -71,30 +130,39 @@ export async function fetchApiKeys(
       };
     }
 
-    // Buscar contagem total
-    const { count } = await supabase
-      .from('api_keys')
-      .select('*', { count: 'exact', head: true });
-
-    // Buscar dados com paginação, ordenando por service_name
-    const offset = (page - 1) * limit;
-    const { data, error } = await supabase
+    // Buscar chaves API tradicionais (Evolution API e OpenAI)
+    const { data: apiKeysData, error: apiKeysError } = await supabase
       .from('api_keys')
       .select('*')
-      .range(offset, offset + limit - 1)
+      .in('service_name', ['openai', 'evolution'])
       .order('service_name', { ascending: true });
 
-    if (error) {
-      console.error('❌ Erro ao buscar chaves de API:', error);
-      return { data: null, error: error.message, success: false };
+    if (apiKeysError) {
+      console.error('❌ Erro ao buscar chaves de API:', apiKeysError);
+      return { data: null, error: apiKeysError.message, success: false };
     }
 
-    const totalPages = Math.ceil((count || 0) / limit);
+    // Buscar token Asaas da empresa do usuário
+    const company = await getUserCompanyForAsaas();
+    const allData: ApiKey[] = [...(apiKeysData as ApiKey[])];
+
+    // Adicionar Asaas se houver empresa
+    if (company) {
+      allData.push(mapCompanyToApiKey(company));
+    }
+
+    // Ordenar por service_name
+    allData.sort((a, b) => a.service_name.localeCompare(b.service_name));
+
+    // Aplicar paginação manual
+    const offset = (page - 1) * limit;
+    const paginatedData = allData.slice(offset, offset + limit);
+    const totalPages = Math.ceil(allData.length / limit);
 
     return {
       data: {
-        data: data as ApiKey[],
-        total: count || 0,
+        data: paginatedData,
+        total: allData.length,
         page,
         limit,
         totalPages,
@@ -128,6 +196,40 @@ export async function createApiKey(
       data: { user },
     } = await supabase.auth.getUser();
 
+    // Para Asaas, usar tabela pessoa_empresas
+    if (data.service_name === 'asaas') {
+      const company = await getUserCompanyForAsaas();
+      if (!company) {
+        return {
+          data: null,
+          error:
+            'Empresa não encontrada. É necessário ter uma empresa cadastrada para configurar o Asaas.',
+          success: false,
+        };
+      }
+
+      const { data: updatedCompany, error } = await supabase
+        .from('pessoa_empresas')
+        .update({
+          api_token_externo: data.encrypted_key,
+        })
+        .eq('id', company.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao atualizar token Asaas:', error);
+        return { data: null, error: error.message, success: false };
+      }
+
+      return {
+        data: mapCompanyToApiKey(updatedCompany),
+        error: null,
+        success: true,
+      };
+    }
+
+    // Para Evolution API e OpenAI, usar tabela api_keys
     const { data: newApiKey, error } = await supabase
       .from('api_keys')
       .insert({
@@ -171,6 +273,36 @@ export async function updateApiKey(
       data: { user },
     } = await supabase.auth.getUser();
 
+    // Verificar se é Asaas baseado no ID (será o ID da empresa)
+    const company = await getUserCompanyForAsaas();
+    if (company && company.id === id) {
+      // Atualizar token Asaas na tabela pessoa_empresas
+      const updateData: Record<string, string | undefined> = {};
+
+      if (data.encrypted_key && data.encrypted_key.trim() !== '') {
+        updateData.api_token_externo = data.encrypted_key;
+      }
+
+      const { data: updatedCompany, error } = await supabase
+        .from('pessoa_empresas')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao atualizar token Asaas:', error);
+        return { data: null, error: error.message, success: false };
+      }
+
+      return {
+        data: mapCompanyToApiKey(updatedCompany),
+        error: null,
+        success: true,
+      };
+    }
+
+    // Para Evolution API e OpenAI, usar tabela api_keys
     const { data: updatedApiKey, error } = await supabase
       .from('api_keys')
       .update({
@@ -213,6 +345,34 @@ export async function toggleApiKeyStatus(
       data: { user },
     } = await supabase.auth.getUser();
 
+    // Verificar se é Asaas baseado no ID (será o ID da empresa)
+    const company = await getUserCompanyForAsaas();
+    if (company && company.id === id) {
+      // Toggle status da empresa (campo ativo)
+      const newStatus = !company.ativo;
+
+      const { data: updatedCompany, error } = await supabase
+        .from('pessoa_empresas')
+        .update({
+          ativo: newStatus,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao alterar status do Asaas:', error);
+        return { data: null, error: error.message, success: false };
+      }
+
+      return {
+        data: mapCompanyToApiKey(updatedCompany),
+        error: null,
+        success: true,
+      };
+    }
+
+    // Para Evolution API e OpenAI, usar tabela api_keys
     // Primeiro buscar o status atual
     const { data: currentKey, error: fetchError } = await supabase
       .from('api_keys')
@@ -268,7 +428,26 @@ export async function deleteApiKey(id: string): Promise<ApiResponse<boolean>> {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // Soft delete - marcar como inativo
+    // Verificar se é Asaas baseado no ID (será o ID da empresa)
+    const company = await getUserCompanyForAsaas();
+    if (company && company.id === id) {
+      // Para Asaas, apenas limpar o token, não desativar a empresa
+      const { error } = await supabase
+        .from('pessoa_empresas')
+        .update({
+          api_token_externo: null,
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('❌ Erro ao remover token Asaas:', error);
+        return { data: false, error: error.message, success: false };
+      }
+
+      return { data: true, error: null, success: true };
+    }
+
+    // Para Evolution API e OpenAI, usar tabela api_keys - soft delete
     const { error } = await supabase
       .from('api_keys')
       .update({
