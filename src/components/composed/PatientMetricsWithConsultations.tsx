@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CreditCard,
   X,
+  Building2,
 } from 'lucide-react';
 import {
   Card,
@@ -440,7 +441,10 @@ export const PatientMetricsWithConsultations =
               status_pagamento_cor,
               profissional_nome,
               profissional_id,
-              possui_evolucao
+              possui_evolucao,
+              empresa_fatura_id,
+              empresa_fatura_razao_social,
+              empresa_fatura_nome_fantasia
             `
               )
               .eq('paciente_id', patientId)
@@ -605,6 +609,10 @@ export const PatientMetricsWithConsultations =
                 profissional_nome:
                   item.profissional_nome || 'Profissional não especificado',
                 possui_evolucao: item.possui_evolucao || 'não',
+                empresa_fatura_nome:
+                  item.empresa_fatura_nome_fantasia ||
+                  item.empresa_fatura_razao_social ||
+                  'Empresa não especificada',
               }));
 
             setMetrics(calculatedMetrics);
@@ -1047,12 +1055,25 @@ export const PatientMetricsWithConsultations =
                                   </>
                                 )}
                               </div>
-                              {consultation.profissional_nome && (
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                                  <User className="h-3 w-3" />
-                                  <span>{consultation.profissional_nome}</span>
-                                </div>
-                              )}
+                              <div className="flex flex-col gap-1 mt-1">
+                                {consultation.profissional_nome && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <User className="h-3 w-3" />
+                                    <span>
+                                      {consultation.profissional_nome}
+                                    </span>
+                                  </div>
+                                )}
+                                {consultation.empresa_fatura_nome && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Building2 className="h-3 w-3" />
+                                    <span>
+                                      Faturamento:{' '}
+                                      {consultation.empresa_fatura_nome}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
 
                             <div className="text-right">

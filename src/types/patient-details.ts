@@ -84,6 +84,7 @@ export interface RecentConsultation {
   status_cor_pagamento: string;
   profissional_nome?: string;
   possui_evolucao?: string;
+  empresa_fatura_nome?: string; // Empresa responsável pelo faturamento
   selectable?: boolean; // Para modo de seleção de cobrança
 }
 
