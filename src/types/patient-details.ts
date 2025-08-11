@@ -20,9 +20,11 @@ export interface PatientDetails extends SupabasePessoa {
 
   // Dados de responsáveis (vindos de views/joins)
   nomes_responsaveis?: string;
+  responsavel_legal_id?: string;
   responsavel_legal_nome?: string;
   responsavel_legal_email?: string;
   responsavel_legal_telefone?: number;
+  responsavel_financeiro_id?: string;
   responsavel_financeiro_nome?: string;
   responsavel_financeiro_email?: string;
   responsavel_financeiro_telefone?: number;
@@ -162,6 +164,7 @@ export interface PatientPersonalInfoProps {
   patient: PatientDetails;
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
   className?: string;
+  onResponsibleClick?: (responsibleId: string) => void;
 }
 
 // Interface para mídia agrupada por sessão

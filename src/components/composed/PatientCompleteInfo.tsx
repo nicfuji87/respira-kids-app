@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
+import { Button } from '@/components/primitives/button';
 import { cn } from '@/lib/utils';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
@@ -25,7 +26,7 @@ import { BillingResponsibleSelect } from './BillingResponsibleSelect';
 // Substitui múltiplos cards por um único card organizado em seções
 
 export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
-  ({ patient, userRole, className }) => {
+  ({ patient, userRole, className, onResponsibleClick }) => {
     // AI dev note: Calcular idade com suporte a meses para bebês menores de 1 ano
     const calculateAge = (birthDate: string) => {
       const today = new Date();
@@ -257,9 +258,24 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                       </Badge>
                     </div>
                     <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium">
-                        {patient.responsavel_legal_nome}
-                      </p>
+                      {patient.responsavel_legal_id && onResponsibleClick ? (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onResponsibleClick(patient.responsavel_legal_id!);
+                          }}
+                          className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
+                        >
+                          {patient.responsavel_legal_nome}
+                        </Button>
+                      ) : (
+                        <p className="text-sm font-medium">
+                          {patient.responsavel_legal_nome}
+                        </p>
+                      )}
                       {patient.responsavel_legal_email &&
                         userRole !== 'profissional' && (
                           <p className="text-sm text-muted-foreground">
@@ -284,9 +300,27 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           Legal
                         </Badge>
                         <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium">
-                            {patient.responsavel_legal_nome}
-                          </p>
+                          {patient.responsavel_legal_id &&
+                          onResponsibleClick ? (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onResponsibleClick(
+                                  patient.responsavel_legal_id!
+                                );
+                              }}
+                              className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
+                            >
+                              {patient.responsavel_legal_nome}
+                            </Button>
+                          ) : (
+                            <p className="text-sm font-medium">
+                              {patient.responsavel_legal_nome}
+                            </p>
+                          )}
                           {patient.responsavel_legal_email &&
                             userRole !== 'profissional' && (
                               <p className="text-sm text-muted-foreground">
@@ -313,9 +347,27 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           Financeiro
                         </Badge>
                         <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium">
-                            {patient.responsavel_financeiro_nome}
-                          </p>
+                          {patient.responsavel_financeiro_id &&
+                          onResponsibleClick ? (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onResponsibleClick(
+                                  patient.responsavel_financeiro_id!
+                                );
+                              }}
+                              className="h-auto p-0 text-left justify-start font-medium cursor-pointer text-sm"
+                            >
+                              {patient.responsavel_financeiro_nome}
+                            </Button>
+                          ) : (
+                            <p className="text-sm font-medium">
+                              {patient.responsavel_financeiro_nome}
+                            </p>
+                          )}
                           {patient.responsavel_financeiro_email &&
                             userRole !== 'profissional' && (
                               <p className="text-sm text-muted-foreground">
