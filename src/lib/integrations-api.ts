@@ -57,8 +57,9 @@ export async function checkAdminRole(): Promise<ApiResponse<boolean>> {
 // FUNÇÕES AUXILIARES PARA ASAAS (pessoa_empresas)
 // ============================================================================
 
-// AI dev note: Buscar empresa do usuário para gerenciar token Asaas
-async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
+// AI dev note: Buscar empresas para gerenciar token Asaas
+// Admin tem acesso a todas as empresas, outros roles apenas à empresa associada
+async function getUserCompanyForAsaas(): Promise<CompanyData[]> {
   try {
     console.log('🔐 Verificando usuário autenticado...');
     const {
@@ -67,7 +68,7 @@ async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
 
     if (!user) {
       console.log('❌ Usuário não autenticado');
-      return null;
+      return [];
     }
 
     console.log('✅ Usuário autenticado:', user.id);
@@ -75,7 +76,7 @@ async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
 
     const { data: pessoa, error: pessoaError } = await supabase
       .from('pessoas')
-      .select('id_empresa')
+      .select('id_empresa, role')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -83,12 +84,43 @@ async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
 
     if (pessoaError) {
       console.log('❌ Erro ao buscar pessoa:', pessoaError.message);
-      return null;
+      return [];
     }
 
+    console.log('👔 Role do usuário:', pessoa.role);
+
+    // Se for admin, buscar todas as empresas ativas
+    if (pessoa.role === 'admin') {
+      console.log('👑 Usuário é admin - buscando todas as empresas ativas...');
+
+      const { data: empresas, error: empresasError } = await supabase
+        .from('pessoa_empresas')
+        .select('*')
+        .eq('ativo', true)
+        .order('razao_social');
+
+      console.log('📊 Resultado da busca de empresas (admin):', {
+        quantidade: empresas?.length || 0,
+        empresas: empresas?.map((e) => ({
+          id: e.id,
+          razao_social: e.razao_social,
+          tem_token: !!e.api_token_externo,
+        })),
+        erro: empresasError,
+      });
+
+      if (empresasError) {
+        console.log('❌ Erro ao buscar empresas:', empresasError.message);
+        return [];
+      }
+
+      return empresas || [];
+    }
+
+    // Para outros roles, buscar apenas a empresa associada
     if (!pessoa?.id_empresa) {
       console.log('❌ Pessoa não tem empresa associada (id_empresa é null)');
-      return null;
+      return [];
     }
 
     console.log('✅ Pessoa tem empresa associada:', pessoa.id_empresa);
@@ -105,12 +137,12 @@ async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
 
     if (empresaError) {
       console.log('❌ Erro ao buscar empresa:', empresaError.message);
-      return null;
+      return [];
     }
 
     if (!empresa) {
       console.log('❌ Empresa não encontrada ou inativa');
-      return null;
+      return [];
     }
 
     console.log('✅ Empresa encontrada:', {
@@ -123,20 +155,43 @@ async function getUserCompanyForAsaas(): Promise<CompanyData | null> {
         : 'null',
     });
 
-    return empresa;
+    return [empresa];
   } catch (error) {
     console.error('❌ Erro ao buscar empresa do usuário:', error);
+    return [];
+  }
+}
+
+// AI dev note: Buscar empresa específica por ID (para operações CRUD individuais)
+async function getCompanyById(companyId: string): Promise<CompanyData | null> {
+  try {
+    const { data: empresa, error } = await supabase
+      .from('pessoa_empresas')
+      .select('*')
+      .eq('id', companyId)
+      .eq('ativo', true)
+      .single();
+
+    if (error) {
+      console.error('❌ Erro ao buscar empresa por ID:', error);
+      return null;
+    }
+
+    return empresa;
+  } catch (error) {
+    console.error('❌ Erro inesperado ao buscar empresa por ID:', error);
     return null;
   }
 }
 
 // AI dev note: Converter dados da empresa para formato ApiKey para Asaas
-function mapCompanyToApiKey(company: CompanyData): ApiKey {
+function mapCompanyToApiKey(company: CompanyData, index?: number): ApiKey {
+  const suffix = index !== undefined && index > 0 ? ` (${index + 1})` : '';
   return {
     id: company.id,
     service_name: 'asaas',
     encrypted_key: company.api_token_externo || '',
-    label: `${company.razao_social} - Asaas`,
+    label: `${company.razao_social} - Asaas${suffix}`,
     is_active: company.ativo,
     created_at: company.created_at,
     updated_at: company.updated_at,
@@ -176,19 +231,21 @@ export async function fetchApiKeys(
       return { data: null, error: apiKeysError.message, success: false };
     }
 
-    // Buscar token Asaas da empresa do usuário
-    console.log('🔍 Buscando empresa do usuário para Asaas...');
-    const company = await getUserCompanyForAsaas();
-    console.log('🏢 Empresa encontrada:', company);
+    // Buscar empresas do usuário para Asaas
+    console.log('🔍 Buscando empresas do usuário para Asaas...');
+    const companies = await getUserCompanyForAsaas();
+    console.log('🏢 Empresas encontradas:', companies.length);
 
     const allData: ApiKey[] = [...(apiKeysData as ApiKey[])];
 
-    // Adicionar Asaas se houver empresa
-    if (company) {
-      console.log('✅ Adicionando Asaas à lista de integrações');
-      const asaasApiKey = mapCompanyToApiKey(company);
-      console.log('🔑 Dados do Asaas mapeados:', asaasApiKey);
-      allData.push(asaasApiKey);
+    // Adicionar cada empresa como uma integração Asaas separada
+    if (companies.length > 0) {
+      console.log('✅ Adicionando empresas Asaas à lista de integrações');
+      companies.forEach((company, index) => {
+        const asaasApiKey = mapCompanyToApiKey(company, index);
+        console.log(`🔑 Dados do Asaas mapeados (${index + 1}):`, asaasApiKey);
+        allData.push(asaasApiKey);
+      });
     } else {
       console.log(
         '❌ Nenhuma empresa encontrada para o usuário - Asaas não será exibido'
@@ -254,12 +311,24 @@ export async function createApiKey(
 
     // Para Asaas, usar tabela pessoa_empresas
     if (data.service_name === 'asaas') {
-      const company = await getUserCompanyForAsaas();
-      if (!company) {
+      // Para criar uma chave Asaas, precisamos de um ID de empresa específico
+      // Este deve ser passado através de um campo adicional no data
+      const companyId = (data as ApiKeyCreate & { company_id?: string })
+        .company_id;
+      if (!companyId) {
         return {
           data: null,
           error:
-            'Empresa não encontrada. É necessário ter uma empresa cadastrada para configurar o Asaas.',
+            'ID da empresa é obrigatório para configurar o Asaas. Selecione uma empresa específica.',
+          success: false,
+        };
+      }
+
+      const company = await getCompanyById(companyId);
+      if (!company) {
+        return {
+          data: null,
+          error: 'Empresa não encontrada ou inativa.',
           success: false,
         };
       }
@@ -330,8 +399,8 @@ export async function updateApiKey(
     } = await supabase.auth.getUser();
 
     // Verificar se é Asaas baseado no ID (será o ID da empresa)
-    const company = await getUserCompanyForAsaas();
-    if (company && company.id === id) {
+    const company = await getCompanyById(id);
+    if (company) {
       // Atualizar token Asaas na tabela pessoa_empresas
       const updateData: Record<string, string | undefined> = {};
 
@@ -402,8 +471,8 @@ export async function toggleApiKeyStatus(
     } = await supabase.auth.getUser();
 
     // Verificar se é Asaas baseado no ID (será o ID da empresa)
-    const company = await getUserCompanyForAsaas();
-    if (company && company.id === id) {
+    const company = await getCompanyById(id);
+    if (company) {
       // Toggle status da empresa (campo ativo)
       const newStatus = !company.ativo;
 
@@ -485,8 +554,8 @@ export async function deleteApiKey(id: string): Promise<ApiResponse<boolean>> {
     } = await supabase.auth.getUser();
 
     // Verificar se é Asaas baseado no ID (será o ID da empresa)
-    const company = await getUserCompanyForAsaas();
-    if (company && company.id === id) {
+    const company = await getCompanyById(id);
+    if (company) {
       // Para Asaas, apenas limpar o token, não desativar a empresa
       const { error } = await supabase
         .from('pessoa_empresas')
