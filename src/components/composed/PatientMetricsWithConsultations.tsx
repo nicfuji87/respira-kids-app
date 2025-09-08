@@ -24,6 +24,7 @@ import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { Checkbox } from '@/components/primitives/checkbox';
+import { useToast } from '@/components/primitives/use-toast';
 import {
   Select,
   SelectContent,
@@ -62,6 +63,7 @@ export const PatientMetricsWithConsultations =
   React.memo<PatientMetricsWithConsultationsProps>(
     ({ patientId, onConsultationClick, className }) => {
       const { user } = useAuth();
+      const { toast } = useToast();
       const [metrics, setMetrics] = useState<PatientMetricsData | null>(null);
       const [consultations, setConsultations] = useState<RecentConsultation[]>(
         []
@@ -122,16 +124,41 @@ export const PatientMetricsWithConsultations =
           patientData: patientData,
         });
 
+        // Buscar dados completos dos tipos de serviço para obter as descrições
+        const serviceIds = selectedConsultationData
+          .map(
+            (consultation) =>
+              (
+                consultation as RecentConsultation & {
+                  tipo_servico_id?: string;
+                }
+              ).tipo_servico_id
+          )
+          .filter((id) => id);
+
+        let serviceDescriptions: Record<string, string> = {};
+
+        if (serviceIds.length > 0) {
+          const { data: serviceData, error: serviceError } = await supabase
+            .from('tipo_servicos')
+            .select('id, nome, descricao')
+            .in('id', serviceIds);
+
+          if (!serviceError && serviceData) {
+            serviceDescriptions = serviceData.reduce(
+              (acc, service) => {
+                acc[service.nome] = service.descricao || service.nome;
+                return acc;
+              },
+              {} as Record<string, string>
+            );
+          }
+        }
+
         // Agrupar consultas por tipo de serviço
         const serviceGroups = selectedConsultationData.reduce(
           (groups: Record<string, RecentConsultation[]>, consultation) => {
-            const extendedConsultation = consultation as RecentConsultation & {
-              tipo_servico_nome?: string;
-            };
-            const serviceType =
-              extendedConsultation.tipo_servico_nome ||
-              consultation.servico_nome ||
-              'Atendimento';
+            const serviceType = consultation.servico_nome || 'Atendimento';
             if (!groups[serviceType]) {
               groups[serviceType] = [];
             }
@@ -143,17 +170,27 @@ export const PatientMetricsWithConsultations =
 
         console.log('📋 Grupos de serviços:', serviceGroups);
 
-        // Construir descrição dos serviços
-        const serviceDescriptions = Object.entries(serviceGroups).map(
+        // Construir descrição dos serviços com descrição completa
+        const serviceDescriptionTexts = Object.entries(serviceGroups).map(
           ([serviceType, consultations]) => {
             const count = consultations.length;
+            const serviceDescription =
+              serviceDescriptions[serviceType] || serviceType.toLowerCase();
+
+            // AI dev note: Evitar duplicação "Sessão de" se a descrição já contém
+            const finalDescription = serviceDescription
+              .toLowerCase()
+              .startsWith('sessão de')
+              ? serviceDescription
+              : serviceDescription;
+
             return count === 1
-              ? `1 sessão de ${serviceType.toLowerCase()}`
-              : `${count} sessões de ${serviceType.toLowerCase()}`;
+              ? `1 ${finalDescription}`
+              : `${count} ${finalDescription}`;
           }
         );
 
-        const servicesText = serviceDescriptions.join(', ');
+        const servicesText = serviceDescriptionTexts.join('. ');
 
         // Buscar dados completos do profissional da primeira consulta
         const firstConsultation = selectedConsultationData[0];
@@ -166,6 +203,7 @@ export const PatientMetricsWithConsultations =
 
         let profissionalCpf = '';
         let profissionalRegistro = '';
+        let profissionalTipo = 'fisioterapeuta'; // Default para respira kids
 
         // Buscar CPF e registro do profissional no banco
         if (extendedFirstConsultation.profissional_id) {
@@ -178,7 +216,7 @@ export const PatientMetricsWithConsultations =
             const { data: profissionalData, error: profissionalError } =
               await supabase
                 .from('pessoas')
-                .select('cpf_cnpj, registro_profissional')
+                .select('cpf_cnpj, registro_profissional, especialidade')
                 .eq('id', extendedFirstConsultation.profissional_id)
                 .single();
 
@@ -186,9 +224,18 @@ export const PatientMetricsWithConsultations =
               profissionalCpf = profissionalData.cpf_cnpj || '';
               profissionalRegistro =
                 profissionalData.registro_profissional || '';
+              // Determinar tipo profissional baseado na especialidade ou manter default
+              if (
+                profissionalData.especialidade
+                  ?.toLowerCase()
+                  .includes('fisioterapeuta')
+              ) {
+                profissionalTipo = 'fisioterapeuta';
+              }
               console.log('✅ Dados do profissional encontrados:', {
                 profissionalCpf,
                 profissionalRegistro,
+                profissionalTipo,
               });
             } else {
               console.warn(
@@ -209,27 +256,39 @@ export const PatientMetricsWithConsultations =
           profissionalNome,
           profissionalCpf,
           profissionalRegistro,
+          profissionalTipo,
         });
         console.log('👤 Dados do paciente:', { pacienteNome, pacienteCpf });
 
-        // Construir lista de datas e valores
-        const datesAndValues = selectedConsultationData
-          .map((consultation) => {
-            const date = new Date(consultation.data_hora).toLocaleDateString(
-              'pt-BR'
-            );
+        // Construir lista de datas e valores formatadas adequadamente
+        const datesAndValuesArray = selectedConsultationData.map(
+          (consultation) => {
+            const date = new Date(consultation.data_hora);
+            const formattedDate = date.toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            });
             const valueNumber = Number(consultation.valor_servico || 0);
             const formattedValue = valueNumber.toFixed(2).replace('.', ',');
             const value = `R$ ${formattedValue}`;
-            return `${date} (${value})`;
-          })
-          .join(', ');
+            return `${formattedDate} (${value})`;
+          }
+        );
 
-        // Template conforme especificado
+        // AI dev note: Unir datas com vírgula e substituir a última por " e " sem afetar valores monetários
+        const datesAndValues =
+          datesAndValuesArray.length > 1
+            ? datesAndValuesArray.slice(0, -1).join(', ') +
+              ' e ' +
+              datesAndValuesArray[datesAndValuesArray.length - 1]
+            : datesAndValuesArray[0] || '';
+
+        // Template conforme especificado no formato exato
         const registroText = profissionalRegistro
           ? ` ${profissionalRegistro}`
           : '';
-        const description = `${servicesText}. Atendimento realizado ao paciente ${pacienteNome} CPF ${pacienteCpf}, pela ${profissionalNome} CPF ${profissionalCpf}${registroText}. Nos dias ${datesAndValues}`;
+        const description = `${servicesText}. Atendimento realizado ao paciente ${pacienteNome} CPF ${pacienteCpf}, pela ${profissionalTipo} ${profissionalNome} CPF ${profissionalCpf}${registroText}. Nos dias ${datesAndValues}`;
 
         console.log('📝 Descrição gerada:', description);
         return description;
@@ -278,6 +337,34 @@ export const PatientMetricsWithConsultations =
           if (totalValue <= 0) {
             throw new Error('Valor total deve ser maior que zero');
           }
+
+          // AI dev note: Validar se todas as consultas são da mesma empresa de faturamento
+          const empresasUnicas = new Set(
+            selectedConsultationData
+              .map(
+                (c) =>
+                  (c as RecentConsultation & { empresa_fatura_id?: string })
+                    .empresa_fatura_id
+              )
+              .filter((id) => id)
+          );
+
+          if (empresasUnicas.size > 1) {
+            throw new Error(
+              'Todas as consultas selecionadas devem ser da mesma empresa de faturamento. Por favor, selecione consultas de apenas uma empresa.'
+            );
+          }
+
+          if (empresasUnicas.size === 0) {
+            throw new Error(
+              'As consultas selecionadas devem ter uma empresa de faturamento definida.'
+            );
+          }
+
+          console.log('✅ Validação de empresa de faturamento passou:', {
+            empresaId: Array.from(empresasUnicas)[0],
+            totalConsultas: selectedConsultationData.length,
+          });
 
           // Buscar dados completos do paciente com responsável de cobrança
           console.log('👤 Buscando dados do paciente:', patientId);
@@ -334,10 +421,10 @@ export const PatientMetricsWithConsultations =
             // Recarregar dados das consultas para atualizar status
             // TODO: Implementar reload das consultas ou mostrar feedback de sucesso
             console.log('🎉 Exibindo sucesso ao usuário');
-            alert(
-              'Cobrança gerada com sucesso! ID do pagamento: ' +
-                result.asaasPaymentId
-            );
+            toast({
+              title: 'Cobrança criada com sucesso!',
+              description: `ID do pagamento: ${result.asaasPaymentId}`,
+            });
           } else {
             console.error('❌ Falha no processamento:', result.error);
             throw new Error(
@@ -433,7 +520,9 @@ export const PatientMetricsWithConsultations =
               id,
               data_hora,
               valor_servico,
+              tipo_servico_id,
               tipo_servico_nome,
+              tipo_servico_descricao,
               local_atendimento_nome,
               status_consulta_descricao,
               status_consulta_cor,
@@ -592,28 +681,41 @@ export const PatientMetricsWithConsultations =
 
             // Mapear dados das consultas
             const mappedConsultations: RecentConsultation[] =
-              consultationsData.map((item) => ({
-                id: item.id,
-                data_hora: item.data_hora,
-                servico_nome:
-                  item.tipo_servico_nome || 'Serviço não especificado',
-                local_nome:
-                  item.local_atendimento_nome || 'Local não especificado',
-                valor_servico: parseFloat(item.valor_servico || '0'),
-                status_consulta:
-                  item.status_consulta_descricao || 'Status não definido',
-                status_pagamento:
-                  item.status_pagamento_descricao || 'Status não definido',
-                status_cor_consulta: item.status_consulta_cor || '#gray',
-                status_cor_pagamento: item.status_pagamento_cor || '#gray',
-                profissional_nome:
-                  item.profissional_nome || 'Profissional não especificado',
-                possui_evolucao: item.possui_evolucao || 'não',
-                empresa_fatura_nome:
-                  item.empresa_fatura_razao_social ||
-                  item.empresa_fatura_nome_fantasia ||
-                  'Empresa não especificada',
-              }));
+              consultationsData.map(
+                (item) =>
+                  ({
+                    id: item.id,
+                    data_hora: item.data_hora,
+                    servico_nome:
+                      item.tipo_servico_nome || 'Serviço não especificado',
+                    local_nome:
+                      item.local_atendimento_nome || 'Local não especificado',
+                    valor_servico: parseFloat(item.valor_servico || '0'),
+                    status_consulta:
+                      item.status_consulta_descricao || 'Status não definido',
+                    status_pagamento:
+                      item.status_pagamento_descricao || 'Status não definido',
+                    status_cor_consulta: item.status_consulta_cor || '#gray',
+                    status_cor_pagamento: item.status_pagamento_cor || '#gray',
+                    profissional_nome:
+                      item.profissional_nome || 'Profissional não especificado',
+                    possui_evolucao: item.possui_evolucao || 'não',
+                    empresa_fatura_nome:
+                      item.empresa_fatura_razao_social ||
+                      item.empresa_fatura_nome_fantasia ||
+                      'Empresa não especificada',
+                    // Campos adicionais para geração de cobrança
+                    tipo_servico_id: item.tipo_servico_id,
+                    tipo_servico_descricao: item.tipo_servico_descricao,
+                    profissional_id: item.profissional_id,
+                    empresa_fatura_id: item.empresa_fatura_id,
+                  }) as RecentConsultation & {
+                    tipo_servico_id?: string;
+                    tipo_servico_descricao?: string;
+                    profissional_id?: string;
+                    empresa_fatura_id?: string;
+                  }
+              );
 
             setMetrics(calculatedMetrics);
             setConsultations(mappedConsultations);

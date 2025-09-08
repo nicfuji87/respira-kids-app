@@ -10,96 +10,60 @@ import type {
   ProcessPaymentData,
 } from '@/types/asaas';
 
-// AI dev note: Determina qual API key usar - individual da empresa ou global
-export async function determineApiKey(
-  userRole: string | null
+// AI dev note: Determina API key baseada na empresa de faturamento dos agendamentos
+export async function determineApiKeyFromEmpresa(
+  empresaId: string
 ): Promise<AsaasApiConfig | null> {
   try {
-    // Primeiro tenta buscar API individual se usuário for admin/secretaria
-    if (userRole === 'admin' || userRole === 'secretaria') {
-      console.log('🔍 Buscando API key individual para usuário:', userRole);
+    console.log('🔍 Buscando API key da empresa de faturamento:', empresaId);
 
-      // Busca API key da empresa associada ao usuário
-      const { data: currentUser } = await supabase.auth.getUser();
-
-      if (currentUser.user?.id) {
-        const { data: userWithCompany, error: userError } = await supabase
-          .from('pessoas')
-          .select(
-            `
-            id_empresa,
-            pessoa_empresas(
-              api_token_externo
-            )
-          `
-          )
-          .eq('auth_user_id', currentUser.user.id)
-          .not('id_empresa', 'is', null)
-          .single();
-
-        console.log('📊 Resultado da busca de empresa:', {
-          userWithCompany,
-          userError,
-        });
-
-        const empresaData = Array.isArray(userWithCompany?.pessoa_empresas)
-          ? userWithCompany.pessoa_empresas[0]
-          : userWithCompany?.pessoa_empresas;
-
-        if (!userError && empresaData?.api_token_externo) {
-          console.log('✅ API key individual encontrada');
-          return {
-            apiKey: empresaData.api_token_externo,
-            isGlobal: false,
-            baseUrl: 'https://api.asaas.com/v3',
-          };
-        } else {
-          console.log(
-            'ℹ️ API key individual não encontrada:',
-            userError?.message
-          );
-        }
-      }
-    }
-
-    // Se não encontrou API individual, busca API global
-    const { data: globalApiKey, error: globalError } = await supabase
-      .from('api_keys')
-      .select('encrypted_key')
-      .eq('service_name', 'asaas')
-      .eq('is_active', true)
+    // Busca API key da empresa de faturamento
+    const { data: empresaData, error: empresaError } = await supabase
+      .from('pessoa_empresas')
+      .select('api_token_externo, razao_social')
+      .eq('id', empresaId)
+      .eq('ativo', true)
       .single();
 
-    if (globalError || !globalApiKey?.encrypted_key) {
-      console.error('Erro ao buscar API key global do Asaas:', globalError);
+    if (empresaError || !empresaData) {
+      console.error('❌ Erro ao buscar dados da empresa:', empresaError);
       return null;
     }
 
+    if (!empresaData.api_token_externo) {
+      console.error(
+        '❌ Empresa não possui API key configurada:',
+        empresaData.razao_social
+      );
+      return null;
+    }
+
+    console.log('✅ API key da empresa encontrada:', empresaData.razao_social);
     return {
-      apiKey: globalApiKey.encrypted_key,
-      isGlobal: true,
+      apiKey: empresaData.api_token_externo,
+      isGlobal: false,
       baseUrl: 'https://api.asaas.com/v3',
     };
   } catch (error) {
-    console.error('Erro ao determinar API key do Asaas:', error);
+    console.error('Erro ao determinar API key da empresa:', error);
     return null;
   }
+}
+
+// AI dev note: DEPRECATED - Mantido para compatibilidade, usar determineApiKeyFromEmpresa
+export async function determineApiKey(): Promise<AsaasApiConfig | null> {
+  console.warn(
+    '⚠️ determineApiKey está deprecada, use determineApiKeyFromEmpresa'
+  );
+  return null;
 }
 
 // AI dev note: Busca cliente existente no Asaas por CPF
 export async function searchExistingCustomer(
   cpfCnpj: string,
-  userRole: string | null
+  apiConfig: AsaasApiConfig
 ): Promise<AsaasIntegrationResult> {
   try {
-    const apiConfig = await determineApiKey(userRole);
-    if (!apiConfig) {
-      return {
-        success: false,
-        error: 'API key do Asaas não configurada',
-      };
-    }
-
     console.log('🔍 Buscando cliente existente por CPF/CNPJ:', cpfCnpj);
 
     // Chama Edge Function para buscar cliente
@@ -150,17 +114,9 @@ export async function searchExistingCustomer(
 // AI dev note: Cria cliente no Asaas se não existir
 export async function createCustomer(
   customerData: CreateCustomerRequest,
-  userRole: string | null
+  apiConfig: AsaasApiConfig
 ): Promise<AsaasIntegrationResult> {
   try {
-    const apiConfig = await determineApiKey(userRole);
-    if (!apiConfig) {
-      return {
-        success: false,
-        error: 'API key do Asaas não configurada',
-      };
-    }
-
     // Chama Edge Function para criar cliente
     const { data, error } = await supabase.functions.invoke(
       'asaas-create-customer',
@@ -207,17 +163,9 @@ export async function createCustomer(
 // AI dev note: Desabilita todas as notificações nativas do Asaas
 export async function disableNotifications(
   customerId: string,
-  userRole: string | null
+  apiConfig: AsaasApiConfig
 ): Promise<AsaasIntegrationResult> {
   try {
-    const apiConfig = await determineApiKey(userRole);
-    if (!apiConfig) {
-      return {
-        success: false,
-        error: 'API key do Asaas não configurada',
-      };
-    }
-
     // Chama Edge Function para desabilitar notificações
     const { data, error } = await supabase.functions.invoke(
       'asaas-disable-notifications',
@@ -256,17 +204,9 @@ export async function disableNotifications(
 // AI dev note: Cria cobrança PIX no Asaas
 export async function createPayment(
   paymentData: CreatePaymentRequest,
-  userRole: string | null
+  apiConfig: AsaasApiConfig
 ): Promise<AsaasIntegrationResult> {
   try {
-    const apiConfig = await determineApiKey(userRole);
-    if (!apiConfig) {
-      return {
-        success: false,
-        error: 'API key do Asaas não configurada',
-      };
-    }
-
     // Chama Edge Function para criar cobrança
     const { data, error } = await supabase.functions.invoke(
       'asaas-create-payment',
@@ -368,6 +308,52 @@ export async function processPayment(
   console.log('👨‍💼 Role do usuário:', userRole);
 
   try {
+    // 0. Buscar empresa_fatura dos agendamentos e obter API key
+    console.log(
+      '🏢 Buscando empresa de faturamento dos agendamentos:',
+      processData.consultationIds
+    );
+
+    const { data: agendamentosData, error: agendamentosError } = await supabase
+      .from('vw_cobranca_empresas')
+      .select('empresa_id, razao_social, api_token_externo')
+      .in('agendamento_id', processData.consultationIds)
+      .limit(1)
+      .single();
+
+    if (agendamentosError || !agendamentosData) {
+      console.error(
+        '❌ Erro ao buscar dados da empresa de faturamento:',
+        agendamentosError
+      );
+      return {
+        success: false,
+        error: 'Erro ao buscar dados da empresa de faturamento',
+      };
+    }
+
+    const apiConfig = {
+      apiKey: agendamentosData.api_token_externo,
+      isGlobal: false,
+      baseUrl: 'https://api.asaas.com/v3',
+    };
+
+    if (!apiConfig.apiKey) {
+      console.error(
+        '❌ Empresa não possui API key configurada:',
+        agendamentosData.razao_social
+      );
+      return {
+        success: false,
+        error: `Empresa ${agendamentosData.razao_social} não possui API key do Asaas configurada`,
+      };
+    }
+
+    console.log(
+      '✅ API key da empresa encontrada:',
+      agendamentosData.razao_social
+    );
+
     // 1. Busca dados do responsável pela cobrança
     console.log('🔍 Buscando dados do responsável:', processData.responsibleId);
 
@@ -414,7 +400,7 @@ export async function processPayment(
       // Primeiro, busca cliente existente por CPF
       const searchResult = await searchExistingCustomer(
         responsible.cpf_cnpj,
-        userRole
+        apiConfig
       );
 
       if (searchResult.success && searchResult.asaasCustomerId) {
@@ -458,7 +444,7 @@ export async function processPayment(
 
         console.log('📝 Dados para criação do cliente:', customerData);
 
-        const customerResult = await createCustomer(customerData, userRole);
+        const customerResult = await createCustomer(customerData, apiConfig);
         if (!customerResult.success) {
           console.error(
             '❌ Falha ao criar cliente no Asaas:',
@@ -489,7 +475,7 @@ export async function processPayment(
       console.log('🔕 Desabilitando notificações nativas do Asaas...');
       const notificationResult = await disableNotifications(
         asaasCustomerId,
-        userRole
+        apiConfig
       );
       if (!notificationResult.success) {
         console.warn(
@@ -519,7 +505,7 @@ export async function processPayment(
 
     console.log('💳 Criando cobrança no Asaas:', paymentData);
 
-    const paymentResult = await createPayment(paymentData, userRole);
+    const paymentResult = await createPayment(paymentData, apiConfig);
     if (!paymentResult.success) {
       console.error('❌ Falha ao criar cobrança:', paymentResult.error);
       return paymentResult;
