@@ -37,7 +37,7 @@ export interface AsaasPayment {
   externalReference?: string; // referência externa (ex: lista de IDs dos agendamentos)
   postalService?: boolean;
   split?: AsaasPaymentSplit[];
-  
+
   // Campos retornados pelo Asaas
   object?: string;
   dateCreated?: string;
@@ -51,20 +51,20 @@ export interface AsaasPayment {
   interest?: AsaasInterest;
 }
 
-export type AsaasPaymentStatus = 
-  | 'PENDING' 
-  | 'RECEIVED' 
-  | 'CONFIRMED' 
-  | 'OVERDUE' 
-  | 'REFUNDED' 
-  | 'RECEIVED_IN_CASH' 
-  | 'REFUND_REQUESTED' 
-  | 'REFUND_IN_PROGRESS' 
-  | 'CHARGEBACK_REQUESTED' 
-  | 'CHARGEBACK_DISPUTE' 
-  | 'AWAITING_CHARGEBACK_REVERSAL' 
-  | 'DUNNING_REQUESTED' 
-  | 'DUNNING_RECEIVED' 
+export type AsaasPaymentStatus =
+  | 'PENDING'
+  | 'RECEIVED'
+  | 'CONFIRMED'
+  | 'OVERDUE'
+  | 'REFUNDED'
+  | 'RECEIVED_IN_CASH'
+  | 'REFUND_REQUESTED'
+  | 'REFUND_IN_PROGRESS'
+  | 'CHARGEBACK_REQUESTED'
+  | 'CHARGEBACK_DISPUTE'
+  | 'AWAITING_CHARGEBACK_REVERSAL'
+  | 'DUNNING_REQUESTED'
+  | 'DUNNING_RECEIVED'
   | 'AWAITING_RISK_ANALYSIS';
 
 export interface AsaasPixTransaction {
@@ -153,6 +153,44 @@ export interface CreatePaymentRequest {
   externalReference?: string;
 }
 
+export interface UpdatePaymentRequest {
+  billingType: 'PIX';
+  value: number;
+  dueDate: string; // formato YYYY-MM-DD
+  description?: string;
+  externalReference?: string;
+}
+
+export interface CancelPaymentRequest {
+  paymentId: string;
+}
+
+export interface ScheduleInvoiceRequest {
+  payment: string; // ID da cobrança no Asaas
+  serviceDescription: string;
+  observations: string;
+  value: number;
+  deductions: number;
+  effectiveDate: string; // formato YYYY-MM-DD
+  municipalServiceCode: string;
+  municipalServiceName: string;
+  externalReference?: string;
+  updatePayment?: boolean;
+  taxes: {
+    retainIss: boolean;
+    iss?: number;
+    cofins?: number;
+    csll?: number;
+    inss?: number;
+    ir?: number;
+    pis?: number;
+  };
+}
+
+export interface AuthorizeInvoiceRequest {
+  invoiceId: string;
+}
+
 export interface UpdateNotificationsRequest {
   customer: string;
   notifications: Record<string, boolean>;
@@ -178,7 +216,7 @@ export interface GetNotificationsResponse {
 }
 
 // Tipos para errors específicos
-export type AsaasErrorType = 
+export type AsaasErrorType =
   | 'invalid_action'
   | 'invalid_customer'
   | 'invalid_value'
@@ -203,4 +241,4 @@ export interface AsaasIntegrationResult {
   error?: string;
   asaasCustomerId?: string;
   asaasPaymentId?: string;
-} 
+}

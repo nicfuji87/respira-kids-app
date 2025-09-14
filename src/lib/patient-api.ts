@@ -413,17 +413,31 @@ export async function fetchPatientCompiledHistory(patientId: string): Promise<{
     const agendamentoIds = agendamentos.map((a) => a.id);
 
     // Segundo, buscar relatório compilado usando os IDs dos agendamentos
-    const { data, error } = await supabase
-      .from('relatorio_evolucao')
-      .select('conteudo, created_at')
-      .eq('tipo_relatorio_id', tipoData.id)
-      .in('id_agendamento', agendamentoIds)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // AI dev note: Fallback robusto para tratar erro 406 de RLS complexa
+    let data, error;
+
+    try {
+      const result = await supabase
+        .from('relatorio_evolucao')
+        .select('conteudo, created_at')
+        .eq('tipo_relatorio_id', tipoData.id)
+        .in('id_agendamento', agendamentoIds)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(); // Use maybeSingle para evitar erro quando vazio
+
+      data = result.data;
+      error = result.error;
+    } catch (fetchError) {
+      console.warn(
+        '⚠️ Erro ao buscar histórico compilado (não crítico):',
+        fetchError
+      );
+      return { history: null, lastGenerated: null };
+    }
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Erro ao buscar histórico compilado:', error);
+      console.warn('⚠️ Erro não crítico ao buscar histórico compilado:', error);
       return { history: null, lastGenerated: null };
     }
 
@@ -480,17 +494,31 @@ export async function fetchPatientHistory(patientId: string): Promise<{
     const agendamentoIds = agendamentos.map((a) => a.id);
 
     // Segundo, buscar histórico usando os IDs dos agendamentos
-    const { data, error } = await supabase
-      .from('relatorio_evolucao')
-      .select('conteudo, created_at, transcricao')
-      .eq('tipo_relatorio_id', tipoData.id)
-      .in('id_agendamento', agendamentoIds)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // AI dev note: Fallback robusto para tratar erro 406 de RLS complexa
+    let data, error;
+
+    try {
+      const result = await supabase
+        .from('relatorio_evolucao')
+        .select('conteudo, created_at, transcricao')
+        .eq('tipo_relatorio_id', tipoData.id)
+        .in('id_agendamento', agendamentoIds)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(); // Use maybeSingle para evitar erro quando vazio
+
+      data = result.data;
+      error = result.error;
+    } catch (fetchError) {
+      console.warn('⚠️ Erro ao buscar histórico (não crítico):', fetchError);
+      return { history: null, lastGenerated: null, isAiGenerated: null };
+    }
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Erro ao buscar histórico do paciente:', error);
+      console.warn(
+        '⚠️ Erro não crítico ao buscar histórico do paciente:',
+        error
+      );
       return { history: null, lastGenerated: null, isAiGenerated: null };
     }
 
@@ -562,14 +590,33 @@ export async function savePatientHistory(
     const agendamentoIds = agendamentos.map((a) => a.id);
 
     // Buscar histórico existente de forma simplificada
-    const { data: existingHistory } = await supabase
-      .from('relatorio_evolucao')
-      .select('id, id_agendamento')
-      .eq('tipo_relatorio_id', tipoData.id)
-      .in('id_agendamento', agendamentoIds)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(); // Usar maybeSingle ao invés de single para evitar erro se não existe
+    // AI dev note: Fallback robusto para tratar erro 406 de RLS complexa
+    let existingHistory = null;
+
+    try {
+      const result = await supabase
+        .from('relatorio_evolucao')
+        .select('id, id_agendamento')
+        .eq('tipo_relatorio_id', tipoData.id)
+        .in('id_agendamento', agendamentoIds)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(); // Usar maybeSingle ao invés de single para evitar erro se não existe
+
+      existingHistory = result.data;
+
+      if (result.error) {
+        console.warn(
+          '⚠️ Erro não crítico ao buscar histórico existente:',
+          result.error
+        );
+      }
+    } catch (fetchError) {
+      console.warn(
+        '⚠️ Erro ao buscar histórico existente (não crítico):',
+        fetchError
+      );
+    }
 
     if (existingHistory) {
       // SEMPRE atualizar o histórico existente

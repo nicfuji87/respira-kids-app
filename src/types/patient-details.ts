@@ -71,6 +71,7 @@ export interface PatientMetrics {
   consultas_agendadas?: number;
   consultas_canceladas?: number;
   valor_pago?: number;
+  valor_cancelado?: number; // Valor das consultas canceladas
 }
 
 // Interface para consultas recentes
@@ -87,6 +88,8 @@ export interface RecentConsultation {
   profissional_nome?: string;
   possui_evolucao?: string;
   empresa_fatura_nome?: string; // Empresa responsável pelo faturamento
+  id_pagamento_externo?: string; // ID da cobrança no ASAAS (compatibilidade)
+  fatura_id?: string; // Nova referência estruturada à tabela faturas
   selectable?: boolean; // Para modo de seleção de cobrança
 }
 

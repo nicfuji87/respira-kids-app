@@ -2,10 +2,23 @@
 // Funções principais: determineApiKey, createCustomer, disableNotifications, createPayment
 
 import { supabase } from '@/lib/supabase';
+import { criarFatura } from '@/lib/faturas-api';
+
+// AI dev note: Gera ID único para externalReference do ASAAS (limite 100 chars)
+// Formato: RK-YYYYMMDD-NNN (max 17 chars) - resolve problema de múltiplas consultas
+const generateUniquePaymentRef = (): string => {
+  const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const random = Math.floor(Math.random() * 999)
+    .toString()
+    .padStart(3, '0');
+  return `RK-${today}-${random}`;
+};
 import type {
   AsaasApiConfig,
   CreateCustomerRequest,
   CreatePaymentRequest,
+  UpdatePaymentRequest,
+  ScheduleInvoiceRequest,
   AsaasIntegrationResult,
   ProcessPaymentData,
 } from '@/types/asaas';
@@ -250,6 +263,105 @@ export async function createPayment(
   }
 }
 
+// AI dev note: Atualiza cobrança PIX no Asaas
+export async function updateAsaasPayment(
+  paymentId: string,
+  paymentData: UpdatePaymentRequest,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult> {
+  try {
+    // Chama Edge Function para atualizar cobrança
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-update-payment',
+      {
+        body: {
+          apiConfig,
+          paymentId,
+          paymentData,
+        },
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao chamar Edge Function asaas-update-payment:',
+        error
+      );
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de atualização',
+      };
+    }
+
+    if (!data.success) {
+      return {
+        success: false,
+        error: data.error || 'Erro desconhecido ao atualizar cobrança',
+      };
+    }
+
+    return {
+      success: true,
+      data: data.payment,
+      asaasPaymentId: data.payment.id,
+    };
+  } catch (error) {
+    console.error('Erro ao atualizar cobrança no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao atualizar cobrança',
+    };
+  }
+}
+
+// AI dev note: Cancela cobrança no Asaas
+export async function cancelAsaasPayment(
+  paymentId: string,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult> {
+  try {
+    // Chama Edge Function para cancelar cobrança
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-cancel-payment',
+      {
+        body: {
+          apiConfig,
+          paymentId,
+        },
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao chamar Edge Function asaas-cancel-payment:',
+        error
+      );
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de cancelamento',
+      };
+    }
+
+    if (!data.success) {
+      return {
+        success: false,
+        error: data.error || 'Erro desconhecido ao cancelar cobrança',
+      };
+    }
+
+    return {
+      success: true,
+      data: data.message,
+    };
+  } catch (error) {
+    console.error('Erro ao cancelar cobrança no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao cancelar cobrança',
+    };
+  }
+}
+
 // AI dev note: Atualiza id_asaas da pessoa no banco de dados
 export async function updatePersonAsaasId(
   personId: string,
@@ -302,12 +414,32 @@ export async function updateAppointmentsPaymentId(
 // AI dev note: Função principal que processa cobrança completa
 export async function processPayment(
   processData: ProcessPaymentData,
-  userRole: string | null
+  userId: string
 ): Promise<AsaasIntegrationResult> {
   console.log('🔧 Iniciando processamento de pagamento:', processData);
-  console.log('👨‍💼 Role do usuário:', userRole);
+  console.log('👤 ID do usuário:', userId);
 
   try {
+    // Validar se usuário tem permissão (apenas admin pode gerar faturas)
+    if (userId !== 'system') {
+      const { data: userData, error: userError } = await supabase
+        .from('pessoas')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userData || userData.role !== 'admin') {
+        console.error(
+          '❌ Usuário sem permissão para gerar faturas:',
+          userData?.role
+        );
+        return {
+          success: false,
+          error: 'Apenas administradores podem gerar faturas',
+        };
+      }
+      console.log('✅ Usuário autorizado:', userData.role);
+    }
     // 0. Buscar empresa_fatura dos agendamentos e obter API key
     console.log(
       '🏢 Buscando empresa de faturamento dos agendamentos:',
@@ -500,7 +632,7 @@ export async function processPayment(
       value: processData.totalValue,
       dueDate: dueDateString,
       description: processData.description,
-      externalReference: processData.consultationIds.join(','),
+      externalReference: generateUniquePaymentRef(),
     };
 
     console.log('💳 Criando cobrança no Asaas:', paymentData);
@@ -530,6 +662,32 @@ export async function processPayment(
 
     console.log('✅ Agendamentos vinculados à cobrança com sucesso');
 
+    // 7. Criar registro estruturado da fatura
+    console.log('📋 Criando registro da fatura no sistema...');
+    const faturaResult = await criarFatura(
+      {
+        id_asaas: paymentResult.asaasPaymentId!,
+        valor_total: processData.totalValue,
+        descricao: processData.description,
+        empresa_id: agendamentosData.empresa_id,
+        responsavel_cobranca_id: processData.responsibleId,
+        vencimento: dueDateString,
+        dados_asaas: paymentResult.data as Record<string, unknown>,
+        agendamento_ids: processData.consultationIds,
+      },
+      userId
+    ); // Usar UUID da pessoa (já validado como admin)
+
+    if (!faturaResult.success) {
+      console.warn(
+        '⚠️ Cobrança criada no ASAAS mas erro ao registrar fatura:',
+        faturaResult.error
+      );
+      // Não falha a operação principal, mas registra o aviso
+    } else {
+      console.log('✅ Fatura registrada no sistema:', faturaResult.data?.id);
+    }
+
     const finalResult = {
       success: true,
       data: paymentResult.data,
@@ -544,6 +702,106 @@ export async function processPayment(
     return {
       success: false,
       error: 'Erro inesperado ao processar cobrança',
+    };
+  }
+}
+
+// AI dev note: Agenda nota fiscal no Asaas
+export async function scheduleAsaasInvoice(
+  paymentId: string,
+  invoiceData: Omit<ScheduleInvoiceRequest, 'payment'>,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult> {
+  try {
+    // Chama Edge Function para agendar nota fiscal
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-schedule-invoice',
+      {
+        body: {
+          apiConfig,
+          invoiceData: {
+            ...invoiceData,
+            payment: paymentId,
+          },
+        },
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao chamar Edge Function asaas-schedule-invoice:',
+        error
+      );
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de agendamento de NFe',
+      };
+    }
+
+    if (!data.success) {
+      return {
+        success: false,
+        error: data.error || 'Erro desconhecido ao agendar nota fiscal',
+      };
+    }
+
+    return {
+      success: true,
+      data: data.invoice,
+    };
+  } catch (error) {
+    console.error('Erro ao agendar nota fiscal no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao agendar nota fiscal',
+    };
+  }
+}
+
+// AI dev note: Emite/autoriza nota fiscal no Asaas
+export async function authorizeAsaasInvoice(
+  invoiceId: string,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult> {
+  try {
+    // Chama Edge Function para autorizar nota fiscal
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-authorize-invoice',
+      {
+        body: {
+          apiConfig,
+          invoiceId,
+        },
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao chamar Edge Function asaas-authorize-invoice:',
+        error
+      );
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de emissão de NFe',
+      };
+    }
+
+    if (!data.success) {
+      return {
+        success: false,
+        error: data.error || 'Erro desconhecido ao emitir nota fiscal',
+      };
+    }
+
+    return {
+      success: true,
+      data: data.invoice,
+    };
+  } catch (error) {
+    console.error('Erro ao emitir nota fiscal no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao emitir nota fiscal',
     };
   }
 }
