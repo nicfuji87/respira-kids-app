@@ -43,14 +43,6 @@ export const navigationConfig: NavigationConfig[] = [
     href: '/pacientes',
     roles: ['admin', 'secretaria'],
   },
-  // AI dev note: Rota para detalhes de pessoa (pacientes, responsáveis, profissionais)
-  // Admin e secretaria: acesso total; Profissional: acesso limitado (sem telefone/email)
-  {
-    icon: Users,
-    label: 'Detalhes de Pessoa',
-    href: '/pessoa',
-    roles: ['admin', 'profissional', 'secretaria'],
-  },
   {
     icon: Package,
     label: 'Estoque',
