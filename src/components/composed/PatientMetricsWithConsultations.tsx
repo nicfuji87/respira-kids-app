@@ -525,41 +525,44 @@ export const PatientMetricsWithConsultations =
       const selectedCount = selectedConsultations.length;
 
       // Função para calcular datas baseadas no período (compartilhada)
-      const getDateRange = (period: PeriodFilter) => {
-        const today = new Date();
-        const end = today.toISOString().split('T')[0];
+      const getDateRange = useCallback(
+        (period: PeriodFilter) => {
+          const today = new Date();
+          const end = today.toISOString().split('T')[0];
 
-        let start = '';
-        switch (period) {
-          case 'ultimos_30':
-            start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split('T')[0];
-            break;
-          case 'ultimos_60':
-            start = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split('T')[0];
-            break;
-          case 'ultimos_90':
-            start = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split('T')[0];
-            break;
-          case 'ultimo_ano':
-            start = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split('T')[0];
-            break;
-          case 'personalizado':
-            return { start: startDate, end: endDate };
-          case 'todos':
-          default:
-            return { start: '', end: '' };
-        }
+          let start = '';
+          switch (period) {
+            case 'ultimos_30':
+              start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split('T')[0];
+              break;
+            case 'ultimos_60':
+              start = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split('T')[0];
+              break;
+            case 'ultimos_90':
+              start = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split('T')[0];
+              break;
+            case 'ultimo_ano':
+              start = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split('T')[0];
+              break;
+            case 'personalizado':
+              return { start: startDate, end: endDate };
+            case 'todos':
+            default:
+              return { start: '', end: '' };
+          }
 
-        return { start, end };
-      };
+          return { start, end };
+        },
+        [startDate, endDate]
+      );
 
       // Função para carregar dados das consultas
       const loadData = useCallback(async () => {
@@ -891,14 +894,7 @@ export const PatientMetricsWithConsultations =
         } finally {
           setIsLoading(false);
         }
-      }, [
-        patientId,
-        periodFilter,
-        startDate,
-        endDate,
-        editingFatura,
-        getDateRange,
-      ]);
+      }, [patientId, periodFilter, editingFatura, getDateRange]);
 
       // useEffect para chamar loadData
       useEffect(() => {
@@ -938,7 +934,7 @@ export const PatientMetricsWithConsultations =
         } finally {
           setIsLoadingFaturas(false);
         }
-      }, [patientId, periodFilter, startDate, endDate, getDateRange]);
+      }, [patientId, periodFilter, getDateRange]);
 
       // useEffect para carregar faturas
       useEffect(() => {
