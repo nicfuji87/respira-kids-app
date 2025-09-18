@@ -15,6 +15,7 @@ export interface WeekEventBlockProps {
   className?: string;
   overlapIndex?: number; // Índice para eventos sobrepostos (0, 1, 2...)
   totalOverlapping?: number; // Total de eventos sobrepostos no mesmo horário
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const WeekEventBlock = React.memo<WeekEventBlockProps>(
@@ -27,6 +28,7 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
     className,
     overlapIndex = 0,
     totalOverlapping = 1,
+    userRole,
   }) => {
     const calculatePosition = () => {
       const eventStart = event.start;
@@ -108,6 +110,7 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
             event={event}
             variant="week"
             onClick={handleClick}
+            userRole={userRole}
             className="h-full w-full"
           />
         </div>

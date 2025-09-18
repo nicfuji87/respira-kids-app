@@ -26,6 +26,7 @@ export interface WeekTimeGridProps {
   startHour?: number;
   endHour?: number;
   className?: string;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
@@ -37,6 +38,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
     startHour = 6,
     endHour = 20,
     className,
+    userRole,
   }) => {
     // Estado para modal de eventos múltiplos
     const [modalState, setModalState] = useState<{
@@ -220,6 +222,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                             onClick={handleEventClick}
                             overlapIndex={overlapIndex}
                             totalOverlapping={totalOverlapping}
+                            userRole={userRole}
                           />
                         )
                       )}
