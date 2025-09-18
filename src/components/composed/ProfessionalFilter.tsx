@@ -46,6 +46,7 @@ export const ProfessionalFilter = React.memo<ProfessionalFilterProps>(
     const [loading, setLoading] = useState(false);
 
     // Buscar lista de profissionais ativos
+    // Inclui tanto role='profissional' quanto pessoas com pode_atender=true (ex: admins habilitados)
     useEffect(() => {
       const fetchProfessionals = async () => {
         setLoading(true);
@@ -53,7 +54,7 @@ export const ProfessionalFilter = React.memo<ProfessionalFilterProps>(
           const { data, error } = await supabase
             .from('pessoas')
             .select('id, nome, ativo')
-            .eq('role', 'profissional')
+            .or('role.eq.profissional,pode_atender.eq.true')
             .eq('is_approved', true)
             .eq('ativo', true)
             .order('nome');

@@ -12,6 +12,7 @@ export interface MonthViewProps {
   events: CalendarEvent[];
   onEventClick?: (event: CalendarEvent) => void;
   onDateClick?: (date: Date) => void;
+  onTimeSlotClick?: (time: string, date: Date) => void;
   onDateChange?: (date: Date) => void;
   className?: string;
 }
@@ -22,6 +23,7 @@ export const MonthView = React.memo<MonthViewProps>(
     events,
     onEventClick,
     onDateClick,
+    onTimeSlotClick,
     onDateChange,
     className,
   }) => {
@@ -29,10 +31,19 @@ export const MonthView = React.memo<MonthViewProps>(
       // Se clicar em data de outro mês, navegar para esse mês
       if (date.getMonth() !== currentDate.getMonth()) {
         onDateChange?.(date);
+        return;
       }
 
-      // Sempre chamar o callback de clique na data
-      onDateClick?.(date);
+      // AI dev note: No modo mês, quando clicamos em uma data vazia,
+      // chamamos onTimeSlotClick com horário padrão (9:00) para criar agendamento
+      if (onTimeSlotClick) {
+        // Definir horário padrão para agendamentos criados via clique no mês
+        const defaultTime = '09:00';
+        onTimeSlotClick(defaultTime, date);
+      } else {
+        // Fallback para onDateClick se onTimeSlotClick não estiver disponível
+        onDateClick?.(date);
+      }
     };
 
     const handleEventClick = (event: CalendarEvent) => {

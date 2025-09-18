@@ -64,16 +64,16 @@ export const CurrentTimeIndicator = React.memo<CurrentTimeIndicatorProps>(
         style={{ top: `${position}%` }}
       >
         {/* Linha vermelha */}
-        <div className="flex items-center">
-          {/* Círculo na lateral esquerda */}
-          <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0 shadow-sm" />
+        <div className="flex items-center w-full">
+          {/* Linha horizontal que ocupa toda a largura */}
+          <div className="w-full h-0.5 bg-red-500 shadow-sm relative">
+            {/* Círculo na lateral esquerda */}
+            <div className="absolute -left-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full shadow-sm" />
 
-          {/* Linha horizontal */}
-          <div className="flex-1 h-0.5 bg-red-500 shadow-sm" />
-
-          {/* Label com horário atual */}
-          <div className="ml-2 px-2 py-1 bg-red-500 text-white text-xs font-medium rounded shadow-sm">
-            {currentTimeLabel}
+            {/* Label com horário atual na lateral direita */}
+            <div className="absolute -right-16 top-1/2 transform -translate-y-1/2 px-2 py-1 bg-red-500 text-white text-xs font-medium rounded shadow-sm">
+              {currentTimeLabel}
+            </div>
           </div>
         </div>
       </div>

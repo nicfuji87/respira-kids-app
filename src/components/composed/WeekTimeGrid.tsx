@@ -122,7 +122,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
     return (
       <>
         {/* Grid semanal simples que expande naturalmente */}
-        <div className={cn('w-full', className)}>
+        <div className={cn('w-full relative', className)}>
           {/* Header com dias da semana */}
           <div className="w-full grid grid-cols-8 border-b bg-muted/30">
             <div className="p-3 border-r bg-muted/50 text-center">
@@ -165,7 +165,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
           </div>
 
           {/* Grid de horários que se adapta ao container */}
-          <div className="w-full grid grid-cols-8">
+          <div className="w-full grid grid-cols-8 relative">
             {/* Coluna de horários */}
             <div className="border-r bg-muted/10">
               {timeSlots.map((time) => (
@@ -178,59 +178,64 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
               ))}
             </div>
 
-            {/* Colunas dos dias */}
-            {weekDays.map((day) => {
-              const dayKey = day.toISOString().split('T')[0];
-              const dayEvents = eventsGroupedByDay[dayKey] || [];
-              const eventsWithOverlap = getEventsWithOverlapData(dayEvents);
-              const isCurrentDay = isToday(day);
+            {/* Container para colunas dos dias com indicador */}
+            <div className="col-span-7 relative">
+              {/* Grid interno para os dias */}
+              <div className="grid grid-cols-7 h-full">
+                {weekDays.map((day) => {
+                  const dayKey = day.toISOString().split('T')[0];
+                  const dayEvents = eventsGroupedByDay[dayKey] || [];
+                  const eventsWithOverlap = getEventsWithOverlapData(dayEvents);
+                  const isCurrentDay = isToday(day);
 
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={cn(
-                    'border-r last:border-r-0 relative',
-                    isCurrentDay && 'bg-primary/5'
-                  )}
-                  style={{
-                    minHeight: `${timeSlots.length * 64}px`,
-                  }}
-                >
-                  {/* Slots de horário clicáveis */}
-                  {timeSlots.map((time) => (
+                  return (
                     <div
-                      key={time}
-                      className="h-16 border-b hover:bg-muted/20 cursor-pointer transition-colors"
-                      onClick={() => handleTimeSlotClick(time, day)}
-                    />
-                  ))}
+                      key={day.toISOString()}
+                      className={cn(
+                        'border-r last:border-r-0 relative',
+                        isCurrentDay && 'bg-primary/5'
+                      )}
+                      style={{
+                        minHeight: `${timeSlots.length * 64}px`,
+                      }}
+                    >
+                      {/* Slots de horário clicáveis */}
+                      {timeSlots.map((time) => (
+                        <div
+                          key={time}
+                          className="h-16 border-b hover:bg-muted/20 cursor-pointer transition-colors"
+                          onClick={() => handleTimeSlotClick(time, day)}
+                        />
+                      ))}
 
-                  {/* Eventos renderizados sobre os slots */}
-                  {eventsWithOverlap.map(
-                    ({ event, overlapIndex, totalOverlapping }) => (
-                      <WeekEventBlock
-                        key={event.id}
-                        event={event}
-                        startHour={startHour}
-                        endHour={endHour}
-                        hourHeight={64}
-                        onClick={handleEventClick}
-                        overlapIndex={overlapIndex}
-                        totalOverlapping={totalOverlapping}
-                      />
-                    )
-                  )}
-                </div>
-              );
-            })}
+                      {/* Eventos renderizados sobre os slots */}
+                      {eventsWithOverlap.map(
+                        ({ event, overlapIndex, totalOverlapping }) => (
+                          <WeekEventBlock
+                            key={event.id}
+                            event={event}
+                            startHour={startHour}
+                            endHour={endHour}
+                            hourHeight={64}
+                            onClick={handleEventClick}
+                            overlapIndex={overlapIndex}
+                            totalOverlapping={totalOverlapping}
+                          />
+                        )
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Indicador de tempo atual DENTRO do container dos dias */}
+              <CurrentTimeIndicator
+                startHour={startHour}
+                endHour={endHour}
+                className="absolute left-0 right-0"
+              />
+            </div>
           </div>
-
-          {/* Indicador de tempo atual */}
-          <CurrentTimeIndicator
-            startHour={startHour}
-            endHour={endHour}
-            className="ml-[12.5%]"
-          />
         </div>
 
         {/* Modal para eventos múltiplos */}

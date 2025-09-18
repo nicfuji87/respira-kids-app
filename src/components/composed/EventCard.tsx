@@ -34,7 +34,8 @@ export const EventCard = React.memo<EventCardProps>(
     showLocation = false,
     showAttendees = false,
   }) => {
-    const handleClick = () => {
+    const handleClick = (e?: React.MouseEvent) => {
+      e?.stopPropagation(); // AI dev note: Evitar propagação do evento para containers pais
       onClick?.(event);
     };
 
@@ -67,7 +68,7 @@ export const EventCard = React.memo<EventCardProps>(
             'hover:opacity-80 transition-opacity',
             className
           )}
-          onClick={handleClick}
+          onClick={(e) => handleClick(e)}
           title={event.title}
         >
           {showTime && !event.allDay && (
@@ -103,7 +104,7 @@ export const EventCard = React.memo<EventCardProps>(
             'flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity py-0.5 px-1',
             className
           )}
-          onClick={handleClick}
+          onClick={(e) => handleClick(e)}
           title={`${event.title} - ${event.metadata?.statusPagamento || 'Status não definido'}`}
         >
           {/* Bolinha do tipo de serviço (evento) */}
@@ -219,7 +220,7 @@ export const EventCard = React.memo<EventCardProps>(
             className
           )}
           style={{ backgroundColor: corEventoHex }}
-          onClick={handleClick}
+          onClick={(e) => handleClick(e)}
           title={tooltipContent}
         >
           {content}
@@ -264,7 +265,7 @@ export const EventCard = React.memo<EventCardProps>(
             'cursor-pointer border-l-4 hover:shadow-md transition-shadow p-4',
             className
           )}
-          onClick={handleClick}
+          onClick={(e) => handleClick(e)}
           style={{
             borderLeftColor: isValidHexColor(tipoServicoCor)
               ? tipoServicoCor
@@ -276,6 +277,20 @@ export const EventCard = React.memo<EventCardProps>(
             <div className="text-lg font-bold text-foreground leading-tight">
               {pacienteNome}
             </div>
+
+            {/* Linha 1.5: Nome do responsável legal */}
+            {(() => {
+              const responsavelLegalNome = event.metadata
+                ?.responsavelLegalNome as string;
+              if (responsavelLegalNome) {
+                return (
+                  <div className="text-sm text-muted-foreground italic">
+                    ({responsavelLegalNome})
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* Linha 2: Tipo de serviço (EMBAIXO) */}
             <div className="text-sm font-medium text-muted-foreground">
@@ -360,7 +375,7 @@ export const EventCard = React.memo<EventCardProps>(
             'cursor-pointer border-l-4 hover:shadow-md transition-shadow',
             className
           )}
-          onClick={handleClick}
+          onClick={(e) => handleClick(e)}
           style={{
             borderLeftColor: event.color
               ? `var(--${event.color}-500)`
@@ -415,7 +430,7 @@ export const EventCard = React.memo<EventCardProps>(
           getColorClasses(event.color),
           className
         )}
-        onClick={handleClick}
+        onClick={(e) => handleClick(e)}
       >
         <CardContent className="p-2">
           <div className="space-y-1">

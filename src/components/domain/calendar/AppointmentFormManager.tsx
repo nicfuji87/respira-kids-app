@@ -44,6 +44,7 @@ import type {
   SupabaseTipoServico,
   CalendarFilters,
 } from '@/types/supabase-calendar';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
 
@@ -140,7 +141,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setIsLoadingEmpresas(true);
         try {
           // Buscar empresas ativas usando Supabase
-          const { supabase } = await import('@/lib/supabase');
           const { data: empresas, error } = await supabase
             .from('pessoa_empresas')
             .select('id, razao_social, nome_fantasia')

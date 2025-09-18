@@ -47,6 +47,7 @@ import type {
   SupabaseTipoServico,
   SupabaseRelatorioEvolucaoCompleto,
 } from '@/types/supabase-calendar';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
 // AI dev note: AppointmentDetailsManager é um DOMAIN que combina COMPOSED específicos
@@ -186,7 +187,6 @@ export const AppointmentDetailsManager =
           }
 
           try {
-            const { supabase } = await import('@/lib/supabase');
             const { data: fatura, error } = await supabase
               .from('faturas')
               .select('link_nfe, id_asaas')
@@ -214,12 +214,7 @@ export const AppointmentDetailsManager =
         };
 
         loadFaturaData();
-      }, [
-        appointment &&
-          (appointment as typeof appointment & { fatura_id?: string })
-            .fatura_id,
-        isOpen,
-      ]);
+      }, [appointment, isOpen]);
 
       // Carregar opções de status de consulta
       useEffect(() => {
@@ -265,7 +260,6 @@ export const AppointmentDetailsManager =
           setIsLoadingEmpresas(true);
           try {
             // Buscar empresas ativas usando Supabase
-            const { supabase } = await import('@/lib/supabase');
             const { data: empresas, error } = await supabase
               .from('pessoa_empresas')
               .select('id, razao_social, nome_fantasia')
@@ -586,7 +580,7 @@ export const AppointmentDetailsManager =
                             e.preventDefault();
                             e.stopPropagation();
                             if (appointment.responsavel_legal_id) {
-                              onProfessionalClick?.(
+                              onPatientClick?.(
                                 appointment.responsavel_legal_id
                               );
                             }

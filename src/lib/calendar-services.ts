@@ -655,11 +655,12 @@ export const fetchLocaisAtendimento = async (): Promise<
 };
 
 // AI dev note: Busca profissionais ativos para seleção
+// Inclui tanto role='profissional' quanto pessoas com pode_atender=true (ex: admins habilitados)
 export const fetchProfissionais = async (): Promise<SupabasePessoa[]> => {
   const { data, error } = await supabase
     .from('pessoas')
     .select('*')
-    .eq('role', 'profissional')
+    .or('role.eq.profissional,pode_atender.eq.true')
     .eq('ativo', true)
     .eq('is_approved', true)
     .order('nome');
@@ -681,10 +682,11 @@ export const fetchProfissionaisForUser = async (
   switch (userRole) {
     case 'admin': {
       // Admin vê todos os profissionais aprovados e com perfil completo
+      // Inclui tanto role='profissional' quanto pessoas com pode_atender=true
       const { data, error } = await supabase
         .from('pessoas')
         .select('*')
-        .eq('role', 'profissional')
+        .or('role.eq.profissional,pode_atender.eq.true')
         .eq('ativo', true)
         .eq('is_approved', true)
         .eq('profile_complete', true)
@@ -728,10 +730,11 @@ export const fetchProfissionaisForUser = async (
       }
 
       // Buscar dados completos dos profissionais autorizados com perfil completo
+      // Inclui tanto role='profissional' quanto pessoas com pode_atender=true
       const { data, error } = await supabase
         .from('pessoas')
         .select('*')
-        .eq('role', 'profissional')
+        .or('role.eq.profissional,pode_atender.eq.true')
         .eq('ativo', true)
         .eq('is_approved', true)
         .eq('profile_complete', true)
@@ -752,11 +755,12 @@ export const fetchProfissionaisForUser = async (
 
     case 'profissional': {
       // Profissional vê apenas a si mesmo
+      // Inclui tanto role='profissional' quanto pessoas com pode_atender=true
       const { data, error } = await supabase
         .from('pessoas')
         .select('*')
         .eq('id', userId)
-        .eq('role', 'profissional')
+        .or('role.eq.profissional,pode_atender.eq.true')
         .eq('ativo', true)
         .eq('is_approved', true)
         .single();

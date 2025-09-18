@@ -424,6 +424,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
               currentDate={currentDate}
               events={filteredEvents}
               onEventClick={handleEventClick}
+              onTimeSlotClick={handleTimeSlotClick}
               onDateChange={handleDateChange}
             />
           );

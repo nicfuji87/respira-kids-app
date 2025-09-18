@@ -44,6 +44,12 @@ export const navigationConfig: NavigationConfig[] = [
     roles: ['admin', 'secretaria'],
   },
   {
+    icon: Users,
+    label: 'Pessoa',
+    href: '/pessoa',
+    roles: ['admin', 'profissional', 'secretaria'], // Todos podem ver detalhes de pessoas
+  },
+  {
     icon: Package,
     label: 'Estoque',
     href: '/estoque',
