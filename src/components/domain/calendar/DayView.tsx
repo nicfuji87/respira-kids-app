@@ -2,8 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { format, isSameDay, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-import { Card, CardContent } from '@/components/primitives/card';
-import { ScrollArea } from '@/components/primitives/scroll-area';
 import { cn } from '@/lib/utils';
 import { CurrentTimeIndicator, WeekEventBlock } from '@/components/composed';
 import { EventListModal } from '../calendar';
@@ -18,18 +16,10 @@ export interface DayViewProps {
   onEventClick?: (event: CalendarEvent) => void;
   onTimeSlotClick?: (time: string, date: Date) => void;
   className?: string;
-  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const DayView = React.memo<DayViewProps>(
-  ({
-    currentDate,
-    events,
-    onEventClick,
-    onTimeSlotClick,
-    className,
-    userRole,
-  }) => {
+  ({ currentDate, events, onEventClick, onTimeSlotClick, className }) => {
     // Estado para modal de eventos múltiplos
     const [modalState, setModalState] = useState<{
       isOpen: boolean;
@@ -42,8 +32,8 @@ export const DayView = React.memo<DayViewProps>(
     });
 
     // Constantes do grid
-    const startHour = 7;
-    const endHour = 22;
+    const startHour = 6;
+    const endHour = 20;
     const hourHeight = 64;
 
     // Gerar array de horários
@@ -130,100 +120,94 @@ export const DayView = React.memo<DayViewProps>(
 
     return (
       <>
-        <Card className={cn('overflow-hidden', className)}>
-          <CardContent className="p-0">
-            {/* Header com dia */}
-            <div className="border-b bg-muted/50 p-4">
-              <h2
-                className={cn(
-                  'text-lg font-semibold capitalize',
-                  isCurrentDay && 'text-primary'
-                )}
-              >
-                {dayLabel}
-                {isCurrentDay && (
-                  <span className="ml-2 text-sm font-normal text-primary">
-                    (Hoje)
-                  </span>
-                )}
-              </h2>
+        {/* Grid diário simples que expande naturalmente */}
+        <div className={cn('w-full', className)}>
+          {/* Header com dia */}
+          <div className="border-b bg-muted/30 p-4">
+            <h2
+              className={cn(
+                'text-lg font-semibold capitalize',
+                isCurrentDay && 'text-primary'
+              )}
+            >
+              {dayLabel}
+              {isCurrentDay && (
+                <span className="ml-2 text-sm font-normal text-primary">
+                  (Hoje)
+                </span>
+              )}
+            </h2>
+          </div>
+
+          {/* Grid de horários que se adapta ao container */}
+          <div className="w-full grid grid-cols-[80px_1fr]">
+            {/* Coluna de horários */}
+            <div className="border-r bg-muted/10">
+              {timeSlots.map((time) => (
+                <div
+                  key={time}
+                  className="border-b text-xs text-muted-foreground font-medium p-3 text-center"
+                  style={{ height: `${hourHeight}px` }}
+                >
+                  {time}
+                </div>
+              ))}
             </div>
 
-            {/* Grid de horários */}
-            <ScrollArea className="h-[calc(100vh-8rem)]">
-              <div className="relative">
-                <div className="grid grid-cols-[auto_1fr] min-h-full">
-                  {/* Coluna de horários */}
-                  <div className="border-r bg-muted/20 w-20">
-                    {timeSlots.map((time) => (
-                      <div
-                        key={time}
-                        className="border-b text-xs text-muted-foreground font-medium p-3"
-                        style={{ height: `${hourHeight}px` }}
-                      >
-                        {time}
-                      </div>
-                    ))}
-                  </div>
+            {/* Coluna de eventos */}
+            <div
+              className="relative"
+              style={{ minHeight: `${timeSlots.length * hourHeight}px` }}
+            >
+              {/* Slots de horário clicáveis */}
+              {timeSlots.map((time) => {
+                const slotEvents = getEventsPerTimeSlot(dayEvents, time);
+                const hasMultipleEvents = slotEvents.length > 2;
 
-                  {/* Coluna de eventos */}
+                return (
                   <div
-                    className="relative"
-                    style={{ minHeight: `${timeSlots.length * hourHeight}px` }}
+                    key={time}
+                    className={cn(
+                      'border-b hover:bg-muted/10 cursor-pointer',
+                      'transition-colors group relative'
+                    )}
+                    style={{ height: `${hourHeight}px` }}
+                    onClick={() => handleTimeSlotClick(time)}
                   >
-                    {/* Slots de horário clicáveis */}
-                    {timeSlots.map((time) => {
-                      const slotEvents = getEventsPerTimeSlot(dayEvents, time);
-                      const hasMultipleEvents = slotEvents.length > 2;
-
-                      return (
-                        <div
-                          key={time}
-                          className={cn(
-                            'border-b hover:bg-muted/10 cursor-pointer',
-                            'transition-colors group relative'
-                          )}
-                          style={{ height: `${hourHeight}px` }}
-                          onClick={() => handleTimeSlotClick(time)}
-                        >
-                          {hasMultipleEvents && (
-                            <div className="absolute top-1 right-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-medium z-10">
-                              +{slotEvents.length - 2}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Eventos renderizados sobre os slots */}
-                    {eventsWithOverlap.map(
-                      ({ event, overlapIndex, totalOverlapping }) => (
-                        <WeekEventBlock
-                          key={event.id}
-                          event={event}
-                          startHour={startHour}
-                          endHour={endHour}
-                          hourHeight={hourHeight}
-                          onClick={handleEventClick}
-                          overlapIndex={overlapIndex}
-                          totalOverlapping={Math.min(totalOverlapping, 3)} // Máximo 3 visíveis na view dia
-                          userRole={userRole}
-                        />
-                      )
+                    {hasMultipleEvents && (
+                      <div className="absolute top-1 right-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-medium z-10">
+                        +{slotEvents.length - 2}
+                      </div>
                     )}
                   </div>
-                </div>
+                );
+              })}
 
-                {/* Indicador de tempo atual */}
-                <CurrentTimeIndicator
-                  startHour={startHour}
-                  endHour={endHour}
-                  className="ml-20" // Offset para pular coluna de horários (w-20)
-                />
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+              {/* Eventos renderizados sobre os slots */}
+              {eventsWithOverlap.map(
+                ({ event, overlapIndex, totalOverlapping }) => (
+                  <WeekEventBlock
+                    key={event.id}
+                    event={event}
+                    startHour={startHour}
+                    endHour={endHour}
+                    hourHeight={hourHeight}
+                    onClick={handleEventClick}
+                    overlapIndex={overlapIndex}
+                    totalOverlapping={Math.min(totalOverlapping, 3)} // Máximo 3 visíveis na view dia
+                  />
+                )
+              )}
+
+              {/* Indicador de tempo atual */}
+              <CurrentTimeIndicator
+                startHour={startHour}
+                endHour={endHour}
+                className="ml-0" // Sem offset pois já está na coluna correta
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Modal para eventos múltiplos */}
         {modalState.date && (

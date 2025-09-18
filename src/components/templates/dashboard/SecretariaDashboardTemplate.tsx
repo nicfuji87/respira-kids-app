@@ -33,7 +33,7 @@ export const SecretariaDashboardTemplate =
         >
           {/* Header */}
           <header className="bg-white border-b shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="w-full px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between items-center h-16">
                 <div className="flex items-center space-x-4">
                   <img
@@ -69,7 +69,7 @@ export const SecretariaDashboardTemplate =
           </header>
 
           {/* Main Content */}
-          <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          <main className="w-full py-6 px-4 sm:px-6 lg:px-8">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-roxo-titulo mb-2">
                 Bem-vinda, {currentUser.name}!

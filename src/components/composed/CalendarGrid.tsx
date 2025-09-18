@@ -198,7 +198,7 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
 
     return (
       <>
-        <Card className={cn('w-full overflow-hidden', className)}>
+        <Card className={cn('w-full max-w-none overflow-hidden', className)}>
           <CardContent className="p-0 w-full">
             {/* Header com dias da semana */}
             <div className="grid grid-cols-7 border-b">

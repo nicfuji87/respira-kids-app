@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { CalendarTemplateWithData } from '@/components/templates';
 import { useAuth } from '@/hooks/useAuth';
 
-
 // AI dev note: AgendaPage simplificada - apenas calendário sem headers ou estatísticas
 export const AgendaPage: React.FC = () => {
   const { user } = useAuth();
@@ -43,8 +42,8 @@ export const AgendaPage: React.FC = () => {
   }
 
   return (
-    <div className="w-full h-full">
-      {/* Calendário integrado com dados reais */}
+    <div className="w-full h-full overflow-hidden">
+      {/* Calendário integrado com dados reais - expandido para toda largura e altura */}
       <Suspense
         fallback={
           <div className="flex items-center justify-center min-h-96">
@@ -59,6 +58,7 @@ export const AgendaPage: React.FC = () => {
           onEventDelete={handleEventDelete}
           onPatientClick={handlePatientClick}
           onProfessionalClick={handleProfessionalClick}
+          className="w-full max-w-none h-full"
         />
       </Suspense>
     </div>

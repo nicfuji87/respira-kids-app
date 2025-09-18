@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { CalendarTemplate } from './CalendarTemplate';
 import { Button } from '@/components/primitives/button';
-import { Badge } from '@/components/primitives/badge';
 import {
   Select,
   SelectContent,
@@ -71,7 +70,6 @@ export const SecretariaCalendarTemplate =
       onEventSave,
       initialView = 'week', // Secretaria typically prefers week view
       initialDate = new Date(),
-      className,
       availableProfessionals = [],
       // AI dev note: External state control
       externalCurrentDate,
@@ -153,151 +151,86 @@ export const SecretariaCalendarTemplate =
         onEventSave(secretariaEvent);
       };
 
-      // Get professional statistics
-      const getProfessionalStats = () => {
-        const authorizedProfessionals = getAuthorizedProfessionals();
-        const filteredEvents = getFilteredEvents();
-
-        return authorizedProfessionals.map((prof) => ({
-          ...prof,
-          eventCount: filteredEvents.filter(
-            (event) =>
-              event.attendees?.includes(prof.id) ||
-              event.title.includes(prof.name)
-          ).length,
-          todayEvents: filteredEvents.filter(
-            (event) =>
-              (event.attendees?.includes(prof.id) ||
-                event.title.includes(prof.name)) &&
-              new Date(event.start).toDateString() === new Date().toDateString()
-          ).length,
-        }));
-      };
-
       return (
-        <div className="secretaria-calendar-template">
-          {/* Secretaria Header */}
-          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <h3 className="font-semibold text-lg mb-2">
-                  <Users className="inline h-5 w-5 mr-2" />
-                  Agenda - {currentUser.name}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Gerenciando {getAuthorizedProfessionals().length}{' '}
-                  profissionais
-                </p>
-              </div>
-
-              {/* Filters */}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filtros
-                </Button>
-
-                {showFilters && (
-                  <Select
-                    value={selectedProfessional}
-                    onValueChange={setSelectedProfessional}
-                  >
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Selecionar profissional" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">
-                        Todos os profissionais
-                      </SelectItem>
-                      {getAuthorizedProfessionals().map((prof) => (
-                        <SelectItem key={prof.id} value={prof.id}>
-                          {prof.name}{' '}
-                          {prof.specialization && `(${prof.specialization})`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+        <div className="secretaria-calendar-template w-full h-full flex flex-col -mx-4">
+          {/* Header compacto e expandido */}
+          <div className="flex-shrink-0 px-4 py-2 bg-muted/30 border-b flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h3 className="font-semibold text-sm">
+                <Users className="inline h-4 w-4 mr-1" />
+                {currentUser.name} | {getAuthorizedProfessionals().length}{' '}
+                profissionais
+              </h3>
+              <div className="text-xs text-muted-foreground">
+                {getFilteredEvents().length} evento(s)
+                {selectedProfessional !== 'all' && (
+                  <span className="ml-1 text-primary">
+                    para{' '}
+                    {
+                      availableProfessionals.find(
+                        (p) => p.id === selectedProfessional
+                      )?.name
+                    }
+                  </span>
                 )}
               </div>
             </div>
-          </div>
 
-          {/* Professional Stats */}
-          <div className="mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {getProfessionalStats().map((prof) => (
-              <div key={prof.id} className="p-3 bg-card rounded-lg border">
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="font-medium text-sm">{prof.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {prof.specialization || 'Profissional'}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {prof.todayEvents} hoje
-                  </Badge>
-                </div>
-                <div className="flex gap-2 text-xs text-muted-foreground">
-                  <span>Total: {prof.eventCount}</span>
-                  <span>•</span>
-                  <span
-                    className={`cursor-pointer hover:text-primary ${
-                      selectedProfessional === prof.id
-                        ? 'text-primary font-medium'
-                        : ''
-                    }`}
-                    onClick={() => setSelectedProfessional(prof.id)}
-                  >
-                    Ver agenda
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+            {/* Filtros compactos */}
+            <div className="flex gap-2 items-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="text-xs"
+              >
+                <Filter className="h-3 w-3 mr-1" />
+                Filtros
+              </Button>
 
-          {/* Quick Actions */}
-          <div className="mb-4 flex gap-2 flex-wrap">
-            <div className="text-sm text-muted-foreground">
-              Vista recomendada: Semana | Mostrando {getFilteredEvents().length}{' '}
-              evento(s)
-              {selectedProfessional !== 'all' && (
-                <span className="ml-1 text-primary">
-                  para{' '}
-                  {
-                    availableProfessionals.find(
-                      (p) => p.id === selectedProfessional
-                    )?.name
-                  }
-                </span>
+              {showFilters && (
+                <Select
+                  value={selectedProfessional}
+                  onValueChange={setSelectedProfessional}
+                >
+                  <SelectTrigger className="w-40 h-7 text-xs">
+                    <SelectValue placeholder="Profissional" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {getAuthorizedProfessionals().map((prof) => (
+                      <SelectItem key={prof.id} value={prof.id}>
+                        {prof.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           </div>
 
-          {/* Main Calendar */}
-          <CalendarTemplate
-            events={getFilteredEvents()}
-            onEventSave={handleEventSave}
-            initialView={initialView}
-            initialDate={initialDate}
-            // AI dev note: Repassar props de estado externo para CalendarTemplate
-            externalCurrentDate={externalCurrentDate}
-            externalCurrentView={externalCurrentView}
-            onExternalDateChange={onExternalDateChange}
-            onExternalViewChange={onExternalViewChange}
-            canCreateEvents={canCreateEvents}
-            canEditEvents={canEditEvents}
-            canDeleteEvents={canDeleteEvents}
-            canViewAllEvents={canViewAllEvents}
-            showEventManager={true}
-            userRole={currentUser.role}
-            onPatientClick={onPatientClick}
-            onProfessionalClick={onProfessionalClick}
-            className={className}
-          />
+          {/* Calendário expandido para ocupar todo espaço restante */}
+          <div className="flex-1 min-h-0">
+            <CalendarTemplate
+              events={getFilteredEvents()}
+              onEventSave={handleEventSave}
+              initialView={initialView}
+              initialDate={initialDate}
+              externalCurrentDate={externalCurrentDate}
+              externalCurrentView={externalCurrentView}
+              onExternalDateChange={onExternalDateChange}
+              onExternalViewChange={onExternalViewChange}
+              canCreateEvents={canCreateEvents}
+              canEditEvents={canEditEvents}
+              canDeleteEvents={canDeleteEvents}
+              canViewAllEvents={canViewAllEvents}
+              showEventManager={true}
+              userRole={currentUser.role}
+              onPatientClick={onPatientClick}
+              onProfessionalClick={onProfessionalClick}
+              className="w-full max-w-none h-full"
+            />
+          </div>
         </div>
       );
     }

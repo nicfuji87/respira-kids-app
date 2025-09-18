@@ -24,11 +24,19 @@ import {
   PagamentoStatusSelect,
   LocationSelect,
 } from '@/components/composed';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
 import { cn } from '@/lib/utils';
 import {
   createAgendamento,
   fetchAgendamentosFromView,
 } from '@/lib/calendar-services';
+import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
 import { useToast } from '@/components/primitives/use-toast';
 import { ToastAction } from '@/components/primitives/toast';
 import type {
@@ -64,6 +72,7 @@ interface AppointmentFormData {
   status_pagamento_id: string;
   valor_servico: number;
   observacao: string;
+  empresa_fatura: string;
 }
 
 interface FormErrors {
@@ -76,6 +85,7 @@ interface FormErrors {
   status_pagamento_id?: string;
   valor_servico?: string;
   observacao?: string;
+  empresa_fatura?: string;
   general?: string;
 }
 
@@ -89,8 +99,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     onSave,
     className,
   }) => {
-    
-
     const { user } = useAuth();
     const { toast } = useToast();
     const { formData: calendarFormData, loading: formDataLoading } =
@@ -106,6 +114,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       status_pagamento_id: '',
       valor_servico: 0,
       observacao: '',
+      empresa_fatura: '',
     });
 
     const [errors, setErrors] = useState<FormErrors>({});
@@ -114,20 +123,55 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     const [conflictDetails, setConflictDetails] = useState<string>('');
     const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
 
+    // Estados para empresas de faturamento
+    const [empresasOptions, setEmpresasOptions] = useState<
+      Array<{ id: string; razao_social: string; nome_fantasia?: string }>
+    >([]);
+    const [isLoadingEmpresas, setIsLoadingEmpresas] = useState(false);
+
     // Log para mudanças no formData
     useEffect(() => {
       // removed verbose debug log
     }, [formData]);
 
+    // Carregar opções de empresas de faturamento
+    useEffect(() => {
+      const loadEmpresas = async () => {
+        setIsLoadingEmpresas(true);
+        try {
+          // Buscar empresas ativas usando Supabase
+          const { supabase } = await import('@/lib/supabase');
+          const { data: empresas, error } = await supabase
+            .from('pessoa_empresas')
+            .select('id, razao_social, nome_fantasia')
+            .eq('ativo', true)
+            .order('razao_social');
+
+          if (error) {
+            console.error('Erro ao carregar empresas:', error);
+            return;
+          }
+
+          setEmpresasOptions(empresas || []);
+        } catch (error) {
+          console.error('Erro ao carregar empresas:', error);
+        } finally {
+          setIsLoadingEmpresas(false);
+        }
+      };
+
+      if (isOpen) {
+        loadEmpresas();
+      }
+    }, [isOpen]);
+
     // Reset form quando dialog abre/fecha
     useEffect(() => {
-      
       if (isOpen) {
         const defaultDate = initialDate || new Date();
         const defaultTime = initialTime || '09:00';
         const dateTimeString = `${format(defaultDate, 'yyyy-MM-dd')}T${defaultTime}`;
 
-        
         setFormData({
           data_hora: dateTimeString,
           paciente_id: initialPatientId || '',
@@ -138,6 +182,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           status_pagamento_id: '',
           valor_servico: 0,
           observacao: '',
+          empresa_fatura: '',
         });
         setErrors({});
         setHasConflict(false);
@@ -152,7 +197,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         if (!data_hora || !profissional_id) return;
 
         try {
-          const appointmentDate = new Date(data_hora);
+          const appointmentDate = parseSupabaseDatetime(data_hora);
           const startDate = new Date(appointmentDate);
           startDate.setHours(0, 0, 0, 0);
           const endDate = new Date(appointmentDate);
@@ -169,8 +214,10 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           // Verificar conflitos no mesmo horário
           const conflictingAppointments = existingAppointments.filter(
             (appointment) => {
-              const existingDateTime = new Date(appointment.data_hora);
-              const newDateTime = new Date(data_hora);
+              const existingDateTime = parseSupabaseDatetime(
+                appointment.data_hora
+              );
+              const newDateTime = parseSupabaseDatetime(data_hora);
 
               // Mesmo horário exato ou sobreposição
               return (
@@ -184,7 +231,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             const conflict = conflictingAppointments[0];
             setHasConflict(true);
             setConflictDetails(
-              `Conflito com agendamento existente: ${conflict.paciente.nome} às ${format(new Date(conflict.data_hora), 'HH:mm', { locale: ptBR })}`
+              `Conflito com agendamento existente: ${conflict.paciente.nome} às ${format(parseSupabaseDatetime(conflict.data_hora), 'HH:mm', { locale: ptBR })}`
             );
           } else {
             setHasConflict(false);
@@ -200,19 +247,15 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     // Atualizar campo específico
     const updateField = useCallback(
       (field: keyof AppointmentFormData, value: string | number) => {
-        
-
         setFormData((prev) => {
-          
           const newData = { ...prev, [field]: value };
-          
+
           return newData;
         });
 
         // Limpar erro do campo ao modificar usando functional update
         setErrors((prev) => {
           if (prev[field as keyof FormErrors]) {
-            
             return {
               ...prev,
               [field as keyof FormErrors]: undefined,
@@ -279,10 +322,12 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         newErrors.status_pagamento_id = 'Status do pagamento é obrigatório';
       if (!formData.valor_servico || formData.valor_servico <= 0)
         newErrors.valor_servico = 'Valor deve ser maior que zero';
+      if (!formData.empresa_fatura)
+        newErrors.empresa_fatura = 'Empresa para faturamento é obrigatória';
 
       // Validar data no futuro
       if (formData.data_hora) {
-        const appointmentDate = new Date(formData.data_hora);
+        const appointmentDate = parseSupabaseDatetime(formData.data_hora);
         const now = new Date();
         if (appointmentDate < now) {
           // Se é data passada e usuário ainda não confirmou, mostrar toast
@@ -337,6 +382,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           valor_servico: formData.valor_servico,
           observacao: formData.observacao || undefined,
           agendado_por: user.pessoa.id,
+          empresa_fatura: formData.empresa_fatura,
         };
 
         const newAppointment = await createAgendamento(appointmentData);
@@ -539,6 +585,43 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
                   required
                 />
               </div>
+            </div>
+
+            {/* Empresa para Faturamento */}
+            <div className="space-y-2">
+              <Label>Empresa para Faturamento *</Label>
+              <Select
+                value={formData.empresa_fatura}
+                onValueChange={(value) => updateField('empresa_fatura', value)}
+                disabled={isLoadingEmpresas}
+              >
+                <SelectTrigger
+                  className={cn(errors.empresa_fatura && 'border-destructive')}
+                >
+                  <SelectValue placeholder="Selecionar empresa para faturamento..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {empresasOptions.map((empresa) => (
+                    <SelectItem key={empresa.id} value={empresa.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {empresa.razao_social}
+                        </span>
+                        {empresa.nome_fantasia && (
+                          <span className="text-sm text-muted-foreground">
+                            {empresa.nome_fantasia}
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.empresa_fatura && (
+                <p className="text-sm text-destructive">
+                  {errors.empresa_fatura}
+                </p>
+              )}
             </div>
 
             {/* Local de Atendimento */}

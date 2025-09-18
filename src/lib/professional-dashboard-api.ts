@@ -1,7 +1,17 @@
 import { supabase } from './supabase';
+import { parseSupabaseDatetime } from './calendar-mappers';
 
 // AI dev note: Professional Dashboard API - funções para métricas do profissional
 // Usa view vw_agendamentos_completos e tabelas relacionadas
+// PERFORMANCE: Implementado sistema de batches para contornar limite de 1000 registros do Supabase JS
+
+interface AgendamentoData {
+  status_consulta_codigo: string;
+  comissao_valor_calculado: string;
+  valor_servico: string;
+  data_hora: string;
+  possui_evolucao: string;
+}
 
 export interface ProfessionalMetrics {
   consultasNoMes: number;
@@ -103,62 +113,104 @@ export const fetchProfessionalMetrics = async (
     const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
     const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
 
-    // Buscar consultas do mês atual
-    const { data: consultasAtual, error: errorAtual } = await supabase
-      .from('vw_agendamentos_completos')
-      .select('*')
-      .eq('profissional_id', professionalId)
-      .gte('data_hora', mesAtual.toISOString().split('T')[0])
-      .lte('data_hora', endDate)
-      .eq('ativo', true);
+    // AI dev note: Usar batches para métricas mensais
+    const batchSize = 1000;
 
-    if (errorAtual) throw errorAtual;
+    // Buscar consultas do mês atual COM BATCHES
+    let allConsultasAtual: AgendamentoData[] = [];
+    let offset = 0;
+    let hasMoreData = true;
 
-    // Buscar consultas do mês anterior
-    const { data: consultasAnterior, error: errorAnterior } = await supabase
-      .from('vw_agendamentos_completos')
-      .select('*')
-      .eq('profissional_id', professionalId)
-      .gte('data_hora', mesAnterior.toISOString().split('T')[0])
-      .lte('data_hora', fimMesAnterior.toISOString().split('T')[0])
-      .eq('ativo', true);
+    while (hasMoreData) {
+      const { data: batchData, error: batchError } = await supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .eq('profissional_id', professionalId)
+        .gte('data_hora', mesAtual.toISOString().split('T')[0])
+        .lte('data_hora', endDate)
+        .eq('ativo', true)
+        .range(offset, offset + batchSize - 1)
+        .order('data_hora', { ascending: false });
 
-    if (errorAnterior) throw errorAnterior;
+      if (batchError) throw batchError;
 
-    const consultasAtualArray = consultasAtual || [];
-    const consultasAnteriorArray = consultasAnterior || [];
+      if (!batchData || batchData.length === 0) {
+        hasMoreData = false;
+      } else {
+        allConsultasAtual = [
+          ...allConsultasAtual,
+          ...(batchData as AgendamentoData[]),
+        ];
+        if (batchData.length < batchSize) {
+          hasMoreData = false;
+        } else {
+          offset += batchSize;
+        }
+      }
+
+      if (offset > 10000) hasMoreData = false; // Safety menor para mês
+    }
+
+    // Buscar consultas do mês anterior COM BATCHES
+    let allConsultasAnterior: AgendamentoData[] = [];
+    offset = 0;
+    hasMoreData = true;
+
+    while (hasMoreData) {
+      const { data: batchData, error: batchError } = await supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .eq('profissional_id', professionalId)
+        .gte('data_hora', mesAnterior.toISOString().split('T')[0])
+        .lte('data_hora', fimMesAnterior.toISOString().split('T')[0])
+        .eq('ativo', true)
+        .range(offset, offset + batchSize - 1)
+        .order('data_hora', { ascending: false });
+
+      if (batchError) throw batchError;
+
+      if (!batchData || batchData.length === 0) {
+        hasMoreData = false;
+      } else {
+        allConsultasAnterior = [
+          ...allConsultasAnterior,
+          ...(batchData as AgendamentoData[]),
+        ];
+        if (batchData.length < batchSize) {
+          hasMoreData = false;
+        } else {
+          offset += batchSize;
+        }
+      }
+
+      if (offset > 10000) hasMoreData = false; // Safety menor para mês
+    }
+
+    const consultasAtualArray = allConsultasAtual;
+    const consultasAnteriorArray = allConsultasAnterior;
 
     // Calcular métricas do mês atual
     const consultasNoMes = consultasAtualArray.length;
     const consultasNoMesAnterior = consultasAnteriorArray.length;
 
-    // Faturamento a receber: consultas finalizadas com evolução
+    // AI dev note: CORREÇÃO - Faturamento baseado em consultas finalizadas, independente de evolução
+    // Faturamento a receber: todas as consultas finalizadas (o que realmente foi faturado)
     const faturamentoAReceber = consultasAtualArray
-      .filter(
-        (c) =>
-          c.status_consulta_codigo === 'finalizado' &&
-          c.possui_evolucao === 'sim'
-      )
+      .filter((c) => c.status_consulta_codigo === 'finalizado')
       .reduce(
         (total, c) => total + parseFloat(c.comissao_valor_calculado || '0'),
         0
       );
 
-    // Total faturado: todas as consultas com evolução (independente do status)
-    const faturamentoTotalFaturado = consultasAtualArray
-      .filter((c) => c.possui_evolucao === 'sim')
-      .reduce(
-        (total, c) => total + parseFloat(c.comissao_valor_calculado || '0'),
-        0
-      );
+    // Total faturado: todas as consultas realizadas no mês (independente de status/evolução)
+    const faturamentoTotalFaturado = consultasAtualArray.reduce(
+      (total, c) => total + parseFloat(c.comissao_valor_calculado || '0'),
+      0
+    );
 
-    // Faturamento do mês anterior
+    // Faturamento do mês anterior: todas as consultas finalizadas
     const faturamentoMesAnterior = consultasAnteriorArray
-      .filter(
-        (c) =>
-          c.status_consulta_codigo === 'finalizado' &&
-          c.possui_evolucao === 'sim'
-      )
+      .filter((c) => c.status_consulta_codigo === 'finalizado')
       .reduce(
         (total, c) => total + parseFloat(c.comissao_valor_calculado || '0'),
         0
@@ -169,7 +221,7 @@ export const fetchProfessionalMetrics = async (
     proximos7Dias.setDate(hoje.getDate() + 7);
 
     const proximosAgendamentos = consultasAtualArray.filter((c) => {
-      const dataConsulta = new Date(c.data_hora);
+      const dataConsulta = parseSupabaseDatetime(c.data_hora);
       return (
         dataConsulta >= hoje &&
         dataConsulta <= proximos7Dias &&
@@ -292,14 +344,14 @@ export const fetchConsultationsToEvolve = async (
       .eq('possui_evolucao', 'não')
       .eq('ativo', true)
       .order('data_hora', { ascending: false })
-      .limit(20);
+      .range(0, 499); // Mostrar até 500 consultas a evoluir
 
     if (error) throw error;
 
     const hoje = new Date();
 
     return (consultas || []).map((c) => {
-      const dataConsulta = new Date(c.data_hora);
+      const dataConsulta = parseSupabaseDatetime(c.data_hora);
       const diasPendente = Math.floor(
         (hoje.getTime() - dataConsulta.getTime()) / (1000 * 60 * 60 * 24)
       );
@@ -343,18 +395,46 @@ export const fetchFaturamentoComparativo = async (
     const inicioAno = new Date(anoAtual, 0, 1);
     const fimAno = new Date(anoAtual, 11, 31);
 
-    // Buscar todas as consultas do ano atual (sem filtrar por status ou evolução)
-    const { data: consultas, error } = await supabase
-      .from('vw_agendamentos_completos')
-      .select('*')
-      .eq('profissional_id', professionalId)
-      .gte('data_hora', inicioAno.toISOString().split('T')[0])
-      .lte('data_hora', fimAno.toISOString().split('T')[0])
-      .eq('ativo', true);
+    // AI dev note: Contornar limite de 1000 do Supabase JS com queries em batches
+    const batchSize = 1000;
+    let allConsultas: AgendamentoData[] = [];
+    let offset = 0;
+    let hasMoreData = true;
 
-    if (error) throw error;
+    while (hasMoreData) {
+      const { data: batchData, error: batchError } = await supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .eq('profissional_id', professionalId)
+        .gte('data_hora', inicioAno.toISOString().split('T')[0])
+        .lte('data_hora', fimAno.toISOString().split('T')[0])
+        .eq('ativo', true)
+        .range(offset, offset + batchSize - 1)
+        .order('data_hora', { ascending: false });
 
-    const consultasArray = consultas || [];
+      if (batchError) {
+        throw new Error(batchError.message);
+      }
+
+      if (!batchData || batchData.length === 0) {
+        hasMoreData = false;
+      } else {
+        allConsultas = [...allConsultas, ...(batchData as AgendamentoData[])];
+
+        if (batchData.length < batchSize) {
+          hasMoreData = false;
+        } else {
+          offset += batchSize;
+        }
+      }
+
+      // Safety: evitar loop infinito
+      if (offset > 50000) {
+        hasMoreData = false;
+      }
+    }
+
+    const consultasArray = allConsultas;
 
     // Agrupar por mês
     const dadosPorMes = new Map<
@@ -379,7 +459,7 @@ export const fetchFaturamentoComparativo = async (
 
     // Processar consultas
     consultasArray.forEach((consulta) => {
-      const dataConsulta = new Date(consulta.data_hora);
+      const dataConsulta = parseSupabaseDatetime(consulta.data_hora);
       const mes = dataConsulta.getMonth() + 1; // getMonth() retorna 0-11
       const valor = parseFloat(consulta.comissao_valor_calculado || '0');
 
@@ -393,13 +473,16 @@ export const fetchFaturamentoComparativo = async (
       // Sempre contar consulta realizada
       dadosExistentes.consultasRealizadas += 1;
 
-      // Se tem evolução, contar no faturamento total
-      if (consulta.possui_evolucao === 'sim') {
+      // AI dev note: CORREÇÃO - Contar valores reais baseado no status da consulta
+      if (consulta.status_consulta_codigo === 'finalizado') {
+        // Faturamento total: todas as consultas finalizadas (valor real gerado)
         dadosExistentes.faturamentoTotal += valor;
-        dadosExistentes.consultasComEvolucao += 1;
 
-        // Se está finalizada, também contar no faturamento a receber
-        if (consulta.status_consulta_codigo === 'finalizado') {
+        if (consulta.possui_evolucao === 'sim') {
+          // Consultas com evolução completa (faturamento efetivo)
+          dadosExistentes.consultasComEvolucao += 1;
+        } else {
+          // Consultas finalizadas sem evolução (valor a receber quando evolução for feita)
           dadosExistentes.faturamentoAReceber += valor;
         }
       }
@@ -530,25 +613,76 @@ export const fetchAdminMetrics = async (
     const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
     const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
 
-    // Buscar consultas do mês atual (todos os profissionais)
-    const { data: consultasAtual, error: errorAtual } = await supabase
-      .from('vw_agendamentos_completos')
-      .select('*')
-      .gte('data_hora', mesAtual.toISOString().split('T')[0])
-      .lte('data_hora', endDate)
-      .eq('ativo', true);
+    // AI dev note: Queries em batches para admin metrics - contornar limite de 1000
 
-    if (errorAtual) throw errorAtual;
+    // Buscar consultas do mês atual (todos os profissionais) - COM BATCHES
+    const batchSize = 1000;
+    let allConsultasAtual: unknown[] = [];
+    let offset = 0;
+    let hasMoreData = true;
 
-    // Buscar consultas do mês anterior (todos os profissionais)
-    const { data: consultasAnterior, error: errorAnterior } = await supabase
-      .from('vw_agendamentos_completos')
-      .select('*')
-      .gte('data_hora', mesAnterior.toISOString().split('T')[0])
-      .lte('data_hora', fimMesAnterior.toISOString().split('T')[0])
-      .eq('ativo', true);
+    while (hasMoreData) {
+      const { data: batchData, error: batchError } = await supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .gte('data_hora', mesAtual.toISOString().split('T')[0])
+        .lte('data_hora', endDate)
+        .eq('ativo', true)
+        .range(offset, offset + batchSize - 1)
+        .order('data_hora', { ascending: false });
 
-    if (errorAnterior) throw errorAnterior;
+      if (batchError) throw batchError;
+
+      if (!batchData || batchData.length === 0) {
+        hasMoreData = false;
+      } else {
+        allConsultasAtual = [
+          ...allConsultasAtual,
+          ...(batchData as AgendamentoData[]),
+        ];
+        if (batchData.length < batchSize) {
+          hasMoreData = false;
+        } else {
+          offset += batchSize;
+        }
+      }
+
+      if (offset > 50000) hasMoreData = false;
+    }
+
+    // Buscar consultas do mês anterior (todos os profissionais) - COM BATCHES
+    let allConsultasAnterior: AgendamentoData[] = [];
+    offset = 0;
+    hasMoreData = true;
+
+    while (hasMoreData) {
+      const { data: batchData, error: batchError } = await supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .gte('data_hora', mesAnterior.toISOString().split('T')[0])
+        .lte('data_hora', fimMesAnterior.toISOString().split('T')[0])
+        .eq('ativo', true)
+        .range(offset, offset + batchSize - 1)
+        .order('data_hora', { ascending: false });
+
+      if (batchError) throw batchError;
+
+      if (!batchData || batchData.length === 0) {
+        hasMoreData = false;
+      } else {
+        allConsultasAnterior = [
+          ...allConsultasAnterior,
+          ...(batchData as AgendamentoData[]),
+        ];
+        if (batchData.length < batchSize) {
+          hasMoreData = false;
+        } else {
+          offset += batchSize;
+        }
+      }
+
+      if (offset > 50000) hasMoreData = false;
+    }
 
     // Contar próximos agendamentos (próximos 7 dias)
     const proximosDias = new Date();
@@ -616,17 +750,35 @@ export const fetchAdminMetrics = async (
 
     if (errorAprovacoes) throw errorAprovacoes;
 
-    const consultasAtuais = consultasAtual || [];
-    const consultasAnteriores = consultasAnterior || [];
+    const consultasAtuais = allConsultasAtual;
+    const consultasAnteriores = allConsultasAnterior;
 
     // Calcular faturamento total (usar valor_servico ao invés de comissão)
     const faturamentoTotalMes = consultasAtuais
-      .filter((c) => c.status_consulta_codigo === 'finalizado')
-      .reduce((sum, c) => sum + parseFloat(c.valor_servico || '0'), 0);
+      .filter(
+        (c: unknown) =>
+          (c as { status_consulta_codigo?: string }).status_consulta_codigo ===
+          'finalizado'
+      )
+      .reduce(
+        (sum: number, c: unknown) =>
+          sum +
+          parseFloat((c as { valor_servico?: string }).valor_servico || '0'),
+        0
+      );
 
     const faturamentoMesAnterior = consultasAnteriores
-      .filter((c) => c.status_consulta_codigo === 'finalizado')
-      .reduce((sum, c) => sum + parseFloat(c.valor_servico || '0'), 0);
+      .filter(
+        (c: unknown) =>
+          (c as { status_consulta_codigo?: string }).status_consulta_codigo ===
+          'finalizado'
+      )
+      .reduce(
+        (sum: number, c: unknown) =>
+          sum +
+          parseFloat((c as { valor_servico?: string }).valor_servico || '0'),
+        0
+      );
 
     return {
       totalPacientes: totalPacientesCount || 0,
@@ -723,14 +875,14 @@ export const fetchAllConsultationsToEvolve = async (
 
     const { data: consultas, error } = await query
       .order('data_hora', { ascending: false })
-      .limit(20);
+      .range(0, 999); // Mostrar até 1000 consultas para evolução do admin
 
     if (error) throw error;
 
     const hoje = new Date();
 
     return (consultas || []).map((c) => {
-      const dataConsulta = new Date(c.data_hora);
+      const dataConsulta = parseSupabaseDatetime(c.data_hora);
       const diasPendente = Math.floor(
         (hoje.getTime() - dataConsulta.getTime()) / (1000 * 60 * 60 * 24)
       );
@@ -777,23 +929,52 @@ export const fetchAdminFaturamentoComparativo = async (
     const inicioAno = new Date(anoAtual, 0, 1);
     const fimAno = new Date(anoAtual, 11, 31);
 
-    let query = supabase
-      .from('vw_agendamentos_completos')
-      .select('*')
-      .gte('data_hora', inicioAno.toISOString().split('T')[0])
-      .lte('data_hora', fimAno.toISOString().split('T')[0])
-      .eq('ativo', true);
+    // AI dev note: Contornar limite de 1000 do Supabase JS com queries em batches para Admin
+    const batchSize = 1000;
+    let allConsultas: AgendamentoData[] = [];
+    let offset = 0;
+    let hasMoreData = true;
 
-    // Aplicar filtro de profissionais se fornecido
-    if (professionalIds && professionalIds.length > 0) {
-      query = query.in('profissional_id', professionalIds);
+    while (hasMoreData) {
+      let query = supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .gte('data_hora', inicioAno.toISOString().split('T')[0])
+        .lte('data_hora', fimAno.toISOString().split('T')[0])
+        .eq('ativo', true)
+        .range(offset, offset + batchSize - 1)
+        .order('data_hora', { ascending: false });
+
+      // Aplicar filtro de profissionais se fornecido
+      if (professionalIds && professionalIds.length > 0) {
+        query = query.in('profissional_id', professionalIds);
+      }
+
+      const { data: batchData, error: batchError } = await query;
+
+      if (batchError) {
+        throw new Error(batchError.message);
+      }
+
+      if (!batchData || batchData.length === 0) {
+        hasMoreData = false;
+      } else {
+        allConsultas = [...allConsultas, ...(batchData as AgendamentoData[])];
+
+        if (batchData.length < batchSize) {
+          hasMoreData = false;
+        } else {
+          offset += batchSize;
+        }
+      }
+
+      // Safety: evitar loop infinito
+      if (offset > 50000) {
+        hasMoreData = false;
+      }
     }
 
-    const { data: consultas, error } = await query;
-
-    if (error) throw error;
-
-    const consultasArray = consultas || [];
+    const consultasArray = allConsultas;
 
     // Agrupar por mês
     const dadosPorMes = new Map<
@@ -827,20 +1008,30 @@ export const fetchAdminFaturamentoComparativo = async (
 
     // Processar consultas
     consultasArray.forEach((consulta) => {
-      const dataConsulta = new Date(consulta.data_hora);
+      const dataConsulta = parseSupabaseDatetime(consulta.data_hora);
       const mes = dataConsulta.getMonth();
       const dadosMes = dadosPorMes.get(mes)!;
 
+      // AI dev note: CORREÇÃO - Processar todas as consultas, não apenas finalizadas
+      const valor = parseFloat(consulta.valor_servico || '0');
+
+      // Sempre contar consulta realizada
+      dadosMes.consultasRealizadas += 1;
+
       if (consulta.status_consulta_codigo === 'finalizado') {
-        const valor = parseFloat(consulta.valor_servico || '0');
-        dadosMes.consultasRealizadas += 1;
+        // Todas as consultas finalizadas geram faturamento total
+        dadosMes.faturamentoTotal += valor;
 
         if (consulta.possui_evolucao === 'sim') {
-          dadosMes.faturamentoTotal += valor;
+          // Consultas com evolução completa (já processadas totalmente)
           dadosMes.consultasComEvolucao += 1;
         } else {
+          // Consultas finalizadas sem evolução (ainda precisam ser processadas)
           dadosMes.faturamentoAReceber += valor;
         }
+      } else if (consulta.status_consulta_codigo === 'agendado') {
+        // Consultas agendadas contam no total potencial mas ainda não no a receber
+        dadosMes.faturamentoTotal += valor;
       }
     });
 

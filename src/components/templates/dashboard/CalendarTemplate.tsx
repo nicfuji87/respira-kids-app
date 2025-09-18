@@ -434,7 +434,6 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
               events={filteredEvents}
               onEventClick={handleEventClick}
               onTimeSlotClick={handleTimeSlotClick}
-              userRole={userRole}
             />
           );
         case 'day':
@@ -444,7 +443,6 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
               events={filteredEvents}
               onEventClick={handleEventClick}
               onTimeSlotClick={handleTimeSlotClick}
-              userRole={userRole}
             />
           );
         case 'agenda':
@@ -461,7 +459,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     };
 
     return (
-      <div className={cn('w-full h-full flex flex-col', className)}>
+      <div className={cn('w-full max-w-none h-full flex flex-col', className)}>
         {/* Calendar Header */}
         <div className="flex-shrink-0 mb-4">
           <CalendarHeader
@@ -476,8 +474,8 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           />
         </div>
 
-        {/* Calendar Content */}
-        <div className="flex-1 min-h-0">{renderCurrentView()}</div>
+        {/* Calendar Content - expandido para largura total */}
+        <div className="flex-1 w-full max-w-none">{renderCurrentView()}</div>
 
         {/* Appointment Details Modal - Para editar agendamentos existentes */}
         {showEventManager && (

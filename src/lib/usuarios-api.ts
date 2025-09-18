@@ -1,4 +1,17 @@
 // AI dev note: API para gerenciamento de usuários - CRUD completo com view otimizada
+// SEGURANÇA: Implementada verificação de autenticação em todas as funções
+// Apenas usuários autenticados (admin, profissional, secretaria) podem acessar dados
+// A view vw_usuarios_admin aplica RLS baseado no role do usuário logado
+// PERFORMANCE: Implementado sistema de batches para contornar limite de 1000 registros do Supabase JS
+
+interface UsuarioMetadata {
+  is_approved: boolean;
+  ativo: boolean;
+  bloqueado: boolean;
+  tipo_pessoa_codigo?: string;
+  role?: string;
+  created_at: string;
+}
 import { supabase } from './supabase';
 import type {
   Usuario,
@@ -18,7 +31,23 @@ export async function fetchUsuarios(
   limit: number = ITEMS_PER_PAGE
 ): Promise<ApiResponse<PaginatedUsuarios>> {
   try {
-    console.log('🔍 fetchUsuarios chamado com:', { filters, page, limit });
+    // AI dev note: Verificação de autenticação - apenas staff autorizado pode acessar dados de usuários
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error(
+        '❌ fetchUsuarios: Usuário não autenticado:',
+        authError?.message
+      );
+      return {
+        data: null,
+        error: 'Usuário não autenticado',
+        success: false,
+      };
+    }
 
     let query = supabase.from('vw_usuarios_admin').select('*');
 
@@ -28,7 +57,6 @@ export async function fetchUsuarios(
 
     // Aplicar filtros na query principal
     if (filters.busca) {
-      console.log('📝 Aplicando filtro de busca:', filters.busca);
       // Busca flexível: todas as palavras devem estar presentes (AND)
       const searchWords = filters.busca
         .trim()
@@ -54,38 +82,32 @@ export async function fetchUsuarios(
     }
 
     if (filters.tipo_pessoa) {
-      console.log('👤 Aplicando filtro tipo_pessoa:', filters.tipo_pessoa);
       query = query.eq('tipo_pessoa_codigo', filters.tipo_pessoa);
       countQuery = countQuery.eq('tipo_pessoa_codigo', filters.tipo_pessoa);
     }
 
     if (filters.role) {
-      console.log('🎭 Aplicando filtro role:', filters.role);
       query = query.eq('role', filters.role);
       countQuery = countQuery.eq('role', filters.role);
     }
 
     if (filters.is_approved !== undefined) {
-      console.log('✅ Aplicando filtro is_approved:', filters.is_approved);
       query = query.eq('is_approved', filters.is_approved);
       countQuery = countQuery.eq('is_approved', filters.is_approved);
     }
 
     if (filters.ativo !== undefined) {
-      console.log('🔄 Aplicando filtro ativo:', filters.ativo);
       query = query.eq('ativo', filters.ativo);
       countQuery = countQuery.eq('ativo', filters.ativo);
     }
 
     if (filters.bloqueado !== undefined) {
-      console.log('🚫 Aplicando filtro bloqueado:', filters.bloqueado);
       query = query.eq('bloqueado', filters.bloqueado);
       countQuery = countQuery.eq('bloqueado', filters.bloqueado);
     }
 
-    // Executar count
-    const { count } = await countQuery;
-    console.log('📊 Count resultado:', count);
+    // Executar count - com limite alto para garantir contagem correta
+    const { count } = await countQuery.limit(10000);
 
     // Buscar dados com paginação
     const offset = (page - 1) * limit;
@@ -97,8 +119,6 @@ export async function fetchUsuarios(
       console.error('❌ Erro ao buscar usuários:', error);
       return { data: null, error: error.message, success: false };
     }
-
-    console.log('✅ Dados retornados:', data?.length, 'de', count, 'total');
 
     const totalPages = Math.ceil((count || 0) / limit);
 
@@ -128,15 +148,66 @@ export async function fetchUsuarioMetrics(): Promise<
   ApiResponse<UsuarioMetrics>
 > {
   try {
-    // Query principal para contadores
-    const { data: contadores, error: erroContadores } = await supabase
-      .from('vw_usuarios_admin')
-      .select(
-        'is_approved, ativo, bloqueado, tipo_pessoa_codigo, role, created_at'
-      );
+    // AI dev note: Verificação de autenticação - apenas staff autorizado pode acessar métricas
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    if (erroContadores) {
-      throw new Error(erroContadores.message);
+    if (authError || !user) {
+      console.error(
+        '❌ fetchUsuarioMetrics: Usuário não autenticado:',
+        authError?.message
+      );
+      return {
+        data: null,
+        error: 'Usuário não autenticado',
+        success: false,
+      };
+    }
+
+    // AI dev note: Contornar limite de 1000 do Supabase JS com queries em batches
+    const batchSize = 1000;
+    let allContadores: UsuarioMetadata[] = [];
+    let offset = 0;
+    let hasMoreData = true;
+
+    while (hasMoreData) {
+      const { data: batchData, error: batchError } = await supabase
+        .from('vw_usuarios_admin')
+        .select(
+          'is_approved, ativo, bloqueado, tipo_pessoa_codigo, role, created_at'
+        )
+        .range(offset, offset + batchSize - 1)
+        .order('created_at', { ascending: false });
+
+      if (batchError) {
+        throw new Error(batchError.message);
+      }
+
+      if (!batchData || batchData.length === 0) {
+        hasMoreData = false;
+      } else {
+        allContadores = [...allContadores, ...(batchData as UsuarioMetadata[])];
+
+        // Se retornou menos que o batch size, não há mais dados
+        if (batchData.length < batchSize) {
+          hasMoreData = false;
+        } else {
+          offset += batchSize;
+        }
+      }
+
+      // Safety: evitar loop infinito
+      if (offset > 50000) {
+        hasMoreData = false;
+      }
+    }
+
+    const contadores = allContadores;
+
+    if (!contadores || contadores.length === 0) {
+      throw new Error('Nenhum dado retornado das queries em batch');
     }
 
     const agora = new Date();
@@ -168,10 +239,12 @@ export async function fetchUsuarioMetrics(): Promise<
       {} as Record<string, number>
     );
 
-    metrics.por_tipo = Object.entries(porTipo).map(([tipo, quantidade]) => ({
-      tipo,
-      quantidade,
-    }));
+    metrics.por_tipo = Object.entries(porTipo as Record<string, number>).map(
+      ([tipo, quantidade]) => ({
+        tipo,
+        quantidade,
+      })
+    );
 
     // Agrupar por role
     const porRole = contadores.reduce(
@@ -183,10 +256,12 @@ export async function fetchUsuarioMetrics(): Promise<
       {} as Record<string, number>
     );
 
-    metrics.por_role = Object.entries(porRole).map(([role, quantidade]) => ({
-      role,
-      quantidade,
-    }));
+    metrics.por_role = Object.entries(porRole as Record<string, number>).map(
+      ([role, quantidade]) => ({
+        role,
+        quantidade,
+      })
+    );
 
     return { data: metrics, error: null, success: true };
   } catch (error) {
@@ -205,6 +280,24 @@ export async function updateUsuario(
   updates: UsuarioUpdate
 ): Promise<ApiResponse<Usuario>> {
   try {
+    // AI dev note: Verificação de autenticação - apenas staff autorizado pode atualizar usuários
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error(
+        '❌ updateUsuario: Usuário não autenticado:',
+        authError?.message
+      );
+      return {
+        data: null,
+        error: 'Usuário não autenticado',
+        success: false,
+      };
+    }
+
     const { data, error } = await supabase
       .from('pessoas')
       .update({

@@ -22,7 +22,6 @@ export interface EventCardProps {
   showTime?: boolean;
   showLocation?: boolean;
   showAttendees?: boolean;
-  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const EventCard = React.memo<EventCardProps>(
@@ -34,7 +33,6 @@ export const EventCard = React.memo<EventCardProps>(
     showTime = true,
     showLocation = false,
     showAttendees = false,
-    userRole,
   }) => {
     const handleClick = () => {
       onClick?.(event);
@@ -82,65 +80,92 @@ export const EventCard = React.memo<EventCardProps>(
 
     // Variante compacta para vista mensal
     if (variant === 'month') {
-      // Extrair nome do paciente do título (formato: "Tipo Servico - Nome Paciente")
-      const pacienteNome = event.title.includes(' - ')
-        ? event.title.split(' - ')[1]
-        : event.title;
+      // AI dev note: CORREÇÃO - Usar nome do paciente direto do metadata
+      // Evita problema com tipos de serviço que já contêm traços (ex: "Fisio - DU")
+      const pacienteNome =
+        (event.metadata?.pacienteNome as string) ||
+        (event.title.includes(' - ')
+          ? event.title.split(' - ').slice(-1)[0] // Pegar último elemento após split
+          : event.title);
 
-      // Usar cor hex diretamente do metadata se disponível, senão mapear a cor do evento
-      const corHex =
+      // Cor do tipo de serviço (evento)
+      const corEventoHex =
         (event.metadata?.tipoServicoCor as string) ||
         (event.color ? `var(--${event.color}-500)` : '#3B82F6');
+
+      // Cor do status de pagamento
+      const corPagamentoHex =
+        (event.metadata?.statusPagamentoCor as string) || '#6B7280';
 
       return (
         <div
           className={cn(
-            'flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity py-0.5',
+            'flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity py-0.5 px-1',
             className
           )}
           onClick={handleClick}
-          title={event.title}
+          title={`${event.title} - ${event.metadata?.statusPagamento || 'Status não definido'}`}
         >
-          {/* Bolinha colorida */}
+          {/* Bolinha do tipo de serviço (evento) */}
           <div
-            className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{ backgroundColor: corHex }}
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white shadow-sm"
+            style={{ backgroundColor: corEventoHex }}
+            title={`Tipo: ${event.metadata?.statusConsulta || 'Não definido'}`}
+          />
+
+          {/* Bolinha do status de pagamento */}
+          <div
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white shadow-sm"
+            style={{ backgroundColor: corPagamentoHex }}
+            title={`Pagamento: ${event.metadata?.statusPagamento || 'Não definido'}`}
           />
 
           {/* Horário */}
           {!event.allDay && (
-            <span className="text-xs font-medium flex-shrink-0">
+            <span className="text-xs font-medium flex-shrink-0 text-gray-700">
               {formatTime(event.start)}
             </span>
           )}
 
           {/* Nome do paciente */}
-          <span className="text-xs truncate flex-1">{pacienteNome}</span>
+          <span className="text-xs truncate flex-1 font-medium text-gray-900">
+            {pacienteNome}
+          </span>
         </div>
       );
     }
 
     // Variante para vista semanal
     if (variant === 'week') {
-      // Extrair dados do evento
-      const pacienteNome = event.title.includes(' - ')
-        ? event.title.split(' - ')[1]
-        : event.title;
+      // AI dev note: CORREÇÃO - Usar dados do metadata ao invés de parsing do título
+      const pacienteNome =
+        (event.metadata?.pacienteNome as string) ||
+        (event.title.includes(' - ')
+          ? event.title.split(' - ').slice(-1)[0] // Último elemento (nome do paciente)
+          : event.title);
 
-      const tipoServicoNome = event.title.includes(' - ')
-        ? event.title.split(' - ')[0]
-        : 'Serviço não informado';
+      const tipoServicoNome =
+        (event.metadata?.tipoServicoNome as string) ||
+        (event.title.includes(' - ')
+          ? event.title.split(' - ').slice(0, -1).join(' - ') // Tudo exceto último (tipo de serviço)
+          : 'Serviço não informado');
 
       const profissionalNome =
         (event.metadata?.profissionalNome as string) ||
         'Profissional não informado';
       const statusConsulta =
         (event.metadata?.statusConsulta as string) || 'Status não informado';
+      const statusPagamento =
+        (event.metadata?.statusPagamento as string) || 'Pendente';
 
-      // Usar cor hex diretamente do metadata se disponível, senão mapear a cor do evento
-      const corHex =
+      // Cor do tipo de serviço (evento)
+      const corEventoHex =
         (event.metadata?.tipoServicoCor as string) ||
         (event.color ? `var(--${event.color}-500)` : '#3B82F6');
+
+      // Cor do status de pagamento
+      const corPagamentoHex =
+        (event.metadata?.statusPagamentoCor as string) || '#F59E0B';
 
       // Verificar se há erro nos dados
       const hasError = !event.metadata || !pacienteNome;
@@ -153,45 +178,47 @@ export const EventCard = React.memo<EventCardProps>(
             Erro de dados no agendamento
           </div>
         );
-      } else if (userRole === 'profissional') {
+      } else {
+        // Vista semanal limpa e simples
         content = (
-          <div className="space-y-0.5 overflow-hidden">
-            <div className="truncate font-medium">{pacienteNome}</div>
-            <div className="truncate text-xs opacity-90">{tipoServicoNome}</div>
-            <div className="truncate text-xs opacity-75">{statusConsulta}</div>
-          </div>
-        );
-      } else if (userRole === 'admin' || userRole === 'secretaria') {
-        content = (
-          <div className="space-y-0.5 overflow-hidden">
-            <div className="truncate font-medium">{pacienteNome}</div>
-            <div className="truncate text-xs opacity-90">
+          <div className="h-full flex flex-col justify-center p-1 space-y-0.5">
+            {/* Nome do paciente com bolinha */}
+            <div className="flex items-center gap-1">
+              <div
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: corPagamentoHex }}
+              />
+              <div className="truncate font-medium text-[11px] leading-tight">
+                {pacienteNome}
+              </div>
+            </div>
+
+            {/* Tipo de serviço */}
+            <div className="truncate text-[9px] opacity-85 ml-2.5">
+              {tipoServicoNome}
+            </div>
+
+            {/* Profissional */}
+            <div className="truncate text-[9px] opacity-75 ml-2.5">
               {profissionalNome}
             </div>
           </div>
         );
-      } else {
-        // Fallback para role não definido
-        content = <div className="truncate font-medium">{pacienteNome}</div>;
       }
 
       // Tooltip com informações completas
       const tooltipContent = hasError
         ? 'Erro de dados no agendamento'
-        : userRole === 'profissional'
-          ? `${pacienteNome} - ${tipoServicoNome} - ${statusConsulta}`
-          : userRole === 'admin' || userRole === 'secretaria'
-            ? `${pacienteNome} - ${profissionalNome}`
-            : pacienteNome;
+        : `${pacienteNome}\n${tipoServicoNome}\n${formatTime(event.start)} - ${formatTime(event.end)}\nStatus: ${statusConsulta}\nPagamento: ${statusPagamento}\nProfissional: ${profissionalNome}\nLocal: ${event.location}`;
 
       return (
         <div
           className={cn(
-            'w-full h-full rounded-md p-2 cursor-pointer hover:opacity-90 transition-opacity',
-            'border border-white/20 shadow-sm text-white text-xs',
+            'w-full h-full rounded-sm cursor-pointer hover:opacity-90 transition-opacity',
+            'text-white border border-white/10',
             className
           )}
-          style={{ backgroundColor: corHex }}
+          style={{ backgroundColor: corEventoHex }}
           onClick={handleClick}
           title={tooltipContent}
         >
@@ -205,8 +232,6 @@ export const EventCard = React.memo<EventCardProps>(
       // Extrair dados do metadata
       const profissionalNome =
         (event.metadata?.profissionalNome as string) || '';
-      const responsavelLegalNome =
-        (event.metadata?.responsavelLegalNome as string) || null;
       const statusConsulta = (event.metadata?.statusConsulta as string) || '';
       const statusPagamento = (event.metadata?.statusPagamento as string) || '';
       const statusConsultaCor =
@@ -218,15 +243,18 @@ export const EventCard = React.memo<EventCardProps>(
       const tipoServicoCor =
         (event.metadata?.tipoServicoCor as string) || '#3B82F6';
 
-      // Extrair nome do paciente do título
-      const pacienteNome = event.title.includes(' - ')
-        ? event.title.split(' - ')[1]
-        : event.title;
+      // AI dev note: CORREÇÃO - Usar dados do metadata ao invés de parsing do título
+      const pacienteNome =
+        (event.metadata?.pacienteNome as string) ||
+        (event.title.includes(' - ')
+          ? event.title.split(' - ').slice(-1)[0] // Último elemento (nome do paciente)
+          : event.title);
 
-      // Extrair nome do serviço do título
-      const tipoServicoNome = event.title.includes(' - ')
-        ? event.title.split(' - ')[0]
-        : event.title;
+      const tipoServicoNome =
+        (event.metadata?.tipoServicoNome as string) ||
+        (event.title.includes(' - ')
+          ? event.title.split(' - ').slice(0, -1).join(' - ') // Tudo exceto último (tipo de serviço)
+          : 'Serviço não identificado');
 
       const isValidHexColor = (color: string) => /^#[0-9A-F]{6}$/i.test(color);
 
@@ -244,79 +272,79 @@ export const EventCard = React.memo<EventCardProps>(
           }}
         >
           <div className="space-y-3">
-            {/* Linha 1: Nome do paciente */}
-            <div className="font-semibold text-foreground">{pacienteNome}</div>
-
-            {/* Linha 2: Responsável legal (se existir) */}
-            {responsavelLegalNome && (
-              <div className="text-sm text-muted-foreground">
-                {responsavelLegalNome}
-              </div>
-            )}
-
-            {/* Linha 3: Horário e Serviço com badges inline */}
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">
-                {showTime && !event.allDay && formatTime(event.start)}
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {tipoServicoNome}
-                </span>
-
-                {/* Badges de status - empilhados no mobile, inline no desktop */}
-                <div className="flex flex-wrap gap-1">
-                  {/* Status da consulta */}
-                  <Badge
-                    className="text-xs px-1.5 py-0.5 h-5"
-                    style={{
-                      backgroundColor: isValidHexColor(statusConsultaCor)
-                        ? statusConsultaCor
-                        : '#3B82F6',
-                      color: '#FFFFFF',
-                      border: 'none',
-                    }}
-                  >
-                    {statusConsulta}
-                  </Badge>
-
-                  {/* Status do pagamento */}
-                  <Badge
-                    className="text-xs px-1.5 py-0.5 h-5"
-                    style={{
-                      backgroundColor: isValidHexColor(statusPagamentoCor)
-                        ? statusPagamentoCor
-                        : '#3B82F6',
-                      color: '#FFFFFF',
-                      border: 'none',
-                    }}
-                  >
-                    {statusPagamento}
-                  </Badge>
-
-                  {/* Badge de evolução - apenas se não possui */}
-                  {possuiEvolucao === 'não' && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs px-1.5 py-0.5 h-5 bg-yellow-50 text-yellow-800 border-yellow-200"
-                    >
-                      Evoluir
-                    </Badge>
-                  )}
-                </div>
-              </div>
+            {/* Linha 1: Nome do paciente (DESTAQUE) */}
+            <div className="text-lg font-bold text-foreground leading-tight">
+              {pacienteNome}
             </div>
 
-            {/* Linha 4: Profissional */}
-            <div className="text-sm text-muted-foreground">
-              Dr(a). {profissionalNome}
+            {/* Linha 2: Tipo de serviço (EMBAIXO) */}
+            <div className="text-sm font-medium text-muted-foreground">
+              {tipoServicoNome}
             </div>
 
-            {/* Linha 5: Local */}
+            {/* Linha 3: Horário */}
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">
+                {showTime && !event.allDay
+                  ? formatTime(event.start)
+                  : 'Dia inteiro'}
+              </span>
+            </div>
+
+            {/* Linha 4: Status badges */}
+            <div className="flex flex-wrap gap-2">
+              {/* Status da consulta */}
+              <Badge
+                className="text-xs px-2 py-1"
+                style={{
+                  backgroundColor: isValidHexColor(statusConsultaCor)
+                    ? statusConsultaCor
+                    : '#3B82F6',
+                  color: '#FFFFFF',
+                  border: 'none',
+                }}
+              >
+                {statusConsulta}
+              </Badge>
+
+              {/* Status do pagamento */}
+              <Badge
+                className="text-xs px-2 py-1"
+                style={{
+                  backgroundColor: isValidHexColor(statusPagamentoCor)
+                    ? statusPagamentoCor
+                    : '#3B82F6',
+                  color: '#FFFFFF',
+                  border: 'none',
+                }}
+              >
+                {statusPagamento}
+              </Badge>
+
+              {/* Badge de evolução pendente */}
+              {possuiEvolucao === 'não' && (
+                <Badge variant="destructive" className="text-xs px-2 py-1">
+                  Evoluir
+                </Badge>
+              )}
+            </div>
+
+            {/* Linha 5: Profissional */}
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                Dr(a). {profissionalNome}
+              </span>
+            </div>
+
+            {/* Linha 6: Local */}
             {showLocation && event.location && (
-              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                <span>{event.location}</span>
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  {event.location}
+                </span>
               </div>
             )}
           </div>

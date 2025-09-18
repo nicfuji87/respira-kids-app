@@ -24,6 +24,7 @@ import {
   mapAgendamentoFlatToCompleto,
   mapAgendamentoFlatToCalendarEvent,
   calculateCalendarStats,
+  parseSupabaseDatetime,
 } from './calendar-mappers';
 import type { CalendarEvent } from '@/types/calendar';
 
@@ -331,7 +332,7 @@ export const fetchUserCalendarEvents = async (
             .gte('data_hora', filters.startDate.toISOString())
             .lte('data_hora', filters.endDate.toISOString())
             .eq('ativo', true)
-            .limit(5);
+            .limit(10); // Aumentar limite de debug
 
           console.log('🧪 DEBUG: BYPASS RESULT', {
             'rawData?.length': rawData?.length || 0,
@@ -475,7 +476,8 @@ export const fetchUserAgendamentos = async (
         .flat()
         .sort(
           (a, b) =>
-            new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime()
+            parseSupabaseDatetime(a.data_hora).getTime() -
+            parseSupabaseDatetime(b.data_hora).getTime()
         );
 
       return todosAgendamentos;
@@ -504,33 +506,36 @@ export const fetchProfissionaisAutorizados = async (
   return data?.map((p) => p.id_profissional) || [];
 };
 
-// AI dev note: Cria novo agendamento
+// AI dev note: Cria novo agendamento usando view para evitar problemas de join
 export const createAgendamento = async (
   agendamento: CreateAgendamento
 ): Promise<SupabaseAgendamentoCompleto> => {
-  const { data, error } = await supabase
+  // 1. Inserir o agendamento básico
+  const { data: newAgendamento, error: insertError } = await supabase
     .from('agendamentos')
     .insert([agendamento])
-    .select(
-      `
-      *,
-      paciente:pessoas!agendamentos_paciente_id_fkey (*),
-      profissional:pessoas!agendamentos_profissional_id_fkey (*),
-      tipo_servico:tipo_servicos (*),
-      local_atendimento:locais_atendimento (*),
-      status_consulta:consulta_status (*),
-      status_pagamento:pagamento_status (*),
-      agendado_por_pessoa:pessoas!agendamentos_agendado_por_fkey (*)
-    `
-    )
+    .select('id')
     .single();
 
-  if (error) {
-    console.error('Erro ao criar agendamento:', error);
-    throw error;
+  if (insertError) {
+    console.error('Erro ao criar agendamento:', insertError);
+    throw insertError;
   }
 
-  return data;
+  // 2. Buscar o agendamento completo usando a view
+  const { data: agendamentoCompleto, error: fetchError } = await supabase
+    .from('vw_agendamentos_completos')
+    .select('*')
+    .eq('id', newAgendamento.id)
+    .single();
+
+  if (fetchError) {
+    console.error('Erro ao buscar agendamento criado:', fetchError);
+    throw fetchError;
+  }
+
+  // 3. Mapear da estrutura flat da view para a estrutura aninhada
+  return mapAgendamentoFlatToCompleto(agendamentoCompleto);
 };
 
 // AI dev note: Atualiza agendamento existente

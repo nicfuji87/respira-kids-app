@@ -5,13 +5,13 @@ import { cn } from '@/lib/utils';
 // Renderiza linha vermelha indicando horário atual na view semana
 
 export interface CurrentTimeIndicatorProps {
-  startHour?: number; // Hora de início do grid (padrão: 7)
-  endHour?: number; // Hora de fim do grid (padrão: 22)
+  startHour?: number; // Hora de início do grid (padrão: 6)
+  endHour?: number; // Hora de fim do grid (padrão: 20)
   className?: string;
 }
 
 export const CurrentTimeIndicator = React.memo<CurrentTimeIndicatorProps>(
-  ({ startHour = 7, endHour = 22, className }) => {
+  ({ startHour = 6, endHour = 20, className }) => {
     const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {

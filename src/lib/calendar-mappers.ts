@@ -1,5 +1,6 @@
 // AI dev note: Mappers para converter dados do Supabase para interfaces do calendário
 // Converte agendamentos e pessoas para CalendarEvent e User types
+// TIMEZONE: Implementado parse manual para manter horários exatos do Supabase (sem conversão UTC)
 
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -14,6 +15,17 @@ import type {
 import type { AdminUser } from '@/components/templates/dashboard/AdminCalendarTemplate';
 import type { ProfissionalUser } from '@/components/templates/dashboard/ProfissionalCalendarTemplate';
 import type { SecretariaUser } from '@/components/templates/dashboard/SecretariaCalendarTemplate';
+
+// AI dev note: Helper para parse de data do Supabase sem conversão de timezone
+// Mantém horário exato como está salvo no banco (09:00 UTC → 09:00 local)
+export const parseSupabaseDatetime = (dataHoraStr: string): Date => {
+  const [datePart, timePart] = dataHoraStr.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute, second] = timePart.split('+')[0].split(':').map(Number);
+
+  // Criar data usando valores exatos, sem conversão de timezone
+  return new Date(year, month - 1, day, hour, minute, second || 0);
+};
 
 // AI dev note: Mapeamento de cores do Supabase para EventColor
 export const mapSupabaseColorToEventColor = (
@@ -210,9 +222,8 @@ export const mapAgendamentoFlatToCompleto = (
 export const mapAgendamentoToCalendarEvent = (
   agendamento: SupabaseAgendamentoCompleto
 ): CalendarEvent => {
-  // AI dev note: Manter timezone UTC conforme está no Supabase para consistência
-  // Usuário especificou: "o horario deve ser exatamente o que está no supabase"
-  const start = new Date(agendamento.data_hora);
+  // AI dev note: CORREÇÃO - Usar helper para manter horário exato do Supabase
+  const start = parseSupabaseDatetime(agendamento.data_hora);
   const end = new Date(
     start.getTime() + (agendamento.tipo_servico?.duracao_minutos || 60) * 60000
   );
@@ -253,8 +264,10 @@ export const mapAgendamentoToCalendarEvent = (
       localId: agendamento.local_id,
       observacao: agendamento.observacao,
       tipoServicoCor: agendamento.tipo_servico?.cor || '#3B82F6', // Cor original do tipo de serviço
-      // Dados adicionais
+      // Dados adicionais para exibição
+      pacienteNome, // AI dev note: ADICIONADO - Nome do paciente para evitar problemas de parsing
       profissionalNome,
+      tipoServicoNome,
       statusConsultaCor: agendamento.status_consulta?.cor || '#3B82F6',
       statusPagamentoCor: agendamento.status_pagamento?.cor || '#3B82F6',
     },
@@ -265,25 +278,11 @@ export const mapAgendamentoToCalendarEvent = (
 export const mapAgendamentoFlatToCalendarEvent = (
   flat: SupabaseAgendamentoCompletoFlat
 ): CalendarEvent => {
-  // AI dev note: Manter timezone UTC conforme está no Supabase para consistência
-  // Usuário especificou: "o horario deve ser exatamente o que está no supabase"
-  const start = new Date(flat.data_hora);
+  // AI dev note: CORREÇÃO - Usar helper para manter horário exato do Supabase
+  const start = parseSupabaseDatetime(flat.data_hora);
   const end = new Date(
     start.getTime() + flat.tipo_servico_duracao_minutos * 60000
   );
-
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔄 DEBUG: mapAgendamentoFlatToCalendarEvent', {
-      'flat.id': flat.id,
-      'flat.data_hora (original)': flat.data_hora,
-      'start (parsed)': start.toISOString(),
-      'start.getMonth()': start.getMonth(),
-      'start.getFullYear()': start.getFullYear(),
-      end: end.toISOString(),
-      paciente: flat.paciente_nome,
-      profissional: flat.profissional_nome,
-    });
-  }
 
   return {
     id: flat.id,
@@ -309,7 +308,9 @@ export const mapAgendamentoFlatToCalendarEvent = (
       observacao: flat.observacao,
       tipoServicoCor: flat.tipo_servico_cor,
       // Dados extras da view flat
+      pacienteNome: flat.paciente_nome, // AI dev note: ADICIONADO - Nome do paciente direto
       profissionalNome: flat.profissional_nome,
+      tipoServicoNome: flat.tipo_servico_nome,
       responsavelLegalNome: flat.responsavel_legal_nome,
       statusConsultaCor: flat.status_consulta_cor,
       statusPagamentoCor: flat.status_pagamento_cor,
@@ -350,6 +351,9 @@ export const mapCalendarEventToAgendamento = (
     valor_servico: (event.metadata?.valorServico as number) || 0,
     observacao: event.description || undefined,
     agendado_por: currentUserId,
+    empresa_fatura: isUpdate
+      ? (event.metadata?.empresaFaturaId as string) || undefined
+      : (event.metadata?.empresaFaturaId as string) || '',
   };
 
   // For updates, always include atualizado_por
@@ -411,7 +415,7 @@ export const calculateCalendarStats = (
 ): CalendarStats => {
   const now = new Date();
   const proximosEventos = agendamentos.filter(
-    (agendamento) => new Date(agendamento.data_hora) > now
+    (agendamento) => parseSupabaseDatetime(agendamento.data_hora) > now
   ).length;
 
   const participantesUnicos = new Set(

@@ -311,6 +311,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                   loading={loading}
                   onConsultationClick={handleAppointmentClick}
                   onCreateEvolutionClick={handleEvolutionClick}
+                  maxItems={50} // Mostrar até 50 consultas inicialmente
                 />
               </ScrollArea>
             </CardContent>

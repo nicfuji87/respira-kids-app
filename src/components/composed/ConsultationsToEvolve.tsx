@@ -269,7 +269,7 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
     error,
     onConsultationClick,
     onCreateEvolutionClick,
-    maxItems = 3,
+    maxItems = 10, // Aumentar padrão de 3 para 10
     className,
     userRole,
   }) => {

@@ -2,6 +2,7 @@
 // Módulo centralizado para garantir consistência entre criação e edição de faturas
 
 import { supabase } from '@/lib/supabase';
+import { parseSupabaseDatetime } from './calendar-mappers';
 
 export interface ConsultationData {
   id: string;
@@ -155,11 +156,13 @@ export async function generateChargeDescription(
   // Construir lista de datas e valores formatadas adequadamente
   // AI dev note: Ordenar consultas cronologicamente antes de gerar descrição
   const sortedConsultations = [...consultationData].sort(
-    (a, b) => new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime()
+    (a, b) =>
+      parseSupabaseDatetime(a.data_hora).getTime() -
+      parseSupabaseDatetime(b.data_hora).getTime()
   );
 
   const datesAndValuesArray = sortedConsultations.map((consultation) => {
-    const date = new Date(consultation.data_hora);
+    const date = parseSupabaseDatetime(consultation.data_hora);
     const formattedDate = date.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',

@@ -30,7 +30,6 @@ export function useAuth() {
 
   // Função para atualizar status do usuário
   const updateUserStatus = async (user: User | null) => {
-
     // AI dev note: Melhorada - cache persiste mesmo quando userId muda de null para real ID
     const currentUserId = user?.id || null;
 
@@ -40,11 +39,9 @@ export function useAuth() {
       (authCache.current.userId === currentUserId ||
         (authCache.current.userId === null && currentUserId))
     ) {
-      
       // Atualizar cache com o ID real se estava null
       if (authCache.current.userId === null && currentUserId) {
         authCache.current.userId = currentUserId;
-        
       }
       setUserStatus(authCache.current.status);
       // AI dev note: Cache hit - verificar se userRole está disponível
@@ -61,7 +58,6 @@ export function useAuth() {
     }
 
     // Se não há cache válido, fazer verificação completa
-      
 
     try {
       // AI dev note: Timeout para garantir que loading nunca fique infinito
@@ -81,7 +77,6 @@ export function useAuth() {
           userId: currentUserId,
           status: status,
         };
-        
       }
 
       setUserStatus(status);
@@ -123,7 +118,6 @@ export function useAuth() {
   const refreshUserStatus = async () => {
     try {
       // Forçar invalidação de cache para refresh manual
-      
       authCache.current = { userId: null, status: null };
 
       const user = await getCurrentUser();
@@ -152,8 +146,6 @@ export function useAuth() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
-        
-
         if (!mounted) return;
 
         // AI dev note: Debounce para evitar múltiplos eventos em sequência rápida
@@ -184,7 +176,7 @@ export function useAuth() {
               await updateUserStatus(session.user);
             } else {
               // Logout ou token expirado - limpar cache
-              
+
               authCache.current = { userId: null, status: null };
               setUserStatus({
                 isAuthenticated: false,

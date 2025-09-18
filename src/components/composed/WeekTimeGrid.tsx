@@ -9,16 +9,14 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-import { Card, CardContent } from '@/components/primitives/card';
-import { ScrollArea } from '@/components/primitives/scroll-area';
 import { cn } from '@/lib/utils';
 import { CurrentTimeIndicator } from './CurrentTimeIndicator';
 import { WeekEventBlock } from './WeekEventBlock';
 import { EventListModal } from '../domain/calendar';
 import type { CalendarEvent } from '@/types/calendar';
 
-// AI dev note: WeekTimeGrid é um Composed component
-// Grid principal da view semana com horários, dias, eventos proporcionais e indicadores
+// AI dev note: WeekTimeGrid simplificado e limpo
+// Grid semanal com layout simples e funcional
 
 export interface WeekTimeGridProps {
   currentDate: Date;
@@ -27,9 +25,7 @@ export interface WeekTimeGridProps {
   onTimeSlotClick?: (time: string, date: Date) => void;
   startHour?: number;
   endHour?: number;
-  hourHeight?: number;
   className?: string;
-  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
@@ -38,11 +34,9 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
     events,
     onEventClick,
     onTimeSlotClick,
-    startHour = 7,
-    endHour = 22,
-    hourHeight = 64,
+    startHour = 6,
+    endHour = 20,
     className,
-    userRole,
   }) => {
     // Estado para modal de eventos múltiplos
     const [modalState, setModalState] = useState<{
@@ -70,7 +64,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
       });
     }, [startHour, endHour]);
 
-    // Agrupa eventos por dia e detecta sobreposições
+    // Agrupa eventos por dia
     const eventsGroupedByDay = useMemo(() => {
       const grouped: Record<string, CalendarEvent[]> = {};
 
@@ -82,59 +76,38 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
       return grouped;
     }, [weekDays, events]);
 
-    // Detecta eventos sobrepostos e calcula posicionamento
+    // Detecção simples de sobreposições
     const getEventsWithOverlapData = (dayEvents: CalendarEvent[]) => {
       return dayEvents.map((event) => {
-        // Encontra eventos que se sobrepõem com este
-        const overlapping = dayEvents.filter((otherEvent) => {
+        // Busca eventos no mesmo horário exato
+        const sameTimeEvents = dayEvents.filter((otherEvent) => {
           if (otherEvent.id === event.id) return false;
-
-          const eventStart = event.start.getTime();
-          const eventEnd = event.end.getTime();
-          const otherStart = otherEvent.start.getTime();
-          const otherEnd = otherEvent.end.getTime();
-
-          // Verifica sobreposição
-          return eventStart < otherEnd && eventEnd > otherStart;
+          return event.start.getTime() === otherEvent.start.getTime();
         });
 
-        // Todos os eventos sobrepostos incluindo o atual
-        const allOverlapping = [event, ...overlapping].sort(
-          (a, b) => a.start.getTime() - b.start.getTime()
+        if (sameTimeEvents.length === 0) {
+          // Evento único no horário
+          return {
+            event,
+            overlapIndex: 0,
+            totalOverlapping: 1,
+          };
+        }
+
+        // Eventos no mesmo horário - ordenar por ID para consistência
+        const allSameTime = [event, ...sameTimeEvents].sort((a, b) =>
+          a.id.localeCompare(b.id)
         );
 
         return {
           event,
-          overlapIndex: allOverlapping.findIndex((e) => e.id === event.id),
-          totalOverlapping: allOverlapping.length,
+          overlapIndex: allSameTime.findIndex((e) => e.id === event.id),
+          totalOverlapping: allSameTime.length,
         };
       });
     };
 
-    // Agrupa eventos por time slot para detectar múltiplos
-    const getEventsPerTimeSlot = (dayEvents: CalendarEvent[], time: string) => {
-      const [hours] = time.split(':').map(Number);
-      return dayEvents.filter((event) => {
-        const eventHour = event.start.getHours();
-        return eventHour === hours;
-      });
-    };
-
     const handleTimeSlotClick = (time: string, date: Date) => {
-      const dayKey = date.toISOString().split('T')[0];
-      const dayEvents = eventsGroupedByDay[dayKey] || [];
-      const slotEvents = getEventsPerTimeSlot(dayEvents, time);
-
-      // Se há mais de 2 eventos, abre modal
-      if (slotEvents.length > 2) {
-        setModalState({
-          isOpen: true,
-          date,
-          events: slotEvents,
-        });
-        return;
-      }
-
       onTimeSlotClick?.(time, date);
     };
 
@@ -148,138 +121,117 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
 
     return (
       <>
-        <Card className={cn('overflow-hidden', className)}>
-          <CardContent className="p-0">
-            {/* Header com dias da semana */}
-            <div className="grid grid-cols-8 border-b bg-muted/50 sticky top-0 z-20">
-              <div className="p-4 border-r">
-                <div className="text-sm font-medium text-muted-foreground">
-                  Horário
-                </div>
-              </div>
-              {weekDays.map((day) => {
-                const isCurrentDay = isToday(day);
-                return (
-                  <div
-                    key={day.toISOString()}
-                    className="p-4 border-r last:border-r-0"
-                  >
-                    <div className="text-center">
-                      <div
-                        className={cn(
-                          'text-sm font-medium capitalize',
-                          isCurrentDay && 'text-primary'
-                        )}
-                      >
-                        {format(day, 'EEE', { locale: ptBR })}
-                      </div>
-                      <div
-                        className={cn(
-                          'text-lg font-bold mt-1',
-                          isCurrentDay && 'text-primary'
-                        )}
-                      >
-                        {format(day, 'd')}
-                      </div>
-                      {isCurrentDay && (
-                        <div className="w-2 h-2 bg-primary rounded-full mx-auto mt-1" />
+        {/* Grid semanal simples que expande naturalmente */}
+        <div className={cn('w-full', className)}>
+          {/* Header com dias da semana */}
+          <div className="w-full grid grid-cols-8 border-b bg-muted/30">
+            <div className="p-3 border-r bg-muted/50 text-center">
+              <div className="text-sm font-medium">Horário</div>
+            </div>
+            {weekDays.map((day) => {
+              const isCurrentDay = isToday(day);
+              return (
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    'p-3 border-r last:border-r-0 text-center',
+                    isCurrentDay && 'bg-primary/15'
+                  )}
+                >
+                  <div className="text-center">
+                    <div
+                      className={cn(
+                        'text-sm font-medium capitalize',
+                        isCurrentDay && 'text-primary font-semibold'
                       )}
+                    >
+                      {format(day, 'EEE', { locale: ptBR })}
                     </div>
+                    <div
+                      className={cn(
+                        'text-lg font-bold mt-1',
+                        isCurrentDay && 'text-primary'
+                      )}
+                    >
+                      {format(day, 'd')}
+                    </div>
+                    {isCurrentDay && (
+                      <div className="w-2 h-2 bg-primary rounded-full mx-auto mt-1" />
+                    )}
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Grid de horários que se adapta ao container */}
+          <div className="w-full grid grid-cols-8">
+            {/* Coluna de horários */}
+            <div className="border-r bg-muted/10">
+              {timeSlots.map((time) => (
+                <div
+                  key={time}
+                  className="h-16 border-b p-2 text-xs text-muted-foreground font-medium text-center flex items-center justify-center"
+                >
+                  {time}
+                </div>
+              ))}
             </div>
 
-            {/* Grid de horários */}
-            <ScrollArea className="h-[calc(100vh-8rem)]">
-              <div className="relative">
-                <div className="grid grid-cols-8 min-h-full">
-                  {/* Coluna de horários */}
-                  <div className="border-r bg-muted/20">
-                    {timeSlots.map((time) => (
-                      <div
-                        key={time}
-                        className="border-b text-xs text-muted-foreground font-medium p-3"
-                        style={{ height: `${hourHeight}px` }}
-                      >
-                        {time}
-                      </div>
-                    ))}
-                  </div>
+            {/* Colunas dos dias */}
+            {weekDays.map((day) => {
+              const dayKey = day.toISOString().split('T')[0];
+              const dayEvents = eventsGroupedByDay[dayKey] || [];
+              const eventsWithOverlap = getEventsWithOverlapData(dayEvents);
+              const isCurrentDay = isToday(day);
 
-                  {/* Colunas dos dias */}
-                  {weekDays.map((day) => {
-                    const dayKey = day.toISOString().split('T')[0];
-                    const dayEvents = eventsGroupedByDay[dayKey] || [];
-                    const eventsWithOverlap =
-                      getEventsWithOverlapData(dayEvents);
+              return (
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    'border-r last:border-r-0 relative',
+                    isCurrentDay && 'bg-primary/5'
+                  )}
+                  style={{
+                    minHeight: `${timeSlots.length * 64}px`,
+                  }}
+                >
+                  {/* Slots de horário clicáveis */}
+                  {timeSlots.map((time) => (
+                    <div
+                      key={time}
+                      className="h-16 border-b hover:bg-muted/20 cursor-pointer transition-colors"
+                      onClick={() => handleTimeSlotClick(time, day)}
+                    />
+                  ))}
 
-                    return (
-                      <div
-                        key={day.toISOString()}
-                        className="border-r last:border-r-0 relative"
-                        style={{
-                          minHeight: `${timeSlots.length * hourHeight}px`,
-                        }}
-                      >
-                        {/* Slots de horário clicáveis */}
-                        {timeSlots.map((time) => {
-                          const slotEvents = getEventsPerTimeSlot(
-                            dayEvents,
-                            time
-                          );
-                          const hasMultipleEvents = slotEvents.length > 2;
-
-                          return (
-                            <div
-                              key={time}
-                              className={cn(
-                                'border-b hover:bg-muted/10 cursor-pointer',
-                                'transition-colors group relative'
-                              )}
-                              style={{ height: `${hourHeight}px` }}
-                              onClick={() => handleTimeSlotClick(time, day)}
-                            >
-                              {hasMultipleEvents && (
-                                <div className="absolute top-1 right-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-medium z-10">
-                                  +{slotEvents.length - 2}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {/* Eventos renderizados sobre os slots */}
-                        {eventsWithOverlap.map(
-                          ({ event, overlapIndex, totalOverlapping }) => (
-                            <WeekEventBlock
-                              key={event.id}
-                              event={event}
-                              startHour={startHour}
-                              endHour={endHour}
-                              hourHeight={hourHeight}
-                              onClick={handleEventClick}
-                              overlapIndex={overlapIndex}
-                              totalOverlapping={Math.min(totalOverlapping, 2)} // Máximo 2 visíveis
-                              userRole={userRole}
-                            />
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
+                  {/* Eventos renderizados sobre os slots */}
+                  {eventsWithOverlap.map(
+                    ({ event, overlapIndex, totalOverlapping }) => (
+                      <WeekEventBlock
+                        key={event.id}
+                        event={event}
+                        startHour={startHour}
+                        endHour={endHour}
+                        hourHeight={64}
+                        onClick={handleEventClick}
+                        overlapIndex={overlapIndex}
+                        totalOverlapping={totalOverlapping}
+                      />
+                    )
+                  )}
                 </div>
+              );
+            })}
+          </div>
 
-                {/* Indicador de tempo atual */}
-                <CurrentTimeIndicator
-                  startHour={startHour}
-                  endHour={endHour}
-                  className="ml-[12.5%]" // Offset para pular coluna de horários
-                />
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+          {/* Indicador de tempo atual */}
+          <CurrentTimeIndicator
+            startHour={startHour}
+            endHour={endHour}
+            className="ml-[12.5%]"
+          />
+        </div>
 
         {/* Modal para eventos múltiplos */}
         {modalState.date && (

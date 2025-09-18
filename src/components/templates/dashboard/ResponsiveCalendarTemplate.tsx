@@ -149,7 +149,7 @@ export const ResponsiveCalendarTemplate =
       const getResponsiveClasses = () => {
         return cn(
           'responsive-calendar-template',
-          'w-full h-full',
+          'w-full max-w-none h-full',
           {
             'mobile-layout': isMobile,
             'desktop-layout': !isMobile,

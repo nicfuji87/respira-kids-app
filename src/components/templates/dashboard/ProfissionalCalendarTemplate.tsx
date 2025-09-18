@@ -107,12 +107,11 @@ export const ProfissionalCalendarTemplate =
             onEventSave={handleEventSave}
             initialView={initialView}
             initialDate={initialDate}
-            // AI dev note: Repassar props de estado externo para CalendarTemplate
             externalCurrentDate={externalCurrentDate}
             externalCurrentView={externalCurrentView}
             onExternalDateChange={onExternalDateChange}
             onExternalViewChange={onExternalViewChange}
-            className="w-full h-full"
+            className="w-full max-w-none h-full"
             userRole={currentUser.role}
             onPatientClick={onPatientClick}
             onProfessionalClick={onProfessionalClick}

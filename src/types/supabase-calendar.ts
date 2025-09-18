@@ -105,6 +105,7 @@ export interface SupabaseAgendamentoCompletoFlat {
   valor_servico: string; // numeric vem como string do Supabase
   id_pagamento_externo: string | null;
   link_nfe: string | null;
+  fatura_id: string | null; // ID da fatura associada
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -229,6 +230,7 @@ export interface CreateAgendamento {
   valor_servico: number;
   observacao?: string;
   agendado_por: string;
+  empresa_fatura: string;
 }
 
 export interface UpdateAgendamento {
@@ -242,6 +244,7 @@ export interface UpdateAgendamento {
   valor_servico?: number;
   observacao?: string;
   atualizado_por: string;
+  empresa_fatura?: string;
 }
 
 // Types para estatísticas

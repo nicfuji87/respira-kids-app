@@ -150,6 +150,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
             onConsultationClick={onConsultationClick}
             onCreateEvolutionClick={onCreateEvolutionClick}
             userRole={userRole}
+            maxItems={100} // Mostrar até 100 consultas para profissional
           />
         </div>
 

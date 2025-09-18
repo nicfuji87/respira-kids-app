@@ -145,7 +145,81 @@ export const AppointmentDetailsManager =
       const [editingContent, setEditingContent] = useState<string>('');
       const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+      // Estado para emissão de NFe
+      const [isEmitingNfe, setIsEmitingNfe] = useState(false);
+
+      // Estados para dados da fatura associada
+      const [faturaData, setFaturaData] = useState<{
+        link_nfe: string | null;
+        id_asaas: string | null;
+      } | null>(null);
+
       const { user } = useAuth();
+
+      // Função wrapper para emitir NFe (apenas para casos de emissão)
+      const handleEmitirNfe = async () => {
+        const statusLower =
+          appointment?.status_pagamento_descricao?.toLowerCase() || '';
+        const linkNfe = faturaData?.link_nfe || appointment?.link_nfe;
+
+        // Só executar se for realmente um caso de "Emitir NFe"
+        if (statusLower.includes('pago') && !linkNfe && onNfeAction) {
+          setIsEmitingNfe(true);
+          try {
+            await onNfeAction(appointment?.id || '', linkNfe || undefined);
+          } finally {
+            setIsEmitingNfe(false);
+          }
+        }
+      };
+
+      // Carregar dados da fatura associada se existir fatura_id
+      useEffect(() => {
+        const loadFaturaData = async () => {
+          // Type assertion for fatura_id which may not be in the base type
+          const appointmentWithFatura = appointment as typeof appointment & {
+            fatura_id?: string;
+          };
+          if (!appointmentWithFatura?.fatura_id || !isOpen) {
+            setFaturaData(null);
+            return;
+          }
+
+          try {
+            const { supabase } = await import('@/lib/supabase');
+            const { data: fatura, error } = await supabase
+              .from('faturas')
+              .select('link_nfe, id_asaas')
+              .eq('id', appointmentWithFatura.fatura_id)
+              .single();
+
+            if (error) {
+              console.error('Erro ao carregar dados da fatura:', error);
+              setFaturaData(null);
+            } else {
+              setFaturaData({
+                link_nfe: fatura.link_nfe,
+                id_asaas: fatura.id_asaas,
+              });
+              console.log('🔍 Dados da fatura carregados:', {
+                fatura_id: appointmentWithFatura.fatura_id,
+                link_nfe: fatura.link_nfe,
+                id_asaas: fatura.id_asaas,
+              });
+            }
+          } catch (error) {
+            console.error('Erro inesperado ao carregar fatura:', error);
+            setFaturaData(null);
+          }
+        };
+
+        loadFaturaData();
+      }, [
+        appointment &&
+          (appointment as typeof appointment & { fatura_id?: string })
+            .fatura_id,
+        isOpen,
+      ]);
 
       // Carregar opções de status de consulta
       useEffect(() => {
@@ -593,7 +667,12 @@ export const AppointmentDetailsManager =
                           statusColor={appointment.status_pagamento_cor}
                           valor={appointment.valor_servico}
                           userRole={userRole}
-                          linkNfe={appointment.link_nfe}
+                          linkNfe={faturaData?.link_nfe || appointment.link_nfe}
+                          idAsaas={
+                            faturaData?.id_asaas ||
+                            appointment.id_pagamento_externo
+                          }
+                          isEmitingNfe={isEmitingNfe}
                           hideValue={
                             userRole === 'admin' || userRole === 'secretaria'
                           }
@@ -603,12 +682,7 @@ export const AppointmentDetailsManager =
                           onPaymentAction={() =>
                             onPaymentAction?.(appointment.id)
                           }
-                          onNfeAction={() =>
-                            onNfeAction?.(
-                              appointment.id,
-                              appointment.link_nfe || undefined
-                            )
-                          }
+                          onNfeAction={handleEmitirNfe}
                         />
                       </>
                     ) : userRole === 'profissional' ? (
@@ -631,16 +705,16 @@ export const AppointmentDetailsManager =
                           statusColor={appointment.status_pagamento_cor}
                           valor={appointment.comissao_valor_calculado}
                           userRole={userRole}
-                          linkNfe={appointment.link_nfe}
+                          linkNfe={faturaData?.link_nfe || appointment.link_nfe}
+                          idAsaas={
+                            faturaData?.id_asaas ||
+                            appointment.id_pagamento_externo
+                          }
+                          isEmitingNfe={isEmitingNfe}
                           onPaymentAction={() =>
                             onPaymentAction?.(appointment.id)
                           }
-                          onNfeAction={() =>
-                            onNfeAction?.(
-                              appointment.id,
-                              appointment.link_nfe || undefined
-                            )
-                          }
+                          onNfeAction={handleEmitirNfe}
                           hideValue={true}
                         />
                       </>

@@ -40,14 +40,14 @@ export const MonthView = React.memo<MonthViewProps>(
     };
 
     return (
-      <div className={cn('w-full', className)}>
+      <div className={cn('w-full max-w-none', className)}>
         <CalendarGrid
           currentDate={currentDate}
           events={events}
           view="month"
           onEventClick={handleEventClick}
           onDateClick={handleDateClick}
-          className="w-full"
+          className="w-full max-w-none"
         />
       </div>
     );
