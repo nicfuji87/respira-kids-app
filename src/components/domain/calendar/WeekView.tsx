@@ -13,10 +13,18 @@ export interface WeekViewProps {
   onEventClick?: (event: CalendarEvent) => void;
   onTimeSlotClick?: (time: string, date: Date) => void;
   className?: string;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const WeekView = React.memo<WeekViewProps>(
-  ({ currentDate, events, onEventClick, onTimeSlotClick, className }) => {
+  ({
+    currentDate,
+    events,
+    onEventClick,
+    onTimeSlotClick,
+    className,
+    userRole,
+  }) => {
     const handleEventClick = (event: CalendarEvent) => {
       onEventClick?.(event);
     };
@@ -32,6 +40,7 @@ export const WeekView = React.memo<WeekViewProps>(
           events={events}
           onEventClick={handleEventClick}
           onTimeSlotClick={handleTimeSlotClick}
+          userRole={userRole}
           className="w-full max-w-none"
         />
       </div>

@@ -22,6 +22,7 @@ export interface EventCardProps {
   showTime?: boolean;
   showLocation?: boolean;
   showAttendees?: boolean;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const EventCard = React.memo<EventCardProps>(
@@ -33,7 +34,11 @@ export const EventCard = React.memo<EventCardProps>(
     showTime = true,
     showLocation = false,
     showAttendees = false,
+    userRole,
   }) => {
+    // AI dev note: userRole será usado para controlar visualizações específicas por role no futuro
+    void userRole;
+
     const handleClick = () => {
       onClick?.(event);
     };

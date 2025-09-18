@@ -434,6 +434,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
               events={filteredEvents}
               onEventClick={handleEventClick}
               onTimeSlotClick={handleTimeSlotClick}
+              userRole={userRole}
             />
           );
         case 'day':
@@ -443,6 +444,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
               events={filteredEvents}
               onEventClick={handleEventClick}
               onTimeSlotClick={handleTimeSlotClick}
+              userRole={userRole}
             />
           );
         case 'agenda':

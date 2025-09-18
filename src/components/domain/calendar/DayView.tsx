@@ -16,10 +16,18 @@ export interface DayViewProps {
   onEventClick?: (event: CalendarEvent) => void;
   onTimeSlotClick?: (time: string, date: Date) => void;
   className?: string;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 export const DayView = React.memo<DayViewProps>(
-  ({ currentDate, events, onEventClick, onTimeSlotClick, className }) => {
+  ({
+    currentDate,
+    events,
+    onEventClick,
+    onTimeSlotClick,
+    className,
+    userRole,
+  }) => {
     // Estado para modal de eventos múltiplos
     const [modalState, setModalState] = useState<{
       isOpen: boolean;
@@ -195,6 +203,7 @@ export const DayView = React.memo<DayViewProps>(
                     onClick={handleEventClick}
                     overlapIndex={overlapIndex}
                     totalOverlapping={Math.min(totalOverlapping, 3)} // Máximo 3 visíveis na view dia
+                    userRole={userRole}
                   />
                 )
               )}
