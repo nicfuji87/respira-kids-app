@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, ChevronRight, User } from 'lucide-react';
+import { Calendar, MapPin, User, ChevronRight } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -22,13 +22,14 @@ import type {
 // Consolidado em um único card com dados reais
 
 export const RecentConsultations = React.memo<RecentConsultationsProps>(
-  ({ patientId, onConsultationClick, className }) => {
+  ({ patientId, onConsultationClick, className, userRole }) => {
     const [consultations, setConsultations] = useState<RecentConsultation[]>(
       []
     );
     const [totalCount, setTotalCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showAll, setShowAll] = useState(false);
 
     useEffect(() => {
       const loadConsultations = async () => {
@@ -39,8 +40,8 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
           setError(null);
 
           // AI dev note: Buscar consultas recentes reais do Supabase usando view completa
-          // Query da view vw_agendamentos_completos para ter dados completos incluindo evolução
-          const { data, error: queryError } = await supabase
+          // Query da view vw_agendamentos_completos para ter dados completos incluindo evolução e comissão
+          let query = supabase
             .from('vw_agendamentos_completos')
             .select(
               `
@@ -54,13 +55,21 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
               status_pagamento_descricao,
               status_pagamento_cor,
               profissional_nome,
-              possui_evolucao
+              possui_evolucao,
+              comissao_tipo_recebimento,
+              comissao_valor_calculado
             `
             )
             .eq('paciente_id', patientId)
             .eq('ativo', true)
-            .order('data_hora', { ascending: false })
-            .limit(5);
+            .order('data_hora', { ascending: false });
+
+          // Aplicar limite apenas se não estiver mostrando todas
+          if (!showAll) {
+            query = query.limit(5);
+          }
+
+          const { data, error: queryError } = await query;
 
           if (queryError) {
             throw new Error(queryError.message);
@@ -89,6 +98,11 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
               profissional_nome:
                 item.profissional_nome || 'Profissional não especificado',
               possui_evolucao: item.possui_evolucao || 'não',
+              // AI dev note: Campos de comissão para lógica de exibição
+              comissao_tipo_recebimento: item.comissao_tipo_recebimento,
+              comissao_valor_calculado: item.comissao_valor_calculado
+                ? parseFloat(item.comissao_valor_calculado)
+                : null,
             })
           );
 
@@ -111,7 +125,7 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
       };
 
       loadConsultations();
-    }, [patientId]);
+    }, [patientId, showAll]);
 
     // Função para formatar data e hora (sem conversão de timezone)
     const formatDateTime = (dateString: string) => {
@@ -140,6 +154,26 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
         style: 'currency',
         currency: 'BRL',
       }).format(value);
+    };
+
+    // AI dev note: Função para determinar valor correto baseado no role
+    // APENAS para profissional: mostrar comissão se configurada, senão valor integral
+    // Para TODOS os outros roles: sempre valor integral
+    const getDisplayValue = (consultation: RecentConsultation): number => {
+      // APENAS profissional tem lógica especial
+      if (userRole === 'profissional') {
+        // Se tem comissão configurada, mostrar comissão
+        if (
+          consultation.comissao_tipo_recebimento &&
+          consultation.comissao_valor_calculado !== null &&
+          consultation.comissao_valor_calculado !== undefined
+        ) {
+          return consultation.comissao_valor_calculado;
+        }
+      }
+
+      // Para TODOS os outros casos (outros roles ou profissional sem comissão), mostrar valor integral
+      return consultation.valor_servico;
     };
 
     // Loading state
@@ -186,10 +220,10 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Consultas Recentes
+            Histórico de Consultas
             {totalCount > 0 && (
               <Badge variant="outline" className="ml-auto">
-                {totalCount} total
+                {totalCount} {totalCount === 1 ? 'consulta' : 'consultas'}
               </Badge>
             )}
           </CardTitle>
@@ -249,7 +283,7 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
 
                       <div className="text-right">
                         <div className="text-sm font-medium">
-                          {formatCurrency(consultation.valor_servico)}
+                          {formatCurrency(getDisplayValue(consultation))}
                         </div>
                       </div>
                     </div>
@@ -293,12 +327,25 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
             })
           )}
 
-          {/* Ver mais */}
-          {totalCount > consultations.length && (
+          {/* Botão Ver mais / Ver menos */}
+          {totalCount > 5 && (
             <div className="text-center pt-4 border-t">
-              <Button variant="outline" size="sm">
-                Ver todas as {totalCount} consultas
-                <ChevronRight className="h-4 w-4 ml-1" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAll(!showAll)}
+              >
+                {showAll ? (
+                  <>
+                    Ver menos
+                    <ChevronRight className="h-4 w-4 ml-1 rotate-90" />
+                  </>
+                ) : (
+                  <>
+                    Ver todas as {totalCount} consultas
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </>
+                )}
               </Button>
             </div>
           )}

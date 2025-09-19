@@ -95,7 +95,7 @@ interface PatientMetricsWithConsultationsProps extends PatientMetricsProps {
 
 export const PatientMetricsWithConsultations =
   React.memo<PatientMetricsWithConsultationsProps>(
-    ({ patientId, onConsultationClick, className, editMode }) => {
+    ({ patientId, onConsultationClick, className, editMode, userRole }) => {
       const { user } = useAuth();
       const { toast } = useToast();
       const [metrics, setMetrics] = useState<PatientMetricsData | null>(null);
@@ -564,6 +564,37 @@ export const PatientMetricsWithConsultations =
         [startDate, endDate]
       );
 
+      // AI dev note: Tipo para itens de métricas com campos essenciais para cálculo
+      type MetricsItem = {
+        valor_servico: string | number;
+        comissao_tipo_recebimento?: string | null;
+        comissao_valor_calculado?: string | number | null;
+      };
+
+      // AI dev note: Função helper para calcular valores em métricas baseado no role
+      // APENAS para profissional tem lógica especial
+      const getCalculationValue = useCallback(
+        (item: MetricsItem): number => {
+          // APENAS profissional tem lógica especial
+          if (userRole === 'profissional') {
+            // Se tem comissão configurada, usar comissão
+            if (
+              item.comissao_tipo_recebimento &&
+              item.comissao_valor_calculado !== null &&
+              item.comissao_valor_calculado !== undefined
+            ) {
+              return parseFloat(
+                item.comissao_valor_calculado?.toString() || '0'
+              );
+            }
+          }
+
+          // Para TODOS os outros casos (outros roles ou profissional sem comissão), usar valor integral
+          return parseFloat(item.valor_servico?.toString() || '0');
+        },
+        [userRole]
+      );
+
       // Função para carregar dados das consultas
       const loadData = useCallback(async () => {
         if (!patientId) return;
@@ -613,7 +644,9 @@ export const PatientMetricsWithConsultations =
               empresa_fatura_razao_social,
               empresa_fatura_nome_fantasia,
               id_pagamento_externo,
-              fatura_id
+              fatura_id,
+              comissao_tipo_recebimento,
+              comissao_valor_calculado
             `
             )
             .eq('paciente_id', patientId)
@@ -687,7 +720,7 @@ export const PatientMetricsWithConsultations =
           });
 
           const totalAgendado = consultasAgendadasEfetivas.reduce(
-            (sum, item) => sum + parseFloat(item.valor_servico || '0'),
+            (sum, item) => sum + getCalculationValue(item),
             0
           );
 
@@ -717,17 +750,14 @@ export const PatientMetricsWithConsultations =
                 'atrasado',
               ].includes(statusCode);
             })
-            .reduce(
-              (sum, item) => sum + parseFloat(item.valor_servico || '0'),
-              0
-            );
+            .reduce((sum, item) => sum + getCalculationValue(item), 0);
 
           // Valores por status específico de pagamento
           const consultasPagas = metricsData.filter(
             (item) => item.status_pagamento_codigo === 'pago'
           );
           const valorPago = consultasPagas.reduce(
-            (sum, item) => sum + parseFloat(item.valor_servico || '0'),
+            (sum, item) => sum + getCalculationValue(item),
             0
           );
 
@@ -737,25 +767,16 @@ export const PatientMetricsWithConsultations =
 
           const valorPendente = metricsData
             .filter((item) => item.status_pagamento_codigo === 'pendente')
-            .reduce(
-              (sum, item) => sum + parseFloat(item.valor_servico || '0'),
-              0
-            );
+            .reduce((sum, item) => sum + getCalculationValue(item), 0);
 
           const valorEmAtraso = metricsData
             .filter((item) => item.status_pagamento_codigo === 'atrasado')
-            .reduce(
-              (sum, item) => sum + parseFloat(item.valor_servico || '0'),
-              0
-            );
+            .reduce((sum, item) => sum + getCalculationValue(item), 0);
 
           // Valor Cancelado: consultas canceladas
           const valorCancelado = metricsData
             .filter((item) => item.status_consulta_codigo === 'cancelado')
-            .reduce(
-              (sum, item) => sum + parseFloat(item.valor_servico || '0'),
-              0
-            );
+            .reduce((sum, item) => sum + getCalculationValue(item), 0);
 
           // Consultas por status
           const consultasFinalizadas = metricsData.filter(
@@ -861,6 +882,11 @@ export const PatientMetricsWithConsultations =
                   tipo_servico_descricao: item.tipo_servico_descricao,
                   profissional_id: item.profissional_id,
                   empresa_fatura_id: item.empresa_fatura_id,
+                  // AI dev note: Campos de comissão para lógica de exibição
+                  comissao_tipo_recebimento: item.comissao_tipo_recebimento,
+                  comissao_valor_calculado: item.comissao_valor_calculado
+                    ? parseFloat(item.comissao_valor_calculado)
+                    : null,
                 }) as RecentConsultation & {
                   tipo_servico_id?: string;
                   tipo_servico_descricao?: string;
@@ -894,7 +920,13 @@ export const PatientMetricsWithConsultations =
         } finally {
           setIsLoading(false);
         }
-      }, [patientId, periodFilter, editingFatura, getDateRange]);
+      }, [
+        patientId,
+        periodFilter,
+        editingFatura,
+        getDateRange,
+        getCalculationValue,
+      ]);
 
       // useEffect para chamar loadData
       useEffect(() => {
@@ -954,6 +986,26 @@ export const PatientMetricsWithConsultations =
           style: 'currency',
           currency: 'BRL',
         }).format(value);
+      };
+
+      // AI dev note: Função para determinar valor correto baseado no role
+      // APENAS para profissional: mostrar comissão se configurada, senão valor integral
+      // Para TODOS os outros roles: sempre valor integral
+      const getDisplayValue = (consultation: RecentConsultation): number => {
+        // APENAS profissional tem lógica especial
+        if (userRole === 'profissional') {
+          // Se tem comissão configurada, mostrar comissão
+          if (
+            consultation.comissao_tipo_recebimento &&
+            consultation.comissao_valor_calculado !== null &&
+            consultation.comissao_valor_calculado !== undefined
+          ) {
+            return consultation.comissao_valor_calculado;
+          }
+        }
+
+        // Para TODOS os outros casos (outros roles ou profissional sem comissão), mostrar valor integral
+        return consultation.valor_servico;
       };
 
       // Função para formatar data e hora (sem conversão de timezone)
@@ -1207,110 +1259,112 @@ export const PatientMetricsWithConsultations =
                 </div>
               </div>
 
-              {/* Seção de Últimas Faturas */}
-              <div className="border-t pt-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    <h3 className="text-lg font-medium">Últimas Faturas</h3>
-                    {faturas.length > 0 && (
-                      <Badge variant="outline">{faturas.length} total</Badge>
+              {/* Seção de Últimas Faturas - Ocultar para role profissional */}
+              {userRole !== 'profissional' && (
+                <div className="border-t pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="h-5 w-5" />
+                      <h3 className="text-lg font-medium">Últimas Faturas</h3>
+                      {faturas.length > 0 && (
+                        <Badge variant="outline">{faturas.length} total</Badge>
+                      )}
+                    </div>
+
+                    {faturas.length > 2 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          // TODO: Implementar modal ou navegação para ver todas as faturas
+                          console.log('Ver todas as faturas - TODO');
+                        }}
+                        className="text-azul-respira hover:text-azul-respira/80"
+                      >
+                        Ver todas as faturas
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
                     )}
                   </div>
 
-                  {faturas.length > 2 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        // TODO: Implementar modal ou navegação para ver todas as faturas
-                        console.log('Ver todas as faturas - TODO');
-                      }}
-                      className="text-azul-respira hover:text-azul-respira/80"
-                    >
-                      Ver todas as faturas
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  )}
-                </div>
-
-                <FaturasList
-                  faturas={faturas}
-                  loading={isLoadingFaturas}
-                  error={errorFaturas}
-                  maxItems={2}
-                  onFaturaClick={(fatura) => {
-                    // Abrir link do ASAAS ao clicar na fatura
-                    if (fatura.url_asaas) {
-                      window.open(fatura.url_asaas, '_blank');
-                    }
-                  }}
-                  onFaturaEdit={(fatura) => {
-                    // Iniciar modo de edição da fatura
-                    console.log('🔄 Iniciando edição da fatura:', fatura);
-                    setEditingFatura(fatura);
-                    setIsSelectionMode(true);
-                    setChargeError(null);
-
-                    // Buscar agendamentos da fatura para inicializar seleção
-                    (async () => {
-                      try {
-                        // Usar a mesma view que a lista para garantir consistência
-                        const { data, error } = await supabase
-                          .from('vw_agendamentos_completos')
-                          .select(
-                            'id, valor_servico, status_pagamento_codigo, status_pagamento_descricao'
-                          )
-                          .eq('fatura_id', fatura.id)
-                          .eq('paciente_id', patientId);
-
-                        if (error) throw error;
-
-                        const agendamentosIds = data?.map((a) => a.id) || [];
-                        console.log(
-                          '📋 Agendamentos da fatura encontrados via view:',
-                          {
-                            faturaId: fatura.id,
-                            agendamentosIds,
-                            totalAgendamentos: agendamentosIds.length,
-                            statusDetalhes: data?.map((a) => ({
-                              id: a.id.substring(0, 8),
-                              status: a.status_pagamento_descricao,
-                            })),
-                          }
-                        );
-
-                        setSelectedConsultations(agendamentosIds);
-                        setOriginalSelectedIds(agendamentosIds);
-
-                        // Forçar recarregamento da lista para sincronizar
-                        setTimeout(() => {
-                          console.log(
-                            '🔄 Estados atualizados - recarregando...'
-                          );
-                        }, 100);
-                      } catch (error) {
-                        console.error(
-                          'Erro ao buscar agendamentos da fatura:',
-                          error
-                        );
-                        setChargeError(
-                          'Erro ao carregar agendamentos da fatura'
-                        );
+                  <FaturasList
+                    faturas={faturas}
+                    loading={isLoadingFaturas}
+                    error={errorFaturas}
+                    maxItems={2}
+                    onFaturaClick={(fatura) => {
+                      // Abrir link do ASAAS ao clicar na fatura
+                      if (fatura.url_asaas) {
+                        window.open(fatura.url_asaas, '_blank');
                       }
-                    })();
-                  }}
-                  onFaturaDelete={(fatura) => {
-                    // Abrir modal de confirmação para exclusão
-                    setFaturaToDelete(fatura);
-                  }}
-                  onEmitirNfe={handleEmitirNfe}
-                  userRole={user?.pessoa?.role}
-                  isEmitingNfe={isEmitingNfe}
-                  showCard={false}
-                  showVerMais={false}
-                />
-              </div>
+                    }}
+                    onFaturaEdit={(fatura) => {
+                      // Iniciar modo de edição da fatura
+                      console.log('🔄 Iniciando edição da fatura:', fatura);
+                      setEditingFatura(fatura);
+                      setIsSelectionMode(true);
+                      setChargeError(null);
+
+                      // Buscar agendamentos da fatura para inicializar seleção
+                      (async () => {
+                        try {
+                          // Usar a mesma view que a lista para garantir consistência
+                          const { data, error } = await supabase
+                            .from('vw_agendamentos_completos')
+                            .select(
+                              'id, valor_servico, status_pagamento_codigo, status_pagamento_descricao'
+                            )
+                            .eq('fatura_id', fatura.id)
+                            .eq('paciente_id', patientId);
+
+                          if (error) throw error;
+
+                          const agendamentosIds = data?.map((a) => a.id) || [];
+                          console.log(
+                            '📋 Agendamentos da fatura encontrados via view:',
+                            {
+                              faturaId: fatura.id,
+                              agendamentosIds,
+                              totalAgendamentos: agendamentosIds.length,
+                              statusDetalhes: data?.map((a) => ({
+                                id: a.id.substring(0, 8),
+                                status: a.status_pagamento_descricao,
+                              })),
+                            }
+                          );
+
+                          setSelectedConsultations(agendamentosIds);
+                          setOriginalSelectedIds(agendamentosIds);
+
+                          // Forçar recarregamento da lista para sincronizar
+                          setTimeout(() => {
+                            console.log(
+                              '🔄 Estados atualizados - recarregando...'
+                            );
+                          }, 100);
+                        } catch (error) {
+                          console.error(
+                            'Erro ao buscar agendamentos da fatura:',
+                            error
+                          );
+                          setChargeError(
+                            'Erro ao carregar agendamentos da fatura'
+                          );
+                        }
+                      })();
+                    }}
+                    onFaturaDelete={(fatura) => {
+                      // Abrir modal de confirmação para exclusão
+                      setFaturaToDelete(fatura);
+                    }}
+                    onEmitirNfe={handleEmitirNfe}
+                    userRole={user?.pessoa?.role}
+                    isEmitingNfe={isEmitingNfe}
+                    showCard={false}
+                    showVerMais={false}
+                  />
+                </div>
+              )}
 
               {/* Seção de Lista de Consultas */}
               <div className="space-y-4 border-t pt-6">
@@ -1564,7 +1618,9 @@ export const PatientMetricsWithConsultations =
 
                               <div className="text-right">
                                 <div className="text-sm font-medium">
-                                  {formatCurrency(consultation.valor_servico)}
+                                  {formatCurrency(
+                                    getDisplayValue(consultation)
+                                  )}
                                 </div>
                               </div>
                             </div>

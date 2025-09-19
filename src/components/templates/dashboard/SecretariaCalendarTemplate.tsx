@@ -101,25 +101,11 @@ export const SecretariaCalendarTemplate =
 
       // Filter events based on secretaria permissions
       const getFilteredEvents = () => {
+        // A filtragem por profissionais autorizados já foi feita na query
+        // Aqui só aplicamos filtro adicional por profissional selecionado se necessário
         let filteredEvents = [...events];
 
-        // Filter by authorized professionals
-        const authorizedProfessionals = getAuthorizedProfessionals();
-        const authorizedIds = authorizedProfessionals.map((prof) => prof.id);
-
-        if (authorizedIds.length > 0) {
-          filteredEvents = filteredEvents.filter(
-            (event) =>
-              event.attendees?.some((attendee) =>
-                authorizedIds.includes(attendee)
-              ) ||
-              authorizedProfessionals.some((prof) =>
-                event.title.includes(prof.name)
-              )
-          );
-        }
-
-        // Filter by selected professional
+        // Filter by selected professional only
         if (selectedProfessional !== 'all') {
           const selectedProf = availableProfessionals.find(
             (prof) => prof.id === selectedProfessional
@@ -127,8 +113,8 @@ export const SecretariaCalendarTemplate =
           if (selectedProf) {
             filteredEvents = filteredEvents.filter(
               (event) =>
-                event.attendees?.includes(selectedProf.id) ||
-                event.title.includes(selectedProf.name)
+                event.title.includes(selectedProf.name) ||
+                event.metadata?.professionalId === selectedProf.id
             );
           }
         }

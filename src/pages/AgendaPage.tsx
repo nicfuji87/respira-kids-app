@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 // AI dev note: AgendaPage simplificada - apenas calendário sem headers ou estatísticas
 export const AgendaPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const handleEventClick = () => {};
@@ -24,6 +24,22 @@ export const AgendaPage: React.FC = () => {
   const handleProfessionalClick = (professionalId: string) => {
     navigate(`/pessoa/${professionalId}`);
   };
+
+  // Loading state - aguardar usuário estar disponível
+  if (authLoading || !user?.pessoa?.id) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground">
+            {authLoading
+              ? 'Carregando dados do usuário...'
+              : 'Aguardando autenticação...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Error state
   if (!user) {

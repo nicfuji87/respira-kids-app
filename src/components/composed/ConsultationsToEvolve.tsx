@@ -35,6 +35,11 @@ interface ConsultationsToEvolveProps {
   maxItems?: number;
   className?: string;
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
+  title?: string;
+  emptyMessage?: string;
+  showProfessionalName?: boolean;
+  showValues?: boolean;
+  showAlert?: boolean;
 }
 
 const ConsultationItem = React.memo<{
@@ -42,198 +47,219 @@ const ConsultationItem = React.memo<{
   onClick?: (consultation: ConsultationToEvolve) => void;
   onCreateEvolution?: (consultationId: string) => void;
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
-}>(({ consultation, onClick, onCreateEvolution, userRole }) => {
-  const formatDate = (dateString: string) => {
-    // Parse manual para evitar conversão automática de timezone
-    // Formato esperado: "2025-07-29T09:00:00+00:00" ou "2025-07-29 09:00:00+00"
-    const [datePart, timePart] =
-      dateString.split('T').length > 1
-        ? dateString.split('T')
-        : dateString.split(' ');
+  showProfessionalName?: boolean;
+  showValues?: boolean;
+  showAlert?: boolean;
+}>(
+  ({
+    consultation,
+    onClick,
+    onCreateEvolution,
+    userRole,
+    showProfessionalName = true,
+    showValues = true,
+  }) => {
+    const formatDate = (dateString: string) => {
+      // Parse manual para evitar conversão automática de timezone
+      // Formato esperado: "2025-07-29T09:00:00+00:00" ou "2025-07-29 09:00:00+00"
+      const [datePart, timePart] =
+        dateString.split('T').length > 1
+          ? dateString.split('T')
+          : dateString.split(' ');
 
-    const [year, month, day] = datePart.split('-');
-    const [hour, minute] = timePart.split('+')[0].split(':'); // Remove timezone info
+      const [year, month, day] = datePart.split('-');
+      const [hour, minute] = timePart.split('+')[0].split(':'); // Remove timezone info
 
-    // Criar data usando valores exatos sem conversão
-    const date = new Date(
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day),
-      parseInt(hour),
-      parseInt(minute)
-    );
-
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
-
-  const getUrgencyBadge = (
-    diasPendente: number,
-    prioridade: 'normal' | 'atencao' | 'urgente'
-  ) => {
-    // Nova lógica: até 2 dias = amarelo, acima de 2 dias = vermelho
-    if (prioridade === 'urgente' || diasPendente > 2) {
-      return (
-        <Badge variant="destructive" className="text-xs">
-          <AlertTriangle className="h-3 w-3 mr-1" />
-          {diasPendente} dias pendente
-        </Badge>
+      // Criar data usando valores exatos sem conversão
+      const date = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hour),
+        parseInt(minute)
       );
-    }
 
-    if (prioridade === 'atencao' || diasPendente <= 2) {
+      return new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date);
+    };
+
+    const formatCurrency = (value: number) => {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(value);
+    };
+
+    const getUrgencyBadge = (
+      diasPendente: number,
+      prioridade: 'normal' | 'atencao' | 'urgente'
+    ) => {
+      // Nova lógica: até 2 dias = amarelo, acima de 2 dias = vermelho
+      if (prioridade === 'urgente' || diasPendente > 2) {
+        return (
+          <Badge variant="destructive" className="text-xs">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            {diasPendente} dias pendente
+          </Badge>
+        );
+      }
+
+      if (prioridade === 'atencao' || diasPendente <= 2) {
+        return (
+          <Badge
+            variant="secondary"
+            className="text-xs bg-amarelo-pipa/10 text-amarelo-pipa border-amarelo-pipa/20"
+          >
+            <Clock className="h-3 w-3 mr-1" />
+            {diasPendente} dias
+          </Badge>
+        );
+      }
+
       return (
-        <Badge
-          variant="secondary"
-          className="text-xs bg-amarelo-pipa/10 text-amarelo-pipa border-amarelo-pipa/20"
-        >
-          <Clock className="h-3 w-3 mr-1" />
+        <Badge variant="outline" className="text-xs">
           {diasPendente} dias
         </Badge>
       );
-    }
+    };
 
-    return (
-      <Badge variant="outline" className="text-xs">
-        {diasPendente} dias
-      </Badge>
-    );
-  };
+    const getPaymentStatusBadge = (statusPagamento?: string) => {
+      if (!statusPagamento) return null;
 
-  const getPaymentStatusBadge = (statusPagamento?: string) => {
-    if (!statusPagamento) return null;
+      const status = statusPagamento.toLowerCase();
 
-    const status = statusPagamento.toLowerCase();
+      if (status.includes('pago') || status.includes('confirmado')) {
+        return (
+          <Badge
+            variant="default"
+            className="text-xs bg-verde-pipa/10 text-verde-pipa border-verde-pipa/20"
+          >
+            <CreditCard className="h-3 w-3 mr-1" />
+            Pago
+          </Badge>
+        );
+      }
 
-    if (status.includes('pago') || status.includes('confirmado')) {
+      if (status.includes('pendente') || status.includes('aguardando')) {
+        return (
+          <Badge
+            variant="secondary"
+            className="text-xs bg-amarelo-pipa/10 text-amarelo-pipa border-amarelo-pipa/20"
+          >
+            <Clock className="h-3 w-3 mr-1" />
+            Pendente
+          </Badge>
+        );
+      }
+
       return (
-        <Badge
-          variant="default"
-          className="text-xs bg-verde-pipa/10 text-verde-pipa border-verde-pipa/20"
-        >
+        <Badge variant="outline" className="text-xs">
           <CreditCard className="h-3 w-3 mr-1" />
-          Pago
+          {statusPagamento}
         </Badge>
       );
-    }
+    };
 
-    if (status.includes('pendente') || status.includes('aguardando')) {
-      return (
-        <Badge
-          variant="secondary"
-          className="text-xs bg-amarelo-pipa/10 text-amarelo-pipa border-amarelo-pipa/20"
-        >
-          <Clock className="h-3 w-3 mr-1" />
-          Pendente
-        </Badge>
-      );
-    }
+    const shouldShowProfessional =
+      showProfessionalName &&
+      (userRole === 'admin' || userRole === 'secretaria');
+    const showAdminFields = userRole === 'admin' || userRole === 'secretaria';
 
     return (
-      <Badge variant="outline" className="text-xs">
-        <CreditCard className="h-3 w-3 mr-1" />
-        {statusPagamento}
-      </Badge>
-    );
-  };
-
-  const showAdminFields = userRole === 'admin' || userRole === 'secretaria';
-
-  return (
-    <div
-      className={cn(
-        'flex items-center justify-between p-3 md:p-4 border rounded-lg transition-all duration-200',
-        'hover:shadow-md hover:border-primary/20',
-        (consultation.prioridade === 'urgente' ||
-          consultation.diasPendente > 2) &&
-          'border-destructive/30 bg-destructive/5',
-        onClick && 'cursor-pointer hover:bg-accent/50'
-      )}
-      onClick={() => onClick?.(consultation)}
-    >
-      <div className="flex-1 space-y-1.5 md:space-y-2">
-        {/* Linha 1: Paciente e Status */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 md:gap-2">
-            <User className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
-            <span className="font-medium text-sm md:text-base text-foreground">
-              {consultation.pacienteNome}
-            </span>
-          </div>
-          {getUrgencyBadge(consultation.diasPendente, consultation.prioridade)}
-        </div>
-
-        {/* Linha 2: Serviço e Data */}
-        <div className="flex items-center justify-between text-xs md:text-sm">
-          <span className="text-muted-foreground">
-            {consultation.tipoServico}
-          </span>
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <Calendar className="h-3 w-3" />
-            {formatDate(consultation.dataHora)}
-          </div>
-        </div>
-
-        {/* Linha 3: Profissional e Status Pagamento (apenas para admin/secretaria) */}
-        {showAdminFields &&
-          (consultation.profissionalNome || consultation.statusPagamento) && (
-            <div className="flex items-center justify-between text-xs md:text-sm">
-              {consultation.profissionalNome && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <UserCog className="h-3 w-3" />
-                  <span>{consultation.profissionalNome}</span>
-                </div>
-              )}
-              {consultation.statusPagamento && (
-                <div className="flex items-center gap-2">
-                  {getPaymentStatusBadge(consultation.statusPagamento)}
-                </div>
-              )}
+      <div
+        className={cn(
+          'flex items-center justify-between p-3 md:p-4 border rounded-lg transition-all duration-200',
+          'hover:shadow-md hover:border-primary/20',
+          (consultation.prioridade === 'urgente' ||
+            consultation.diasPendente > 2) &&
+            'border-destructive/30 bg-destructive/5',
+          onClick && 'cursor-pointer hover:bg-accent/50'
+        )}
+        onClick={() => onClick?.(consultation)}
+      >
+        <div className="flex-1 space-y-1.5 md:space-y-2">
+          {/* Linha 1: Paciente e Status */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 md:gap-2">
+              <User className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+              <span className="font-medium text-sm md:text-base text-foreground">
+                {consultation.pacienteNome}
+              </span>
             </div>
-          )}
-
-        {/* Linha 4: Valor e Ação */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 text-xs md:text-sm font-medium text-verde-pipa">
-            <DollarSign className="h-3 w-3" />
-            {formatCurrency(consultation.valor)}
+            {getUrgencyBadge(
+              consultation.diasPendente,
+              consultation.prioridade
+            )}
           </div>
 
-          {onCreateEvolution && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCreateEvolution(consultation.id);
-              }}
-              className="text-xs h-7 px-2 md:px-3"
-            >
-              <FileText className="h-3 w-3 mr-1" />
-              Criar Evolução
-            </Button>
-          )}
-        </div>
-      </div>
+          {/* Linha 2: Serviço e Data */}
+          <div className="flex items-center justify-between text-xs md:text-sm">
+            <span className="text-muted-foreground">
+              {consultation.tipoServico}
+            </span>
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              {formatDate(consultation.dataHora)}
+            </div>
+          </div>
 
-      {onClick && (
-        <ArrowRight className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground ml-2 md:ml-3" />
-      )}
-    </div>
-  );
-});
+          {/* Linha 3: Profissional e Status Pagamento (apenas para admin/secretaria) */}
+          {showAdminFields &&
+            ((shouldShowProfessional && consultation.profissionalNome) ||
+              consultation.statusPagamento) && (
+              <div className="flex items-center justify-between text-xs md:text-sm">
+                {shouldShowProfessional && consultation.profissionalNome && (
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <UserCog className="h-3 w-3" />
+                    <span>{consultation.profissionalNome}</span>
+                  </div>
+                )}
+                {consultation.statusPagamento && (
+                  <div className="flex items-center gap-2">
+                    {getPaymentStatusBadge(consultation.statusPagamento)}
+                  </div>
+                )}
+              </div>
+            )}
+
+          {/* Linha 4: Valor e Ação */}
+          <div className="flex items-center justify-between">
+            {showValues && (
+              <div className="flex items-center gap-1 text-xs md:text-sm font-medium text-verde-pipa">
+                <DollarSign className="h-3 w-3" />
+                {formatCurrency(consultation.valor)}
+              </div>
+            )}
+
+            {onCreateEvolution && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateEvolution(consultation.id);
+                }}
+                className="text-xs h-7 px-2 md:px-3"
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                Criar Evolução
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {onClick && (
+          <ArrowRight className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground ml-2 md:ml-3" />
+        )}
+      </div>
+    );
+  }
+);
 
 ConsultationItem.displayName = 'ConsultationItem';
 
@@ -272,6 +298,11 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
     maxItems = 10, // Aumentar padrão de 3 para 10
     className,
     userRole,
+    title = 'Consultas a Evoluir',
+    emptyMessage = 'Nenhuma consulta pendente de evolução',
+    showProfessionalName = true,
+    showValues = true,
+    showAlert = false,
   }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -286,8 +317,8 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-vermelho-kids" />
-            Consultas a Evoluir
-            {urgentCount > 0 && (
+            {title}
+            {urgentCount > 0 && showAlert && (
               <Badge variant="destructive" className="ml-2">
                 {urgentCount} urgentes
               </Badge>
@@ -325,9 +356,7 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
               <div className="font-medium text-foreground mb-2">
                 Todas as evoluções em dia!
               </div>
-              <p className="text-sm text-muted-foreground">
-                Não há consultas finalizadas pendentes de evolução.
-              </p>
+              <p className="text-sm text-muted-foreground">{emptyMessage}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -338,6 +367,8 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
                   onClick={onConsultationClick}
                   onCreateEvolution={onCreateEvolutionClick}
                   userRole={userRole}
+                  showProfessionalName={showProfessionalName}
+                  showValues={showValues}
                 />
               ))}
             </div>

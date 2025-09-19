@@ -10,6 +10,7 @@ export { CompleteProfilePage } from './auth/CompleteProfilePage';
 // Dashboard domain exports
 export { AdminDashboard } from './dashboard/AdminDashboard';
 export { ProfessionalDashboard } from './dashboard/ProfessionalDashboard';
+export { SecretariaDashboard } from './dashboard/SecretariaDashboard';
 export { DashboardSidebar } from './dashboard/DashboardSidebar';
 export { DashboardTopBar } from './dashboard/DashboardTopBar';
 export { MobileBottomTabs } from './dashboard/MobileBottomTabs';
@@ -53,6 +54,8 @@ export const DomainComponents = {
 
   // Dashboard
   AdminDashboard: 'AdminDashboard',
+  ProfessionalDashboard: 'ProfessionalDashboard',
+  SecretariaDashboard: 'SecretariaDashboard',
   DashboardSidebar: 'DashboardSidebar',
   DashboardTopBar: 'DashboardTopBar',
   MobileBottomTabs: 'MobileBottomTabs',
@@ -81,6 +84,8 @@ export const AuthComponents = {
 
 export const DashboardComponents = {
   AdminDashboard: 'AdminDashboard',
+  ProfessionalDashboard: 'ProfessionalDashboard',
+  SecretariaDashboard: 'SecretariaDashboard',
   DashboardSidebar: 'DashboardSidebar',
   DashboardTopBar: 'DashboardTopBar',
   MobileBottomTabs: 'MobileBottomTabs',

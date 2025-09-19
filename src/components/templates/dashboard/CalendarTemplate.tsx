@@ -120,14 +120,6 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     const setCurrentDate = onExternalDateChange ?? setLocalCurrentDate;
     const setCurrentView = onExternalViewChange ?? setLocalCurrentView;
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 DEBUG: CalendarTemplate - ESTADO', {
-        'usando estado externo': !!externalCurrentDate,
-        currentDate: currentDate.toISOString(),
-        currentView: currentView,
-        'events.length': events.length,
-      });
-    }
     const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
       null
     );

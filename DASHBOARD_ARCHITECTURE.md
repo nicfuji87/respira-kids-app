@@ -32,7 +32,7 @@ Implementação completa da arquitetura de dashboard responsivo para o sistema R
 
 - **Admin**: Dashboard, Usuários, Relatórios, Config, Mais
 - **Profissional**: Dashboard, Agenda, Pacientes, Estoque, Financeiro
-- **Secretária**: Dashboard, Agenda, Pacientes, Estoque, Financeiro
+- **Secretária**: Dashboard, Agenda, Pacientes, Config
 
 ### ✅ Layout Responsivo
 

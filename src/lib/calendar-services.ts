@@ -24,7 +24,6 @@ import {
   mapAgendamentoFlatToCompleto,
   mapAgendamentoFlatToCalendarEvent,
   calculateCalendarStats,
-  parseSupabaseDatetime,
 } from './calendar-mappers';
 import type { CalendarEvent } from '@/types/calendar';
 
@@ -63,20 +62,6 @@ export const fetchAgendamentosFromViewAsEvents = async (
 
   if (filters.localId) {
     query = query.eq('local_atendimento_id', filters.localId);
-  }
-
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 DEBUG: Query Supabase na view para CalendarEvents', {
-      'filters.startDate': filters.startDate.toISOString(),
-      'filters.endDate': filters.endDate.toISOString(),
-      'filters.profissionalId': filters.profissionalId,
-      rangeInDays: Math.ceil(
-        (filters.endDate.getTime() - filters.startDate.getTime()) /
-          (1000 * 60 * 60 * 24)
-      ),
-      view: 'vw_agendamentos_completos',
-      allFilters: filters,
-    });
   }
 
   const { data, error } = await query;
@@ -388,7 +373,7 @@ export const fetchUserCalendarEvents = async (
     }
 
     case 'secretaria': {
-      // Secretária vê agendamentos dos profissionais autorizados
+      // Secretária vê eventos dos profissionais autorizados
       const profissionaisAutorizados =
         await fetchProfissionaisAutorizados(userId);
 
@@ -396,28 +381,45 @@ export const fetchUserCalendarEvents = async (
         return [];
       }
 
-      // Buscar agendamentos para cada profissional autorizado
-      const agendamentosPromises = profissionaisAutorizados.map(
-        (profissionalId) => {
-          const secretariaFilters = {
-            ...filters,
-            profissionalId,
-          };
-          return fetchAgendamentosFromViewAsEvents(secretariaFilters);
-        }
-      );
+      // Usar query única com filtro IN para melhor performance
+      let query = supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .in('profissional_id', profissionaisAutorizados)
+        .gte('data_hora', filters.startDate.toISOString())
+        .lte('data_hora', filters.endDate.toISOString())
+        .eq('ativo', true)
+        .order('data_hora', { ascending: true });
 
-      const agendamentosArrays = await Promise.all(agendamentosPromises);
-      const agendamentos = agendamentosArrays.flat();
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: Agendamentos para secretária', {
-          profissionaisAutorizados,
-          totalAgendamentos: agendamentos.length,
-        });
+      // Aplicar outros filtros se fornecidos
+      if (filters.pacienteId) {
+        query = query.eq('paciente_id', filters.pacienteId);
+      }
+      if (filters.tipoServicoId) {
+        query = query.eq('tipo_servico_id', filters.tipoServicoId);
+      }
+      if (filters.statusConsultaId) {
+        query = query.eq('status_consulta_id', filters.statusConsultaId);
+      }
+      if (filters.statusPagamentoId) {
+        query = query.eq('status_pagamento_id', filters.statusPagamentoId);
+      }
+      if (filters.localId) {
+        query = query.eq('local_atendimento_id', filters.localId);
       }
 
-      return agendamentos;
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Erro ao buscar eventos da secretaria:', error);
+        throw error;
+      }
+
+      // Converter para CalendarEvent
+      const calendarEvents = (data || []).map(
+        mapAgendamentoFlatToCalendarEvent
+      );
+      return calendarEvents;
     }
 
     default:
@@ -431,14 +433,6 @@ export const fetchUserAgendamentos = async (
   userId: string,
   userRole: 'admin' | 'profissional' | 'secretaria'
 ): Promise<SupabaseAgendamentoCompleto[]> => {
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 DEBUG: fetchUserAgendamentos chamado', {
-      filters,
-      userId,
-      userRole,
-    });
-  }
-
   // AI dev note: Null-safety check para userRole
   if (!userRole || typeof userRole !== 'string') {
     throw new Error(`Role inválido ou não definido: ${userRole}`);
@@ -455,9 +449,6 @@ export const fetchUserAgendamentos = async (
         ...filters,
         profissionalId: userId,
       };
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: Filtros para profissional', profissionalFilters);
-      }
       return fetchAgendamentosFromView(profissionalFilters);
     }
 
@@ -465,22 +456,48 @@ export const fetchUserAgendamentos = async (
       // Secretária vê agendamentos dos profissionais autorizados
       const profissionaisAutorizados =
         await fetchProfissionaisAutorizados(userId);
-      const agendamentosPorProfissional = await Promise.all(
-        profissionaisAutorizados.map((profId) =>
-          fetchAgendamentosFromView({ ...filters, profissionalId: profId })
-        )
-      );
 
-      // Combinar e ordenar por data
-      const todosAgendamentos = agendamentosPorProfissional
-        .flat()
-        .sort(
-          (a, b) =>
-            parseSupabaseDatetime(a.data_hora).getTime() -
-            parseSupabaseDatetime(b.data_hora).getTime()
-        );
+      if (profissionaisAutorizados.length === 0) {
+        return [];
+      }
 
-      return todosAgendamentos;
+      // Usar query única com filtro IN para melhor performance
+      let query = supabase
+        .from('vw_agendamentos_completos')
+        .select('*')
+        .in('profissional_id', profissionaisAutorizados)
+        .gte('data_hora', filters.startDate.toISOString())
+        .lte('data_hora', filters.endDate.toISOString())
+        .eq('ativo', true)
+        .order('data_hora', { ascending: true });
+
+      // Aplicar outros filtros se fornecidos
+      if (filters.pacienteId) {
+        query = query.eq('paciente_id', filters.pacienteId);
+      }
+      if (filters.tipoServicoId) {
+        query = query.eq('tipo_servico_id', filters.tipoServicoId);
+      }
+      if (filters.statusConsultaId) {
+        query = query.eq('status_consulta_id', filters.statusConsultaId);
+      }
+      if (filters.statusPagamentoId) {
+        query = query.eq('status_pagamento_id', filters.statusPagamentoId);
+      }
+      if (filters.localId) {
+        query = query.eq('local_atendimento_id', filters.localId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Erro ao buscar agendamentos da secretaria:', error);
+        throw error;
+      }
+
+      // Converter estrutura flat da view para estrutura aninhada
+      const agendamentos = (data || []).map(mapAgendamentoFlatToCompleto);
+      return agendamentos;
     }
 
     default:

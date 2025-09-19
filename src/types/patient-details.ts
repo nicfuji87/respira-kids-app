@@ -91,6 +91,9 @@ export interface RecentConsultation {
   id_pagamento_externo?: string; // ID da cobrança no ASAAS (compatibilidade)
   fatura_id?: string; // Nova referência estruturada à tabela faturas
   selectable?: boolean; // Para modo de seleção de cobrança
+  // AI dev note: Campos de comissão para controle de exibição por role
+  comissao_tipo_recebimento?: string | null;
+  comissao_valor_calculado?: number | null;
 }
 
 // Interface para dados de consentimento
@@ -113,6 +116,8 @@ export interface PatientConsentFormProps {
 export interface PatientMetricsProps {
   patientId: string;
   className?: string;
+  // AI dev note: Role para controlar exibição de valores (comissão vs valor integral)
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 // Interface para props das consultas recentes
@@ -120,6 +125,8 @@ export interface RecentConsultationsProps {
   patientId: string;
   onConsultationClick?: (consultationId: string) => void;
   className?: string;
+  // AI dev note: Role para controlar exibição de valores (comissão vs valor integral)
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 // Interface para galeria de mídia

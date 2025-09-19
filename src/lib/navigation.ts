@@ -47,19 +47,19 @@ export const navigationConfig: NavigationConfig[] = [
     icon: Users,
     label: 'Pessoa',
     href: '/pessoa',
-    roles: ['admin', 'profissional', 'secretaria'], // Todos podem ver detalhes de pessoas
+    roles: ['admin', 'profissional'], // Secretaria não exibe no menu mas pode acessar via navegação programática
   },
   {
     icon: Package,
     label: 'Estoque',
     href: '/estoque',
-    roles: ['admin', 'secretaria'],
+    roles: ['admin'], // Apenas admin acessa estoque
   },
   {
     icon: DollarSign,
     label: 'Financeiro',
     href: '/financeiro',
-    roles: ['admin', 'profissional', 'secretaria'],
+    roles: ['admin', 'profissional'], // Secretaria não acessa financeiro
   },
   {
     icon: Settings,
@@ -150,12 +150,6 @@ export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
       roles: ['secretaria'],
     },
     {
-      icon: Package,
-      label: 'Estoque',
-      href: '/estoque',
-      roles: ['secretaria'],
-    },
-    {
       icon: Settings,
       label: 'Config',
       href: '/configuracoes',
@@ -179,6 +173,12 @@ export const getMobileNavigationForRole = (
 // Função para verificar se usuário tem acesso a uma rota
 // AI dev note: Suporte a rotas dinâmicas - se tem acesso a /pacientes, tem acesso a /pacientes/:id
 export const hasAccessToRoute = (route: string, role: UserRole): boolean => {
+  // Exceção especial: secretaria pode acessar detalhes de pessoas via navegação programática
+  // mas não tem o item "Pessoa" no menu
+  if (role === 'secretaria' && route.startsWith('/pessoa/')) {
+    return true;
+  }
+
   // Verificação direta para rota exata
   const exactMatch = navigationConfig.find((item) => item.href === route);
   if (exactMatch) {

@@ -345,6 +345,12 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
             <PatientMetricsWithConsultations
               patientId={actualId}
               onConsultationClick={handleConsultationClick}
+              userRole={
+                (user?.pessoa?.role as
+                  | 'admin'
+                  | 'profissional'
+                  | 'secretaria') || null
+              }
             />
 
             {/* Anamnese do Paciente */}

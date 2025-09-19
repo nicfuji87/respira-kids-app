@@ -16,7 +16,11 @@ import {
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { CalendarTemplateWithData } from '@/components/templates/dashboard/CalendarTemplateWithData';
-import { ProfessionalDashboard, AdminDashboard } from '@/components/domain';
+import {
+  ProfessionalDashboard,
+  AdminDashboard,
+  SecretariaDashboard,
+} from '@/components/domain';
 import { AppointmentDetailsManager } from '@/components/domain/calendar';
 import {
   fetchAgendamentoById,
@@ -75,6 +79,8 @@ export const DashboardPage: React.FC = () => {
   const userRole = user?.pessoa?.role;
   const professionalId = user?.pessoa?.id;
   const professionalName = user?.pessoa?.nome || 'Profissional';
+  const secretariaId = user?.pessoa?.id;
+  const secretariaName = user?.pessoa?.nome || 'Secretaria';
 
   // Hook para dados do calendário (locais de atendimento)
   const { formData } = useCalendarFormData();
@@ -335,8 +341,36 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  // Dashboard legado para outras roles (secretaria)
-  // TODO: Implementar dashboard específico para secretaria
+  // Dashboard específico para secretaria
+  if (userRole === 'secretaria' && secretariaId) {
+    return (
+      <>
+        <SecretariaDashboard
+          secretariaId={secretariaId}
+          secretariaName={secretariaName}
+          onAppointmentClick={handleAppointmentClick}
+          onConsultationClick={handleConsultationClick}
+          onCreateEvolutionClick={handleCreateEvolutionClick}
+          userRole={userRole}
+        />
+
+        {/* Modal de detalhes do agendamento */}
+        <AppointmentDetailsManager
+          isOpen={isAppointmentDetailsOpen}
+          onClose={handleAppointmentDetailsClose}
+          appointment={selectedAppointmentData}
+          userRole={userRole}
+          locaisAtendimento={formData.locaisAtendimento || []}
+          isLoadingLocais={false}
+          onSave={handleAppointmentDetailsSave}
+          onPaymentAction={handlePaymentAction}
+          onNfeAction={handleNfeAction}
+          onPatientClick={handlePatientClick}
+          onProfessionalClick={handleProfessionalClick}
+        />
+      </>
+    );
+  }
 
   if (loading) {
     return (
