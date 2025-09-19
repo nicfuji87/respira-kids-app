@@ -9,7 +9,7 @@ import {
   PersonTypesManagement,
   ConsultaStatusManagement,
   PagamentoStatusManagement,
-  TipoServicosManagement,
+  ServicosManagement,
   LocaisAtendimentoManagement,
   EnderecoManagement,
   ContractTemplateManagement,
@@ -87,8 +87,9 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       id: 'servicos',
       label: 'Serviços',
       icon: Wrench,
-      description: 'Configurar serviços oferecidos pela clínica',
-      content: <TipoServicosManagement />,
+      description:
+        'Configurar serviços oferecidos e comissões dos profissionais',
+      content: <ServicosManagement />,
       implemented: true,
     },
     {

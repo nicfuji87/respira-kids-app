@@ -19,6 +19,7 @@ import { Input } from '@/components/primitives/input';
 import { Textarea } from '@/components/primitives/textarea';
 import { Button } from '@/components/primitives/button';
 import { Switch } from '@/components/primitives/switch';
+import { Checkbox } from '@/components/primitives/checkbox';
 import {
   Select,
   SelectContent,
@@ -36,7 +37,16 @@ import { Loader2 } from 'lucide-react';
 export interface FormField {
   name: string;
   label: string;
-  type: 'text' | 'email' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'color';
+  type:
+    | 'text'
+    | 'email'
+    | 'password'
+    | 'number'
+    | 'textarea'
+    | 'select'
+    | 'multiselect'
+    | 'switch'
+    | 'color';
   placeholder?: string;
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
@@ -86,7 +96,9 @@ export const GenericForm = React.memo<GenericFormProps>(
             <FormItem>
               <FormLabel>
                 {field.label}
-                {field.required && <span className="text-destructive ml-1">*</span>}
+                {field.required && (
+                  <span className="text-destructive ml-1">*</span>
+                )}
               </FormLabel>
               <FormControl>
                 {(() => {
@@ -103,7 +115,7 @@ export const GenericForm = React.memo<GenericFormProps>(
                           disabled={field.disabled || loading}
                         />
                       );
-                    
+
                     case 'number':
                       return (
                         <Input
@@ -112,10 +124,12 @@ export const GenericForm = React.memo<GenericFormProps>(
                           placeholder={field.placeholder}
                           disabled={field.disabled || loading}
                           value={formField.value || ''}
-                          onChange={(e) => formField.onChange(Number(e.target.value) || 0)}
+                          onChange={(e) =>
+                            formField.onChange(Number(e.target.value) || 0)
+                          }
                         />
                       );
-                    
+
                     case 'textarea':
                       return (
                         <Textarea
@@ -125,7 +139,7 @@ export const GenericForm = React.memo<GenericFormProps>(
                           rows={3}
                         />
                       );
-                    
+
                     case 'select':
                       return (
                         <Select
@@ -138,14 +152,63 @@ export const GenericForm = React.memo<GenericFormProps>(
                           </SelectTrigger>
                           <SelectContent>
                             {field.options?.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
                                 {option.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       );
-                    
+
+                    case 'multiselect':
+                      return (
+                        <div className="space-y-2">
+                          {field.options?.map((option) => (
+                            <div
+                              key={option.value}
+                              className="flex items-center space-x-2"
+                            >
+                              <Checkbox
+                                id={`${field.name}-${option.value}`}
+                                checked={
+                                  Array.isArray(formField.value) &&
+                                  formField.value.includes(option.value)
+                                }
+                                onCheckedChange={(checked) => {
+                                  const currentValue = Array.isArray(
+                                    formField.value
+                                  )
+                                    ? formField.value
+                                    : [];
+                                  if (checked) {
+                                    formField.onChange([
+                                      ...currentValue,
+                                      option.value,
+                                    ]);
+                                  } else {
+                                    formField.onChange(
+                                      currentValue.filter(
+                                        (v: string) => v !== option.value
+                                      )
+                                    );
+                                  }
+                                }}
+                                disabled={field.disabled || loading}
+                              />
+                              <label
+                                htmlFor={`${field.name}-${option.value}`}
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                              >
+                                {option.label}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      );
+
                     case 'switch':
                       return (
                         <div className="flex items-center space-x-2">
@@ -159,7 +222,7 @@ export const GenericForm = React.memo<GenericFormProps>(
                           </span>
                         </div>
                       );
-                    
+
                     case 'color':
                       return (
                         <ColorPicker
@@ -168,7 +231,7 @@ export const GenericForm = React.memo<GenericFormProps>(
                           disabled={field.disabled || loading}
                         />
                       );
-                    
+
                     default:
                       // Fallback para tipos não implementados
                       return (
@@ -181,13 +244,13 @@ export const GenericForm = React.memo<GenericFormProps>(
                   }
                 })()}
               </FormControl>
-              
+
               {field.description && (
                 <div className="text-sm text-muted-foreground">
                   {field.description}
                 </div>
               )}
-              
+
               <FormMessage />
             </FormItem>
           )}
@@ -233,4 +296,4 @@ export const GenericForm = React.memo<GenericFormProps>(
   }
 );
 
-GenericForm.displayName = 'GenericForm'; 
+GenericForm.displayName = 'GenericForm';

@@ -172,3 +172,13 @@ export type { GenericFormProps, FormField } from './GenericForm';
 
 export { CepSearch } from './CepSearch';
 export { ProfessionalFilter } from './ProfessionalFilter';
+
+// Webhook Management Components
+export { WebhooksList } from './WebhooksList';
+export { WebhookForm } from './WebhookForm';
+export { WebhookLogs } from './WebhookLogs';
+
+// Webhook Type exports
+export type { Webhook } from './WebhooksList';
+export type { WebhookFormData } from './WebhookForm';
+export type { WebhookLog } from './WebhookLogs';
