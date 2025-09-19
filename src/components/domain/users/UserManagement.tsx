@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Edit, User, Phone, Mail, Calendar, Save, X } from 'lucide-react';
+import {
+  Edit,
+  User,
+  Phone,
+  Mail,
+  Calendar,
+  Save,
+  X,
+  CheckCircle,
+  XCircle,
+  UserCog,
+} from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -80,6 +91,8 @@ export const UserManagement = React.memo<UserManagementProps>(
     const [editingUser, setEditingUser] = useState<Usuario | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
     const [updating, setUpdating] = useState(false);
+    const [showRoleModal, setShowRoleModal] = useState(false);
+    const [userForRole, setUserForRole] = useState<Usuario | null>(null);
 
     const { toast } = useToast();
 
@@ -279,6 +292,59 @@ export const UserManagement = React.memo<UserManagementProps>(
         ),
       },
       {
+        key: 'approval',
+        label: 'Aprovação',
+        className: 'w-32',
+        render: (usuario: Usuario) => (
+          <div className="flex items-center gap-1">
+            {!usuario.is_approved ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleApproveUser(usuario.id, true)}
+                title="Aprovar Usuário"
+                className="text-green-600 hover:text-green-700"
+              >
+                <CheckCircle className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleApproveUser(usuario.id, false)}
+                title="Remover Aprovação"
+                className="text-orange-600 hover:text-orange-700"
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'role_actions',
+        label: 'Role',
+        className: 'w-40',
+        render: (usuario: Usuario) => (
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleQuickRoleChange(usuario)}
+              title="Definir Role"
+              className="text-blue-600 hover:text-blue-700"
+            >
+              <UserCog className="h-4 w-4" />
+            </Button>
+            {!usuario.role && (
+              <Badge variant="outline" className="text-xs bg-yellow-50">
+                Pendente
+              </Badge>
+            )}
+          </div>
+        ),
+      },
+      {
         key: 'actions',
         label: 'Editar',
         className: 'w-20',
@@ -295,6 +361,76 @@ export const UserManagement = React.memo<UserManagementProps>(
         ),
       },
     ];
+
+    // Handler para aprovação rápida
+    const handleApproveUser = useCallback(
+      async (userId: string, approve: boolean) => {
+        try {
+          const result = await updateUsuario(userId, { is_approved: approve });
+          if (result.success) {
+            toast({
+              title: 'Sucesso',
+              description: `Usuário ${approve ? 'aprovado' : 'aprovação removida'} com sucesso`,
+            });
+            loadData();
+          } else {
+            toast({
+              title: 'Erro',
+              description: result.error || 'Erro ao atualizar aprovação',
+              variant: 'destructive',
+            });
+          }
+        } catch (error) {
+          console.error('Erro ao aprovar usuário:', error);
+          toast({
+            title: 'Erro',
+            description: 'Erro inesperado ao atualizar aprovação',
+            variant: 'destructive',
+          });
+        }
+      },
+      [toast, loadData]
+    );
+
+    // Handler para mudança rápida de role
+    const handleQuickRoleChange = useCallback((usuario: Usuario) => {
+      setUserForRole(usuario);
+      setShowRoleModal(true);
+    }, []);
+
+    // Handler para definir role
+    const handleSetRole = useCallback(
+      async (role: 'admin' | 'profissional' | 'secretaria') => {
+        if (!userForRole) return;
+
+        try {
+          const result = await updateUsuario(userForRole.id, { role });
+          if (result.success) {
+            toast({
+              title: 'Sucesso',
+              description: `Role "${role}" definida para ${userForRole.nome}`,
+            });
+            setShowRoleModal(false);
+            setUserForRole(null);
+            loadData();
+          } else {
+            toast({
+              title: 'Erro',
+              description: result.error || 'Erro ao definir role',
+              variant: 'destructive',
+            });
+          }
+        } catch (error) {
+          console.error('Erro ao definir role:', error);
+          toast({
+            title: 'Erro',
+            description: 'Erro inesperado ao definir role',
+            variant: 'destructive',
+          });
+        }
+      },
+      [userForRole, toast, loadData]
+    );
 
     return (
       <div className={cn('space-y-6', className)}>
@@ -638,6 +774,63 @@ export const UserManagement = React.memo<UserManagementProps>(
                 </DialogFooter>
               </form>
             </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de Seleção de Role */}
+        <Dialog open={showRoleModal} onOpenChange={setShowRoleModal}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserCog className="h-5 w-5" />
+                Definir Role
+              </DialogTitle>
+              <DialogDescription>
+                Selecione a função para <strong>{userForRole?.nome}</strong>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => handleSetRole('admin')}
+              >
+                <User className="mr-2 h-4 w-4" />
+                Administrador
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => handleSetRole('secretaria')}
+              >
+                <User className="mr-2 h-4 w-4" />
+                Secretária
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => handleSetRole('profissional')}
+              >
+                <User className="mr-2 h-4 w-4" />
+                Profissional
+              </Button>
+
+              <div className="border-t pt-3">
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => {
+                    setShowRoleModal(false);
+                    setUserForRole(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
