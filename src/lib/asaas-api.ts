@@ -486,146 +486,44 @@ export async function processPayment(
       agendamentosData.razao_social
     );
 
-    // 1. Busca dados do responsável pela cobrança
-    console.log('🔍 Buscando dados do responsável:', processData.responsibleId);
+    // 1. Buscar ou criar cliente na conta específica desta empresa (NOVA LÓGICA)
+    console.log(
+      '👤 Processando cliente para empresa:',
+      agendamentosData.razao_social
+    );
+    const customerResult = await getOrCreateAsaasCustomer(
+      processData.responsibleId,
+      apiConfig
+    );
 
-    const { data: responsible, error: responsibleError } = await supabase
-      .from('pessoas')
-      .select(
-        `
-        id,
-        nome,
-        cpf_cnpj,
-        email,
-        telefone,
-        id_asaas,
-        numero_endereco,
-        complemento_endereco,
-        enderecos(cep)
-      `
-      )
-      .eq('id', processData.responsibleId)
-      .single();
-
-    if (responsibleError || !responsible) {
-      console.error('❌ Erro ao buscar responsável:', responsibleError);
-      return {
-        success: false,
-        error: 'Responsável pela cobrança não encontrado',
-      };
+    if (!customerResult.success) {
+      console.error('❌ Erro ao obter/criar cliente:', customerResult.error);
+      return customerResult;
     }
 
-    console.log('✅ Responsável encontrado:', {
-      id: responsible.id,
-      nome: responsible.nome,
-      id_asaas: responsible.id_asaas,
-    });
+    const asaasCustomerId = customerResult.asaasCustomerId!;
+    console.log('✅ Cliente pronto para cobrança:', asaasCustomerId);
 
-    let asaasCustomerId = responsible.id_asaas;
-
-    // 2. Se não tem id_asaas, verifica se cliente já existe no Asaas
-    if (!asaasCustomerId) {
-      console.log(
-        '👤 Responsável não tem ID do Asaas, verificando se já existe...'
+    // 2. Desabilita notificações nativas do Asaas
+    console.log('🔕 Desabilitando notificações nativas do Asaas...');
+    const notificationResult = await disableNotifications(
+      asaasCustomerId,
+      apiConfig
+    );
+    if (!notificationResult.success) {
+      console.warn(
+        '⚠️ Aviso: Não foi possível desabilitar notificações:',
+        notificationResult.error
       );
-
-      // Primeiro, busca cliente existente por CPF
-      const searchResult = await searchExistingCustomer(
-        responsible.cpf_cnpj,
-        apiConfig
-      );
-
-      if (searchResult.success && searchResult.asaasCustomerId) {
-        // Cliente já existe no Asaas, apenas atualiza o ID no Supabase
-        asaasCustomerId = searchResult.asaasCustomerId;
-        console.log('✅ Cliente já existe no Asaas:', asaasCustomerId);
-
-        // Atualiza id_asaas no banco
-        console.log('💾 Atualizando ID do Asaas existente no banco...');
-        const updateResult = await updatePersonAsaasId(
-          responsible.id,
-          asaasCustomerId
-        );
-        if (!updateResult) {
-          console.error('❌ Erro ao salvar ID do cliente Asaas no banco');
-          return {
-            success: false,
-            error: 'Erro ao salvar ID do cliente Asaas',
-          };
-        }
-
-        console.log('✅ ID do Asaas atualizado no Supabase');
-      } else {
-        // Cliente não existe, criar novo
-        console.log('🆕 Cliente não existe no Asaas, criando novo...');
-
-        const customerData: CreateCustomerRequest = {
-          name: responsible.nome,
-          cpfCnpj: responsible.cpf_cnpj,
-          email: responsible.email || undefined,
-          mobilePhone: responsible.telefone
-            ? String(responsible.telefone)
-            : undefined,
-          postalCode:
-            (responsible.enderecos as { cep?: string })?.cep || undefined,
-          externalReference: responsible.id,
-          addressNumber:
-            `${responsible.numero_endereco || ''} ${responsible.complemento_endereco || ''}`.trim() ||
-            undefined,
-        };
-
-        console.log('📝 Dados para criação do cliente:', customerData);
-
-        const customerResult = await createCustomer(customerData, apiConfig);
-        if (!customerResult.success) {
-          console.error(
-            '❌ Falha ao criar cliente no Asaas:',
-            customerResult.error
-          );
-          return customerResult;
-        }
-
-        asaasCustomerId = customerResult.asaasCustomerId!;
-        console.log('✅ Cliente criado no Asaas:', asaasCustomerId);
-
-        // Atualiza id_asaas no banco
-        console.log('💾 Atualizando ID do Asaas no banco...');
-        const updateResult = await updatePersonAsaasId(
-          responsible.id,
-          asaasCustomerId
-        );
-        if (!updateResult) {
-          console.error('❌ Erro ao salvar ID do cliente Asaas no banco');
-          return {
-            success: false,
-            error: 'Erro ao salvar ID do cliente Asaas',
-          };
-        }
-      }
-
-      // 3. Desabilita notificações nativas do Asaas (para cliente novo ou existente)
-      console.log('🔕 Desabilitando notificações nativas do Asaas...');
-      const notificationResult = await disableNotifications(
-        asaasCustomerId,
-        apiConfig
-      );
-      if (!notificationResult.success) {
-        console.warn(
-          '⚠️ Aviso: Não foi possível desabilitar notificações:',
-          notificationResult.error
-        );
-      }
-    } else {
-      console.log('✅ Responsável já possui ID do Asaas:', asaasCustomerId);
     }
 
-    // 4. Calcula data de vencimento (2 dias após data atual)
+    // 3. Calcula data de vencimento (2 dias após data atual)
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 2);
     const dueDateString = dueDate.toISOString().split('T')[0]; // YYYY-MM-DD
     console.log('📅 Data de vencimento calculada:', dueDateString);
 
-    // 5. Cria cobrança no Asaas
+    // 4. Cria cobrança no Asaas
     const paymentData: CreatePaymentRequest = {
       customer: asaasCustomerId,
       billingType: 'PIX',
@@ -645,7 +543,7 @@ export async function processPayment(
 
     console.log('✅ Cobrança criada no Asaas:', paymentResult.asaasPaymentId);
 
-    // 6. Atualiza id_pagamento_externo dos agendamentos
+    // 5. Atualiza id_pagamento_externo dos agendamentos
     console.log('🔗 Vinculando cobrança aos agendamentos...');
     const updateAppointmentsResult = await updateAppointmentsPaymentId(
       processData.consultationIds,
@@ -662,7 +560,7 @@ export async function processPayment(
 
     console.log('✅ Agendamentos vinculados à cobrança com sucesso');
 
-    // 7. Criar registro estruturado da fatura
+    // 6. Criar registro estruturado da fatura
     console.log('📋 Criando registro da fatura no sistema...');
     const faturaResult = await criarFatura(
       {
@@ -704,6 +602,94 @@ export async function processPayment(
       error: 'Erro inesperado ao processar cobrança',
     };
   }
+}
+
+// AI dev note: Busca ou cria cliente na conta Asaas específica da empresa usando view otimizada
+export async function getOrCreateAsaasCustomer(
+  responsibleId: string,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult> {
+  console.log('🔍 Buscando responsável via vw_usuarios_admin:', responsibleId);
+
+  // 1. Buscar dados completos do responsável via view
+  const { data: responsible, error: responsibleError } = await supabase
+    .from('vw_usuarios_admin')
+    .select(
+      `
+      id, nome, cpf_cnpj, email, telefone,
+      numero_endereco, complemento_endereco, cep,
+      endereco_completo
+    `
+    )
+    .eq('id', responsibleId)
+    .single();
+
+  if (responsibleError || !responsible) {
+    console.error('❌ Erro ao buscar responsável:', responsibleError);
+    return {
+      success: false,
+      error: 'Responsável pela cobrança não encontrado',
+    };
+  }
+
+  console.log('✅ Responsável encontrado:', {
+    id: responsible.id,
+    nome: responsible.nome,
+    cpf: responsible.cpf_cnpj?.substring(0, 6) + '...',
+  });
+
+  // 2. Validar CPF obrigatório para Asaas
+  if (!responsible.cpf_cnpj) {
+    console.error('❌ CPF/CNPJ ausente para responsável:', responsible.nome);
+    return {
+      success: false,
+      error: 'CPF/CNPJ é obrigatório para criar cobrança no Asaas',
+    };
+  }
+
+  // 3. Buscar cliente na conta específica da empresa (NOVA LÓGICA)
+  console.log('🔍 Verificando se cliente existe na conta desta empresa...');
+  const searchResult = await searchExistingCustomer(
+    responsible.cpf_cnpj,
+    apiConfig
+  );
+
+  if (searchResult.success && searchResult.asaasCustomerId) {
+    console.log(
+      '✅ Cliente encontrado na conta desta empresa:',
+      searchResult.asaasCustomerId
+    );
+    return {
+      success: true,
+      asaasCustomerId: searchResult.asaasCustomerId,
+      data: searchResult.data,
+    };
+  }
+
+  // 4. Se não encontrou, criar novo na conta desta empresa
+  console.log('🆕 Cliente não existe nesta empresa, criando novo...');
+  const customerData: CreateCustomerRequest = {
+    name: responsible.nome,
+    cpfCnpj: responsible.cpf_cnpj,
+    email: responsible.email || undefined,
+    mobilePhone: responsible.telefone
+      ? String(responsible.telefone)
+      : undefined,
+    postalCode: responsible.cep || undefined,
+    externalReference: responsible.id,
+    addressNumber:
+      `${responsible.numero_endereco || ''} ${responsible.complemento_endereco || ''}`.trim() ||
+      undefined,
+  };
+
+  const createResult = await createCustomer(customerData, apiConfig);
+  if (!createResult.success) {
+    console.error('❌ Falha ao criar cliente:', createResult.error);
+    return createResult;
+  }
+
+  console.log('✅ Cliente criado na empresa:', createResult.asaasCustomerId);
+  return createResult;
 }
 
 // AI dev note: Agenda nota fiscal no Asaas

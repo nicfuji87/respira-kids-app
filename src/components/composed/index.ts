@@ -3,6 +3,8 @@ export { AuthCard } from './AuthCard';
 export { LoginForm } from './LoginForm';
 export { SignUpForm } from './SignUpForm';
 export { CompleteProfileForm } from './CompleteProfileForm';
+export { ForgotPasswordForm } from './ForgotPasswordForm';
+export { ResetPasswordForm } from './ResetPasswordForm';
 
 // User Management
 export { UserApprovalCard } from './UserApprovalCard';
@@ -122,6 +124,8 @@ export const ComposedComponents = {
   // Auth
   AuthCard: 'AuthCard',
   SignUpForm: 'SignUpForm',
+  ForgotPasswordForm: 'ForgotPasswordForm',
+  ResetPasswordForm: 'ResetPasswordForm',
   UserApprovalCard: 'UserApprovalCard',
   DatePicker: 'DatePicker',
 

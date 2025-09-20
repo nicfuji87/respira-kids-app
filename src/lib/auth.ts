@@ -101,10 +101,39 @@ export async function signOut() {
 }
 
 /**
+ * Solicitar recuperação de senha via email
+ */
+export async function resetPasswordRequest(email: string) {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/auth/callback`,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+/**
+ * Atualizar senha do usuário logado
+ */
+export async function updatePassword(newPassword: string) {
+  const { data, error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+/**
  * Buscar dados da pessoa associada ao usuário com timeout
  */
 export async function getUserPessoa(userId: string, timeout = 8000) {
-
   return new Promise<{
     id: string;
     nome: string;
@@ -127,7 +156,6 @@ export async function getUserPessoa(userId: string, timeout = 8000) {
           .single();
 
         clearTimeout(timeoutId);
-        
 
         if (error && error.code !== 'PGRST116') {
           // PGRST116 = not found
@@ -235,13 +263,10 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
     };
   }
 
-  
-
   // Verificar se email foi confirmado
   const needsEmailConfirmation = !user.email_confirmed_at;
 
   if (needsEmailConfirmation) {
-    
     return {
       isAuthenticated: true,
       needsEmailConfirmation: true,
@@ -254,12 +279,9 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
 
   // Buscar dados da pessoa
   try {
-    
     const pessoa = await getUserPessoa(user.id);
-    
 
     if (!pessoa) {
-      
       // Pessoa não existe - deve ser criada pelo trigger
       return {
         isAuthenticated: true,
@@ -271,13 +293,10 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
       };
     }
 
-    
-
     const authUser = { ...user, pessoa } as AuthUser;
 
     // Verificar aprovação
     if (!pessoa.is_approved) {
-      
       return {
         isAuthenticated: true,
         needsEmailConfirmation: false,
@@ -290,7 +309,6 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
 
     // Verificar se perfil está completo
     if (!pessoa.profile_complete) {
-      
       return {
         isAuthenticated: true,
         needsEmailConfirmation: false,
@@ -327,7 +345,7 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
       canAccessDashboard: false,
       user: user as AuthUser,
     };
-    
+
     return errorResult;
   }
 }
@@ -384,7 +402,6 @@ export async function getCurrentUser(
   } catch {
     // AI dev note: Retry logic para casos de sessão sendo restaurada
     if (retryCount < maxRetries) {
-      
       await new Promise((resolve) =>
         setTimeout(resolve, 1000 * (retryCount + 1))
       ); // Backoff exponencial
@@ -392,7 +409,7 @@ export async function getCurrentUser(
     }
 
     // Se esgotar tentativas, retornar null ao invés de erro
-    
+
     return null;
   }
 }

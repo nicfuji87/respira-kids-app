@@ -493,6 +493,13 @@ export const PatientMetricsWithConsultations =
             error instanceof Error ? error.message : 'Erro desconhecido';
           console.error('📝 Mensagem de erro para usuário:', errorMessage);
           setChargeError(errorMessage);
+
+          // Toast de erro para feedback imediato
+          toast({
+            title: 'Erro ao gerar cobrança',
+            description: errorMessage,
+            variant: 'destructive',
+          });
         } finally {
           console.log('🏁 Finalizando geração de cobrança');
           setIsGeneratingCharge(false);

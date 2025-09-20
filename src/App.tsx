@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SignUpTemplate } from '@/components/templates';
-import { LoginPage } from '@/components/domain';
+import { LoginPage, ForgotPasswordPage } from '@/components/domain';
 import { AppRouter } from '@/components/AppRouter';
 import { Toaster } from '@/components/primitives/toaster';
 
-type AuthMode = 'login' | 'signup';
+type AuthMode = 'login' | 'signup' | 'forgot-password';
 type AuthStep =
   | 'signup'
   | 'pending-approval'
@@ -29,6 +29,23 @@ function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authStep, setAuthStep] = useState<AuthStep>('signup');
   const [userEmail, setUserEmail] = useState<string>('');
+  const [resetPasswordStep, setResetPasswordStep] = useState<
+    'request-email' | 'email-sent' | 'reset-password'
+  >('request-email');
+
+  // AI dev note: Detectar callback de reset de senha via URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const type = urlParams.get('type');
+
+    if (type === 'recovery') {
+      setAuthMode('forgot-password');
+      setResetPasswordStep('reset-password');
+
+      // Limpar URL após detectar callback
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   // Loading state
   if (loading) {
@@ -148,9 +165,25 @@ function App() {
         <LoginPage
           onNavigateToSignUp={() => setAuthMode('signup')}
           onForgotPassword={() => {
-            // Implementar lógica de esqueceu senha
-            console.log('Esqueceu senha');
+            setAuthMode('forgot-password');
+            setResetPasswordStep('request-email');
           }}
+        />
+        <Toaster />
+      </div>
+    );
+  }
+
+  // Fluxo de recuperação de senha
+  if (authMode === 'forgot-password') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-bege-fundo to-background flex items-center justify-center p-4">
+        <ForgotPasswordPage
+          onNavigateToLogin={() => {
+            setAuthMode('login');
+            setResetPasswordStep('request-email');
+          }}
+          initialStep={resetPasswordStep}
         />
         <Toaster />
       </div>
@@ -176,8 +209,8 @@ function App() {
       <LoginPage
         onNavigateToSignUp={() => setAuthMode('signup')}
         onForgotPassword={() => {
-          // Implementar lógica de esqueceu senha
-          console.log('Esqueceu senha');
+          setAuthMode('forgot-password');
+          setResetPasswordStep('request-email');
         }}
       />
       <Toaster />

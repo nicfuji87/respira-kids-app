@@ -3,10 +3,16 @@ import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
-import { globalIgnores } from 'eslint/config';
 
 export default tseslint.config([
-  globalIgnores(['dist', 'src/components/ui/**/*']),
+  {
+    ignores: [
+      'node_modules/',
+      'dist/',
+      'src/components/ui/',
+      'components.json',
+    ],
+  },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

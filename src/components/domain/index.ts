@@ -6,6 +6,7 @@ export { LoginPage } from './auth/LoginPage';
 export { SignUpPage } from './auth/SignUpPage';
 export { PendingApprovalPage } from './auth/PendingApprovalPage';
 export { CompleteProfilePage } from './auth/CompleteProfilePage';
+export { ForgotPasswordPage } from './auth/ForgotPasswordPage';
 
 // Dashboard domain exports
 export { AdminDashboard } from './dashboard/AdminDashboard';
@@ -51,6 +52,7 @@ export const DomainComponents = {
   // Auth
   SignUpPage: 'SignUpPage',
   PendingApprovalPage: 'PendingApprovalPage',
+  ForgotPasswordPage: 'ForgotPasswordPage',
 
   // Dashboard
   AdminDashboard: 'AdminDashboard',
