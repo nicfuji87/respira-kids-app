@@ -57,8 +57,10 @@ export const PatientsList: React.FC<PatientsListProps> = ({
       try {
         if (page === 1) {
           setSearchLoading(true);
+          setLoading(false); // Garantir que loading principal não está ativo
         } else {
           setLoading(true);
+          setSearchLoading(false); // Garantir que search loading não está ativo
         }
         setError(null);
 
@@ -94,25 +96,22 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     loadPatients('', 1, selectedLetter);
   }, [loadPatients, selectedLetter]);
 
-  // AI dev note: Debounce para busca
+  // AI dev note: Debounce para busca - removido currentPage da dependência
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (currentPage === 1) {
-        loadPatients(searchTerm, 1, selectedLetter);
-      } else {
-        setCurrentPage(1);
-      }
+      setCurrentPage(1); // Sempre resetar para página 1 ao buscar
+      loadPatients(searchTerm, 1, selectedLetter);
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, loadPatients, currentPage, selectedLetter]);
+  }, [searchTerm, selectedLetter, loadPatients]);
 
   // AI dev note: Carregar pacientes quando a página muda
   useEffect(() => {
     if (currentPage > 1) {
       loadPatients(searchTerm, currentPage, selectedLetter);
     }
-  }, [currentPage, searchTerm, selectedLetter, loadPatients]);
+  }, [currentPage, loadPatients]);
 
   // AI dev note: Função para navegar para detalhes do paciente
   const handlePatientClick = (patientId: string) => {
@@ -124,11 +123,26 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   };
 
   // AI dev note: Funções de paginação
-  const goToFirstPage = () => setCurrentPage(1);
-  const goToPrevPage = () => setCurrentPage(Math.max(1, currentPage - 1));
-  const goToNextPage = () =>
-    setCurrentPage(Math.min(totalPages, currentPage + 1));
-  const goToLastPage = () => setCurrentPage(totalPages);
+  const goToFirstPage = () => {
+    if (currentPage !== 1 && !loading) {
+      setCurrentPage(1);
+    }
+  };
+  const goToPrevPage = () => {
+    if (currentPage > 1 && !loading) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+  const goToNextPage = () => {
+    if (currentPage < totalPages && !loading) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+  const goToLastPage = () => {
+    if (currentPage !== totalPages && !loading) {
+      setCurrentPage(totalPages);
+    }
+  };
 
   // AI dev note: Funções de navegação por letra
   const handleLetterClick = (letter: string) => {
@@ -408,13 +422,13 @@ export const PatientsList: React.FC<PatientsListProps> = ({
       )}
 
       {/* Paginação */}
-      {totalPages > 1 && !loading && (
+      {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={goToFirstPage}
-            disabled={currentPage === 1}
+            disabled={currentPage === 1 || loading}
           >
             <ChevronsLeft className="h-4 w-4" />
           </Button>
@@ -423,7 +437,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             variant="outline"
             size="sm"
             onClick={goToPrevPage}
-            disabled={currentPage === 1}
+            disabled={currentPage === 1 || loading}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -432,13 +446,16 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             <span className="text-sm text-muted-foreground">
               Página {currentPage} de {totalPages}
             </span>
+            {loading && (
+              <Loader2 className="h-4 w-4 animate-spin text-primary ml-2" />
+            )}
           </div>
 
           <Button
             variant="outline"
             size="sm"
             onClick={goToNextPage}
-            disabled={currentPage === totalPages}
+            disabled={currentPage === totalPages || loading}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -447,7 +464,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             variant="outline"
             size="sm"
             onClick={goToLastPage}
-            disabled={currentPage === totalPages}
+            disabled={currentPage === totalPages || loading}
           >
             <ChevronsRight className="h-4 w-4" />
           </Button>
