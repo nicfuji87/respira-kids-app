@@ -967,13 +967,14 @@ export async function fetchPatients(
         .filter((word) => word.length > 0);
 
       if (searchWords.length === 1) {
-        // Busca simples para uma palavra
+        // AI dev note: Busca por nome, email, CPF e nomes dos responsáveis
+        // Campo nomes_responsaveis da view contém todos os responsáveis concatenados
         const term = searchWords[0];
         query = query.or(
-          `nome.ilike.%${term}%,email.ilike.%${term}%,cpf_cnpj.ilike.%${term}%`
+          `nome.ilike.%${term}%,email.ilike.%${term}%,cpf_cnpj.ilike.%${term}%,nomes_responsaveis.ilike.%${term}%`
         );
         countQuery = countQuery.or(
-          `nome.ilike.%${term}%,email.ilike.%${term}%,cpf_cnpj.ilike.%${term}%`
+          `nome.ilike.%${term}%,email.ilike.%${term}%,cpf_cnpj.ilike.%${term}%,nomes_responsaveis.ilike.%${term}%`
         );
       } else {
         // Busca com AND: todas as palavras devem estar presentes no nome

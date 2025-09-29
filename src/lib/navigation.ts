@@ -43,12 +43,7 @@ export const navigationConfig: NavigationConfig[] = [
     href: '/pacientes',
     roles: ['admin', 'secretaria'],
   },
-  {
-    icon: Users,
-    label: 'Pessoa',
-    href: '/pessoa',
-    roles: ['admin', 'profissional'], // Secretaria não exibe no menu mas pode acessar via navegação programática
-  },
+  // Pessoa foi removido do sidebar - função disponível em Configurações > Usuarios
   {
     icon: Package,
     label: 'Estoque',

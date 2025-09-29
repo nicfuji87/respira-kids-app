@@ -207,12 +207,12 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
   return (
     <div className={cn('space-y-6', className)}>
-      {/* Campo de busca */}
+      {/* Campo de busca com autocomplete */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
         <Input
           type="text"
-          placeholder="Buscar pacientes por nome, email ou CPF..."
+          placeholder="Buscar pacientes por nome, email, telefone ou CPF..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10 pr-4"

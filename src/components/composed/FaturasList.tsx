@@ -470,11 +470,28 @@ export const FaturasList = React.memo<FaturasListProps>(
               />
             ))}
 
-            {hasMore && !isExpanded && !onVerMais && (
-              <div className="text-center pt-2 border-t">
-                <div className="text-xs text-muted-foreground">
-                  Mais {faturas.length - maxItems} fatura(s)
-                </div>
+            {hasMore && (
+              <div className="text-center pt-4 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleVerMais();
+                  }}
+                >
+                  {isExpanded ? (
+                    <>
+                      Ver menos
+                      <ChevronRight className="h-4 w-4 ml-1 rotate-90" />
+                    </>
+                  ) : (
+                    <>
+                      Ver todas as {faturas.length} faturas
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </>
+                  )}
+                </Button>
               </div>
             )}
           </div>

@@ -22,7 +22,8 @@ import type { SupabasePessoa } from '@/types/supabase-calendar';
 
 // AI dev note: PatientSelect corrigido com Combobox pattern do shadcn/ui
 // Usa CommandInput para manter foco apropriadamente durante autocomplete
-// DEBUG: Logs mantidos para verificar correção da perda de foco
+// BUSCA COMPLETA: Nome, email, CPF e telefone (do paciente e dos responsáveis)
+// Ao digitar 'Nicolas' (responsável), aparece 'Henrique' (paciente) na lista
 
 export interface PatientSelectProps {
   value?: string;
@@ -39,13 +40,18 @@ interface PatientOption extends SupabasePessoa {
   nomes_responsaveis?: string; // Responsáveis concatenados com ' | '
   access_type?: string; // Tipo de acesso para RLS
 
+  // Campos adicionais
+  cpf_cnpj?: string | null;
+
   // Campos anteriores para compatibilidade (se existirem)
   responsavel_legal_nome?: string;
   responsavel_legal_email?: string;
   responsavel_legal_telefone?: number;
+  responsavel_legal_cpf?: string | null;
   responsavel_financeiro_nome?: string;
   responsavel_financeiro_email?: string;
   responsavel_financeiro_telefone?: number;
+  responsavel_financeiro_cpf?: string | null;
 }
 
 // AI dev note: Hook para debounce de busca - otimiza performance
@@ -70,11 +76,10 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     value,
     onValueChange,
     className,
-    placeholder = 'Digite o nome do paciente...',
+    placeholder = 'Buscar por nome, email, telefone ou CPF...',
     disabled = false,
     error,
   }) => {
-
     const [patients, setPatients] = useState<PatientOption[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -85,36 +90,25 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
     // Buscar pacientes do Supabase
     useEffect(() => {
-      
-
       const loadPatients = async () => {
-        
         setIsLoading(true);
 
         try {
-          
           const data = await fetchPacientes();
-          
 
           if (Array.isArray(data)) {
-            
             setPatients(data as PatientOption[]);
           } else {
-            
             setPatients([]);
           }
         } catch {
           setPatients([]);
         } finally {
-          
           setIsLoading(false);
         }
       };
 
-      
       loadPatients().catch(() => {});
-
-      
     }, []);
 
     // Encontrar paciente selecionado para display
@@ -126,23 +120,18 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     // Filtrar pacientes baseado na busca com normalização de acentos
     // AI dev note: Busca unificada - procura tanto no nome do paciente quanto dos responsáveis
     const filteredPatients = useMemo(() => {
-      
-
       // AI dev note: Não filtrar se ainda estiver carregando pacientes
       if (isLoading) {
-        
         return [];
       }
 
       // Verificar se os pacientes foram carregados
       if (patients.length === 0) {
-        
         return [];
       }
 
       // Só mostrar sugestões se tiver 2+ caracteres
       if (!debouncedSearch.trim() || debouncedSearch.trim().length < 2) {
-        
         return [];
       }
 
@@ -154,8 +143,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
       const normalizedSearchWords = searchWords.map((word) =>
         normalizeText(word)
       );
-
-      
 
       const filtered = patients.filter((patient) => {
         // AI dev note: Verificar se o campo nome existe e não é nulo
@@ -173,7 +160,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
         // Buscar por nome do paciente (normalizado) - busca flexível
         if (matchesAllWords(patient.nome)) {
-          
           return true;
         }
 
@@ -182,14 +168,25 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.nomes_responsaveis &&
           matchesAllWords(patient.nomes_responsaveis)
         ) {
-          
           return true;
         }
 
         // Buscar por email do paciente (normalizado)
         if (patient.email && matchesAllWords(patient.email)) {
-          
           return true;
+        }
+
+        // Buscar por CPF do paciente
+        if (patient.cpf_cnpj && matchesAllWords(patient.cpf_cnpj)) {
+          return true;
+        }
+
+        // Buscar por telefone do paciente (converter para string para buscar)
+        if (patient.telefone) {
+          const telefoneStr = patient.telefone.toString();
+          if (matchesAllWords(telefoneStr)) {
+            return true;
+          }
         }
 
         // Busca por responsável legal (nome e email)
@@ -197,7 +194,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.responsavel_legal_nome &&
           matchesAllWords(patient.responsavel_legal_nome)
         ) {
-          
           return true;
         }
 
@@ -205,8 +201,23 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.responsavel_legal_email &&
           matchesAllWords(patient.responsavel_legal_email)
         ) {
-          
           return true;
+        }
+
+        // Busca por CPF do responsável legal
+        if (
+          patient.responsavel_legal_cpf &&
+          matchesAllWords(patient.responsavel_legal_cpf)
+        ) {
+          return true;
+        }
+
+        // Busca por telefone do responsável legal
+        if (patient.responsavel_legal_telefone) {
+          const telefoneStr = patient.responsavel_legal_telefone.toString();
+          if (matchesAllWords(telefoneStr)) {
+            return true;
+          }
         }
 
         // Busca por responsável financeiro (nome e email)
@@ -214,7 +225,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.responsavel_financeiro_nome &&
           matchesAllWords(patient.responsavel_financeiro_nome)
         ) {
-          
           return true;
         }
 
@@ -222,26 +232,37 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           patient.responsavel_financeiro_email &&
           matchesAllWords(patient.responsavel_financeiro_email)
         ) {
-          
           return true;
+        }
+
+        // Busca por CPF do responsável financeiro
+        if (
+          patient.responsavel_financeiro_cpf &&
+          matchesAllWords(patient.responsavel_financeiro_cpf)
+        ) {
+          return true;
+        }
+
+        // Busca por telefone do responsável financeiro
+        if (patient.responsavel_financeiro_telefone) {
+          const telefoneStr =
+            patient.responsavel_financeiro_telefone.toString();
+          if (matchesAllWords(telefoneStr)) {
+            return true;
+          }
         }
 
         return false;
       });
 
-      
       if (filtered.length > 0) {
-        
         // trimmed debug output
       }
       if (filtered.length > 0) {
         // Results found - show them
       } else {
-        
-
         // Debug especial: testar especificamente busca unificada
         if (normalizedSearchWords.length >= 1) {
-          
           const allMatches = patients.filter((p) => {
             const matchesAllWords = (text: string) => {
               const normalizedText = normalizeText(text);
@@ -255,7 +276,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
               p.nomes_responsaveis && matchesAllWords(p.nomes_responsaveis);
             return nomeMatch || responsavelMatch;
           });
-          
+
           allMatches.forEach(() => {});
         }
       }
@@ -276,7 +297,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
     const handlePatientSelect = useCallback(
       (patient: PatientOption) => {
-        
         onValueChange(patient.id);
         setIsOpen(false);
       },
@@ -284,13 +304,11 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     );
 
     const handleOpenChange = useCallback((open: boolean) => {
-      
       setIsOpen(open);
     }, []);
 
     // AI dev note: Callback para mudanças no campo de busca
     const handleSearchChange = useCallback((search: string) => {
-      
       setSearchTerm(search);
     }, []);
 
@@ -424,7 +442,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           >
             <Command shouldFilter={false} className="overflow-hidden">
               <CommandInput
-                placeholder="Digite para buscar pacientes..."
+                placeholder="Buscar por nome, email, telefone ou CPF..."
                 value={searchTerm}
                 onValueChange={handleSearchChange}
                 className="h-9"

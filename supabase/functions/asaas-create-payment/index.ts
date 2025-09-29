@@ -1,5 +1,5 @@
 // AI dev note: Edge Function para criar cobrança PIX no Asaas
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 interface CreatePaymentRequest {
   apiConfig: {
@@ -27,7 +27,8 @@ Deno.serve(async (req: Request) => {
   // Configurar CORS
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
@@ -40,9 +41,9 @@ Deno.serve(async (req: Request) => {
     if (req.method !== 'POST') {
       return new Response(
         JSON.stringify({ success: false, error: 'Method not allowed' }),
-        { 
-          status: 405, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 405,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
@@ -50,29 +51,36 @@ Deno.serve(async (req: Request) => {
     const { apiConfig, paymentData }: CreatePaymentRequest = await req.json();
 
     // Validar dados obrigatórios
-    if (!apiConfig?.apiKey || !paymentData?.customer || !paymentData?.value || !paymentData?.dueDate) {
+    if (
+      !apiConfig?.apiKey ||
+      !paymentData?.customer ||
+      !paymentData?.value ||
+      !paymentData?.dueDate
+    ) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Dados obrigatórios não informados' 
+        JSON.stringify({
+          success: false,
+          error: 'Dados obrigatórios não informados',
         }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
 
+    // AI dev note: Esta validação é CORRETA - ASAAS não aceita cobranças com valor zero
+    // Consultas gratuitas podem existir no sistema, mas não devem gerar cobranças
     // Validar valor mínimo
     if (paymentData.value <= 0) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Valor deve ser maior que zero' 
+        JSON.stringify({
+          success: false,
+          error: 'Valor deve ser maior que zero para gerar cobrança no ASAAS',
         }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
@@ -81,13 +89,13 @@ Deno.serve(async (req: Request) => {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(paymentData.dueDate)) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Data de vencimento deve estar no formato YYYY-MM-DD' 
+        JSON.stringify({
+          success: false,
+          error: 'Data de vencimento deve estar no formato YYYY-MM-DD',
         }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
@@ -99,7 +107,7 @@ Deno.serve(async (req: Request) => {
       value: paymentData.value,
       dueDate: paymentData.dueDate,
       description: paymentData.description || 'Cobrança Respira Kids',
-      externalReference: paymentData.externalReference
+      externalReference: paymentData.externalReference,
     };
 
     // Remover campos vazios opcionais
@@ -107,7 +115,10 @@ Deno.serve(async (req: Request) => {
       delete asaasPayload.externalReference;
     }
 
-    console.log('Criando cobrança PIX no Asaas:', JSON.stringify(asaasPayload, null, 2));
+    console.log(
+      'Criando cobrança PIX no Asaas:',
+      JSON.stringify(asaasPayload, null, 2)
+    );
 
     // Chamada para API do Asaas
     const controller = new AbortController();
@@ -116,7 +127,7 @@ Deno.serve(async (req: Request) => {
     const asaasResponse = await fetch(`${apiConfig.baseUrl}/payments`, {
       method: 'POST',
       headers: {
-        'access_token': apiConfig.apiKey,
+        access_token: apiConfig.apiKey,
         'Content-Type': 'application/json',
         'User-Agent': 'RespiraKids/1.0',
       },
@@ -130,10 +141,10 @@ Deno.serve(async (req: Request) => {
 
     if (asaasResponse.ok) {
       console.log('Cobrança PIX criada com sucesso:', asaasData.id);
-      
+
       const response: CreatePaymentResponse = {
         success: true,
-        payment: asaasData
+        payment: asaasData,
       };
 
       return new Response(JSON.stringify(response), {
@@ -142,14 +153,15 @@ Deno.serve(async (req: Request) => {
       });
     } else {
       console.error('Erro da API Asaas:', asaasData);
-      
-      const errorMessage = asaasData.errors?.length > 0 
-        ? asaasData.errors[0].description 
-        : `Erro ${asaasResponse.status} ao criar cobrança no Asaas`;
+
+      const errorMessage =
+        asaasData.errors?.length > 0
+          ? asaasData.errors[0].description
+          : `Erro ${asaasResponse.status} ao criar cobrança no Asaas`;
 
       const response: CreatePaymentResponse = {
         success: false,
-        error: errorMessage
+        error: errorMessage,
       };
 
       return new Response(JSON.stringify(response), {
@@ -157,7 +169,6 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
   } catch (error) {
     console.error('Erro na Edge Function asaas-create-payment:', error);
 
@@ -172,7 +183,7 @@ Deno.serve(async (req: Request) => {
 
     const response: CreatePaymentResponse = {
       success: false,
-      error: errorMessage
+      error: errorMessage,
     };
 
     return new Response(JSON.stringify(response), {
@@ -180,4 +191,4 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-}); 
+});

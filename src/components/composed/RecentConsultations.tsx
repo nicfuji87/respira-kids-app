@@ -333,7 +333,10 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(!showAll)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAll(!showAll);
+                }}
               >
                 {showAll ? (
                   <>

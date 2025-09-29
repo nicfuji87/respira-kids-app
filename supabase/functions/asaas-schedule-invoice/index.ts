@@ -82,12 +82,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // AI dev note: Esta validação é CORRETA - ASAAS não aceita notas fiscais com valor zero
+    // Consultas gratuitas podem existir no sistema, mas não devem gerar NFe
     // Validar valor mínimo
     if (invoiceData.value <= 0) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Valor deve ser maior que zero',
+          error:
+            'Valor deve ser maior que zero para emitir nota fiscal no ASAAS',
         }),
         {
           status: 400,

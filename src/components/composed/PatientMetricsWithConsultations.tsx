@@ -140,6 +140,9 @@ export const PatientMetricsWithConsultations =
       // Estados para emissão de NFe
       const [isEmitingNfe, setIsEmitingNfe] = useState<string | null>(null); // faturaId sendo processada
 
+      // Estado para controlar "Ver todas as consultas"
+      const [showAll, setShowAll] = useState(false);
+
       // Verificar se usuário tem permissão para gerar cobrança (admin ou secretaria)
       const canGenerateCharge =
         user?.pessoa?.role === 'admin' || user?.pessoa?.role === 'secretaria';
@@ -356,6 +359,9 @@ export const PatientMetricsWithConsultations =
             throw new Error('Nenhuma consulta selecionada encontrada');
           }
 
+          // AI dev note: Consultas gratuitas (valor zero) são permitidas no sistema
+          // mas não devem ser incluídas em cobranças do ASAAS (que requer valor > 0)
+
           // Calcular valor total
           const totalValue = selectedConsultationData.reduce(
             (sum, consultation) => {
@@ -366,6 +372,18 @@ export const PatientMetricsWithConsultations =
           );
 
           console.log('💰 Valor total calculado:', totalValue);
+
+          // Validar se há consultas com valor zero
+          const consultasGratuitas = selectedConsultationData.filter(
+            (c) => Number(c.valor_servico || 0) === 0
+          );
+
+          if (consultasGratuitas.length > 0) {
+            throw new Error(
+              `Não é possível gerar cobrança para ${consultasGratuitas.length} consulta(s) gratuita(s). ` +
+                'Por favor, desmarque as consultas com valor R$ 0,00 antes de gerar a cobrança.'
+            );
+          }
 
           if (totalValue <= 0) {
             throw new Error('Valor total deve ser maior que zero');
@@ -688,9 +706,8 @@ export const PatientMetricsWithConsultations =
           // Executar queries em paralelo
           let consultationsPromise;
 
-          if (editingFatura) {
-            // No modo de edição, carregar TODAS as consultas (sem limit) para garantir que
-            // as consultas da fatura atual apareçam
+          if (editingFatura || showAll) {
+            // No modo de edição ou "Ver todas", carregar TODAS as consultas (sem limit)
             consultationsPromise = consultationsQuery.order('data_hora', {
               ascending: false,
             });
@@ -931,6 +948,7 @@ export const PatientMetricsWithConsultations =
         patientId,
         periodFilter,
         editingFatura,
+        showAll,
         getDateRange,
         getCalculationValue,
       ]);
@@ -1269,28 +1287,11 @@ export const PatientMetricsWithConsultations =
               {/* Seção de Últimas Faturas - Ocultar para role profissional */}
               {userRole !== 'profissional' && (
                 <div className="border-t pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="h-5 w-5" />
-                      <h3 className="text-lg font-medium">Últimas Faturas</h3>
-                      {faturas.length > 0 && (
-                        <Badge variant="outline">{faturas.length} total</Badge>
-                      )}
-                    </div>
-
-                    {faturas.length > 2 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          // TODO: Implementar modal ou navegação para ver todas as faturas
-                          console.log('Ver todas as faturas - TODO');
-                        }}
-                        className="text-azul-respira hover:text-azul-respira/80"
-                      >
-                        Ver todas as faturas
-                        <ChevronRight className="h-4 w-4 ml-1" />
-                      </Button>
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    <h3 className="text-lg font-medium">Últimas Faturas</h3>
+                    {faturas.length > 0 && (
+                      <Badge variant="outline">{faturas.length} total</Badge>
                     )}
                   </div>
 
@@ -1713,9 +1714,25 @@ export const PatientMetricsWithConsultations =
                     {/* Ver mais */}
                     {totalCount > consultations.length && (
                       <div className="text-center pt-4 border-t">
-                        <Button variant="outline" size="sm">
-                          Ver todas as {totalCount} consultas
-                          <ChevronRight className="h-4 w-4 ml-1" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowAll(!showAll);
+                          }}
+                        >
+                          {showAll ? (
+                            <>
+                              Ver menos
+                              <ChevronRight className="h-4 w-4 ml-1 rotate-90" />
+                            </>
+                          ) : (
+                            <>
+                              Ver todas as {totalCount} consultas
+                              <ChevronRight className="h-4 w-4 ml-1" />
+                            </>
+                          )}
                         </Button>
                       </div>
                     )}
