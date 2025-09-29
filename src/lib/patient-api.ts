@@ -7,6 +7,7 @@ import type {
   PatientConsent,
   PatientDetailsResponse,
 } from '@/types/patient-details';
+import type { PaginatedUsuarios, ApiResponse } from '@/types/usuarios';
 
 /**
  * Buscar detalhes completos do paciente por ID
@@ -906,5 +907,169 @@ export async function updateBillingResponsible(
   } catch (err) {
     console.error('Erro ao atualizar responsável cobrança:', err);
     return { success: false, error: 'Erro interno do servidor' };
+  }
+}
+
+/**
+ * Buscar pacientes com paginação
+ * Usa a view vw_usuarios_admin filtrando apenas pacientes
+ */
+export async function fetchPatients(
+  searchTerm: string = '',
+  page: number = 1,
+  limit: number = 20,
+  startWithLetter?: string
+): Promise<ApiResponse<PaginatedUsuarios>> {
+  try {
+    // AI dev note: Verificação de autenticação
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error(
+        '❌ fetchPatients: Usuário não autenticado:',
+        authError?.message
+      );
+      return {
+        data: null,
+        error: 'Usuário não autenticado',
+        success: false,
+      };
+    }
+
+    const offset = (page - 1) * limit;
+
+    let query = supabase
+      .from('pacientes_com_responsaveis_view')
+      .select('*')
+      .eq('tipo_pessoa_codigo', 'paciente') // Filtrar APENAS pacientes
+      .eq('ativo', true); // Apenas pacientes ativos
+
+    let countQuery = supabase
+      .from('pacientes_com_responsaveis_view')
+      .select('*', { count: 'exact', head: true })
+      .eq('tipo_pessoa_codigo', 'paciente') // Filtrar APENAS pacientes
+      .eq('ativo', true);
+
+    // AI dev note: Aplicar filtro por letra inicial
+    if (startWithLetter && startWithLetter.length === 1) {
+      query = query.ilike('nome', `${startWithLetter}%`);
+      countQuery = countQuery.ilike('nome', `${startWithLetter}%`);
+    }
+
+    // Aplicar busca se fornecida (e não estiver filtrando por letra)
+    if (searchTerm.trim() && !startWithLetter) {
+      const searchWords = searchTerm
+        .trim()
+        .split(/\s+/)
+        .filter((word) => word.length > 0);
+
+      if (searchWords.length === 1) {
+        // Busca simples para uma palavra
+        const term = searchWords[0];
+        query = query.or(
+          `nome.ilike.%${term}%,email.ilike.%${term}%,cpf_cnpj.ilike.%${term}%`
+        );
+        countQuery = countQuery.or(
+          `nome.ilike.%${term}%,email.ilike.%${term}%,cpf_cnpj.ilike.%${term}%`
+        );
+      } else {
+        // Busca com AND: todas as palavras devem estar presentes no nome
+        for (const word of searchWords) {
+          query = query.ilike('nome', `%${word}%`);
+          countQuery = countQuery.ilike('nome', `%${word}%`);
+        }
+      }
+    }
+
+    // Aplicar paginação e ordenação
+    query = query
+      .order('nome', { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    // Executar queries
+    const [{ data, error }, { count, error: countError }] = await Promise.all([
+      query,
+      countQuery,
+    ]);
+
+    if (error) {
+      console.error('Erro ao buscar pacientes:', error);
+      return {
+        data: null,
+        error: error.message,
+        success: false,
+      };
+    }
+
+    if (countError) {
+      console.error('Erro ao contar pacientes:', countError);
+      return {
+        data: null,
+        error: countError.message,
+        success: false,
+      };
+    }
+
+    const totalPages = Math.ceil((count || 0) / limit);
+
+    // AI dev note: Enriquecer dados com status de pagamento
+    const enrichedData = await Promise.all(
+      (data || []).map(async (patient) => {
+        // Buscar status de pagamento das consultas do paciente
+        const { data: agendamentos } = await supabase
+          .from('vw_agendamentos_completos')
+          .select('status_pagamento_codigo')
+          .eq('paciente_id', patient.id)
+          .eq('ativo', true);
+
+        const totalConsultas = agendamentos?.length || 0;
+        const consultasPagas =
+          agendamentos?.filter((a) => a.status_pagamento_codigo === 'pago')
+            .length || 0;
+        const consultasAtrasadas =
+          agendamentos?.filter((a) => a.status_pagamento_codigo === 'atrasado')
+            .length || 0;
+        const consultasPendentes =
+          agendamentos?.filter((a) => a.status_pagamento_codigo === 'pendente')
+            .length || 0;
+
+        const todasPagas =
+          totalConsultas > 0 && consultasPagas === totalConsultas;
+        const temAtrasadas = consultasAtrasadas > 0;
+
+        return {
+          ...patient,
+          // Novos campos de status de pagamento
+          total_consultas_pagamento: totalConsultas,
+          consultas_pagas: consultasPagas,
+          consultas_atrasadas: consultasAtrasadas,
+          consultas_pendentes: consultasPendentes,
+          todas_consultas_pagas: todasPagas,
+          tem_consultas_atrasadas: temAtrasadas,
+        };
+      })
+    );
+
+    return {
+      data: {
+        data: enrichedData,
+        total: count || 0,
+        page,
+        limit,
+        totalPages,
+      },
+      error: null,
+      success: true,
+    };
+  } catch (err) {
+    console.error('Erro ao buscar pacientes:', err);
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : 'Erro desconhecido',
+      success: false,
+    };
   }
 }

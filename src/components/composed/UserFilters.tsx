@@ -94,8 +94,8 @@ export const UserFilters = React.memo<UserFiltersProps>(
                   <SelectContent>
                     <SelectItem value="all">Todos os tipos</SelectItem>
                     <SelectItem value="paciente">Pacientes</SelectItem>
-                    <SelectItem value="medico">Médicos</SelectItem>
                     <SelectItem value="responsavel">Responsáveis</SelectItem>
+                    <SelectItem value="profissional">Profissionais</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

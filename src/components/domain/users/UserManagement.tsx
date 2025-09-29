@@ -589,9 +589,6 @@ export const UserManagement = React.memo<UserManagementProps>(
                                 <SelectItem value="secretaria">
                                   Secretaria
                                 </SelectItem>
-                                <SelectItem value="medico_pediatra">
-                                  Médico Pediatra
-                                </SelectItem>
                                 <SelectItem value="fonoaudiologo">
                                   Fonoaudiólogo
                                 </SelectItem>

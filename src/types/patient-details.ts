@@ -47,6 +47,13 @@ export interface PatientDetails extends SupabasePessoa {
 
   // Anamnese
   anamnese?: string | null;
+
+  // AI dev note: Novos campos de pediatras - vindos da view atualizada
+  pediatras_nomes?: string | null;
+  pediatras_crms?: string | null;
+  pediatras_especialidades?: string | null;
+  total_pediatras?: number | null;
+  pediatras_ids?: string | null;
 }
 
 // Interface genérica para qualquer pessoa (paciente/responsável/profissional)

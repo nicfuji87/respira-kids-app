@@ -46,6 +46,30 @@ export interface Usuario {
   razao_social: string | null;
   nome_fantasia: string | null;
   empresa_cnpj: string | null;
+
+  // AI dev note: Novos campos para pediatras - FASE 4 do plano aprovado
+  pediatra_id?: string | null;
+  pediatra_crm?: string | null;
+  pediatra_especialidade?: string | null;
+  pediatra_observacoes?: string | null;
+  is_pediatra?: boolean;
+  total_pacientes_pediatra?: number;
+  pacientes_ativos_pediatra?: number;
+
+  // Novos campos para pacientes
+  pediatras_nomes?: string | null;
+  total_pediatras?: number;
+
+  // Campos de responsáveis
+  responsavel_legal_nome?: string | null;
+
+  // AI dev note: Campos de status de pagamento
+  total_consultas_pagamento?: number;
+  consultas_pagas?: number;
+  consultas_atrasadas?: number;
+  consultas_pendentes?: number;
+  todas_consultas_pagas?: boolean;
+  tem_consultas_atrasadas?: boolean;
 }
 
 export interface UsuarioFilters {

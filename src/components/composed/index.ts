@@ -83,6 +83,8 @@ export { UserMetrics } from './UserMetrics';
 export { TypePersonSelect } from './TypePersonSelect';
 export { AddressSelect } from './AddressSelect';
 export { ResponsibleSelect } from './ResponsibleSelect';
+export { PediatraSelect } from './PediatraSelect';
+export { PatientsList } from './PatientsList';
 
 // Type exports
 export type { ApprovalStatus } from './UserApprovalCard';
@@ -105,6 +107,8 @@ export type { WeekTimeGridProps } from './WeekTimeGrid';
 export type { StatusPaymentDisplayProps } from './StatusPaymentDisplay';
 export type { ContactLinkProps } from './ContactLink';
 export type { LocationSelectProps, LocationOption } from './LocationSelect';
+export type { PediatraSelectProps } from './PediatraSelect';
+export type { PatientsListProps } from './PatientsList';
 export type { SessionMediaManagerProps } from './SessionMediaManager';
 export type { EvolutionEditorProps } from './EvolutionEditor';
 

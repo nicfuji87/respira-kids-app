@@ -1,22 +1,12 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
 import { UserPlus } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
-import { PatientSelect } from '@/components/composed/PatientSelect';
+import { PatientsList } from '@/components/composed/PatientsList';
 
-// AI dev note: PacientesPage simplificada - usa PatientSelect para busca e navegação
-// Layout full-width sem métricas, focado na funcionalidade principal
+// AI dev note: PacientesPage atualizada - usa PatientsList com paginação de 20 itens
+// Lista completa de pacientes com busca integrada e navegação para detalhes
 
 export const PacientesPage: React.FC = () => {
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
-  const navigate = useNavigate();
-
-  const handlePatientSelect = (patientId: string) => {
-    setSelectedPatientId(patientId);
-    // Navegar para página de detalhes do paciente
-    navigate(`/pacientes/${patientId}`);
-  };
-
   const handleNewPatient = () => {
     // TODO: Implementar criação de novo paciente
     console.log('Criando novo paciente');
@@ -38,15 +28,8 @@ export const PacientesPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Busca de pacientes */}
-      <div className="w-full">
-        <PatientSelect
-          value={selectedPatientId}
-          onValueChange={handlePatientSelect}
-          placeholder="Digite o nome do paciente para buscar..."
-          className="w-full max-w-2xl"
-        />
-      </div>
+      {/* Lista paginada de pacientes */}
+      <PatientsList className="w-full" />
     </div>
   );
 };
