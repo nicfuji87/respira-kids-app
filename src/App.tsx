@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { HashRouter } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SignUpTemplate } from '@/components/templates';
 import { LoginPage, ForgotPasswordPage } from '@/components/domain';
@@ -71,10 +71,10 @@ function App() {
     if (canAccessDashboard && user?.pessoa?.role) {
       console.log('✅ App: Renderizando AppRouter com role:', user.pessoa.role);
       return (
-        <BrowserRouter>
+        <HashRouter>
           <AppRouter />
           <Toaster />
-        </BrowserRouter>
+        </HashRouter>
       );
     } else if (canAccessDashboard && user?.pessoa && !user?.pessoa?.role) {
       // Estado transitório: pessoa existe mas role ainda não
@@ -111,10 +111,10 @@ function App() {
       user.pessoa.role
     );
     return (
-      <BrowserRouter>
+      <HashRouter>
         <AppRouter />
         <Toaster />
-      </BrowserRouter>
+      </HashRouter>
     );
   }
 
