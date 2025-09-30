@@ -1,6 +1,6 @@
 export default function handler(req, res) {
   const { code, state, error } = req.query;
-  
+
   const html = `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -30,24 +30,32 @@ export default function handler(req, res) {
 </head>
 <body>
   <div class="container">
-    ${error ? `
+    ${
+      error
+        ? `
       <h1>Erro: ${error}</h1>
-    ` : `
+    `
+        : `
       <h1>Conectado com sucesso!</h1>
       <p>Redirecionando...</p>
-    `}
+    `
+    }
   </div>
   <script>
-    ${!error ? `
+    ${
+      !error
+        ? `
     setTimeout(() => {
-      window.location.href = '/#/auth/google/callback?code=${code}&state=${encodeURIComponent(state || '')}';
+      window.location.href = '/?code=${code}&state=${encodeURIComponent(state || '')}#/auth/google/callback';
     }, 1000);
-    ` : ''}
+    `
+        : ''
+    }
   </script>
 </body>
 </html>
   `;
-  
+
   res.setHeader('Content-Type', 'text/html');
   res.status(200).send(html);
 }
