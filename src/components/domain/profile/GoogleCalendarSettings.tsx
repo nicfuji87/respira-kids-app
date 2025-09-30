@@ -70,7 +70,7 @@ export const GoogleCalendarSettings: React.FC = () => {
     );
     console.log(
       '🔤 CLIENT_ID CHAR CODES:',
-      Array.from(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').map((c) =>
+      Array.from(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').map((c: string) =>
         c.charCodeAt(0)
       )
     );
