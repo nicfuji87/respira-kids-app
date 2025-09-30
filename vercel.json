@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/auth/google/callback.ts": {
-      "runtime": "@vercel/node@3.0.0"
+      "runtime": "@vercel/node@latest"
     }
   },
   "rewrites": [
