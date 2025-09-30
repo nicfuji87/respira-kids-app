@@ -68,11 +68,10 @@ export const GoogleCalendarSettings: React.FC = () => {
       '🔢 CLIENT_ID LENGTH:',
       import.meta.env.VITE_GOOGLE_CLIENT_ID?.length
     );
+    const clientIdString: string = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
     console.log(
       '🔤 CLIENT_ID CHAR CODES:',
-      (import.meta.env.VITE_GOOGLE_CLIENT_ID || '')
-        .split('')
-        .map((c) => c.charCodeAt(0))
+      clientIdString.split('').map((c: string) => c.charCodeAt(0))
     );
 
     // WORKAROUND: Garantir que o client_id está correto
