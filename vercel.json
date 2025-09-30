@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/auth/google/callback.js": {
+    "api/auth/google/callback.ts": {
       "runtime": "@vercel/node@3.0.0"
     }
   },
