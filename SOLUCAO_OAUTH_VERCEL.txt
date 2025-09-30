@@ -1,0 +1,47 @@
+## ✅ SOLUÇÃO OAUTH - ANÁLISE COMPLETA
+
+### PROBLEMA REAL:
+1. Frontend envia para: `/api/auth/google/callback` (Vercel Function)
+2. Edge Function esperava: `/auth/google/callback` (rota React)
+3. Conflito entre duas implementações tentando processar o OAuth
+
+### O QUE FOI CORRIGIDO:
+
+1. **Frontend (GoogleCalendarSettings.tsx):**
+   - redirect_uri = `${VITE_APP_URL}/api/auth/google/callback`
+
+2. **Vercel Function (api/auth/google/callback.js):**
+   - Recebe callback do Google
+   - Mostra página de sucesso
+   - Redireciona para React com #
+
+3. **Edge Function (google-oauth-callback):**
+   - Atualizada para esperar o mesmo redirect_uri
+   - Deploy v5 em andamento
+
+4. **React App (App.tsx):**
+   - Usa HashRouter para evitar problemas de roteamento
+
+### IMPORTANTE - GOOGLE CLOUD CONSOLE:
+
+Adicione EXATAMENTE esta URI:
+https://app.respirakidsbrasilia.com.br/api/auth/google/callback
+
+### FLUXO COMPLETO:
+
+1. Usuário clica "Conectar Google"
+2. Google redireciona para `/api/auth/google/callback`
+3. Vercel Function mostra página de sucesso
+4. Redireciona para React `/#/auth/google/callback`
+5. React chama Edge Function para trocar código por tokens
+6. Tokens salvos no banco
+
+### AGUARDE:
+- Deploy Vercel: 2-3 minutos
+- Deploy Edge Function v5: 1 minuto
+
+### TESTE APÓS DEPLOY:
+1. https://app.respirakidsbrasilia.com.br
+2. Login: brunacurylp@gmail.com
+3. Configurações > Meu Perfil > Conectar Google
+4. Verificar tabela pessoas no Supabase

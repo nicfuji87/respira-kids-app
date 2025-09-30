@@ -1,4 +1,6 @@
-export default function handler(req, res) {
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export default function handler(req: VercelRequest, res: VercelResponse) {
   const { code, state, error } = req.query;
   
   const html = `
@@ -96,7 +98,7 @@ export default function handler(req, res) {
     }, 2000);
     ` : `
     setTimeout(() => {
-      window.location.href = '/configuracoes';
+      window.location.href = '/#/configuracoes';
     }, 3000);
     `}
   </script>
