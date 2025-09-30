@@ -1,62 +1,122 @@
-## 🚨 TESTE DEFINITIVO - OAUTH GOOGLE CALENDAR
+# TESTE DEFINITIVO DO OAUTH - DIAGNÓSTICO COMPLETO
 
-### ✅ O QUE FOI FEITO:
+## 🔍 TESTES DIRETOS DA API VERCEL
 
-1. **Simplificado para JavaScript puro** (sem TypeScript)
-   - `/api/hello.js` - Teste básico
-   - `/api/oauth-callback.js` - Callback OAuth
+### ✅ Teste 1: API Hello (deve funcionar)
+```
+https://app.respirakidsbrasilia.com.br/api/hello
+```
+Resultado esperado: `{"message": "Hello from Vercel!"}`
 
-2. **URLs atualizadas para:**
-   - Redirect URI: `/api/oauth-callback`
-   - Removido paths complexos
-
-3. **Edge Function v6** deployed com nova URI
-
-4. **Commit: 85485ed** - Deploy em andamento
-
-### 🔴 IMPORTANTE - GOOGLE CLOUD CONSOLE:
-
-**ADICIONE ESTA URI EXATA:**
+### 🔴 Teste 2: OAuth Callback direto
 ```
 https://app.respirakidsbrasilia.com.br/api/oauth-callback
 ```
+Resultado esperado: Página HTML com "Conectado com sucesso!"
 
-### 📋 APÓS O DEPLOY (2-3 minutos):
-
-1. **TESTE A API BÁSICA:**
-   ```
-   https://app.respirakidsbrasilia.com.br/api/hello
-   ```
-   Deve retornar: {"message": "Hello from Vercel!"}
-
-2. **SE FUNCIONAR, TESTE OAUTH:**
-   - https://app.respirakidsbrasilia.com.br
-   - Login: brunacurylp@gmail.com
-   - Configurações > Meu Perfil > Conectar Google
-
-3. **VERIFIQUE NO BANCO:**
-   ```sql
-   SELECT google_calendar_enabled, google_refresh_token 
-   FROM pessoas WHERE email = 'brunacurylp@gmail.com'
-   ```
-
-### 🚨 SE AINDA DER 404:
-
-1. **No Vercel Dashboard:**
-   - Vá em Functions tab
-   - Deve mostrar: `/api/hello` e `/api/oauth-callback`
-   - Se não mostrar, o problema é build
-
-2. **Me envie:**
-   - Screenshot da aba Functions
-   - Resultado de /api/hello
-   - Logs do build
-
-### ESTRUTURA ATUAL:
+### 🔴 Teste 3: OAuth Callback com parâmetros
 ```
-api/
-  ├── hello.js (teste)
-  └── oauth-callback.js (OAuth)
+https://app.respirakidsbrasilia.com.br/api/oauth-callback?code=test&state=test
+```
+Resultado esperado: Página HTML com "Conectado com sucesso!"
+
+---
+
+## 📋 PROCEDIMENTO DE TESTE COMPLETO
+
+### 1️⃣ PREPARAÇÃO
+1. Limpe TODOS os dados do navegador para app.respirakidsbrasilia.com.br
+2. Abra uma nova aba (NÃO anônima desta vez)
+3. Abra o Console (F12) ANTES de acessar o site
+
+### 2️⃣ TESTE OAUTH
+1. Acesse: https://app.respirakidsbrasilia.com.br
+2. Login: brunacurylp@gmail.com
+3. Navegue: **Configurações → Meu Perfil**
+4. **ANTES de clicar em "Conectar Google":**
+   - Console deve estar aberto
+   - Limpe o console (botão 🚫 ou Ctrl+L)
+
+### 3️⃣ CAPTURA DE LOGS
+1. **CLIQUE** em "Conectar Google"
+2. **AGUARDE 2 SEGUNDOS** (delay proposital para logs)
+3. **COPIE IMEDIATAMENTE** todos os logs que aparecerem
+4. Você verá logs como:
+   ```
+   🚀 INICIANDO OAUTH DEBUG
+   📍 window.location: ...
+   🔑 VITE_APP_URL: ...
+   🎯 redirectUri construída: ...
+   🌐 URL final do Google OAuth: ...
+   ```
+
+### 4️⃣ APÓS O ERRO 404
+1. **NO CONSOLE**, execute:
+   ```javascript
+   console.log(JSON.parse(localStorage.getItem('oauth_debug')))
+   ```
+2. **COPIE** todo o objeto que aparecer
+
+3. **COPIE** a URL completa onde deu 404
+
+4. **NO CONSOLE**, execute também:
+   ```javascript
+   // Ver todos os itens no localStorage
+   Object.keys(localStorage).forEach(key => {
+     console.log(key, ':', localStorage.getItem(key));
+   });
+   ```
+
+---
+
+## 📊 INFORMAÇÕES QUE PRECISO
+
+### 1. Logs do Console (ANTES do redirecionamento)
+```
+[Cole aqui todos os logs que aparecerem]
 ```
 
-AGUARDE O DEPLOY E TESTE!
+### 2. Conteúdo do oauth_debug
+```json
+[Cole aqui o objeto JSON do localStorage]
+```
+
+### 3. URL do Erro 404
+```
+[Cole aqui a URL completa onde deu 404]
+```
+
+### 4. Headers da Requisição (se possível)
+- Aba Network → Filtrar por "oauth"
+- Clique na requisição que deu 404
+- Copie os Request Headers
+
+---
+
+## 🚀 STATUS DO DEPLOY
+
+- **Último push:** ~11:18 (horário de Brasília)
+- **Deploy Vercel:** Deve estar completo em 2-3 minutos
+- **Verificação:** https://vercel.com/nicfuji87s-projects/respira-kids-app
+
+---
+
+## 🔧 TESTE ALTERNATIVO (CURL)
+
+Se tiver acesso a terminal/PowerShell:
+```bash
+curl -I https://app.respirakidsbrasilia.com.br/api/oauth-callback
+```
+
+Ou no PowerShell:
+```powershell
+Invoke-WebRequest -Uri "https://app.respirakidsbrasilia.com.br/api/oauth-callback" -Method HEAD
+```
+
+---
+
+## ⚠️ IMPORTANTE
+- NÃO use aba anônima desta vez
+- Mantenha o Console aberto ANTES de iniciar
+- Copie TODOS os logs, mesmo que pareçam irrelevantes
+- Se houver algum erro JavaScript, copie também

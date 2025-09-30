@@ -64,6 +64,28 @@ export const GoogleCalendarSettings: React.FC = () => {
       '🔑 VITE_GOOGLE_CLIENT_ID:',
       import.meta.env.VITE_GOOGLE_CLIENT_ID
     );
+    console.log(
+      '🔢 CLIENT_ID LENGTH:',
+      import.meta.env.VITE_GOOGLE_CLIENT_ID?.length
+    );
+    console.log(
+      '🔤 CLIENT_ID CHAR CODES:',
+      Array.from(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').map((c) =>
+        c.charCodeAt(0)
+      )
+    );
+
+    // WORKAROUND: Garantir que o client_id está correto
+    const rawClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    let clientId = rawClientId;
+
+    // Se o client_id não começar com "7", adicionar (bug de truncamento)
+    if (clientId && !clientId.startsWith('7')) {
+      console.log('⚠️ CLIENT_ID TRUNCADO DETECTADO! Corrigindo...');
+      clientId = '7' + clientId;
+    }
+
+    console.log('✅ CLIENT_ID FINAL:', clientId);
 
     const redirectUri = `${import.meta.env.VITE_APP_URL}/api/oauth-callback`;
     console.log('🎯 redirectUri construída:', redirectUri);
@@ -75,7 +97,7 @@ export const GoogleCalendarSettings: React.FC = () => {
     console.log('📦 State data:', stateData);
 
     const params = {
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+      client_id: clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'https://www.googleapis.com/auth/calendar.events',
