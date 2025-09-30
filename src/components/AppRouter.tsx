@@ -17,7 +17,9 @@ import {
   UsuariosPage,
   RelatoriosPage,
   WebhooksPage,
+  GoogleOAuthDebugPage,
 } from '@/pages';
+import { GoogleCalendarCallback } from '@/components/domain/auth/GoogleCalendarCallback';
 
 // AI dev note: AppRouter - Roteamento principal da aplicação
 // Integra React Router com sistema de autenticação e permissões
@@ -130,6 +132,12 @@ export const AppRouter: React.FC = () => {
       <Routes>
         {/* Dashboard - rota padrão */}
         <Route path="/dashboard" element={<DashboardPage />} />
+
+        {/* Google Calendar OAuth Callback - não requer autenticação adicional */}
+        <Route path="/auth/google/callback" element={<GoogleCalendarCallback />} />
+        
+        {/* Debug Google OAuth */}
+        <Route path="/debug/google-oauth" element={<GoogleOAuthDebugPage />} />
 
         {/* Rotas comuns a todos os roles */}
         <Route

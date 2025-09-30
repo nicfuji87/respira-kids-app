@@ -7,6 +7,7 @@ export { SignUpPage } from './auth/SignUpPage';
 export { PendingApprovalPage } from './auth/PendingApprovalPage';
 export { CompleteProfilePage } from './auth/CompleteProfilePage';
 export { ForgotPasswordPage } from './auth/ForgotPasswordPage';
+export { GoogleCalendarCallback } from './auth/GoogleCalendarCallback';
 
 // Dashboard domain exports
 export { AdminDashboard } from './dashboard/AdminDashboard';
@@ -18,7 +19,7 @@ export { MobileBottomTabs } from './dashboard/MobileBottomTabs';
 export { MobileHeader } from './dashboard/MobileHeader';
 
 // Profile domain exports
-export { EditProfileForm, MyProfileSection } from './profile';
+export { EditProfileForm, MyProfileSection, GoogleCalendarSettings } from './profile';
 
 // Calendar domain exports
 export {

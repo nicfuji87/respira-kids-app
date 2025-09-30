@@ -8,6 +8,7 @@ import {
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { EditProfileForm } from './EditProfileForm';
+import { GoogleCalendarSettings } from './GoogleCalendarSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/primitives/use-toast';
 import {
@@ -256,25 +257,30 @@ export const MyProfileSection = React.memo<MyProfileSectionProps>(
     }
 
     return (
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Meu Perfil
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EditProfileForm
-            initialData={profileData || undefined}
-            onSubmit={handleSubmit}
-            onAvatarUpload={handleAvatarUpload}
-            onAvatarRemove={handleAvatarRemove}
-            isLoading={saving}
-            userRole={userRole}
-            showAllFields={showAllFields}
-          />
-        </CardContent>
-      </Card>
+      <div className={`space-y-6 ${className}`}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Meu Perfil
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EditProfileForm
+              initialData={profileData || undefined}
+              onSubmit={handleSubmit}
+              onAvatarUpload={handleAvatarUpload}
+              onAvatarRemove={handleAvatarRemove}
+              isLoading={saving}
+              userRole={userRole}
+              showAllFields={showAllFields}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Google Calendar Settings */}
+        <GoogleCalendarSettings />
+      </div>
     );
   }
 );

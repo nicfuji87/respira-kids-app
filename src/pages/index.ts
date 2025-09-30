@@ -16,3 +16,6 @@ export { ConfiguracoesPage } from './ConfiguracoesPage';
 export { UsuariosPage } from './UsuariosPage';
 export { RelatoriosPage } from './RelatoriosPage';
 export { WebhooksPage } from './WebhooksPage';
+
+// Debug pages
+export { GoogleOAuthDebugPage } from './GoogleOAuthDebugPage';

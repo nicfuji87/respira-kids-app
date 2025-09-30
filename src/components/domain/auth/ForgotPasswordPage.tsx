@@ -188,3 +188,12 @@ export const ForgotPasswordPage = React.memo<ForgotPasswordPageProps>(
 );
 
 ForgotPasswordPage.displayName = 'ForgotPasswordPage';
+
+
+
+
+
+
+
+
+

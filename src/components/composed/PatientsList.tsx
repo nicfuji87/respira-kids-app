@@ -111,7 +111,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     if (currentPage > 1) {
       loadPatients(searchTerm, currentPage, selectedLetter);
     }
-  }, [currentPage, loadPatients]);
+  }, [currentPage, loadPatients, searchTerm, selectedLetter]);
 
   // AI dev note: Função para navegar para detalhes do paciente
   const handlePatientClick = (patientId: string) => {

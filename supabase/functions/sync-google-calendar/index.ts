@@ -1,0 +1,429 @@
+// AI dev note: Edge Function para sincronizar agendamentos com Google Calendar
+// APENAS para profissionais que conectaram OAuth
+// Responsável Legal recebe via email/WhatsApp (n8n)
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+interface SyncRequest {
+  operation: 'INSERT' | 'UPDATE' | 'DELETE';
+  agendamento_id: string;
+}
+
+interface Recipient {
+  id: string;
+  nome: string;
+  email: string;
+  google_calendar_id: string;
+  google_refresh_token: string;
+  google_access_token: string;
+  google_token_expires_at: string;
+}
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const { operation, agendamento_id }: SyncRequest = await req.json();
+
+    console.log(`📅 Sincronizando Google Calendar: ${operation} - Agendamento: ${agendamento_id}`);
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // 1. Buscar agendamento completo
+    const { data: agendamento, error: agendamentoError } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('*')
+      .eq('id', agendamento_id)
+      .single();
+
+    if (agendamentoError || !agendamento) {
+      console.error('❌ Erro ao buscar agendamento:', agendamentoError);
+      throw new Error('Agendamento não encontrado');
+    }
+
+    // 2. Buscar profissional com Google Calendar (OAuth)
+    const { data: recipients, error: recipientsError } = await supabase
+      .rpc('get_google_calendar_recipients', { p_agendamento_id: agendamento_id });
+
+    if (recipientsError) {
+      console.error('❌ Erro ao buscar destinatários:', recipientsError);
+      throw new Error('Erro ao buscar destinatários');
+    }
+
+    if (!recipients || recipients.length === 0) {
+      console.log('⚠️ Nenhum profissional com Google Calendar configurado.');
+      return new Response(
+        JSON.stringify({ success: true, message: 'Profissional sem Google Calendar' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 3. Buscar endereço correto
+    const location = await getEventLocation(supabase, agendamento);
+
+    // 4. Para cada profissional, sincronizar
+    const results = [];
+    for (const recipient of recipients) {
+      try {
+        const result = await syncEventForRecipient(
+          supabase,
+          agendamento,
+          recipient,
+          location,
+          operation
+        );
+        results.push(result);
+      } catch (err) {
+        console.error(`❌ Erro ao sincronizar para ${recipient.nome}:`, err);
+        results.push({ recipient: recipient.nome, error: err.message });
+      }
+    }
+
+    // 5. Atualizar google_synced_at
+    if (operation !== 'DELETE') {
+      await supabase
+        .from('agendamentos')
+        .update({ google_synced_at: new Date().toISOString() })
+        .eq('id', agendamento_id);
+    }
+
+    console.log('✅ Sincronização concluída:', results);
+
+    return new Response(
+      JSON.stringify({ success: true, results }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('❌ Erro na sincronização:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Erro ao sincronizar'
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
+  }
+});
+
+// ====================================================================
+// AUXILIARES
+// ====================================================================
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getEventLocation(supabase: any, agendamento: any): Promise<string> {
+  const tipoLocal = agendamento.local_atendimento_tipo_local;
+
+  // Clínica ou Externa: endereço do local
+  if (tipoLocal === 'clinica' || tipoLocal === 'externa') {
+    if (!agendamento.local_atendimento_id) return '';
+
+    const { data: local } = await supabase
+      .from('locais_atendimento')
+      .select(`
+        nome,
+        numero_endereco,
+        complemento_endereco,
+        endereco:enderecos(logradouro, bairro, cidade, estado, cep)
+      `)
+      .eq('id', agendamento.local_atendimento_id)
+      .single();
+
+    if (!local || !local.endereco) return agendamento.local_atendimento_nome || '';
+
+    return [
+      local.endereco.logradouro,
+      local.numero_endereco,
+      local.complemento_endereco,
+      local.endereco.bairro,
+      local.endereco.cidade,
+      local.endereco.estado,
+      local.endereco.cep
+    ].filter(Boolean).join(', ');
+  }
+
+  // Domiciliar: endereço do paciente
+  if (tipoLocal === 'domiciliar') {
+    const { data: paciente } = await supabase
+      .from('pessoas')
+      .select(`
+        id_endereco,
+        numero_endereco,
+        complemento_endereco,
+        endereco:enderecos(logradouro, bairro, cidade, estado, cep)
+      `)
+      .eq('id', agendamento.paciente_id)
+      .single();
+
+    if (!paciente || !paciente.endereco) return 'Atendimento Domiciliar';
+
+    return [
+      paciente.endereco.logradouro,
+      paciente.numero_endereco,
+      paciente.complemento_endereco,
+      paciente.endereco.bairro,
+      paciente.endereco.cidade,
+      paciente.endereco.estado,
+      paciente.endereco.cep
+    ].filter(Boolean).join(', ');
+  }
+
+  return '';
+}
+
+async function syncEventForRecipient(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  agendamento: any,
+  recipient: Recipient,
+  location: string,
+  operation: string
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  // 1. Refresh token se necessário
+  const accessToken = await refreshGoogleTokenIfNeeded(supabase, recipient);
+  const calendarId = recipient.google_calendar_id || 'primary';
+
+  // 2. DELETE
+  if (operation === 'DELETE' || !agendamento.ativo) {
+    if (agendamento.google_event_id) {
+      await deleteGoogleCalendarEvent(accessToken, calendarId, agendamento.google_event_id);
+      await supabase
+        .from('agendamentos')
+        .update({ google_event_id: null, google_synced_at: null })
+        .eq('id', agendamento.id);
+      return { recipient: recipient.nome, action: 'deleted' };
+    }
+    return { recipient: recipient.nome, action: 'skipped (no event)' };
+  }
+
+  // 3. Montar dados do evento
+  const eventData = buildEventData(agendamento, location);
+
+  // 4. UPDATE
+  if (operation === 'UPDATE' && agendamento.google_event_id) {
+    await updateGoogleCalendarEvent(accessToken, calendarId, agendamento.google_event_id, eventData);
+    return { recipient: recipient.nome, action: 'updated' };
+  }
+
+  // 5. INSERT
+  const eventId = await createGoogleCalendarEvent(accessToken, calendarId, eventData);
+  if (!agendamento.google_event_id) {
+    await supabase
+      .from('agendamentos')
+      .update({ google_event_id: eventId })
+      .eq('id', agendamento.id);
+  }
+
+  return { recipient: recipient.nome, action: 'created', eventId };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildEventData(agendamento: any, location: string): any {
+  const startDate = new Date(agendamento.data_hora);
+  const durationMinutes = agendamento.tipo_servico_duracao_minutos || 60;
+  const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+
+  const formatWithTimezone = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
+  };
+
+  const summary = `Consulta de Fisioterapia - ${agendamento.paciente_nome}`;
+  const description = buildEventDescription(agendamento, location);
+  const reminders = buildReminders(startDate);
+
+  return {
+    summary,
+    location,
+    description,
+          start: {
+      dateTime: formatWithTimezone(startDate),
+            timeZone: 'America/Sao_Paulo'
+          },
+          end: {
+      dateTime: formatWithTimezone(endDate),
+            timeZone: 'America/Sao_Paulo'
+          },
+    reminders
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildEventDescription(agendamento: any, location: string): string {
+  const startDate = new Date(agendamento.data_hora);
+  const dateStr = startDate.toLocaleDateString('pt-BR');
+  const timeStr = startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const responsavelNome = agendamento.responsavel_legal_nome || agendamento.paciente_nome;
+
+  let description = `Paciente: ${agendamento.paciente_nome}
+Responsável: ${responsavelNome}
+Data: ${dateStr} às ${timeStr}
+Local: ${location}
+
+👨‍⚕️ Profissional: ${agendamento.profissional_nome}`;
+
+  if (agendamento.profissional_especialidade) {
+    description += ` (${agendamento.profissional_especialidade})`;
+  }
+
+  description += `
+🏥 Tipo de Serviço: ${agendamento.tipo_servico_nome}
+⏱️ Duração: ${agendamento.tipo_servico_duracao_minutos || 60} minutos`;
+
+  if (agendamento.observacao) {
+    description += `\n\n📝 Observações: ${agendamento.observacao}`;
+  }
+
+  return description.trim();
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildReminders(startDate: Date): any {
+  const hour = startDate.getHours();
+  let reminderMinutes = 180; // 3h antes (padrão)
+  
+  if (hour === 7 || hour === 8) {
+    reminderMinutes = 60; // 1h antes
+  } else if (hour === 9) {
+    reminderMinutes = 120; // 2h antes
+  }
+
+  return {
+            useDefault: false,
+            overrides: [
+      { method: 'popup', minutes: reminderMinutes },
+      { method: 'email', minutes: reminderMinutes }
+    ]
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function refreshGoogleTokenIfNeeded(supabase: any, recipient: Recipient): Promise<string> {
+  const now = new Date();
+  const expiresAt = new Date(recipient.google_token_expires_at);
+  
+  if (now < expiresAt && recipient.google_access_token) {
+    return recipient.google_access_token;
+  }
+
+  console.log(`🔄 Refreshing token para ${recipient.nome}`);
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: Deno.env.get('GOOGLE_CLIENT_ID'),
+      client_secret: Deno.env.get('GOOGLE_CLIENT_SECRET'),
+      refresh_token: recipient.google_refresh_token,
+      grant_type: 'refresh_token'
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('❌ Erro ao fazer refresh:', error);
+    throw new Error('Falha ao atualizar token do Google');
+  }
+
+  const tokens = await response.json();
+  const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+
+  await supabase
+    .from('pessoas')
+    .update({
+      google_access_token: tokens.access_token,
+      google_token_expires_at: newExpiresAt.toISOString()
+    })
+    .eq('id', recipient.id);
+
+  return tokens.access_token;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createGoogleCalendarEvent(accessToken: string, calendarId: string, eventData: any): Promise<string> {
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(eventData)
+            }
+          );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('❌ Erro ao criar evento:', error);
+    throw new Error('Falha ao criar evento no Google Calendar');
+  }
+
+  const event = await response.json();
+  console.log(`✅ Evento criado: ${event.id}`);
+  return event.id;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function updateGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string, eventData: any): Promise<void> {
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
+              {
+                method: 'PUT',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(eventData)
+              }
+            );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('❌ Erro ao atualizar evento:', error);
+    throw new Error('Falha ao atualizar evento no Google Calendar');
+  }
+
+  console.log(`✅ Evento atualizado: ${eventId}`);
+}
+
+async function deleteGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string): Promise<void> {
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
+              {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`
+                }
+              }
+            );
+
+  if (!response.ok && response.status !== 404) {
+    const error = await response.text();
+    console.error('❌ Erro ao deletar evento:', error);
+    throw new Error('Falha ao deletar evento no Google Calendar');
+  }
+
+  console.log(`✅ Evento deletado: ${eventId}`);
+}
