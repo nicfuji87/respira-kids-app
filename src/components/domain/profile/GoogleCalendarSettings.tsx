@@ -50,7 +50,7 @@ export const GoogleCalendarSettings: React.FC = () => {
 
   const handleConnectGoogle = () => {
     // AI dev note: Usar VITE_APP_URL para garantir consistência com a Edge Function
-    const redirectUri = `${import.meta.env.VITE_APP_URL}/auth/google/callback`;
+    const redirectUri = `${import.meta.env.VITE_APP_URL}/api/auth/google/callback`;
     
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
       client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
