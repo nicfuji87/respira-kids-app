@@ -10,11 +10,18 @@ import { Card, CardContent } from '@/components/ui/card';
 
 export const GoogleCalendarCallback: React.FC = () => {
   const navigate = useNavigate();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>(
+    'loading'
+  );
   const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    handleCallback();
+    // Evitar múltiplas execuções
+    if (!isProcessing) {
+      setIsProcessing(true);
+      handleCallback();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -27,12 +34,14 @@ export const GoogleCalendarCallback: React.FC = () => {
 
     try {
       addLog('🔍 INICIO - Processando callback OAuth');
-      
+
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const stateStr = urlParams.get('state');
-      
-      addLog(`📋 URL params - code: ${code ? 'presente' : 'ausente'}, state: ${stateStr ? 'presente' : 'ausente'}`);
+
+      addLog(
+        `📋 URL params - code: ${code ? 'presente' : 'ausente'}, state: ${stateStr ? 'presente' : 'ausente'}`
+      );
 
       if (!code) {
         throw new Error('Código de autorização não encontrado');
@@ -53,25 +62,31 @@ export const GoogleCalendarCallback: React.FC = () => {
       }
 
       addLog('📞 Chamando Edge Function google-oauth-callback...');
-      addLog(`   Payload: { code: [presente], userId: ${stateData.userId}, autoEnable: ${stateData.autoEnable} }`);
+      addLog(
+        `   Payload: { code: [presente], userId: ${stateData.userId}, autoEnable: ${stateData.autoEnable} }`
+      );
 
       // Chamar Edge Function para trocar código por tokens
       const { data, error: functionError } = await supabase.functions.invoke(
         'google-oauth-callback',
         {
-          body: { 
-            code, 
+          body: {
+            code,
             userId: stateData.userId,
-            autoEnable: stateData.autoEnable 
-          }
+            autoEnable: stateData.autoEnable,
+          },
         }
       );
 
-      addLog(`📡 Edge Function respondeu - error: ${functionError ? 'SIM' : 'NÃO'}, data: ${JSON.stringify(data)}`);
+      addLog(
+        `📡 Edge Function respondeu - error: ${functionError ? 'SIM' : 'NÃO'}, data: ${JSON.stringify(data)}`
+      );
 
       if (functionError) {
         addLog(`❌ Erro na Edge Function: ${JSON.stringify(functionError)}`);
-        throw new Error(functionError.message || 'Erro ao processar autenticação');
+        throw new Error(
+          functionError.message || 'Erro ao processar autenticação'
+        );
       }
 
       if (!data?.success) {
@@ -85,20 +100,31 @@ export const GoogleCalendarCallback: React.FC = () => {
       // Salvar logs no localStorage para debugar
       localStorage.setItem('google_oauth_logs', JSON.stringify(logs));
 
+      // Limpar parâmetros da URL para evitar reprocessamento
+      window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname + window.location.hash
+      );
+
       // Redirecionar após 2 segundos
       setTimeout(() => {
         navigate('/configuracoes?tab=integracao');
       }, 2000);
-
     } catch (err) {
-      addLog(`❌ ERRO FINAL: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+      addLog(
+        `❌ ERRO FINAL: ${err instanceof Error ? err.message : 'Erro desconhecido'}`
+      );
       console.error('❌ Erro no callback:', err);
       console.error('📋 LOGS COMPLETOS:', logs);
-      
+
       // Salvar logs no localStorage
       localStorage.setItem('google_oauth_logs', JSON.stringify(logs));
-      localStorage.setItem('google_oauth_error', err instanceof Error ? err.message : 'Erro desconhecido');
-      
+      localStorage.setItem(
+        'google_oauth_error',
+        err instanceof Error ? err.message : 'Erro desconhecido'
+      );
+
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       setStatus('error');
     }
@@ -112,7 +138,9 @@ export const GoogleCalendarCallback: React.FC = () => {
             <div className="text-center space-y-4">
               <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
               <div>
-                <h2 className="text-xl font-semibold">Conectando com Google...</h2>
+                <h2 className="text-xl font-semibold">
+                  Conectando com Google...
+                </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   Aguarde enquanto configuramos sua integração
                 </p>
