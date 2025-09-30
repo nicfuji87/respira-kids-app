@@ -122,15 +122,3 @@ export const ForgotPasswordForm = React.memo<ForgotPasswordFormProps>(
 );
 
 ForgotPasswordForm.displayName = 'ForgotPasswordForm';
-
-
-
-
-
-
-
-
-
-
-
-

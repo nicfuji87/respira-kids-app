@@ -6,21 +6,28 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/primitives/button';
 import { Switch } from '@/components/primitives/switch';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/card';
 import { Calendar, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 
 export const GoogleCalendarSettings: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   const [enabled, setEnabled] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // AI dev note: Profissionais e Admin tem controle manual (checkbox)
   // Pacientes e responsáveis (sem acesso) recebem automaticamente se conectarem
-  const canToggle = user?.pessoa?.role === 'profissional' || user?.pessoa?.role === 'admin';
+  const canToggle =
+    user?.pessoa?.role === 'profissional' || user?.pessoa?.role === 'admin';
 
   useEffect(() => {
     loadSettings();
@@ -50,23 +57,60 @@ export const GoogleCalendarSettings: React.FC = () => {
 
   const handleConnectGoogle = () => {
     // AI dev note: Usar VITE_APP_URL para garantir consistência com a Edge Function
+    console.log('🚀 INICIANDO OAUTH DEBUG');
+    console.log('📍 window.location:', window.location.href);
+    console.log('🔑 VITE_APP_URL:', import.meta.env.VITE_APP_URL);
+    console.log(
+      '🔑 VITE_GOOGLE_CLIENT_ID:',
+      import.meta.env.VITE_GOOGLE_CLIENT_ID
+    );
+
     const redirectUri = `${import.meta.env.VITE_APP_URL}/api/oauth-callback`;
-    
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+    console.log('🎯 redirectUri construída:', redirectUri);
+
+    const stateData = {
+      userId: user?.pessoa?.id || '',
+      autoEnable: !canToggle, // Auto-ativar para pacientes/responsáveis
+    };
+    console.log('📦 State data:', stateData);
+
+    const params = {
       client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'https://www.googleapis.com/auth/calendar.events',
       access_type: 'offline',
       prompt: 'consent',
-      state: JSON.stringify({
-        userId: user?.pessoa?.id || '',
-        autoEnable: !canToggle // Auto-ativar para pacientes/responsáveis
+      state: JSON.stringify(stateData),
+    };
+    console.log('🔧 OAuth params:', params);
+
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(params)}`;
+    console.log('🌐 URL final do Google OAuth:', googleAuthUrl);
+
+    // Salvar logs no localStorage para análise posterior
+    localStorage.setItem(
+      'oauth_debug',
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        redirectUri,
+        params,
+        googleAuthUrl,
+        windowLocation: window.location.href,
+        env: {
+          VITE_APP_URL: import.meta.env.VITE_APP_URL,
+          VITE_GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        },
       })
-    })}`;
-    
-    console.log('🔗 Redirecionando para OAuth com redirect_uri:', redirectUri);
-    window.location.href = googleAuthUrl;
+    );
+
+    console.log('💾 Logs salvos em localStorage["oauth_debug"]');
+    console.log('🔗 Redirecionando em 2 segundos...');
+
+    // Delay para permitir ver os logs
+    setTimeout(() => {
+      window.location.href = googleAuthUrl;
+    }, 2000);
   };
 
   const handleDisconnect = async () => {
@@ -79,7 +123,7 @@ export const GoogleCalendarSettings: React.FC = () => {
           google_refresh_token: null,
           google_access_token: null,
           google_calendar_enabled: false,
-          google_token_expires_at: null
+          google_token_expires_at: null,
         })
         .eq('id', user.pessoa.id);
 
@@ -122,7 +166,7 @@ export const GoogleCalendarSettings: React.FC = () => {
 
       toast({
         title: checked ? 'Ativado' : 'Desativado',
-        description: checked 
+        description: checked
           ? 'Agendamentos serão sincronizados com seu Google Calendar'
           : 'Sincronização pausada',
       });
@@ -157,7 +201,7 @@ export const GoogleCalendarSettings: React.FC = () => {
           Seus agendamentos aparecerão automaticamente no seu Google Calendar
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {/* Status da Conexão */}
         {isConnected ? (
@@ -182,7 +226,7 @@ export const GoogleCalendarSettings: React.FC = () => {
             <div className="space-y-1">
               <p className="font-medium">Sincronização Automática</p>
               <p className="text-sm text-muted-foreground">
-                {enabled 
+                {enabled
                   ? 'Novos agendamentos serão adicionados automaticamente'
                   : 'Ative para sincronizar agendamentos'}
               </p>
@@ -199,29 +243,30 @@ export const GoogleCalendarSettings: React.FC = () => {
         {!canToggle && isConnected && (
           <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
             <p className="text-sm text-green-700 dark:text-green-300">
-              ✓ <strong>Sincronização ativa!</strong> Você receberá automaticamente os agendamentos no seu Google Calendar.
+              ✓ <strong>Sincronização ativa!</strong> Você receberá
+              automaticamente os agendamentos no seu Google Calendar.
             </p>
           </div>
         )}
 
         {/* Botão de Conexão/Desconexão */}
         {!isConnected ? (
-          <Button 
-            onClick={handleConnectGoogle} 
-            variant="outline" 
+          <Button
+            onClick={handleConnectGoogle}
+            variant="outline"
             className="w-full gap-2"
           >
-            <img 
-              src="/images/logos/icone-google.png" 
-              alt="Google" 
-              className="w-5 h-5" 
+            <img
+              src="/images/logos/icone-google.png"
+              alt="Google"
+              className="w-5 h-5"
             />
             Conectar com Google
           </Button>
         ) : (
-          <Button 
-            onClick={handleDisconnect} 
-            variant="ghost" 
+          <Button
+            onClick={handleDisconnect}
+            variant="ghost"
             size="sm"
             className="w-full"
           >
@@ -233,9 +278,10 @@ export const GoogleCalendarSettings: React.FC = () => {
         {user?.pessoa?.role === 'profissional' && (
           <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              💡 <strong>Dica:</strong> Os responsáveis legais dos pacientes também podem 
-              conectar suas contas Google para receber automaticamente os agendamentos 
-              de seus filhos em seus calendários.
+              💡 <strong>Dica:</strong> Os responsáveis legais dos pacientes
+              também podem conectar suas contas Google para receber
+              automaticamente os agendamentos de seus filhos em seus
+              calendários.
             </p>
           </div>
         )}

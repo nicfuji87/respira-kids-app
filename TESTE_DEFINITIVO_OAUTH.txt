@@ -1,0 +1,62 @@
+## 🚨 TESTE DEFINITIVO - OAUTH GOOGLE CALENDAR
+
+### ✅ O QUE FOI FEITO:
+
+1. **Simplificado para JavaScript puro** (sem TypeScript)
+   - `/api/hello.js` - Teste básico
+   - `/api/oauth-callback.js` - Callback OAuth
+
+2. **URLs atualizadas para:**
+   - Redirect URI: `/api/oauth-callback`
+   - Removido paths complexos
+
+3. **Edge Function v6** deployed com nova URI
+
+4. **Commit: 85485ed** - Deploy em andamento
+
+### 🔴 IMPORTANTE - GOOGLE CLOUD CONSOLE:
+
+**ADICIONE ESTA URI EXATA:**
+```
+https://app.respirakidsbrasilia.com.br/api/oauth-callback
+```
+
+### 📋 APÓS O DEPLOY (2-3 minutos):
+
+1. **TESTE A API BÁSICA:**
+   ```
+   https://app.respirakidsbrasilia.com.br/api/hello
+   ```
+   Deve retornar: {"message": "Hello from Vercel!"}
+
+2. **SE FUNCIONAR, TESTE OAUTH:**
+   - https://app.respirakidsbrasilia.com.br
+   - Login: brunacurylp@gmail.com
+   - Configurações > Meu Perfil > Conectar Google
+
+3. **VERIFIQUE NO BANCO:**
+   ```sql
+   SELECT google_calendar_enabled, google_refresh_token 
+   FROM pessoas WHERE email = 'brunacurylp@gmail.com'
+   ```
+
+### 🚨 SE AINDA DER 404:
+
+1. **No Vercel Dashboard:**
+   - Vá em Functions tab
+   - Deve mostrar: `/api/hello` e `/api/oauth-callback`
+   - Se não mostrar, o problema é build
+
+2. **Me envie:**
+   - Screenshot da aba Functions
+   - Resultado de /api/hello
+   - Logs do build
+
+### ESTRUTURA ATUAL:
+```
+api/
+  ├── hello.js (teste)
+  └── oauth-callback.js (OAuth)
+```
+
+AGUARDE O DEPLOY E TESTE!
