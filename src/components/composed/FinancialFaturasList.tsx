@@ -160,7 +160,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         'empresa_id',
         'empresa_razao_social',
         'empresa_nome_fantasia',
-        'responsavel_cobranca_id',
+        'responsavel_id',
         'responsavel_nome',
         'responsavel_cpf',
         'link_nfe',
