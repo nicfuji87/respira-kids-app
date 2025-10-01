@@ -9,6 +9,7 @@ export { MediaViewer } from './media-viewer';
 export type { MediaViewerProps } from './media-viewer';
 export { RichTextEditor } from './rich-text-editor';
 export { AudioRecorder } from './audio-recorder';
+export { PinInput } from './pin-input';
 export {
   Select,
   SelectContent,

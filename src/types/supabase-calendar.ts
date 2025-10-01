@@ -98,93 +98,112 @@ export interface SupabasePermissaoAgendamento {
 }
 
 // AI dev note: Interface para dados da view vw_agendamentos_completos (estrutura flat)
+// Atualizada para refletir exatamente os campos retornados pela view otimizada
 export interface SupabaseAgendamentoCompletoFlat {
+  // Campos do agendamento
   id: string;
   data_hora: string;
-  observacao: string | null;
+  paciente_id: string;
+  profissional_id: string;
+  tipo_servico_id: string;
+  local_id: string | null;
+  status_consulta_id: string;
+  status_pagamento_id: string;
   valor_servico: string; // numeric vem como string do Supabase
   id_pagamento_externo: string | null;
   link_nfe: string | null;
-  fatura_id: string | null; // ID da fatura associada
+  observacao: string | null;
   ativo: boolean;
+  fatura_id: string | null;
+  cobranca_gerada_em: string | null;
+  google_event_id: string | null;
+  empresa_fatura_id: string;
+  agendado_por_id: string;
   created_at: string;
   updated_at: string;
-  // Paciente
-  paciente_id: string;
+
+  // Dados do paciente
   paciente_nome: string;
-  paciente_email: string | null;
+  paciente_cpf: string | null;
   paciente_telefone: number | null;
+  paciente_email: string | null;
+  paciente_data_nascimento: string | null;
   paciente_role: string | null;
   paciente_foto_perfil: string | null;
   paciente_is_approved: boolean;
   paciente_profile_complete: boolean;
   paciente_ativo: boolean;
-  // Responsável Legal
-  responsavel_legal_id: string | null;
-  responsavel_legal_nome: string | null;
-  responsavel_legal_email: string | null;
-  responsavel_legal_telefone: number | null;
-  // Responsável Financeiro
-  responsavel_financeiro_id: string | null;
-  responsavel_financeiro_nome: string | null;
-  responsavel_financeiro_email: string | null;
-  responsavel_financeiro_telefone: number | null;
-  // Profissional
-  profissional_id: string;
+
+  // Dados do profissional
   profissional_nome: string;
   profissional_email: string | null;
   profissional_telefone: number | null;
   profissional_role: string | null;
-  profissional_foto_perfil: string | null;
-  profissional_especialidade: string | null;
   profissional_registro_profissional: string | null;
+  profissional_especialidade: string | null;
   profissional_bio_profissional: string | null;
+  profissional_foto_perfil: string | null;
   profissional_is_approved: boolean;
   profissional_profile_complete: boolean;
   profissional_ativo: boolean;
-  // Comissão
-  comissao_tipo_recebimento: string | null;
-  comissao_valor_fixo: string | null;
-  comissao_valor_percentual: string | null;
-  comissao_valor_calculado: string;
-  // Tipo Serviço
-  tipo_servico_id: string;
-  tipo_servico_nome: string;
+
+  // Dados do serviço
+  servico_nome: string;
+  servico_duracao: number;
+  servico_cor: string;
   tipo_servico_descricao: string | null;
   tipo_servico_duracao_minutos: number;
   tipo_servico_valor: string;
   tipo_servico_cor: string;
   tipo_servico_ativo: boolean;
-  // Local Atendimento
+
+  // Dados do local
+  local_nome: string | null;
   local_atendimento_id: string | null;
-  local_atendimento_nome: string | null;
   local_atendimento_tipo_local: string | null;
   local_atendimento_ativo: boolean | null;
+
   // Status Consulta
-  status_consulta_id: string;
   status_consulta_codigo: string;
-  status_consulta_descricao: string;
+  status_consulta_nome: string;
   status_consulta_cor: string;
+
   // Status Pagamento
-  status_pagamento_id: string;
   status_pagamento_codigo: string;
-  status_pagamento_descricao: string;
+  status_pagamento_nome: string;
   status_pagamento_cor: string;
-  // Agendado Por
-  agendado_por_id: string;
-  agendado_por_nome: string;
-  agendado_por_email: string | null;
-  // Auditoria
-  criado_por_nome: string | null;
-  atualizado_por_nome: string | null;
+
+  // Empresa de Faturamento
+  empresa_fatura_razao_social: string | null;
+  empresa_fatura_nome_fantasia: string | null;
+  empresa_fatura_cnpj: string | null;
+  empresa_fatura_ativo: boolean;
+
+  // Responsáveis (NOVOS)
+  responsavel_legal_id: string | null;
+  responsavel_legal_nome: string | null;
+  responsavel_financeiro_id: string | null;
+  responsavel_financeiro_nome: string | null;
+  responsavel_cobranca_id: string;
+  responsavel_cobranca_nome: string | null;
+
+  // Agendado Por (NOVOS)
+  agendado_por_nome: string | null;
+
+  // Comissão (NOVOS)
+  comissao_tipo_recebimento: string | null;
+  comissao_valor_fixo: string | null;
+  comissao_valor_percentual: string | null;
+  comissao_valor_calculado: string;
+
+  // Aliases para compatibilidade com webhooks (NOVOS)
+  tipo_servico_nome: string;
+  local_atendimento_nome: string | null;
+  status_consulta_descricao: string;
+  status_pagamento_descricao: string;
+
   // Evolução
   possui_evolucao: string; // 'sim' ou 'não'
-  // Empresa de Faturamento (NOVO)
-  empresa_fatura_id: string;
-  empresa_fatura_razao_social: string;
-  empresa_fatura_nome_fantasia: string | null;
-  empresa_fatura_cnpj: string;
-  empresa_fatura_ativo: boolean;
 }
 
 // Interfaces para dados enriquecidos (com joins) - MANTIDO PARA COMPATIBILIDADE

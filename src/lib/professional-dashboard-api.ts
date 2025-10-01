@@ -7,10 +7,16 @@ import { parseSupabaseDatetime } from './calendar-mappers';
 
 interface AgendamentoData {
   status_consulta_codigo: string;
-  comissao_valor_calculado: string;
   valor_servico: string;
   data_hora: string;
   possui_evolucao: string;
+  // Campos adicionais da view
+  paciente_nome?: string;
+  profissional_nome?: string;
+  servico_nome?: string;
+  local_nome?: string;
+  status_consulta_nome?: string;
+  status_pagamento_nome?: string;
 }
 
 export interface ProfessionalMetrics {
@@ -197,24 +203,18 @@ export const fetchProfessionalMetrics = async (
     // Faturamento a receber: todas as consultas finalizadas (o que realmente foi faturado)
     const faturamentoAReceber = consultasAtualArray
       .filter((c) => c.status_consulta_codigo === 'finalizado')
-      .reduce(
-        (total, c) => total + parseFloat(c.comissao_valor_calculado || '0'),
-        0
-      );
+      .reduce((total, c) => total + parseFloat(c.valor_servico || '0'), 0);
 
     // Total faturado: todas as consultas realizadas no mês (independente de status/evolução)
     const faturamentoTotalFaturado = consultasAtualArray.reduce(
-      (total, c) => total + parseFloat(c.comissao_valor_calculado || '0'),
+      (total, c) => total + parseFloat(c.valor_servico || '0'),
       0
     );
 
     // Faturamento do mês anterior: todas as consultas finalizadas
     const faturamentoMesAnterior = consultasAnteriorArray
       .filter((c) => c.status_consulta_codigo === 'finalizado')
-      .reduce(
-        (total, c) => total + parseFloat(c.comissao_valor_calculado || '0'),
-        0
-      );
+      .reduce((total, c) => total + parseFloat(c.valor_servico || '0'), 0);
 
     // Próximos agendamentos (próximos 7 dias)
     const proximos7Dias = new Date();
@@ -315,11 +315,11 @@ export const fetchUpcomingAppointments = async (
       id: a.id,
       dataHora: a.data_hora,
       pacienteNome: a.paciente_nome,
-      tipoServico: a.tipo_servico_nome,
-      local: a.local_atendimento_nome || 'Local não definido',
-      valor: parseFloat(a.comissao_valor_calculado || '0'), // Usar comissao_valor_calculado para profissional
-      statusConsulta: a.status_consulta_descricao,
-      statusPagamento: a.status_pagamento_descricao,
+      tipoServico: a.servico_nome || 'Serviço não definido',
+      local: a.local_nome || 'Local não definido',
+      valor: parseFloat(a.valor_servico || '0'),
+      statusConsulta: a.status_consulta_nome || 'Status não definido',
+      statusPagamento: a.status_pagamento_nome || 'Pagamento não definido',
       // Campos extras para admin e secretaria
       profissionalNome: a.profissional_nome,
     }));
@@ -336,15 +336,16 @@ export const fetchConsultationsToEvolve = async (
   professionalId: string
 ): Promise<ConsultationToEvolve[]> => {
   try {
+    // AI dev note: Select apenas campos necessários para lista de consultas a evoluir
     const { data: consultas, error } = await supabase
       .from('vw_agendamentos_completos')
-      .select('*')
+      .select('id, data_hora, paciente_nome, servico_nome, valor_servico')
       .eq('profissional_id', professionalId)
       .eq('status_consulta_codigo', 'finalizado')
       .eq('possui_evolucao', 'não')
       .eq('ativo', true)
       .order('data_hora', { ascending: false })
-      .range(0, 499); // Mostrar até 500 consultas a evoluir
+      .limit(100); // AI dev note: Reduzido de 500 para 100 para performance
 
     if (error) throw error;
 
@@ -368,8 +369,8 @@ export const fetchConsultationsToEvolve = async (
         id: c.id,
         dataHora: c.data_hora,
         pacienteNome: c.paciente_nome,
-        tipoServico: c.tipo_servico_nome,
-        valor: parseFloat(c.comissao_valor_calculado || '0'), // Usar comissao_valor_calculado para profissional
+        tipoServico: c.servico_nome || 'Serviço não definido',
+        valor: parseFloat(c.valor_servico || '0'), // Usar valor_servico para profissional
         diasPendente,
         urgente: diasPendente > 7, // Mais de 7 dias é urgente
         prioridade,
@@ -461,7 +462,7 @@ export const fetchFaturamentoComparativo = async (
     consultasArray.forEach((consulta) => {
       const dataConsulta = parseSupabaseDatetime(consulta.data_hora);
       const mes = dataConsulta.getMonth() + 1; // getMonth() retorna 0-11
-      const valor = parseFloat(consulta.comissao_valor_calculado || '0');
+      const valor = parseFloat(consulta.valor_servico || '0');
 
       const dadosExistentes = dadosPorMes.get(mes) || {
         faturamentoTotal: 0,
@@ -613,76 +614,25 @@ export const fetchAdminMetrics = async (
     const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
     const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
 
-    // AI dev note: Queries em batches para admin metrics - contornar limite de 1000
+    // AI dev note: Buscar apenas campos necessários para cálculo de métricas (status e valor)
+    // Evita timeout com .select('*') que retorna ~70 campos
+    const { data: consultasAtuais, error: errorAtual } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('status_consulta_codigo, valor_servico')
+      .gte('data_hora', mesAtual.toISOString().split('T')[0])
+      .lte('data_hora', endDate)
+      .eq('ativo', true);
 
-    // Buscar consultas do mês atual (todos os profissionais) - COM BATCHES
-    const batchSize = 1000;
-    let allConsultasAtual: unknown[] = [];
-    let offset = 0;
-    let hasMoreData = true;
+    if (errorAtual) throw errorAtual;
 
-    while (hasMoreData) {
-      const { data: batchData, error: batchError } = await supabase
-        .from('vw_agendamentos_completos')
-        .select('*')
-        .gte('data_hora', mesAtual.toISOString().split('T')[0])
-        .lte('data_hora', endDate)
-        .eq('ativo', true)
-        .range(offset, offset + batchSize - 1)
-        .order('data_hora', { ascending: false });
+    const { data: consultasAnteriores, error: errorAnterior } = await supabase
+      .from('vw_agendamentos_completos')
+      .select('status_consulta_codigo, valor_servico')
+      .gte('data_hora', mesAnterior.toISOString().split('T')[0])
+      .lte('data_hora', fimMesAnterior.toISOString().split('T')[0])
+      .eq('ativo', true);
 
-      if (batchError) throw batchError;
-
-      if (!batchData || batchData.length === 0) {
-        hasMoreData = false;
-      } else {
-        allConsultasAtual = [
-          ...allConsultasAtual,
-          ...(batchData as AgendamentoData[]),
-        ];
-        if (batchData.length < batchSize) {
-          hasMoreData = false;
-        } else {
-          offset += batchSize;
-        }
-      }
-
-      if (offset > 50000) hasMoreData = false;
-    }
-
-    // Buscar consultas do mês anterior (todos os profissionais) - COM BATCHES
-    let allConsultasAnterior: AgendamentoData[] = [];
-    offset = 0;
-    hasMoreData = true;
-
-    while (hasMoreData) {
-      const { data: batchData, error: batchError } = await supabase
-        .from('vw_agendamentos_completos')
-        .select('*')
-        .gte('data_hora', mesAnterior.toISOString().split('T')[0])
-        .lte('data_hora', fimMesAnterior.toISOString().split('T')[0])
-        .eq('ativo', true)
-        .range(offset, offset + batchSize - 1)
-        .order('data_hora', { ascending: false });
-
-      if (batchError) throw batchError;
-
-      if (!batchData || batchData.length === 0) {
-        hasMoreData = false;
-      } else {
-        allConsultasAnterior = [
-          ...allConsultasAnterior,
-          ...(batchData as AgendamentoData[]),
-        ];
-        if (batchData.length < batchSize) {
-          hasMoreData = false;
-        } else {
-          offset += batchSize;
-        }
-      }
-
-      if (offset > 50000) hasMoreData = false;
-    }
+    if (errorAnterior) throw errorAnterior;
 
     // Contar próximos agendamentos (próximos 7 dias)
     const proximosDias = new Date();
@@ -750,11 +700,8 @@ export const fetchAdminMetrics = async (
 
     if (errorAprovacoes) throw errorAprovacoes;
 
-    const consultasAtuais = allConsultasAtual;
-    const consultasAnteriores = allConsultasAnterior;
-
     // Calcular faturamento total (usar valor_servico ao invés de comissão)
-    const faturamentoTotalMes = consultasAtuais
+    const faturamentoTotalMes = (consultasAtuais || [])
       .filter(
         (c: unknown) =>
           (c as { status_consulta_codigo?: string }).status_consulta_codigo ===
@@ -767,7 +714,7 @@ export const fetchAdminMetrics = async (
         0
       );
 
-    const faturamentoMesAnterior = consultasAnteriores
+    const faturamentoMesAnterior = (consultasAnteriores || [])
       .filter(
         (c: unknown) =>
           (c as { status_consulta_codigo?: string }).status_consulta_codigo ===
@@ -782,8 +729,8 @@ export const fetchAdminMetrics = async (
 
     return {
       totalPacientes: totalPacientesCount || 0,
-      consultasNoMes: consultasAtuais.length,
-      consultasNoMesAnterior: consultasAnteriores.length,
+      consultasNoMes: (consultasAtuais || []).length,
+      consultasNoMesAnterior: (consultasAnteriores || []).length,
       faturamentoTotalMes,
       faturamentoMesAnterior,
       proximosAgendamentos: proximosAgendamentos || 0,
@@ -835,11 +782,11 @@ export const fetchAllUpcomingAppointments = async (
       id: a.id,
       dataHora: a.data_hora,
       pacienteNome: a.paciente_nome,
-      tipoServico: a.tipo_servico_nome,
-      local: a.local_atendimento_nome || 'Local não definido',
+      tipoServico: a.servico_nome || 'Serviço não definido',
+      local: a.local_nome || 'Local não definido',
       valor: parseFloat(a.valor_servico || '0'), // Admin vê valor total, não comissão
-      statusConsulta: a.status_consulta_descricao,
-      statusPagamento: a.status_pagamento_descricao,
+      statusConsulta: a.status_consulta_nome || 'Status não definido',
+      statusPagamento: a.status_pagamento_nome || 'Pagamento não definido',
       // Campos extras para admin
       profissionalNome: a.profissional_nome,
     }));
@@ -861,9 +808,12 @@ export const fetchAllConsultationsToEvolve = async (
   professionalIds?: string[]
 ): Promise<ConsultationToEvolve[]> => {
   try {
+    // AI dev note: Select apenas campos necessários + limit para performance
     let query = supabase
       .from('vw_agendamentos_completos')
-      .select('*')
+      .select(
+        'id, data_hora, paciente_nome, servico_nome, valor_servico, profissional_nome, status_pagamento_nome'
+      )
       .eq('status_consulta_codigo', 'finalizado')
       .eq('possui_evolucao', 'não')
       .eq('ativo', true);
@@ -875,7 +825,7 @@ export const fetchAllConsultationsToEvolve = async (
 
     const { data: consultas, error } = await query
       .order('data_hora', { ascending: false })
-      .range(0, 999); // Mostrar até 1000 consultas para evolução do admin
+      .limit(100); // AI dev note: Reduzido de 1000 para 100 para performance
 
     if (error) throw error;
 
@@ -899,14 +849,14 @@ export const fetchAllConsultationsToEvolve = async (
         id: c.id,
         dataHora: c.data_hora,
         pacienteNome: c.paciente_nome,
-        tipoServico: c.tipo_servico_nome,
+        tipoServico: c.servico_nome || 'Serviço não definido',
         valor: parseFloat(c.valor_servico || '0'), // Admin vê valor total
         diasPendente,
         urgente: diasPendente > 7,
         prioridade,
         // Campos extras para admin e secretaria
         profissionalNome: c.profissional_nome,
-        statusPagamento: c.status_pagamento_descricao,
+        statusPagamento: c.status_pagamento_nome || 'Pagamento não definido',
       };
     });
   } catch (error) {

@@ -100,7 +100,6 @@ export interface RecentConsultation {
   selectable?: boolean; // Para modo de seleção de cobrança
   // AI dev note: Campos de comissão para controle de exibição por role
   comissao_tipo_recebimento?: string | null;
-  comissao_valor_calculado?: number | null;
 }
 
 // Interface para dados de consentimento

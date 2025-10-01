@@ -28,9 +28,25 @@ export const parseSupabaseDatetime = (dataHoraStr: string): Date => {
 };
 
 // AI dev note: Mapeamento de cores do Supabase para EventColor
+// Aceita tanto hex (#3B82F6) quanto strings simples ('blue')
 export const mapSupabaseColorToEventColor = (
   supabaseColor: string
 ): EventColor => {
+  // Se já for uma cor simples, retornar diretamente
+  const simpleColors: EventColor[] = [
+    'red',
+    'orange',
+    'green',
+    'blue',
+    'purple',
+    'pink',
+    'gray',
+  ];
+  if (simpleColors.includes(supabaseColor as EventColor)) {
+    return supabaseColor as EventColor;
+  }
+
+  // Mapeamento de hex para cores simples
   const colorMap: Record<string, EventColor> = {
     '#EF4444': 'red',
     '#F97316': 'orange',
@@ -64,23 +80,13 @@ export const mapEventColorToHex = (eventColor: EventColor): string => {
 export const mapAgendamentoFlatToCompleto = (
   flat: SupabaseAgendamentoCompletoFlat
 ): SupabaseAgendamentoCompleto => {
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔄 Mapeando agendamento flat→completo:', {
-      id: flat.id,
-      data_hora: flat.data_hora,
-      paciente_nome: flat.paciente_nome,
-      profissional_nome: flat.profissional_nome,
-      tipo_servico_nome: flat.tipo_servico_nome,
-    });
-  }
-
   const mapped = {
     id: flat.id,
     data_hora: flat.data_hora,
     paciente_id: flat.paciente_id,
     profissional_id: flat.profissional_id,
     tipo_servico_id: flat.tipo_servico_id,
-    local_id: flat.local_atendimento_id,
+    local_id: flat.local_id,
     status_consulta_id: flat.status_consulta_id,
     status_pagamento_id: flat.status_pagamento_id,
     valor_servico: parseFloat(flat.valor_servico || '0'),
@@ -141,7 +147,7 @@ export const mapAgendamentoFlatToCompleto = (
     },
     tipo_servico: {
       id: flat.tipo_servico_id,
-      nome: flat.tipo_servico_nome,
+      nome: flat.servico_nome,
       descricao: flat.tipo_servico_descricao,
       duracao_minutos: flat.tipo_servico_duracao_minutos,
       valor: parseFloat(flat.tipo_servico_valor || '0'),
@@ -155,7 +161,7 @@ export const mapAgendamentoFlatToCompleto = (
     local_atendimento: flat.local_atendimento_id
       ? {
           id: flat.local_atendimento_id,
-          nome: flat.local_atendimento_nome || '',
+          nome: flat.local_nome || '',
           tipo_local: flat.local_atendimento_tipo_local as
             | 'clinica'
             | 'domiciliar'
@@ -173,7 +179,7 @@ export const mapAgendamentoFlatToCompleto = (
     status_consulta: {
       id: flat.status_consulta_id,
       codigo: flat.status_consulta_codigo,
-      descricao: flat.status_consulta_descricao,
+      descricao: flat.status_consulta_nome,
       cor: flat.status_consulta_cor,
       created_at: flat.created_at,
       updated_at: flat.updated_at,
@@ -181,15 +187,15 @@ export const mapAgendamentoFlatToCompleto = (
     status_pagamento: {
       id: flat.status_pagamento_id,
       codigo: flat.status_pagamento_codigo,
-      descricao: flat.status_pagamento_descricao,
+      descricao: flat.status_pagamento_nome,
       cor: flat.status_pagamento_cor,
       created_at: flat.created_at,
       updated_at: flat.updated_at,
     },
     agendado_por_pessoa: {
       id: flat.agendado_por_id,
-      nome: flat.agendado_por_nome,
-      email: flat.agendado_por_email,
+      nome: '', // Não disponível na view
+      email: null, // Não disponível na view
       telefone: null, // Não disponível na view
       role: null, // Não disponível na view
       auth_user_id: null, // Não disponível na view
@@ -280,40 +286,33 @@ export const mapAgendamentoFlatToCalendarEvent = (
 ): CalendarEvent => {
   // AI dev note: CORREÇÃO - Usar helper para manter horário exato do Supabase
   const start = parseSupabaseDatetime(flat.data_hora);
-  const end = new Date(
-    start.getTime() + flat.tipo_servico_duracao_minutos * 60000
-  );
+  const end = new Date(start.getTime() + flat.servico_duracao * 60000);
 
   return {
     id: flat.id,
-    title: `${flat.tipo_servico_nome} - ${flat.paciente_nome}`,
+    title: `${flat.servico_nome} - ${flat.paciente_nome}`,
     description: flat.observacao || `Atendimento com ${flat.profissional_nome}`,
     start,
     end,
-    color: mapSupabaseColorToEventColor(flat.tipo_servico_cor),
-    attendees: [flat.paciente_email, flat.profissional_email].filter(
-      Boolean
-    ) as string[],
-    location: flat.local_atendimento_nome || 'Local não definido',
+    color: mapSupabaseColorToEventColor(flat.servico_cor),
+    attendees: [flat.paciente_email].filter(Boolean) as string[],
+    location: flat.local_nome || 'Local não definido',
     allDay: false,
     // Metadados específicos da view flat
     metadata: {
       pacienteId: flat.paciente_id,
       profissionalId: flat.profissional_id,
       tipoServicoId: flat.tipo_servico_id,
-      statusConsulta: flat.status_consulta_descricao,
-      statusPagamento: flat.status_pagamento_descricao,
-      valorServico: parseFloat(flat.valor_servico || '0'),
-      localId: flat.local_atendimento_id,
-      observacao: flat.observacao,
-      tipoServicoCor: flat.tipo_servico_cor,
-      // Dados extras da view flat
-      pacienteNome: flat.paciente_nome, // AI dev note: ADICIONADO - Nome do paciente direto
-      profissionalNome: flat.profissional_nome,
-      tipoServicoNome: flat.tipo_servico_nome,
-      responsavelLegalNome: flat.responsavel_legal_nome,
-      statusConsultaCor: flat.status_consulta_cor,
+      statusConsulta: flat.status_consulta_nome,
+      statusPagamento: flat.status_pagamento_nome,
       statusPagamentoCor: flat.status_pagamento_cor,
+      valorServico: parseFloat(flat.valor_servico || '0'),
+      localId: flat.local_id,
+      observacao: flat.observacao,
+      // Dados extras da view flat
+      pacienteNome: flat.paciente_nome,
+      profissionalNome: flat.profissional_nome,
+      tipoServicoNome: flat.servico_nome,
       possuiEvolucao: flat.possui_evolucao,
       // AI dev note: Dados completos para AppointmentDetailsManager
       appointmentData: flat,

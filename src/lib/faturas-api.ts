@@ -159,6 +159,68 @@ export async function fetchFaturasPorPaciente(
   }
 }
 
+// === BUSCAR FATURAS GERAL (TODOS OS PACIENTES) ===
+export async function fetchFaturasGeral(filtros?: {
+  startDate?: string;
+  endDate?: string;
+}): Promise<ApiResponse<FaturaComDetalhes[]>> {
+  try {
+    console.log('🔍 Buscando faturas gerais com filtros:', filtros);
+
+    let query = supabase
+      .from('vw_faturas_completas')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    // Aplicar filtros de data se fornecidos
+    if (filtros?.startDate) {
+      query = query.gte('created_at', filtros.startDate);
+    }
+    if (filtros?.endDate) {
+      query = query.lte('created_at', filtros.endDate + 'T23:59:59');
+    }
+
+    const { data: faturasData, error } = await query;
+
+    if (error) {
+      console.error('❌ Erro ao buscar faturas:', error);
+      throw error;
+    }
+
+    // Mapear para interface FaturaComDetalhes
+    const faturasComDetalhes: FaturaComDetalhes[] = (faturasData || []).map(
+      (fatura) => ({
+        ...fatura,
+        consultas_periodo:
+          fatura.periodo_inicio && fatura.periodo_fim
+            ? {
+                inicio: fatura.periodo_inicio,
+                fim: fatura.periodo_fim,
+              }
+            : undefined,
+        url_asaas: fatura.id_asaas
+          ? `https://www.asaas.com/i/${fatura.id_asaas.replace('pay_', '')}`
+          : undefined,
+        link_nfe: fatura.link_nfe,
+        status_nfe: fatura.status_nfe,
+      })
+    );
+
+    console.log('✅ Faturas gerais encontradas:', faturasComDetalhes.length);
+
+    return {
+      success: true,
+      data: faturasComDetalhes,
+    };
+  } catch (error) {
+    console.error('❌ Erro ao buscar faturas gerais:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    };
+  }
+}
+
 // === BUSCAR TODAS AS FATURAS COM FILTROS ===
 export async function fetchFaturas(
   filtros: FaturaFiltros = {}
@@ -404,7 +466,7 @@ export async function fetchAgendamentosElegiveisParaFatura(
         `
         id,
         data_hora,
-        tipo_servico_nome,
+        servico_nome,
         valor_servico,
         profissional_nome,
         paciente_nome,
@@ -443,7 +505,7 @@ export async function fetchAgendamentosElegiveisParaFatura(
     const agendamentos = (data || []).map((item) => ({
       id: item.id,
       data_hora: item.data_hora,
-      servico_nome: item.tipo_servico_nome || 'Serviço não especificado',
+      servico_nome: item.servico_nome || 'Serviço não especificado',
       valor_servico: parseFloat(item.valor_servico || '0'),
       profissional_nome:
         item.profissional_nome || 'Profissional não especificado',
@@ -550,7 +612,7 @@ export async function editarFatura(
           `
           id, 
           valor_servico, 
-          tipo_servico_nome, 
+          servico_nome, 
           tipo_servico_id,
           data_hora, 
           paciente_nome,
@@ -572,7 +634,7 @@ export async function editarFatura(
             `
             id, 
             valor_servico, 
-            tipo_servico_nome, 
+            servico_nome, 
             tipo_servico_id,
             data_hora, 
             paciente_nome,
@@ -609,7 +671,7 @@ export async function editarFatura(
         const consultationData = agendamentosFinais.map((a) => ({
           id: a.id,
           data_hora: a.data_hora,
-          servico_nome: a.tipo_servico_nome || 'Atendimento',
+          servico_nome: a.servico_nome || 'Atendimento',
           valor_servico: parseFloat(a.valor_servico || '0'),
           profissional_nome: a.profissional_nome || 'Profissional',
           profissional_id: a.profissional_id,
@@ -645,10 +707,10 @@ export async function editarFatura(
           const consultasPorTipo = agendamentosFinais.reduce(
             (acc: Record<string, number>, a) => {
               const agendamento = a as Record<string, unknown> & {
-                tipo_servico_nome?: string;
+                servico_nome?: string;
               };
               const servico =
-                agendamento.tipo_servico_nome || 'Serviço não especificado';
+                agendamento.servico_nome || 'Serviço não especificado';
               acc[servico] = (acc[servico] || 0) + 1;
               return acc;
             },

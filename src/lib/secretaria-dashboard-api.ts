@@ -247,11 +247,11 @@ export const fetchSecretariaUpcomingAppointments = async (
       id: a.id,
       dataHora: a.data_hora,
       pacienteNome: a.paciente_nome,
-      tipoServico: a.tipo_servico_nome,
-      local: a.local_atendimento_nome || 'Local não definido',
+      tipoServico: a.servico_nome || 'Serviço não definido',
+      local: a.local_nome || 'Local não definido',
       valor: 0, // Secretaria não vê valores
-      statusConsulta: a.status_consulta_descricao,
-      statusPagamento: a.status_pagamento_descricao,
+      statusConsulta: a.status_consulta_nome || 'Status não definido',
+      statusPagamento: a.status_pagamento_nome || 'Pagamento não definido',
       // Campos extras para secretaria
       profissionalNome: a.profissional_nome,
     }));
@@ -308,14 +308,14 @@ export const fetchSecretariaConsultationsToEvolve = async (
         id: c.id,
         dataHora: c.data_hora,
         pacienteNome: c.paciente_nome,
-        tipoServico: c.tipo_servico_nome,
+        tipoServico: c.servico_nome || 'Serviço não definido',
         valor: 0, // Secretaria não vê valores
         diasPendente,
         urgente: diasPendente > 7,
         prioridade,
         // Campos extras para secretaria
         profissionalNome: c.profissional_nome,
-        statusPagamento: c.status_pagamento_descricao,
+        statusPagamento: c.status_pagamento_nome || 'Pagamento não definido',
       };
     });
   } catch (error) {

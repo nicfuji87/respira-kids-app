@@ -591,9 +591,8 @@ export const PatientMetricsWithConsultations =
 
       // AI dev note: Tipo para itens de métricas com campos essenciais para cálculo
       type MetricsItem = {
-        valor_servico: string | number;
+        valor_servico?: string | number | null;
         comissao_tipo_recebimento?: string | null;
-        comissao_valor_calculado?: string | number | null;
       };
 
       // AI dev note: Função helper para calcular valores em métricas baseado no role
@@ -605,12 +604,10 @@ export const PatientMetricsWithConsultations =
             // Se tem comissão configurada, usar comissão
             if (
               item.comissao_tipo_recebimento &&
-              item.comissao_valor_calculado !== null &&
-              item.comissao_valor_calculado !== undefined
+              item.valor_servico !== null &&
+              item.valor_servico !== undefined
             ) {
-              return parseFloat(
-                item.comissao_valor_calculado?.toString() || '0'
-              );
+              return parseFloat(item.valor_servico?.toString() || '0');
             }
           }
 
@@ -654,12 +651,12 @@ export const PatientMetricsWithConsultations =
               data_hora,
               valor_servico,
               tipo_servico_id,
-              tipo_servico_nome,
+              servico_nome,
               tipo_servico_descricao,
-              local_atendimento_nome,
-              status_consulta_descricao,
+              local_nome,
+              status_consulta_nome,
               status_consulta_cor,
-              status_pagamento_descricao,
+              status_pagamento_nome,
               status_pagamento_cor,
               status_pagamento_codigo,
               profissional_nome,
@@ -671,7 +668,7 @@ export const PatientMetricsWithConsultations =
               id_pagamento_externo,
               fatura_id,
               comissao_tipo_recebimento,
-              comissao_valor_calculado
+              valor_servico
             `
             )
             .eq('paciente_id', patientId)
@@ -882,15 +879,13 @@ export const PatientMetricsWithConsultations =
                 ({
                   id: item.id,
                   data_hora: item.data_hora,
-                  servico_nome:
-                    item.tipo_servico_nome || 'Serviço não especificado',
-                  local_nome:
-                    item.local_atendimento_nome || 'Local não especificado',
+                  servico_nome: item.servico_nome || 'Serviço não especificado',
+                  local_nome: item.local_nome || 'Local não especificado',
                   valor_servico: parseFloat(item.valor_servico || '0'),
                   status_consulta:
-                    item.status_consulta_descricao || 'Status não definido',
+                    item.status_consulta_nome || 'Status não definido',
                   status_pagamento:
-                    item.status_pagamento_descricao || 'Status não definido',
+                    item.status_pagamento_nome || 'Status não definido',
                   status_cor_consulta: item.status_consulta_cor || '#gray',
                   status_cor_pagamento: item.status_pagamento_cor || '#gray',
                   profissional_nome:
@@ -908,9 +903,6 @@ export const PatientMetricsWithConsultations =
                   empresa_fatura_id: item.empresa_fatura_id,
                   // AI dev note: Campos de comissão para lógica de exibição
                   comissao_tipo_recebimento: item.comissao_tipo_recebimento,
-                  comissao_valor_calculado: item.comissao_valor_calculado
-                    ? parseFloat(item.comissao_valor_calculado)
-                    : null,
                 }) as RecentConsultation & {
                   tipo_servico_id?: string;
                   tipo_servico_descricao?: string;
@@ -1022,10 +1014,10 @@ export const PatientMetricsWithConsultations =
           // Se tem comissão configurada, mostrar comissão
           if (
             consultation.comissao_tipo_recebimento &&
-            consultation.comissao_valor_calculado !== null &&
-            consultation.comissao_valor_calculado !== undefined
+            consultation.valor_servico !== null &&
+            consultation.valor_servico !== undefined
           ) {
-            return consultation.comissao_valor_calculado;
+            return consultation.valor_servico;
           }
         }
 
@@ -1320,7 +1312,7 @@ export const PatientMetricsWithConsultations =
                           const { data, error } = await supabase
                             .from('vw_agendamentos_completos')
                             .select(
-                              'id, valor_servico, status_pagamento_codigo, status_pagamento_descricao'
+                              'id, valor_servico, status_pagamento_codigo, status_pagamento_nome'
                             )
                             .eq('fatura_id', fatura.id)
                             .eq('paciente_id', patientId);
@@ -1336,7 +1328,7 @@ export const PatientMetricsWithConsultations =
                               totalAgendamentos: agendamentosIds.length,
                               statusDetalhes: data?.map((a) => ({
                                 id: a.id.substring(0, 8),
-                                status: a.status_pagamento_descricao,
+                                status: a.status_pagamento_nome,
                               })),
                             }
                           );

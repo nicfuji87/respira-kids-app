@@ -88,6 +88,10 @@ const AppointmentItem = React.memo<{
     };
 
     const getStatusColor = (status: string) => {
+      if (!status) {
+        return 'bg-gray-100 text-gray-600 border-gray-200';
+      }
+
       switch (status.toLowerCase()) {
         case 'agendado':
           return 'bg-azul-respira/10 text-azul-respira border-azul-respira/20';

@@ -76,6 +76,13 @@ export { PatientHistory } from './PatientHistory';
 export { MediaGallery } from './MediaGallery';
 export { BillingResponsibleSelect } from './BillingResponsibleSelect';
 
+// Financial Components
+export { PinConfiguration } from './PinConfiguration';
+export { PinValidationDialog } from './PinValidationDialog';
+export { FinancialConsultationsList } from './FinancialConsultationsList';
+export { FinancialFaturasList } from './FinancialFaturasList';
+export { FaturasList } from './FaturasList';
+
 // User Management Components
 export { UserSearch } from './UserSearch';
 export { UserFilters } from './UserFilters';

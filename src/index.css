@@ -116,3 +116,16 @@
     transform: scale(1.02);
   }
 }
+
+/* Grid utilities para layouts personalizados */
+@layer utilities {
+  .grid-cols-7 {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  @screen lg {
+    .lg\:grid-cols-7 {
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+  }
+}

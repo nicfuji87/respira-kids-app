@@ -10,7 +10,7 @@ import { MyProfileSection } from '@/components/domain/profile';
 import { CompanyForm } from './CompanyForm';
 import { UserManagement } from '@/components/domain/users';
 import { IntegrationsTemplate } from '@/components/templates/integrations';
-
+import { PinConfiguration } from './PinConfiguration';
 import { SystemSettingsTemplate } from '@/components/templates/system/SystemSettingsTemplate';
 import {
   User,
@@ -20,6 +20,7 @@ import {
   DollarSign,
   Package,
   Users,
+  Shield,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/navigation';
 
@@ -67,6 +68,13 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
         roles: ['admin'],
         icon: Settings,
         content: <SystemSettingsTemplate />,
+      },
+      {
+        id: 'security',
+        label: 'Segurança',
+        roles: ['admin'],
+        icon: Shield,
+        content: <PinConfiguration showCard={true} />,
       },
       {
         id: 'integrations',
@@ -137,7 +145,8 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       if (tabCount <= 4) return 'grid-cols-2 md:grid-cols-4';
       if (tabCount <= 5) return 'grid-cols-2 md:grid-cols-5';
       if (tabCount <= 6) return 'grid-cols-3 md:grid-cols-6';
-      return 'grid-cols-3 md:grid-cols-7';
+      // Para 7 abas, usar um layout que funcione bem
+      return 'grid-cols-3 md:grid-cols-4 lg:grid-cols-7';
     };
 
     return (
@@ -152,10 +161,12 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
-                  className="flex items-center gap-2 h-9 text-xs md:text-sm"
+                  className="flex items-center gap-1 h-9 text-xs md:text-sm px-2"
                 >
-                  <IconComponent className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{tab.label}</span>
+                  <IconComponent className="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
+                  <span className="truncate max-w-[60px] md:max-w-[80px] lg:max-w-full">
+                    {tab.label}
+                  </span>
                 </TabsTrigger>
               );
             })}

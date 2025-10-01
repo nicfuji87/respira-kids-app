@@ -312,7 +312,7 @@ export const fetchUserCalendarEvents = async (
           const { data: rawData, error: rawError } = await supabase
             .from('vw_agendamentos_completos')
             .select(
-              'id, data_hora, paciente_nome, profissional_nome, tipo_servico_nome'
+              'id, data_hora, paciente_nome, profissional_nome, servico_nome'
             )
             .gte('data_hora', filters.startDate.toISOString())
             .lte('data_hora', filters.endDate.toISOString())
@@ -935,6 +935,7 @@ export const updateAgendamentoDetails = async (appointmentData: {
   status_consulta_id?: string;
   tipo_servico_id?: string;
   observacao?: string;
+  empresa_fatura?: string;
 }): Promise<SupabaseAgendamentoCompletoFlat> => {
   const { id, ...updateFields } = appointmentData;
 

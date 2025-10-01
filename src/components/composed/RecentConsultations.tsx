@@ -48,16 +48,18 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
               id,
               data_hora,
               valor_servico,
-              tipo_servico_nome,
-              local_atendimento_nome,
-              status_consulta_descricao,
+              servico_nome,
+              local_nome,
+              status_consulta_nome,
               status_consulta_cor,
-              status_pagamento_descricao,
+              status_pagamento_nome,
               status_pagamento_cor,
               profissional_nome,
               possui_evolucao,
               comissao_tipo_recebimento,
-              comissao_valor_calculado
+              empresa_fatura_razao_social,
+              empresa_fatura_nome_fantasia,
+              id_pagamento_externo
             `
             )
             .eq('paciente_id', patientId)
@@ -84,25 +86,25 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
             (item) => ({
               id: item.id,
               data_hora: item.data_hora,
-              servico_nome:
-                item.tipo_servico_nome || 'Serviço não especificado',
-              local_nome:
-                item.local_atendimento_nome || 'Local não especificado',
+              servico_nome: item.servico_nome || 'Serviço não especificado',
+              local_nome: item.local_nome || 'Local não especificado',
               valor_servico: parseFloat(item.valor_servico || '0'),
               status_consulta:
-                item.status_consulta_descricao || 'Status não definido',
+                item.status_consulta_nome || 'Status não definido',
               status_pagamento:
-                item.status_pagamento_descricao || 'Status não definido',
+                item.status_pagamento_nome || 'Status não definido',
               status_cor_consulta: item.status_consulta_cor || '#gray',
               status_cor_pagamento: item.status_pagamento_cor || '#gray',
               profissional_nome:
                 item.profissional_nome || 'Profissional não especificado',
               possui_evolucao: item.possui_evolucao || 'não',
+              empresa_fatura_nome:
+                item.empresa_fatura_razao_social ||
+                item.empresa_fatura_nome_fantasia ||
+                'Empresa não especificada',
+              id_pagamento_externo: item.id_pagamento_externo || '',
               // AI dev note: Campos de comissão para lógica de exibição
               comissao_tipo_recebimento: item.comissao_tipo_recebimento,
-              comissao_valor_calculado: item.comissao_valor_calculado
-                ? parseFloat(item.comissao_valor_calculado)
-                : null,
             })
           );
 
@@ -165,10 +167,10 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
         // Se tem comissão configurada, mostrar comissão
         if (
           consultation.comissao_tipo_recebimento &&
-          consultation.comissao_valor_calculado !== null &&
-          consultation.comissao_valor_calculado !== undefined
+          consultation.valor_servico !== null &&
+          consultation.valor_servico !== undefined
         ) {
-          return consultation.comissao_valor_calculado;
+          return consultation.valor_servico;
         }
       }
 

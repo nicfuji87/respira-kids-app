@@ -94,12 +94,23 @@ export const EventCard = React.memo<EventCardProps>(
           ? event.title.split(' - ').slice(-1)[0] // Pegar último elemento após split
           : event.title);
 
-      // Cor do tipo de serviço (evento)
-      const corEventoHex =
-        (event.metadata?.tipoServicoCor as string) ||
-        (event.color ? `var(--${event.color}-500)` : '#3B82F6');
+      // Mapa de cores para hex
+      const colorToHex: Record<string, string> = {
+        blue: '#3B82F6',
+        green: '#22C55E',
+        orange: '#F97316',
+        red: '#EF4444',
+        purple: '#8B5CF6',
+        pink: '#EC4899',
+        gray: '#6B7280',
+      };
 
-      // Cor do status de pagamento
+      // Cor do tipo de serviço (evento)
+      const corEventoHex = event.color
+        ? colorToHex[event.color] || '#3B82F6'
+        : '#3B82F6';
+
+      // Cor do status de pagamento vinda do metadata
       const corPagamentoHex =
         (event.metadata?.statusPagamentoCor as string) || '#6B7280';
 
@@ -164,14 +175,25 @@ export const EventCard = React.memo<EventCardProps>(
       const statusPagamento =
         (event.metadata?.statusPagamento as string) || 'Pendente';
 
-      // Cor do tipo de serviço (evento)
-      const corEventoHex =
-        (event.metadata?.tipoServicoCor as string) ||
-        (event.color ? `var(--${event.color}-500)` : '#3B82F6');
+      // Mapa de cores para hex
+      const colorToHex: Record<string, string> = {
+        blue: '#3B82F6',
+        green: '#22C55E',
+        orange: '#F97316',
+        red: '#EF4444',
+        purple: '#8B5CF6',
+        pink: '#EC4899',
+        gray: '#6B7280',
+      };
 
-      // Cor do status de pagamento
+      // Cor do tipo de serviço (evento)
+      const corEventoHex = event.color
+        ? colorToHex[event.color] || '#3B82F6'
+        : '#3B82F6';
+
+      // Cor do status de pagamento vinda do metadata
       const corPagamentoHex =
-        (event.metadata?.statusPagamentoCor as string) || '#F59E0B';
+        (event.metadata?.statusPagamentoCor as string) || '#6B7280';
 
       // Verificar se há erro nos dados
       const hasError = !event.metadata || !pacienteNome;

@@ -160,7 +160,7 @@ export const AppointmentDetailsManager =
       // Função wrapper para emitir NFe (apenas para casos de emissão)
       const handleEmitirNfe = async () => {
         const statusLower =
-          appointment?.status_pagamento_descricao?.toLowerCase() || '';
+          appointment?.status_pagamento_nome?.toLowerCase() || '';
         const linkNfe = faturaData?.link_nfe || appointment?.link_nfe;
 
         // Só executar se for realmente um caso de "Emitir NFe"
@@ -295,7 +295,7 @@ export const AppointmentDetailsManager =
           setFormData({
             dataHora: datePart,
             timeHora: timeWithoutTz.substring(0, 5), // HH:mm format
-            localId: appointment.local_atendimento_id || '',
+            localId: appointment.local_id || '',
             valorServico: appointment.valor_servico,
             statusConsultaId: appointment.status_consulta_id,
             tipoServicoId: appointment.tipo_servico_id,
@@ -657,7 +657,7 @@ export const AppointmentDetailsManager =
                           placeholder="0.00"
                         />
                         <StatusPaymentDisplay
-                          status={appointment.status_pagamento_descricao}
+                          status={appointment.status_pagamento_nome}
                           statusColor={appointment.status_pagamento_cor}
                           valor={appointment.valor_servico}
                           userRole={userRole}
@@ -688,16 +688,16 @@ export const AppointmentDetailsManager =
                           <span className="text-sm font-medium">
                             R${' '}
                             {parseFloat(
-                              appointment.comissao_valor_calculado
+                              appointment.valor_servico
                             ).toLocaleString('pt-BR', {
                               minimumFractionDigits: 2,
                             })}
                           </span>
                         </div>
                         <StatusPaymentDisplay
-                          status={appointment.status_pagamento_descricao}
+                          status={appointment.status_pagamento_nome}
                           statusColor={appointment.status_pagamento_cor}
-                          valor={appointment.comissao_valor_calculado}
+                          valor={appointment.valor_servico}
                           userRole={userRole}
                           linkNfe={faturaData?.link_nfe || appointment.link_nfe}
                           idAsaas={
