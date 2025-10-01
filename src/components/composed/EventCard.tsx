@@ -396,6 +396,20 @@ export const EventCard = React.memo<EventCardProps>(
 
     // Variante detalhada para vista de agenda
     if (variant === 'detailed') {
+      // Extrair dados do metadata
+      const statusConsulta = (event.metadata?.statusConsulta as string) || '';
+      const statusPagamento = (event.metadata?.statusPagamento as string) || '';
+      const statusConsultaCor =
+        (event.metadata?.statusConsultaCor as string) || '#3B82F6';
+      const statusPagamentoCor =
+        (event.metadata?.statusPagamentoCor as string) || '#3B82F6';
+      const tipoServicoCor =
+        (event.metadata?.tipoServicoCor as string) || '#3B82F6';
+      const possuiEvolucao =
+        (event.metadata?.possuiEvolucao as string) || 'não';
+
+      const isValidHexColor = (color: string) => /^#[0-9A-F]{6}$/i.test(color);
+
       return (
         <Card
           className={cn(
@@ -404,9 +418,9 @@ export const EventCard = React.memo<EventCardProps>(
           )}
           onClick={(e) => handleClick(e)}
           style={{
-            borderLeftColor: event.color
-              ? `var(--${event.color}-500)`
-              : 'var(--blue-500)',
+            borderLeftColor: isValidHexColor(tipoServicoCor)
+              ? tipoServicoCor
+              : '#3B82F6',
           }}
         >
           <CardContent className="p-4">
@@ -425,6 +439,45 @@ export const EventCard = React.memo<EventCardProps>(
                   {event.description}
                 </p>
               )}
+
+              {/* Status badges com cores corretas */}
+              <div className="flex flex-wrap gap-2">
+                {statusConsulta && (
+                  <Badge
+                    className="text-xs px-2 py-1"
+                    style={{
+                      backgroundColor: isValidHexColor(statusConsultaCor)
+                        ? statusConsultaCor
+                        : '#3B82F6',
+                      color: '#FFFFFF',
+                      border: 'none',
+                    }}
+                  >
+                    {statusConsulta}
+                  </Badge>
+                )}
+
+                {statusPagamento && (
+                  <Badge
+                    className="text-xs px-2 py-1"
+                    style={{
+                      backgroundColor: isValidHexColor(statusPagamentoCor)
+                        ? statusPagamentoCor
+                        : '#3B82F6',
+                      color: '#FFFFFF',
+                      border: 'none',
+                    }}
+                  >
+                    {statusPagamento}
+                  </Badge>
+                )}
+
+                {possuiEvolucao === 'não' && (
+                  <Badge variant="destructive" className="text-xs px-2 py-1">
+                    Evoluir
+                  </Badge>
+                )}
+              </div>
 
               <div className="flex items-center gap-4 text-xs text-muted-foreground">
                 {showLocation && event.location && (
