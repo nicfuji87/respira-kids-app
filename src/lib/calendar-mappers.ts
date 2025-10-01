@@ -305,7 +305,9 @@ export const mapAgendamentoFlatToCalendarEvent = (
       tipoServicoId: flat.tipo_servico_id,
       statusConsulta: flat.status_consulta_nome,
       statusPagamento: flat.status_pagamento_nome,
-      statusPagamentoCor: flat.status_pagamento_cor,
+      statusConsultaCor: flat.status_consulta_cor || '#3B82F6',
+      statusPagamentoCor: flat.status_pagamento_cor || '#3B82F6',
+      tipoServicoCor: flat.servico_cor || '#3B82F6',
       valorServico: parseFloat(flat.valor_servico || '0'),
       localId: flat.local_id,
       observacao: flat.observacao,
@@ -314,6 +316,7 @@ export const mapAgendamentoFlatToCalendarEvent = (
       profissionalNome: flat.profissional_nome,
       tipoServicoNome: flat.servico_nome,
       possuiEvolucao: flat.possui_evolucao,
+      responsavelLegalNome: flat.responsavel_legal_nome,
       // AI dev note: Dados completos para AppointmentDetailsManager
       appointmentData: flat,
     },
