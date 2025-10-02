@@ -1095,17 +1095,22 @@ export async function emitirNfeFatura(
         fatura.id_asaas,
         {
           serviceDescription: fatura.descricao || 'Serviços de fisioterapia',
-          observations: 'Emissão automática - Respira Kids',
+          observations: '',
           value: fatura.valor_total,
           deductions: 0,
           effectiveDate: new Date().toISOString().split('T')[0],
-          municipalServiceCode: '0701', // Código padrão fisioterapia
-          municipalServiceName: 'Fisioterapia',
-          externalReference: `RK-${faturaId.substring(0, 8)}`,
+          municipalServiceId: '290448',
+          municipalServiceName:
+            'Terapia ocupacional, fisioterapia e fonoaudiologia.',
           updatePayment: false,
           taxes: {
             retainIss: false,
-            iss: 5.0, // 5% ISS padrão
+            iss: 2, // 2% ISS
+            cofins: 0,
+            csll: 0,
+            inss: 0,
+            ir: 0,
+            pis: 0,
           },
         },
         apiConfig

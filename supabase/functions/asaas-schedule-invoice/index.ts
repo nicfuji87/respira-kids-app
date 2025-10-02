@@ -14,9 +14,8 @@ interface ScheduleInvoiceRequest {
     value: number;
     deductions: number;
     effectiveDate: string;
-    municipalServiceCode: string;
+    municipalServiceId: string;
     municipalServiceName: string;
-    externalReference?: string;
     updatePayment?: boolean;
     taxes: {
       retainIss: boolean;
@@ -122,17 +121,11 @@ Deno.serve(async (req: Request) => {
       value: invoiceData.value,
       deductions: invoiceData.deductions,
       effectiveDate: invoiceData.effectiveDate,
-      municipalServiceCode: invoiceData.municipalServiceCode,
+      municipalServiceId: invoiceData.municipalServiceId,
       municipalServiceName: invoiceData.municipalServiceName,
-      externalReference: invoiceData.externalReference,
       updatePayment: invoiceData.updatePayment || false,
       taxes: invoiceData.taxes,
     };
-
-    // Remover campos vazios opcionais
-    if (!asaasPayload.externalReference) {
-      delete asaasPayload.externalReference;
-    }
 
     console.log(
       '📄 Agendando nota fiscal no Asaas:',

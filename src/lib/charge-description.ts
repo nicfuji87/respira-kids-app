@@ -68,19 +68,32 @@ export async function generateChargeDescription(
 
   console.log('📋 Grupos de serviços:', serviceGroups);
 
-  // Construir descrição dos serviços com descrição completa
+  // AI dev note: Construir descrição dos serviços com plural correto
   const serviceDescriptionTexts = Object.entries(serviceGroups).map(
     ([serviceType, consultations]) => {
       const count = consultations.length;
       const serviceDescription =
         serviceDescriptions[serviceType] || serviceType.toLowerCase();
 
-      // AI dev note: Evitar duplicação "Sessão de" se a descrição já contém
-      const finalDescription = serviceDescription
-        .toLowerCase()
-        .startsWith('sessão de')
-        ? serviceDescription
-        : serviceDescription;
+      // Determinar o tipo base e aplicar plural adequadamente
+      let finalDescription = serviceDescription;
+
+      if (count > 1) {
+        // Aplicar plural conforme tipo de serviço
+        if (serviceDescription.toLowerCase().includes('sessão')) {
+          finalDescription = serviceDescription.replace(/sessão/gi, 'sessões');
+        } else if (serviceDescription.toLowerCase().includes('consulta')) {
+          finalDescription = serviceDescription.replace(
+            /consulta/gi,
+            'consultas'
+          );
+        } else if (serviceDescription.toLowerCase().includes('avaliação')) {
+          finalDescription = serviceDescription.replace(
+            /avaliação/gi,
+            'avaliações'
+          );
+        }
+      }
 
       return count === 1
         ? `1 ${finalDescription}`
@@ -143,7 +156,7 @@ export async function generateChargeDescription(
 
   // Dados do paciente
   const pacienteNome = patientData?.nome || 'Paciente';
-  const pacienteCpf = patientData?.cpf_cnpj || '';
+  const pacienteCpf = patientData?.cpf_cnpj || 'Não Informado';
 
   console.log('👨‍⚕️ Dados do profissional:', {
     profissionalNome,

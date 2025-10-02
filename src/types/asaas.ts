@@ -172,9 +172,8 @@ export interface ScheduleInvoiceRequest {
   value: number;
   deductions: number;
   effectiveDate: string; // formato YYYY-MM-DD
-  municipalServiceCode: string;
+  municipalServiceId: string;
   municipalServiceName: string;
-  externalReference?: string;
   updatePayment?: boolean;
   taxes: {
     retainIss: boolean;
