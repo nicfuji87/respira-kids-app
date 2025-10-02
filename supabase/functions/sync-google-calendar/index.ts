@@ -233,6 +233,39 @@ async function syncEventForRecipient(
   return { recipient: recipient.nome, action: 'created', eventId };
 }
 
+// AI dev note: Mapear cores do sistema para cores do Google Calendar
+// Google Calendar aceita IDs de 1 a 11 com cores específicas
+function mapServiceColorToGoogleCalendar(colorCode: string | null | undefined): string {
+  // Mapa de cores CSS/hex para Google Calendar colorId
+  const colorMap: Record<string, string> = {
+    // Cores do sistema → Google Calendar ID
+    'blue': '9',      // Azul
+    'green': '10',    // Verde
+    'red': '11',      // Vermelho
+    'orange': '6',    // Laranja
+    'purple': '3',    // Roxo
+    'pink': '4',      // Rosa
+    'yellow': '5',    // Amarelo
+    'gray': '8',      // Cinza
+    'grey': '8',      // Cinza (alternativo)
+    
+    // Códigos hex comuns do Tailwind
+    '#3B82F6': '9',   // blue-500
+    '#22C55E': '10',  // green-500
+    '#EF4444': '11',  // red-500
+    '#F97316': '6',   // orange-500
+    '#8B5CF6': '3',   // purple-500
+    '#EC4899': '4',   // pink-500
+    '#F59E0B': '5',   // yellow-500
+    '#6B7280': '8',   // gray-500
+  };
+  
+  if (!colorCode) return '1'; // Lavanda (padrão)
+  
+  const normalized = colorCode.toLowerCase().trim();
+  return colorMap[normalized] || '1';
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildEventData(agendamento: any, location: string): any {
   const startDate = new Date(agendamento.data_hora);
@@ -249,22 +282,27 @@ function buildEventData(agendamento: any, location: string): any {
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
   };
 
-  const summary = `Consulta de Fisioterapia - ${agendamento.paciente_nome}`;
+  // AI dev note: Título apenas com nome do paciente (conforme solicitado)
+  const summary = agendamento.paciente_nome;
   const description = buildEventDescription(agendamento, location);
   const reminders = buildReminders(startDate);
+  
+  // AI dev note: Mapear cor do tipo de serviço para Google Calendar
+  const colorId = mapServiceColorToGoogleCalendar(agendamento.servico_cor || agendamento.tipo_servico_cor);
 
   return {
     summary,
     location,
     description,
-          start: {
+    start: {
       dateTime: formatWithTimezone(startDate),
-            timeZone: 'America/Sao_Paulo'
-          },
-          end: {
+      timeZone: 'America/Sao_Paulo'
+    },
+    end: {
       dateTime: formatWithTimezone(endDate),
-            timeZone: 'America/Sao_Paulo'
-          },
+      timeZone: 'America/Sao_Paulo'
+    },
+    colorId,
     reminders
   };
 }
@@ -274,22 +312,21 @@ function buildEventDescription(agendamento: any, location: string): string {
   const startDate = new Date(agendamento.data_hora);
   const dateStr = startDate.toLocaleDateString('pt-BR');
   const timeStr = startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  
+  // AI dev note: Buscar responsável legal (não o próprio paciente como fallback)
   const responsavelNome = agendamento.responsavel_legal_nome || agendamento.paciente_nome;
+  
+  // AI dev note: Usar servico_nome ou tipo_servico_nome (ambos existem na view)
+  const tipoServico = agendamento.servico_nome || agendamento.tipo_servico_nome || 'Serviço';
 
-  let description = `Paciente: ${agendamento.paciente_nome}
-Responsável: ${responsavelNome}
-Data: ${dateStr} às ${timeStr}
-Local: ${location}
-
-👨‍⚕️ Profissional: ${agendamento.profissional_nome}`;
-
-  if (agendamento.profissional_especialidade) {
-    description += ` (${agendamento.profissional_especialidade})`;
-  }
-
-  description += `
-🏥 Tipo de Serviço: ${agendamento.tipo_servico_nome}
-⏱️ Duração: ${agendamento.tipo_servico_duracao_minutos || 60} minutos`;
+  // AI dev note: Descrição simplificada conforme solicitado
+  // Removido: Profissional (já vai para o calendário dele)
+  // Removido: Duração (redundante)
+  let description = `👤 Paciente: ${agendamento.paciente_nome}
+👥 Responsável: ${responsavelNome}
+📅 Data: ${dateStr} às ${timeStr}
+🏥 Tipo de Serviço: ${tipoServico}
+📍 Local: ${location}`;
 
   if (agendamento.observacao) {
     description += `\n\n📝 Observações: ${agendamento.observacao}`;
@@ -300,20 +337,11 @@ Local: ${location}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildReminders(startDate: Date): any {
-  const hour = startDate.getHours();
-  let reminderMinutes = 180; // 3h antes (padrão)
-  
-  if (hour === 7 || hour === 8) {
-    reminderMinutes = 60; // 1h antes
-  } else if (hour === 9) {
-    reminderMinutes = 120; // 2h antes
-  }
-
+  // AI dev note: Lembrete fixo de 1 hora antes conforme solicitado
   return {
-            useDefault: false,
-            overrides: [
-      { method: 'popup', minutes: reminderMinutes },
-      { method: 'email', minutes: reminderMinutes }
+    useDefault: false,
+    overrides: [
+      { method: 'popup', minutes: 60 }
     ]
   };
 }
