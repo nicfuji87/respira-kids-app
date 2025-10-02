@@ -1026,7 +1026,10 @@ export const fetchAdminFaturamentoComparativo = async (
       }).format(hoje),
       faturamentoTotal: 0,
       faturamentoAReceber: 0,
-      consultas: 0,
+      consultasRealizadas: 0,
+      consultasComEvolucao: 0,
+      mes: mesAtualNum,
+      ano: anoAtual,
     };
 
     // Encontrar melhor mês
