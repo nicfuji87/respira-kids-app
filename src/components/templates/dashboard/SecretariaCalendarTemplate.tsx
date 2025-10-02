@@ -214,7 +214,7 @@ export const SecretariaCalendarTemplate =
               userRole={currentUser.role}
               onPatientClick={onPatientClick}
               onProfessionalClick={onProfessionalClick}
-              className="w-full max-w-none h-full"
+              className="w-full max-w-none"
             />
           </div>
         </div>

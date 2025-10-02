@@ -10,6 +10,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 
 import { cn } from '@/lib/utils';
+import { Card, CardContent } from '@/components/primitives/card';
 import { CurrentTimeIndicator } from './CurrentTimeIndicator';
 import { WeekEventBlock } from './WeekEventBlock';
 import { EventListModal } from '../domain/calendar';
@@ -35,7 +36,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
     events,
     onEventClick,
     onTimeSlotClick,
-    startHour = 6,
+    startHour = 7, // AI dev note: Alterado de 6 para 7 conforme solicitação
     endHour = 20,
     className,
     userRole,
@@ -123,123 +124,126 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
 
     return (
       <>
-        {/* Grid semanal simples que expande naturalmente */}
-        <div className={cn('w-full relative', className)}>
-          {/* Header com dias da semana */}
-          <div className="w-full grid grid-cols-8 border-b bg-muted/30">
-            <div className="p-3 border-r bg-muted/50 text-center">
-              <div className="text-sm font-medium">Horário</div>
-            </div>
-            {weekDays.map((day) => {
-              const isCurrentDay = isToday(day);
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={cn(
-                    'p-3 border-r last:border-r-0 text-center',
-                    isCurrentDay && 'bg-primary/15'
-                  )}
-                >
-                  <div className="text-center">
-                    <div
-                      className={cn(
-                        'text-sm font-medium capitalize',
-                        isCurrentDay && 'text-primary font-semibold'
-                      )}
-                    >
-                      {format(day, 'EEE', { locale: ptBR })}
-                    </div>
-                    <div
-                      className={cn(
-                        'text-lg font-bold mt-1',
-                        isCurrentDay && 'text-primary'
-                      )}
-                    >
-                      {format(day, 'd')}
-                    </div>
-                    {isCurrentDay && (
-                      <div className="w-2 h-2 bg-primary rounded-full mx-auto mt-1" />
+        {/* Grid semanal - estrutura igual ao CalendarGrid */}
+        <Card className={cn('overflow-hidden', className)}>
+          <CardContent className="p-0">
+            {/* Header com dias da semana */}
+            <div className="w-full grid grid-cols-8 border-b bg-muted/30">
+              <div className="p-3 border-r bg-muted/50 text-center">
+                <div className="text-sm font-medium">Horário</div>
+              </div>
+              {weekDays.map((day) => {
+                const isCurrentDay = isToday(day);
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={cn(
+                      'p-3 border-r last:border-r-0 text-center',
+                      isCurrentDay && 'bg-primary/15'
                     )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Grid de horários que se adapta ao container */}
-          <div className="w-full grid grid-cols-8 relative">
-            {/* Coluna de horários */}
-            <div className="border-r bg-muted/10">
-              {timeSlots.map((time) => (
-                <div
-                  key={time}
-                  className="h-16 border-b p-2 text-xs text-muted-foreground font-medium text-center flex items-center justify-center"
-                >
-                  {time}
-                </div>
-              ))}
-            </div>
-
-            {/* Container para colunas dos dias com indicador */}
-            <div className="col-span-7 relative">
-              {/* Grid interno para os dias */}
-              <div className="grid grid-cols-7 h-full">
-                {weekDays.map((day) => {
-                  const dayKey = day.toISOString().split('T')[0];
-                  const dayEvents = eventsGroupedByDay[dayKey] || [];
-                  const eventsWithOverlap = getEventsWithOverlapData(dayEvents);
-                  const isCurrentDay = isToday(day);
-
-                  return (
-                    <div
-                      key={day.toISOString()}
-                      className={cn(
-                        'border-r last:border-r-0 relative',
-                        isCurrentDay && 'bg-primary/5'
-                      )}
-                      style={{
-                        minHeight: `${timeSlots.length * 64}px`,
-                      }}
-                    >
-                      {/* Slots de horário clicáveis */}
-                      {timeSlots.map((time) => (
-                        <div
-                          key={time}
-                          className="h-16 border-b hover:bg-muted/20 cursor-pointer transition-colors"
-                          onClick={() => handleTimeSlotClick(time, day)}
-                        />
-                      ))}
-
-                      {/* Eventos renderizados sobre os slots */}
-                      {eventsWithOverlap.map(
-                        ({ event, overlapIndex, totalOverlapping }) => (
-                          <WeekEventBlock
-                            key={event.id}
-                            event={event}
-                            startHour={startHour}
-                            endHour={endHour}
-                            hourHeight={64}
-                            onClick={handleEventClick}
-                            overlapIndex={overlapIndex}
-                            totalOverlapping={totalOverlapping}
-                            userRole={userRole}
-                          />
-                        )
+                  >
+                    <div className="text-center">
+                      <div
+                        className={cn(
+                          'text-sm font-medium capitalize',
+                          isCurrentDay && 'text-primary font-semibold'
+                        )}
+                      >
+                        {format(day, 'EEE', { locale: ptBR })}
+                      </div>
+                      <div
+                        className={cn(
+                          'text-lg font-bold mt-1',
+                          isCurrentDay && 'text-primary'
+                        )}
+                      >
+                        {format(day, 'd')}
+                      </div>
+                      {isCurrentDay && (
+                        <div className="w-2 h-2 bg-primary rounded-full mx-auto mt-1" />
                       )}
                     </div>
-                  );
-                })}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
+            <div className="w-full grid grid-cols-8 relative h-[calc(100vh-10rem)] overflow-y-auto">
+              {/* Coluna de horários */}
+              <div className="border-r bg-muted/10">
+                {timeSlots.map((time) => (
+                  <div
+                    key={time}
+                    className="h-16 border-b p-2 text-xs text-muted-foreground font-medium text-center flex items-center justify-center"
+                  >
+                    {time}
+                  </div>
+                ))}
               </div>
 
-              {/* Indicador de tempo atual DENTRO do container dos dias */}
-              <CurrentTimeIndicator
-                startHour={startHour}
-                endHour={endHour}
-                className="absolute left-0 right-0"
-              />
+              {/* Container para colunas dos dias com indicador */}
+              <div className="col-span-7 relative">
+                {/* Grid interno para os dias */}
+                <div className="grid grid-cols-7 h-full">
+                  {weekDays.map((day) => {
+                    const dayKey = day.toISOString().split('T')[0];
+                    const dayEvents = eventsGroupedByDay[dayKey] || [];
+                    const eventsWithOverlap =
+                      getEventsWithOverlapData(dayEvents);
+                    const isCurrentDay = isToday(day);
+
+                    return (
+                      <div
+                        key={day.toISOString()}
+                        className={cn(
+                          'border-r last:border-r-0 relative',
+                          isCurrentDay && 'bg-primary/5'
+                        )}
+                        style={{
+                          minHeight: `${timeSlots.length * 64}px`,
+                        }}
+                      >
+                        {/* Slots de horário clicáveis */}
+                        {timeSlots.map((time) => (
+                          <div
+                            key={time}
+                            className="h-16 border-b hover:bg-muted/20 cursor-pointer transition-colors"
+                            onClick={() => handleTimeSlotClick(time, day)}
+                          />
+                        ))}
+
+                        {/* Eventos renderizados sobre os slots */}
+                        {eventsWithOverlap.map(
+                          ({ event, overlapIndex, totalOverlapping }) => (
+                            <WeekEventBlock
+                              key={event.id}
+                              event={event}
+                              startHour={startHour}
+                              endHour={endHour}
+                              hourHeight={64}
+                              onClick={handleEventClick}
+                              overlapIndex={overlapIndex}
+                              totalOverlapping={totalOverlapping}
+                              userRole={userRole}
+                            />
+                          )
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Indicador de tempo atual DENTRO do container dos dias */}
+                <CurrentTimeIndicator
+                  startHour={startHour}
+                  endHour={endHour}
+                  className="absolute left-0 right-0"
+                />
+              </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Modal para eventos múltiplos */}
         {modalState.date && (

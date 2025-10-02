@@ -960,21 +960,6 @@ export const AppointmentDetailsManager =
                         placeholder="Digite ou grave a evolução do atendimento..."
                         disabled={isSavingEvolucao}
                       />
-
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={handleSaveAll}
-                          disabled={
-                            isSavingEvolucao ||
-                            (!isEdited && !formData.evolucaoServico.trim())
-                          }
-                          size="sm"
-                        >
-                          {isSavingEvolucao
-                            ? 'Salvando...'
-                            : 'Salvar Alterações'}
-                        </Button>
-                      </div>
                     </div>
                   )}
 
@@ -988,6 +973,26 @@ export const AppointmentDetailsManager =
                 </div>
               </div>
             </ScrollArea>
+
+            {/* Footer fixo com botão Salvar - SEMPRE VISÍVEL */}
+            <div className="border-t p-4 flex justify-end gap-2 bg-background">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                disabled={isSavingEvolucao}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSaveAll}
+                disabled={
+                  isSavingEvolucao ||
+                  (!isEdited && !formData.evolucaoServico.trim())
+                }
+              >
+                {isSavingEvolucao ? 'Salvando...' : 'Salvar Alterações'}
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       );

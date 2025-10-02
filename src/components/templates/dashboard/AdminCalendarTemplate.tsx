@@ -5,6 +5,7 @@ import type { CalendarEvent, CalendarView } from '@/types/calendar';
 import { PatientSelect } from '@/components/composed/PatientSelect';
 import { fetchProfissionais } from '@/lib/calendar-services';
 import type { SupabasePessoa } from '@/types/supabase-calendar';
+import { supabase } from '@/lib/supabase';
 import {
   Select,
   SelectContent,
@@ -77,8 +78,23 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     const [selectedProfessional, setSelectedProfessional] =
       useState<string>('all');
     const [selectedPatient, setSelectedPatient] = useState<string>('');
+    const [selectedTipoServico, setSelectedTipoServico] =
+      useState<string>('all');
+    const [selectedStatusConsulta, setSelectedStatusConsulta] =
+      useState<string>('all');
+    const [selectedStatusPagamento, setSelectedStatusPagamento] =
+      useState<string>('all');
     const [profissionais, setProfissionais] = useState<SupabasePessoa[]>([]);
     const [isLoadingProfissionais, setIsLoadingProfissionais] = useState(false);
+    const [tiposServico, setTiposServico] = useState<
+      Array<{ id: string; nome: string }>
+    >([]);
+    const [statusConsulta, setStatusConsulta] = useState<
+      Array<{ id: string; descricao: string; cor: string }>
+    >([]);
+    const [statusPagamento, setStatusPagamento] = useState<
+      Array<{ id: string; descricao: string; cor: string }>
+    >([]);
     const [showFilters, setShowFilters] = useState(true); // Mostrar filtros por padrão
 
     // Carregar lista de profissionais
@@ -96,6 +112,39 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
       };
 
       loadProfissionais();
+    }, []);
+
+    // AI dev note: Carregar tipos de serviço, status consulta e status pagamento
+    useEffect(() => {
+      const loadFilterData = async () => {
+        try {
+          // Carregar tipos de serviço
+          const { data: tipos } = await supabase
+            .from('tipo_servicos')
+            .select('id, nome')
+            .eq('ativo', true)
+            .order('nome');
+          if (tipos) setTiposServico(tipos);
+
+          // Carregar status de consulta
+          const { data: statusC } = await supabase
+            .from('consulta_status')
+            .select('id, descricao, cor')
+            .order('descricao');
+          if (statusC) setStatusConsulta(statusC);
+
+          // Carregar status de pagamento
+          const { data: statusP } = await supabase
+            .from('pagamento_status')
+            .select('id, descricao, cor')
+            .order('descricao');
+          if (statusP) setStatusPagamento(statusP);
+        } catch (error) {
+          console.error('Erro ao carregar dados de filtros:', error);
+        }
+      };
+
+      loadFilterData();
     }, []);
 
     if (process.env.NODE_ENV === 'development') {
@@ -125,6 +174,40 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
         });
       }
 
+      // AI dev note: Filtrar por tipo de serviço
+      if (selectedTipoServico && selectedTipoServico !== 'all') {
+        filteredEvents = filteredEvents.filter((event) => {
+          const metadata = event.metadata as { tipoServicoId?: string };
+          return metadata?.tipoServicoId === selectedTipoServico;
+        });
+      }
+
+      // AI dev note: Filtrar por status de consulta
+      if (selectedStatusConsulta && selectedStatusConsulta !== 'all') {
+        filteredEvents = filteredEvents.filter((event) => {
+          const metadata = event.metadata as {
+            appointmentData?: { status_consulta_id?: string };
+          };
+          return (
+            metadata?.appointmentData?.status_consulta_id ===
+            selectedStatusConsulta
+          );
+        });
+      }
+
+      // AI dev note: Filtrar por status de pagamento
+      if (selectedStatusPagamento && selectedStatusPagamento !== 'all') {
+        filteredEvents = filteredEvents.filter((event) => {
+          const metadata = event.metadata as {
+            appointmentData?: { status_pagamento_id?: string };
+          };
+          return (
+            metadata?.appointmentData?.status_pagamento_id ===
+            selectedStatusPagamento
+          );
+        });
+      }
+
       if (!showAllProfessionals) {
         // Filter to specific professionals if needed
         // Implementation would depend on specific requirements
@@ -141,7 +224,13 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
         console.log('🔍 DEBUG: AdminCalendarTemplate - EVENTOS FILTRADOS', {
           'eventos antes': events.length,
           'eventos depois': filteredEvents.length,
-          filtros: { selectedProfessional, selectedPatient },
+          filtros: {
+            selectedProfessional,
+            selectedPatient,
+            selectedTipoServico,
+            selectedStatusConsulta,
+            selectedStatusPagamento,
+          },
         });
       }
 
@@ -150,6 +239,9 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
       events,
       selectedProfessional,
       selectedPatient,
+      selectedTipoServico,
+      selectedStatusConsulta,
+      selectedStatusPagamento,
       showAllProfessionals,
       showSystemEvents,
     ]);
@@ -173,6 +265,9 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     const clearFilters = () => {
       setSelectedProfessional('all');
       setSelectedPatient('');
+      setSelectedTipoServico('all');
+      setSelectedStatusConsulta('all');
+      setSelectedStatusPagamento('all');
     };
 
     // Função para lidar com mudança de paciente
@@ -182,18 +277,17 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
 
     // Verificar se há filtros ativos
     const hasActiveFilters =
-      selectedProfessional !== 'all' || selectedPatient !== '';
+      selectedProfessional !== 'all' ||
+      selectedPatient !== '' ||
+      selectedTipoServico !== 'all' ||
+      selectedStatusConsulta !== 'all' ||
+      selectedStatusPagamento !== 'all';
 
     return (
-      <div
-        className={cn(
-          'admin-calendar-template w-full h-full flex flex-col gap-4',
-          className
-        )}
-      >
+      <div className={cn('admin-calendar-template w-full', className)}>
         {/* AI dev note: Seção de filtros para admin */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-4">
+        <Card className="p-3 mb-3">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
@@ -225,37 +319,89 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
           </div>
 
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Filtro por profissional */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Profissional</label>
+            <div className="space-y-2">
+              {/* Primeira linha - Filtros de select AUMENTADOS */}
+              <div className="flex flex-wrap gap-3">
+                {/* Filtro por profissional */}
                 <Select
                   value={selectedProfessional}
                   onValueChange={setSelectedProfessional}
                   disabled={isLoadingProfissionais}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um profissional" />
+                  <SelectTrigger className="w-[390px]">
+                    <SelectValue placeholder="Profissional" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os profissionais</SelectItem>
                     {profissionais.map((prof) => (
                       <SelectItem key={prof.id} value={prof.id}>
                         {prof.nome}
-                        {prof.especialidade && ` - ${prof.especialidade}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro por tipo de serviço */}
+                <Select
+                  value={selectedTipoServico}
+                  onValueChange={setSelectedTipoServico}
+                >
+                  <SelectTrigger className="w-[390px]">
+                    <SelectValue placeholder="Tipo de Serviço" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os tipos</SelectItem>
+                    {tiposServico.map((tipo) => (
+                      <SelectItem key={tipo.id} value={tipo.id}>
+                        {tipo.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro por status de consulta */}
+                <Select
+                  value={selectedStatusConsulta}
+                  onValueChange={setSelectedStatusConsulta}
+                >
+                  <SelectTrigger className="w-[390px]">
+                    <SelectValue placeholder="Status da Consulta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os status</SelectItem>
+                    {statusConsulta.map((status) => (
+                      <SelectItem key={status.id} value={status.id}>
+                        {status.descricao}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro por status de pagamento */}
+                <Select
+                  value={selectedStatusPagamento}
+                  onValueChange={setSelectedStatusPagamento}
+                >
+                  <SelectTrigger className="w-[390px]">
+                    <SelectValue placeholder="Status do Pagamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os status</SelectItem>
+                    {statusPagamento.map((status) => (
+                      <SelectItem key={status.id} value={status.id}>
+                        {status.descricao}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Filtro por paciente */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Paciente</label>
+              {/* Segunda linha - Busca de paciente SEPARADA */}
+              <div className="w-full">
                 <PatientSelect
                   value={selectedPatient}
                   onValueChange={handlePatientChange}
-                  placeholder="Buscar paciente..."
+                  placeholder="Buscar paciente pelo nome completo..."
                 />
               </div>
             </div>
@@ -280,14 +426,49 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
                   <span>Paciente selecionado</span>
                 </div>
               )}
+              {selectedTipoServico !== 'all' && (
+                <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-md text-xs">
+                  <span>Tipo:</span>
+                  <span className="font-medium">
+                    {
+                      tiposServico.find((t) => t.id === selectedTipoServico)
+                        ?.nome
+                    }
+                  </span>
+                </div>
+              )}
+              {selectedStatusConsulta !== 'all' && (
+                <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-md text-xs">
+                  <span>Status Consulta:</span>
+                  <span className="font-medium">
+                    {
+                      statusConsulta.find(
+                        (s) => s.id === selectedStatusConsulta
+                      )?.descricao
+                    }
+                  </span>
+                </div>
+              )}
+              {selectedStatusPagamento !== 'all' && (
+                <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-md text-xs">
+                  <span>Status Pagamento:</span>
+                  <span className="font-medium">
+                    {
+                      statusPagamento.find(
+                        (s) => s.id === selectedStatusPagamento
+                      )?.descricao
+                    }
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </Card>
 
         {/* Main Calendar */}
-        <div className="flex-1">
+        <div>
           {getFilteredEvents.length === 0 && hasActiveFilters ? (
-            <Card className="h-full flex items-center justify-center">
+            <Card className="flex items-center justify-center">
               <div className="text-center space-y-4 p-8">
                 <Filter className="h-12 w-12 text-muted-foreground mx-auto" />
                 <div>
@@ -314,7 +495,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
               externalCurrentView={externalCurrentView}
               onExternalDateChange={onExternalDateChange}
               onExternalViewChange={onExternalViewChange}
-              className="w-full max-w-none h-full"
+              className="w-full max-w-none"
               userRole={currentUser.role}
               onPatientClick={onPatientClick}
               onProfessionalClick={onProfessionalClick}

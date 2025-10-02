@@ -52,6 +52,15 @@ export const AgendaView = React.memo<AgendaViewProps>(
     // Filtrar apenas dias que têm eventos
     const daysWithEvents = eventsByDay.filter((day) => day.events.length > 0);
 
+    // AI dev note: Debug - verificar se className h-full foi passada
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎨 AgendaView - Renderização:', {
+        className,
+        'tem h-full': className?.includes('h-full'),
+        daysWithEvents: daysWithEvents.length,
+      });
+    }
+
     if (daysWithEvents.length === 0) {
       return (
         <Card className={cn('w-full', className)}>
@@ -67,7 +76,7 @@ export const AgendaView = React.memo<AgendaViewProps>(
     return (
       <Card className={cn('w-full', className)}>
         <CardContent className="p-0">
-          <ScrollArea className="h-[600px] w-full">
+          <ScrollArea className="h-[calc(100vh-10rem)] w-full">
             <div className="p-4 space-y-6">
               {daysWithEvents.map((day, dayIndex) => {
                 const isToday = isSameDay(day.date, new Date());

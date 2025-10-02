@@ -3,6 +3,7 @@ import { format, isSameDay, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { cn } from '@/lib/utils';
+import { Card, CardContent } from '@/components/primitives/card';
 import { CurrentTimeIndicator, WeekEventBlock } from '@/components/composed';
 import { EventListModal } from '../calendar';
 import type { CalendarEvent } from '@/types/calendar';
@@ -39,8 +40,11 @@ export const DayView = React.memo<DayViewProps>(
       events: [],
     });
 
+    // Ref para container de eventos (scroll automático)
+    const eventsContainerRef = React.useRef<HTMLDivElement>(null);
+
     // Constantes do grid
-    const startHour = 6;
+    const startHour = 7; // AI dev note: Alterado de 6 para 7 conforme solicitação
     const endHour = 20;
     const hourHeight = 64;
 
@@ -54,34 +58,73 @@ export const DayView = React.memo<DayViewProps>(
 
     // Filtrar eventos do dia atual
     const dayEvents = useMemo(() => {
-      return events.filter((event) => isSameDay(event.start, currentDate));
+      const filtered = events.filter((event) =>
+        isSameDay(event.start, currentDate)
+      );
+
+      // AI dev note: Debug logs para identificar eventos faltando
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 DayView - Filtro de eventos:', {
+          currentDate: currentDate.toISOString(),
+          'total eventos recebidos': events.length,
+          'eventos filtrados para o dia': filtered.length,
+          'primeiros 3 eventos recebidos': events.slice(0, 3).map((e) => ({
+            id: e.id,
+            title: e.title,
+            start: e.start.toISOString(),
+            'isSameDay result': isSameDay(e.start, currentDate),
+          })),
+          'eventos filtrados': filtered.map((e) => ({
+            id: e.id,
+            title: e.title,
+            start: e.start.toISOString(),
+          })),
+        });
+      }
+
+      return filtered;
     }, [events, currentDate]);
 
-    // Detecta eventos sobrepostos e calcula posicionamento
+    // AI dev note: Scroll automático para hora atual quando visualizando hoje
+    React.useEffect(() => {
+      if (!isToday(currentDate) || !eventsContainerRef.current) return;
+
+      const now = new Date();
+      const currentHour = now.getHours();
+
+      // Scroll para 1 hora antes da atual (para contexto)
+      const targetHour = Math.max(startHour, currentHour - 1);
+      const scrollPosition = (targetHour - startHour) * hourHeight;
+
+      // Delay para garantir que o DOM foi renderizado
+      setTimeout(() => {
+        eventsContainerRef.current?.scrollTo({
+          top: scrollPosition,
+          behavior: 'smooth',
+        });
+      }, 100);
+    }, [currentDate, startHour, hourHeight]);
+
+    // AI dev note: Detecta eventos no MESMO HORÁRIO EXATO (não sobreposição temporal)
     const getEventsWithOverlapData = (events: CalendarEvent[]) => {
       return events.map((event) => {
-        // Encontra eventos que se sobrepõem com este
-        const overlapping = events.filter((otherEvent) => {
+        // Encontra eventos que COMEÇAM no mesmo horário exato (mesmo minuto)
+        const sameTimeEvents = events.filter((otherEvent) => {
           if (otherEvent.id === event.id) return false;
 
-          const eventStart = event.start.getTime();
-          const eventEnd = event.end.getTime();
-          const otherStart = otherEvent.start.getTime();
-          const otherEnd = otherEvent.end.getTime();
-
-          // Verifica sobreposição
-          return eventStart < otherEnd && eventEnd > otherStart;
+          // Comparar apenas o horário de início (timestamp exato)
+          return event.start.getTime() === otherEvent.start.getTime();
         });
 
-        // Todos os eventos sobrepostos incluindo o atual
-        const allOverlapping = [event, ...overlapping].sort(
-          (a, b) => a.start.getTime() - b.start.getTime()
+        // Todos os eventos do mesmo horário incluindo o atual
+        const allSameTime = [event, ...sameTimeEvents].sort(
+          (a, b) => a.id.localeCompare(b.id) // Ordenar por ID para consistência
         );
 
         return {
           event,
-          overlapIndex: allOverlapping.findIndex((e) => e.id === event.id),
-          totalOverlapping: allOverlapping.length,
+          overlapIndex: allSameTime.findIndex((e) => e.id === event.id),
+          totalOverlapping: allSameTime.length,
         };
       });
     };
@@ -93,6 +136,25 @@ export const DayView = React.memo<DayViewProps>(
         const eventHour = event.start.getHours();
         return eventHour === hours;
       });
+    };
+
+    // AI dev note: Limita renderização quando há muitos eventos no mesmo slot
+    // Mas sempre mostra pelo menos os 2 primeiros lado a lado
+    const shouldShowEvent = (
+      event: CalendarEvent,
+      allEvents: CalendarEvent[]
+    ): boolean => {
+      // Eventos no mesmo horário exato (mesmo minuto)
+      const sameTimeEvents = allEvents
+        .filter((e) => e.start.getTime() === event.start.getTime())
+        .sort((a, b) => a.id.localeCompare(b.id)); // Ordenar por ID para consistência
+
+      // Se há <= 2 eventos no mesmo horário, mostrar todos
+      if (sameTimeEvents.length <= 2) return true;
+
+      // Se há > 2, mostrar apenas os 2 primeiros (por ordem de ID)
+      const eventIndex = sameTimeEvents.findIndex((e) => e.id === event.id);
+      return eventIndex < 2;
     };
 
     const handleTimeSlotClick = (time: string) => {
@@ -126,97 +188,187 @@ export const DayView = React.memo<DayViewProps>(
     const isCurrentDay = isToday(currentDate);
     const eventsWithOverlap = getEventsWithOverlapData(dayEvents);
 
+    // AI dev note: Debug - verificar se className h-full foi passada
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎨 DayView - Renderização:', {
+        className,
+        'tem h-full': className?.includes('h-full'),
+        'timeSlots count': timeSlots.length,
+        startHour: startHour,
+      });
+    }
+
+    // AI dev note: Debug - verificar eventos com overlap calculado
+    if (
+      process.env.NODE_ENV === 'development' &&
+      eventsWithOverlap.length > 0
+    ) {
+      console.log('🔍 DayView - Eventos com dados de sobreposição:', {
+        'total eventos com overlap': eventsWithOverlap.length,
+        detalhes: eventsWithOverlap.map((e) => ({
+          id: e.event.id,
+          title: e.event.title,
+          start: e.event.start.toISOString(),
+          overlapIndex: e.overlapIndex,
+          totalOverlapping: e.totalOverlapping,
+          'será renderizado': shouldShowEvent(e.event, dayEvents),
+        })),
+      });
+    }
+
+    // AI dev note: Agrupar eventos por horário para detectar quando há mais eventos ocultos
+    const hiddenEventsByTime = useMemo(() => {
+      const map = new Map<string, number>();
+
+      // Agrupar eventos por timestamp exato
+      const eventsByExactTime = new Map<number, CalendarEvent[]>();
+      dayEvents.forEach((event) => {
+        const timestamp = event.start.getTime();
+        if (!eventsByExactTime.has(timestamp)) {
+          eventsByExactTime.set(timestamp, []);
+        }
+        eventsByExactTime.get(timestamp)!.push(event);
+      });
+
+      // Para cada grupo com > 2 eventos, adicionar ao map de ocultos
+      eventsByExactTime.forEach((events, timestamp) => {
+        if (events.length > 2) {
+          const timeKey = format(new Date(timestamp), 'HH:mm'); // Usar minuto exato
+          map.set(timeKey, events.length);
+        }
+      });
+
+      return map;
+    }, [dayEvents]);
+
     return (
       <>
-        {/* Grid diário simples que expande naturalmente */}
-        <div className={cn('w-full', className)}>
-          {/* Header com dia */}
-          <div className="border-b bg-muted/30 p-4">
-            <h2
-              className={cn(
-                'text-lg font-semibold capitalize',
-                isCurrentDay && 'text-primary'
-              )}
-            >
-              {dayLabel}
-              {isCurrentDay && (
-                <span className="ml-2 text-sm font-normal text-primary">
-                  (Hoje)
-                </span>
-              )}
-            </h2>
-          </div>
-
-          {/* Grid de horários que se adapta ao container */}
-          <div className="w-full grid grid-cols-[80px_1fr]">
-            {/* Coluna de horários */}
-            <div className="border-r bg-muted/10">
-              {timeSlots.map((time) => (
-                <div
-                  key={time}
-                  className="border-b text-xs text-muted-foreground font-medium p-3 text-center"
-                  style={{ height: `${hourHeight}px` }}
-                >
-                  {time}
-                </div>
-              ))}
+        {/* Grid diário - estrutura Card igual ao CalendarGrid */}
+        <Card className={cn('w-full overflow-hidden', className)}>
+          <CardContent className="p-0">
+            {/* Header com dia */}
+            <div className="border-b bg-muted/30 p-4">
+              <h2
+                className={cn(
+                  'text-lg font-semibold capitalize',
+                  isCurrentDay && 'text-primary'
+                )}
+              >
+                {dayLabel}
+                {isCurrentDay && (
+                  <span className="ml-2 text-sm font-normal text-primary">
+                    (Hoje)
+                  </span>
+                )}
+              </h2>
             </div>
 
-            {/* Coluna de eventos */}
-            <div
-              className="relative"
-              style={{ minHeight: `${timeSlots.length * hourHeight}px` }}
-            >
-              {/* Slots de horário clicáveis */}
-              {timeSlots.map((time) => {
-                const slotEvents = getEventsPerTimeSlot(dayEvents, time);
-                const hasMultipleEvents = slotEvents.length > 2;
-
-                return (
+            {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
+            <div className="w-full grid grid-cols-[80px_1fr] h-[calc(100vh-10rem)] overflow-y-auto">
+              {/* Coluna de horários */}
+              <div className="border-r bg-muted/10">
+                {timeSlots.map((time) => (
                   <div
                     key={time}
-                    className={cn(
-                      'border-b hover:bg-muted/10 cursor-pointer',
-                      'transition-colors group relative'
-                    )}
+                    className="border-b text-xs text-muted-foreground font-medium p-3 text-center"
                     style={{ height: `${hourHeight}px` }}
-                    onClick={() => handleTimeSlotClick(time)}
                   >
-                    {hasMultipleEvents && (
-                      <div className="absolute top-1 right-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-medium z-10">
-                        +{slotEvents.length - 2}
-                      </div>
-                    )}
+                    {time}
                   </div>
-                );
-              })}
+                ))}
+              </div>
 
-              {/* Eventos renderizados sobre os slots */}
-              {eventsWithOverlap.map(
-                ({ event, overlapIndex, totalOverlapping }) => (
-                  <WeekEventBlock
-                    key={event.id}
-                    event={event}
-                    startHour={startHour}
-                    endHour={endHour}
-                    hourHeight={hourHeight}
-                    onClick={handleEventClick}
-                    overlapIndex={overlapIndex}
-                    totalOverlapping={Math.min(totalOverlapping, 3)} // Máximo 3 visíveis na view dia
-                    userRole={userRole}
-                  />
-                )
-              )}
+              {/* Coluna de eventos */}
+              <div
+                ref={eventsContainerRef}
+                className="relative"
+                style={{
+                  minHeight: `${timeSlots.length * hourHeight}px`,
+                }}
+              >
+                {/* Slots de horário clicáveis */}
+                {timeSlots.map((time) => {
+                  const slotEvents = getEventsPerTimeSlot(dayEvents, time);
+                  // Verificar se algum horário exato dentro deste slot tem eventos ocultos
+                  const hasHiddenEventsInSlot = Array.from(
+                    hiddenEventsByTime.keys()
+                  ).some((exactTime) =>
+                    exactTime.startsWith(time.split(':')[0] + ':')
+                  );
+                  const totalEventsInSlot = hasHiddenEventsInSlot
+                    ? Math.max(
+                        ...Array.from(hiddenEventsByTime.entries())
+                          .filter(([k]) =>
+                            k.startsWith(time.split(':')[0] + ':')
+                          )
+                          .map(([, v]) => v)
+                      )
+                    : 0;
 
-              {/* Indicador de tempo atual */}
-              <CurrentTimeIndicator
-                startHour={startHour}
-                endHour={endHour}
-                className="ml-0" // Sem offset pois já está na coluna correta
-              />
+                  return (
+                    <div
+                      key={time}
+                      className={cn(
+                        'border-b hover:bg-muted/10 cursor-pointer',
+                        'transition-colors group relative'
+                      )}
+                      style={{ height: `${hourHeight}px` }}
+                      onClick={() => handleTimeSlotClick(time)}
+                    >
+                      {hasHiddenEventsInSlot && totalEventsInSlot > 2 && (
+                        <div
+                          className="absolute top-1 right-1 text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full font-medium z-10 shadow-sm hover:bg-primary/90 transition-colors cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModalState({
+                              isOpen: true,
+                              date: currentDate,
+                              events: slotEvents,
+                            });
+                          }}
+                          title={`Ver todos os ${totalEventsInSlot} eventos`}
+                        >
+                          +{totalEventsInSlot - 2} eventos
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Eventos renderizados sobre os slots */}
+                {/* AI dev note: Filtra e renderiza eventos (max 2 por horário exato) */}
+                {eventsWithOverlap
+                  .filter(({ event }) => shouldShowEvent(event, dayEvents))
+                  .map(({ event, overlapIndex, totalOverlapping }) => {
+                    // Ajustar para máximo 2 colunas visíveis
+                    const adjustedTotal = Math.min(totalOverlapping, 2);
+                    const adjustedIndex = Math.min(overlapIndex, 1);
+
+                    return (
+                      <WeekEventBlock
+                        key={event.id}
+                        event={event}
+                        startHour={startHour}
+                        endHour={endHour}
+                        hourHeight={hourHeight}
+                        onClick={handleEventClick}
+                        overlapIndex={adjustedIndex}
+                        totalOverlapping={adjustedTotal}
+                        userRole={userRole}
+                      />
+                    );
+                  })}
+
+                {/* Indicador de tempo atual */}
+                <CurrentTimeIndicator
+                  startHour={startHour}
+                  endHour={endHour}
+                  className="ml-0" // Sem offset pois já está na coluna correta
+                />
+              </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Modal para eventos múltiplos */}
         {modalState.date && (

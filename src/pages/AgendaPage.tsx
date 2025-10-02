@@ -58,7 +58,7 @@ export const AgendaPage: React.FC = () => {
   }
 
   return (
-    <div className="w-full h-full overflow-hidden">
+    <div className="w-full">
       {/* Calendário integrado com dados reais - expandido para toda largura e altura */}
       <Suspense
         fallback={
@@ -74,7 +74,7 @@ export const AgendaPage: React.FC = () => {
           onEventDelete={handleEventDelete}
           onPatientClick={handlePatientClick}
           onProfessionalClick={handleProfessionalClick}
-          className="w-full max-w-none h-full"
+          className="w-full max-w-none"
         />
       </Suspense>
     </div>

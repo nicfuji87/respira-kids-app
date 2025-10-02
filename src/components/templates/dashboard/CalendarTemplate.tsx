@@ -454,9 +454,9 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     };
 
     return (
-      <div className={cn('w-full max-w-none h-full flex flex-col', className)}>
+      <div className={cn('w-full max-w-none', className)}>
         {/* Calendar Header */}
-        <div className="flex-shrink-0 mb-4">
+        <div className="mb-4">
           <CalendarHeader
             currentDate={currentDate}
             currentView={currentView}
@@ -470,7 +470,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
         </div>
 
         {/* Calendar Content - expandido para largura total */}
-        <div className="flex-1 w-full max-w-none">{renderCurrentView()}</div>
+        <div className="w-full max-w-none">{renderCurrentView()}</div>
 
         {/* Appointment Details Modal - Para editar agendamentos existentes */}
         {showEventManager && (
