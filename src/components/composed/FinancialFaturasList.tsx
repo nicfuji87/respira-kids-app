@@ -9,7 +9,6 @@ import {
   ExternalLink,
   FileText,
   AlertCircle,
-  ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
 import {
@@ -42,6 +41,8 @@ import { supabase } from '@/lib/supabase';
 // Mesmos filtros e paginação da lista de consultas
 
 type PeriodFilter =
+  | 'mes_atual'
+  | 'mes_anterior'
   | 'ultimos_30'
   | 'ultimos_60'
   | 'ultimos_90'
@@ -85,7 +86,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   const [isEmitingNfe, setIsEmitingNfe] = useState<string | null>(null);
 
   // Estados de filtro
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('ultimos_30');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('mes_atual');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
@@ -99,6 +100,15 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const PAGE_SIZE = 100; // AI dev note: 100 faturas por página
+
+  // Estados de totais (todos os registros do filtro, não apenas da página)
+  const [totalSummary, setTotalSummary] = useState({
+    totalValue: 0,
+    paidCount: 0,
+    unpaidCount: 0,
+    nfeEmittedCount: 0,
+    nfeNotEmittedCount: 0,
+  });
 
   // Listas para filtros
   const [professionals, setProfessionals] = useState<
@@ -114,38 +124,72 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     setError(null);
 
     try {
-      // Determinar datas baseadas no filtro
+      // AI dev note: Determinar datas baseadas no filtro
       const today = new Date();
       let dateStart = '';
-      let dateEnd = today.toISOString().split('T')[0];
+      let dateEnd = '';
 
       switch (periodFilter) {
+        case 'mes_atual':
+          // Primeiro dia do mês atual
+          dateStart = new Date(today.getFullYear(), today.getMonth(), 1)
+            .toISOString()
+            .split('T')[0];
+          dateEnd = today.toISOString().split('T')[0];
+          break;
+        case 'mes_anterior': {
+          // Primeiro dia do mês anterior
+          const firstDayLastMonth = new Date(
+            today.getFullYear(),
+            today.getMonth() - 1,
+            1
+          );
+          const lastDayLastMonth = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            0
+          );
+          dateStart = firstDayLastMonth.toISOString().split('T')[0];
+          dateEnd = lastDayLastMonth.toISOString().split('T')[0];
+          console.log('🗓️ Filtro Mês Anterior:', {
+            dateStart,
+            dateEnd,
+            periodFilter,
+          });
+          break;
+        }
         case 'ultimos_30':
           dateStart = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
+          dateEnd = today.toISOString().split('T')[0];
           break;
         case 'ultimos_60':
           dateStart = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
+          dateEnd = today.toISOString().split('T')[0];
           break;
         case 'ultimos_90':
           dateStart = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
+          dateEnd = today.toISOString().split('T')[0];
           break;
         case 'ultimo_ano':
           dateStart = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
+          dateEnd = today.toISOString().split('T')[0];
           break;
         case 'personalizado':
           if (startDate) dateStart = startDate;
           if (endDate) dateEnd = endDate;
           break;
         case 'todos':
+          // Sem filtros de data
           dateStart = '';
+          dateEnd = '';
           break;
       }
 
@@ -172,20 +216,116 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         'pacientes_atendidos',
       ].join(',');
 
-      // Buscar count separadamente
+      // AI dev note: Buscar count COM OS MESMOS FILTROS aplicados
       let countQuery = supabase
         .from('vw_faturas_completas')
         .select('id', { count: 'exact', head: true });
 
-      if (dateStart) {
-        countQuery = countQuery.gte('created_at', dateStart);
-      }
-      if (dateEnd && periodFilter !== 'todos') {
-        countQuery = countQuery.lte('created_at', dateEnd + 'T23:59:59');
+      // Aplicar filtros apenas se não for 'todos'
+      if (periodFilter !== 'todos') {
+        if (dateStart) {
+          countQuery = countQuery.gte('created_at', dateStart);
+        }
+        if (dateEnd) {
+          countQuery = countQuery.lte('created_at', dateEnd + 'T23:59:59');
+        }
       }
 
       const { count } = await countQuery;
       setTotalCount(count || 0);
+
+      // AI dev note: Buscar totais usando agregação no banco (sem limite de 1000)
+      // Buscar todas as faturas com filtros aplicados para calcular totais
+      let allFaturasQuery = supabase
+        .from('vw_faturas_completas')
+        .select('valor_total, status, link_nfe');
+
+      // Aplicar mesmos filtros de período
+      if (periodFilter !== 'todos') {
+        if (dateStart) {
+          allFaturasQuery = allFaturasQuery.gte('created_at', dateStart);
+        }
+        if (dateEnd) {
+          allFaturasQuery = allFaturasQuery.lte(
+            'created_at',
+            dateEnd + 'T23:59:59'
+          );
+        }
+      }
+
+      // Buscar TODAS as faturas em lotes para evitar limite de 1000
+      const allFaturas: Array<{
+        valor_total: number;
+        status: string;
+        link_nfe: string | null;
+      }> = [];
+      let currentOffset = 0;
+      const batchSize = 1000;
+      let hasMoreRecords = true;
+
+      while (hasMoreRecords) {
+        const { data: batchData, error: batchError } =
+          await allFaturasQuery.range(
+            currentOffset,
+            currentOffset + batchSize - 1
+          );
+
+        if (batchError) {
+          console.error('❌ Erro ao buscar lote de faturas:', batchError);
+          break;
+        }
+
+        if (batchData && batchData.length > 0) {
+          allFaturas.push(...batchData);
+          currentOffset += batchSize;
+          hasMoreRecords = batchData.length === batchSize;
+        } else {
+          hasMoreRecords = false;
+        }
+      }
+
+      // Calcular totais com TODOS os registros
+      const totalValue = allFaturas.reduce(
+        (sum, item) => sum + (item.valor_total || 0),
+        0
+      );
+      const paidCount = allFaturas.filter(
+        (item) => item.status === 'pago'
+      ).length;
+      const unpaidCount = allFaturas.filter(
+        (item) =>
+          item.status !== 'pago' &&
+          item.status !== 'cancelado' &&
+          item.status !== 'estornado'
+      ).length;
+      const nfeEmittedCount = allFaturas.filter(
+        (item) => item.link_nfe && item.link_nfe.trim() !== ''
+      ).length;
+      const nfeNotEmittedCount = allFaturas.filter(
+        (item) =>
+          item.status === 'pago' &&
+          (!item.link_nfe || item.link_nfe.trim() === '')
+      ).length;
+
+      console.log('📊 Totais de Faturas (com lotes):', {
+        periodFilter,
+        totalRegistros: allFaturas.length,
+        totalValue,
+        paidCount,
+        unpaidCount,
+        nfeEmittedCount,
+        nfeNotEmittedCount,
+        dateStart,
+        dateEnd,
+      });
+
+      setTotalSummary({
+        totalValue,
+        paidCount,
+        unpaidCount,
+        nfeEmittedCount,
+        nfeNotEmittedCount,
+      });
 
       // Buscar dados com paginação
       const from = currentPage * PAGE_SIZE;
@@ -197,11 +337,14 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         .range(from, to)
         .order('created_at', { ascending: false });
 
-      if (dateStart) {
-        query = query.gte('created_at', dateStart);
-      }
-      if (dateEnd && periodFilter !== 'todos') {
-        query = query.lte('created_at', dateEnd + 'T23:59:59');
+      // Aplicar filtros apenas se não for 'todos'
+      if (periodFilter !== 'todos') {
+        if (dateStart) {
+          query = query.gte('created_at', dateStart);
+        }
+        if (dateEnd) {
+          query = query.lte('created_at', dateEnd + 'T23:59:59');
+        }
       }
 
       const { data, error: fetchError } = await query;
@@ -391,9 +534,14 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     }
   };
 
-  // Função para formatar data
+  // AI dev note: Função para formatar data SEM conversão de timezone
+  // Mantém exatamente como vem do Supabase
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+    if (!dateString) return '--/--/----';
+    // Extrair data diretamente da string sem criar objeto Date
+    const [datePart] = dateString.split('T');
+    const [year, month, day] = datePart.split('-');
+    return `${day}/${month}/${year}`;
   };
 
   // Função para formatar valor
@@ -538,6 +686,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
               <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="mes_atual">Mês Atual</SelectItem>
+              <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
               <SelectItem value="ultimos_30">Últimos 30 dias</SelectItem>
               <SelectItem value="ultimos_60">Últimos 60 dias</SelectItem>
               <SelectItem value="ultimos_90">Últimos 90 dias</SelectItem>
@@ -638,67 +788,35 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
 
         {/* Datas personalizadas */}
         {periodFilter === 'personalizado' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Data inicial</label>
-              <DatePicker
-                value={startDate}
-                onChange={(date) => {
-                  setStartDate(date);
-                  setCurrentPage(0);
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Data final</label>
-              <DatePicker
-                value={endDate}
-                onChange={(date) => {
-                  setEndDate(date);
-                  setCurrentPage(0);
-                }}
-              />
-            </div>
+          <div className="flex gap-3 items-center">
+            <DatePicker
+              value={startDate}
+              onChange={(date) => {
+                setStartDate(date);
+                setCurrentPage(0);
+              }}
+              placeholder="Data inicial"
+            />
+            <span className="text-muted-foreground">até</span>
+            <DatePicker
+              value={endDate}
+              onChange={(date) => {
+                setEndDate(date);
+                setCurrentPage(0);
+              }}
+              placeholder="Data final"
+            />
           </div>
         )}
 
-        {/* Contador de resultados e paginação */}
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Mostrando {currentPage * PAGE_SIZE + 1}-
-            {Math.min((currentPage + 1) * PAGE_SIZE, totalCount)} de{' '}
-            {totalCount}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-              disabled={currentPage === 0}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={!hasMore}
-            >
-              Próxima
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-
         {/* Lista de Faturas */}
         {filteredFaturas.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
+          <div className="text-center py-8 text-muted-foreground">
             <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Nenhuma fatura encontrada</p>
+            <p>Nenhuma fatura encontrada com os filtros aplicados.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[600px] overflow-y-auto">
             {filteredFaturas.map((fatura) => {
               const nfeConfig = getNfeButtonConfig(fatura);
               const NfeIcon = nfeConfig?.icon;
@@ -805,6 +923,104 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Resumo - Totais de TODOS os registros do filtro */}
+        {!isLoading && !error && filteredFaturas.length > 0 && (
+          <div className="mt-4 p-4 bg-muted/30 rounded-lg">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Total de faturas:</span>
+                <p className="font-semibold">{totalCount}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Valor total:</span>
+                <p className="font-semibold text-verde-pipa">
+                  {formatCurrency(totalSummary.totalValue)}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Pagas:</span>
+                <p className="font-semibold text-green-500">
+                  {totalSummary.paidCount}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Não pagas:</span>
+                <p className="font-semibold text-orange-500">
+                  {totalSummary.unpaidCount}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">NFe emitidas:</span>
+                <p className="font-semibold text-blue-500">
+                  {totalSummary.nfeEmittedCount}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">NFe não emitidas:</span>
+                <p className="font-semibold text-gray-500">
+                  {totalSummary.nfeNotEmittedCount}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Paginação */}
+        {!isLoading && !error && totalCount > PAGE_SIZE && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t">
+            <p className="text-sm text-muted-foreground">
+              Mostrando {currentPage * PAGE_SIZE + 1} -{' '}
+              {Math.min((currentPage + 1) * PAGE_SIZE, totalCount)} de{' '}
+              {totalCount} faturas
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(0)}
+                disabled={currentPage === 0}
+                title="Primeira página"
+              >
+                <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
+                <ChevronRight className="h-4 w-4 rotate-180 -ml-3" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                disabled={currentPage === 0}
+              >
+                <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
+                Anterior
+              </Button>
+              <div className="px-3 py-1 text-sm font-medium bg-muted rounded">
+                Página {currentPage + 1} de {Math.ceil(totalCount / PAGE_SIZE)}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => p + 1)}
+                disabled={!hasMore}
+              >
+                Próxima
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCurrentPage(Math.ceil(totalCount / PAGE_SIZE) - 1)
+                }
+                disabled={!hasMore}
+                title="Última página"
+              >
+                <ChevronRight className="h-4 w-4 ml-1" />
+                <ChevronRight className="h-4 w-4 -ml-3" />
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

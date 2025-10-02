@@ -58,30 +58,31 @@ const FaturaItem = React.memo<{
       }).format(value);
     };
 
+    // AI dev note: Função para formatar data SEM conversão de timezone
+    // Mantém exatamente como vem do Supabase
     const formatDate = (dateString: string) => {
-      return new Date(dateString).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      });
+      if (!dateString) return '--/--/----';
+      // Extrair data diretamente da string sem criar objeto Date
+      const [datePart] = dateString.split('T');
+      const [year, month, day] = datePart.split('-');
+      return `${day}/${month}/${year}`;
     };
 
-    // Formatar datas das consultas de forma compacta
+    // AI dev note: Formatar datas das consultas SEM conversão de timezone
+    // Mantém exatamente como vem do Supabase
     const formatConsultationDates = (datasConsultas: string[]) => {
       if (!datasConsultas || datasConsultas.length === 0) return '';
 
       return datasConsultas
         .map((dataHora) => {
-          const date = new Date(dataHora);
-          const dateStr = date.toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-          });
-          const timeStr = date.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          });
+          // Extrair data e hora diretamente da string
+          const [datePart, timePart] = dataHora.split('T');
+          const [year, month, day] = datePart.split('-');
+          const [hour, minute] = timePart.split(':');
+
+          const dateStr = `${day}/${month}/${year}`;
+          const timeStr = `${hour}:${minute}`;
+
           return `${dateStr} ${timeStr}`;
         })
         .join(', ');

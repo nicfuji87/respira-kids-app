@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/primitives/card';
@@ -14,17 +13,46 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart';
-import { DollarSign } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
+import { DollarSign, X, Search } from 'lucide-react';
+import { Button } from '@/components/primitives/button';
+import { Input } from '@/components/primitives/input';
 import { cn } from '@/lib/utils';
-import type { FaturamentoComparativo } from '@/lib/professional-dashboard-api';
+import { supabase } from '@/lib/supabase';
+
+type PeriodFilter =
+  | 'mes_atual'
+  | 'mes_anterior'
+  | 'ultimos_3'
+  | 'ultimos_6'
+  | 'ultimos_12'
+  | 'ultimo_ano'
+  | 'ultimos_24'
+  | 'todos';
+
+type PaymentStatusFilter =
+  | 'todos'
+  | 'pago'
+  | 'pendente'
+  | 'aberto'
+  | 'cancelado';
+type ConsultationStatusFilter =
+  | 'todos'
+  | 'finalizado'
+  | 'agendado'
+  | 'cancelado'
+  | 'confirmado';
 
 // AI dev note: FaturamentoChart - Gráfico comparativo de faturamento mensal
-// Usa Chart primitives com cores da Respira Kids e variação percentual
+// Agora com filtros completos que buscam dados brutos e agregam no frontend
 
 interface FaturamentoChartProps {
-  data: FaturamentoComparativo | null;
-  loading?: boolean;
-  error?: string | null;
   className?: string;
 }
 
@@ -40,7 +68,42 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export const FaturamentoChart = React.memo<FaturamentoChartProps>(
-  ({ data, loading = false, error, className }) => {
+  ({ className }) => {
+    // Estados de filtros
+    const [periodFilter, setPeriodFilter] =
+      useState<PeriodFilter>('ultimos_12');
+    const [professionalFilter, setProfessionalFilter] =
+      useState<string>('todos');
+    const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('todos');
+    const [paymentStatusFilter, setPaymentStatusFilter] =
+      useState<PaymentStatusFilter>('todos');
+    const [consultationStatusFilter, setConsultationStatusFilter] =
+      useState<ConsultationStatusFilter>('todos');
+    const [empresaFilter, setEmpresaFilter] = useState<string>('todos');
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // Estados de dados
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [rawData, setRawData] = useState<
+      Array<{
+        data_hora: string;
+        valor_servico: string;
+        status_consulta_codigo: string;
+        status_pagamento_codigo: string;
+        possui_evolucao: string;
+        paciente_nome: string;
+      }>
+    >([]);
+
+    // Listas para filtros
+    const [professionals, setProfessionals] = useState<
+      Array<{ id: string; nome: string }>
+    >([]);
+    const [serviceTypes, setServiceTypes] = useState<
+      Array<{ id: string; nome: string }>
+    >([]);
+
     const formatCurrency = (value: number) => {
       return new Intl.NumberFormat('pt-BR', {
         style: 'currency',
@@ -48,18 +111,281 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
       }).format(value);
     };
 
-    // Preparar dados para o gráfico (dados anuais)
-    const chartData = data
-      ? data.dadosAnuais.map((mes) => ({
-          periodo: mes.periodo,
-          faturamentoAReceber: mes.faturamentoAReceber,
-          faturamentoPendente: mes.faturamentoTotal - mes.faturamentoAReceber, // Diferença = consultas com evolução mas não finalizadas
-          consultasRealizadas: mes.consultasRealizadas,
-          consultasComEvolucao: mes.consultasComEvolucao,
-          mes: mes.mes,
-          ano: mes.ano,
-        }))
-      : [];
+    // Carregar listas de filtros
+    useEffect(() => {
+      const loadFilterLists = async () => {
+        // Buscar profissionais (role = 'profissional' ou pode_atender = true)
+        const { data: profsData, error: profsError } = await supabase
+          .from('pessoas')
+          .select('id, nome, role, pode_atender')
+          .eq('ativo', true)
+          .or('role.eq.profissional,pode_atender.eq.true')
+          .order('nome');
+
+        if (profsError) {
+          console.error('❌ Erro ao buscar profissionais:', profsError);
+        } else {
+          console.log('👨‍⚕️ Profissionais carregados:', profsData?.length);
+          if (profsData) setProfessionals(profsData);
+        }
+
+        // Buscar tipos de serviço
+        const { data: servicesData, error: servicesError } = await supabase
+          .from('tipo_servicos')
+          .select('id, nome')
+          .eq('ativo', true)
+          .order('nome');
+
+        if (servicesError) {
+          console.error('❌ Erro ao buscar tipos de serviço:', servicesError);
+        } else {
+          console.log('🏥 Tipos de serviço carregados:', servicesData?.length);
+          if (servicesData) setServiceTypes(servicesData);
+        }
+      };
+
+      loadFilterLists();
+    }, []);
+
+    // Buscar dados do gráfico com filtros aplicados
+    const fetchChartData = useCallback(async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // AI dev note: Buscar dados em lotes aplicando filtros
+        let query = supabase
+          .from('vw_agendamentos_completos')
+          .select(
+            'data_hora, valor_servico, status_consulta_codigo, status_pagamento_codigo, possui_evolucao, paciente_nome'
+          )
+          .eq('ativo', true);
+
+        // Aplicar filtros
+        if (professionalFilter !== 'todos') {
+          query = query.eq('profissional_id', professionalFilter);
+        }
+        if (serviceTypeFilter !== 'todos') {
+          query = query.eq('tipo_servico_id', serviceTypeFilter);
+        }
+        if (paymentStatusFilter !== 'todos') {
+          query = query.eq('status_pagamento_codigo', paymentStatusFilter);
+        }
+        if (consultationStatusFilter !== 'todos') {
+          query = query.eq('status_consulta_codigo', consultationStatusFilter);
+        }
+        if (empresaFilter !== 'todos') {
+          query = query.eq('empresa_fatura_id', empresaFilter);
+        }
+        if (searchQuery) {
+          query = query.ilike('paciente_nome', `%${searchQuery}%`);
+        }
+
+        // Buscar em lotes
+        const allData: Array<{
+          data_hora: string;
+          valor_servico: string;
+          status_consulta_codigo: string;
+          status_pagamento_codigo: string;
+          possui_evolucao: string;
+          paciente_nome: string;
+        }> = [];
+        let offset = 0;
+        const batchSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+          const { data: batchData, error: batchError } = await query
+            .range(offset, offset + batchSize - 1)
+            .order('data_hora', { ascending: true });
+
+          if (batchError) throw batchError;
+
+          if (batchData && batchData.length > 0) {
+            allData.push(...batchData);
+            offset += batchSize;
+            hasMore = batchData.length === batchSize;
+          } else {
+            hasMore = false;
+          }
+
+          if (offset > 50000) break; // Safety
+        }
+
+        setRawData(allData);
+      } catch (err) {
+        console.error('Erro ao buscar dados do gráfico:', err);
+        setError('Erro ao carregar dados do gráfico');
+      } finally {
+        setIsLoading(false);
+      }
+    }, [
+      professionalFilter,
+      serviceTypeFilter,
+      paymentStatusFilter,
+      consultationStatusFilter,
+      empresaFilter,
+      searchQuery,
+    ]);
+
+    // Recarregar quando filtros mudarem
+    useEffect(() => {
+      fetchChartData();
+    }, [fetchChartData]);
+
+    // AI dev note: Agregar dados brutos por mês/ano
+    const chartData = useMemo(() => {
+      if (rawData.length === 0) return [];
+
+      // Agrupar por mês/ano
+      const dadosPorMes = new Map<
+        string,
+        {
+          periodo: string;
+          faturamentoAReceber: number;
+          faturamentoPendente: number;
+          consultasRealizadas: number;
+          consultasComEvolucao: number;
+          mes: number;
+          ano: number;
+        }
+      >();
+
+      rawData.forEach((consulta) => {
+        const data = new Date(consulta.data_hora);
+        const ano = data.getFullYear();
+        const mes = data.getMonth() + 1; // 1-12
+        const mesKey = `${ano}${String(mes).padStart(2, '0')}`;
+
+        if (!dadosPorMes.has(mesKey)) {
+          dadosPorMes.set(mesKey, {
+            periodo: new Intl.DateTimeFormat('pt-BR', {
+              month: 'short',
+              year: 'numeric',
+            }).format(new Date(ano, mes - 1, 1)),
+            faturamentoAReceber: 0,
+            faturamentoPendente: 0,
+            consultasRealizadas: 0,
+            consultasComEvolucao: 0,
+            mes,
+            ano,
+          });
+        }
+
+        const dadosMes = dadosPorMes.get(mesKey)!;
+        const valor = parseFloat(consulta.valor_servico || '0');
+
+        // Sempre contar consulta
+        dadosMes.consultasRealizadas += 1;
+
+        // AI dev note: Lógica de faturamento
+        // Verde (A Receber) = Finalizadas SEM evolução (prontas para faturar)
+        // Amarelo (Pendente) = Finalizadas COM evolução mas ainda em processo
+        if (consulta.status_consulta_codigo === 'finalizado') {
+          if (consulta.possui_evolucao === 'sim') {
+            // COM evolução = ainda em processo (amarelo/pendente)
+            dadosMes.consultasComEvolucao += 1;
+            dadosMes.faturamentoPendente += valor;
+          } else {
+            // SEM evolução = pronta para receber (verde/a receber)
+            dadosMes.faturamentoAReceber += valor;
+          }
+        } else if (consulta.status_consulta_codigo === 'agendado') {
+          // Agendadas contam como pendente
+          dadosMes.faturamentoPendente += valor;
+        }
+      });
+
+      // Ordenar por ano e mês
+      const allData = Array.from(dadosPorMes.values()).sort((a, b) => {
+        if (a.ano !== b.ano) return a.ano - b.ano;
+        return a.mes - b.mes;
+      });
+
+      // Aplicar filtro de período
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1; // 1-12
+      const currentYear = now.getFullYear();
+
+      switch (periodFilter) {
+        case 'mes_atual':
+          return allData.filter(
+            (d) => d.mes === currentMonth && d.ano === currentYear
+          );
+        case 'mes_anterior': {
+          const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+          const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+          return allData.filter(
+            (d) => d.mes === prevMonth && d.ano === prevYear
+          );
+        }
+        case 'ultimos_3':
+          return allData.slice(-3);
+        case 'ultimos_6':
+          return allData.slice(-6);
+        case 'ultimos_12':
+          return allData.slice(-12);
+        case 'ultimos_24':
+          return allData.slice(-24);
+        case 'ultimo_ano':
+          return allData.slice(-12);
+        case 'todos':
+        default:
+          return allData;
+      }
+    }, [rawData, periodFilter]);
+
+    // Calcular resumo baseado nos dados filtrados
+    const resumoFiltrado = useMemo(() => {
+      if (!chartData || chartData.length === 0) {
+        return {
+          totalFaturamento: 0,
+          totalAReceber: 0,
+          totalConsultas: 0,
+          mediaMovel: 0,
+        };
+      }
+
+      const totalFaturamento = chartData.reduce(
+        (sum, d) => sum + d.faturamentoAReceber + d.faturamentoPendente,
+        0
+      );
+      const totalAReceber = chartData.reduce(
+        (sum, d) => sum + d.faturamentoAReceber,
+        0
+      );
+      const totalConsultas = chartData.reduce(
+        (sum, d) => sum + d.consultasRealizadas,
+        0
+      );
+      const mediaMovel = totalFaturamento / chartData.length;
+
+      return {
+        totalFaturamento,
+        totalAReceber,
+        totalConsultas,
+        mediaMovel,
+      };
+    }, [chartData]);
+
+    if (isLoading) {
+      return (
+        <Card className={cn('w-full', className)}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-verde-pipa" />
+              Gráfico de Faturamento
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-[300px] w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
 
     if (error) {
       return (
@@ -67,7 +393,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-verde-pipa" />
-              Faturamento Comparativo
+              Gráfico de Faturamento
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -76,49 +402,9 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                 Erro ao carregar dados
               </div>
               <p className="text-sm text-muted-foreground">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    if (loading) {
-      return (
-        <Card className={cn('w-full', className)}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-verde-pipa" />
-              Faturamento Comparativo
-            </CardTitle>
-            <CardDescription>
-              <Skeleton className="h-4 w-48" />
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-6 w-32" />
-                <Skeleton className="h-6 w-24" />
-              </div>
-              <Skeleton className="h-[300px] w-full" />
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    if (!data) {
-      return (
-        <Card className={cn('w-full', className)}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-verde-pipa" />
-              Faturamento Comparativo
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-6">
-              <div className="text-muted-foreground">Dados não disponíveis</div>
+              <Button onClick={fetchChartData} className="mt-4">
+                Tentar novamente
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -128,73 +414,213 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
     return (
       <Card className={cn('w-full', className)}>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-verde-pipa" />
-            Gráfico anual
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-verde-pipa" />
+              Gráfico de Faturamento
+            </CardTitle>
+          </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Métricas resumo */}
+          {/* Busca */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar paciente..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Linha de filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+            {/* Período */}
+            <Select
+              value={periodFilter}
+              onValueChange={(value) => setPeriodFilter(value as PeriodFilter)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mes_atual">Mês Atual</SelectItem>
+                <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
+                <SelectItem value="ultimos_3">Últimos 3 Meses</SelectItem>
+                <SelectItem value="ultimos_6">Últimos 6 Meses</SelectItem>
+                <SelectItem value="ultimos_12">Últimos 12 Meses</SelectItem>
+                <SelectItem value="ultimos_24">Últimos 24 Meses</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Status de Consulta */}
+            <Select
+              value={consultationStatusFilter}
+              onValueChange={(value) =>
+                setConsultationStatusFilter(value as ConsultationStatusFilter)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Status Consulta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="finalizado">Finalizado</SelectItem>
+                <SelectItem value="agendado">Agendado</SelectItem>
+                <SelectItem value="confirmado">Confirmado</SelectItem>
+                <SelectItem value="cancelado">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Status de Pagamento */}
+            <Select
+              value={paymentStatusFilter}
+              onValueChange={(value) =>
+                setPaymentStatusFilter(value as PaymentStatusFilter)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Status Pagamento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="pago">Pago</SelectItem>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="aberto">Em aberto</SelectItem>
+                <SelectItem value="cancelado">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Profissional */}
+            <Select
+              value={professionalFilter}
+              onValueChange={setProfessionalFilter}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Profissional" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {professionals.map((prof) => (
+                  <SelectItem key={prof.id} value={prof.id}>
+                    {prof.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Tipo de Serviço */}
+            <Select
+              value={serviceTypeFilter}
+              onValueChange={setServiceTypeFilter}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Tipo de Serviço" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {serviceTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Botão de limpar filtros */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setPeriodFilter('ultimos_12');
+                setProfessionalFilter('todos');
+                setServiceTypeFilter('todos');
+                setPaymentStatusFilter('todos');
+                setConsultationStatusFilter('todos');
+                setEmpresaFilter('todos');
+                setSearchQuery('');
+              }}
+            >
+              <X className="h-4 w-4 mr-1" />
+              Limpar
+            </Button>
+          </div>
+          {/* Métricas resumo - baseadas no filtro aplicado */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 p-3 md:p-4 bg-muted/30 rounded-lg border">
-            {/* Mês Atual */}
+            {/* Total Faturamento */}
             <div className="text-center">
               <div className="text-xs md:text-sm text-muted-foreground">
-                Mês Atual
+                Total Faturamento
               </div>
-              <div className="font-medium text-sm md:text-base">
-                {formatCurrency(data.resumoAno.mesAtual.faturamentoTotal)}
+              <div className="font-medium text-foreground text-sm md:text-base">
+                {formatCurrency(resumoFiltrado.totalFaturamento)}
               </div>
               <div className="text-xs text-muted-foreground">
-                {data.resumoAno.mesAtual.consultas} consultas
-              </div>
-              <div className="text-xs text-verde-pipa font-medium">
-                A receber:{' '}
-                {formatCurrency(data.resumoAno.mesAtual.faturamentoAReceber)}
+                {resumoFiltrado.totalConsultas} consultas
               </div>
             </div>
 
-            {/* Melhor Mês */}
+            {/* A Receber */}
+            <div className="text-center">
+              <div className="text-xs md:text-sm text-muted-foreground">
+                A Receber
+              </div>
+              <div className="font-medium text-verde-pipa text-sm md:text-base">
+                {formatCurrency(resumoFiltrado.totalAReceber)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {(
+                  (resumoFiltrado.totalAReceber /
+                    resumoFiltrado.totalFaturamento) *
+                  100
+                ).toFixed(0)}
+                % do total
+              </div>
+            </div>
+
+            {/* Média */}
+            <div className="text-center">
+              <div className="text-xs md:text-sm text-muted-foreground">
+                Média do Período
+              </div>
+              <div className="font-medium text-sm md:text-base">
+                {formatCurrency(resumoFiltrado.mediaMovel)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {chartData.length} mês(es)
+              </div>
+            </div>
+
+            {/* Melhor Mês do período filtrado */}
             <div className="text-center">
               <div className="text-xs md:text-sm text-muted-foreground">
                 Melhor Mês
               </div>
               <div className="font-medium text-sm md:text-base">
-                {formatCurrency(data.resumoAno.melhorMes.faturamento)}
+                {chartData.length > 0
+                  ? formatCurrency(
+                      Math.max(
+                        ...chartData.map(
+                          (d) => d.faturamentoAReceber + d.faturamentoPendente
+                        )
+                      )
+                    )
+                  : formatCurrency(0)}
               </div>
               <div className="text-xs text-muted-foreground">
-                {data.resumoAno.melhorMes.periodo}
-              </div>
-            </div>
-
-            {/* Média Mensal */}
-            <div className="text-center">
-              <div className="text-xs md:text-sm text-muted-foreground">
-                Média Mensal
-              </div>
-              <div className="font-medium text-verde-pipa text-sm md:text-base">
-                {formatCurrency(data.resumoAno.mediaMovel)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {Math.round(
-                  data.resumoAno.totalConsultas /
-                    data.dadosAnuais.filter((m) => m.consultasRealizadas > 0)
-                      .length
-                )}{' '}
-                consultas
-              </div>
-            </div>
-
-            {/* Total do Ano */}
-            <div className="text-center">
-              <div className="text-xs md:text-sm text-muted-foreground">
-                Total do Ano
-              </div>
-              <div className="font-medium text-foreground text-sm md:text-base">
-                {formatCurrency(data.resumoAno.totalFaturamento)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {data.resumoAno.totalConsultas} consultas
+                {chartData.length > 0
+                  ? chartData.find(
+                      (d) =>
+                        d.faturamentoAReceber + d.faturamentoPendente ===
+                        Math.max(
+                          ...chartData.map(
+                            (d) => d.faturamentoAReceber + d.faturamentoPendente
+                          )
+                        )
+                    )?.periodo
+                  : 'N/A'}
               </div>
             </div>
           </div>
@@ -310,7 +736,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
             </ChartContainer>
           </div>
 
-          {/* Indicadores de faturamento */}
+          {/* Indicadores de faturamento - baseados no filtro */}
           <div className="grid grid-cols-2 gap-4 p-3 bg-muted/30 rounded-lg">
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-1">
@@ -318,7 +744,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                 <span className="text-xs font-medium">A Receber</span>
               </div>
               <div className="text-lg font-bold text-verde-pipa">
-                {formatCurrency(data.resumoAno.totalAReceber)}
+                {formatCurrency(resumoFiltrado.totalAReceber)}
               </div>
             </div>
             <div className="text-center">
@@ -328,7 +754,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
               </div>
               <div className="text-lg font-bold text-amarelo-pipa">
                 {formatCurrency(
-                  data.resumoAno.totalFaturamento - data.resumoAno.totalAReceber
+                  resumoFiltrado.totalFaturamento - resumoFiltrado.totalAReceber
                 )}
               </div>
             </div>

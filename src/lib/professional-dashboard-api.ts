@@ -867,17 +867,17 @@ export const fetchAllConsultationsToEvolve = async (
 
 /**
  * Busca faturamento comparativo anual (todos os profissionais ou filtrados)
+ * AI dev note: Busca TODOS os registros históricos disponíveis para permitir filtragem no frontend
  */
 export const fetchAdminFaturamentoComparativo = async (
   professionalIds?: string[]
 ): Promise<FaturamentoComparativo> => {
   try {
     const hoje = new Date();
-    const anoAtual = hoje.getFullYear();
 
-    // Início e fim do ano atual
-    const inicioAno = new Date(anoAtual, 0, 1);
-    const fimAno = new Date(anoAtual, 11, 31);
+    // AI dev note: BUSCAR TODOS OS DADOS HISTÓRICOS sem limite de período
+    // Permite ao frontend filtrar por qualquer período
+    // Não definir inicioHistorico para buscar TUDO
 
     // AI dev note: Contornar limite de 1000 do Supabase JS com queries em batches para Admin
     const batchSize = 1000;
@@ -889,11 +889,9 @@ export const fetchAdminFaturamentoComparativo = async (
       let query = supabase
         .from('vw_agendamentos_completos')
         .select('*')
-        .gte('data_hora', inicioAno.toISOString().split('T')[0])
-        .lte('data_hora', fimAno.toISOString().split('T')[0])
         .eq('ativo', true)
         .range(offset, offset + batchSize - 1)
-        .order('data_hora', { ascending: false });
+        .order('data_hora', { ascending: true }); // Ascendente para facilitar agregação cronológica
 
       // Aplicar filtro de profissionais se fornecido
       if (professionalIds && professionalIds.length > 0) {
@@ -926,9 +924,14 @@ export const fetchAdminFaturamentoComparativo = async (
 
     const consultasArray = allConsultas;
 
-    // Agrupar por mês
+    console.log(
+      `📊 Faturamento Comparativo Admin: ${consultasArray.length} consultas históricas carregadas`
+    );
+
+    // AI dev note: Agrupar por mês/ano (não apenas por mês do ano atual)
+    // Criar chave única: "YYYYMM" para cada mês
     const dadosPorMes = new Map<
-      number,
+      string,
       {
         periodo: string;
         faturamentoTotal: number;
@@ -940,27 +943,30 @@ export const fetchAdminFaturamentoComparativo = async (
       }
     >();
 
-    // Inicializar todos os meses do ano
-    for (let mes = 0; mes < 12; mes++) {
-      dadosPorMes.set(mes, {
-        periodo: new Intl.DateTimeFormat('pt-BR', {
-          month: 'short',
-          year: 'numeric',
-        }).format(new Date(anoAtual, mes, 1)),
-        faturamentoTotal: 0,
-        faturamentoAReceber: 0,
-        consultasRealizadas: 0,
-        consultasComEvolucao: 0,
-        mes: mes + 1,
-        ano: anoAtual,
-      });
-    }
-
-    // Processar consultas
+    // Processar consultas e criar meses dinamicamente
     consultasArray.forEach((consulta) => {
       const dataConsulta = parseSupabaseDatetime(consulta.data_hora);
-      const mes = dataConsulta.getMonth();
-      const dadosMes = dadosPorMes.get(mes)!;
+      const ano = dataConsulta.getFullYear();
+      const mes = dataConsulta.getMonth(); // 0-11
+      const mesKey = `${ano}${String(mes + 1).padStart(2, '0')}`; // "202501"
+
+      // Inicializar mês se não existir
+      if (!dadosPorMes.has(mesKey)) {
+        dadosPorMes.set(mesKey, {
+          periodo: new Intl.DateTimeFormat('pt-BR', {
+            month: 'short',
+            year: 'numeric',
+          }).format(new Date(ano, mes, 1)),
+          faturamentoTotal: 0,
+          faturamentoAReceber: 0,
+          consultasRealizadas: 0,
+          consultasComEvolucao: 0,
+          mes: mes + 1,
+          ano: ano,
+        });
+      }
+
+      const dadosMes = dadosPorMes.get(mesKey)!;
 
       // AI dev note: CORREÇÃO - Processar todas as consultas, não apenas finalizadas
       const valor = parseFloat(consulta.valor_servico || '0');
@@ -985,7 +991,15 @@ export const fetchAdminFaturamentoComparativo = async (
       }
     });
 
-    const dadosAnuais = Array.from(dadosPorMes.values());
+    // AI dev note: Ordenar dados por ano e mês (do mais antigo para o mais recente)
+    const dadosAnuais = Array.from(dadosPorMes.values()).sort((a, b) => {
+      if (a.ano !== b.ano) return a.ano - b.ano;
+      return a.mes - b.mes;
+    });
+
+    console.log(
+      `📊 Dados agrupados em ${dadosAnuais.length} meses (${dadosAnuais[0]?.periodo} a ${dadosAnuais[dadosAnuais.length - 1]?.periodo})`
+    );
 
     // Calcular totais
     const totalFaturamento = dadosAnuais.reduce(
@@ -1001,8 +1015,19 @@ export const fetchAdminFaturamentoComparativo = async (
       0
     );
 
-    const mesAtualIndex = hoje.getMonth();
-    const mesAtualData = dadosAnuais[mesAtualIndex];
+    // Buscar dados do mês atual
+    const anoAtual = hoje.getFullYear();
+    const mesAtualNum = hoje.getMonth() + 1; // 1-12
+    const mesAtualKey = `${anoAtual}${String(mesAtualNum).padStart(2, '0')}`;
+    const mesAtualData = dadosPorMes.get(mesAtualKey) || {
+      periodo: new Intl.DateTimeFormat('pt-BR', {
+        month: 'short',
+        year: 'numeric',
+      }).format(hoje),
+      faturamentoTotal: 0,
+      faturamentoAReceber: 0,
+      consultas: 0,
+    };
 
     // Encontrar melhor mês
     const melhorMes = dadosAnuais.reduce(
@@ -1014,7 +1039,7 @@ export const fetchAdminFaturamentoComparativo = async (
               consultas: current.consultasRealizadas,
             }
           : max,
-      { periodo: dadosAnuais[0].periodo, faturamento: 0, consultas: 0 }
+      { periodo: dadosAnuais[0]?.periodo || '', faturamento: 0, consultas: 0 }
     );
 
     return {
@@ -1023,12 +1048,13 @@ export const fetchAdminFaturamentoComparativo = async (
         totalFaturamento,
         totalAReceber,
         totalConsultas,
-        mediaMovel: totalConsultas > 0 ? totalFaturamento / 12 : 0,
+        mediaMovel:
+          dadosAnuais.length > 0 ? totalFaturamento / dadosAnuais.length : 0,
         mesAtual: {
           periodo: mesAtualData.periodo,
           faturamentoTotal: mesAtualData.faturamentoTotal,
           faturamentoAReceber: mesAtualData.faturamentoAReceber,
-          consultas: mesAtualData.consultasRealizadas,
+          consultas: mesAtualData.consultasRealizadas || 0,
         },
         melhorMes,
       },

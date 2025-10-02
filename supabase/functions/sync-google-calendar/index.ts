@@ -2,7 +2,7 @@
 // APENAS para profissionais que conectaram OAuth
 // Responsável Legal recebe via email/WhatsApp (n8n)
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 interface SyncRequest {
@@ -22,7 +22,8 @@ interface Recipient {
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
 };
 
 Deno.serve(async (req: Request) => {
@@ -33,7 +34,9 @@ Deno.serve(async (req: Request) => {
   try {
     const { operation, agendamento_id }: SyncRequest = await req.json();
 
-    console.log(`📅 Sincronizando Google Calendar: ${operation} - Agendamento: ${agendamento_id}`);
+    console.log(
+      `📅 Sincronizando Google Calendar: ${operation} - Agendamento: ${agendamento_id}`
+    );
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -53,8 +56,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // 2. Buscar profissional com Google Calendar (OAuth)
-    const { data: recipients, error: recipientsError } = await supabase
-      .rpc('get_google_calendar_recipients', { p_agendamento_id: agendamento_id });
+    const { data: recipients, error: recipientsError } = await supabase.rpc(
+      'get_google_calendar_recipients',
+      { p_agendamento_id: agendamento_id }
+    );
 
     if (recipientsError) {
       console.error('❌ Erro ao buscar destinatários:', recipientsError);
@@ -64,7 +69,10 @@ Deno.serve(async (req: Request) => {
     if (!recipients || recipients.length === 0) {
       console.log('⚠️ Nenhum profissional com Google Calendar configurado.');
       return new Response(
-        JSON.stringify({ success: true, message: 'Profissional sem Google Calendar' }),
+        JSON.stringify({
+          success: true,
+          message: 'Profissional sem Google Calendar',
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -100,21 +108,19 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ Sincronização concluída:', results);
 
-    return new Response(
-      JSON.stringify({ success: true, results }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    return new Response(JSON.stringify({ success: true, results }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     console.error('❌ Erro na sincronização:', error);
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message || 'Erro ao sincronizar'
+      JSON.stringify({
+        success: false,
+        error: error.message || 'Erro ao sincronizar',
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   }
@@ -125,7 +131,10 @@ Deno.serve(async (req: Request) => {
 // ====================================================================
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getEventLocation(supabase: any, agendamento: any): Promise<string> {
+async function getEventLocation(
+  supabase: any,
+  agendamento: any
+): Promise<string> {
   const tipoLocal = agendamento.local_atendimento_tipo_local;
 
   // Clínica ou Externa: endereço do local
@@ -134,16 +143,19 @@ async function getEventLocation(supabase: any, agendamento: any): Promise<string
 
     const { data: local } = await supabase
       .from('locais_atendimento')
-      .select(`
+      .select(
+        `
         nome,
         numero_endereco,
         complemento_endereco,
         endereco:enderecos(logradouro, bairro, cidade, estado, cep)
-      `)
+      `
+      )
       .eq('id', agendamento.local_atendimento_id)
       .single();
 
-    if (!local || !local.endereco) return agendamento.local_atendimento_nome || '';
+    if (!local || !local.endereco)
+      return agendamento.local_atendimento_nome || '';
 
     return [
       local.endereco.logradouro,
@@ -152,20 +164,24 @@ async function getEventLocation(supabase: any, agendamento: any): Promise<string
       local.endereco.bairro,
       local.endereco.cidade,
       local.endereco.estado,
-      local.endereco.cep
-    ].filter(Boolean).join(', ');
+      local.endereco.cep,
+    ]
+      .filter(Boolean)
+      .join(', ');
   }
 
   // Domiciliar: endereço do paciente
   if (tipoLocal === 'domiciliar') {
     const { data: paciente } = await supabase
       .from('pessoas')
-      .select(`
+      .select(
+        `
         id_endereco,
         numero_endereco,
         complemento_endereco,
         endereco:enderecos(logradouro, bairro, cidade, estado, cep)
-      `)
+      `
+      )
       .eq('id', agendamento.paciente_id)
       .single();
 
@@ -178,8 +194,10 @@ async function getEventLocation(supabase: any, agendamento: any): Promise<string
       paciente.endereco.bairro,
       paciente.endereco.cidade,
       paciente.endereco.estado,
-      paciente.endereco.cep
-    ].filter(Boolean).join(', ');
+      paciente.endereco.cep,
+    ]
+      .filter(Boolean)
+      .join(', ');
   }
 
   return '';
@@ -193,7 +211,7 @@ async function syncEventForRecipient(
   recipient: Recipient,
   location: string,
   operation: string
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   // 1. Refresh token se necessário
   const accessToken = await refreshGoogleTokenIfNeeded(supabase, recipient);
@@ -202,7 +220,11 @@ async function syncEventForRecipient(
   // 2. DELETE
   if (operation === 'DELETE' || !agendamento.ativo) {
     if (agendamento.google_event_id) {
-      await deleteGoogleCalendarEvent(accessToken, calendarId, agendamento.google_event_id);
+      await deleteGoogleCalendarEvent(
+        accessToken,
+        calendarId,
+        agendamento.google_event_id
+      );
       await supabase
         .from('agendamentos')
         .update({ google_event_id: null, google_synced_at: null })
@@ -217,12 +239,21 @@ async function syncEventForRecipient(
 
   // 4. UPDATE
   if (operation === 'UPDATE' && agendamento.google_event_id) {
-    await updateGoogleCalendarEvent(accessToken, calendarId, agendamento.google_event_id, eventData);
+    await updateGoogleCalendarEvent(
+      accessToken,
+      calendarId,
+      agendamento.google_event_id,
+      eventData
+    );
     return { recipient: recipient.nome, action: 'updated' };
   }
 
   // 5. INSERT
-  const eventId = await createGoogleCalendarEvent(accessToken, calendarId, eventData);
+  const eventId = await createGoogleCalendarEvent(
+    accessToken,
+    calendarId,
+    eventData
+  );
   if (!agendamento.google_event_id) {
     await supabase
       .from('agendamentos')
@@ -235,33 +266,35 @@ async function syncEventForRecipient(
 
 // AI dev note: Mapear cores do sistema para cores do Google Calendar
 // Google Calendar aceita IDs de 1 a 11 com cores específicas
-function mapServiceColorToGoogleCalendar(colorCode: string | null | undefined): string {
+function mapServiceColorToGoogleCalendar(
+  colorCode: string | null | undefined
+): string {
   // Mapa de cores CSS/hex para Google Calendar colorId
   const colorMap: Record<string, string> = {
     // Cores do sistema → Google Calendar ID
-    'blue': '9',      // Azul
-    'green': '10',    // Verde
-    'red': '11',      // Vermelho
-    'orange': '6',    // Laranja
-    'purple': '3',    // Roxo
-    'pink': '4',      // Rosa
-    'yellow': '5',    // Amarelo
-    'gray': '8',      // Cinza
-    'grey': '8',      // Cinza (alternativo)
-    
+    blue: '9', // Azul
+    green: '10', // Verde
+    red: '11', // Vermelho
+    orange: '6', // Laranja
+    purple: '3', // Roxo
+    pink: '4', // Rosa
+    yellow: '5', // Amarelo
+    gray: '8', // Cinza
+    grey: '8', // Cinza (alternativo)
+
     // Códigos hex comuns do Tailwind
-    '#3B82F6': '9',   // blue-500
-    '#22C55E': '10',  // green-500
-    '#EF4444': '11',  // red-500
-    '#F97316': '6',   // orange-500
-    '#8B5CF6': '3',   // purple-500
-    '#EC4899': '4',   // pink-500
-    '#F59E0B': '5',   // yellow-500
-    '#6B7280': '8',   // gray-500
+    '#3B82F6': '9', // blue-500
+    '#22C55E': '10', // green-500
+    '#EF4444': '11', // red-500
+    '#F97316': '6', // orange-500
+    '#8B5CF6': '3', // purple-500
+    '#EC4899': '4', // pink-500
+    '#F59E0B': '5', // yellow-500
+    '#6B7280': '8', // gray-500
   };
-  
+
   if (!colorCode) return '1'; // Lavanda (padrão)
-  
+
   const normalized = colorCode.toLowerCase().trim();
   return colorMap[normalized] || '1';
 }
@@ -285,10 +318,17 @@ function buildEventData(agendamento: any, location: string): any {
   // AI dev note: Título apenas com nome do paciente (conforme solicitado)
   const summary = agendamento.paciente_nome;
   const description = buildEventDescription(agendamento, location);
-  const reminders = buildReminders(startDate);
-  
-  // AI dev note: Mapear cor do tipo de serviço para Google Calendar
-  const colorId = mapServiceColorToGoogleCalendar(agendamento.servico_cor || agendamento.tipo_servico_cor);
+  const reminders = buildReminders();
+
+  // AI dev note: Determinar cor - priorizar status "Cancelado" = cinza
+  // Se cancelado, usar cinza. Caso contrário, usar cor do tipo de serviço
+  const isCancelado =
+    agendamento.status_consulta_codigo?.toLowerCase() === 'cancelado';
+  const colorId = isCancelado
+    ? '8' // Cinza para cancelados
+    : mapServiceColorToGoogleCalendar(
+        agendamento.servico_cor || agendamento.tipo_servico_cor
+      );
 
   return {
     summary,
@@ -296,14 +336,14 @@ function buildEventData(agendamento: any, location: string): any {
     description,
     start: {
       dateTime: formatWithTimezone(startDate),
-      timeZone: 'America/Sao_Paulo'
+      timeZone: 'America/Sao_Paulo',
     },
     end: {
       dateTime: formatWithTimezone(endDate),
-      timeZone: 'America/Sao_Paulo'
+      timeZone: 'America/Sao_Paulo',
     },
     colorId,
-    reminders
+    reminders,
   };
 }
 
@@ -311,18 +351,33 @@ function buildEventData(agendamento: any, location: string): any {
 function buildEventDescription(agendamento: any, location: string): string {
   const startDate = new Date(agendamento.data_hora);
   const dateStr = startDate.toLocaleDateString('pt-BR');
-  const timeStr = startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  
+  const timeStr = startDate.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   // AI dev note: Buscar responsável legal (não o próprio paciente como fallback)
-  const responsavelNome = agendamento.responsavel_legal_nome || agendamento.paciente_nome;
-  
+  const responsavelNome =
+    agendamento.responsavel_legal_nome || agendamento.paciente_nome;
+
   // AI dev note: Usar servico_nome ou tipo_servico_nome (ambos existem na view)
-  const tipoServico = agendamento.servico_nome || agendamento.tipo_servico_nome || 'Serviço';
+  const tipoServico =
+    agendamento.servico_nome || agendamento.tipo_servico_nome || 'Serviço';
+
+  // AI dev note: Detectar status para destacar visualmente
+  const statusCodigo = agendamento.status_consulta_codigo?.toLowerCase();
+  const isCancelado = statusCodigo === 'cancelado';
+
+  // AI dev note: Adicionar aviso visual se cancelado
+  let description = '';
+  if (isCancelado) {
+    description = '❌❌❌ CONSULTA CANCELADA ❌❌❌\n\n';
+  }
 
   // AI dev note: Descrição simplificada conforme solicitado
   // Removido: Profissional (já vai para o calendário dele)
   // Removido: Duração (redundante)
-  let description = `👤 Paciente: ${agendamento.paciente_nome}
+  description += `👤 Paciente: ${agendamento.paciente_nome}
 👥 Responsável: ${responsavelNome}
 📅 Data: ${dateStr} às ${timeStr}
 🏥 Tipo de Serviço: ${tipoServico}
@@ -336,21 +391,22 @@ function buildEventDescription(agendamento: any, location: string): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildReminders(startDate: Date): any {
+function buildReminders(): any {
   // AI dev note: Lembrete fixo de 1 hora antes conforme solicitado
   return {
     useDefault: false,
-    overrides: [
-      { method: 'popup', minutes: 60 }
-    ]
+    overrides: [{ method: 'popup', minutes: 60 }],
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function refreshGoogleTokenIfNeeded(supabase: any, recipient: Recipient): Promise<string> {
+async function refreshGoogleTokenIfNeeded(
+  supabase: any,
+  recipient: Recipient
+): Promise<string> {
   const now = new Date();
   const expiresAt = new Date(recipient.google_token_expires_at);
-  
+
   if (now < expiresAt && recipient.google_access_token) {
     return recipient.google_access_token;
   }
@@ -364,8 +420,8 @@ async function refreshGoogleTokenIfNeeded(supabase: any, recipient: Recipient): 
       client_id: Deno.env.get('GOOGLE_CLIENT_ID'),
       client_secret: Deno.env.get('GOOGLE_CLIENT_SECRET'),
       refresh_token: recipient.google_refresh_token,
-      grant_type: 'refresh_token'
-    })
+      grant_type: 'refresh_token',
+    }),
   });
 
   if (!response.ok) {
@@ -381,7 +437,7 @@ async function refreshGoogleTokenIfNeeded(supabase: any, recipient: Recipient): 
     .from('pessoas')
     .update({
       google_access_token: tokens.access_token,
-      google_token_expires_at: newExpiresAt.toISOString()
+      google_token_expires_at: newExpiresAt.toISOString(),
     })
     .eq('id', recipient.id);
 
@@ -389,18 +445,22 @@ async function refreshGoogleTokenIfNeeded(supabase: any, recipient: Recipient): 
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function createGoogleCalendarEvent(accessToken: string, calendarId: string, eventData: any): Promise<string> {
+async function createGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventData: any
+): Promise<string> {
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(eventData)
-            }
-          );
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventData),
+    }
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -414,18 +474,23 @@ async function createGoogleCalendarEvent(accessToken: string, calendarId: string
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function updateGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string, eventData: any): Promise<void> {
+async function updateGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  eventData: any
+): Promise<void> {
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
-              {
-                method: 'PUT',
-                headers: {
-                  'Authorization': `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(eventData)
-              }
-            );
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventData),
+    }
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -436,16 +501,20 @@ async function updateGoogleCalendarEvent(accessToken: string, calendarId: string
   console.log(`✅ Evento atualizado: ${eventId}`);
 }
 
-async function deleteGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string): Promise<void> {
+async function deleteGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string
+): Promise<void> {
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
-              {
-                method: 'DELETE',
-                headers: {
-                  'Authorization': `Bearer ${accessToken}`
-                }
-              }
-            );
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
 
   if (!response.ok && response.status !== 404) {
     const error = await response.text();

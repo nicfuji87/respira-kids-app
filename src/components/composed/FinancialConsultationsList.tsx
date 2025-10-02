@@ -73,6 +73,8 @@ interface ConsultationWithPatient {
 }
 
 type PeriodFilter =
+  | 'mes_atual'
+  | 'mes_anterior'
   | 'ultimos_30'
   | 'ultimos_60'
   | 'ultimos_90'
@@ -115,7 +117,7 @@ export const FinancialConsultationsList: React.FC<
   const [error, setError] = useState<string | null>(null);
 
   // Estados de filtro
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('ultimos_30');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('mes_atual');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [professionalFilter, setProfessionalFilter] = useState<string>('todos');
@@ -137,6 +139,13 @@ export const FinancialConsultationsList: React.FC<
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const PAGE_SIZE = 100; // AI dev note: 100 consultas por página
+
+  // Estados de totais (todos os registros do filtro, não apenas da página)
+  const [totalSummary, setTotalSummary] = useState({
+    totalValue: 0,
+    unpaidCount: 0,
+    paidCount: 0,
+  });
 
   // Listas para filtros
   const [professionals, setProfessionals] = useState<
@@ -161,26 +170,34 @@ export const FinancialConsultationsList: React.FC<
         fatura_id, tipo_servico_id, empresa_fatura_id
       `;
 
-      // Primeiro buscar count total
-      const { count } = await supabase
-        .from('vw_agendamentos_completos')
-        .select('*', { count: 'exact', head: true })
-        .not('status_consulta_codigo', 'eq', 'cancelado');
-
-      setTotalCount(count || 0);
-
-      let query = supabase
-        .from('vw_agendamentos_completos')
-        .select(selectFields)
-        .not('status_consulta_codigo', 'eq', 'cancelado')
-        .order('data_hora', { ascending: false });
-
-      // Aplicar filtro de período
+      // AI dev note: Calcular filtros de período ANTES de buscar count e dados
       const today = new Date();
       let startDateFilter = '';
       let endDateFilter = today.toISOString().split('T')[0];
 
       switch (periodFilter) {
+        case 'mes_atual':
+          // Primeiro dia do mês atual
+          startDateFilter = new Date(today.getFullYear(), today.getMonth(), 1)
+            .toISOString()
+            .split('T')[0];
+          // Hoje
+          endDateFilter = today.toISOString().split('T')[0];
+          break;
+        case 'mes_anterior':
+          // Primeiro dia do mês anterior
+          startDateFilter = new Date(
+            today.getFullYear(),
+            today.getMonth() - 1,
+            1
+          )
+            .toISOString()
+            .split('T')[0];
+          // Último dia do mês anterior
+          endDateFilter = new Date(today.getFullYear(), today.getMonth(), 0)
+            .toISOString()
+            .split('T')[0];
+          break;
         case 'ultimos_30':
           startDateFilter = new Date(today.setDate(today.getDate() - 30))
             .toISOString()
@@ -207,6 +224,101 @@ export const FinancialConsultationsList: React.FC<
           break;
       }
 
+      // AI dev note: Buscar count COM OS MESMOS FILTROS aplicados
+      let countQuery = supabase
+        .from('vw_agendamentos_completos')
+        .select('*', { count: 'exact', head: true })
+        .not('status_consulta_codigo', 'eq', 'cancelado');
+
+      // Aplicar mesmos filtros de período no count
+      if (startDateFilter && periodFilter !== 'todos') {
+        countQuery = countQuery.gte('data_hora', startDateFilter);
+      }
+      if (endDateFilter && periodFilter !== 'todos') {
+        countQuery = countQuery.lte('data_hora', endDateFilter);
+      }
+
+      const { count } = await countQuery;
+      setTotalCount(count || 0);
+
+      // AI dev note: Buscar totais usando agregação em lotes (sem limite de 1000)
+      let allConsultasQuery = supabase
+        .from('vw_agendamentos_completos')
+        .select('valor_servico, status_pagamento_codigo')
+        .not('status_consulta_codigo', 'eq', 'cancelado');
+
+      // Aplicar mesmos filtros de período
+      if (startDateFilter && periodFilter !== 'todos') {
+        allConsultasQuery = allConsultasQuery.gte('data_hora', startDateFilter);
+      }
+      if (endDateFilter && periodFilter !== 'todos') {
+        allConsultasQuery = allConsultasQuery.lte('data_hora', endDateFilter);
+      }
+
+      // Buscar TODAS as consultas em lotes para evitar limite de 1000
+      const allConsultas: Array<{
+        valor_servico: string;
+        status_pagamento_codigo: string;
+      }> = [];
+      let currentOffset = 0;
+      const batchSize = 1000;
+      let hasMoreRecords = true;
+
+      while (hasMoreRecords) {
+        const { data: batchData, error: batchError } =
+          await allConsultasQuery.range(
+            currentOffset,
+            currentOffset + batchSize - 1
+          );
+
+        if (batchError) {
+          console.error('❌ Erro ao buscar lote de consultas:', batchError);
+          break;
+        }
+
+        if (batchData && batchData.length > 0) {
+          allConsultas.push(...batchData);
+          currentOffset += batchSize;
+          hasMoreRecords = batchData.length === batchSize;
+        } else {
+          hasMoreRecords = false;
+        }
+      }
+
+      // Calcular totais com TODOS os registros
+      const totalValue = allConsultas.reduce(
+        (sum, item) => sum + (parseFloat(item.valor_servico) || 0),
+        0
+      );
+      const unpaidCount = allConsultas.filter(
+        (item) =>
+          item.status_pagamento_codigo !== 'pago' &&
+          item.status_pagamento_codigo !== 'cancelado'
+      ).length;
+      const paidCount = allConsultas.filter(
+        (item) => item.status_pagamento_codigo === 'pago'
+      ).length;
+
+      console.log('📊 Totais de Consultas (com lotes):', {
+        periodFilter,
+        totalRegistros: allConsultas.length,
+        totalValue,
+        unpaidCount,
+        paidCount,
+        startDateFilter,
+        endDateFilter,
+      });
+
+      setTotalSummary({ totalValue, unpaidCount, paidCount });
+
+      // Query de dados com mesmos filtros
+      let query = supabase
+        .from('vw_agendamentos_completos')
+        .select(selectFields)
+        .not('status_consulta_codigo', 'eq', 'cancelado')
+        .order('data_hora', { ascending: false });
+
+      // Aplicar filtros de período
       if (startDateFilter && periodFilter !== 'todos') {
         query = query.gte('data_hora', startDateFilter);
       }
@@ -433,9 +545,10 @@ export const FinancialConsultationsList: React.FC<
     fetchConsultations();
   }, [fetchConsultations]);
 
-  // AI dev note: Permitir seleção de consultas não pagas (aberto, pendente, ou sem cobrança)
+  // AI dev note: Toggle selecionar/desselecionar todos da PÁGINA ATUAL
+  // Mantém seleções de outras páginas intactas
   const toggleSelectAll = () => {
-    const eligibleIds = filteredConsultations
+    const eligibleIdsCurrentPage = filteredConsultations
       .filter(
         (c) =>
           c.status_pagamento_codigo !== 'pago' &&
@@ -444,10 +557,118 @@ export const FinancialConsultationsList: React.FC<
       )
       .map((c) => c.id);
 
-    if (selectedConsultations.length === eligibleIds.length) {
-      setSelectedConsultations([]);
+    // Verificar se todos da página atual já estão selecionados
+    const allCurrentPageSelected = eligibleIdsCurrentPage.every((id) =>
+      selectedConsultations.includes(id)
+    );
+
+    if (allCurrentPageSelected) {
+      // Remover apenas os IDs da página atual
+      setSelectedConsultations(
+        selectedConsultations.filter(
+          (id) => !eligibleIdsCurrentPage.includes(id)
+        )
+      );
     } else {
-      setSelectedConsultations(eligibleIds);
+      // Adicionar apenas os IDs da página atual que ainda não estão selecionados
+      const newIds = eligibleIdsCurrentPage.filter(
+        (id) => !selectedConsultations.includes(id)
+      );
+      setSelectedConsultations([...selectedConsultations, ...newIds]);
+    }
+  };
+
+  // AI dev note: Selecionar TODAS as consultas não pagas de TODAS as páginas
+  // Query otimizada que busca apenas IDs
+  const selectAllUnpaid = async () => {
+    setIsLoading(true);
+    try {
+      // Buscar apenas IDs de consultas não pagas (query leve)
+      let query = supabase
+        .from('vw_agendamentos_completos')
+        .select('id, status_pagamento_codigo, fatura_id')
+        .not('status_consulta_codigo', 'eq', 'cancelado')
+        .in('status_pagamento_codigo', ['aberto', 'pendente'])
+        .is('fatura_id', null);
+
+      // Aplicar mesmos filtros de período
+      const today = new Date();
+      let startDateFilter = '';
+      let endDateFilter = today.toISOString().split('T')[0];
+
+      switch (periodFilter) {
+        case 'mes_atual':
+          startDateFilter = new Date(today.getFullYear(), today.getMonth(), 1)
+            .toISOString()
+            .split('T')[0];
+          endDateFilter = today.toISOString().split('T')[0];
+          break;
+        case 'mes_anterior':
+          startDateFilter = new Date(
+            today.getFullYear(),
+            today.getMonth() - 1,
+            1
+          )
+            .toISOString()
+            .split('T')[0];
+          endDateFilter = new Date(today.getFullYear(), today.getMonth(), 0)
+            .toISOString()
+            .split('T')[0];
+          break;
+        case 'ultimos_30':
+          startDateFilter = new Date(today.setDate(today.getDate() - 30))
+            .toISOString()
+            .split('T')[0];
+          break;
+        case 'ultimos_60':
+          startDateFilter = new Date(today.setDate(today.getDate() - 60))
+            .toISOString()
+            .split('T')[0];
+          break;
+        case 'ultimos_90':
+          startDateFilter = new Date(today.setDate(today.getDate() - 90))
+            .toISOString()
+            .split('T')[0];
+          break;
+        case 'ultimo_ano':
+          startDateFilter = new Date(today.setFullYear(today.getFullYear() - 1))
+            .toISOString()
+            .split('T')[0];
+          break;
+        case 'personalizado':
+          if (startDate) startDateFilter = startDate;
+          if (endDate) endDateFilter = endDate;
+          break;
+      }
+
+      if (startDateFilter && periodFilter !== 'todos') {
+        query = query.gte('data_hora', startDateFilter);
+      }
+      if (endDateFilter && periodFilter !== 'todos') {
+        query = query.lte('data_hora', endDateFilter);
+      }
+
+      const { data, error: fetchError } = await query;
+
+      if (fetchError) throw fetchError;
+
+      const allUnpaidIds = (data || []).map((item) => item.id);
+
+      setSelectedConsultations(allUnpaidIds);
+
+      toast({
+        title: 'Todas selecionadas',
+        description: `${allUnpaidIds.length} consultas não pagas foram selecionadas.`,
+      });
+    } catch (err) {
+      console.error('Erro ao selecionar todas:', err);
+      toast({
+        title: 'Erro ao selecionar',
+        description: 'Não foi possível selecionar todas as consultas.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -637,37 +858,53 @@ export const FinancialConsultationsList: React.FC<
     }
   };
 
-  // Função para formatar data
+  // AI dev note: Função para formatar data SEM conversão de timezone
+  // Mantém exatamente como vem do Supabase
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR');
+    if (!dateString) return '--/--/----';
+    // Extrair data diretamente da string sem criar objeto Date
+    const [datePart] = dateString.split('T');
+    const [year, month, day] = datePart.split('-');
+    return `${day}/${month}/${year}`;
   };
 
-  // Função para formatar horário a partir de data_hora
+  // AI dev note: Função para formatar horário SEM conversão de timezone
+  // Mantém exatamente como vem do Supabase
   const formatTime = (dataHora: string) => {
     if (!dataHora) {
       return '--:--';
     }
-    const date = new Date(dataHora);
-    return date.toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    // Extrair horário diretamente da string sem criar objeto Date
+    const timePart = dataHora.includes('T') ? dataHora.split('T')[1] : dataHora;
+    const [hour, minute] = timePart.split(':');
+    return `${hour}:${minute}`;
   };
 
-  // Função para calcular horário de fim baseado em duração
+  // AI dev note: Função para calcular horário de fim SEM conversão de timezone
+  // Mantém exatamente como vem do Supabase
   const calculateEndTime = (dataHora: string, duracaoMinutos?: number) => {
-    if (!dataHora) {
+    if (!dataHora || !duracaoMinutos) {
       return '--:--';
     }
-    const date = new Date(dataHora);
-    if (duracaoMinutos) {
-      date.setMinutes(date.getMinutes() + duracaoMinutos);
-    }
-    return date.toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    // Extrair horário diretamente da string
+    const timePart = dataHora.includes('T') ? dataHora.split('T')[1] : dataHora;
+    const [hour, minute] = timePart.split(':');
+
+    // Calcular novo horário
+    const totalMinutes =
+      parseInt(hour) * 60 + parseInt(minute) + duracaoMinutos;
+    const endHour = Math.floor(totalMinutes / 60) % 24;
+    const endMinute = totalMinutes % 60;
+
+    return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+  };
+
+  // AI dev note: Função para formatar valores monetários no padrão brasileiro
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
   };
 
   // Função para obter URL do ASAAS
@@ -769,6 +1006,8 @@ export const FinancialConsultationsList: React.FC<
                 <SelectValue placeholder="Período" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="mes_atual">Mês Atual</SelectItem>
+                <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
                 <SelectItem value="ultimos_30">Últimos 30 dias</SelectItem>
                 <SelectItem value="ultimos_60">Últimos 60 dias</SelectItem>
                 <SelectItem value="ultimos_90">Últimos 90 dias</SelectItem>
@@ -838,7 +1077,7 @@ export const FinancialConsultationsList: React.FC<
               variant="ghost"
               size="sm"
               onClick={() => {
-                setPeriodFilter('ultimos_30');
+                setPeriodFilter('mes_atual');
                 setProfessionalFilter('todos');
                 setServiceTypeFilter('todos');
                 setPaymentStatusFilter('todos');
@@ -872,31 +1111,80 @@ export const FinancialConsultationsList: React.FC<
 
         {/* Ação de selecionar todos quando em modo de seleção */}
         {isSelectionMode && (
-          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-            <Checkbox
-              checked={
-                selectedConsultations.length ===
-                  filteredConsultations.filter(
-                    (c) =>
-                      c.status_pagamento_codigo !== 'pago' &&
-                      c.status_pagamento_codigo !== 'cancelado' &&
-                      !c.fatura_id
-                  ).length && selectedConsultations.length > 0
-              }
-              onCheckedChange={toggleSelectAll}
-            />
-            <span className="text-sm font-medium">
-              Selecionar todas não pagas (
-              {
-                filteredConsultations.filter(
-                  (c) =>
-                    c.status_pagamento_codigo !== 'pago' &&
-                    c.status_pagamento_codigo !== 'cancelado' &&
-                    !c.fatura_id
-                ).length
-              }
-              )
-            </span>
+          <div className="space-y-3">
+            {/* Controles de seleção */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Checkbox para página atual */}
+              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg flex-1">
+                <Checkbox
+                  checked={
+                    filteredConsultations
+                      .filter(
+                        (c) =>
+                          c.status_pagamento_codigo !== 'pago' &&
+                          c.status_pagamento_codigo !== 'cancelado' &&
+                          !c.fatura_id
+                      )
+                      .every((c) => selectedConsultations.includes(c.id)) &&
+                    filteredConsultations.filter(
+                      (c) =>
+                        c.status_pagamento_codigo !== 'pago' &&
+                        c.status_pagamento_codigo !== 'cancelado' &&
+                        !c.fatura_id
+                    ).length > 0
+                  }
+                  onCheckedChange={toggleSelectAll}
+                />
+                <span className="text-sm font-medium">
+                  Selecionar desta página (
+                  {
+                    filteredConsultations.filter(
+                      (c) =>
+                        c.status_pagamento_codigo !== 'pago' &&
+                        c.status_pagamento_codigo !== 'cancelado' &&
+                        !c.fatura_id
+                    ).length
+                  }
+                  )
+                </span>
+              </div>
+
+              {/* Botão para selecionar TODAS */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={selectAllUnpaid}
+                disabled={isLoading}
+                className="whitespace-nowrap"
+              >
+                <CheckSquare className="h-4 w-4 mr-2" />
+                Selecionar TODAS não pagas
+              </Button>
+            </div>
+
+            {/* AI dev note: Indicador de seleções ativas entre páginas */}
+            {selectedConsultations.length > 0 && (
+              <Alert className="bg-verde-pipa/10 border-verde-pipa">
+                <CheckSquare className="h-4 w-4 text-verde-pipa" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>
+                    <strong>{selectedConsultations.length}</strong> consulta(s)
+                    selecionada(s). As seleções persistem ao trocar de página.
+                  </span>
+                  {selectedConsultations.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedConsultations([])}
+                      className="ml-2"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Limpar tudo
+                    </Button>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
         )}
 
@@ -991,8 +1279,7 @@ export const FinancialConsultationsList: React.FC<
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-verde-pipa">
-                            R${' '}
-                            {consultation.valor_servico?.toFixed(2) || '0,00'}
+                            {formatCurrency(consultation.valor_servico || 0)}
                           </span>
                           <Badge
                             variant={
@@ -1099,7 +1386,7 @@ export const FinancialConsultationsList: React.FC<
           </div>
         )}
 
-        {/* Resumo */}
+        {/* Resumo - Totais de TODOS os registros do filtro */}
         {!isLoading && !error && filteredConsultations.length > 0 && (
           <div className="mt-4 p-4 bg-muted/30 rounded-lg">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -1107,37 +1394,24 @@ export const FinancialConsultationsList: React.FC<
                 <span className="text-muted-foreground">
                   Total de consultas:
                 </span>
-                <p className="font-semibold">{filteredConsultations.length}</p>
+                <p className="font-semibold">{totalCount}</p>
               </div>
               <div>
                 <span className="text-muted-foreground">Valor total:</span>
                 <p className="font-semibold text-verde-pipa">
-                  R${' '}
-                  {filteredConsultations
-                    .reduce((sum, c) => sum + (c.valor_servico || 0), 0)
-                    .toFixed(2)}
+                  {formatCurrency(totalSummary.totalValue)}
                 </p>
               </div>
               <div>
                 <span className="text-muted-foreground">Não pagas:</span>
                 <p className="font-semibold text-orange-500">
-                  {
-                    filteredConsultations.filter(
-                      (c) =>
-                        c.status_pagamento_codigo !== 'pago' &&
-                        c.status_pagamento_codigo !== 'cancelado'
-                    ).length
-                  }
+                  {totalSummary.unpaidCount}
                 </p>
               </div>
               <div>
                 <span className="text-muted-foreground">Pagas:</span>
                 <p className="font-semibold text-green-500">
-                  {
-                    filteredConsultations.filter(
-                      (c) => c.status_pagamento_codigo === 'pago'
-                    ).length
-                  }
+                  {totalSummary.paidCount}
                 </p>
               </div>
             </div>
@@ -1146,7 +1420,7 @@ export const FinancialConsultationsList: React.FC<
 
         {/* Paginação */}
         {!isLoading && !error && totalCount > PAGE_SIZE && (
-          <div className="flex items-center justify-between mt-4 pt-4 border-t">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t">
             <p className="text-sm text-muted-foreground">
               Mostrando {currentPage * PAGE_SIZE + 1} -{' '}
               {Math.min((currentPage + 1) * PAGE_SIZE, totalCount)} de{' '}
@@ -1154,15 +1428,29 @@ export const FinancialConsultationsList: React.FC<
               {selectedConsultations.length > 0 &&
                 ` (${selectedConsultations.length} selecionadas)`}
             </p>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(0)}
+                disabled={currentPage === 0}
+                title="Primeira página"
+              >
+                <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
+                <ChevronRight className="h-4 w-4 rotate-180 -ml-3" />
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                 disabled={currentPage === 0}
               >
+                <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
                 Anterior
               </Button>
+              <div className="px-3 py-1 text-sm font-medium bg-muted rounded">
+                Página {currentPage + 1} de {Math.ceil(totalCount / PAGE_SIZE)}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -1170,6 +1458,19 @@ export const FinancialConsultationsList: React.FC<
                 disabled={!hasMore}
               >
                 Próxima
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCurrentPage(Math.ceil(totalCount / PAGE_SIZE) - 1)
+                }
+                disabled={!hasMore}
+                title="Última página"
+              >
+                <ChevronRight className="h-4 w-4 ml-1" />
+                <ChevronRight className="h-4 w-4 -ml-3" />
               </Button>
             </div>
           </div>

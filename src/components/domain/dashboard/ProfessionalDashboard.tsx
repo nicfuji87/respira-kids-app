@@ -64,7 +64,6 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
       upcomingAppointments,
       consultationsToEvolve,
       materialRequests,
-      faturamentoComparativo,
       loading,
       error,
       lastUpdate,
@@ -114,11 +113,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
         />
 
         {/* Gráfico de faturamento */}
-        <FaturamentoChart
-          data={faturamentoComparativo}
-          loading={loading}
-          error={error}
-        />
+        <FaturamentoChart />
 
         {/* Grid principal */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

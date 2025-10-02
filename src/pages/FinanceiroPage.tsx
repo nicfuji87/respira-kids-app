@@ -11,7 +11,6 @@ import {
 } from '@/components/primitives/tabs';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
 import { useAuth } from '@/hooks/useAuth';
-import { useAdminMetrics } from '@/hooks/useAdminMetrics';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
 import { useNavigate } from 'react-router-dom';
 import { fetchAgendamentoById } from '@/lib/calendar-services';
@@ -66,17 +65,8 @@ export const FinanceiroPage: React.FC = () => {
   // Hook para dados do calendário (locais de atendimento)
   const { formData } = useCalendarFormData();
 
-  // Hook para métricas do admin (para o gráfico)
-  const {
-    faturamentoComparativo,
-    loading: loadingMetrics,
-    error: errorMetrics,
-  } = useAdminMetrics({
-    startDate: new Date(
-      new Date().setMonth(new Date().getMonth() - 11)
-    ).toISOString(),
-    endDate: new Date().toISOString(),
-  });
+  // AI dev note: FaturamentoChart agora busca seus próprios dados com filtros
+  // Removido useAdminMetrics para evitar duplicação de queries
 
   // Verificar se usuário é admin (apenas uma vez no mount)
   useEffect(() => {
@@ -259,11 +249,7 @@ export const FinanceiroPage: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="grafico" className="space-y-4">
-              <FaturamentoChart
-                data={faturamentoComparativo}
-                loading={loadingMetrics}
-                error={errorMetrics}
-              />
+              <FaturamentoChart />
             </TabsContent>
           </Tabs>
         )}
