@@ -211,9 +211,14 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
           const existingAppointments = await fetchAgendamentosFromView(filters);
 
-          // Verificar conflitos no mesmo horário
+          // AI dev note: Verificar conflitos no mesmo horário, EXCLUINDO agendamentos cancelados
           const conflictingAppointments = existingAppointments.filter(
             (appointment) => {
+              // Ignorar agendamentos cancelados - eles podem ser sobrescritos
+              if (appointment.status_consulta?.codigo === 'cancelado') {
+                return false;
+              }
+
               const existingDateTime = parseSupabaseDatetime(
                 appointment.data_hora
               );

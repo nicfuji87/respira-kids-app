@@ -15,6 +15,7 @@ export { ProfileFormFields } from './ProfileFormFields';
 
 // Calendar and Date
 export { CalendarGrid } from './CalendarGrid';
+export { CalendarFilters } from './CalendarFilters';
 export { DatePicker } from './DatePicker';
 export { TimeSlot } from './TimeSlot';
 export { EventCard } from './EventCard';
@@ -108,6 +109,7 @@ export type { EventCardProps } from './EventCard';
 export type { ViewToggleProps } from './ViewToggle';
 export type { ColorPickerProps } from './ColorPicker';
 export type { CalendarGridProps } from './CalendarGrid';
+export type { CalendarFiltersProps } from './CalendarFilters';
 export type { CurrentTimeIndicatorProps } from './CurrentTimeIndicator';
 export type { WeekEventBlockProps } from './WeekEventBlock';
 export type { WeekTimeGridProps } from './WeekTimeGrid';

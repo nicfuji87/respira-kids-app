@@ -1,14 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CalendarTemplate } from './CalendarTemplate';
-import { Button } from '@/components/primitives/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/primitives/select';
-import { Users, Filter } from 'lucide-react';
+import { CalendarFilters } from '@/components/composed/CalendarFilters';
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
 
 // AI dev note: SecretariaCalendarTemplate combina CalendarTemplate
@@ -83,10 +75,16 @@ export const SecretariaCalendarTemplate =
       onPatientClick,
       onProfessionalClick,
     }) => {
-      // State for filters
+      // AI dev note: Estados para filtros completos (igual ao admin)
       const [selectedProfessional, setSelectedProfessional] =
         useState<string>('all');
-      const [showFilters, setShowFilters] = useState(false);
+      const [selectedPatient, setSelectedPatient] = useState<string>('');
+      const [selectedTipoServico, setSelectedTipoServico] =
+        useState<string>('all');
+      const [selectedStatusConsulta, setSelectedStatusConsulta] =
+        useState<string>('all');
+      const [selectedStatusPagamento, setSelectedStatusPagamento] =
+        useState<string>('all');
 
       // Get authorized professionals
       const getAuthorizedProfessionals = () => {
@@ -99,28 +97,69 @@ export const SecretariaCalendarTemplate =
         );
       };
 
-      // Filter events based on secretaria permissions
-      const getFilteredEvents = () => {
-        // A filtragem por profissionais autorizados já foi feita na query
-        // Aqui só aplicamos filtro adicional por profissional selecionado se necessário
+      // AI dev note: Filtrar eventos com todos os filtros disponíveis
+      const getFilteredEvents = useMemo(() => {
         let filteredEvents = [...events];
 
-        // Filter by selected professional only
-        if (selectedProfessional !== 'all') {
-          const selectedProf = availableProfessionals.find(
-            (prof) => prof.id === selectedProfessional
-          );
-          if (selectedProf) {
-            filteredEvents = filteredEvents.filter(
-              (event) =>
-                event.title.includes(selectedProf.name) ||
-                event.metadata?.professionalId === selectedProf.id
+        // AI dev note: Filtrar por profissional se selecionado
+        if (selectedProfessional && selectedProfessional !== 'all') {
+          filteredEvents = filteredEvents.filter((event) => {
+            const metadata = event.metadata as { profissionalId?: string };
+            return metadata?.profissionalId === selectedProfessional;
+          });
+        }
+
+        // AI dev note: Filtrar por paciente se selecionado
+        if (selectedPatient) {
+          filteredEvents = filteredEvents.filter((event) => {
+            const metadata = event.metadata as { pacienteId?: string };
+            return metadata?.pacienteId === selectedPatient;
+          });
+        }
+
+        // AI dev note: Filtrar por tipo de serviço
+        if (selectedTipoServico && selectedTipoServico !== 'all') {
+          filteredEvents = filteredEvents.filter((event) => {
+            const metadata = event.metadata as { tipoServicoId?: string };
+            return metadata?.tipoServicoId === selectedTipoServico;
+          });
+        }
+
+        // AI dev note: Filtrar por status de consulta
+        if (selectedStatusConsulta && selectedStatusConsulta !== 'all') {
+          filteredEvents = filteredEvents.filter((event) => {
+            const metadata = event.metadata as {
+              appointmentData?: { status_consulta_id?: string };
+            };
+            return (
+              metadata?.appointmentData?.status_consulta_id ===
+              selectedStatusConsulta
             );
-          }
+          });
+        }
+
+        // AI dev note: Filtrar por status de pagamento
+        if (selectedStatusPagamento && selectedStatusPagamento !== 'all') {
+          filteredEvents = filteredEvents.filter((event) => {
+            const metadata = event.metadata as {
+              appointmentData?: { status_pagamento_id?: string };
+            };
+            return (
+              metadata?.appointmentData?.status_pagamento_id ===
+              selectedStatusPagamento
+            );
+          });
         }
 
         return filteredEvents;
-      };
+      }, [
+        events,
+        selectedProfessional,
+        selectedPatient,
+        selectedTipoServico,
+        selectedStatusConsulta,
+        selectedStatusPagamento,
+      ]);
 
       const handleEventSave = (
         event: Omit<CalendarEvent, 'id'> & { id?: string }
@@ -137,68 +176,45 @@ export const SecretariaCalendarTemplate =
         onEventSave(secretariaEvent);
       };
 
+      // AI dev note: Função para limpar todos os filtros
+      const clearFilters = () => {
+        setSelectedProfessional('all');
+        setSelectedPatient('');
+        setSelectedTipoServico('all');
+        setSelectedStatusConsulta('all');
+        setSelectedStatusPagamento('all');
+      };
+
+      // Converter profissionais para o formato esperado pelo CalendarFilters
+      const professionalsList = getAuthorizedProfessionals().map((prof) => ({
+        id: prof.id,
+        name: prof.name,
+      }));
+
       return (
-        <div className="secretaria-calendar-template w-full h-full flex flex-col -mx-4">
-          {/* Header compacto e expandido */}
-          <div className="flex-shrink-0 px-4 py-2 bg-muted/30 border-b flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h3 className="font-semibold text-sm">
-                <Users className="inline h-4 w-4 mr-1" />
-                {currentUser.name} | {getAuthorizedProfessionals().length}{' '}
-                profissionais
-              </h3>
-              <div className="text-xs text-muted-foreground">
-                {getFilteredEvents().length} evento(s)
-                {selectedProfessional !== 'all' && (
-                  <span className="ml-1 text-primary">
-                    para{' '}
-                    {
-                      availableProfessionals.find(
-                        (p) => p.id === selectedProfessional
-                      )?.name
-                    }
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Filtros compactos */}
-            <div className="flex gap-2 items-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowFilters(!showFilters)}
-                className="text-xs"
-              >
-                <Filter className="h-3 w-3 mr-1" />
-                Filtros
-              </Button>
-
-              {showFilters && (
-                <Select
-                  value={selectedProfessional}
-                  onValueChange={setSelectedProfessional}
-                >
-                  <SelectTrigger className="w-40 h-7 text-xs">
-                    <SelectValue placeholder="Profissional" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {getAuthorizedProfessionals().map((prof) => (
-                      <SelectItem key={prof.id} value={prof.id}>
-                        {prof.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </div>
+        <div className="secretaria-calendar-template w-full h-full flex flex-col">
+          {/* AI dev note: Filtros completos reutilizáveis */}
+          <CalendarFilters
+            selectedProfessional={selectedProfessional}
+            selectedPatient={selectedPatient}
+            selectedTipoServico={selectedTipoServico}
+            selectedStatusConsulta={selectedStatusConsulta}
+            selectedStatusPagamento={selectedStatusPagamento}
+            onProfessionalChange={setSelectedProfessional}
+            onPatientChange={setSelectedPatient}
+            onTipoServicoChange={setSelectedTipoServico}
+            onStatusConsultaChange={setSelectedStatusConsulta}
+            onStatusPagamentoChange={setSelectedStatusPagamento}
+            onClearFilters={clearFilters}
+            showProfessionalFilter={true}
+            availableProfessionals={professionalsList}
+            eventCount={getFilteredEvents.length}
+          />
 
           {/* Calendário expandido para ocupar todo espaço restante */}
           <div className="flex-1 min-h-0">
             <CalendarTemplate
-              events={getFilteredEvents()}
+              events={getFilteredEvents}
               onEventSave={handleEventSave}
               initialView={initialView}
               initialDate={initialDate}

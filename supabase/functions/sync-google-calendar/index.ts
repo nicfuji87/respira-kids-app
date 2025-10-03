@@ -20,6 +20,39 @@ interface Recipient {
   google_token_expires_at: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseClient = any;
+
+interface AgendamentoCompleto {
+  id: string;
+  local_atendimento_id?: string;
+  local_atendimento_tipo_local?: string;
+  paciente_nome?: string;
+  profissional_nome?: string;
+  tipo_servico_nome?: string;
+  data_hora: string;
+  observacao?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
+interface GoogleCalendarEvent {
+  summary: string;
+  description?: string;
+  location?: string;
+  start: {
+    dateTime: string;
+    timeZone: string;
+  };
+  end: {
+    dateTime: string;
+    timeZone: string;
+  };
+  reminders?: {
+    useDefault: boolean;
+  };
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
@@ -130,10 +163,9 @@ Deno.serve(async (req: Request) => {
 // AUXILIARES
 // ====================================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getEventLocation(
-  supabase: any,
-  agendamento: any
+  supabase: SupabaseClient,
+  agendamento: AgendamentoCompleto
 ): Promise<string> {
   const tipoLocal = agendamento.local_atendimento_tipo_local;
 
@@ -399,9 +431,8 @@ function buildReminders(): any {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function refreshGoogleTokenIfNeeded(
-  supabase: any,
+  supabase: SupabaseClient,
   recipient: Recipient
 ): Promise<string> {
   const now = new Date();
@@ -444,11 +475,10 @@ async function refreshGoogleTokenIfNeeded(
   return tokens.access_token;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createGoogleCalendarEvent(
   accessToken: string,
   calendarId: string,
-  eventData: any
+  eventData: GoogleCalendarEvent
 ): Promise<string> {
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
@@ -473,12 +503,11 @@ async function createGoogleCalendarEvent(
   return event.id;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function updateGoogleCalendarEvent(
   accessToken: string,
   calendarId: string,
   eventId: string,
-  eventData: any
+  eventData: GoogleCalendarEvent
 ): Promise<void> {
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
