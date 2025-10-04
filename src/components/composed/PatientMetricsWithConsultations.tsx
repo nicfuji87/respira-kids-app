@@ -79,6 +79,8 @@ type PeriodFilter =
   | 'ultimos_30'
   | 'ultimos_60'
   | 'ultimos_90'
+  | 'mes_atual'
+  | 'mes_anterior'
   | 'ultimo_ano'
   | 'personalizado'
   | 'todos';
@@ -572,6 +574,27 @@ export const PatientMetricsWithConsultations =
                 .toISOString()
                 .split('T')[0];
               break;
+            case 'mes_atual':
+              // Primeiro dia do mês atual
+              start = new Date(today.getFullYear(), today.getMonth(), 1)
+                .toISOString()
+                .split('T')[0];
+              break;
+            case 'mes_anterior': {
+              // Primeiro dia do mês anterior
+              start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+                .toISOString()
+                .split('T')[0];
+              // Último dia do mês anterior
+              const endOfLastMonth = new Date(
+                today.getFullYear(),
+                today.getMonth(),
+                0
+              )
+                .toISOString()
+                .split('T')[0];
+              return { start, end: endOfLastMonth };
+            }
             case 'ultimo_ano':
               start = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000)
                 .toISOString()
@@ -1109,6 +1132,8 @@ export const PatientMetricsWithConsultations =
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos os dados</SelectItem>
+                      <SelectItem value="mes_atual">Mês atual</SelectItem>
+                      <SelectItem value="mes_anterior">Mês anterior</SelectItem>
                       <SelectItem value="ultimos_30">
                         Últimos 30 dias
                       </SelectItem>

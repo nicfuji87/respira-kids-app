@@ -174,7 +174,7 @@ const ConsultationItem = React.memo<{
       <div
         className={cn(
           'flex items-center justify-between p-3 md:p-4 border rounded-lg transition-all duration-200',
-          'hover:shadow-md hover:border-primary/20',
+          'hover:shadow-md hover:border-primary/20 min-h-[100px]', // Altura mínima para mobile
           (consultation.prioridade === 'urgente' ||
             consultation.diasPendente > 2) &&
             'border-destructive/30 bg-destructive/5',
@@ -182,32 +182,36 @@ const ConsultationItem = React.memo<{
         )}
         onClick={() => onClick?.(consultation)}
       >
-        <div className="flex-1 space-y-1.5 md:space-y-2">
+        <div className="flex-1 space-y-1.5 md:space-y-2 min-w-0">
+          {' '}
+          {/* min-w-0 para prevenir overflow */}
           {/* Linha 1: Paciente e Status */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 md:gap-2">
-              <User className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
-              <span className="font-medium text-sm md:text-base text-foreground">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 md:gap-2 min-w-0 flex-1">
+              <User className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground flex-shrink-0" />
+              <span className="font-medium text-sm md:text-base text-foreground truncate">
                 {consultation.pacienteNome}
               </span>
             </div>
-            {getUrgencyBadge(
-              consultation.diasPendente,
-              consultation.prioridade
-            )}
-          </div>
-
-          {/* Linha 2: Serviço e Data */}
-          <div className="flex items-center justify-between text-xs md:text-sm">
-            <span className="text-muted-foreground">
-              {consultation.tipoServico}
-            </span>
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <Calendar className="h-3 w-3" />
-              {formatDate(consultation.dataHora)}
+            <div className="flex-shrink-0">
+              {getUrgencyBadge(
+                consultation.diasPendente,
+                consultation.prioridade
+              )}
             </div>
           </div>
-
+          {/* Linha 2: Serviço e Data */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs md:text-sm">
+            <span className="text-muted-foreground truncate">
+              {consultation.tipoServico}
+            </span>
+            <div className="flex items-center gap-1 text-muted-foreground whitespace-nowrap flex-shrink-0">
+              <Calendar className="h-3 w-3" />
+              <span className="text-xs">
+                {formatDate(consultation.dataHora)}
+              </span>
+            </div>
+          </div>
           {/* Linha 3: Profissional e Status Pagamento (apenas para admin/secretaria) */}
           {showAdminFields &&
             ((shouldShowProfessional && consultation.profissionalNome) ||
@@ -226,13 +230,12 @@ const ConsultationItem = React.memo<{
                 )}
               </div>
             )}
-
           {/* Linha 4: Valor e Ação */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2">
             {showValues && (
               <div className="flex items-center gap-1 text-xs md:text-sm font-medium text-verde-pipa">
-                <DollarSign className="h-3 w-3" />
-                {formatCurrency(consultation.valor)}
+                <DollarSign className="h-3 w-3 flex-shrink-0" />
+                <span>{formatCurrency(consultation.valor)}</span>
               </div>
             )}
 
@@ -244,17 +247,17 @@ const ConsultationItem = React.memo<{
                   e.stopPropagation();
                   onCreateEvolution(consultation.id);
                 }}
-                className="text-xs h-7 px-2 md:px-3"
+                className="text-xs h-8 px-3 w-full sm:w-auto"
               >
-                <FileText className="h-3 w-3 mr-1" />
-                Criar Evolução
+                <FileText className="h-3 w-3 mr-1 flex-shrink-0" />
+                <span className="whitespace-nowrap">Criar Evolução</span>
               </Button>
             )}
           </div>
         </div>
 
         {onClick && (
-          <ArrowRight className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground ml-2 md:ml-3" />
+          <ArrowRight className="hidden sm:block h-4 w-4 text-muted-foreground ml-3 flex-shrink-0" />
         )}
       </div>
     );
@@ -295,7 +298,7 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
     error,
     onConsultationClick,
     onCreateEvolutionClick,
-    maxItems = 10, // Aumentar padrão de 3 para 10
+    maxItems = 5, // Padrão de 5 consultas
     className,
     userRole,
     title = 'Consultas a Evoluir',

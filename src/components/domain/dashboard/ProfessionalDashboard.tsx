@@ -73,7 +73,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
       startDate,
       endDate,
       autoRefresh: true,
-      refreshInterval: 60, // 1 hora
+      refreshInterval: 5, // 5 minutos - Otimizado para melhor performance
     });
 
     const handleRefresh = async () => {
@@ -124,6 +124,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
             error={error}
             onAppointmentClick={onAppointmentClick}
             userRole={userRole}
+            maxItems={5}
           />
 
           {/* Solicitação de material */}
@@ -145,7 +146,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
             onConsultationClick={onConsultationClick}
             onCreateEvolutionClick={onCreateEvolutionClick}
             userRole={userRole}
-            maxItems={100} // Mostrar até 100 consultas para profissional
+            maxItems={5} // Mostrar 5 consultas inicialmente, com botão "Ver mais"
           />
         </div>
 

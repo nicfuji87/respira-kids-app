@@ -212,7 +212,7 @@ export const AppointmentsList = React.memo<AppointmentsListProps>(
     loading = false,
     error,
     onAppointmentClick,
-    maxItems = 3,
+    maxItems = 5, // Padrão aumentado para 5 consultas
     className,
     userRole,
     title = 'Próximos Agendamentos',

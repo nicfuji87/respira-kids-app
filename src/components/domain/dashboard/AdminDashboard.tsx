@@ -269,7 +269,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[400px]">
+              <ScrollArea className="h-[500px]">
                 <AppointmentsList
                   appointments={upcomingAppointments || []}
                   loading={loading}
@@ -295,13 +295,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[200px]">
+              <ScrollArea className="h-[600px]">
                 <ConsultationsToEvolve
                   consultations={consultationsToEvolve || []}
                   loading={loading}
                   onConsultationClick={handleAppointmentClick}
                   onCreateEvolutionClick={handleEvolutionClick}
-                  maxItems={50} // Mostrar até 50 consultas inicialmente
+                  maxItems={10} // Mostrar 10 consultas inicialmente, com botão "Ver mais"
                 />
               </ScrollArea>
             </CardContent>

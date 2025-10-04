@@ -336,6 +336,11 @@ export const fetchConsultationsToEvolve = async (
   professionalId: string
 ): Promise<ConsultationToEvolve[]> => {
   try {
+    // AI dev note: OTIMIZAÇÃO - Buscar apenas consultas dos últimos 60 dias para melhor performance
+    const hoje = new Date();
+    const sessentaDiasAtras = new Date();
+    sessentaDiasAtras.setDate(hoje.getDate() - 60);
+
     // AI dev note: Select apenas campos necessários para lista de consultas a evoluir
     const { data: consultas, error } = await supabase
       .from('vw_agendamentos_completos')
@@ -344,12 +349,11 @@ export const fetchConsultationsToEvolve = async (
       .eq('status_consulta_codigo', 'finalizado')
       .eq('possui_evolucao', 'não')
       .eq('ativo', true)
+      .gte('data_hora', sessentaDiasAtras.toISOString()) // Filtrar apenas últimos 60 dias
       .order('data_hora', { ascending: false })
       .limit(100); // AI dev note: Reduzido de 500 para 100 para performance
 
     if (error) throw error;
-
-    const hoje = new Date();
 
     return (consultas || []).map((c) => {
       const dataConsulta = parseSupabaseDatetime(c.data_hora);
@@ -875,58 +879,38 @@ export const fetchAdminFaturamentoComparativo = async (
   try {
     const hoje = new Date();
 
-    // AI dev note: BUSCAR TODOS OS DADOS HISTÓRICOS sem limite de período
-    // Permite ao frontend filtrar por qualquer período
-    // Não definir inicioHistorico para buscar TUDO
+    // AI dev note: OTIMIZAÇÃO - Buscar apenas últimos 12 meses para evitar timeout
+    // Suficiente para gráfico de faturamento comparativo
+    const inicioHistorico = new Date();
+    inicioHistorico.setMonth(hoje.getMonth() - 12);
 
-    // AI dev note: Contornar limite de 1000 do Supabase JS com queries em batches para Admin
-    const batchSize = 1000;
-    let allConsultas: AgendamentoData[] = [];
-    let offset = 0;
-    let hasMoreData = true;
+    // AI dev note: Select apenas campos necessários para reduzir payload
+    let query = supabase
+      .from('vw_agendamentos_completos')
+      .select(
+        'data_hora, valor_servico, status_consulta_codigo, possui_evolucao, status_pagamento_codigo'
+      )
+      .eq('ativo', true)
+      .gte('data_hora', inicioHistorico.toISOString())
+      .lte('data_hora', hoje.toISOString())
+      .order('data_hora', { ascending: true });
 
-    while (hasMoreData) {
-      let query = supabase
-        .from('vw_agendamentos_completos')
-        .select('*')
-        .eq('ativo', true)
-        .range(offset, offset + batchSize - 1)
-        .order('data_hora', { ascending: true }); // Ascendente para facilitar agregação cronológica
-
-      // Aplicar filtro de profissionais se fornecido
-      if (professionalIds && professionalIds.length > 0) {
-        query = query.in('profissional_id', professionalIds);
-      }
-
-      const { data: batchData, error: batchError } = await query;
-
-      if (batchError) {
-        throw new Error(batchError.message);
-      }
-
-      if (!batchData || batchData.length === 0) {
-        hasMoreData = false;
-      } else {
-        allConsultas = [...allConsultas, ...(batchData as AgendamentoData[])];
-
-        if (batchData.length < batchSize) {
-          hasMoreData = false;
-        } else {
-          offset += batchSize;
-        }
-      }
-
-      // Safety: evitar loop infinito
-      if (offset > 50000) {
-        hasMoreData = false;
-      }
+    // Aplicar filtro de profissionais se fornecido
+    if (professionalIds && professionalIds.length > 0) {
+      query = query.in('profissional_id', professionalIds);
     }
 
-    const consultasArray = allConsultas;
+    const { data: allConsultas, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
 
     console.log(
-      `📊 Faturamento Comparativo Admin: ${consultasArray.length} consultas históricas carregadas`
+      `📊 Faturamento Comparativo Admin: ${allConsultas?.length || 0} consultas históricas carregadas`
     );
+
+    const consultasArray = allConsultas || [];
 
     // AI dev note: Agrupar por mês/ano (não apenas por mês do ano atual)
     // Criar chave única: "YYYYMM" para cada mês
