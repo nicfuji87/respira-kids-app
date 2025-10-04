@@ -295,25 +295,37 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
     }
 
     return (
-      <div className={cn('w-full space-y-6', className)}>
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className={cn('w-full space-y-4 md:space-y-6', className)}>
+        {/* Header - Responsivo para mobile */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
             {onBack && (
-              <Button variant="ghost" size="sm" onClick={onBack}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Voltar
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onBack}
+                className="flex-shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Voltar</span>
               </Button>
             )}
-            <h1 className="text-2xl font-bold">{patient.nome}</h1>
+            <h1 className="text-xl md:text-2xl font-bold truncate">
+              {patient.nome}
+            </h1>
           </div>
 
           {/* Botão Agendar - apenas para pacientes */}
           {(!personId ||
             (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
-            <Button onClick={handleNewAppointmentClick} className="gap-2">
+            <Button
+              onClick={handleNewAppointmentClick}
+              className="gap-2 w-full md:w-auto flex-shrink-0"
+              size="sm"
+            >
               <Calendar className="h-4 w-4" />
-              Agendar Paciente
+              <span className="hidden sm:inline">Agendar Paciente</span>
+              <span className="sm:hidden">Agendar</span>
             </Button>
           )}
         </div>

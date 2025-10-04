@@ -6,7 +6,6 @@ import {
   DollarSign,
   Settings,
   FileText,
-  MoreHorizontal,
   Webhook,
 } from 'lucide-react';
 
@@ -78,6 +77,7 @@ export const navigationConfig: NavigationConfig[] = [
 ];
 
 // Navegação mobile específica por role
+// AI dev note: Mobile menu unificado - Dashboard, Agenda, Pacientes e Configurações para todos
 export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
   admin: [
     {
@@ -87,21 +87,21 @@ export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
       roles: ['admin'],
     },
     {
-      icon: FileText,
-      label: 'Relatórios',
-      href: '/relatorios',
+      icon: Calendar,
+      label: 'Agenda',
+      href: '/agenda',
+      roles: ['admin'],
+    },
+    {
+      icon: Users,
+      label: 'Pacientes',
+      href: '/pacientes',
       roles: ['admin'],
     },
     {
       icon: Settings,
       label: 'Config',
       href: '/configuracoes',
-      roles: ['admin'],
-    },
-    {
-      icon: MoreHorizontal,
-      label: 'Mais',
-      href: '/mais',
       roles: ['admin'],
     },
   ],
@@ -116,6 +116,12 @@ export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
       icon: Calendar,
       label: 'Agenda',
       href: '/agenda',
+      roles: ['profissional'],
+    },
+    {
+      icon: Users,
+      label: 'Pacientes',
+      href: '/pacientes',
       roles: ['profissional'],
     },
     {

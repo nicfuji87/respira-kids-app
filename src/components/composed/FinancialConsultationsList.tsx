@@ -918,13 +918,13 @@ export const FinancialConsultationsList: React.FC<
   return (
     <Card className={cn('w-full', className)}>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-verde-pipa" />
-            Lista de Consultas
+            <DollarSign className="h-5 w-5 text-verde-pipa flex-shrink-0" />
+            <span className="text-base md:text-lg">Lista de Consultas</span>
           </CardTitle>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {isSelectionMode ? (
               <>
                 <Button
@@ -934,9 +934,10 @@ export const FinancialConsultationsList: React.FC<
                     setIsSelectionMode(false);
                     setSelectedConsultations([]);
                   }}
+                  className="gap-1"
                 >
-                  <X className="h-4 w-4 mr-1" />
-                  Cancelar
+                  <X className="h-4 w-4" />
+                  <span className="hidden sm:inline">Cancelar</span>
                 </Button>
                 <Button
                   size="sm"
@@ -945,8 +946,15 @@ export const FinancialConsultationsList: React.FC<
                     selectedConsultations.length === 0 || isGeneratingCharges
                   }
                 >
-                  <CreditCard className="h-4 w-4 mr-1" />
-                  Gerar Cobranças ({selectedConsultations.length})
+                  <CreditCard className="h-4 w-4 flex-shrink-0" />
+                  <span className="ml-1.5 sm:ml-2">
+                    <span className="sm:hidden">
+                      Gerar ({selectedConsultations.length})
+                    </span>
+                    <span className="hidden sm:inline">
+                      Gerar Cobranças ({selectedConsultations.length})
+                    </span>
+                  </span>
                 </Button>
               </>
             ) : (
@@ -955,8 +963,8 @@ export const FinancialConsultationsList: React.FC<
                 size="sm"
                 onClick={() => setIsSelectionMode(true)}
               >
-                <CheckSquare className="h-4 w-4 mr-1" />
-                Selecionar
+                <CheckSquare className="h-4 w-4 flex-shrink-0" />
+                <span className="ml-1.5 sm:ml-2">Selecionar</span>
               </Button>
             )}
           </div>

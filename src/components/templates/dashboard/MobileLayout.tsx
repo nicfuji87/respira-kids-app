@@ -70,9 +70,9 @@ export const MobileLayout = React.memo<MobileLayoutProps>(
           onLogout={onLogout}
         />
 
-        {/* Content area */}
+        {/* Content area - AI dev note: Padding otimizado para mobile */}
         <main className="flex-1 overflow-auto pt-16 pb-16">
-          <div className="px-2 py-3">{children}</div>
+          <div className="px-3 py-4">{children}</div>
         </main>
 
         {/* Bottom tabs */}

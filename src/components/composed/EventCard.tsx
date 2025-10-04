@@ -504,12 +504,12 @@ export const EventCard = React.memo<EventCardProps>(
                 : '#3B82F6',
           }}
         >
-          <CardContent className="p-4">
-            <div className="space-y-2">
-              <div className="flex items-start justify-between">
+          <CardContent className="p-3 md:p-4">
+            <div className="space-y-1.5 md:space-y-2">
+              <div className="flex items-start justify-between gap-2">
                 <h3
                   className={cn(
-                    'font-semibold text-sm',
+                    'font-semibold text-sm flex-1',
                     // AI dev note: Line-through e cinza se cancelado
                     isCancelado && 'line-through text-gray-500'
                   )}
@@ -517,7 +517,7 @@ export const EventCard = React.memo<EventCardProps>(
                   {event.title}
                 </h3>
                 {showTime && (
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs flex-shrink-0">
                     {formatDuration()}
                   </Badge>
                 )}
@@ -526,7 +526,7 @@ export const EventCard = React.memo<EventCardProps>(
               {event.description && (
                 <p
                   className={cn(
-                    'text-sm line-clamp-2',
+                    'text-xs md:text-sm line-clamp-2',
                     isCancelado ? 'text-gray-500' : 'text-muted-foreground'
                   )}
                 >
@@ -535,10 +535,10 @@ export const EventCard = React.memo<EventCardProps>(
               )}
 
               {/* Status badges com cores corretas */}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 md:gap-2">
                 {statusConsulta && (
                   <Badge
-                    className="text-xs px-2 py-1"
+                    className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
                     style={{
                       backgroundColor: isValidHexColor(statusConsultaCor)
                         ? statusConsultaCor
@@ -553,7 +553,7 @@ export const EventCard = React.memo<EventCardProps>(
 
                 {statusPagamento && (
                   <Badge
-                    className="text-xs px-2 py-1"
+                    className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
                     style={{
                       backgroundColor: isValidHexColor(statusPagamentoCor)
                         ? statusPagamentoCor
@@ -567,17 +567,20 @@ export const EventCard = React.memo<EventCardProps>(
                 )}
 
                 {possuiEvolucao === 'não' && (
-                  <Badge variant="destructive" className="text-xs px-2 py-1">
+                  <Badge
+                    variant="destructive"
+                    className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
+                  >
                     Evoluir
                   </Badge>
                 )}
               </div>
 
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-3 md:gap-4 text-xs text-muted-foreground flex-wrap">
                 {showLocation && event.location && (
                   <div className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
-                    <span>{event.location}</span>
+                    <MapPin className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">{event.location}</span>
                   </div>
                 )}
 
@@ -585,7 +588,7 @@ export const EventCard = React.memo<EventCardProps>(
                   event.attendees &&
                   event.attendees.length > 0 && (
                     <div className="flex items-center gap-1">
-                      <Users className="h-3 w-3" />
+                      <Users className="h-3 w-3 flex-shrink-0" />
                       <span>{event.attendees.length} participantes</span>
                     </div>
                   )}

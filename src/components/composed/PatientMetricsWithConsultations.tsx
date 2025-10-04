@@ -1368,10 +1368,12 @@ export const PatientMetricsWithConsultations =
 
               {/* Seção de Lista de Consultas */}
               <div className="space-y-4 border-t pt-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    <h3 className="text-lg font-medium">Lista de Consultas</h3>
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Calendar className="h-5 w-5 flex-shrink-0" />
+                    <h3 className="text-base md:text-lg font-medium">
+                      Lista de Consultas
+                    </h3>
                     {totalCount > 0 && (
                       <Badge variant="outline">{totalCount} total</Badge>
                     )}
@@ -1380,7 +1382,7 @@ export const PatientMetricsWithConsultations =
                   {/* Botão de seleção para cobrança - apenas para admin/secretaria */}
                   {(canGenerateCharge || editingFatura) &&
                     selectableConsultations.length > 0 && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {isSelectionMode && (
                           <>
                             <Button
@@ -1406,9 +1408,10 @@ export const PatientMetricsWithConsultations =
                               variant="outline"
                               size="sm"
                               onClick={toggleSelectionMode}
+                              className="gap-1"
                             >
                               <X className="h-4 w-4" />
-                              Cancelar
+                              <span className="hidden sm:inline">Cancelar</span>
                             </Button>
                           </>
                         )}
@@ -1428,18 +1431,64 @@ export const PatientMetricsWithConsultations =
                             selectedCount > 0 ? 'respira-gradient' : ''
                           }
                         >
-                          <CreditCard className="h-4 w-4 mr-2" />
-                          {isGeneratingCharge
-                            ? editingFatura
-                              ? 'Atualizando fatura...'
-                              : 'Gerando cobrança...'
-                            : selectedCount > 0
-                              ? editingFatura
-                                ? `Atualizar Fatura com ${selectedCount} consulta${selectedCount > 1 ? 's' : ''}`
-                                : `Gerar cobrança de ${selectedCount} consulta${selectedCount > 1 ? 's' : ''}`
-                              : editingFatura
-                                ? 'Editar consultas da fatura'
-                                : 'Escolher consultas para gerar cobrança'}
+                          <CreditCard className="h-4 w-4 flex-shrink-0" />
+                          <span className="ml-1.5 sm:ml-2">
+                            {isGeneratingCharge ? (
+                              editingFatura ? (
+                                <>
+                                  <span className="sm:hidden">
+                                    Atualizando...
+                                  </span>
+                                  <span className="hidden sm:inline">
+                                    Atualizando fatura...
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="sm:hidden">Gerando...</span>
+                                  <span className="hidden sm:inline">
+                                    Gerando cobrança...
+                                  </span>
+                                </>
+                              )
+                            ) : selectedCount > 0 ? (
+                              editingFatura ? (
+                                <>
+                                  <span className="sm:hidden">
+                                    Atualizar ({selectedCount})
+                                  </span>
+                                  <span className="hidden sm:inline">
+                                    Atualizar Fatura com {selectedCount}{' '}
+                                    consulta{selectedCount > 1 ? 's' : ''}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="sm:hidden">
+                                    Gerar ({selectedCount})
+                                  </span>
+                                  <span className="hidden sm:inline">
+                                    Gerar cobrança de {selectedCount} consulta
+                                    {selectedCount > 1 ? 's' : ''}
+                                  </span>
+                                </>
+                              )
+                            ) : editingFatura ? (
+                              <>
+                                <span className="sm:hidden">Editar</span>
+                                <span className="hidden sm:inline">
+                                  Editar consultas da fatura
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="sm:hidden">Selecionar</span>
+                                <span className="hidden sm:inline">
+                                  Escolher consultas para gerar cobrança
+                                </span>
+                              </>
+                            )}
+                          </span>
                         </Button>
                       </div>
                     )}
