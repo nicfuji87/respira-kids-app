@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { SignUpTemplate } from '@/components/templates';
 import { LoginPage, ForgotPasswordPage } from '@/components/domain';
 import { AppRouter } from '@/components/AppRouter';
+import { PublicRouter } from '@/components/PublicRouter';
 import { Toaster } from '@/components/primitives/toaster';
 
 type AuthMode = 'login' | 'signup' | 'forgot-password';
@@ -14,6 +15,10 @@ type AuthStep =
   | 'complete-profile';
 
 function App() {
+  // AI dev note: Verificar rota pública ANTES de qualquer autenticação
+  // Rotas públicas (ex: /cadastro-paciente) não requerem autenticação
+  const isPublicRoute = window.location.hash.startsWith('#/cadastro-paciente');
+
   const {
     loading,
     isAuthenticated,
@@ -46,6 +51,12 @@ function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
+
+  // AI dev note: Renderizar rotas públicas SEM autenticação
+  // Cadastro de paciente é público e não requer login
+  if (isPublicRoute) {
+    return <PublicRouter />;
+  }
 
   // Loading state
   if (loading) {

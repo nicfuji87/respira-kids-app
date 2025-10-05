@@ -10,6 +10,14 @@ export type { MediaViewerProps } from './media-viewer';
 export { RichTextEditor } from './rich-text-editor';
 export { AudioRecorder } from './audio-recorder';
 export { PinInput } from './pin-input';
+export { PhoneInput } from './PhoneInput';
+export { CPFInput, validateCPF } from './CPFInput';
+export {
+  DateInput,
+  calculateAge,
+  validateDate,
+  formatDateDisplay,
+} from './DateInput';
 export {
   Select,
   SelectContent,

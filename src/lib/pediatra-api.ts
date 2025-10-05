@@ -1,285 +1,228 @@
-// AI dev note: API para gerenciamento de pediatras - FASE 3.1 do plano aprovado
+// AI dev note: API específica para gerenciamento de pediatras
+// Funções para busca e cadastro de pediatras no cadastro público de pacientes
+
 import { supabase } from './supabase';
+import { normalizeText } from './utils';
 
 export interface Pediatra {
   id: string;
   pessoa_id: string;
-  nome: string; // da tabela pessoas
-  crm?: string;
-  especialidade: string;
-  observacoes?: string;
-  ativo: boolean;
-  created_at: string;
-  updated_at: string;
-  // Dados da pessoa
-  email?: string;
-  telefone?: number;
-  cpf_cnpj?: string;
+  nome: string;
+  crm?: string | null;
+  especialidade?: string | null;
 }
 
-export interface CreatePediatraInput {
-  pessoa_id: string;
-  crm?: string;
-  especialidade?: string;
-  observacoes?: string;
+export interface PediatricianSearchResult {
+  id: string; // pessoa_pediatra.id
+  pessoaId: string; // pessoas.id
+  nome: string;
+  crm?: string | null;
+  especialidade?: string | null;
 }
 
-export interface UpdatePediatraInput {
-  id: string;
-  crm?: string;
-  especialidade?: string;
-  observacoes?: string;
-  ativo?: boolean;
-}
-
-export interface PacientePediatra {
-  id: string;
-  paciente_id: string;
-  pediatra_id: string;
-  data_inicio: string;
-  data_fim?: string;
-  observacoes?: string;
-  ativo: boolean;
-  created_at: string;
-  updated_at: string;
-  // Dados do pediatra
-  pediatra: {
-    id: string;
-    nome: string;
-    crm?: string;
-    especialidade: string;
-  };
-}
-
-export interface CreatePacientePediatraInput {
-  paciente_id: string;
-  pediatra_id: string;
-  observacoes?: string;
-}
-
-// AI dev note: Buscar todos os pediatras ativos
-export const fetchPediatras = async (): Promise<Pediatra[]> => {
-  const { data, error } = await supabase
-    .from('pessoa_pediatra')
-    .select(
+/**
+ * Buscar todos os pediatras ativos (para select/dropdown)
+ * Usado por componentes internos do sistema
+ */
+export async function fetchPediatras(): Promise<Pediatra[]> {
+  try {
+    const { data, error } = await supabase
+      .from('pessoas')
+      .select(
+        `
+        id,
+        nome,
+        pessoa_pediatra!inner(
+          id,
+          crm,
+          especialidade,
+          ativo
+        )
       `
-      *,
-      pessoa:pessoas(nome, email, telefone, cpf_cnpj)
-    `
-    )
-    .eq('ativo', true)
-    .order('pessoa.nome');
-
-  if (error) {
-    console.error('Erro ao buscar pediatras:', error);
-    throw error;
-  }
-
-  return (
-    data?.map((item) => ({
-      id: item.id,
-      pessoa_id: item.pessoa_id,
-      nome: item.pessoa?.nome || '',
-      crm: item.crm,
-      especialidade: item.especialidade,
-      observacoes: item.observacoes,
-      ativo: item.ativo,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      email: item.pessoa?.email,
-      telefone: item.pessoa?.telefone,
-      cpf_cnpj: item.pessoa?.cpf_cnpj,
-    })) || []
-  );
-};
-
-// AI dev note: Criar novo pediatra
-export const createPediatra = async (
-  input: CreatePediatraInput
-): Promise<Pediatra> => {
-  const { data, error } = await supabase
-    .from('pessoa_pediatra')
-    .insert({
-      pessoa_id: input.pessoa_id,
-      crm: input.crm,
-      especialidade: input.especialidade || 'Pediatria',
-      observacoes: input.observacoes,
-    })
-    .select(
-      `
-      *,
-      pessoa:pessoas(nome, email, telefone, cpf_cnpj)
-    `
-    )
-    .single();
-
-  if (error) {
-    console.error('Erro ao criar pediatra:', error);
-    throw error;
-  }
-
-  return {
-    id: data.id,
-    pessoa_id: data.pessoa_id,
-    nome: data.pessoa?.nome || '',
-    crm: data.crm,
-    especialidade: data.especialidade,
-    observacoes: data.observacoes,
-    ativo: data.ativo,
-    created_at: data.created_at,
-    updated_at: data.updated_at,
-    email: data.pessoa?.email,
-    telefone: data.pessoa?.telefone,
-    cpf_cnpj: data.pessoa?.cpf_cnpj,
-  };
-};
-
-// AI dev note: Atualizar pediatra existente
-export const updatePediatra = async (
-  input: UpdatePediatraInput
-): Promise<Pediatra> => {
-  const { data, error } = await supabase
-    .from('pessoa_pediatra')
-    .update({
-      crm: input.crm,
-      especialidade: input.especialidade,
-      observacoes: input.observacoes,
-      ativo: input.ativo,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', input.id)
-    .select(
-      `
-      *,
-      pessoa:pessoas(nome, email, telefone, cpf_cnpj)
-    `
-    )
-    .single();
-
-  if (error) {
-    console.error('Erro ao atualizar pediatra:', error);
-    throw error;
-  }
-
-  return {
-    id: data.id,
-    pessoa_id: data.pessoa_id,
-    nome: data.pessoa?.nome || '',
-    crm: data.crm,
-    especialidade: data.especialidade,
-    observacoes: data.observacoes,
-    ativo: data.ativo,
-    created_at: data.created_at,
-    updated_at: data.updated_at,
-    email: data.pessoa?.email,
-    telefone: data.pessoa?.telefone,
-    cpf_cnpj: data.pessoa?.cpf_cnpj,
-  };
-};
-
-// AI dev note: Buscar pediatras de um paciente específico
-export const fetchPacientePediatras = async (
-  pacienteId: string
-): Promise<PacientePediatra[]> => {
-  const { data, error } = await supabase
-    .from('paciente_pediatra')
-    .select(
-      `
-      *,
-      pediatra:pessoa_pediatra(
-        *,
-        pessoa:pessoas(nome)
       )
-    `
-    )
-    .eq('paciente_id', pacienteId)
-    .eq('ativo', true)
-    .order('created_at', { ascending: false });
+      .eq('ativo', true)
+      .eq('pessoa_pediatra.ativo', true)
+      .order('nome');
 
-  if (error) {
-    console.error('Erro ao buscar pediatras do paciente:', error);
+    if (error) {
+      console.error('❌ [fetchPediatras] Erro:', error);
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Mapear resultados
+    const pediatras: Pediatra[] = data
+      .filter((p) => {
+        return Array.isArray(p.pessoa_pediatra)
+          ? p.pessoa_pediatra.length > 0
+          : p.pessoa_pediatra !== null && p.pessoa_pediatra !== undefined;
+      })
+      .map((p) => {
+        const pediatraData = Array.isArray(p.pessoa_pediatra)
+          ? p.pessoa_pediatra[0]
+          : p.pessoa_pediatra;
+
+        return {
+          id: pediatraData.id,
+          pessoa_id: p.id,
+          nome: p.nome,
+          crm: pediatraData.crm,
+          especialidade: pediatraData.especialidade,
+        };
+      });
+
+    return pediatras;
+  } catch (error) {
+    console.error('❌ [fetchPediatras] Erro ao buscar pediatras:', error);
     throw error;
   }
+}
 
-  return (
-    data?.map((item) => ({
-      id: item.id,
-      paciente_id: item.paciente_id,
-      pediatra_id: item.pediatra_id,
-      data_inicio: item.data_inicio,
-      data_fim: item.data_fim,
-      observacoes: item.observacoes,
-      ativo: item.ativo,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      pediatra: {
-        id: item.pediatra?.id || '',
-        nome: item.pediatra?.pessoa?.nome || '',
-        crm: item.pediatra?.crm,
-        especialidade: item.pediatra?.especialidade || '',
-      },
-    })) || []
-  );
-};
+/**
+ * Buscar pediatras para autocomplete (acesso público)
+ * Busca por nome com normalização para evitar duplicatas
+ */
+export async function searchPediatricians(
+  searchTerm: string
+): Promise<PediatricianSearchResult[]> {
+  try {
+    if (!searchTerm || searchTerm.length < 2) {
+      return [];
+    }
 
-// AI dev note: Associar paciente a pediatra
-export const createPacientePediatra = async (
-  input: CreatePacientePediatraInput
-): Promise<PacientePediatra> => {
-  const { data, error } = await supabase
-    .from('paciente_pediatra')
-    .insert({
-      paciente_id: input.paciente_id,
-      pediatra_id: input.pediatra_id,
-      observacoes: input.observacoes,
-    })
-    .select(
+    // Remover prefixos comuns (Dr., Dra., Dr, Dra)
+    const cleanedSearch = searchTerm.trim().replace(/^(dr\.?|dra\.?)\s*/i, '');
+
+    // Normalizar para busca (remover acentos)
+    const normalizedSearch = normalizeText(cleanedSearch);
+
+    // Buscar pediatras ativos
+    // AI dev note: Usar pessoas e pessoa_pediatra (não vw_usuarios_admin por questões de RLS)
+
+    // Buscar todos os pediatras ativos e filtrar no cliente
+    // (Supabase não suporta busca sem acento diretamente)
+    const { data, error } = await supabase
+      .from('pessoas')
+      .select(
+        `
+        id,
+        nome,
+        pessoa_pediatra!inner(
+          id,
+          crm,
+          especialidade,
+          ativo
+        )
       `
-      *,
-      pediatra:pessoa_pediatra(
-        *,
-        pessoa:pessoas(nome)
       )
-    `
-    )
-    .single();
+      .eq('ativo', true)
+      .eq('pessoa_pediatra.ativo', true)
+      .order('nome');
 
-  if (error) {
-    console.error('Erro ao associar paciente ao pediatra:', error);
-    throw error;
+    if (error) {
+      console.error('❌ [searchPediatricians] Erro:', error);
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Mapear e filtrar resultados (incluindo normalização de acentos)
+    // AI dev note: Com !inner, pessoa_pediatra vem como array ou objeto
+    const results: PediatricianSearchResult[] = data
+      .filter((p) => {
+        const hasPediatra = Array.isArray(p.pessoa_pediatra)
+          ? p.pessoa_pediatra.length > 0
+          : p.pessoa_pediatra !== null && p.pessoa_pediatra !== undefined;
+
+        if (!hasPediatra) return false;
+
+        // Filtrar por nome normalizado (sem acentos)
+        const normalizedNome = normalizeText(p.nome);
+        return normalizedNome.includes(normalizedSearch);
+      })
+      .map((p) => {
+        const pediatraData = Array.isArray(p.pessoa_pediatra)
+          ? p.pessoa_pediatra[0]
+          : p.pessoa_pediatra;
+
+        return {
+          id: pediatraData.id, // ID da tabela pessoa_pediatra
+          pessoaId: p.id, // ID da tabela pessoas
+          nome: p.nome,
+          crm: pediatraData.crm,
+          especialidade: pediatraData.especialidade,
+        };
+      })
+      .slice(0, 10); // Limitar a 10 resultados
+
+    return results;
+  } catch (error) {
+    console.error('❌ [searchPediatricians] Erro ao buscar pediatras:', error);
+    return [];
   }
+}
 
-  return {
-    id: data.id,
-    paciente_id: data.paciente_id,
-    pediatra_id: data.pediatra_id,
-    data_inicio: data.data_inicio,
-    data_fim: data.data_fim,
-    observacoes: data.observacoes,
-    ativo: data.ativo,
-    created_at: data.created_at,
-    updated_at: data.updated_at,
-    pediatra: {
-      id: data.pediatra?.id || '',
-      nome: data.pediatra?.pessoa?.nome || '',
-      crm: data.pediatra?.crm,
-      especialidade: data.pediatra?.especialidade || '',
-    },
-  };
-};
+/**
+ * Verificar se pediatra já existe por nome (para evitar duplicatas)
+ */
+export async function checkPediatricianExists(nome: string): Promise<{
+  exists: boolean;
+  pediatrician?: PediatricianSearchResult;
+}> {
+  try {
+    // Normalizar nome para comparação
+    const normalizedNome = normalizeText(nome.trim());
 
-// AI dev note: Remover associação paciente-pediatra (soft delete)
-export const removePacientePediatra = async (id: string): Promise<void> => {
-  const { error } = await supabase
-    .from('paciente_pediatra')
-    .update({
-      ativo: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id);
+    const { data, error } = await supabase
+      .from('pessoas')
+      .select(
+        `
+        id,
+        nome,
+        pessoa_pediatra!inner(
+          id,
+          crm,
+          especialidade,
+          ativo
+        )
+      `
+      )
+      .eq('ativo', true)
+      .eq('pessoa_pediatra.ativo', true);
 
-  if (error) {
-    console.error('Erro ao remover associação paciente-pediatra:', error);
-    throw error;
+    if (error) {
+      console.error('❌ [checkPediatricianExists] Erro:', error);
+      return { exists: false };
+    }
+
+    if (!data || data.length === 0) {
+      return { exists: false };
+    }
+
+    // Buscar match exato por nome normalizado
+    const match = data.find((p) => normalizeText(p.nome) === normalizedNome);
+
+    if (match) {
+      return {
+        exists: true,
+        pediatrician: {
+          id: match.pessoa_pediatra[0].id,
+          pessoaId: match.id,
+          nome: match.nome,
+          crm: match.pessoa_pediatra[0].crm,
+          especialidade: match.pessoa_pediatra[0].especialidade,
+        },
+      };
+    }
+
+    return { exists: false };
+  } catch (error) {
+    console.error('❌ [checkPediatricianExists] Erro:', error);
+    return { exists: false };
   }
-};
+}

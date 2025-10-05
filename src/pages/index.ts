@@ -19,3 +19,6 @@ export { WebhooksPage } from './WebhooksPage';
 
 // Debug pages
 export { GoogleOAuthDebugPage } from './GoogleOAuthDebugPage';
+
+// Public pages (não requer autenticação)
+export { PatientPublicRegistrationPage } from './PatientPublicRegistrationPage';

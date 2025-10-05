@@ -199,3 +199,41 @@ export { WebhookLogs } from './WebhookLogs';
 export type { Webhook } from './WebhooksList';
 export type { WebhookFormData } from './WebhookForm';
 export type { WebhookLog } from './WebhookLogs';
+
+// Patient Public Registration Components
+export { WhatsAppValidationStep } from './WhatsAppValidationStep';
+export { ResponsibleIdentificationStep } from './ResponsibleIdentificationStep';
+export { ResponsibleDataStep } from './ResponsibleDataStep';
+export { AddressStep } from './AddressStep';
+export { FinancialResponsibleStep } from './FinancialResponsibleStep';
+export { PatientDataStep } from './PatientDataStep';
+export { PediatricianStep } from './PediatricianStep';
+export { AuthorizationsStep } from './AuthorizationsStep';
+export { ReviewStep } from './ReviewStep';
+export { ContractReviewStep } from './ContractReviewStep';
+export { ProgressIndicator } from './ProgressIndicator';
+
+// Patient Public Registration Type exports
+export type {
+  WhatsAppValidationStepProps,
+  ExistingUserFullData,
+} from './WhatsAppValidationStep';
+export type { ResponsibleIdentificationStepProps } from './ResponsibleIdentificationStep';
+export type {
+  ResponsibleDataStepProps,
+  ResponsibleData,
+} from './ResponsibleDataStep';
+export type { AddressStepProps, AddressData } from './AddressStep';
+export type { FinancialResponsibleStepProps } from './FinancialResponsibleStep';
+export type { PatientDataStepProps, PatientData } from './PatientDataStep';
+export type {
+  PediatricianStepProps,
+  PediatricianData,
+} from './PediatricianStep';
+export type {
+  AuthorizationsStepProps,
+  AuthorizationsData,
+} from './AuthorizationsStep';
+export type { ReviewStepProps } from './ReviewStep';
+export type { ContractReviewStepProps } from './ContractReviewStep';
+export type { ProgressIndicatorProps } from './ProgressIndicator';
