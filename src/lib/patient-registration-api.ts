@@ -243,9 +243,7 @@ interface ExistingUser {
  * Buscar usuário existente na vw_usuarios_admin por telefone
  * @param phoneNumber - Número do telefone sem código do país (ex: 61981446666)
  */
-export async function findExistingUserByPhone(
-  phoneNumber: string
-): Promise<{
+export async function findExistingUserByPhone(phoneNumber: string): Promise<{
   exists: boolean;
   user?: ExistingUser;
   pacientes?: Array<{ id: string; nome: string; pediatras: string | null }>;
@@ -320,18 +318,18 @@ export async function findExistingUserByPhone(
             | { id: string; nome: string }[]
             | { id: string; nome: string };
         }) => {
-          const { data: pediatraInfo } = await supabase
-            .from('vw_usuarios_admin')
-            .select('pediatras_nomes')
-            .eq('id', rel.pessoas.id)
-            .maybeSingle();
-
           const pessoaId = Array.isArray(rel.pessoas)
             ? rel.pessoas[0]?.id
             : rel.pessoas?.id;
           const pessoaNome = Array.isArray(rel.pessoas)
             ? rel.pessoas[0]?.nome
             : rel.pessoas?.nome;
+
+          const { data: pediatraInfo } = await supabase
+            .from('vw_usuarios_admin')
+            .select('pediatras_nomes')
+            .eq('id', pessoaId)
+            .maybeSingle();
 
           return {
             id: pessoaId,
@@ -360,9 +358,7 @@ export async function findExistingUserByPhone(
  * Enviar código de validação via Edge Function
  * @param whatsappJid - Número com código país (ex: 556181446666)
  */
-export async function sendValidationCode(
-  whatsappJid: string
-): Promise<{
+export async function sendValidationCode(whatsappJid: string): Promise<{
   success: boolean;
   expiresAt?: string;
   error?: string;
