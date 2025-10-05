@@ -2,14 +2,13 @@ import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
-import { MapPin } from 'lucide-react';
+import { MapPin, Loader2, Check } from 'lucide-react';
 import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { cn } from '@/lib/utils';
 import {
   fetchAddressByCep,
   type EnderecoViaCepData,
 } from '@/lib/enderecos-api';
-import { Loader2, MapPin, Check } from 'lucide-react';
 
 // AI dev note: AddressStep - Etapa de cadastro de endereço do responsável
 // Integra com ViaCEP para busca automática por CEP
