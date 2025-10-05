@@ -6,9 +6,9 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from '@/components/primitives/radio-group';
-import { Card } from '@/components/ui/card';
 import { CPFInput } from '@/components/primitives/CPFInput';
 import { DateInput } from '@/components/primitives/DateInput';
+import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { cn } from '@/lib/utils';
 
 // AI dev note: PatientDataStep - Etapa de cadastro de dados do paciente
@@ -108,20 +108,28 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
 
     return (
       <div className={cn('w-full max-w-md mx-auto space-y-6', className)}>
+        <ProgressIndicator currentStep={6} totalSteps={10} />
+
         {/* Título */}
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-foreground">
             Dados do Paciente
           </h2>
-          <p className="text-base text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Preencha as informações do paciente que será atendido
           </p>
         </div>
 
-        <Card className="p-6 space-y-5">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleContinue();
+          }}
+          className="space-y-4"
+        >
           {/* Nome completo */}
           <div className="space-y-2">
-            <Label htmlFor="nome" className="text-base">
+            <Label htmlFor="nome">
               Nome completo do paciente{' '}
               <span className="text-destructive">*</span>
             </Label>
@@ -134,10 +142,7 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
                 setNome(e.target.value);
                 if (errors.nome) setErrors((prev) => ({ ...prev, nome: '' }));
               }}
-              className={cn(
-                'h-12 text-base',
-                errors.nome && 'border-destructive'
-              )}
+              className={cn(errors.nome && 'border-destructive')}
             />
             {errors.nome && (
               <p className="text-sm text-destructive">{errors.nome}</p>
@@ -146,7 +151,7 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
 
           {/* Data de nascimento */}
           <div className="space-y-2">
-            <Label htmlFor="dataNascimento" className="text-base">
+            <Label htmlFor="dataNascimento">
               Data de nascimento <span className="text-destructive">*</span>
             </Label>
             <DateInput
@@ -285,29 +290,22 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
               </p>
             </div>
           )}
-        </Card>
 
-        {/* Botões de navegação */}
-        <div className="flex gap-3">
-          {onBack && (
+          {/* Botões */}
+          <div className="flex gap-3 pt-4">
             <Button
               type="button"
               variant="outline"
               onClick={onBack}
-              size="lg"
-              className="flex-1 h-12 text-base"
+              className="flex-1"
             >
               Voltar
             </Button>
-          )}
-          <Button
-            onClick={handleContinue}
-            size="lg"
-            className="flex-1 h-12 text-base font-semibold"
-          >
-            Continuar
-          </Button>
-        </div>
+            <Button type="submit" className="flex-1">
+              Continuar
+            </Button>
+          </div>
+        </form>
       </div>
     );
   }

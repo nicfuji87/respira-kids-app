@@ -2,7 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
-import { Card } from '@/components/ui/card';
+import { MapPin } from 'lucide-react';
+import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { cn } from '@/lib/utils';
 import {
   fetchAddressByCep,
@@ -159,52 +160,58 @@ export const AddressStep = React.memo<AddressStepProps>(
       return Object.keys(newErrors).length === 0;
     }, [cep, logradouro, bairro, cidade, estado, numero]);
 
-    const handleContinue = useCallback(() => {
-      console.log('➡️ [AddressStep] handleContinue');
+    const handleSubmit = useCallback(
+      (e: React.FormEvent) => {
+        e.preventDefault();
+        console.log('➡️ [AddressStep] handleSubmit');
 
-      if (!validateForm()) {
-        console.log('❌ [AddressStep] Validação falhou:', errors);
-        return;
-      }
+        if (!validateForm()) {
+          console.log('❌ [AddressStep] Validação falhou:', errors);
+          return;
+        }
 
-      const addressData: AddressData = {
-        cep: cep.replace(/\D/g, ''), // Salvar sem formatação
-        logradouro: logradouro.trim(),
-        bairro: bairro.trim(),
-        cidade: cidade.trim(),
-        estado: estado.trim(),
-        numero: numero.trim(),
-        ...(complemento.trim() && { complemento: complemento.trim() }),
-      };
+        const addressData: AddressData = {
+          cep: cep.replace(/\D/g, ''), // Salvar sem formatação
+          logradouro: logradouro.trim(),
+          bairro: bairro.trim(),
+          cidade: cidade.trim(),
+          estado: estado.trim(),
+          numero: numero.trim(),
+          ...(complemento.trim() && { complemento: complemento.trim() }),
+        };
 
-      console.log('✅ [AddressStep] Dados válidos:', addressData);
-      onContinue(addressData);
-    }, [
-      cep,
-      logradouro,
-      bairro,
-      cidade,
-      estado,
-      numero,
-      complemento,
-      validateForm,
-      onContinue,
-      errors,
-    ]);
+        console.log('✅ [AddressStep] Dados válidos:', addressData);
+        onContinue(addressData);
+      },
+      [
+        cep,
+        logradouro,
+        bairro,
+        cidade,
+        estado,
+        numero,
+        complemento,
+        validateForm,
+        onContinue,
+        errors,
+      ]
+    );
 
     return (
       <div className={cn('w-full max-w-md mx-auto space-y-6', className)}>
+        <ProgressIndicator currentStep={4} totalSteps={10} />
+
         {/* Título */}
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-foreground">
             Endereço do Responsável
           </h2>
-          <p className="text-base text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Informe o endereço residencial para cadastro
           </p>
         </div>
 
-        <Card className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* CEP com busca */}
           <div className="space-y-2">
             <Label htmlFor="cep" className="text-base">
@@ -407,32 +414,25 @@ export const AddressStep = React.memo<AddressStepProps>(
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground pt-2">
+          <p className="text-xs text-muted-foreground">
             💡 Digite o CEP e clique em "Buscar" para preenchimento automático
           </p>
-        </Card>
 
-        {/* Botões de navegação */}
-        <div className="flex gap-3">
-          {onBack && (
+          {/* Botões */}
+          <div className="flex gap-3 pt-4">
             <Button
               type="button"
               variant="outline"
               onClick={onBack}
-              size="lg"
-              className="flex-1 h-12 text-base"
+              className="flex-1"
             >
               Voltar
             </Button>
-          )}
-          <Button
-            onClick={handleContinue}
-            size="lg"
-            className="flex-1 h-12 text-base font-semibold"
-          >
-            Continuar
-          </Button>
-        </div>
+            <Button type="submit" className="flex-1">
+              Continuar
+            </Button>
+          </div>
+        </form>
       </div>
     );
   }
