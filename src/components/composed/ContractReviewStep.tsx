@@ -5,10 +5,8 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/primitives/button';
 import { Checkbox } from '@/components/primitives/checkbox';
-import { ScrollArea } from '@/components/primitives/scroll-area';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { AlertCircle, FileDown, CheckCircle } from 'lucide-react';
-import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 
 export interface ContractReviewStepProps {
   contractContent: string; // Conteúdo do contrato (texto formatado)
@@ -38,9 +36,6 @@ export function ContractReviewStep({
 
   return (
     <div className="w-full px-4 space-y-6 pb-8">
-      {/* Progress bar slim no topo */}
-      <ProgressIndicator currentStep={9} totalSteps={10} />
-
       {/* Título sem container */}
       <div className="space-y-1 text-center">
         <h2 className="text-2xl font-semibold text-foreground">
@@ -60,81 +55,71 @@ export function ContractReviewStep({
         </AlertDescription>
       </Alert>
 
-      {/* Card com Conteúdo do Contrato - MUITO MAIS ESPAÇOSO */}
-      <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-        {/* Header do Card com botão de exportar */}
-        {onExportPDF && (
-          <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
-            <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
-              Contrato Completo
-            </h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onExportPDF}
-              disabled={isLoading}
-              className="h-9"
-            >
-              <FileDown className="w-4 h-4 mr-2" />
-              Exportar PDF
-            </Button>
-          </div>
-        )}
+      {/* Botão exportar (se disponível) */}
+      {onExportPDF && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onExportPDF}
+            disabled={isLoading}
+            className="h-9"
+          >
+            <FileDown className="w-4 h-4 mr-2" />
+            Exportar PDF
+          </Button>
+        </div>
+      )}
 
-        {/* Área de Scroll com Conteúdo - ALTURA MAIOR */}
-        <ScrollArea className="h-[60vh] md:h-[65vh] w-full">
-          <div className="p-6 md:p-8">
-            <ReactMarkdown
-              components={{
-                // Customizar estilos dos elementos - TIPOGRAFIA MELHORADA
-                p: ({ children }) => (
-                  <p className="mb-6 text-[15px] leading-[1.8] text-justify text-foreground/90">
-                    {children}
-                  </p>
-                ),
-                strong: ({ children }) => (
-                  <strong className="font-semibold text-foreground">
-                    {children}
-                  </strong>
-                ),
-                h1: ({ children }) => (
-                  <h1 className="text-center font-bold text-xl md:text-2xl mb-6 mt-8 text-foreground">
-                    {children}
-                  </h1>
-                ),
-                h2: ({ children }) => (
-                  <h2 className="font-bold text-base md:text-lg mb-4 mt-8 text-foreground">
-                    {children}
-                  </h2>
-                ),
-                h3: ({ children }) => (
-                  <h3 className="font-semibold text-[15px] mb-3 mt-6 text-foreground">
-                    {children}
-                  </h3>
-                ),
-                ol: ({ children }) => (
-                  <ol className="list-decimal ml-8 mb-6 space-y-2">
-                    {children}
-                  </ol>
-                ),
-                ul: ({ children }) => (
-                  <ul className="list-disc ml-8 mb-6 space-y-2">{children}</ul>
-                ),
-                li: ({ children }) => (
-                  <li className="text-[15px] leading-[1.8] text-foreground/90">
-                    {children}
-                  </li>
-                ),
-              }}
-            >
-              {contractContent}
-            </ReactMarkdown>
-          </div>
-        </ScrollArea>
+      {/* Conteúdo do Contrato - SEM ScrollArea fixa, usuário rola a página */}
+      <div className="space-y-6">
+        <ReactMarkdown
+          components={{
+            // Customizar estilos dos elementos - TIPOGRAFIA MELHORADA
+            p: ({ children }) => (
+              <p className="mb-6 text-[15px] leading-[1.8] text-justify text-foreground/90">
+                {children}
+              </p>
+            ),
+            strong: ({ children }) => (
+              <strong className="font-semibold text-foreground">
+                {children}
+              </strong>
+            ),
+            h1: ({ children }) => (
+              <h1 className="text-center font-bold text-xl md:text-2xl mb-6 mt-8 text-foreground">
+                {children}
+              </h1>
+            ),
+            h2: ({ children }) => (
+              <h2 className="font-bold text-base md:text-lg mb-4 mt-8 text-foreground">
+                {children}
+              </h2>
+            ),
+            h3: ({ children }) => (
+              <h3 className="font-semibold text-[15px] mb-3 mt-6 text-foreground">
+                {children}
+              </h3>
+            ),
+            ol: ({ children }) => (
+              <ol className="list-decimal ml-8 mb-6 space-y-2">{children}</ol>
+            ),
+            ul: ({ children }) => (
+              <ul className="list-disc ml-8 mb-6 space-y-2">{children}</ul>
+            ),
+            li: ({ children }) => (
+              <li className="text-[15px] leading-[1.8] text-foreground/90">
+                {children}
+              </li>
+            ),
+          }}
+        >
+          {contractContent}
+        </ReactMarkdown>
       </div>
 
-      {/* Card de Aceite - MAIS ESPAÇOSO */}
-      <div className="bg-muted/50 rounded-lg border border-border p-5">
+      {/* Aceite */}
+      <div className="bg-muted/30 rounded-lg border border-border p-4">
         <div className="flex items-start space-x-4">
           <Checkbox
             id="accept-contract"

@@ -43,8 +43,8 @@ export const ResponsibleIdentificationStep =
             </p>
           </div>
 
-          {/* Container branco com pergunta */}
-          <div className="bg-card rounded-lg shadow-sm border border-border p-6 space-y-5">
+          {/* Pergunta - SEM container branco */}
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-foreground">
                 Você é o responsável legal pelo paciente?

@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Label } from '@/components/primitives/label';
-import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Check } from 'lucide-react';
 
@@ -61,18 +60,18 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
     }, [allAnswered, usoCientifico, usoRedesSociais, usoNome, onContinue]);
 
     return (
-      <div className={cn('w-full max-w-md mx-auto space-y-6', className)}>
+      <div className={cn('w-full px-4 space-y-6', className)}>
         {/* Título */}
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold text-foreground">
             Autorizações e Consentimentos
           </h2>
-          <p className="text-base text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Precisamos da sua autorização para alguns usos específicos
           </p>
         </div>
 
-        <Card className="p-6 space-y-5">
+        <div className="space-y-5">
           {/* Explicação */}
           <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
             <div className="flex gap-3">
@@ -273,7 +272,7 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
               Dados).
             </p>
           </div>
-        </Card>
+        </div>
 
         {/* Botões de navegação */}
         <div className="flex gap-3">

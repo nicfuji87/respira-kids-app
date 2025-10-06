@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
-import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import {
   searchPediatricians,
@@ -179,18 +178,18 @@ export const PediatricianStep = React.memo<PediatricianStepProps>(
     ]);
 
     return (
-      <div className={cn('w-full max-w-md mx-auto space-y-6', className)}>
+      <div className={cn('w-full px-4 space-y-6', className)}>
         {/* Título */}
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold text-foreground">
             Pediatra do Paciente
           </h2>
-          <p className="text-base text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Informe o pediatra que acompanha o paciente
           </p>
         </div>
 
-        <Card className="p-6 space-y-5">
+        <div className="space-y-5">
           {/* Opção: Não possui pediatra */}
           <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg border border-border">
             <input
@@ -356,7 +355,7 @@ export const PediatricianStep = React.memo<PediatricianStepProps>(
               </p>
             </>
           )}
-        </Card>
+        </div>
 
         {/* Botões de navegação */}
         <div className="flex gap-3">
