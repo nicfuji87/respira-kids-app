@@ -9,7 +9,10 @@ import {
   AddressStep,
   type AddressData,
 } from '@/components/composed/AddressStep';
-import { FinancialResponsibleStep } from '@/components/composed/FinancialResponsibleStep';
+import {
+  FinancialResponsibleStep,
+  type FinancialResponsibleData,
+} from '@/components/composed/FinancialResponsibleStep';
 import {
   PatientDataStep,
   type PatientData,
@@ -88,15 +91,7 @@ export interface PatientRegistrationData {
   endereco?: AddressData;
 
   // Etapa 5: Responsável Financeiro
-  responsavelFinanceiroMesmoQueLegal?: boolean;
-  responsavelFinanceiro?: {
-    nome: string;
-    cpf: string;
-    email: string;
-    telefone: string;
-    whatsappJid: string;
-    endereco: AddressData;
-  };
+  responsavelFinanceiro?: FinancialResponsibleData;
 
   // Etapa 6: Dados do Paciente
   paciente?: PatientData;
@@ -267,33 +262,26 @@ export const PatientRegistrationSteps =
     }, []);
 
     // Handler para responsável financeiro
-    const handleFinancialResponsible = useCallback((isSameAsLegal: boolean) => {
-      console.log(
-        '✅ [PatientRegistrationSteps] handleFinancialResponsible - mesmo que legal:',
-        isSameAsLegal
-      );
-
-      setRegistrationData((prev) => ({
-        ...prev,
-        responsavelFinanceiroMesmoQueLegal: isSameAsLegal,
-      }));
-
-      if (isSameAsLegal) {
-        // Mesmo responsável - ir para dados do paciente
+    const handleFinancialResponsible = useCallback(
+      (data: FinancialResponsibleData) => {
         console.log(
-          '➡️ [PatientRegistrationSteps] Mesmo responsável → Avançando para patient-data (ETAPA 6)'
+          '✅ [PatientRegistrationSteps] handleFinancialResponsible:',
+          data
+        );
+
+        setRegistrationData((prev) => ({
+          ...prev,
+          responsavelFinanceiro: data,
+        }));
+
+        // Sempre avança para dados do paciente
+        console.log(
+          '➡️ [PatientRegistrationSteps] Avançando para patient-data (ETAPA 6)'
         );
         setCurrentStep('patient-data');
-      } else {
-        // Responsável diferente - precisa cadastrar (TODO: implementar)
-        console.log(
-          '⚠️ [PatientRegistrationSteps] Responsável diferente → cadastro ainda não implementado'
-        );
-        // TODO: Criar etapa para cadastrar responsável financeiro diferente
-        // Por enquanto, avançar para patient-data
-        setCurrentStep('patient-data');
-      }
-    }, []);
+      },
+      []
+    );
 
     // Handler para dados do paciente
     const handlePatientData = useCallback((data: PatientData) => {
@@ -775,7 +763,7 @@ export const PatientRegistrationSteps =
             <FinancialResponsibleStep
               onContinue={handleFinancialResponsible}
               onBack={handleBack}
-              defaultValue={registrationData.responsavelFinanceiroMesmoQueLegal}
+              defaultValue={registrationData.responsavelFinanceiro}
             />
           );
 

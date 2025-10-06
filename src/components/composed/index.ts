@@ -205,7 +205,10 @@ export { WhatsAppValidationStep } from './WhatsAppValidationStep';
 export { ResponsibleIdentificationStep } from './ResponsibleIdentificationStep';
 export { ResponsibleDataStep } from './ResponsibleDataStep';
 export { AddressStep } from './AddressStep';
-export { FinancialResponsibleStep } from './FinancialResponsibleStep';
+export {
+  FinancialResponsibleStep,
+  type FinancialResponsibleData,
+} from './FinancialResponsibleStep';
 export { PatientDataStep } from './PatientDataStep';
 export { PediatricianStep } from './PediatricianStep';
 export { AuthorizationsStep } from './AuthorizationsStep';

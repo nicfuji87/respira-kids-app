@@ -484,3 +484,109 @@ export async function trackRegistrationAttempt(data: {
     console.error('Erro ao registrar analytics:', error);
   }
 }
+
+/**
+ * Buscar pessoa por CPF (para verificar responsável financeiro existente)
+ * Público - não requer autenticação
+ */
+export interface PersonByCPFResult {
+  exists: boolean;
+  person?: {
+    id: string;
+    nome: string;
+    cpf_cnpj: string;
+    email?: string;
+    telefone?: string;
+    tipo_pessoa_codigo?: string;
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
+  };
+  error?: string;
+}
+
+export async function searchPersonByCPF(
+  cpf: string
+): Promise<PersonByCPFResult> {
+  try {
+    console.log('🔍 [searchPersonByCPF] Buscando pessoa por CPF:', cpf);
+
+    // Limpar CPF (remover pontos, traços)
+    const cpfLimpo = cpf.replace(/\D/g, '');
+
+    if (cpfLimpo.length !== 11) {
+      return {
+        exists: false,
+        error: 'CPF inválido',
+      };
+    }
+
+    // Buscar pessoa por CPF
+    const { data: pessoa, error: pessoaError } = await supabase
+      .from('vw_usuarios_admin')
+      .select(
+        `
+        id,
+        nome,
+        cpf_cnpj,
+        email,
+        telefone,
+        tipo_pessoa_codigo,
+        cep,
+        logradouro,
+        numero_endereco,
+        complemento_endereco,
+        bairro,
+        cidade,
+        estado
+      `
+      )
+      .eq('cpf_cnpj', cpfLimpo)
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (pessoaError) {
+      console.error('❌ [searchPersonByCPF] Erro ao buscar:', pessoaError);
+      return {
+        exists: false,
+        error: 'Erro ao buscar CPF no sistema',
+      };
+    }
+
+    if (!pessoa) {
+      console.log('❌ [searchPersonByCPF] Pessoa não encontrada');
+      return { exists: false };
+    }
+
+    console.log('✅ [searchPersonByCPF] Pessoa encontrada:', pessoa.nome);
+
+    return {
+      exists: true,
+      person: {
+        id: pessoa.id,
+        nome: pessoa.nome,
+        cpf_cnpj: pessoa.cpf_cnpj,
+        email: pessoa.email || undefined,
+        telefone: pessoa.telefone ? String(pessoa.telefone) : undefined,
+        tipo_pessoa_codigo: pessoa.tipo_pessoa_codigo || undefined,
+        cep: pessoa.cep || undefined,
+        logradouro: pessoa.logradouro || undefined,
+        numero: pessoa.numero_endereco || undefined,
+        complemento: pessoa.complemento_endereco || undefined,
+        bairro: pessoa.bairro || undefined,
+        cidade: pessoa.cidade || undefined,
+        estado: pessoa.estado || undefined,
+      },
+    };
+  } catch (error) {
+    console.error('❌ [searchPersonByCPF] Erro:', error);
+    return {
+      exists: false,
+      error: 'Erro ao buscar CPF',
+    };
+  }
+}
