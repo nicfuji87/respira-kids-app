@@ -399,7 +399,7 @@ export const PatientRegistrationSteps =
           cep: existingUserData?.cep || registrationData.endereco?.cep || '',
           paciente: registrationData.paciente?.nome || '',
           dnPac: registrationData.paciente?.dataNascimento || '', // Já vem em dd/mm/aaaa
-          cpfPac: registrationData.paciente?.cpf || '',
+          cpfPac: registrationData.paciente?.cpf || 'não fornecido',
           hoje: new Date().toLocaleDateString('pt-BR'),
           autorizo: (() => {
             const cientifico = registrationData.autorizacoes?.usoCientifico;
