@@ -27,22 +27,7 @@ export interface FinalizationData {
   };
 
   responsavelFinanceiroMesmoQueLegal: boolean;
-  responsavelFinanceiro?: {
-    nome: string;
-    cpf: string;
-    email: string;
-    telefone: string;
-    whatsappJid: string;
-    endereco?: {
-      cep: string;
-      logradouro: string;
-      bairro: string;
-      cidade: string;
-      estado: string;
-      numero: string;
-      complemento?: string;
-    };
-  };
+  responsavelFinanceiroExistingId?: string; // ID de pessoa existente buscada por CPF
 
   paciente: {
     nome: string;
@@ -89,8 +74,8 @@ export async function finalizePatientRegistration(
     phoneNumber: data.phoneNumber,
     responsavelLegalNome: data.responsavelLegal?.nome || 'Usuário existente',
     responsavelFinanceiroMesmoQueLegal: data.responsavelFinanceiroMesmoQueLegal,
-    responsavelFinanceiroNome:
-      data.responsavelFinanceiro?.nome || 'Mesmo que legal',
+    responsavelFinanceiroExistingId:
+      data.responsavelFinanceiroExistingId || 'Mesmo que legal',
     pacienteNome: data.paciente.nome,
     pacienteSexo: data.paciente.sexo,
     pacienteCpf: data.paciente.cpf || 'Não fornecido',

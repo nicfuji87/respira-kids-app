@@ -338,11 +338,36 @@ export const PatientRegistrationSteps =
       setIsLoadingContract(true);
 
       try {
-        // Determinar quem é o responsável financeiro (para o contrato)
-        const responsavelContrato =
-          registrationData.responsavelFinanceiro ||
-          registrationData.responsavelLegal;
+        // Determinar quem é o contratante (para o contrato)
+        // Se responsável financeiro é o mesmo que legal, usar dados do responsável legal ou existente
+        // Se responsável financeiro é diferente, usar dados da pessoa encontrada
         const existingUserData = registrationData.existingUserData;
+        const responsavelFinanceiro = registrationData.responsavelFinanceiro;
+
+        let contratanteNome = '';
+        let contratanteCpf = '';
+        let contratanteEmail = '';
+
+        if (responsavelFinanceiro?.isSameAsLegal) {
+          // Usar dados do responsável legal/existente
+          contratanteNome =
+            existingUserData?.nome ||
+            registrationData.responsavelLegal?.nome ||
+            '';
+          contratanteCpf =
+            existingUserData?.cpf_cnpj ||
+            registrationData.responsavelLegal?.cpf ||
+            '';
+          contratanteEmail =
+            existingUserData?.email ||
+            registrationData.responsavelLegal?.email ||
+            '';
+        } else if (responsavelFinanceiro?.personData) {
+          // Usar dados da pessoa financeira encontrada
+          contratanteNome = responsavelFinanceiro.personData.nome;
+          contratanteCpf = responsavelFinanceiro.personData.cpf;
+          contratanteEmail = responsavelFinanceiro.personData.email || '';
+        }
 
         // Preparar variáveis do contrato conforme plano
         // Formatar telefone para (XX) XXXXX-XXXX
@@ -351,11 +376,10 @@ export const PatientRegistrationSteps =
           : '';
 
         const contractVariables: ContractVariables = {
-          contratante:
-            existingUserData?.nome || responsavelContrato?.nome || '',
-          cpf: existingUserData?.cpf_cnpj || responsavelContrato?.cpf || '',
+          contratante: contratanteNome,
+          cpf: contratanteCpf,
           telefone: telefoneFormatado,
-          email: existingUserData?.email || responsavelContrato?.email || '',
+          email: contratanteEmail,
           logradouro:
             existingUserData?.logradouro ||
             registrationData.endereco?.logradouro ||
@@ -381,20 +405,12 @@ export const PatientRegistrationSteps =
             const cientifico = registrationData.autorizacoes?.usoCientifico;
             const redesSociais = registrationData.autorizacoes?.usoRedesSociais;
 
-            // Se ambas SIM
-            if (cientifico && redesSociais) {
-              return 'autoriza o uso e veiculação de imagens do paciente e do tratamento, sejam elas fotográficas, em vídeo e/ou quaisquer outras mídias pela CONTRATADA';
+            // Se pelo menos uma é SIM, retorna "autorizo"
+            if (cientifico || redesSociais) {
+              return 'autorizo';
             }
-            // Se SIM e NÃO
-            if (cientifico && !redesSociais) {
-              return 'autoriza o uso e veiculação de imagens do paciente e do tratamento, sejam elas fotográficas, em vídeo e/ou quaisquer outras mídias pela CONTRATADA';
-            }
-            // Se NÃO e SIM
-            if (!cientifico && redesSociais) {
-              return 'autoriza o uso e veiculação de imagens do paciente e do tratamento, sejam elas fotográficas, em vídeo e/ou quaisquer outras mídias pela CONTRATADA';
-            }
-            // Se ambas NÃO
-            return 'não autoriza o uso e veiculação de imagens do paciente e do tratamento, sejam elas fotográficas, em vídeo e/ou quaisquer outras mídias pela CONTRATADA';
+            // Se ambas NÃO, retorna "não autorizo"
+            return 'não autorizo';
           })(),
           fimTerapeutico: (() => {
             const cientifico = registrationData.autorizacoes?.usoCientifico;
@@ -472,8 +488,8 @@ export const PatientRegistrationSteps =
           hasExistingUserData: !!registrationData.existingUserData,
           hasResponsavelLegal: !!registrationData.responsavelLegal,
           hasEndereco: !!registrationData.endereco,
-          responsavelFinanceiroMesmoQueLegal:
-            registrationData.responsavelFinanceiroMesmoQueLegal,
+          responsavelFinanceiroIsSame:
+            registrationData.responsavelFinanceiro?.isSameAsLegal,
           hasResponsavelFinanceiro: !!registrationData.responsavelFinanceiro,
           hasPaciente: !!registrationData.paciente,
           hasPediatra: !!registrationData.pediatra,
@@ -520,17 +536,9 @@ export const PatientRegistrationSteps =
 
           // Responsável Financeiro
           responsavelFinanceiroMesmoQueLegal:
-            registrationData.responsavelFinanceiroMesmoQueLegal ?? true,
-          responsavelFinanceiro: registrationData.responsavelFinanceiro
-            ? {
-                nome: registrationData.responsavelFinanceiro.nome,
-                cpf: registrationData.responsavelFinanceiro.cpf,
-                email: registrationData.responsavelFinanceiro.email,
-                telefone: registrationData.responsavelFinanceiro.telefone,
-                whatsappJid: registrationData.responsavelFinanceiro.whatsappJid,
-                endereco: registrationData.responsavelFinanceiro.endereco,
-              }
-            : undefined,
+            registrationData.responsavelFinanceiro?.isSameAsLegal ?? true,
+          responsavelFinanceiroExistingId:
+            registrationData.responsavelFinanceiro?.existingPersonId,
 
           // Paciente
           paciente: {
@@ -569,7 +577,8 @@ export const PatientRegistrationSteps =
           enderecoCep: finalizationData.endereco.cep,
           responsavelFinanceiroMesmoQueLegal:
             finalizationData.responsavelFinanceiroMesmoQueLegal,
-          hasResponsavelFinanceiro: !!finalizationData.responsavelFinanceiro,
+          responsavelFinanceiroExistingId:
+            finalizationData.responsavelFinanceiroExistingId,
           pacienteNome: finalizationData.paciente.nome,
           pacienteSexo: finalizationData.paciente.sexo,
           hasPacienteCpf: !!finalizationData.paciente.cpf,
@@ -810,8 +819,24 @@ export const PatientRegistrationSteps =
                 responsavel: registrationData.responsavelLegal,
                 endereco: registrationData.endereco,
                 responsavelFinanceiroMesmoQueLegal:
-                  registrationData.responsavelFinanceiroMesmoQueLegal,
-                responsavelFinanceiro: registrationData.responsavelFinanceiro,
+                  registrationData.responsavelFinanceiro?.isSameAsLegal,
+                responsavelFinanceiro: registrationData.responsavelFinanceiro
+                  ?.personData
+                  ? {
+                      nome: registrationData.responsavelFinanceiro.personData
+                        .nome,
+                      cpf: registrationData.responsavelFinanceiro.personData
+                        .cpf,
+                      email:
+                        registrationData.responsavelFinanceiro.personData
+                          .email || '',
+                      telefone:
+                        registrationData.responsavelFinanceiro.personData
+                          .telefone || '',
+                      whatsappJid: '',
+                      endereco: registrationData.endereco!,
+                    }
+                  : undefined,
                 paciente: registrationData.paciente,
                 pediatra: registrationData.pediatra,
                 autorizacoes: registrationData.autorizacoes,
