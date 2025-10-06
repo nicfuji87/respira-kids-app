@@ -517,12 +517,10 @@ export const ReviewStep = React.memo<ReviewStepProps>(
         <Button
           onClick={handleConfirm}
           size="lg"
-          className="w-full h-12 text-base font-semibold"
+          className="w-full h-12 text-sm font-semibold"
           disabled={loading}
         >
-          {loading
-            ? 'Gerando contrato...'
-            : '✅ Confirmo as Informações e Gerar Contrato'}
+          {loading ? 'Gerando contrato...' : '✅ Confirmo e Gerar Contrato'}
         </Button>
       </div>
     );

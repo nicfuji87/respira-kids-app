@@ -398,20 +398,43 @@ export const PatientRegistrationSteps =
           dnPac: registrationData.paciente?.dataNascimento || '', // Já vem em dd/mm/aaaa
           cpfPac: registrationData.paciente?.cpf || '',
           hoje: new Date().toLocaleDateString('pt-BR'),
-          autorizo: registrationData.autorizacoes?.usoCientifico
-            ? 'autorizo'
-            : 'não autorizo',
+          autorizo: (() => {
+            const cientifico = registrationData.autorizacoes?.usoCientifico;
+            const redesSociais = registrationData.autorizacoes?.usoRedesSociais;
+
+            // Se ambas SIM
+            if (cientifico && redesSociais) {
+              return 'autoriza o uso e veiculação de imagens do paciente e do tratamento, sejam elas fotográficas, em vídeo e/ou quaisquer outras mídias pela CONTRATADA';
+            }
+            // Se SIM e NÃO
+            if (cientifico && !redesSociais) {
+              return 'autoriza o uso e veiculação de imagens do paciente e do tratamento, sejam elas fotográficas, em vídeo e/ou quaisquer outras mídias pela CONTRATADA';
+            }
+            // Se NÃO e SIM
+            if (!cientifico && redesSociais) {
+              return 'autoriza o uso e veiculação de imagens do paciente e do tratamento, sejam elas fotográficas, em vídeo e/ou quaisquer outras mídias pela CONTRATADA';
+            }
+            // Se ambas NÃO
+            return 'não autoriza o uso e veiculação de imagens do paciente e do tratamento, sejam elas fotográficas, em vídeo e/ou quaisquer outras mídias pela CONTRATADA';
+          })(),
           fimTerapeutico: (() => {
             const cientifico = registrationData.autorizacoes?.usoCientifico;
             const redesSociais = registrationData.autorizacoes?.usoRedesSociais;
+
+            // Se ambas SIM
             if (cientifico && redesSociais) {
-              return 'fins terapêuticos, uso em redes sociais e pesquisa científica';
-            } else if (redesSociais) {
-              return 'fins terapêuticos e uso em redes sociais';
-            } else if (cientifico) {
-              return 'fins terapêuticos e pesquisa científica';
+              return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
             }
-            return 'fins exclusivamente terapêuticos';
+            // Se SIM e NÃO
+            if (cientifico && !redesSociais) {
+              return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, porém a CONTRATANTE não autoriza em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
+            }
+            // Se NÃO e SIM
+            if (!cientifico && redesSociais) {
+              return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, porém a CONTRATANTE não autoriza em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
+            }
+            // Se ambas NÃO
+            return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
           })(),
           vinculoNome: registrationData.autorizacoes?.usoNome
             ? 'poderão'
