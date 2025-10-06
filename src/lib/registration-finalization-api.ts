@@ -83,7 +83,29 @@ export interface FinalizationResult {
 export async function finalizePatientRegistration(
   data: FinalizationData
 ): Promise<FinalizationResult> {
+  console.log('🚀 [FRONTEND] Iniciando finalização de cadastro...');
+  console.log('📋 [FRONTEND] Resumo dos dados:', {
+    hasExistingUser: !!data.existingPersonId,
+    phoneNumber: data.phoneNumber,
+    responsavelLegalNome: data.responsavelLegal?.nome || 'Usuário existente',
+    responsavelFinanceiroMesmoQueLegal: data.responsavelFinanceiroMesmoQueLegal,
+    responsavelFinanceiroNome:
+      data.responsavelFinanceiro?.nome || 'Mesmo que legal',
+    pacienteNome: data.paciente.nome,
+    pacienteSexo: data.paciente.sexo,
+    pacienteCpf: data.paciente.cpf || 'Não fornecido',
+    pediatraId: data.pediatra.id || 'Novo pediatra',
+    pediatraNome: data.pediatra.nome,
+    pediatraCrm: data.pediatra.crm || 'Não fornecido',
+    contratoId: data.contratoId,
+    enderecoCep: data.endereco.cep,
+    autorizacoes: data.autorizacoes,
+  });
+
   try {
+    console.log('📤 [FRONTEND] Enviando dados para Edge Function...');
+    const startTime = Date.now();
+
     const { data: result, error } = await supabase.functions.invoke(
       'public-patient-registration',
       {
@@ -94,17 +116,46 @@ export async function finalizePatientRegistration(
       }
     );
 
+    const duration = Date.now() - startTime;
+    console.log(`⏱️ [FRONTEND] Edge Function respondeu em ${duration}ms`);
+
     if (error) {
-      console.error('❌ Erro ao finalizar cadastro:', error);
+      console.error('❌ [FRONTEND] Erro retornado pela Edge Function:', error);
+      console.error('❌ [FRONTEND] Detalhes do erro:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
       return {
         success: false,
         error: error.message || 'Erro ao finalizar cadastro',
       };
     }
 
+    if (!result) {
+      console.error('❌ [FRONTEND] Edge Function não retornou dados');
+      return {
+        success: false,
+        error: 'Resposta vazia da Edge Function',
+      };
+    }
+
+    console.log('✅ [FRONTEND] Cadastro finalizado com sucesso!');
+    console.log('📋 [FRONTEND] IDs retornados:', {
+      pacienteId: result.pacienteId,
+      responsavelLegalId: result.responsavelLegalId,
+      responsavelFinanceiroId: result.responsavelFinanceiroId,
+      contratoId: result.contratoId,
+    });
+
     return result as FinalizationResult;
   } catch (error) {
-    console.error('❌ Erro na chamada da Edge Function:', error);
+    console.error('❌ [FRONTEND] Erro na chamada da Edge Function:', error);
+    console.error(
+      '❌ [FRONTEND] Stack trace:',
+      error instanceof Error ? error.stack : 'N/A'
+    );
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Erro desconhecido',

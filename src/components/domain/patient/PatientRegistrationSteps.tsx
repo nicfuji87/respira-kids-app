@@ -481,10 +481,34 @@ export const PatientRegistrationSteps =
 
     // Handler para aceite do contrato
     const handleContractAccept = useCallback(async () => {
-      console.log('✅ [PatientRegistrationSteps] handleContractAccept');
+      console.log(
+        '🎯 [PatientRegistrationSteps] ====== INICIANDO FINALIZAÇÃO DE CADASTRO ======'
+      );
+      console.log(
+        '📋 [PatientRegistrationSteps] Estado atual do registrationData:',
+        {
+          hasWhatsappJid: !!registrationData.whatsappJid,
+          hasPhoneNumber: !!registrationData.phoneNumber,
+          hasExistingPersonId: !!registrationData.existingPersonId,
+          hasExistingUserData: !!registrationData.existingUserData,
+          hasResponsavelLegal: !!registrationData.responsavelLegal,
+          hasEndereco: !!registrationData.endereco,
+          responsavelFinanceiroMesmoQueLegal:
+            registrationData.responsavelFinanceiroMesmoQueLegal,
+          hasResponsavelFinanceiro: !!registrationData.responsavelFinanceiro,
+          hasPaciente: !!registrationData.paciente,
+          hasPediatra: !!registrationData.pediatra,
+          hasAutorizacoes: !!registrationData.autorizacoes,
+          hasContrato: !!registrationData.contrato,
+        }
+      );
       setIsLoadingContract(true);
 
       try {
+        console.log(
+          '📋 [PatientRegistrationSteps] Preparando dados para Edge Function...'
+        );
+
         // Preparar dados para a Edge Function
         const finalizationData: FinalizationData = {
           whatsappJid:
@@ -557,20 +581,68 @@ export const PatientRegistrationSteps =
           contratoId: registrationData.contrato!.contractId,
         };
 
+        console.log('📋 [PatientRegistrationSteps] Dados preparados:', {
+          hasWhatsappJid: !!finalizationData.whatsappJid,
+          phoneNumber: finalizationData.phoneNumber,
+          existingPersonId: finalizationData.existingPersonId,
+          hasExistingUserData: !!finalizationData.existingUserData,
+          hasResponsavelLegal: !!finalizationData.responsavelLegal,
+          enderecoCep: finalizationData.endereco.cep,
+          responsavelFinanceiroMesmoQueLegal:
+            finalizationData.responsavelFinanceiroMesmoQueLegal,
+          hasResponsavelFinanceiro: !!finalizationData.responsavelFinanceiro,
+          pacienteNome: finalizationData.paciente.nome,
+          pacienteSexo: finalizationData.paciente.sexo,
+          hasPacienteCpf: !!finalizationData.paciente.cpf,
+          pediatraId: finalizationData.pediatra.id,
+          pediatraNome: finalizationData.pediatra.nome,
+          autorizacoes: finalizationData.autorizacoes,
+          contratoId: finalizationData.contratoId,
+        });
+
         console.log(
-          '📤 [PatientRegistrationSteps] Enviando dados para finalização...'
+          '📤 [PatientRegistrationSteps] Enviando dados para Edge Function...'
+        );
+        console.log(
+          '⏱️ [PatientRegistrationSteps] Timestamp:',
+          new Date().toISOString()
         );
 
         // Chamar Edge Function
         const result = await finalizePatientRegistration(finalizationData);
 
+        console.log(
+          '📥 [PatientRegistrationSteps] Resposta recebida da Edge Function'
+        );
+        console.log('📋 [PatientRegistrationSteps] Success:', result.success);
+
         if (!result.success) {
+          console.error(
+            '❌ [PatientRegistrationSteps] Erro na finalização:',
+            result.error
+          );
           throw new Error(result.error || 'Erro ao finalizar cadastro');
         }
 
-        console.log('🎉 [PatientRegistrationSteps] Cadastro COMPLETO!');
-        console.log('✅ Paciente criado:', result.pacienteId);
-        console.log('✅ Contrato assinado:', result.contratoId);
+        console.log(
+          '🎉 [PatientRegistrationSteps] ====== CADASTRO COMPLETO COM SUCESSO! ======'
+        );
+        console.log(
+          '✅ [PatientRegistrationSteps] Paciente criado:',
+          result.pacienteId
+        );
+        console.log(
+          '✅ [PatientRegistrationSteps] Responsável legal:',
+          result.responsavelLegalId
+        );
+        console.log(
+          '✅ [PatientRegistrationSteps] Responsável financeiro:',
+          result.responsavelFinanceiroId
+        );
+        console.log(
+          '✅ [PatientRegistrationSteps] Contrato assinado:',
+          result.contratoId
+        );
 
         // Redirecionar para página de sucesso
         const params = new URLSearchParams({
