@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Label } from '@/components/primitives/label';
 import { Input } from '@/components/primitives/input';
 import { Button } from '@/components/primitives/button';
-import { Card } from '@/components/primitives/card';
 import { CPFInput, validateCPF } from '@/components/primitives/CPFInput';
 import { cn } from '@/lib/utils';
 import { AlertCircle } from 'lucide-react';
@@ -136,28 +135,35 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
       Object.values(errors).every((e) => !e);
 
     return (
-      <div className={cn('w-full max-w-md mx-auto space-y-6', className)}>
+      <div className={cn('w-full px-4 space-y-6', className)}>
         {/* Título e descrição */}
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold text-foreground">
             Dados do Responsável Legal
           </h2>
-          <p className="text-base text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Preencha as informações do responsável legal pelo tratamento
           </p>
           {whatsappNumber && (
-            <p className="text-sm text-muted-foreground font-medium">
+            <p className="text-xs text-muted-foreground font-medium mt-2">
               📱 WhatsApp: {whatsappNumber}
             </p>
           )}
         </div>
 
-        <Card className="p-6">
-          <div className="space-y-5">
+        <div className="bg-card rounded-lg shadow-sm border border-border p-5 space-y-4">
+          <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
+            Informações Pessoais
+          </h3>
+
+          <div className="space-y-4">
             {/* Nome completo */}
-            <div className="space-y-2">
-              <Label htmlFor="nome" className="text-sm font-semibold">
-                Nome completo *
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="nome"
+                className="text-xs text-muted-foreground font-normal"
+              >
+                Nome completo <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="nome"
@@ -166,22 +172,25 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
                 onChange={handleNomeChange}
                 onBlur={() => handleBlur('nome')}
                 placeholder="Maria Silva Santos"
-                className="h-12"
+                className="h-11"
                 autoComplete="name"
                 autoFocus
               />
               {errors.nome && touched.nome && (
-                <p className="text-sm text-destructive flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4" />
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
                   {errors.nome}
                 </p>
               )}
             </div>
 
             {/* CPF */}
-            <div className="space-y-2">
-              <Label htmlFor="cpf" className="text-sm font-semibold">
-                CPF *
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="cpf"
+                className="text-xs text-muted-foreground font-normal"
+              >
+                CPF <span className="text-destructive">*</span>
               </Label>
               <CPFInput
                 id="cpf"
@@ -190,16 +199,20 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
                 onBlur={() => handleBlur('cpf')}
                 errorMessage={touched.cpf ? errors.cpf : undefined}
                 autoComplete="off"
+                className="h-11"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground/70 italic">
                 💡 Obrigatório para emissão de Nota Fiscal
               </p>
             </div>
 
             {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-semibold">
-                Email *
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="email"
+                className="text-xs text-muted-foreground font-normal"
+              >
+                Email <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="email"
@@ -209,48 +222,46 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => handleBlur('email')}
                 placeholder="maria@email.com"
-                className="h-12"
+                className="h-11"
                 autoComplete="email"
               />
               {errors.email && touched.email && (
-                <p className="text-sm text-destructive flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4" />
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
                   {errors.email}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground/70 italic">
                 💡 Avisos de agendamento e cobranças serão enviados por email
               </p>
             </div>
           </div>
-        </Card>
+        </div>
 
         {/* Ações */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex gap-3">
           {onBack && (
             <Button
               type="button"
               variant="outline"
               onClick={onBack}
-              size="lg"
-              className="w-full sm:w-auto"
+              className="flex-1 h-12"
             >
-              ← Voltar
+              Voltar
             </Button>
           )}
           <Button
             type="button"
             onClick={handleContinue}
             disabled={!isValid}
-            size="lg"
-            className="w-full flex-1 text-base font-semibold"
+            className="flex-1 h-12"
           >
-            Continuar →
+            Continuar
           </Button>
         </div>
 
         {/* Informação adicional */}
-        <p className="text-xs text-center text-muted-foreground">
+        <p className="text-xs text-center text-muted-foreground/70 italic">
           🔒 Seus dados são protegidos conforme a LGPD
         </p>
       </div>

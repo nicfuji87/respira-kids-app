@@ -107,15 +107,16 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
     ]);
 
     return (
-      <div className={cn('w-full max-w-md mx-auto space-y-6', className)}>
+      <div className={cn('w-full px-4 space-y-6', className)}>
+        {/* Progress bar slim no topo */}
         <ProgressIndicator currentStep={6} totalSteps={10} />
 
-        {/* Título */}
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-foreground">
+        {/* Título sem container */}
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold text-foreground">
             Dados do Paciente
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Preencha as informações do paciente que será atendido
           </p>
         </div>
@@ -125,98 +126,115 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
             e.preventDefault();
             handleContinue();
           }}
-          className="space-y-4"
+          className="space-y-6"
         >
-          {/* Nome completo */}
-          <div className="space-y-2">
-            <Label htmlFor="nome">
-              Nome completo do paciente{' '}
-              <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="nome"
-              type="text"
-              placeholder="Ex: João Silva Santos"
-              value={nome}
-              onChange={(e) => {
-                setNome(e.target.value);
-                if (errors.nome) setErrors((prev) => ({ ...prev, nome: '' }));
-              }}
-              className={cn(errors.nome && 'border-destructive')}
-            />
-            {errors.nome && (
-              <p className="text-sm text-destructive">{errors.nome}</p>
-            )}
-          </div>
+          {/* Card: Informações Básicas */}
+          <div className="bg-card rounded-lg shadow-sm border border-border p-5 space-y-4">
+            <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
+              Informações Básicas
+            </h3>
 
-          {/* Data de nascimento */}
-          <div className="space-y-2">
-            <Label htmlFor="dataNascimento">
-              Data de nascimento <span className="text-destructive">*</span>
-            </Label>
-            <DateInput
-              id="dataNascimento"
-              value={dataNascimento}
-              onChange={(value) => {
-                setDataNascimento(value);
-                if (errors.dataNascimento)
-                  setErrors((prev) => ({ ...prev, dataNascimento: '' }));
-              }}
-              placeholder="DD/MM/AAAA"
-              className={cn(
-                'h-12 text-base',
-                errors.dataNascimento && 'border-destructive'
+            {/* Nome completo */}
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="nome"
+                className="text-xs text-muted-foreground font-normal"
+              >
+                Nome completo do paciente{' '}
+                <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="nome"
+                type="text"
+                placeholder="Ex: João Silva Santos"
+                value={nome}
+                onChange={(e) => {
+                  setNome(e.target.value);
+                  if (errors.nome) setErrors((prev) => ({ ...prev, nome: '' }));
+                }}
+                className={cn('h-11', errors.nome && 'border-destructive')}
+              />
+              {errors.nome && (
+                <p className="text-xs text-destructive">{errors.nome}</p>
               )}
-            />
-            {errors.dataNascimento && (
-              <p className="text-sm text-destructive">
-                {errors.dataNascimento}
-              </p>
-            )}
+            </div>
+
+            {/* Data de nascimento e Sexo (2 colunas) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="dataNascimento"
+                  className="text-xs text-muted-foreground font-normal"
+                >
+                  Data de nascimento <span className="text-destructive">*</span>
+                </Label>
+                <DateInput
+                  id="dataNascimento"
+                  value={dataNascimento}
+                  onChange={(value) => {
+                    setDataNascimento(value);
+                    if (errors.dataNascimento)
+                      setErrors((prev) => ({ ...prev, dataNascimento: '' }));
+                  }}
+                  placeholder="DD/MM/AAAA"
+                  className={cn(
+                    'h-11',
+                    errors.dataNascimento && 'border-destructive'
+                  )}
+                />
+                {errors.dataNascimento && (
+                  <p className="text-xs text-destructive">
+                    {errors.dataNascimento}
+                  </p>
+                )}
+              </div>
+
+              {/* Sexo */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground font-normal">
+                  Sexo <span className="text-destructive">*</span>
+                </Label>
+                <RadioGroup
+                  value={sexo}
+                  onValueChange={(value) => {
+                    setSexo(value as 'M' | 'F');
+                    if (errors.sexo)
+                      setErrors((prev) => ({ ...prev, sexo: '' }));
+                  }}
+                  className="flex gap-2"
+                >
+                  <div className="flex items-center space-x-2 flex-1 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+                    <RadioGroupItem value="M" id="sexo-m" />
+                    <Label
+                      htmlFor="sexo-m"
+                      className="flex-1 cursor-pointer text-sm font-normal"
+                    >
+                      Masculino
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 flex-1 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+                    <RadioGroupItem value="F" id="sexo-f" />
+                    <Label
+                      htmlFor="sexo-f"
+                      className="flex-1 cursor-pointer text-sm font-normal"
+                    >
+                      Feminino
+                    </Label>
+                  </div>
+                </RadioGroup>
+                {errors.sexo && (
+                  <p className="text-xs text-destructive">{errors.sexo}</p>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Sexo */}
-          <div className="space-y-3">
-            <Label className="text-base">
-              Sexo <span className="text-destructive">*</span>
-            </Label>
-            <RadioGroup
-              value={sexo}
-              onValueChange={(value) => {
-                setSexo(value as 'M' | 'F');
-                if (errors.sexo) setErrors((prev) => ({ ...prev, sexo: '' }));
-              }}
-              className="space-y-2"
-            >
-              <div className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="M" id="sexo-m" />
-                <Label
-                  htmlFor="sexo-m"
-                  className="flex-1 cursor-pointer text-base"
-                >
-                  Masculino
-                </Label>
-              </div>
-              <div className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="F" id="sexo-f" />
-                <Label
-                  htmlFor="sexo-f"
-                  className="flex-1 cursor-pointer text-base"
-                >
-                  Feminino
-                </Label>
-              </div>
-            </RadioGroup>
-            {errors.sexo && (
-              <p className="text-sm text-destructive">{errors.sexo}</p>
-            )}
-          </div>
+          {/* Card: Nota Fiscal */}
+          <div className="bg-card rounded-lg shadow-sm border border-border p-5 space-y-4">
+            <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
+              Emissão de Nota Fiscal
+            </h3>
 
-          {/* Nota fiscal */}
-          <div className="space-y-3 pt-4 border-t border-border">
-            <Label className="text-base">
-              Emissão da Nota Fiscal <span className="text-destructive">*</span>
-            </Label>
             <RadioGroup
               value={emitirNotaNomePaciente ? 'paciente' : 'responsavel'}
               onValueChange={(value) =>
@@ -224,84 +242,82 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
               }
               className="space-y-2"
             >
-              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+              <div className="flex items-start space-x-3 p-4 rounded-lg border border-border hover:bg-accent/20 transition-colors">
                 <RadioGroupItem
                   value="responsavel"
                   id="nf-responsavel"
-                  className="mt-1"
+                  className="mt-0.5"
                 />
                 <Label
                   htmlFor="nf-responsavel"
                   className="flex-1 cursor-pointer"
                 >
-                  <div className="text-base font-medium">
+                  <div className="text-sm font-medium">
                     No nome do responsável financeiro
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-1">
                     A nota fiscal será emitida com os dados do responsável
                     financeiro. Os dados do paciente constarão nas observações
                     da NF-e.
                   </p>
                 </Label>
               </div>
-              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+              <div className="flex items-start space-x-3 p-4 rounded-lg border border-border hover:bg-accent/20 transition-colors">
                 <RadioGroupItem
                   value="paciente"
                   id="nf-paciente"
-                  className="mt-1"
+                  className="mt-0.5"
                 />
                 <Label htmlFor="nf-paciente" className="flex-1 cursor-pointer">
-                  <div className="text-base font-medium">
-                    No nome do paciente
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <div className="text-sm font-medium">No nome do paciente</div>
+                  <p className="text-xs text-muted-foreground mt-1">
                     A nota fiscal será emitida com o CPF do paciente
                   </p>
                 </Label>
               </div>
             </RadioGroup>
+
+            {/* CPF do paciente (se emitir nota no nome dele) */}
+            {emitirNotaNomePaciente && (
+              <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300 pt-2 border-t border-border">
+                <Label
+                  htmlFor="cpf"
+                  className="text-xs text-muted-foreground font-normal"
+                >
+                  CPF do paciente <span className="text-destructive">*</span>
+                </Label>
+                <CPFInput
+                  id="cpf"
+                  value={cpf}
+                  onChange={(value) => {
+                    setCpf(value);
+                    if (errors.cpf) setErrors((prev) => ({ ...prev, cpf: '' }));
+                  }}
+                  placeholder="000.000.000-00"
+                  className={cn('h-11', errors.cpf && 'border-destructive')}
+                />
+                {errors.cpf && (
+                  <p className="text-xs text-destructive">{errors.cpf}</p>
+                )}
+                <p className="text-xs text-muted-foreground/70 italic">
+                  O CPF é obrigatório para emissão da nota fiscal no nome do
+                  paciente
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* CPF do paciente (se emitir nota no nome dele) */}
-          {emitirNotaNomePaciente && (
-            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-              <Label htmlFor="cpf" className="text-base">
-                CPF do paciente <span className="text-destructive">*</span>
-              </Label>
-              <CPFInput
-                id="cpf"
-                value={cpf}
-                onChange={(value) => {
-                  setCpf(value);
-                  if (errors.cpf) setErrors((prev) => ({ ...prev, cpf: '' }));
-                }}
-                placeholder="000.000.000-00"
-                className={cn(
-                  'h-12 text-base',
-                  errors.cpf && 'border-destructive'
-                )}
-              />
-              {errors.cpf && (
-                <p className="text-sm text-destructive">{errors.cpf}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                O CPF é obrigatório para emissão da nota fiscal no nome do
-                paciente
-              </p>
-            </div>
-          )}
-
-          {/* Botões */}
-          <div className="flex gap-3 pt-4">
+          {/* Botões fora dos cards */}
+          <div className="flex gap-3">
             <Button
               type="button"
               variant="outline"
               onClick={onBack}
-              className="flex-1"
+              className="flex-1 h-12"
             >
               Voltar
             </Button>
-            <Button type="submit" className="flex-1">
+            <Button type="submit" className="flex-1 h-12">
               Continuar
             </Button>
           </div>

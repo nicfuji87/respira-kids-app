@@ -12,34 +12,21 @@ export interface ProgressIndicatorProps {
 
 export const ProgressIndicator = React.memo<ProgressIndicatorProps>(
   ({ currentStep, totalSteps, className }) => {
+    const progress = (currentStep / totalSteps) * 100;
+
     return (
-      <div className={cn('flex flex-col items-center gap-3', className)}>
-        {/* Texto */}
-        <div className="text-sm font-medium text-muted-foreground">
-          Etapa {currentStep} de {totalSteps}
+      <div className={cn('w-full space-y-2', className)}>
+        {/* Barra de progresso slim */}
+        <div className="relative h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+          <div
+            className="absolute inset-y-0 left-0 bg-primary transition-all duration-300 ease-out"
+            style={{ width: `${progress}%` }}
+          />
         </div>
 
-        {/* Bolinhas */}
-        <div className="flex items-center gap-2">
-          {Array.from({ length: totalSteps }, (_, i) => {
-            const step = i + 1;
-            const isCompleted = step < currentStep;
-            const isCurrent = step === currentStep;
-            const isPending = step > currentStep;
-
-            return (
-              <div
-                key={step}
-                className={cn(
-                  'rounded-full transition-all',
-                  isCompleted && 'w-2 h-2 bg-primary',
-                  isCurrent &&
-                    'w-3 h-3 bg-primary ring-2 ring-primary/30 ring-offset-2',
-                  isPending && 'w-2 h-2 bg-gray-300 dark:bg-gray-600'
-                )}
-              />
-            );
-          })}
+        {/* Texto discreto */}
+        <div className="text-xs text-muted-foreground text-center">
+          Etapa {currentStep} de {totalSteps}
         </div>
       </div>
     );

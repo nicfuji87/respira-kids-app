@@ -4,11 +4,11 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/primitives/button';
-import { Card } from '@/components/primitives/card';
 import { Checkbox } from '@/components/primitives/checkbox';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { AlertCircle, FileDown, CheckCircle } from 'lucide-react';
+import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 
 export interface ContractReviewStepProps {
   contractContent: string; // Conteúdo do contrato (texto formatado)
@@ -37,124 +37,142 @@ export function ContractReviewStep({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-6 p-4">
-      {/* Header */}
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-foreground">
+    <div className="w-full px-4 space-y-6 pb-8">
+      {/* Progress bar slim no topo */}
+      <ProgressIndicator currentStep={9} totalSteps={10} />
+
+      {/* Título sem container */}
+      <div className="space-y-1 text-center">
+        <h2 className="text-2xl font-semibold text-foreground">
           📄 Contrato de Prestação de Serviços
         </h2>
+        <p className="text-xs text-muted-foreground">
+          Revise e aceite o contrato para finalizar o cadastro
+        </p>
       </div>
 
       {/* Alerta de Atenção */}
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          <strong>⚠️ Importante:</strong> Leia todo o contrato com atenção. O
+      <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+        <AlertCircle className="h-5 w-5 text-amber-600" />
+        <AlertDescription className="text-sm">
+          <strong>Importante:</strong> Leia todo o contrato com atenção. O
           aceite deste contrato é obrigatório para a realização das consultas.
         </AlertDescription>
       </Alert>
 
-      {/* Card com Conteúdo do Contrato */}
-      <Card className="p-6 space-y-4">
-        <div className="space-y-4">
-          {onExportPDF && (
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onExportPDF}
-                disabled={isLoading}
-              >
-                <FileDown className="w-4 h-4 mr-2" />
-                Exportar PDF
-              </Button>
-            </div>
-          )}
+      {/* Card com Conteúdo do Contrato - MUITO MAIS ESPAÇOSO */}
+      <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
+        {/* Header do Card com botão de exportar */}
+        {onExportPDF && (
+          <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
+            <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
+              Contrato Completo
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExportPDF}
+              disabled={isLoading}
+              className="h-9"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Exportar PDF
+            </Button>
+          </div>
+        )}
 
-          {/* Área de Scroll com Conteúdo */}
-          <ScrollArea className="h-[400px] w-full rounded-md border p-4">
-            <div className="text-sm leading-relaxed text-foreground">
-              <ReactMarkdown
-                components={{
-                  // Customizar estilos dos elementos
-                  p: ({ children }) => (
-                    <p className="mb-4 text-justify text-foreground">
-                      {children}
-                    </p>
-                  ),
-                  strong: ({ children }) => (
-                    <strong className="font-bold text-foreground">
-                      {children}
-                    </strong>
-                  ),
-                  h1: ({ children }) => (
-                    <h1 className="text-center font-bold text-lg mb-4 text-foreground">
-                      {children}
-                    </h1>
-                  ),
-                  h2: ({ children }) => (
-                    <h2 className="font-bold text-base mb-3 mt-6 text-foreground">
-                      {children}
-                    </h2>
-                  ),
-                  h3: ({ children }) => (
-                    <h3 className="font-bold text-sm mb-2 mt-4 text-foreground">
-                      {children}
-                    </h3>
-                  ),
-                  ol: ({ children }) => (
-                    <ol className="list-decimal ml-6 mb-4">{children}</ol>
-                  ),
-                  ul: ({ children }) => (
-                    <ul className="list-disc ml-6 mb-4">{children}</ul>
-                  ),
-                  li: ({ children }) => (
-                    <li className="mb-2 text-foreground">{children}</li>
-                  ),
-                }}
-              >
-                {contractContent}
-              </ReactMarkdown>
-            </div>
-          </ScrollArea>
-        </div>
-      </Card>
+        {/* Área de Scroll com Conteúdo - ALTURA MAIOR */}
+        <ScrollArea className="h-[60vh] md:h-[65vh] w-full">
+          <div className="p-6 md:p-8">
+            <ReactMarkdown
+              components={{
+                // Customizar estilos dos elementos - TIPOGRAFIA MELHORADA
+                p: ({ children }) => (
+                  <p className="mb-6 text-[15px] leading-[1.8] text-justify text-foreground/90">
+                    {children}
+                  </p>
+                ),
+                strong: ({ children }) => (
+                  <strong className="font-semibold text-foreground">
+                    {children}
+                  </strong>
+                ),
+                h1: ({ children }) => (
+                  <h1 className="text-center font-bold text-xl md:text-2xl mb-6 mt-8 text-foreground">
+                    {children}
+                  </h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 className="font-bold text-base md:text-lg mb-4 mt-8 text-foreground">
+                    {children}
+                  </h2>
+                ),
+                h3: ({ children }) => (
+                  <h3 className="font-semibold text-[15px] mb-3 mt-6 text-foreground">
+                    {children}
+                  </h3>
+                ),
+                ol: ({ children }) => (
+                  <ol className="list-decimal ml-8 mb-6 space-y-2">
+                    {children}
+                  </ol>
+                ),
+                ul: ({ children }) => (
+                  <ul className="list-disc ml-8 mb-6 space-y-2">{children}</ul>
+                ),
+                li: ({ children }) => (
+                  <li className="text-[15px] leading-[1.8] text-foreground/90">
+                    {children}
+                  </li>
+                ),
+              }}
+            >
+              {contractContent}
+            </ReactMarkdown>
+          </div>
+        </ScrollArea>
+      </div>
 
-      {/* Checkbox de Aceite */}
-      <Card className="p-4 bg-muted/50">
-        <div className="flex items-start space-x-3">
+      {/* Card de Aceite - MAIS ESPAÇOSO */}
+      <div className="bg-muted/50 rounded-lg border border-border p-5">
+        <div className="flex items-start space-x-4">
           <Checkbox
             id="accept-contract"
             checked={accepted}
             onCheckedChange={handleAcceptChange}
             disabled={isLoading}
-            className="mt-1"
+            className="mt-1 h-5 w-5"
           />
           <label
             htmlFor="accept-contract"
-            className="text-sm font-medium leading-relaxed cursor-pointer flex-1"
+            className="text-sm leading-relaxed cursor-pointer flex-1"
           >
-            Li e compreendi todos os termos e condições do contrato acima.
-            Declaro estar ciente de que o aceite deste contrato é obrigatório
-            para a realização dos atendimentos de fisioterapia.
+            <span className="font-medium text-foreground">
+              Li e compreendi todos os termos e condições do contrato acima.
+            </span>
+            <br />
+            <span className="text-muted-foreground">
+              Declaro estar ciente de que o aceite deste contrato é obrigatório
+              para a realização dos atendimentos de fisioterapia.
+            </span>
           </label>
         </div>
-      </Card>
+      </div>
 
-      {/* Botões de Ação */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+      {/* Botões de Ação - MAIS ESPAÇOSOS */}
+      <div className="flex gap-3">
         <Button
           variant="outline"
           onClick={onReject}
           disabled={isLoading}
-          className="w-full sm:w-auto"
+          className="flex-1 h-12"
         >
-          ❌ Rejeitar
+          Voltar
         </Button>
         <Button
           onClick={handleAccept}
           disabled={!accepted || isLoading}
-          className="w-full sm:w-auto"
+          className="flex-1 h-12 font-medium"
         >
           {isLoading ? (
             <>
@@ -163,17 +181,17 @@ export function ContractReviewStep({
             </>
           ) : (
             <>
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Aceitar e Assinar Contrato
+              <CheckCircle className="w-5 h-5 mr-2" />
+              Aceitar e Assinar
             </>
           )}
         </Button>
       </div>
 
       {/* Mensagem de Ajuda */}
-      <p className="text-xs text-center text-muted-foreground">
-        Ao aceitar, você concorda com todos os termos estabelecidos no contrato.
-        Uma cópia será enviada para seu WhatsApp e Email cadastrado.
+      <p className="text-xs text-center text-muted-foreground/70 italic">
+        Uma cópia será enviada para seu WhatsApp e Email cadastrado após a
+        confirmação.
       </p>
     </div>
   );
