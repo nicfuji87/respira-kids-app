@@ -209,6 +209,7 @@ export {
   FinancialResponsibleStep,
   type FinancialResponsibleData,
 } from './FinancialResponsibleStep';
+export { FinancialResponsibleDataStep } from './FinancialResponsibleDataStep';
 export { PatientDataStep } from './PatientDataStep';
 export { PediatricianStep } from './PediatricianStep';
 export { AuthorizationsStep } from './AuthorizationsStep';

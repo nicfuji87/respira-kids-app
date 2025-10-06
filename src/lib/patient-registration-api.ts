@@ -486,6 +486,84 @@ export async function trackRegistrationAttempt(data: {
 }
 
 /**
+ * Validar WhatsApp e obter JID (sem enviar código)
+ * @param phoneNumber - Número do telefone com DDD (ex: 61981446666)
+ * @returns exists: se o WhatsApp é válido, jid: identificador único do WhatsApp
+ */
+export async function validateWhatsAppAndGetJID(phoneNumber: string): Promise<{
+  exists: boolean;
+  jid?: string;
+  error?: string;
+}> {
+  try {
+    console.log(
+      '📱 [validateWhatsAppAndGetJID] Validando WhatsApp:',
+      phoneNumber
+    );
+
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+
+    if (cleanPhone.length !== 11) {
+      return {
+        exists: false,
+        error: 'Número deve ter 11 dígitos (DDD + telefone)',
+      };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(
+      'https://webhooks-i.infusecomunicacao.online/webhook/verificaWhatsApp',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          whatsapp: cleanPhone,
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Formato esperado: [{ exists: boolean, jid: string }]
+    if (
+      Array.isArray(data) &&
+      data.length > 0 &&
+      typeof data[0].exists === 'boolean'
+    ) {
+      const exists = data[0].exists;
+      const jid = data[0].jid || `55${cleanPhone}@s.whatsapp.net`;
+
+      console.log('✅ [validateWhatsAppAndGetJID] WhatsApp válido:', exists);
+      console.log('📱 [validateWhatsAppAndGetJID] JID:', jid);
+
+      return {
+        exists,
+        jid: exists ? jid : undefined,
+      };
+    }
+
+    throw new Error('Formato de resposta inválido');
+  } catch (error) {
+    console.error('❌ [validateWhatsAppAndGetJID] Erro:', error);
+    return {
+      exists: false,
+      error: 'Não foi possível verificar o WhatsApp',
+    };
+  }
+}
+
+/**
  * Buscar pessoa por CPF (para verificar responsável financeiro existente)
  * Público - não requer autenticação
  */

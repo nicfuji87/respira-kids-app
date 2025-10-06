@@ -12,6 +12,7 @@ import {
   searchPersonByCPF,
   type PersonByCPFResult,
 } from '@/lib/patient-registration-api';
+import { FinancialResponsibleDataStep } from './FinancialResponsibleDataStep';
 
 // AI dev note: FinancialResponsibleStep - Etapa para definir responsável financeiro
 // 1) Pergunta se é o mesmo que legal ou outra pessoa
@@ -28,6 +29,14 @@ export interface FinancialResponsibleData {
     email?: string;
     telefone?: string;
   };
+  newPersonData?: {
+    // Se é pessoa nova (não encontrada por CPF)
+    cpf: string;
+    nome: string;
+    email: string;
+    whatsapp: string;
+    whatsappJid: string;
+  };
 }
 
 export interface FinancialResponsibleStepProps {
@@ -41,7 +50,8 @@ type StepState =
   | 'selection'
   | 'cpf-search'
   | 'person-found'
-  | 'person-not-found';
+  | 'person-not-found'
+  | 'register-new';
 
 export const FinancialResponsibleStep =
   React.memo<FinancialResponsibleStepProps>(
@@ -160,11 +170,29 @@ export const FinancialResponsibleStep =
       }, [foundPerson, onContinue]);
 
       const handleNewPersonContinue = useCallback(() => {
-        console.log('🆕 [FinancialResponsibleStep] Cadastrando nova pessoa');
-        // TODO: Implementar cadastro de nova pessoa
-        // Por enquanto, avisar que não está implementado
-        alert('Cadastro de novo responsável financeiro ainda não implementado');
+        console.log('🆕 [FinancialResponsibleStep] Avançando para cadastro');
+        setStepState('register-new');
       }, []);
+
+      const handleNewPersonDataSubmit = useCallback(
+        (data: {
+          cpf: string;
+          nome: string;
+          email: string;
+          whatsapp: string;
+          whatsappJid: string;
+        }) => {
+          console.log(
+            '✅ [FinancialResponsibleStep] Nova pessoa cadastrada:',
+            data
+          );
+          onContinue({
+            isSameAsLegal: false,
+            newPersonData: data,
+          });
+        },
+        [onContinue]
+      );
 
       const handleBackToSearch = useCallback(() => {
         setStepState('cpf-search');
@@ -549,13 +577,24 @@ export const FinancialResponsibleStep =
                 <Button
                   onClick={handleNewPersonContinue}
                   className="flex-1 h-12"
-                  disabled
                 >
-                  Cadastrar Novo (Em Breve)
+                  Cadastrar Novo
                 </Button>
               </div>
             </div>
           </div>
+        );
+      }
+
+      // Renderizar cadastro de nova pessoa
+      if (stepState === 'register-new') {
+        return (
+          <FinancialResponsibleDataStep
+            onContinue={handleNewPersonDataSubmit}
+            onBack={handleBackToSearch}
+            cpf={cpf.replace(/\D/g, '')}
+            className={className}
+          />
         );
       }
 
