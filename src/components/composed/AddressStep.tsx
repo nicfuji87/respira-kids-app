@@ -208,241 +208,222 @@ export const AddressStep = React.memo<AddressStepProps>(
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Card: Localização */}
-          <div className="bg-card rounded-lg shadow-sm border border-border p-5 space-y-4">
-            <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
-              Localização
-            </h3>
-
-            {/* CEP com busca */}
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="cep"
-                className="text-xs text-muted-foreground font-normal"
-              >
-                CEP <span className="text-destructive">*</span>
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="cep"
-                  type="text"
-                  placeholder="00000-000"
-                  value={cep}
-                  onChange={(e) => handleCepChange(e.target.value)}
-                  onKeyDown={handleCepKeyDown}
-                  maxLength={9}
-                  className={cn(
-                    'h-12 text-base flex-1',
-                    errors.cep && 'border-destructive'
-                  )}
-                />
-                <Button
-                  type="button"
-                  onClick={handleSearchCep}
-                  disabled={
-                    isSearchingCep || cep.replace(/\D/g, '').length !== 8
-                  }
-                  size="lg"
-                  className="h-12 px-6"
-                >
-                  {isSearchingCep ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Buscando...
-                    </>
-                  ) : cepFound ? (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      Buscar
-                    </>
-                  ) : (
-                    <>
-                      <MapPin className="w-4 h-4 mr-2" />
-                      Buscar
-                    </>
-                  )}
-                </Button>
-              </div>
-              {errors.cep && (
-                <p className="text-sm text-destructive">{errors.cep}</p>
-              )}
-              {cepFound && (
-                <p className="text-sm text-green-600 dark:text-green-400 flex items-center">
-                  <Check className="w-4 h-4 mr-1" />
-                  Endereço encontrado
-                </p>
-              )}
-            </div>
-
-            {/* Logradouro */}
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="logradouro"
-                className="text-xs text-muted-foreground font-normal"
-              >
-                Logradouro <span className="text-destructive">*</span>
-              </Label>
+          {/* CEP com busca */}
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="cep"
+              className="text-xs text-muted-foreground font-normal"
+            >
+              CEP <span className="text-destructive">*</span>
+            </Label>
+            <div className="flex gap-2">
               <Input
-                id="logradouro"
+                id="cep"
                 type="text"
-                placeholder="Rua, Avenida, Travessa..."
-                value={logradouro}
-                onChange={(e) => {
-                  setLogradouro(e.target.value);
-                  if (errors.logradouro)
-                    setErrors((prev) => ({ ...prev, logradouro: '' }));
-                }}
-                disabled={isSearchingCep}
+                placeholder="00000-000"
+                value={cep}
+                onChange={(e) => handleCepChange(e.target.value)}
+                onKeyDown={handleCepKeyDown}
+                maxLength={9}
                 className={cn(
-                  'h-11',
-                  errors.logradouro && 'border-destructive'
+                  'h-12 text-base flex-1',
+                  errors.cep && 'border-destructive'
                 )}
               />
-              {errors.logradouro && (
-                <p className="text-xs text-destructive">{errors.logradouro}</p>
-              )}
+              <Button
+                type="button"
+                onClick={handleSearchCep}
+                disabled={isSearchingCep || cep.replace(/\D/g, '').length !== 8}
+                size="lg"
+                className="h-12 px-6"
+              >
+                {isSearchingCep ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Buscando...
+                  </>
+                ) : cepFound ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Buscar
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Buscar
+                  </>
+                )}
+              </Button>
             </div>
+            {errors.cep && (
+              <p className="text-sm text-destructive">{errors.cep}</p>
+            )}
+            {cepFound && (
+              <p className="text-sm text-green-600 dark:text-green-400 flex items-center">
+                <Check className="w-4 h-4 mr-1" />
+                Endereço encontrado
+              </p>
+            )}
+          </div>
 
-            {/* Bairro */}
+          {/* Logradouro */}
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="logradouro"
+              className="text-xs text-muted-foreground font-normal"
+            >
+              Logradouro <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="logradouro"
+              type="text"
+              placeholder="Rua, Avenida, Travessa..."
+              value={logradouro}
+              onChange={(e) => {
+                setLogradouro(e.target.value);
+                if (errors.logradouro)
+                  setErrors((prev) => ({ ...prev, logradouro: '' }));
+              }}
+              disabled={isSearchingCep}
+              className={cn('h-11', errors.logradouro && 'border-destructive')}
+            />
+            {errors.logradouro && (
+              <p className="text-xs text-destructive">{errors.logradouro}</p>
+            )}
+          </div>
+
+          {/* Bairro */}
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="bairro"
+              className="text-xs text-muted-foreground font-normal"
+            >
+              Bairro <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="bairro"
+              type="text"
+              placeholder="Centro, Jardim..."
+              value={bairro}
+              onChange={(e) => {
+                setBairro(e.target.value);
+                if (errors.bairro)
+                  setErrors((prev) => ({ ...prev, bairro: '' }));
+              }}
+              disabled={isSearchingCep}
+              className={cn('h-11', errors.bairro && 'border-destructive')}
+            />
+            {errors.bairro && (
+              <p className="text-xs text-destructive">{errors.bairro}</p>
+            )}
+          </div>
+
+          {/* Cidade e Estado */}
+          <div className="grid grid-cols-[1fr,100px] gap-3">
             <div className="space-y-1.5">
               <Label
-                htmlFor="bairro"
+                htmlFor="cidade"
                 className="text-xs text-muted-foreground font-normal"
               >
-                Bairro <span className="text-destructive">*</span>
+                Cidade <span className="text-destructive">*</span>
               </Label>
               <Input
-                id="bairro"
+                id="cidade"
                 type="text"
-                placeholder="Centro, Jardim..."
-                value={bairro}
+                placeholder="Brasília"
+                value={cidade}
                 onChange={(e) => {
-                  setBairro(e.target.value);
-                  if (errors.bairro)
-                    setErrors((prev) => ({ ...prev, bairro: '' }));
+                  setCidade(e.target.value);
+                  if (errors.cidade)
+                    setErrors((prev) => ({ ...prev, cidade: '' }));
                 }}
                 disabled={isSearchingCep}
-                className={cn('h-11', errors.bairro && 'border-destructive')}
+                className={cn('h-11', errors.cidade && 'border-destructive')}
               />
-              {errors.bairro && (
-                <p className="text-xs text-destructive">{errors.bairro}</p>
+              {errors.cidade && (
+                <p className="text-xs text-destructive">{errors.cidade}</p>
               )}
             </div>
 
-            {/* Cidade e Estado */}
-            <div className="grid grid-cols-[1fr,100px] gap-3">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="cidade"
-                  className="text-xs text-muted-foreground font-normal"
-                >
-                  Cidade <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="cidade"
-                  type="text"
-                  placeholder="Brasília"
-                  value={cidade}
-                  onChange={(e) => {
-                    setCidade(e.target.value);
-                    if (errors.cidade)
-                      setErrors((prev) => ({ ...prev, cidade: '' }));
-                  }}
-                  disabled={isSearchingCep}
-                  className={cn('h-11', errors.cidade && 'border-destructive')}
-                />
-                {errors.cidade && (
-                  <p className="text-xs text-destructive">{errors.cidade}</p>
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="estado"
+                className="text-xs text-muted-foreground font-normal"
+              >
+                UF <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="estado"
+                type="text"
+                placeholder="DF"
+                value={estado}
+                onChange={(e) => {
+                  setEstado(e.target.value.toUpperCase());
+                  if (errors.estado)
+                    setErrors((prev) => ({ ...prev, estado: '' }));
+                }}
+                disabled={isSearchingCep}
+                maxLength={2}
+                className={cn(
+                  'h-11 text-center',
+                  errors.estado && 'border-destructive'
                 )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="estado"
-                  className="text-xs text-muted-foreground font-normal"
-                >
-                  UF <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="estado"
-                  type="text"
-                  placeholder="DF"
-                  value={estado}
-                  onChange={(e) => {
-                    setEstado(e.target.value.toUpperCase());
-                    if (errors.estado)
-                      setErrors((prev) => ({ ...prev, estado: '' }));
-                  }}
-                  disabled={isSearchingCep}
-                  maxLength={2}
-                  className={cn(
-                    'h-11 text-center',
-                    errors.estado && 'border-destructive'
-                  )}
-                />
-                {errors.estado && (
-                  <p className="text-xs text-destructive">{errors.estado}</p>
-                )}
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground/70 italic">
-              💡 Digite o CEP e clique em "Buscar" para preenchimento automático
-            </p>
-          </div>
-
-          {/* Card: Detalhes */}
-          <div className="bg-card rounded-lg shadow-sm border border-border p-5 space-y-4">
-            <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
-              Detalhes
-            </h3>
-
-            {/* Número e Complemento */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="numero"
-                  className="text-xs text-muted-foreground font-normal"
-                >
-                  Número <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="numero"
-                  type="text"
-                  placeholder="123"
-                  value={numero}
-                  onChange={(e) => {
-                    setNumero(e.target.value);
-                    if (errors.numero)
-                      setErrors((prev) => ({ ...prev, numero: '' }));
-                  }}
-                  className={cn('h-11', errors.numero && 'border-destructive')}
-                />
-                {errors.numero && (
-                  <p className="text-xs text-destructive">{errors.numero}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="complemento"
-                  className="text-xs text-muted-foreground font-normal"
-                >
-                  Complemento
-                </Label>
-                <Input
-                  id="complemento"
-                  type="text"
-                  placeholder="Apto 101"
-                  value={complemento}
-                  onChange={(e) => setComplemento(e.target.value)}
-                  className="h-11"
-                />
-              </div>
+              />
+              {errors.estado && (
+                <p className="text-xs text-destructive">{errors.estado}</p>
+              )}
             </div>
           </div>
 
-          {/* Botões fora dos cards */}
+          <p className="text-xs text-muted-foreground/70 italic">
+            💡 Digite o CEP e clique em "Buscar" para preenchimento automático
+          </p>
+
+          {/* Número e Complemento */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="numero"
+                className="text-xs text-muted-foreground font-normal"
+              >
+                Número <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="numero"
+                type="text"
+                placeholder="123"
+                value={numero}
+                onChange={(e) => {
+                  setNumero(e.target.value);
+                  if (errors.numero)
+                    setErrors((prev) => ({ ...prev, numero: '' }));
+                }}
+                className={cn('h-11', errors.numero && 'border-destructive')}
+              />
+              {errors.numero && (
+                <p className="text-xs text-destructive">{errors.numero}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="complemento"
+                className="text-xs text-muted-foreground font-normal"
+              >
+                Complemento
+              </Label>
+              <Input
+                id="complemento"
+                type="text"
+                placeholder="Apto 101"
+                value={complemento}
+                onChange={(e) => setComplemento(e.target.value)}
+                className="h-11"
+              />
+            </div>
+          </div>
+
+          {/* Botões */}
           <div className="flex gap-3">
             <Button
               type="button"

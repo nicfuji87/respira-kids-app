@@ -197,12 +197,12 @@ export const PatientRegistrationSteps =
         }));
 
         if (isSelfResponsible) {
-          // Se pessoa EXISTE e é o responsável → ir para address (atualizar se necessário)
+          // Se pessoa EXISTE e é o responsável → pular direto para financial-responsible
           if (registrationData.existingPersonId) {
             console.log(
-              '✅ [PatientRegistrationSteps] Usuário existente → vai para address'
+              '✅ [PatientRegistrationSteps] Usuário existente → pula direto para financial-responsible'
             );
-            setCurrentStep('address');
+            setCurrentStep('financial-responsible');
           } else {
             // Pessoa NOVA e é o responsável → cadastrar dados do responsável primeiro
             console.log(
