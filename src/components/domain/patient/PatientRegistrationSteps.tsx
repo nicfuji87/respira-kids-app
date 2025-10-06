@@ -202,12 +202,12 @@ export const PatientRegistrationSteps =
         }));
 
         if (isSelfResponsible) {
-          // Se pessoa EXISTE e é o responsável → ir direto para cadastro do PACIENTE
+          // Se pessoa EXISTE e é o responsável → ir para address (atualizar se necessário)
           if (registrationData.existingPersonId) {
             console.log(
-              '✅ [PatientRegistrationSteps] Usuário existente → vai para patient-data'
+              '✅ [PatientRegistrationSteps] Usuário existente → vai para address'
             );
-            setCurrentStep('patient-data');
+            setCurrentStep('address');
           } else {
             // Pessoa NOVA e é o responsável → cadastrar dados do responsável primeiro
             console.log(
@@ -247,33 +247,24 @@ export const PatientRegistrationSteps =
     }, []);
 
     // Handler para endereço
-    const handleAddress = useCallback(
-      (data: AddressData) => {
-        console.log('✅ [PatientRegistrationSteps] handleAddress:', data);
+    const handleAddress = useCallback((data: AddressData) => {
+      console.log('✅ [PatientRegistrationSteps] handleAddress:', data);
 
-        setRegistrationData((prev) => ({
-          ...prev,
-          endereco: data,
-        }));
+      setRegistrationData((prev) => ({
+        ...prev,
+        endereco: data,
+      }));
 
-        // Se usuário é EXISTENTE, pular responsável financeiro (já cadastrado)
-        if (registrationData.existingPersonId) {
-          console.log(
-            '✅ [PatientRegistrationSteps] Usuário existente → pula financial-responsible'
-          );
-          console.log(
-            '➡️ [PatientRegistrationSteps] Avançando para patient-data (ETAPA 6)'
-          );
-          setCurrentStep('patient-data');
-        } else {
-          console.log(
-            '➡️ [PatientRegistrationSteps] Avançando para financial-responsible (ETAPA 5)'
-          );
-          setCurrentStep('financial-responsible');
-        }
-      },
-      [registrationData.existingPersonId]
-    );
+      // SEMPRE perguntar sobre responsável financeiro, mesmo para usuários existentes
+      // Cada paciente pode ter um responsável financeiro diferente
+      console.log(
+        '➡️ [PatientRegistrationSteps] Avançando para financial-responsible (ETAPA 5)'
+      );
+      console.log(
+        '💡 [PatientRegistrationSteps] Perguntando sobre responsável financeiro para ESTE paciente'
+      );
+      setCurrentStep('financial-responsible');
+    }, []);
 
     // Handler para responsável financeiro
     const handleFinancialResponsible = useCallback((isSameAsLegal: boolean) => {
@@ -681,21 +672,20 @@ export const PatientRegistrationSteps =
           setCurrentStep('responsible-identification');
           break;
         case 'address':
-          setCurrentStep('responsible-data');
+          // Se usuário existente: volta para responsible-identification
+          // Se novo usuário: volta para responsible-data
+          if (registrationData.existingPersonId) {
+            setCurrentStep('responsible-identification');
+          } else {
+            setCurrentStep('responsible-data');
+          }
           break;
         case 'financial-responsible':
           setCurrentStep('address');
           break;
         case 'patient-data':
-          // Se tem responsável financeiro definido, volta para financial-responsible
-          // Se não (usuário existente), volta para address
-          if (
-            registrationData.responsavelFinanceiroMesmoQueLegal !== undefined
-          ) {
-            setCurrentStep('financial-responsible');
-          } else {
-            setCurrentStep('address');
-          }
+          // SEMPRE volta para financial-responsible (agora é obrigatório para todos)
+          setCurrentStep('financial-responsible');
           break;
         case 'pediatrician':
           setCurrentStep('patient-data');
@@ -712,7 +702,7 @@ export const PatientRegistrationSteps =
         default:
           break;
       }
-    }, [currentStep, registrationData.responsavelFinanceiroMesmoQueLegal]);
+    }, [currentStep, registrationData.existingPersonId]);
 
     // Calcular progresso (etapas válidas)
     const { stepNumber, totalSteps } = useMemo(() => {
