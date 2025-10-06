@@ -3,7 +3,6 @@ import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { MapPin, Loader2, Check } from 'lucide-react';
-import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { cn } from '@/lib/utils';
 import {
   fetchAddressByCep,
@@ -198,9 +197,6 @@ export const AddressStep = React.memo<AddressStepProps>(
 
     return (
       <div className={cn('w-full px-4 space-y-6', className)}>
-        {/* Progress bar slim no topo */}
-        <ProgressIndicator currentStep={4} totalSteps={10} />
-
         {/* Título sem container */}
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold text-foreground">

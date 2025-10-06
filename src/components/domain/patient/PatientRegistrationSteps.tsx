@@ -765,13 +765,11 @@ export const PatientRegistrationSteps =
     };
 
     return (
-      <div className={cn('w-full min-h-screen py-8 px-4', className)}>
-        {/* Indicador de progresso */}
-        <ProgressIndicator
-          currentStep={stepNumber}
-          totalSteps={totalSteps}
-          className="mb-8"
-        />
+      <div className={cn('w-full min-h-screen py-8', className)}>
+        {/* Indicador de progresso ÚNICO */}
+        <div className="px-4 mb-6">
+          <ProgressIndicator currentStep={stepNumber} totalSteps={totalSteps} />
+        </div>
 
         {/* Etapa atual */}
         <div className="w-full">{renderCurrentStep()}</div>

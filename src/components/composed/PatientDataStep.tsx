@@ -8,7 +8,6 @@ import {
 } from '@/components/primitives/radio-group';
 import { CPFInput } from '@/components/primitives/CPFInput';
 import { DateInput } from '@/components/primitives/DateInput';
-import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { cn } from '@/lib/utils';
 
 // AI dev note: PatientDataStep - Etapa de cadastro de dados do paciente
@@ -108,10 +107,7 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
 
     return (
       <div className={cn('w-full px-4 space-y-6', className)}>
-        {/* Progress bar slim no topo */}
-        <ProgressIndicator currentStep={6} totalSteps={10} />
-
-        {/* Título sem container */}
+        {/* Título */}
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold text-foreground">
             Dados do Paciente
@@ -121,19 +117,15 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
           </p>
         </div>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleContinue();
-          }}
-          className="space-y-6"
-        >
-          {/* Card: Informações Básicas */}
-          <div className="bg-card rounded-lg shadow-sm border border-border p-5 space-y-4">
-            <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
-              Informações Básicas
-            </h3>
-
+        {/* Container branco ÚNICO */}
+        <div className="bg-card rounded-lg shadow-sm border border-border p-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleContinue();
+            }}
+            className="space-y-5"
+          >
             {/* Nome completo */}
             <div className="space-y-1.5">
               <Label
@@ -159,8 +151,8 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
               )}
             </div>
 
-            {/* Data de nascimento e Sexo (2 colunas) */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Data de nascimento, Sexo e CPF */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label
                   htmlFor="dataNascimento"
@@ -201,24 +193,24 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
                     if (errors.sexo)
                       setErrors((prev) => ({ ...prev, sexo: '' }));
                   }}
-                  className="flex gap-2"
+                  className="flex gap-2 h-11"
                 >
-                  <div className="flex items-center space-x-2 flex-1 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+                  <div className="flex items-center justify-center space-x-2 flex-1 rounded-lg border border-border hover:bg-accent/50 transition-colors">
                     <RadioGroupItem value="M" id="sexo-m" />
                     <Label
                       htmlFor="sexo-m"
-                      className="flex-1 cursor-pointer text-sm font-normal"
+                      className="cursor-pointer text-sm font-normal"
                     >
-                      Masculino
+                      M
                     </Label>
                   </div>
-                  <div className="flex items-center space-x-2 flex-1 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+                  <div className="flex items-center justify-center space-x-2 flex-1 rounded-lg border border-border hover:bg-accent/50 transition-colors">
                     <RadioGroupItem value="F" id="sexo-f" />
                     <Label
                       htmlFor="sexo-f"
-                      className="flex-1 cursor-pointer text-sm font-normal"
+                      className="cursor-pointer text-sm font-normal"
                     >
-                      Feminino
+                      F
                     </Label>
                   </div>
                 </RadioGroup>
@@ -226,68 +218,17 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
                   <p className="text-xs text-destructive">{errors.sexo}</p>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* Card: Nota Fiscal */}
-          <div className="bg-card rounded-lg shadow-sm border border-border p-5 space-y-4">
-            <h3 className="text-sm font-medium text-foreground/80 uppercase tracking-wide">
-              Emissão de Nota Fiscal
-            </h3>
-
-            <RadioGroup
-              value={emitirNotaNomePaciente ? 'paciente' : 'responsavel'}
-              onValueChange={(value) =>
-                setEmitirNotaNomePaciente(value === 'paciente')
-              }
-              className="space-y-2"
-            >
-              <div className="flex items-start space-x-3 p-4 rounded-lg border border-border hover:bg-accent/20 transition-colors">
-                <RadioGroupItem
-                  value="responsavel"
-                  id="nf-responsavel"
-                  className="mt-0.5"
-                />
+              {/* CPF */}
+              <div className="space-y-1.5">
                 <Label
-                  htmlFor="nf-responsavel"
-                  className="flex-1 cursor-pointer"
-                >
-                  <div className="text-sm font-medium">
-                    No nome do responsável financeiro
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    A nota fiscal será emitida com os dados do responsável
-                    financeiro. Os dados do paciente constarão nas observações
-                    da NF-e.
-                  </p>
-                </Label>
-              </div>
-              <div className="flex items-start space-x-3 p-4 rounded-lg border border-border hover:bg-accent/20 transition-colors">
-                <RadioGroupItem
-                  value="paciente"
-                  id="nf-paciente"
-                  className="mt-0.5"
-                />
-                <Label htmlFor="nf-paciente" className="flex-1 cursor-pointer">
-                  <div className="text-sm font-medium">No nome do paciente</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    A nota fiscal será emitida com o CPF do paciente
-                  </p>
-                </Label>
-              </div>
-            </RadioGroup>
-
-            {/* CPF do paciente (se emitir nota no nome dele) */}
-            {emitirNotaNomePaciente && (
-              <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300 pt-2 border-t border-border">
-                <Label
-                  htmlFor="cpf"
+                  htmlFor="cpf-paciente"
                   className="text-xs text-muted-foreground font-normal"
                 >
-                  CPF do paciente <span className="text-destructive">*</span>
+                  CPF
                 </Label>
                 <CPFInput
-                  id="cpf"
+                  id="cpf-paciente"
                   value={cpf}
                   onChange={(value) => {
                     setCpf(value);
@@ -299,29 +240,87 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
                 {errors.cpf && (
                   <p className="text-xs text-destructive">{errors.cpf}</p>
                 )}
-                <p className="text-xs text-muted-foreground/70 italic">
-                  O CPF é obrigatório para emissão da nota fiscal no nome do
-                  paciente
-                </p>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Botões fora dos cards */}
-          <div className="flex gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onBack}
-              className="flex-1 h-12"
-            >
-              Voltar
-            </Button>
-            <Button type="submit" className="flex-1 h-12">
-              Continuar
-            </Button>
-          </div>
-        </form>
+            {/* Divisor */}
+            <div className="border-t border-border"></div>
+
+            {/* Nota Fiscal */}
+            <div className="space-y-3">
+              <Label className="text-xs text-muted-foreground font-normal">
+                Emissão de Nota Fiscal{' '}
+                <span className="text-destructive">*</span>
+              </Label>
+
+              <RadioGroup
+                value={emitirNotaNomePaciente ? 'paciente' : 'responsavel'}
+                onValueChange={(value) =>
+                  setEmitirNotaNomePaciente(value === 'paciente')
+                }
+                className="space-y-2"
+              >
+                <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-accent/20 transition-colors">
+                  <RadioGroupItem
+                    value="responsavel"
+                    id="nf-responsavel"
+                    className="mt-0.5"
+                  />
+                  <Label
+                    htmlFor="nf-responsavel"
+                    className="flex-1 cursor-pointer"
+                  >
+                    <div className="text-sm font-medium">
+                      No nome do responsável financeiro
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      A nota fiscal será emitida com os dados do responsável
+                    </p>
+                  </Label>
+                </div>
+                <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-accent/20 transition-colors">
+                  <RadioGroupItem
+                    value="paciente"
+                    id="nf-paciente"
+                    className="mt-0.5"
+                  />
+                  <Label
+                    htmlFor="nf-paciente"
+                    className="flex-1 cursor-pointer"
+                  >
+                    <div className="text-sm font-medium">
+                      No nome do paciente
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Será necessário o CPF do paciente
+                    </p>
+                  </Label>
+                </div>
+              </RadioGroup>
+
+              {emitirNotaNomePaciente && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 italic">
+                  ⚠️ O CPF do paciente é obrigatório para esta opção
+                </p>
+              )}
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onBack}
+                className="flex-1 h-12"
+              >
+                Voltar
+              </Button>
+              <Button type="submit" className="flex-1 h-12">
+                Continuar
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     );
   }
