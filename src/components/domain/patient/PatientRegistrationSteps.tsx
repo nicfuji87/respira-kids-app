@@ -539,6 +539,7 @@ export const PatientRegistrationSteps =
             registrationData.responsavelFinanceiro?.isSameAsLegal ?? true,
           responsavelFinanceiroExistingId:
             registrationData.responsavelFinanceiro?.existingPersonId,
+          newPersonData: registrationData.responsavelFinanceiro?.newPersonData,
 
           // Paciente
           paciente: {
@@ -579,6 +580,7 @@ export const PatientRegistrationSteps =
             finalizationData.responsavelFinanceiroMesmoQueLegal,
           responsavelFinanceiroExistingId:
             finalizationData.responsavelFinanceiroExistingId,
+          hasNewPersonData: !!finalizationData.newPersonData,
           pacienteNome: finalizationData.paciente.nome,
           pacienteSexo: finalizationData.paciente.sexo,
           hasPacienteCpf: !!finalizationData.paciente.cpf,

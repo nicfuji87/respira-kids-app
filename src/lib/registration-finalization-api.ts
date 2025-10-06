@@ -28,6 +28,14 @@ export interface FinalizationData {
 
   responsavelFinanceiroMesmoQueLegal: boolean;
   responsavelFinanceiroExistingId?: string; // ID de pessoa existente buscada por CPF
+  newPersonData?: {
+    // Se é pessoa nova (não encontrada por CPF)
+    cpf: string;
+    nome: string;
+    email: string;
+    whatsapp: string;
+    whatsappJid: string;
+  };
 
   paciente: {
     nome: string;
@@ -76,6 +84,7 @@ export async function finalizePatientRegistration(
     responsavelFinanceiroMesmoQueLegal: data.responsavelFinanceiroMesmoQueLegal,
     responsavelFinanceiroExistingId:
       data.responsavelFinanceiroExistingId || 'Mesmo que legal',
+    hasNewPersonData: !!data.newPersonData,
     pacienteNome: data.paciente.nome,
     pacienteSexo: data.paciente.sexo,
     pacienteCpf: data.paciente.cpf || 'Não fornecido',

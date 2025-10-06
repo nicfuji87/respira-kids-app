@@ -35,21 +35,14 @@ interface FinalizationData {
   };
 
   responsavelFinanceiroMesmoQueLegal: boolean;
-  responsavelFinanceiro?: {
-    nome: string;
+  responsavelFinanceiroExistingId?: string; // ID de pessoa existente buscada por CPF
+  newPersonData?: {
+    // Se é pessoa nova (não encontrada por CPF)
     cpf: string;
+    nome: string;
     email: string;
-    telefone: string;
+    whatsapp: string;
     whatsappJid: string;
-    endereco?: {
-      cep: string;
-      logradouro: string;
-      bairro: string;
-      cidade: string;
-      estado: string;
-      numero: string;
-      complemento?: string;
-    };
   };
 
   paciente: {
@@ -109,6 +102,8 @@ Deno.serve(async (req: Request) => {
         hasResponsavelLegal: !!data.responsavelLegal,
         responsavelFinanceiroMesmoQueLegal:
           data.responsavelFinanceiroMesmoQueLegal,
+        responsavelFinanceiroExistingId: data.responsavelFinanceiroExistingId,
+        hasNewPersonData: !!data.newPersonData,
         pacienteNome: data.paciente.nome,
         pediatraId: data.pediatra.id,
         contratoId: data.contratoId,
@@ -308,99 +303,65 @@ Deno.serve(async (req: Request) => {
     let responsavelFinanceiroId: string;
 
     if (data.responsavelFinanceiroMesmoQueLegal) {
+      // CENÁRIO 1: Mesmo que responsável legal
       responsavelFinanceiroId = responsavelLegalId;
       console.log(
         '✅ [STEP 4] Responsável financeiro = legal:',
         responsavelFinanceiroId
       );
-    } else if (data.responsavelFinanceiro) {
-      console.log('📋 [STEP 4] Criando responsável financeiro diferente...');
+    } else if (data.responsavelFinanceiroExistingId) {
+      // CENÁRIO 2: Pessoa existente (encontrada por CPF)
+      responsavelFinanceiroId = data.responsavelFinanceiroExistingId;
+      console.log(
+        '✅ [STEP 4] Usando responsável financeiro existente:',
+        responsavelFinanceiroId
+      );
 
-      // Buscar ou criar endereço do responsável financeiro (se fornecido)
-      let enderecoFinanceiroId: string;
+      // Verificar se a pessoa existe
+      const { data: pessoaExistente, error: errorPessoaCheck } = await supabase
+        .from('pessoas')
+        .select('id, nome')
+        .eq('id', responsavelFinanceiroId)
+        .eq('ativo', true)
+        .single();
 
-      if (data.responsavelFinanceiro.endereco) {
-        console.log(
-          '📋 [STEP 4] Buscando endereço do responsável financeiro...'
+      if (errorPessoaCheck || !pessoaExistente) {
+        console.error(
+          '❌ [STEP 4] Pessoa existente não encontrada:',
+          errorPessoaCheck
         );
-
-        const { data: enderecoFinExistente, error: errorEndFinSearch } =
-          await supabase
-            .from('enderecos')
-            .select('id')
-            .eq('cep', data.responsavelFinanceiro.endereco.cep)
-            .eq('logradouro', data.responsavelFinanceiro.endereco.logradouro)
-            .eq('bairro', data.responsavelFinanceiro.endereco.bairro)
-            .eq('cidade', data.responsavelFinanceiro.endereco.cidade)
-            .eq('estado', data.responsavelFinanceiro.endereco.estado)
-            .maybeSingle();
-
-        if (errorEndFinSearch) {
-          console.error(
-            '❌ [STEP 4] Erro ao buscar endereço financeiro:',
-            errorEndFinSearch
-          );
-          throw new Error('Erro ao buscar endereço do responsável financeiro');
-        }
-
-        if (enderecoFinExistente) {
-          enderecoFinanceiroId = enderecoFinExistente.id;
-          console.log(
-            '✅ [STEP 4] Endereço financeiro já existe:',
-            enderecoFinanceiroId
-          );
-        } else {
-          console.log('📋 [STEP 4] Criando novo endereço financeiro...');
-          const { data: novoEnderecoFin, error: errorEndFinInsert } =
-            await supabase
-              .from('enderecos')
-              .insert({
-                cep: data.responsavelFinanceiro.endereco.cep,
-                logradouro: data.responsavelFinanceiro.endereco.logradouro,
-                bairro: data.responsavelFinanceiro.endereco.bairro,
-                cidade: data.responsavelFinanceiro.endereco.cidade,
-                estado: data.responsavelFinanceiro.endereco.estado,
-                ativo: true,
-              })
-              .select('id')
-              .single();
-
-          if (errorEndFinInsert || !novoEnderecoFin) {
-            console.error(
-              '❌ [STEP 4] Erro ao criar endereço financeiro:',
-              errorEndFinInsert
-            );
-            throw new Error('Erro ao criar endereço do responsável financeiro');
-          }
-
-          enderecoFinanceiroId = novoEnderecoFin.id;
-          console.log(
-            '✅ [STEP 4] Novo endereço financeiro criado:',
-            enderecoFinanceiroId
-          );
-        }
-      } else {
-        // Usar mesmo endereço do responsável legal
-        enderecoFinanceiroId = enderecoId;
-        console.log('✅ [STEP 4] Usando mesmo endereço do responsável legal');
+        throw new Error('Responsável financeiro não encontrado no sistema');
       }
+      console.log(
+        '✅ [STEP 4] Pessoa existente confirmada:',
+        pessoaExistente.nome
+      );
+    } else if (data.newPersonData) {
+      // CENÁRIO 3: Nova pessoa (não encontrada por CPF)
+      console.log('📋 [STEP 4] Criando novo responsável financeiro...');
+      console.log('📋 [STEP 4] Dados:', {
+        nome: data.newPersonData.nome,
+        cpf: data.newPersonData.cpf,
+        email: data.newPersonData.email,
+        whatsapp: data.newPersonData.whatsapp,
+      });
 
-      console.log('📋 [STEP 4] Inserindo responsável financeiro...');
+      // Usar mesmo endereço do responsável legal (conforme decisão do usuário)
+      console.log('✅ [STEP 4] Usando mesmo endereço do responsável legal');
+
+      console.log('📋 [STEP 4] Inserindo nova pessoa financeira...');
       const { data: novoResponsavelFin, error: errorResponsavelFin } =
         await supabase
           .from('pessoas')
           .insert({
-            nome: data.responsavelFinanceiro.nome,
-            cpf_cnpj: data.responsavelFinanceiro.cpf,
-            telefone: data.responsavelFinanceiro.telefone,
-            email: data.responsavelFinanceiro.email,
+            nome: data.newPersonData.nome,
+            cpf_cnpj: data.newPersonData.cpf,
+            telefone: data.newPersonData.whatsapp,
+            email: data.newPersonData.email,
             id_tipo_pessoa: tipoResponsavel.id,
-            id_endereco: enderecoFinanceiroId,
-            numero_endereco:
-              data.responsavelFinanceiro.endereco?.numero ||
-              data.endereco.numero,
-            complemento_endereco:
-              data.responsavelFinanceiro.endereco?.complemento || null,
+            id_endereco: enderecoId, // Mesmo endereço do responsável legal
+            numero_endereco: data.endereco.numero,
+            complemento_endereco: data.endereco.complemento || null,
             responsavel_cobranca_id: null, // Será atualizado
             ativo: true,
           })
