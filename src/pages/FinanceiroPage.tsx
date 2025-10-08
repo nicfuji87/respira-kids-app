@@ -3,6 +3,7 @@ import { PinValidationDialog } from '@/components/composed/PinValidationDialog';
 import { FinancialConsultationsList } from '@/components/composed/FinancialConsultationsList';
 import { FinancialFaturasList } from '@/components/composed/FinancialFaturasList';
 import { FaturamentoChart } from '@/components/composed/FaturamentoChart';
+import { FinancialProfessionalReport } from '@/components/composed/FinancialProfessionalReport';
 import {
   Tabs,
   TabsContent,
@@ -43,8 +44,9 @@ interface AppointmentUpdateData {
 }
 
 // AI dev note: Página Financeiro exclusiva para admin com proteção por PIN
-// Contém lista de consultas, faturas e gráfico anual de faturamento
+// Contém lista de consultas, faturas, gráfico anual de faturamento e relatório de profissionais
 // Funcionalidade de cobrança em massa está integrada no FinancialConsultationsList
+// Aba Profissionais: mostra comissões e detalhamento por profissional (admin only)
 
 export const FinanceiroPage: React.FC = () => {
   const { user } = useAuth();
@@ -53,7 +55,7 @@ export const FinanceiroPage: React.FC = () => {
   const [isPinValidated, setIsPinValidated] = useState(false);
   const [isCheckingPin, setIsCheckingPin] = useState(true);
   const [activeTab, setActiveTab] = useState<
-    'consultas' | 'faturas' | 'grafico'
+    'consultas' | 'faturas' | 'grafico' | 'profissionais'
   >('consultas');
 
   // Estados para modal de detalhes do agendamento
@@ -229,13 +231,16 @@ export const FinanceiroPage: React.FC = () => {
           <Tabs
             value={activeTab}
             onValueChange={(value) =>
-              setActiveTab(value as 'consultas' | 'faturas' | 'grafico')
+              setActiveTab(
+                value as 'consultas' | 'faturas' | 'grafico' | 'profissionais'
+              )
             }
           >
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4 h-auto">
               <TabsTrigger value="consultas">Consultas</TabsTrigger>
               <TabsTrigger value="faturas">Faturas</TabsTrigger>
               <TabsTrigger value="grafico">Gráfico Anual</TabsTrigger>
+              <TabsTrigger value="profissionais">Profissionais</TabsTrigger>
             </TabsList>
 
             <TabsContent value="consultas" className="space-y-4">
@@ -250,6 +255,10 @@ export const FinanceiroPage: React.FC = () => {
 
             <TabsContent value="grafico" className="space-y-4">
               <FaturamentoChart />
+            </TabsContent>
+
+            <TabsContent value="profissionais" className="space-y-4">
+              <FinancialProfessionalReport />
             </TabsContent>
           </Tabs>
         )}

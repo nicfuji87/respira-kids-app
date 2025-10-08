@@ -47,9 +47,33 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
       setPin('');
       setError('');
       checkBlockStatus();
+      checkPinExists();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]); // AI dev note: checkBlockStatus não muda, não precisa como dependência
+
+  const checkPinExists = async () => {
+    try {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (!currentUser) return;
+
+      const userMetadata = currentUser.user_metadata || {};
+      const storedPin = userMetadata.financial_pin;
+
+      if (!storedPin) {
+        // Redirecionar para configuração de PIN
+        setTimeout(() => {
+          window.location.href =
+            '/configuracoes?tab=seguranca&action=create-pin';
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Erro ao verificar PIN:', error);
+    }
+  };
 
   const checkBlockStatus = () => {
     const lastBlockTime = localStorage.getItem('pin_block_time');
@@ -99,8 +123,9 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
       const storedPin = userMetadata.financial_pin;
 
       if (!storedPin) {
-        setError('PIN não configurado. Configure um PIN nas configurações.');
+        // Redirecionar para configuração de PIN
         setLoading(false);
+        window.location.href = '/configuracoes?tab=seguranca&action=create-pin';
         return;
       }
 
@@ -108,6 +133,9 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
         // PIN correto
         localStorage.removeItem('pin_attempts');
         localStorage.removeItem('pin_block_time');
+        setLoading(false);
+
+        // Chamar onSuccess que irá fechar o dialog via mudança de isPinValidated
         onSuccess();
       } else {
         // PIN incorreto

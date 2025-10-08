@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Card,
   CardContent,
@@ -30,6 +31,7 @@ export const PinConfiguration: React.FC<PinConfigurationProps> = ({
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -46,8 +48,32 @@ export const PinConfiguration: React.FC<PinConfigurationProps> = ({
 
   useEffect(() => {
     checkExistingPin();
+
+    // Verificar parâmetros da URL
+    const action = searchParams.get('action');
+    if (action === 'create-pin' && !hasExistingPin) {
+      // Iniciar fluxo de criação de PIN
+      setStep('new');
+      toast({
+        title: 'Configure seu PIN',
+        description: 'Crie um PIN de 4 dígitos para acessar áreas restritas.',
+      });
+    } else if (action === 'reset-pin') {
+      // Iniciar fluxo de redefinição de PIN
+      if (hasExistingPin) {
+        setStep('current');
+      } else {
+        setStep('new');
+      }
+      toast({
+        title: 'Redefinir PIN',
+        description: hasExistingPin
+          ? 'Digite seu PIN atual para continuar.'
+          : 'Crie um PIN de 4 dígitos.',
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]); // AI dev note: checkExistingPin usa user, mas não precisa re-executar a cada mudança
+  }, [user?.id, searchParams]); // AI dev note: checkExistingPin usa user, mas não precisa re-executar a cada mudança
 
   const checkExistingPin = async () => {
     if (!user?.id) return;

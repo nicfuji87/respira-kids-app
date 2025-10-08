@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Tabs,
   TabsContent,
@@ -42,6 +43,9 @@ export interface ConfigurationTabsProps {
 
 export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
   ({ userRole, className }) => {
+    const [searchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState<string>('');
+
     const tabsConfig: TabConfig[] = [
       {
         id: 'profile',
@@ -123,6 +127,20 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       tab.roles.includes(userRole)
     );
 
+    // Primeira tab como default
+    const defaultTab = allowedTabs.length > 0 ? allowedTabs[0].id : '';
+
+    // useEffect para detectar parâmetros da URL e mudar a aba
+    // AI dev note: useEffect DEVE estar sempre antes de qualquer return condicional
+    useEffect(() => {
+      const tabParam = searchParams.get('tab');
+      if (tabParam && allowedTabs.some((tab) => tab.id === tabParam)) {
+        setActiveTab(tabParam);
+      } else if (!activeTab) {
+        setActiveTab(defaultTab);
+      }
+    }, [searchParams, allowedTabs, defaultTab, activeTab]);
+
     // Se não há tabs permitidas, mostrar fallback
     if (allowedTabs.length === 0) {
       return (
@@ -136,9 +154,6 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       );
     }
 
-    // Primeira tab como default
-    const defaultTab = allowedTabs[0].id;
-
     // Grid dinâmico baseado no número de abas disponíveis
     const getGridCols = (tabCount: number) => {
       if (tabCount <= 3) return 'grid-cols-1 md:grid-cols-3';
@@ -151,7 +166,11 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
 
     return (
       <div className={className}>
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs
+          value={activeTab || defaultTab}
+          onValueChange={setActiveTab}
+          className="w-full"
+        >
           <TabsList
             className={`grid w-full ${getGridCols(allowedTabs.length)} gap-1 h-auto md:h-9 p-1`}
           >
