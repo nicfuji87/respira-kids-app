@@ -231,11 +231,11 @@ interface ExistingUser {
   total_pediatras: number | null;
   cep?: string | null;
   logradouro?: string | null;
-  numero?: string | null;
-  complemento?: string | null;
+  numero_endereco?: string | null; // AI dev note: Campo correto da view vw_usuarios_admin
+  complemento_endereco?: string | null; // AI dev note: Campo correto da view vw_usuarios_admin
   bairro?: string | null;
-  localidade?: string | null;
-  uf?: string | null;
+  cidade?: string | null; // AI dev note: Campo correto da view vw_usuarios_admin
+  estado?: string | null; // AI dev note: Campo correto da view vw_usuarios_admin
   tipo_responsabilidade?: string | null; // 'legal', 'financeiro' ou 'ambos'
 }
 

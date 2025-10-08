@@ -17,6 +17,9 @@ export function PatientRegistrationSuccessPage() {
   const contractId = searchParams.get('contract_id');
   const patientId = searchParams.get('patient_id');
 
+  // AI dev note: Verificar se chegaram parâmetros válidos
+  const hasValidData = patientName !== 'Paciente' || contractId || patientId;
+
   useEffect(() => {
     // Analytics
     console.log('✅ [PatientRegistrationSuccess] Página de sucesso exibida', {
@@ -97,13 +100,22 @@ export function PatientRegistrationSuccessPage() {
             🎉 Cadastro Concluído!
           </h1>
           <p className="text-xl text-muted-foreground">
-            Bem-vindo(a),{' '}
-            <span className="font-semibold text-foreground">{patientName}</span>
-            !
+            {hasValidData ? (
+              <>
+                Bem-vindo(a),{' '}
+                <span className="font-semibold text-foreground">
+                  {patientName}
+                </span>
+                !
+              </>
+            ) : (
+              'Cadastro realizado com sucesso!'
+            )}
           </p>
           <p className="text-base text-muted-foreground max-w-md mx-auto">
-            Seu cadastro foi realizado com sucesso e o contrato foi assinado
-            digitalmente.
+            {hasValidData
+              ? 'Seu cadastro foi realizado com sucesso e o contrato foi assinado digitalmente.'
+              : 'O cadastro do paciente foi concluído e o contrato foi assinado digitalmente.'}
           </p>
         </div>
 

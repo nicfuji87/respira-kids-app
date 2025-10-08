@@ -29,11 +29,11 @@ export interface ExistingUserFullData {
   tipo_responsabilidade?: string; // 'legal', 'financeiro' ou 'ambos'
   cep?: string;
   logradouro?: string;
-  numero?: string;
-  complemento?: string;
+  numero_endereco?: string; // AI dev note: Campo correto da view vw_usuarios_admin
+  complemento_endereco?: string; // AI dev note: Campo correto da view vw_usuarios_admin
   bairro?: string;
-  localidade?: string;
-  uf?: string;
+  cidade?: string; // AI dev note: Campo correto da view vw_usuarios_admin
+  estado?: string; // AI dev note: Campo correto da view vw_usuarios_admin
 }
 
 export interface WhatsAppValidationStepProps {
@@ -166,11 +166,13 @@ export const WhatsAppValidationStep = React.memo<WhatsAppValidationStepProps>(
                   validationResult.userData.tipo_responsabilidade || undefined,
                 cep: validationResult.userData.cep || undefined,
                 logradouro: validationResult.userData.logradouro || undefined,
-                numero: validationResult.userData.numero || undefined,
-                complemento: validationResult.userData.complemento || undefined,
+                numero_endereco:
+                  validationResult.userData.numero_endereco || undefined,
+                complemento_endereco:
+                  validationResult.userData.complemento_endereco || undefined,
                 bairro: validationResult.userData.bairro || undefined,
-                localidade: validationResult.userData.localidade || undefined,
-                uf: validationResult.userData.uf || undefined,
+                cidade: validationResult.userData.cidade || undefined,
+                estado: validationResult.userData.estado || undefined,
               }
             : undefined;
 

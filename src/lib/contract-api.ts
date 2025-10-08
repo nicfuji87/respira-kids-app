@@ -9,6 +9,7 @@ export interface ContractVariables {
   cpf: string;
   telefone: string;
   email: string;
+  endereco_completo: string; // AI dev note: Endereço formatado corretamente sem vírgulas duplas
   logradouro: string;
   numero: string;
   complemento?: string;

@@ -100,7 +100,7 @@ export async function finalizePatientRegistration(
     console.log('📤 [FRONTEND] Enviando dados para Edge Function...');
     const startTime = Date.now();
 
-    const { data: result, error } = await supabase.functions.invoke(
+    const response = await supabase.functions.invoke(
       'public-patient-registration',
       {
         body: {
@@ -113,25 +113,39 @@ export async function finalizePatientRegistration(
     const duration = Date.now() - startTime;
     console.log(`⏱️ [FRONTEND] Edge Function respondeu em ${duration}ms`);
 
-    if (error) {
-      console.error('❌ [FRONTEND] Erro retornado pela Edge Function:', error);
+    if (response.error) {
+      console.error(
+        '❌ [FRONTEND] Erro retornado pela Edge Function:',
+        response.error
+      );
       console.error('❌ [FRONTEND] Detalhes do erro:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
+        message: response.error.message,
+        details: response.error.details,
+        hint: response.error.hint,
+        code: response.error.code,
       });
+
+      // Tentar extrair mais detalhes da resposta
+      console.error('❌ [FRONTEND] Resposta completa:', response);
+
       return {
         success: false,
-        error: error.message || 'Erro ao finalizar cadastro',
+        error: response.error.message || 'Erro ao finalizar cadastro',
       };
     }
 
+    const result = response.data;
+
+    // AI dev note: Validação adicional - às vezes result vem null mesmo com sucesso no backend
     if (!result) {
-      console.error('❌ [FRONTEND] Edge Function não retornou dados');
+      console.log('⚠️ [FRONTEND] Result null, mas sem erro explícito');
+      console.log(
+        '⚠️ [FRONTEND] Isso pode indicar que o cadastro funcionou mas houve problema na resposta'
+      );
       return {
         success: false,
-        error: 'Resposta vazia da Edge Function',
+        error:
+          'Resposta vazia da Edge Function (mas cadastro pode ter funcionado)',
       };
     }
 

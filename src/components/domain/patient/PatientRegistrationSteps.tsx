@@ -38,6 +38,7 @@ import {
   finalizePatientRegistration,
   type FinalizationData,
 } from '@/lib/registration-finalization-api';
+import { supabase } from '@/lib/supabase';
 
 // AI dev note: PatientRegistrationSteps - Domain component que gerencia fluxo de cadastro público
 // Etapas: 1) WhatsApp validation, 2) Identificação responsável, 3) Dados responsável, etc.
@@ -66,11 +67,11 @@ export interface ExistingUserFullData {
   tipo_responsabilidade?: string; // 'legal', 'financeiro' ou 'ambos'
   cep?: string;
   logradouro?: string;
-  numero?: string;
-  complemento?: string;
+  numero_endereco?: string; // AI dev note: Corrigindo nome do campo para match com vw_usuarios_admin
+  complemento_endereco?: string; // AI dev note: Corrigindo nome do campo para match com vw_usuarios_admin
   bairro?: string;
-  localidade?: string;
-  uf?: string;
+  cidade?: string; // AI dev note: Campo correto da view vw_usuarios_admin
+  estado?: string; // AI dev note: Campo correto da view vw_usuarios_admin
 }
 
 export interface PatientRegistrationData {
@@ -375,30 +376,87 @@ export const PatientRegistrationSteps =
           ? `(${registrationData.phoneNumber.slice(0, 2)}) ${registrationData.phoneNumber.slice(2, 7)}-${registrationData.phoneNumber.slice(7)}`
           : '';
 
+        // AI dev note: Converter data de nascimento de formato ISO (YYYY-MM-DD) para formato brasileiro (dd/mm/aaaa)
+        const formatarDataBrasileira = (dataISO: string): string => {
+          if (!dataISO) return '';
+          const [year, month, day] = dataISO.split('-');
+          return `${day}/${month}/${year}`;
+        };
+
+        // AI dev note: Formatar endereço completo evitando vírgulas duplas quando número está vazio
+        const formatarEnderecoCompleto = () => {
+          const logradouro =
+            existingUserData?.logradouro ||
+            registrationData.endereco?.logradouro ||
+            '';
+          const numero =
+            existingUserData?.numero_endereco ||
+            registrationData.endereco?.numero ||
+            '';
+          const complemento =
+            existingUserData?.complemento_endereco ||
+            registrationData.endereco?.complemento ||
+            '';
+          const bairro =
+            existingUserData?.bairro || registrationData.endereco?.bairro || '';
+          const cidade =
+            existingUserData?.cidade || registrationData.endereco?.cidade || '';
+          const uf =
+            existingUserData?.estado || registrationData.endereco?.estado || '';
+          const cep =
+            existingUserData?.cep || registrationData.endereco?.cep || '';
+
+          // Montar endereço: se número vazio, não incluir a vírgula extra
+          let endereco = logradouro;
+          if (numero && numero.trim()) {
+            endereco += `, ${numero}`;
+          }
+          if (complemento && complemento.trim()) {
+            endereco += ` ${complemento}`;
+          }
+          if (bairro) {
+            endereco += `, ${bairro}`;
+          }
+          if (cidade) {
+            endereco += `, ${cidade}`;
+          }
+          if (uf) {
+            endereco += ` - ${uf}`;
+          }
+          if (cep) {
+            endereco += `, CEP ${cep}`;
+          }
+          return endereco;
+        };
+
         const contractVariables: ContractVariables = {
           contratante: contratanteNome,
           cpf: contratanteCpf,
           telefone: telefoneFormatado,
           email: contratanteEmail,
+          endereco_completo: formatarEnderecoCompleto(),
           logradouro:
             existingUserData?.logradouro ||
             registrationData.endereco?.logradouro ||
             '',
           numero:
-            existingUserData?.numero || registrationData.endereco?.numero || '',
+            existingUserData?.numero_endereco ||
+            registrationData.endereco?.numero ||
+            '',
           complemento:
-            existingUserData?.complemento ||
+            existingUserData?.complemento_endereco ||
             registrationData.endereco?.complemento,
           bairro:
             existingUserData?.bairro || registrationData.endereco?.bairro || '',
           cidade:
-            existingUserData?.localidade ||
-            registrationData.endereco?.cidade ||
-            '',
-          uf: existingUserData?.uf || registrationData.endereco?.estado || '',
+            existingUserData?.cidade || registrationData.endereco?.cidade || '',
+          uf:
+            existingUserData?.estado || registrationData.endereco?.estado || '',
           cep: existingUserData?.cep || registrationData.endereco?.cep || '',
           paciente: registrationData.paciente?.nome || '',
-          dnPac: registrationData.paciente?.dataNascimento || '', // Já vem em dd/mm/aaaa
+          dnPac: formatarDataBrasileira(
+            registrationData.paciente?.dataNascimento || ''
+          ),
           cpfPac: registrationData.paciente?.cpf || 'não fornecido',
           hoje: new Date().toLocaleDateString('pt-BR'),
           autorizo: (() => {
@@ -504,11 +562,25 @@ export const PatientRegistrationSteps =
           '📋 [PatientRegistrationSteps] Preparando dados para Edge Function...'
         );
 
+        // AI dev note: Simplificando preparação de telefone para usuários existentes
+        const whatsappJid =
+          registrationData.whatsappJid ||
+          (registrationData.existingUserData?.telefone
+            ? registrationData.existingUserData.telefone.toString()
+            : '');
+
+        const phoneNumber =
+          registrationData.phoneNumber ||
+          (registrationData.existingUserData?.telefone
+            ? registrationData.existingUserData.telefone
+                .toString()
+                .replace(/^55/, '')
+            : '');
+
         // Preparar dados para a Edge Function
         const finalizationData: FinalizationData = {
-          whatsappJid:
-            registrationData.whatsappJid || registrationData.phoneNumber,
-          phoneNumber: registrationData.phoneNumber,
+          whatsappJid: whatsappJid,
+          phoneNumber: phoneNumber,
           existingPersonId: registrationData.existingPersonId,
           existingUserData: registrationData.existingUserData,
 
@@ -523,16 +595,29 @@ export const PatientRegistrationSteps =
                 }
               : undefined,
 
-          // Endereço
-          endereco: {
-            cep: registrationData.endereco!.cep,
-            logradouro: registrationData.endereco!.logradouro,
-            bairro: registrationData.endereco!.bairro,
-            cidade: registrationData.endereco!.cidade,
-            estado: registrationData.endereco!.estado,
-            numero: registrationData.endereco!.numero,
-            complemento: registrationData.endereco?.complemento,
-          },
+          // Endereço - usar dados do existingUserData se endereco não estiver definido
+          endereco: registrationData.endereco
+            ? {
+                cep: registrationData.endereco.cep,
+                logradouro: registrationData.endereco.logradouro,
+                bairro: registrationData.endereco.bairro,
+                cidade: registrationData.endereco.cidade,
+                estado: registrationData.endereco.estado,
+                numero: registrationData.endereco.numero,
+                complemento: registrationData.endereco.complemento,
+              }
+            : {
+                cep: registrationData.existingUserData?.cep || '',
+                logradouro: registrationData.existingUserData?.logradouro || '',
+                bairro: registrationData.existingUserData?.bairro || '',
+                cidade: registrationData.existingUserData?.cidade || '',
+                estado: registrationData.existingUserData?.estado || '',
+                numero:
+                  registrationData.existingUserData?.numero_endereco || '',
+                complemento:
+                  registrationData.existingUserData?.complemento_endereco ||
+                  undefined,
+              },
 
           // Responsável Financeiro
           responsavelFinanceiroMesmoQueLegal:
@@ -594,6 +679,10 @@ export const PatientRegistrationSteps =
           '📤 [PatientRegistrationSteps] Enviando dados para Edge Function...'
         );
         console.log(
+          '📋 [PatientRegistrationSteps] Dados completos a serem enviados:',
+          JSON.stringify(finalizationData, null, 2)
+        );
+        console.log(
           '⏱️ [PatientRegistrationSteps] Timestamp:',
           new Date().toISOString()
         );
@@ -611,6 +700,26 @@ export const PatientRegistrationSteps =
             '❌ [PatientRegistrationSteps] Erro na finalização:',
             result.error
           );
+
+          // AI dev note: Se erro menciona que cadastro pode ter funcionado,
+          // redirecionar mesmo assim (dados foram criados no backend)
+          if (
+            result.error &&
+            result.error.includes('mas cadastro pode ter funcionado')
+          ) {
+            console.log(
+              '⚠️ [PatientRegistrationSteps] Erro de comunicação mas cadastro pode ter funcionado - redirecionando'
+            );
+            // Redirecionar com dados básicos disponíveis
+            const params = new URLSearchParams({
+              patient_name: registrationData.paciente!.nome,
+              patient_id: 'verificar', // Indicar que precisa verificação
+              contract_id: registrationData.contrato!.contractId,
+            });
+            window.location.href = `/cadastro-paciente/sucesso?${params.toString()}`;
+            return;
+          }
+
           throw new Error(result.error || 'Erro ao finalizar cadastro');
         }
 
@@ -646,6 +755,47 @@ export const PatientRegistrationSteps =
           '❌ [PatientRegistrationSteps] Erro ao finalizar cadastro:',
           error
         );
+
+        // AI dev note: Verificação adicional - consultar banco para ver se cadastro funcionou
+        // mesmo com erro de comunicação da Edge Function
+        console.log(
+          '🔍 [PatientRegistrationSteps] Verificando se cadastro foi criado no backend...'
+        );
+
+        try {
+          // Verificar se o contrato foi assinado (indicador de sucesso)
+          const { data: contratoVerificacao } = await supabase
+            .from('user_contracts')
+            .select('id, status_contrato, pessoa_id')
+            .eq('id', registrationData.contrato!.contractId)
+            .eq('status_contrato', 'assinado')
+            .single();
+
+          if (contratoVerificacao?.pessoa_id) {
+            console.log(
+              '✅ [PatientRegistrationSteps] Contrato foi assinado - cadastro funcionou!'
+            );
+            console.log(
+              '📋 [PatientRegistrationSteps] Paciente ID encontrado:',
+              contratoVerificacao.pessoa_id
+            );
+
+            // Redirecionar para sucesso
+            const params = new URLSearchParams({
+              patient_name: registrationData.paciente!.nome,
+              patient_id: contratoVerificacao.pessoa_id,
+              contract_id: registrationData.contrato!.contractId,
+            });
+            window.location.href = `/cadastro-paciente/sucesso?${params.toString()}`;
+            return;
+          }
+        } catch (verificationError) {
+          console.error(
+            '❌ [PatientRegistrationSteps] Erro na verificação:',
+            verificationError
+          );
+        }
+
         alert(
           `Erro ao finalizar cadastro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
         );

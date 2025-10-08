@@ -24,11 +24,11 @@ export interface ExistingUserData {
   tipo_responsabilidade?: string; // 'legal', 'financeiro' ou 'ambos'
   cep?: string;
   logradouro?: string;
-  numero?: string;
-  complemento?: string;
+  numero_endereco?: string; // AI dev note: Campo correto da view vw_usuarios_admin
+  complemento_endereco?: string; // AI dev note: Campo correto da view vw_usuarios_admin
   bairro?: string;
-  localidade?: string;
-  uf?: string;
+  cidade?: string; // AI dev note: Campo correto da view vw_usuarios_admin
+  estado?: string; // AI dev note: Campo correto da view vw_usuarios_admin
 }
 
 export interface ReviewStepProps {
@@ -271,15 +271,16 @@ export const ReviewStep = React.memo<ReviewStepProps>(
                         {data.existingUserData.logradouro}
                       </p>
                     )}
-                    {data.existingUserData.numero && (
+                    {data.existingUserData.numero_endereco && (
                       <p>
-                        <strong>Número:</strong> {data.existingUserData.numero}
+                        <strong>Número:</strong>{' '}
+                        {data.existingUserData.numero_endereco}
                       </p>
                     )}
-                    {data.existingUserData.complemento && (
+                    {data.existingUserData.complemento_endereco && (
                       <p>
                         <strong>Complemento:</strong>{' '}
-                        {data.existingUserData.complemento}
+                        {data.existingUserData.complemento_endereco}
                       </p>
                     )}
                     {data.existingUserData.bairro && (
@@ -287,12 +288,12 @@ export const ReviewStep = React.memo<ReviewStepProps>(
                         <strong>Bairro:</strong> {data.existingUserData.bairro}
                       </p>
                     )}
-                    {data.existingUserData.localidade &&
-                      data.existingUserData.uf && (
+                    {data.existingUserData.cidade &&
+                      data.existingUserData.estado && (
                         <p>
                           <strong>Cidade/UF:</strong>{' '}
-                          {data.existingUserData.localidade} -{' '}
-                          {data.existingUserData.uf}
+                          {data.existingUserData.cidade} -{' '}
+                          {data.existingUserData.estado}
                         </p>
                       )}
                   </>
