@@ -8,6 +8,7 @@ import {
   ChevronRight,
   FileText,
   AlertCircle,
+  DollarSign,
 } from 'lucide-react';
 import {
   Card,
@@ -37,8 +38,10 @@ const FaturaItem = React.memo<{
   onEdit?: (fatura: FaturaComDetalhes) => void;
   onDelete?: (fatura: FaturaComDetalhes) => void;
   onEmitirNfe?: (fatura: FaturaComDetalhes) => void;
+  onReceivePayment?: (fatura: FaturaComDetalhes) => void;
   userRole?: string | null;
   isEmitingNfe?: string | null;
+  isReceivingPayment?: string | null;
 }>(
   ({
     fatura,
@@ -46,8 +49,10 @@ const FaturaItem = React.memo<{
     onEdit,
     onDelete,
     onEmitirNfe,
+    onReceivePayment,
     userRole,
     isEmitingNfe,
+    isReceivingPayment,
   }) => {
     const { toast } = useToast();
 
@@ -161,8 +166,26 @@ const FaturaItem = React.memo<{
           variant: 'destructive',
         });
       } else if (linkNfe && linkNfe !== 'sincronizando' && linkNfe !== 'erro') {
-        // Link válido - abrir NFe
-        window.open(linkNfe, '_blank');
+        // Link válido - abrir/baixar NFe
+        console.log('📄 Abrindo NFe:', linkNfe);
+
+        // Criar elemento <a> temporário para forçar download
+        const link = document.createElement('a');
+        link.href = linkNfe;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+
+        // Se for PDF, tentar forçar download
+        if (
+          linkNfe.toLowerCase().includes('.pdf') ||
+          linkNfe.toLowerCase().includes('/pdf')
+        ) {
+          link.download = `nota-fiscal-${fatura.id.substring(0, 8)}.pdf`;
+        }
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } else {
         // Emitir NFe
         if (onEmitirNfe) {
@@ -296,6 +319,34 @@ const FaturaItem = React.memo<{
                 </Button>
               )}
 
+              {/* Botão Receber Pagamento Manual - apenas para faturas pendentes/atrasadas */}
+              {(userRole === 'admin' || userRole === 'secretaria') &&
+                ['pendente', 'atrasado'].includes(fatura.status) &&
+                fatura.id_asaas &&
+                onReceivePayment && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'h-auto p-1 text-xs',
+                      isReceivingPayment === fatura.id
+                        ? 'text-gray-500'
+                        : 'text-green-600 hover:text-green-800'
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReceivePayment(fatura);
+                    }}
+                    disabled={isReceivingPayment === fatura.id}
+                    title="Confirmar recebimento em dinheiro"
+                  >
+                    <DollarSign className="h-3 w-3 mr-1" />
+                    {isReceivingPayment === fatura.id
+                      ? 'Confirmando...'
+                      : 'Receber pagamento'}
+                  </Button>
+                )}
+
               {/* Botão NFe - apenas para faturas pagas */}
               {nfeConfig && (
                 <Button
@@ -388,6 +439,7 @@ export interface FaturasListProps {
   onFaturaEdit?: (fatura: FaturaComDetalhes) => void;
   onFaturaDelete?: (fatura: FaturaComDetalhes) => void;
   onEmitirNfe?: (fatura: FaturaComDetalhes) => void;
+  onReceivePayment?: (fatura: FaturaComDetalhes) => void;
   onVerMais?: () => void;
   maxItems?: number;
   className?: string;
@@ -396,6 +448,7 @@ export interface FaturasListProps {
   showCard?: boolean; // Controla se mostra o Card wrapper ou apenas os items
   userRole?: string | null;
   isEmitingNfe?: string | null; // faturaId sendo processada
+  isReceivingPayment?: string | null; // faturaId sendo processada
 }
 
 // Componente principal da lista de faturas
@@ -408,6 +461,7 @@ export const FaturasList = React.memo<FaturasListProps>(
     onFaturaEdit,
     onFaturaDelete,
     onEmitirNfe,
+    onReceivePayment,
     onVerMais,
     maxItems = 2,
     className,
@@ -416,6 +470,7 @@ export const FaturasList = React.memo<FaturasListProps>(
     showCard = true,
     userRole,
     isEmitingNfe,
+    isReceivingPayment,
   }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -466,8 +521,10 @@ export const FaturasList = React.memo<FaturasListProps>(
                 onEdit={onFaturaEdit}
                 onDelete={onFaturaDelete}
                 onEmitirNfe={onEmitirNfe}
+                onReceivePayment={onReceivePayment}
                 userRole={userRole}
                 isEmitingNfe={isEmitingNfe}
+                isReceivingPayment={isReceivingPayment}
               />
             ))}
 

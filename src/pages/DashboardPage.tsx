@@ -22,11 +22,7 @@ import {
   SecretariaDashboard,
 } from '@/components/domain';
 import { AppointmentDetailsManager } from '@/components/domain/calendar';
-import {
-  fetchAgendamentoById,
-  updatePaymentStatus,
-  updateNfeLink,
-} from '@/lib/calendar-services';
+import { fetchAgendamentoById, updateNfeLink } from '@/lib/calendar-services';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
@@ -192,27 +188,6 @@ export const DashboardPage: React.FC = () => {
     navigate(`/pessoa/${professionalId}`);
   };
 
-  // Handlers para ações de pagamento
-  const handlePaymentAction = async (appointmentId: string) => {
-    try {
-      // TODO: Implementar lógica de pagamento manual com integração Asaas
-
-      // Por enquanto, apenas marcamos como pago
-      // Buscar ID do status "pago"
-      const pagoStatusId = 'bb982df2-56ca-4520-870f-659f7581ab0a'; // ID do status "pago"
-
-      await updatePaymentStatus(appointmentId, pagoStatusId);
-
-      // Recarregar dados do agendamento se necessário
-      if (selectedAppointmentData?.id === appointmentId) {
-        const updatedAppointment = await fetchAgendamentoById(appointmentId);
-        setSelectedAppointmentData(updatedAppointment);
-      }
-    } catch (error) {
-      console.error('Erro na ação de pagamento:', error);
-    }
-  };
-
   const handleNfeAction = async (appointmentId: string, linkNfe?: string) => {
     try {
       if (linkNfe) {
@@ -308,7 +283,6 @@ export const DashboardPage: React.FC = () => {
           locaisAtendimento={formData.locaisAtendimento || []}
           isLoadingLocais={false}
           onSave={handleAppointmentDetailsSave}
-          onPaymentAction={handlePaymentAction}
           onNfeAction={handleNfeAction}
           onPatientClick={handlePatientClick}
           onProfessionalClick={handleProfessionalClick}
@@ -332,7 +306,6 @@ export const DashboardPage: React.FC = () => {
           locaisAtendimento={formData.locaisAtendimento || []}
           isLoadingLocais={false}
           onSave={handleAppointmentDetailsSave}
-          onPaymentAction={handlePaymentAction}
           onNfeAction={handleNfeAction}
           onPatientClick={handlePatientClick}
           onProfessionalClick={handleProfessionalClick}
@@ -363,7 +336,6 @@ export const DashboardPage: React.FC = () => {
           locaisAtendimento={formData.locaisAtendimento || []}
           isLoadingLocais={false}
           onSave={handleAppointmentDetailsSave}
-          onPaymentAction={handlePaymentAction}
           onNfeAction={handleNfeAction}
           onPatientClick={handlePatientClick}
           onProfessionalClick={handleProfessionalClick}

@@ -28,7 +28,6 @@ import {
   fetchAgendamentoById,
   updateAgendamentoDetails,
   fetchLocaisAtendimento,
-  updatePaymentStatus,
   updateNfeLink,
 } from '@/lib/calendar-services';
 import { useAuth } from '@/hooks/useAuth';
@@ -194,27 +193,6 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
 
     const handleProfessionalClick = (professionalId: string) => {
       navigate(`/pessoa/${professionalId}`);
-    };
-
-    // Handlers para ações de pagamento
-    const handlePaymentAction = async (appointmentId: string) => {
-      try {
-        // TODO: Implementar lógica de pagamento manual com integração Asaas
-
-        // Por enquanto, apenas marcamos como pago
-        // Buscar ID do status "pago"
-        const pagoStatusId = 'bb982df2-56ca-4520-870f-659f7581ab0a'; // ID do status "pago"
-
-        await updatePaymentStatus(appointmentId, pagoStatusId);
-
-        // Recarregar dados do agendamento se necessário
-        if (selectedAppointment?.id === appointmentId) {
-          const updatedAppointment = await fetchAgendamentoById(appointmentId);
-          setSelectedAppointment(updatedAppointment);
-        }
-      } catch (error) {
-        console.error('Erro na ação de pagamento:', error);
-      }
     };
 
     const handleNfeAction = async (appointmentId: string, linkNfe?: string) => {
@@ -392,7 +370,6 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
           locaisAtendimento={locaisAtendimento}
           isLoadingLocais={isLoadingLocais}
           onSave={handleAppointmentSave}
-          onPaymentAction={handlePaymentAction}
           onNfeAction={handleNfeAction}
           onPatientClick={handlePatientClick}
           onProfessionalClick={handleProfessionalClick}

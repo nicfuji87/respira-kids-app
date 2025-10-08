@@ -61,7 +61,6 @@ export interface AppointmentDetailsManagerProps {
   locaisAtendimento: LocationOption[];
   isLoadingLocais?: boolean;
   onSave: (appointmentData: AppointmentUpdateData) => void;
-  onPaymentAction?: (appointmentId: string) => void;
   onNfeAction?: (appointmentId: string, linkNfe?: string) => void;
   onPatientClick?: (patientId: string | null) => void;
   onProfessionalClick?: (professionalId: string) => void;
@@ -99,7 +98,6 @@ export const AppointmentDetailsManager =
       locaisAtendimento,
       isLoadingLocais = false,
       onSave,
-      onPaymentAction,
       onNfeAction,
       onPatientClick,
       onProfessionalClick,
@@ -673,9 +671,6 @@ export const AppointmentDetailsManager =
                           inlineButtons={
                             userRole === 'admin' || userRole === 'secretaria'
                           }
-                          onPaymentAction={() =>
-                            onPaymentAction?.(appointment.id)
-                          }
                           onNfeAction={handleEmitirNfe}
                         />
                       </>
@@ -705,9 +700,6 @@ export const AppointmentDetailsManager =
                             appointment.id_pagamento_externo
                           }
                           isEmitingNfe={isEmitingNfe}
-                          onPaymentAction={() =>
-                            onPaymentAction?.(appointment.id)
-                          }
                           onNfeAction={handleEmitirNfe}
                           hideValue={true}
                         />

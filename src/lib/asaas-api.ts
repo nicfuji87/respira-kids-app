@@ -791,3 +791,68 @@ export async function authorizeAsaasInvoice(
     };
   }
 }
+
+// AI dev note: Confirma recebimento em dinheiro no Asaas
+export async function receivePaymentInCash(
+  paymentId: string,
+  value: number,
+  paymentDate: string,
+  apiConfig: AsaasApiConfig,
+  notifyCustomer: boolean = false
+): Promise<AsaasIntegrationResult> {
+  try {
+    console.log(
+      '💵 Confirmando recebimento em dinheiro:',
+      paymentId,
+      value,
+      paymentDate
+    );
+
+    // Chama Edge Function para confirmar recebimento em dinheiro
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-receive-in-cash',
+      {
+        body: {
+          apiConfig,
+          paymentId,
+          paymentData: {
+            notifyCustomer,
+            value,
+            paymentDate,
+          },
+        },
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao chamar Edge Function asaas-receive-in-cash:',
+        error
+      );
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de recebimento',
+      };
+    }
+
+    if (!data.success) {
+      return {
+        success: false,
+        error: data.error || 'Erro desconhecido ao confirmar recebimento',
+      };
+    }
+
+    console.log('✅ Recebimento confirmado no Asaas com sucesso');
+
+    return {
+      success: true,
+      data: data.payment,
+    };
+  } catch (error) {
+    console.error('Erro ao confirmar recebimento no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao confirmar recebimento',
+    };
+  }
+}

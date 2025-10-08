@@ -23,7 +23,6 @@ export interface StatusPaymentDisplayProps {
   userRole: 'admin' | 'profissional' | 'secretaria' | null;
   linkNfe?: string | null;
   idAsaas?: string | null; // Para botão "Ver fatura"
-  onPaymentAction?: () => void;
   onNfeAction?: () => void;
   onVerFatura?: () => void; // Callback para "Ver fatura"
   hideValue?: boolean;
@@ -40,7 +39,6 @@ export const StatusPaymentDisplay = React.memo<StatusPaymentDisplayProps>(
     userRole,
     linkNfe,
     idAsaas,
-    onPaymentAction,
     onNfeAction,
     onVerFatura,
     hideValue = false,
@@ -132,32 +130,12 @@ export const StatusPaymentDisplay = React.memo<StatusPaymentDisplayProps>(
     const getPaymentActions = () => {
       if (!canManagePayments) return null;
 
-      const statusLower = status.toLowerCase();
       const nfeConfig = getNfeButtonConfig();
 
       // Gerar URL do ASAAS usando a função correta
       const asaasUrl = getAsaasPaymentUrl(idAsaas || '');
 
       const buttons = [];
-
-      // Pagamento Pendente/Cobrança Gerada/Atrasado: "Receber pagamento manual"
-      if (
-        statusLower.includes('pendente') ||
-        statusLower.includes('gerada') ||
-        statusLower.includes('atrasado')
-      ) {
-        buttons.push(
-          <Button
-            key="payment"
-            variant="outline"
-            size="sm"
-            onClick={onPaymentAction}
-            className="text-xs"
-          >
-            Receber pagamento manual
-          </Button>
-        );
-      }
 
       // Botão "Ver fatura" - se existir id_asaas
       if (asaasUrl) {

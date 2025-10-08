@@ -73,7 +73,6 @@ export interface CalendarTemplateProps {
   isLoadingLocais?: boolean;
   onPatientClick?: (patientId: string | null) => void;
   onProfessionalClick?: (professionalId: string) => void;
-  onPaymentAction?: (appointmentId: string) => void;
   onNfeAction?: (appointmentId: string, linkNfe?: string) => void;
 }
 
@@ -103,7 +102,6 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     isLoadingLocais = false,
     onPatientClick,
     onProfessionalClick,
-    onPaymentAction,
     onNfeAction,
   }) => {
     // AI dev note: These permissions are received but will be used in future implementations
@@ -539,7 +537,6 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                 });
               }
             }}
-            onPaymentAction={onPaymentAction}
             onNfeAction={onNfeAction}
             onPatientClick={onPatientClick}
             onProfessionalClick={onProfessionalClick}

@@ -48,6 +48,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { processPayment } from '@/lib/asaas-api';
+import { receivePaymentManual } from '@/lib/receive-payment-api';
 import type { ProcessPaymentData } from '@/types/asaas';
 import type {
   PatientMetricsProps,
@@ -141,6 +142,11 @@ export const PatientMetricsWithConsultations =
 
       // Estados para emissão de NFe
       const [isEmitingNfe, setIsEmitingNfe] = useState<string | null>(null); // faturaId sendo processada
+
+      // Estados para recebimento de pagamento manual
+      const [isReceivingPayment, setIsReceivingPayment] = useState<
+        string | null
+      >(null); // faturaId sendo processada
 
       // Estado para controlar "Ver todas as consultas"
       const [showAll, setShowAll] = useState(false);
@@ -329,6 +335,62 @@ export const PatientMetricsWithConsultations =
           });
         } finally {
           setIsEmitingNfe(null);
+        }
+      };
+
+      // Handler para receber pagamento manual
+      const handleReceivePayment = async (fatura: FaturaComDetalhes) => {
+        if (
+          !['pendente', 'atrasado'].includes(fatura.status) ||
+          !fatura.id_asaas
+        ) {
+          toast({
+            title: 'Erro',
+            description:
+              'Apenas faturas pendentes ou atrasadas com ID do ASAAS podem ter pagamento confirmado',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        setIsReceivingPayment(fatura.id);
+
+        try {
+          console.log(
+            '💰 Confirmando recebimento manual para fatura:',
+            fatura.id
+          );
+
+          const result = await receivePaymentManual({
+            faturaId: fatura.id,
+            userId: user?.pessoa?.id || 'system',
+          });
+
+          if (result.success) {
+            toast({
+              title: 'Pagamento confirmado!',
+              description: `Recebimento de R$ ${result.data?.valor.toFixed(2)} confirmado no ASAAS com sucesso.`,
+            });
+
+            // Recarregar dados para mostrar novo status
+            setReloadTrigger((prev) => prev + 1);
+          } else {
+            toast({
+              title: 'Erro ao confirmar pagamento',
+              description:
+                result.error || 'Erro desconhecido ao confirmar recebimento',
+              variant: 'destructive',
+            });
+          }
+        } catch (error) {
+          console.error('💥 Erro ao confirmar pagamento:', error);
+          toast({
+            title: 'Erro ao confirmar pagamento',
+            description: 'Erro inesperado ao confirmar recebimento',
+            variant: 'destructive',
+          });
+        } finally {
+          setIsReceivingPayment(null);
         }
       };
 
@@ -1383,8 +1445,10 @@ export const PatientMetricsWithConsultations =
                       setFaturaToDelete(fatura);
                     }}
                     onEmitirNfe={handleEmitirNfe}
+                    onReceivePayment={handleReceivePayment}
                     userRole={user?.pessoa?.role}
                     isEmitingNfe={isEmitingNfe}
+                    isReceivingPayment={isReceivingPayment}
                     showCard={false}
                     showVerMais={false}
                   />

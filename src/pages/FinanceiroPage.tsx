@@ -264,10 +264,6 @@ export const FinanceiroPage: React.FC = () => {
             locaisAtendimento={formData.locaisAtendimento || []}
             isLoadingLocais={false}
             onSave={handleAppointmentDetailsSave}
-            onPaymentAction={async (appointmentId: string) => {
-              // Implementação de ação de pagamento se necessário
-              console.log('Payment action for:', appointmentId);
-            }}
             onNfeAction={async (appointmentId: string, linkNfe?: string) => {
               // Implementação de ação de NFe se necessário
               console.log('NFe action for:', appointmentId, linkNfe);
