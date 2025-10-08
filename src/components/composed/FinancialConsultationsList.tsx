@@ -11,6 +11,10 @@ import {
   ExternalLink,
   Search,
   CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  List,
+  Users,
 } from 'lucide-react';
 import {
   Card,
@@ -70,6 +74,7 @@ interface ConsultationWithPatient {
   fatura_id?: string;
   tipo_servico_id?: string; // Necessário para filtros
   empresa_fatura_id?: string; // Necessário para validação de cobrança
+  empresa_fatura_razao_social?: string; // Nome da empresa para exibição
 }
 
 type PeriodFilter =
@@ -134,6 +139,12 @@ export const FinancialConsultationsList: React.FC<
   ); // AI dev note: Mantém IDs selecionados entre páginas
   const [isGeneratingCharges, setIsGeneratingCharges] = useState(false);
 
+  // Estados de visualização
+  const [viewMode, setViewMode] = useState<'list' | 'grouped'>('grouped'); // AI dev note: Novo modo de visualização agrupado por paciente
+  const [expandedPatients, setExpandedPatients] = useState<Set<string>>(
+    new Set()
+  );
+
   // Estados de paginação
   const [currentPage, setCurrentPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -167,7 +178,7 @@ export const FinancialConsultationsList: React.FC<
         profissional_id, profissional_nome, paciente_id, paciente_nome,
         local_id, local_nome, status_consulta_codigo, status_consulta_nome,
         status_pagamento_codigo, status_pagamento_nome, id_pagamento_externo,
-        fatura_id, tipo_servico_id, empresa_fatura_id
+        fatura_id, tipo_servico_id, empresa_fatura_id, empresa_fatura_razao_social
       `;
 
       // AI dev note: Calcular filtros de período ANTES de buscar count e dados
@@ -413,6 +424,8 @@ export const FinancialConsultationsList: React.FC<
           id_pagamento_externo: item.id_pagamento_externo,
           fatura_id: item.fatura_id,
           tipo_servico_id: item.tipo_servico_id,
+          empresa_fatura_id: item.empresa_fatura_id,
+          empresa_fatura_razao_social: item.empresa_fatura_razao_social,
         };
       });
 
@@ -672,6 +685,105 @@ export const FinancialConsultationsList: React.FC<
     }
   };
 
+  // AI dev note: Agrupar consultas por paciente
+  const groupedByPatient = React.useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        paciente_id: string;
+        paciente_nome: string;
+        consultas: ConsultationWithPatient[];
+        total_valor: number;
+        total_consultas: number;
+        consultas_nao_pagas: number;
+        empresa_fatura_razao_social?: string;
+      }
+    >();
+
+    filteredConsultations.forEach((consulta) => {
+      if (!groups.has(consulta.paciente_id)) {
+        groups.set(consulta.paciente_id, {
+          paciente_id: consulta.paciente_id,
+          paciente_nome: consulta.paciente_nome,
+          consultas: [],
+          total_valor: 0,
+          total_consultas: 0,
+          consultas_nao_pagas: 0,
+          empresa_fatura_razao_social: consulta.empresa_fatura_razao_social,
+        });
+      }
+
+      const group = groups.get(consulta.paciente_id)!;
+      group.consultas.push(consulta);
+      group.total_valor += consulta.valor_servico || 0;
+      group.total_consultas += 1;
+      if (
+        consulta.status_pagamento_codigo !== 'pago' &&
+        consulta.status_pagamento_codigo !== 'cancelado'
+      ) {
+        group.consultas_nao_pagas += 1;
+      }
+    });
+
+    // Ordenar consultas dentro de cada grupo por data (mais recente primeiro)
+    groups.forEach((group) => {
+      group.consultas.sort(
+        (a, b) =>
+          new Date(b.data_hora).getTime() - new Date(a.data_hora).getTime()
+      );
+    });
+
+    return Array.from(groups.values()).sort((a, b) =>
+      a.paciente_nome.localeCompare(b.paciente_nome, 'pt-BR')
+    );
+  }, [filteredConsultations]);
+
+  // Toggle expansão de paciente
+  const togglePatientExpansion = (patientId: string) => {
+    const newExpanded = new Set(expandedPatients);
+    if (newExpanded.has(patientId)) {
+      newExpanded.delete(patientId);
+    } else {
+      newExpanded.add(patientId);
+    }
+    setExpandedPatients(newExpanded);
+  };
+
+  // Selecionar todas consultas de um paciente
+  const toggleSelectPatient = (patientId: string) => {
+    const patientGroup = groupedByPatient.find(
+      (g) => g.paciente_id === patientId
+    );
+    if (!patientGroup) return;
+
+    const eligibleConsultations = patientGroup.consultas.filter(
+      (c) =>
+        c.status_pagamento_codigo !== 'pago' &&
+        c.status_pagamento_codigo !== 'cancelado' &&
+        !c.fatura_id
+    );
+
+    const eligibleIds = eligibleConsultations.map((c) => c.id);
+
+    // Verificar se todas as consultas do paciente já estão selecionadas
+    const allSelected = eligibleIds.every((id) =>
+      selectedConsultations.includes(id)
+    );
+
+    if (allSelected) {
+      // Remover todas as consultas deste paciente
+      setSelectedConsultations(
+        selectedConsultations.filter((id) => !eligibleIds.includes(id))
+      );
+    } else {
+      // Adicionar todas as consultas deste paciente
+      const newIds = eligibleIds.filter(
+        (id) => !selectedConsultations.includes(id)
+      );
+      setSelectedConsultations([...selectedConsultations, ...newIds]);
+    }
+  };
+
   // AI dev note: Cobrança em massa - all-or-nothing por paciente, continua outros se um falhar
   const handleGenerateBulkCharges = async () => {
     if (selectedConsultations.length === 0) {
@@ -726,18 +838,33 @@ export const FinancialConsultationsList: React.FC<
 
         try {
           // Validar que todas consultas do paciente têm empresa_fatura_id
-          const empresaFaturaIds = [
-            ...new Set(
-              patientConsultations
-                .map((c) => c.empresa_fatura_id)
-                .filter(Boolean)
-            ),
-          ];
-          if (empresaFaturaIds.length === 0) {
-            throw new Error('Consultas sem empresa de faturamento configurada');
+          const consultasSemEmpresa = patientConsultations.filter(
+            (c) => !c.empresa_fatura_id
+          );
+
+          if (consultasSemEmpresa.length > 0) {
+            console.error(
+              '❌ Consultas sem empresa de faturamento:',
+              consultasSemEmpresa.map((c) => ({
+                id: c.id,
+                data: c.data_hora,
+                servico: c.servico_nome,
+                empresa_fatura_id: c.empresa_fatura_id,
+              }))
+            );
+            throw new Error(
+              `${consultasSemEmpresa.length} consulta(s) do paciente ${patientName} não têm empresa de faturamento configurada. Por favor, edite estas consultas para adicionar a empresa de faturamento.`
+            );
           }
+
+          const empresaFaturaIds = [
+            ...new Set(patientConsultations.map((c) => c.empresa_fatura_id)),
+          ];
+
           if (empresaFaturaIds.length > 1) {
-            throw new Error('Consultas com empresas de faturamento diferentes');
+            throw new Error(
+              `As consultas do paciente ${patientName} têm empresas de faturamento diferentes (${empresaFaturaIds.length} empresas). Por favor, selecione consultas da mesma empresa.`
+            );
           }
 
           // Buscar dados do paciente (CPF)
@@ -925,6 +1052,33 @@ export const FinancialConsultationsList: React.FC<
           </CardTitle>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Toggle de visualização */}
+            <Button
+              variant={viewMode === 'grouped' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() =>
+                setViewMode(viewMode === 'list' ? 'grouped' : 'list')
+              }
+              className="gap-1"
+              title={
+                viewMode === 'grouped'
+                  ? 'Alternar para lista'
+                  : 'Agrupar por paciente'
+              }
+            >
+              {viewMode === 'grouped' ? (
+                <>
+                  <Users className="h-4 w-4" />
+                  <span className="hidden sm:inline">Agrupado</span>
+                </>
+              ) : (
+                <>
+                  <List className="h-4 w-4" />
+                  <span className="hidden sm:inline">Lista</span>
+                </>
+              )}
+            </Button>
+
             {isSelectionMode ? (
               <>
                 <Button
@@ -1196,8 +1350,275 @@ export const FinancialConsultationsList: React.FC<
           </div>
         )}
 
-        {/* Lista de consultas */}
-        {isLoading ? (
+        {/* Lista de consultas - Visualização Agrupada */}
+        {viewMode === 'grouped' &&
+        !isLoading &&
+        !error &&
+        filteredConsultations.length > 0 ? (
+          <div className="space-y-3">
+            {groupedByPatient.map((patientGroup) => {
+              const isExpanded = expandedPatients.has(patientGroup.paciente_id);
+              const eligibleConsultations = patientGroup.consultas.filter(
+                (c) =>
+                  c.status_pagamento_codigo !== 'pago' &&
+                  c.status_pagamento_codigo !== 'cancelado' &&
+                  !c.fatura_id
+              );
+              const allPatientConsultationsSelected =
+                eligibleConsultations.length > 0 &&
+                eligibleConsultations.every((c) =>
+                  selectedConsultations.includes(c.id)
+                );
+
+              return (
+                <Card
+                  key={patientGroup.paciente_id}
+                  className={cn(
+                    'overflow-hidden transition-colors',
+                    isSelectionMode &&
+                      allPatientConsultationsSelected &&
+                      'bg-muted/50'
+                  )}
+                >
+                  <div
+                    className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() =>
+                      !isSelectionMode &&
+                      togglePatientExpansion(patientGroup.paciente_id)
+                    }
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-2 flex-1">
+                        {/* Cabeçalho do paciente */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isSelectionMode && (
+                            <Checkbox
+                              checked={allPatientConsultationsSelected}
+                              onCheckedChange={() =>
+                                toggleSelectPatient(patientGroup.paciente_id)
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              disabled={eligibleConsultations.length === 0}
+                            />
+                          )}
+                          <User className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                          <h3 className="font-semibold text-lg">
+                            {patientGroup.paciente_nome}
+                          </h3>
+                          <Badge variant="outline">
+                            {patientGroup.total_consultas} consulta(s)
+                          </Badge>
+                          {patientGroup.consultas_nao_pagas > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-orange-500/10 text-orange-600"
+                            >
+                              {patientGroup.consultas_nao_pagas} não paga(s)
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Valores principais */}
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-verde-pipa" />
+                            <span className="text-muted-foreground">
+                              Total:
+                            </span>
+                            <span className="font-semibold text-verde-pipa">
+                              {formatCurrency(patientGroup.total_valor)}
+                            </span>
+                          </div>
+                          {patientGroup.empresa_fatura_razao_social && (
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-muted-foreground">
+                                Empresa:
+                              </span>
+                              <span className="text-xs">
+                                {patientGroup.empresa_fatura_razao_social}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="flex-shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePatientExpansion(patientGroup.paciente_id);
+                        }}
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="h-5 w-5" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Detalhamento expandido - Consultas do paciente */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 space-y-2 border-t bg-muted/20">
+                      {patientGroup.consultas.map((consultation) => {
+                        const asaasUrl = consultation.id_pagamento_externo
+                          ? getAsaasPaymentUrl(
+                              consultation.id_pagamento_externo
+                            )
+                          : null;
+                        const canSelect =
+                          isSelectionMode &&
+                          consultation.status_pagamento_codigo !== 'pago' &&
+                          consultation.status_pagamento_codigo !==
+                            'cancelado' &&
+                          !consultation.fatura_id;
+
+                        return (
+                          <div
+                            key={consultation.id}
+                            className={cn(
+                              'flex items-center gap-3 p-3 bg-background rounded-lg transition-colors',
+                              canSelect && 'hover:bg-muted/50',
+                              selectedConsultations.includes(consultation.id) &&
+                                'bg-muted/50',
+                              !canSelect && isSelectionMode && 'opacity-50'
+                            )}
+                          >
+                            {isSelectionMode && (
+                              <Checkbox
+                                checked={selectedConsultations.includes(
+                                  consultation.id
+                                )}
+                                onCheckedChange={(checked) => {
+                                  if (!canSelect) return;
+                                  if (checked) {
+                                    setSelectedConsultations([
+                                      ...selectedConsultations,
+                                      consultation.id,
+                                    ]);
+                                  } else {
+                                    setSelectedConsultations(
+                                      selectedConsultations.filter(
+                                        (id) => id !== consultation.id
+                                      )
+                                    );
+                                  }
+                                }}
+                                disabled={!canSelect}
+                              />
+                            )}
+
+                            <div
+                              className="flex-1 space-y-1 cursor-pointer"
+                              onClick={() =>
+                                !isSelectionMode &&
+                                onConsultationClick?.(consultation)
+                              }
+                            >
+                              {/* Linha 1: Data, Horário e Valor */}
+                              <div className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3 text-muted-foreground" />
+                                    <span>
+                                      {formatDate(consultation.data_hora)}
+                                    </span>
+                                  </div>
+                                  <span>
+                                    {formatTime(consultation.data_hora)} -{' '}
+                                    {calculateEndTime(
+                                      consultation.data_hora,
+                                      consultation.servico_duracao
+                                    )}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {consultation.servico_nome}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-verde-pipa">
+                                    {formatCurrency(
+                                      consultation.valor_servico || 0
+                                    )}
+                                  </span>
+                                  <Badge
+                                    variant={
+                                      consultation.status_pagamento_codigo ===
+                                      'pago'
+                                        ? 'default'
+                                        : consultation.status_pagamento_codigo ===
+                                            'pendente'
+                                          ? 'secondary'
+                                          : consultation.status_pagamento_codigo ===
+                                              'aberto'
+                                            ? 'outline'
+                                            : 'destructive'
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {consultation.status_pagamento_nome}
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              {/* Linha 2: Profissional e Local */}
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  <span>{consultation.profissional_nome}</span>
+                                </div>
+                                {consultation.local_nome && (
+                                  <div className="flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    <span>{consultation.local_nome}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Ações */}
+                            {!isSelectionMode && (
+                              <div className="flex items-center gap-1">
+                                {asaasUrl && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(asaasUrl, '_blank');
+                                    }}
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() =>
+                                    onConsultationClick?.(consultation)
+                                  }
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* Lista de consultas - Visualização Lista */}
+        {viewMode === 'list' && isLoading ? (
           <div className="space-y-3">
             {[...Array(5)].map((_, i) => (
               <div
@@ -1213,15 +1634,15 @@ export const FinancialConsultationsList: React.FC<
               </div>
             ))}
           </div>
-        ) : error ? (
+        ) : viewMode === 'list' && error ? (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        ) : filteredConsultations.length === 0 ? (
+        ) : viewMode === 'list' && filteredConsultations.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             Nenhuma consulta encontrada com os filtros aplicados.
           </div>
-        ) : (
+        ) : viewMode === 'list' ? (
           <div className="space-y-3 max-h-[600px] overflow-y-auto">
             {filteredConsultations.map((consultation) => {
               const asaasUrl = consultation.id_pagamento_externo
@@ -1392,7 +1813,28 @@ export const FinancialConsultationsList: React.FC<
               );
             })}
           </div>
-        )}
+        ) : null}
+
+        {/* Estados vazios para visualização agrupada */}
+        {viewMode === 'grouped' && isLoading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="p-4 border rounded-lg space-y-2">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ))}
+          </div>
+        ) : viewMode === 'grouped' && error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : viewMode === 'grouped' && filteredConsultations.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Nenhuma consulta encontrada com os filtros aplicados.
+          </div>
+        ) : null}
 
         {/* Resumo - Totais de TODOS os registros do filtro */}
         {!isLoading && !error && filteredConsultations.length > 0 && (
