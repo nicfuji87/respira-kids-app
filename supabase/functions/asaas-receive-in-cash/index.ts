@@ -11,7 +11,7 @@ interface ReceiveInCashRequest {
   paymentData: {
     notifyCustomer?: boolean;
     value: number;
-    paymentDate: string; // formato: YYYY-MM-DD
+    paymentDate?: string; // formato: YYYY-MM-DD (opcional, usa data do servidor se não fornecido)
   };
 }
 
@@ -50,12 +50,7 @@ Deno.serve(async (req: Request) => {
       await req.json();
 
     // Validar dados obrigatórios
-    if (
-      !apiConfig?.apiKey ||
-      !paymentId ||
-      !paymentData?.value ||
-      !paymentData?.paymentDate
-    ) {
+    if (!apiConfig?.apiKey || !paymentId || !paymentData?.value) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -82,26 +77,46 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Validar formato da data (YYYY-MM-DD)
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(paymentData.paymentDate)) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Data de pagamento deve estar no formato YYYY-MM-DD',
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+    // Validar formato da data (YYYY-MM-DD) se fornecida
+    if (paymentData.paymentDate) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(paymentData.paymentDate)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Data de pagamento deve estar no formato YYYY-MM-DD',
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    }
+
+    // Preparar data de pagamento (usar data do servidor se não fornecida)
+    // IMPORTANTE: Usar fuso horário do Brasil (UTC-3) para sincronizar com ASAAS
+    let finalPaymentDate = paymentData.paymentDate;
+    if (!finalPaymentDate) {
+      // Obter data no fuso horário do Brasil (America/Sao_Paulo)
+      const agora = new Date();
+      const brasilOffset = -3 * 60; // UTC-3 em minutos
+      const utcTime = agora.getTime() + agora.getTimezoneOffset() * 60000;
+      const brasilTime = new Date(utcTime + brasilOffset * 60000);
+
+      const ano = brasilTime.getFullYear();
+      const mes = String(brasilTime.getMonth() + 1).padStart(2, '0');
+      const dia = String(brasilTime.getDate()).padStart(2, '0');
+      finalPaymentDate = `${ano}-${mes}-${dia}`;
+
+      console.log(`📅 Data calculada (Brasil UTC-3): ${finalPaymentDate}`);
     }
 
     // Preparar dados para API do Asaas
     const asaasPayload = {
       notifyCustomer: paymentData.notifyCustomer ?? false,
       value: paymentData.value,
-      paymentDate: paymentData.paymentDate,
+      paymentDate: finalPaymentDate,
     };
 
     console.log(

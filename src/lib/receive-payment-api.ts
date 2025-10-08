@@ -141,17 +141,13 @@ export async function receivePaymentManual(
 
     console.log('✅ API key da empresa obtida');
 
-    // 6. Preparar data de pagamento
-    const finalPaymentDate =
-      paymentDate || new Date().toISOString().split('T')[0];
-    console.log('📅 Data de pagamento:', finalPaymentDate);
-
-    // 7. Confirmar recebimento no ASAAS
+    // 6. Confirmar recebimento no ASAAS
+    // Nota: Não enviamos paymentDate - a Edge Function usará a data do servidor
     console.log('💰 Confirmando recebimento no ASAAS...');
     const asaasResult = await receivePaymentInCash(
       fatura.id_asaas,
       Number(fatura.valor_total),
-      finalPaymentDate,
+      undefined, // Deixar a Edge Function determinar a data
       apiConfig,
       false // Não notificar cliente
     );
@@ -221,13 +217,16 @@ export async function receivePaymentManual(
     }
 
     // 10. Retornar sucesso
+    const hoje = new Date();
+    const dataAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+
     const result: ReceivePaymentManualResult = {
       success: true,
       data: {
         faturaId: fatura.id,
         asaasPaymentId: fatura.id_asaas,
         valor: Number(fatura.valor_total),
-        paymentDate: finalPaymentDate,
+        paymentDate: dataAtual,
       },
     };
 

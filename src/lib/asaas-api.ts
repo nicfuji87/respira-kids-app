@@ -796,7 +796,7 @@ export async function authorizeAsaasInvoice(
 export async function receivePaymentInCash(
   paymentId: string,
   value: number,
-  paymentDate: string,
+  paymentDate: string | undefined,
   apiConfig: AsaasApiConfig,
   notifyCustomer: boolean = false
 ): Promise<AsaasIntegrationResult> {
@@ -805,7 +805,7 @@ export async function receivePaymentInCash(
       '💵 Confirmando recebimento em dinheiro:',
       paymentId,
       value,
-      paymentDate
+      paymentDate || '(data do servidor)'
     );
 
     // Chama Edge Function para confirmar recebimento em dinheiro
@@ -818,7 +818,7 @@ export async function receivePaymentInCash(
           paymentData: {
             notifyCustomer,
             value,
-            paymentDate,
+            ...(paymentDate && { paymentDate }), // Só inclui se fornecida
           },
         },
       }
