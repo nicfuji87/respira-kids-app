@@ -37,15 +37,19 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
   const [attempts, setAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [validationSuccess, setValidationSuccess] = useState(false); // AI dev note: Rastrear sucesso da validação
 
   const maxAttempts = 3;
   const blockDuration = 5 * 60 * 1000; // 5 minutos
 
+  // Reset state quando abrir OU quando fechar após sucesso
   useEffect(() => {
     if (isOpen) {
       // Reset state quando abrir
       setPin('');
       setError('');
+      setValidationSuccess(false); // AI dev note: Reset do estado de sucesso
+      setLoading(false);
       checkBlockStatus();
       checkPinExists();
     }
@@ -133,10 +137,17 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
         // PIN correto
         localStorage.removeItem('pin_attempts');
         localStorage.removeItem('pin_block_time');
+        setValidationSuccess(true);
         setLoading(false);
 
         // Chamar onSuccess que irá fechar o dialog via mudança de isPinValidated
         onSuccess();
+
+        // Limpar estado do PIN após um breve delay
+        setTimeout(() => {
+          setPin('');
+          setError('');
+        }, 100);
       } else {
         // PIN incorreto
         const newAttempts = attempts + 1;
@@ -173,7 +184,14 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && !validationSuccess) {
+          onClose();
+        }
+      }}
+    >
       <DialogContent
         className="sm:max-w-md"
         onPointerDownOutside={(e) => e.preventDefault()}

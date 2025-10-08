@@ -40,7 +40,11 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
     };
 
     const handleDateSelect = (dateString: string) => {
-      const selectedDate = new Date(dateString);
+      // AI dev note: Criar data no timezone local para evitar bug de mudança de dia
+      // Bug: new Date('2025-01-15') cria UTC 00:00, que em UTC-3 vira 14/01 21:00
+      // Fix: criar data parseando componentes para o timezone local
+      const [year, month, day] = dateString.split('-').map(Number);
+      const selectedDate = new Date(year, month - 1, day);
       onDateChange(selectedDate);
     };
 

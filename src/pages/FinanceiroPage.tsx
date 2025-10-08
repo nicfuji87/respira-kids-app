@@ -292,7 +292,9 @@ export const FinanceiroPage: React.FC = () => {
       {/* Dialog de validação de PIN - fecha automaticamente quando isPinValidated = true */}
       <PinValidationDialog
         isOpen={!isPinValidated}
-        onClose={() => navigate('/dashboard')}
+        onClose={() => {
+          navigate('/dashboard');
+        }}
         onSuccess={handlePinSuccess}
         title="Acesso ao Financeiro"
         description="Esta área contém informações sensíveis. Digite seu PIN para continuar."

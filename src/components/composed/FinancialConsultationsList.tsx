@@ -127,6 +127,7 @@ export const FinancialConsultationsList: React.FC<
   const [endDate, setEndDate] = useState<string>('');
   const [professionalFilter, setProfessionalFilter] = useState<string>('todos');
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('todos');
+  const [empresaFilter, setEmpresaFilter] = useState<string>('todos');
   const [paymentStatusFilter, setPaymentStatusFilter] =
     useState<PaymentStatusFilter>('todos');
   const [searchQuery, setSearchQuery] = useState('');
@@ -145,11 +146,8 @@ export const FinancialConsultationsList: React.FC<
     new Set()
   );
 
-  // Estados de paginação
-  const [currentPage, setCurrentPage] = useState(0);
+  // Estados de contagem
   const [totalCount, setTotalCount] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const PAGE_SIZE = 100; // AI dev note: 100 consultas por página
 
   // Estados de totais (todos os registros do filtro, não apenas da página)
   const [totalSummary, setTotalSummary] = useState({
@@ -163,6 +161,9 @@ export const FinancialConsultationsList: React.FC<
     Array<{ id: string; nome: string }>
   >([]);
   const [serviceTypes, setServiceTypes] = useState<
+    Array<{ id: string; nome: string }>
+  >([]);
+  const [companies, setCompanies] = useState<
     Array<{ id: string; nome: string }>
   >([]);
 
@@ -210,22 +211,28 @@ export const FinancialConsultationsList: React.FC<
             .split('T')[0];
           break;
         case 'ultimos_30':
-          startDateFilter = new Date(today.setDate(today.getDate() - 30))
+          // AI dev note: Criar nova instância para evitar mutação do objeto today
+          startDateFilter = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
           break;
         case 'ultimos_60':
-          startDateFilter = new Date(today.setDate(today.getDate() - 60))
+          // AI dev note: Criar nova instância para evitar mutação do objeto today
+          startDateFilter = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
           break;
         case 'ultimos_90':
-          startDateFilter = new Date(today.setDate(today.getDate() - 90))
+          // AI dev note: Criar nova instância para evitar mutação do objeto today
+          startDateFilter = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
           break;
         case 'ultimo_ano':
-          startDateFilter = new Date(today.setFullYear(today.getFullYear() - 1))
+          // AI dev note: Criar nova instância para evitar mutação do objeto today
+          startDateFilter = new Date(
+            today.getTime() - 365 * 24 * 60 * 60 * 1000
+          )
             .toISOString()
             .split('T')[0];
           break;
@@ -310,16 +317,6 @@ export const FinancialConsultationsList: React.FC<
         (item) => item.status_pagamento_codigo === 'pago'
       ).length;
 
-      console.log('📊 Totais de Consultas (com lotes):', {
-        periodFilter,
-        totalRegistros: allConsultas.length,
-        totalValue,
-        unpaidCount,
-        paidCount,
-        startDateFilter,
-        endDateFilter,
-      });
-
       setTotalSummary({ totalValue, unpaidCount, paidCount });
 
       // Query de dados com mesmos filtros
@@ -337,14 +334,13 @@ export const FinancialConsultationsList: React.FC<
         query = query.lte('data_hora', endDateFilter);
       }
 
-      // AI dev note: Aplicar paginação
-      const from = currentPage * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      query = query.range(from, to);
+      // AI dev note: BUSCAR TODAS as consultas do período sem paginação
+      // Os filtros locais (nome, profissional, etc) precisam de todos os dados
+      // A paginação será feita apenas na exibição (frontend)
 
       const { data, error: fetchError } = await query;
 
-      setHasMore((count || 0) > to + 1);
+      // Sem paginação - todos os registros são buscados
 
       if (fetchError) throw fetchError;
 
@@ -455,13 +451,28 @@ export const FinancialConsultationsList: React.FC<
         ).values()
       );
       setServiceTypes(uniqueServiceTypes);
+
+      const uniqueCompanies = Array.from(
+        new Map(
+          mappedData
+            .filter((c) => c.empresa_fatura_id && c.empresa_fatura_razao_social)
+            .map((c) => [
+              c.empresa_fatura_id,
+              {
+                id: c.empresa_fatura_id!,
+                nome: c.empresa_fatura_razao_social!,
+              },
+            ])
+        ).values()
+      );
+      setCompanies(uniqueCompanies);
     } catch (err) {
       console.error('Erro ao buscar consultas:', err);
       setError('Erro ao carregar consultas');
     } finally {
       setIsLoading(false);
     }
-  }, [periodFilter, startDate, endDate, currentPage]);
+  }, [periodFilter, startDate, endDate]);
 
   // Aplicar filtros locais e ordenação
   useEffect(() => {
@@ -479,6 +490,11 @@ export const FinancialConsultationsList: React.FC<
       filtered = filtered.filter(
         (c) => c.tipo_servico_id === serviceTypeFilter
       );
+    }
+
+    // Filtro de empresa
+    if (empresaFilter !== 'todos') {
+      filtered = filtered.filter((c) => c.empresa_fatura_id === empresaFilter);
     }
 
     // Filtro de status de pagamento
@@ -536,14 +552,15 @@ export const FinancialConsultationsList: React.FC<
     consultations,
     professionalFilter,
     serviceTypeFilter,
+    empresaFilter,
     paymentStatusFilter,
     searchQuery,
     sortOption,
   ]);
 
-  // Resetar página quando filtros mudarem
+  // Limpar quando filtros mudarem
   useEffect(() => {
-    setCurrentPage(0);
+    // Resetar seleções se necessário
   }, [
     periodFilter,
     startDate,
@@ -629,22 +646,28 @@ export const FinancialConsultationsList: React.FC<
             .split('T')[0];
           break;
         case 'ultimos_30':
-          startDateFilter = new Date(today.setDate(today.getDate() - 30))
+          // AI dev note: Criar nova instância para evitar mutação do objeto today
+          startDateFilter = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
           break;
         case 'ultimos_60':
-          startDateFilter = new Date(today.setDate(today.getDate() - 60))
+          // AI dev note: Criar nova instância para evitar mutação do objeto today
+          startDateFilter = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
           break;
         case 'ultimos_90':
-          startDateFilter = new Date(today.setDate(today.getDate() - 90))
+          // AI dev note: Criar nova instância para evitar mutação do objeto today
+          startDateFilter = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0];
           break;
         case 'ultimo_ano':
-          startDateFilter = new Date(today.setFullYear(today.getFullYear() - 1))
+          // AI dev note: Criar nova instância para evitar mutação do objeto today
+          startDateFilter = new Date(
+            today.getTime() - 365 * 24 * 60 * 60 * 1000
+          )
             .toISOString()
             .split('T')[0];
           break;
@@ -685,11 +708,12 @@ export const FinancialConsultationsList: React.FC<
     }
   };
 
-  // AI dev note: Agrupar consultas por paciente
+  // AI dev note: Agrupar consultas por paciente + empresa (chave composta)
   const groupedByPatient = React.useMemo(() => {
     const groups = new Map<
       string,
       {
+        groupKey: string; // AI dev note: Chave composta para usar como React key
         paciente_id: string;
         paciente_nome: string;
         consultas: ConsultationWithPatient[];
@@ -697,12 +721,18 @@ export const FinancialConsultationsList: React.FC<
         total_consultas: number;
         consultas_nao_pagas: number;
         empresa_fatura_razao_social?: string;
+        empresa_fatura_id?: string;
       }
     >();
 
     filteredConsultations.forEach((consulta) => {
-      if (!groups.has(consulta.paciente_id)) {
-        groups.set(consulta.paciente_id, {
+      // AI dev note: Chave composta: paciente_id + empresa_fatura_id
+      // Isso permite que o mesmo paciente apareça múltiplas vezes (uma por empresa)
+      const groupKey = `${consulta.paciente_id}__${consulta.empresa_fatura_id || 'sem_empresa'}`;
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          groupKey, // AI dev note: Salvar a chave para usar como React key
           paciente_id: consulta.paciente_id,
           paciente_nome: consulta.paciente_nome,
           consultas: [],
@@ -710,10 +740,11 @@ export const FinancialConsultationsList: React.FC<
           total_consultas: 0,
           consultas_nao_pagas: 0,
           empresa_fatura_razao_social: consulta.empresa_fatura_razao_social,
+          empresa_fatura_id: consulta.empresa_fatura_id,
         });
       }
 
-      const group = groups.get(consulta.paciente_id)!;
+      const group = groups.get(groupKey)!;
       group.consultas.push(consulta);
       group.total_valor += consulta.valor_servico || 0;
       group.total_consultas += 1;
@@ -1215,6 +1246,21 @@ export const FinancialConsultationsList: React.FC<
               </SelectContent>
             </Select>
 
+            {/* Empresa */}
+            <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Empresa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas as empresas</SelectItem>
+                {companies.map((company) => (
+                  <SelectItem key={company.id} value={company.id}>
+                    {company.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {/* Status de Pagamento */}
             <Select
               value={paymentStatusFilter}
@@ -1242,6 +1288,7 @@ export const FinancialConsultationsList: React.FC<
                 setPeriodFilter('mes_atual');
                 setProfessionalFilter('todos');
                 setServiceTypeFilter('todos');
+                setEmpresaFilter('todos');
                 setPaymentStatusFilter('todos');
                 setSearchQuery('');
                 setStartDate('');
@@ -1372,7 +1419,7 @@ export const FinancialConsultationsList: React.FC<
 
               return (
                 <Card
-                  key={patientGroup.paciente_id}
+                  key={patientGroup.groupKey}
                   className={cn(
                     'overflow-hidden transition-colors',
                     isSelectionMode &&
@@ -1405,6 +1452,15 @@ export const FinancialConsultationsList: React.FC<
                           <h3 className="font-semibold text-lg">
                             {patientGroup.paciente_nome}
                           </h3>
+                          {patientGroup.empresa_fatura_razao_social && (
+                            <Badge
+                              variant="outline"
+                              className="bg-blue-500/10 text-blue-700"
+                            >
+                              <Building2 className="h-3 w-3 mr-1" />
+                              {patientGroup.empresa_fatura_razao_social}
+                            </Badge>
+                          )}
                           <Badge variant="outline">
                             {patientGroup.total_consultas} consulta(s)
                           </Badge>
@@ -1429,17 +1485,6 @@ export const FinancialConsultationsList: React.FC<
                               {formatCurrency(patientGroup.total_valor)}
                             </span>
                           </div>
-                          {patientGroup.empresa_fatura_razao_social && (
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-muted-foreground">
-                                Empresa:
-                              </span>
-                              <span className="text-xs">
-                                {patientGroup.empresa_fatura_razao_social}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
 
@@ -1868,61 +1913,14 @@ export const FinancialConsultationsList: React.FC<
           </div>
         )}
 
-        {/* Paginação */}
-        {!isLoading && !error && totalCount > PAGE_SIZE && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t">
+        {/* Contador de consultas */}
+        {!isLoading && !error && filteredConsultations.length > 0 && (
+          <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t">
             <p className="text-sm text-muted-foreground">
-              Mostrando {currentPage * PAGE_SIZE + 1} -{' '}
-              {Math.min((currentPage + 1) * PAGE_SIZE, totalCount)} de{' '}
-              {totalCount} consultas
+              Exibindo {filteredConsultations.length} de {totalCount} consultas
               {selectedConsultations.length > 0 &&
-                ` (${selectedConsultations.length} selecionadas)`}
+                ` • ${selectedConsultations.length} selecionadas`}
             </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(0)}
-                disabled={currentPage === 0}
-                title="Primeira página"
-              >
-                <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
-                <ChevronRight className="h-4 w-4 rotate-180 -ml-3" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                disabled={currentPage === 0}
-              >
-                <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
-                Anterior
-              </Button>
-              <div className="px-3 py-1 text-sm font-medium bg-muted rounded">
-                Página {currentPage + 1} de {Math.ceil(totalCount / PAGE_SIZE)}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => p + 1)}
-                disabled={!hasMore}
-              >
-                Próxima
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage(Math.ceil(totalCount / PAGE_SIZE) - 1)
-                }
-                disabled={!hasMore}
-                title="Última página"
-              >
-                <ChevronRight className="h-4 w-4 ml-1" />
-                <ChevronRight className="h-4 w-4 -ml-3" />
-              </Button>
-            </div>
           </div>
         )}
       </CardContent>
