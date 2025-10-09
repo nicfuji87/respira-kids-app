@@ -351,8 +351,16 @@ export const PatientRegistrationSteps =
         let contratanteCpf = '';
         let contratanteEmail = '';
 
+        console.log('📋 [PatientRegistrationSteps] Determinando contratante:', {
+          isSameAsLegal: responsavelFinanceiro?.isSameAsLegal,
+          hasPersonData: !!responsavelFinanceiro?.personData,
+          hasNewPersonData: !!responsavelFinanceiro?.newPersonData,
+          hasExistingUserData: !!existingUserData,
+          hasResponsavelLegal: !!registrationData.responsavelLegal,
+        });
+
         if (responsavelFinanceiro?.isSameAsLegal) {
-          // Usar dados do responsável legal/existente
+          // CASO 1: Responsável financeiro é o mesmo que legal
           contratanteNome =
             existingUserData?.nome ||
             registrationData.responsavelLegal?.nome ||
@@ -365,11 +373,32 @@ export const PatientRegistrationSteps =
             existingUserData?.email ||
             registrationData.responsavelLegal?.email ||
             '';
+          console.log(
+            '✅ [PatientRegistrationSteps] Contratante = Responsável Legal:',
+            contratanteNome
+          );
         } else if (responsavelFinanceiro?.personData) {
-          // Usar dados da pessoa financeira encontrada
+          // CASO 2: Responsável financeiro é uma pessoa existente (encontrada por CPF)
           contratanteNome = responsavelFinanceiro.personData.nome;
           contratanteCpf = responsavelFinanceiro.personData.cpf;
           contratanteEmail = responsavelFinanceiro.personData.email || '';
+          console.log(
+            '✅ [PatientRegistrationSteps] Contratante = Pessoa Existente:',
+            contratanteNome
+          );
+        } else if (responsavelFinanceiro?.newPersonData) {
+          // CASO 3: Responsável financeiro é uma NOVA pessoa cadastrada
+          contratanteNome = responsavelFinanceiro.newPersonData.nome;
+          contratanteCpf = responsavelFinanceiro.newPersonData.cpf;
+          contratanteEmail = responsavelFinanceiro.newPersonData.email;
+          console.log(
+            '✅ [PatientRegistrationSteps] Contratante = Nova Pessoa:',
+            contratanteNome
+          );
+        } else {
+          console.warn(
+            '⚠️ [PatientRegistrationSteps] Nenhum responsável financeiro definido - usando vazio'
+          );
         }
 
         // Preparar variáveis do contrato conforme plano
