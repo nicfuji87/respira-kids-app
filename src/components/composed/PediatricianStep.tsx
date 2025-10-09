@@ -190,32 +190,6 @@ export const PediatricianStep = React.memo<PediatricianStepProps>(
         </div>
 
         <div className="space-y-5">
-          {/* Opção: Não possui pediatra */}
-          <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg border border-border">
-            <input
-              type="checkbox"
-              id="no-pediatrician"
-              checked={noPediatrician}
-              onChange={(e) => {
-                setNoPediatrician(e.target.checked);
-                if (e.target.checked) {
-                  setNome('');
-                  setSelectedPediatrician(null);
-                  setSearchResults([]);
-                  setShowNewPediatricianForm(false);
-                  setErrors({});
-                }
-              }}
-              className="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded"
-            />
-            <Label
-              htmlFor="no-pediatrician"
-              className="flex-1 cursor-pointer text-base"
-            >
-              Não possui pediatra
-            </Label>
-          </div>
-
           {!noPediatrician && (
             <>
               {/* Campo de busca/nome */}
@@ -355,6 +329,32 @@ export const PediatricianStep = React.memo<PediatricianStepProps>(
               </p>
             </>
           )}
+
+          {/* Opção: Não possui pediatra - movido para baixo e reduzido */}
+          <div className="flex items-center space-x-2 pt-1">
+            <input
+              type="checkbox"
+              id="no-pediatrician"
+              checked={noPediatrician}
+              onChange={(e) => {
+                setNoPediatrician(e.target.checked);
+                if (e.target.checked) {
+                  setNome('');
+                  setSelectedPediatrician(null);
+                  setSearchResults([]);
+                  setShowNewPediatricianForm(false);
+                  setErrors({});
+                }
+              }}
+              className="w-3.5 h-3.5 text-primary focus:ring-primary border-gray-300 rounded"
+            />
+            <Label
+              htmlFor="no-pediatrician"
+              className="cursor-pointer text-xs text-muted-foreground"
+            >
+              Não possui pediatra
+            </Label>
+          </div>
         </div>
 
         {/* Botões de navegação */}
