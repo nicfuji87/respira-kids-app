@@ -152,11 +152,24 @@ export const ReviewStep = React.memo<ReviewStepProps>(
                       Financeiro
                     </span>
                   )}
-                  {!data.existingUserData && (
-                    <span className="text-xs font-semibold text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded">
-                      Legal
-                    </span>
-                  )}
+                  {/* Novo responsável: mostrar badges baseado em se é legal e/ou financeiro */}
+                  {!data.existingUserData &&
+                    data.responsavelFinanceiroMesmoQueLegal && (
+                      <>
+                        <span className="text-xs font-semibold text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded">
+                          Legal
+                        </span>
+                        <span className="text-xs font-semibold text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-300 px-2 py-1 rounded">
+                          Financeiro
+                        </span>
+                      </>
+                    )}
+                  {!data.existingUserData &&
+                    !data.responsavelFinanceiroMesmoQueLegal && (
+                      <span className="text-xs font-semibold text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded">
+                        Legal
+                      </span>
+                    )}
                   {data.existingPersonId && (
                     <span className="text-xs font-medium text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 px-2 py-1 rounded">
                       Cadastrado

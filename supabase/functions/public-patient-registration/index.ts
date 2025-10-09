@@ -84,6 +84,12 @@ interface FinalizationResult {
   error?: string;
 }
 
+// AI dev note: Helper para extrair telefone do JID do WhatsApp
+// Remove o sufixo @s.whatsapp.net e retorna apenas os números
+function extractPhoneFromJid(jid: string): string {
+  return jid.split('@')[0];
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -256,26 +262,37 @@ Deno.serve(async (req: Request) => {
     } else {
       // Criar novo responsável legal
       console.log('📋 [STEP 3] Criando novo responsável legal...');
+
+      // AI dev note: Telefone deve ser o JID (formato internacional completo, ex: 556181446666)
+      const telefoneResponsavelLegal = data.whatsappJid
+        ? extractPhoneFromJid(data.whatsappJid)
+        : data.phoneNumber;
+
       console.log('📋 [STEP 3] Dados:', {
         nome: data.responsavelLegal?.nome,
         cpf: data.responsavelLegal?.cpf,
         email: data.responsavelLegal?.email,
-        telefone: data.phoneNumber,
+        telefone: telefoneResponsavelLegal,
       });
+
+      // AI dev note: responsavel_cobranca_id é NOT NULL, então NÃO podemos passar null.
+      // Vamos inserir um UUID temporário e depois fazer UPDATE.
+      const tempId = crypto.randomUUID();
 
       const { data: novoResponsavelLegal, error: errorResponsavelLegal } =
         await supabase
           .from('pessoas')
           .insert({
+            id: tempId, // AI dev note: Usar ID fixo temporário para poder referenciar em responsavel_cobranca_id
             nome: data.responsavelLegal!.nome,
             cpf_cnpj: data.responsavelLegal!.cpf,
-            telefone: data.phoneNumber,
+            telefone: telefoneResponsavelLegal, // AI dev note: JID do WhatsApp (formato internacional)
             email: data.responsavelLegal!.email,
             id_tipo_pessoa: tipoResponsavel.id,
             id_endereco: enderecoId,
             numero_endereco: data.endereco.numero,
             complemento_endereco: data.endereco.complemento || null,
-            responsavel_cobranca_id: null, // Será atualizado no próximo passo
+            responsavel_cobranca_id: tempId, // AI dev note: Auto-referência temporária
             ativo: true,
           })
           .select('id')
@@ -351,30 +368,40 @@ Deno.serve(async (req: Request) => {
     } else if (data.newPersonData) {
       // CENÁRIO 3: Nova pessoa (não encontrada por CPF)
       console.log('📋 [STEP 4] Criando novo responsável financeiro...');
+
+      // AI dev note: Telefone deve ser o JID (formato internacional completo, ex: 556181446666)
+      const telefoneResponsavelFin = data.newPersonData.whatsappJid
+        ? extractPhoneFromJid(data.newPersonData.whatsappJid)
+        : data.newPersonData.whatsapp;
+
       console.log('📋 [STEP 4] Dados:', {
         nome: data.newPersonData.nome,
         cpf: data.newPersonData.cpf,
         email: data.newPersonData.email,
-        whatsapp: data.newPersonData.whatsapp,
+        telefone: telefoneResponsavelFin,
       });
 
       // Usar mesmo endereço do responsável legal (conforme decisão do usuário)
       console.log('✅ [STEP 4] Usando mesmo endereço do responsável legal');
 
       console.log('📋 [STEP 4] Inserindo nova pessoa financeira...');
+      // AI dev note: responsavel_cobranca_id é NOT NULL, então criamos ID temporário
+      const tempFinId = crypto.randomUUID();
+
       const { data: novoResponsavelFin, error: errorResponsavelFin } =
         await supabase
           .from('pessoas')
           .insert({
+            id: tempFinId, // AI dev note: Usar ID fixo temporário
             nome: data.newPersonData.nome,
             cpf_cnpj: data.newPersonData.cpf,
-            telefone: data.newPersonData.whatsapp,
+            telefone: telefoneResponsavelFin, // AI dev note: JID do WhatsApp (formato internacional)
             email: data.newPersonData.email,
             id_tipo_pessoa: tipoResponsavel.id,
             id_endereco: enderecoId, // Mesmo endereço do responsável legal
             numero_endereco: data.endereco.numero,
             complemento_endereco: data.endereco.complemento || null,
-            responsavel_cobranca_id: null, // Será atualizado
+            responsavel_cobranca_id: tempFinId, // AI dev note: Auto-referência temporária
             ativo: true,
           })
           .select('id')
@@ -524,7 +551,7 @@ Deno.serve(async (req: Request) => {
         responsavel_cobranca_id: responsavelFinanceiroId, // ⚠️ CRÍTICO
         autorizacao_uso_cientifico: data.autorizacoes.usoCientifico,
         autorizacao_uso_redes_sociais: data.autorizacoes.usoRedesSociais,
-        autorizacao_uso_do_nome: data.autorizacoes.usoNome,
+        'autorizacao_uso_do nome': data.autorizacoes.usoNome, // AI dev note: Nome da coluna tem espaço!
         ativo: true,
       })
       .select('id')
@@ -539,33 +566,53 @@ Deno.serve(async (req: Request) => {
     console.log('✅ [STEP 6] Paciente criado:', pacienteId);
 
     // ============================================
-    // STEP 7: Criar RELACIONAMENTO paciente ↔ responsável legal
+    // STEP 7 & 8: Criar RELACIONAMENTOS paciente ↔ responsáveis
     // ============================================
-    console.log(
-      '📋 [STEP 7] Criando relacionamento paciente ↔ responsável legal...'
-    );
-    const { error: errorRelLegal } = await supabase
-      .from('pessoa_responsaveis')
-      .insert({
-        id_pessoa: pacienteId,
-        id_responsavel: responsavelLegalId,
-        tipo_responsabilidade: 'legal',
-        ativo: true,
-      });
-
-    if (errorRelLegal) {
-      console.error(
-        '❌ [STEP 7] Erro ao criar relacionamento legal:',
-        errorRelLegal
+    if (responsavelFinanceiroId === responsavelLegalId) {
+      // Mesma pessoa: criar um único relacionamento com tipo 'ambos'
+      console.log(
+        '📋 [STEP 7] Criando relacionamento paciente ↔ responsável (legal e financeiro)...'
       );
-      throw new Error('Erro ao criar relacionamento com responsável legal');
-    }
-    console.log('✅ [STEP 7] Relacionamento legal criado');
+      const { error: errorRelAmbos } = await supabase
+        .from('pessoa_responsaveis')
+        .insert({
+          id_pessoa: pacienteId,
+          id_responsavel: responsavelLegalId,
+          tipo_responsabilidade: 'ambos', // AI dev note: Usar 'ambos' quando é a mesma pessoa
+          ativo: true,
+        });
 
-    // ============================================
-    // STEP 8: Criar RELACIONAMENTO paciente ↔ responsável financeiro (se diferente)
-    // ============================================
-    if (responsavelFinanceiroId !== responsavelLegalId) {
+      if (errorRelAmbos) {
+        console.error(
+          '❌ [STEP 7] Erro ao criar relacionamento ambos:',
+          errorRelAmbos
+        );
+        throw new Error('Erro ao criar relacionamento com responsável');
+      }
+      console.log('✅ [STEP 7] Relacionamento criado (legal e financeiro)');
+    } else {
+      // Pessoas diferentes: criar dois relacionamentos separados
+      console.log(
+        '📋 [STEP 7] Criando relacionamento paciente ↔ responsável legal...'
+      );
+      const { error: errorRelLegal } = await supabase
+        .from('pessoa_responsaveis')
+        .insert({
+          id_pessoa: pacienteId,
+          id_responsavel: responsavelLegalId,
+          tipo_responsabilidade: 'legal',
+          ativo: true,
+        });
+
+      if (errorRelLegal) {
+        console.error(
+          '❌ [STEP 7] Erro ao criar relacionamento legal:',
+          errorRelLegal
+        );
+        throw new Error('Erro ao criar relacionamento com responsável legal');
+      }
+      console.log('✅ [STEP 7] Relacionamento legal criado');
+
       console.log(
         '📋 [STEP 8] Criando relacionamento paciente ↔ responsável financeiro...'
       );
@@ -588,8 +635,6 @@ Deno.serve(async (req: Request) => {
         );
       }
       console.log('✅ [STEP 8] Relacionamento financeiro criado');
-    } else {
-      console.log('⏭️ [STEP 8] Pulando (responsável financeiro = legal)');
     }
 
     // ============================================
@@ -739,15 +784,27 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     console.error('❌ [ERROR] Erro fatal no cadastro:', error);
+    console.error(
+      '❌ [ERROR] Stack trace:',
+      error instanceof Error ? error.stack : 'N/A'
+    );
+    console.error('❌ [ERROR] Tipo do erro:', typeof error);
+    console.error(
+      '❌ [ERROR] Error completo:',
+      JSON.stringify(error, Object.getOwnPropertyNames(error))
+    );
 
     const result: FinalizationResult = {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error:
+        error instanceof Error
+          ? `${error.message}\n\nStack: ${error.stack}`
+          : String(error),
     };
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: 200, // AI dev note: SEMPRE 200 para o Supabase client ler o body!
     });
   }
 });
