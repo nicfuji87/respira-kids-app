@@ -8,6 +8,7 @@ import {
 } from '@/components/primitives/radio-group';
 import { CPFInput } from '@/components/primitives/CPFInput';
 import { DateInput } from '@/components/primitives/DateInput';
+import { validateCPF } from '@/lib/cpf-validator';
 import { cn } from '@/lib/utils';
 
 // AI dev note: PatientDataStep - Etapa de cadastro de dados do paciente
@@ -66,10 +67,16 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
         newErrors.sexo = 'Selecione o sexo do paciente';
       }
 
-      // CPF obrigatório se emitir nota no nome do paciente
+      // CPF: obrigatório se emitir nota no nome do paciente, mas sempre validar se preenchido
       if (emitirNotaNomePaciente && !cpf) {
         newErrors.cpf =
           'CPF é obrigatório para emissão de nota fiscal no nome do paciente';
+      } else if (cpf && cpf.trim() !== '') {
+        // Se CPF foi preenchido (mesmo que opcional), validar
+        const validation = validateCPF(cpf);
+        if (!validation.valid) {
+          newErrors.cpf = validation.error || 'CPF inválido';
+        }
       }
 
       setErrors(newErrors);

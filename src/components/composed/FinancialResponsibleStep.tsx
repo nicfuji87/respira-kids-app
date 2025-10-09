@@ -12,6 +12,7 @@ import {
   searchPersonByCPF,
   type PersonByCPFResult,
 } from '@/lib/patient-registration-api';
+import { validateCPF } from '@/lib/cpf-validator';
 import { FinancialResponsibleDataStep } from './FinancialResponsibleDataStep';
 
 // AI dev note: FinancialResponsibleStep - Etapa para definir responsável financeiro
@@ -115,15 +116,17 @@ export const FinancialResponsibleStep =
             cpfValue
           );
 
-          // Validar CPF
-          const cpfLimpo = cpfValue.replace(/\D/g, '');
-          if (cpfLimpo.length !== 11) {
-            setCpfError('CPF deve ter 11 dígitos');
+          // Validar CPF com algoritmo robusto
+          const validation = validateCPF(cpfValue);
+          if (!validation.valid) {
+            setCpfError(validation.error || 'CPF inválido');
             return;
           }
 
           setIsSearching(true);
           setCpfError('');
+
+          const cpfLimpo = cpfValue.replace(/\D/g, '');
 
           try {
             console.log(

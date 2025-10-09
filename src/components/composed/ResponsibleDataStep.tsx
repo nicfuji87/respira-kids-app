@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Label } from '@/components/primitives/label';
 import { Input } from '@/components/primitives/input';
 import { Button } from '@/components/primitives/button';
-import { CPFInput, validateCPF } from '@/components/primitives/CPFInput';
+import { CPFInput } from '@/components/primitives/CPFInput';
+import { validateCPF } from '@/lib/cpf-validator';
 import { cn } from '@/lib/utils';
 import { AlertCircle } from 'lucide-react';
 
@@ -59,8 +60,9 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
 
     useEffect(() => {
       if (touched.cpf && cpf.replace(/\D/g, '').length === 11) {
-        if (!validateCPF(cpf)) {
-          setErrors((prev) => ({ ...prev, cpf: 'CPF inválido' }));
+        const validation = validateCPF(cpf);
+        if (!validation.valid) {
+          setErrors((prev) => ({ ...prev, cpf: validation.error }));
         } else {
           setErrors((prev) => ({ ...prev, cpf: undefined }));
         }
@@ -103,9 +105,9 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
         finalErrors.nome = 'Nome completo é obrigatório';
       }
 
-      const cpfDigits = cpf.replace(/\D/g, '');
-      if (cpfDigits.length !== 11 || !validateCPF(cpf)) {
-        finalErrors.cpf = 'CPF válido é obrigatório';
+      const validation = validateCPF(cpf);
+      if (!validation.valid) {
+        finalErrors.cpf = validation.error || 'CPF válido é obrigatório';
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -129,7 +131,7 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
     const isValid =
       nome.trim().length >= 3 &&
       cpf.replace(/\D/g, '').length === 11 &&
-      validateCPF(cpf) &&
+      validateCPF(cpf).valid &&
       email &&
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
       Object.values(errors).every((e) => !e);
