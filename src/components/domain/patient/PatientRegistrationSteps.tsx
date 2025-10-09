@@ -757,7 +757,7 @@ export const PatientRegistrationSteps =
             const params = new URLSearchParams({
               patient_name: registrationData.paciente!.nome,
               patient_id: 'verificar', // Indicar que precisa verificação
-              contract_id: registrationData.contrato!.contractId,
+              contract_id: registrationData.contrato?.contractId || '',
             });
             window.location.href = `/cadastro-paciente/sucesso?${params.toString()}`;
             return;
@@ -807,10 +807,18 @@ export const PatientRegistrationSteps =
 
         try {
           // Verificar se o contrato foi assinado (indicador de sucesso)
+          // Só verificar se temos um ID de contrato
+          if (!registrationData.contrato?.contractId) {
+            console.log(
+              '❌ [PatientRegistrationSteps] Sem ID de contrato para verificar'
+            );
+            throw error; // Re-lançar o erro original
+          }
+
           const { data: contratoVerificacao } = await supabase
             .from('user_contracts')
             .select('id, status_contrato, pessoa_id')
-            .eq('id', registrationData.contrato!.contractId)
+            .eq('id', registrationData.contrato.contractId)
             .eq('status_contrato', 'assinado')
             .single();
 
@@ -827,7 +835,7 @@ export const PatientRegistrationSteps =
             const params = new URLSearchParams({
               patient_name: registrationData.paciente!.nome,
               patient_id: contratoVerificacao.pessoa_id,
-              contract_id: registrationData.contrato!.contractId,
+              contract_id: registrationData.contrato?.contractId || '',
             });
             window.location.href = `/cadastro-paciente/sucesso?${params.toString()}`;
             return;
