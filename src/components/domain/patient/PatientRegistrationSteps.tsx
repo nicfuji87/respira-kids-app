@@ -347,9 +347,8 @@ export const PatientRegistrationSteps =
         const existingUserData = registrationData.existingUserData;
         const responsavelFinanceiro = registrationData.responsavelFinanceiro;
 
-        let contratanteNome = '';
-        let contratanteCpf = '';
-        let contratanteEmail = '';
+        // AI dev note: NOVA LÓGICA - Responsável LEGAL sempre é o contratante
+        // Responsável FINANCEIRO só é mencionado se for diferente do legal
 
         console.log('📋 [PatientRegistrationSteps] Determinando contratante:', {
           isSameAsLegal: responsavelFinanceiro?.isSameAsLegal,
@@ -359,47 +358,87 @@ export const PatientRegistrationSteps =
           hasResponsavelLegal: !!registrationData.responsavelLegal,
         });
 
+        // SEMPRE usar responsável LEGAL como contratante
+        const responsavelLegalNome =
+          existingUserData?.nome ||
+          registrationData.responsavelLegal?.nome ||
+          '';
+        const responsavelLegalCpf =
+          existingUserData?.cpf_cnpj ||
+          registrationData.responsavelLegal?.cpf ||
+          '';
+        const responsavelLegalEmail =
+          existingUserData?.email ||
+          registrationData.responsavelLegal?.email ||
+          '';
+
+        console.log(
+          '✅ [PatientRegistrationSteps] Contratante (Responsável Legal):',
+          responsavelLegalNome
+        );
+
+        // Determinar se precisa mencionar responsável financeiro separadamente
+        let responsavelLegalFinanceiro = '';
+        let clausulaResponsavelFinanceiro = '';
+
         if (responsavelFinanceiro?.isSameAsLegal) {
-          // CASO 1: Responsável financeiro é o mesmo que legal
-          contratanteNome =
-            existingUserData?.nome ||
-            registrationData.responsavelLegal?.nome ||
-            '';
-          contratanteCpf =
-            existingUserData?.cpf_cnpj ||
-            registrationData.responsavelLegal?.cpf ||
-            '';
-          contratanteEmail =
-            existingUserData?.email ||
-            registrationData.responsavelLegal?.email ||
-            '';
+          // CASO 1: Mesma pessoa - mencionar "e Financeiro"
+          responsavelLegalFinanceiro = 'e Financeiro';
+          clausulaResponsavelFinanceiro = '';
           console.log(
-            '✅ [PatientRegistrationSteps] Contratante = Responsável Legal:',
-            contratanteNome
-          );
-        } else if (responsavelFinanceiro?.personData) {
-          // CASO 2: Responsável financeiro é uma pessoa existente (encontrada por CPF)
-          contratanteNome = responsavelFinanceiro.personData.nome;
-          contratanteCpf = responsavelFinanceiro.personData.cpf;
-          contratanteEmail = responsavelFinanceiro.personData.email || '';
-          console.log(
-            '✅ [PatientRegistrationSteps] Contratante = Pessoa Existente:',
-            contratanteNome
-          );
-        } else if (responsavelFinanceiro?.newPersonData) {
-          // CASO 3: Responsável financeiro é uma NOVA pessoa cadastrada
-          contratanteNome = responsavelFinanceiro.newPersonData.nome;
-          contratanteCpf = responsavelFinanceiro.newPersonData.cpf;
-          contratanteEmail = responsavelFinanceiro.newPersonData.email;
-          console.log(
-            '✅ [PatientRegistrationSteps] Contratante = Nova Pessoa:',
-            contratanteNome
+            '✅ [PatientRegistrationSteps] Responsável Legal = Financeiro'
           );
         } else {
-          console.warn(
-            '⚠️ [PatientRegistrationSteps] Nenhum responsável financeiro definido - usando vazio'
-          );
+          // CASO 2 e 3: Pessoas diferentes - adicionar cláusula separada
+          responsavelLegalFinanceiro = '';
+
+          let financeiroNome = '';
+          let financeiroCpf = '';
+          let financeiroTelefone = '';
+          let financeiroEmail = '';
+
+          if (responsavelFinanceiro?.personData) {
+            // Pessoa existente encontrada por CPF
+            financeiroNome = responsavelFinanceiro.personData.nome;
+            financeiroCpf = responsavelFinanceiro.personData.cpf;
+            financeiroEmail = responsavelFinanceiro.personData.email || '';
+            const tel = responsavelFinanceiro.personData.telefone || '';
+            financeiroTelefone = tel
+              ? `(${tel.slice(0, 2)}) ${tel.slice(2, 7)}-${tel.slice(7)}`
+              : '';
+          } else if (responsavelFinanceiro?.newPersonData) {
+            // Nova pessoa cadastrada
+            financeiroNome = responsavelFinanceiro.newPersonData.nome;
+            financeiroCpf = responsavelFinanceiro.newPersonData.cpf;
+            financeiroEmail = responsavelFinanceiro.newPersonData.email;
+            const tel = responsavelFinanceiro.newPersonData.whatsapp;
+            financeiroTelefone = tel
+              ? `(${tel.slice(0, 2)}) ${tel.slice(2, 7)}-${tel.slice(7)}`
+              : '';
+          }
+
+          // Formatar CPF com máscara
+          const formatarCpf = (cpf: string) => {
+            const limpo = cpf.replace(/\D/g, '');
+            return limpo.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+          };
+
+          if (financeiroNome && financeiroCpf) {
+            clausulaResponsavelFinanceiro = `
+
+**Parágrafo único:** Os pagamentos referentes aos serviços prestados serão realizados por **${financeiroNome}**, CPF nº ${formatarCpf(financeiroCpf)}, telefone ${financeiroTelefone}, email ${financeiroEmail}, na qualidade de **RESPONSÁVEL FINANCEIRO**.`;
+
+            console.log(
+              '✅ [PatientRegistrationSteps] Responsável Financeiro DIFERENTE:',
+              financeiroNome
+            );
+          }
         }
+
+        // Manter variáveis antigas para compatibilidade temporária
+        const contratanteNome = responsavelLegalNome;
+        const contratanteCpf = responsavelLegalCpf;
+        const contratanteEmail = responsavelLegalEmail;
 
         // Preparar variáveis do contrato conforme plano
         // Formatar telefone para (XX) XXXXX-XXXX
@@ -461,6 +500,15 @@ export const PatientRegistrationSteps =
         };
 
         const contractVariables: ContractVariables = {
+          // Novas variáveis - Responsável Legal
+          responsavelLegalNome: responsavelLegalNome,
+          responsavelLegalCpf: responsavelLegalCpf,
+          responsavelLegalTelefone: telefoneFormatado,
+          responsavelLegalEmail: responsavelLegalEmail,
+          responsavelLegalFinanceiro: responsavelLegalFinanceiro,
+          clausulaResponsavelFinanceiro: clausulaResponsavelFinanceiro,
+
+          // Variáveis antigas (compatibilidade temporária)
           contratante: contratanteNome,
           cpf: contratanteCpf,
           telefone: telefoneFormatado,

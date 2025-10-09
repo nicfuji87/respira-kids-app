@@ -5,10 +5,22 @@ import { supabase } from './supabase';
 
 // Interfaces conforme plano aprovado
 export interface ContractVariables {
+  // AI dev note: Novas variáveis - Responsável Legal (SEMPRE é o contratante)
+  responsavelLegalNome: string;
+  responsavelLegalCpf: string;
+  responsavelLegalTelefone: string;
+  responsavelLegalEmail: string;
+  responsavelLegalFinanceiro: string; // "e Financeiro" ou vazio
+
+  // AI dev note: Cláusula condicional para responsável financeiro diferente
+  clausulaResponsavelFinanceiro: string; // Parágrafo completo ou vazio
+
+  // AI dev note: Variáveis antigas mantidas para compatibilidade (podem ser removidas futuramente)
   contratante: string;
   cpf: string;
   telefone: string;
   email: string;
+
   endereco_completo: string; // AI dev note: Endereço formatado corretamente sem vírgulas duplas
   logradouro: string;
   numero: string;
