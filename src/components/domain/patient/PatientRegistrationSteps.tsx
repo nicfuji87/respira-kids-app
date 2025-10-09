@@ -107,7 +107,6 @@ export interface PatientRegistrationData {
     contractContent: string;
     contractVariables?: ContractVariables; // Variáveis do contrato para gerar ao aceitar
     contractId?: string; // ID será gerado apenas quando usuário aceitar
-    contractData?: UserContract;
   };
 }
 
