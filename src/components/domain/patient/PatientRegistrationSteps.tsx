@@ -812,7 +812,7 @@ export const PatientRegistrationSteps =
               patient_id: 'verificar', // Indicar que precisa verificação
               contract_id: registrationData.contrato?.contractId || '',
             });
-            window.location.href = `/cadastro-paciente/sucesso?${params.toString()}`;
+            window.location.href = `/#/cadastro-paciente/sucesso?${params.toString()}`;
             return;
           }
 
@@ -845,7 +845,7 @@ export const PatientRegistrationSteps =
           patient_id: result.pacienteId || '',
           contract_id: result.contratoId || '',
         });
-        window.location.href = `/cadastro-paciente/sucesso?${params.toString()}`;
+        window.location.href = `/#/cadastro-paciente/sucesso?${params.toString()}`;
       } catch (error) {
         console.error(
           '❌ [PatientRegistrationSteps] Erro ao finalizar cadastro:',
@@ -890,7 +890,7 @@ export const PatientRegistrationSteps =
               patient_id: contratoVerificacao.pessoa_id,
               contract_id: registrationData.contrato?.contractId || '',
             });
-            window.location.href = `/cadastro-paciente/sucesso?${params.toString()}`;
+            window.location.href = `/#/cadastro-paciente/sucesso?${params.toString()}`;
             return;
           }
         } catch (verificationError) {
