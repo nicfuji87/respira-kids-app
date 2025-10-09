@@ -31,6 +31,7 @@ import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { cn } from '@/lib/utils';
 import {
   generateContract,
+  generateContractPreview,
   type ContractVariables,
   type UserContract,
 } from '@/lib/contract-api';
@@ -106,8 +107,9 @@ export interface PatientRegistrationData {
   // Etapa 10: Contrato
   contrato?: {
     contractContent: string;
-    contractId: string;
-    contractData: UserContract;
+    contractVariables?: ContractVariables; // Variáveis do contrato para gerar ao aceitar
+    contractId?: string; // ID será gerado apenas quando usuário aceitar
+    contractData?: UserContract;
   };
 }
 
@@ -494,26 +496,26 @@ export const PatientRegistrationSteps =
             : 'não poderão',
         };
 
-        // Gerar contrato no banco
-        // TODO: Usar o ID do paciente quando ele for criado
-        // Por enquanto, usando o existingPersonId ou gerando um temporário
-        const pessoaId =
-          registrationData.existingPersonId || 'temp-' + Date.now();
-
-        const contract = await generateContract(pessoaId, contractVariables);
+        // Gerar PREVIEW do contrato (sem salvar no banco)
+        // O contrato será salvo apenas quando o usuário aceitar
+        console.log(
+          '📄 [PatientRegistrationSteps] Gerando PREVIEW do contrato (não salva no banco ainda)'
+        );
+        const contractPreview =
+          await generateContractPreview(contractVariables);
 
         console.log(
-          '✅ [PatientRegistrationSteps] Contrato gerado:',
-          contract.id
+          '✅ [PatientRegistrationSteps] Preview do contrato gerado:',
+          contractPreview.templateNome
         );
 
-        // Salvar contrato nos dados
+        // Salvar preview e variáveis nos dados (para poder gerar o contrato depois)
         setRegistrationData((prev) => ({
           ...prev,
           contrato: {
-            contractContent: contract.conteudo_final,
-            contractId: contract.id,
-            contractData: contract,
+            contractContent: contractPreview.conteudo,
+            contractVariables: contractVariables, // Salvar as variáveis para usar ao aceitar
+            contractId: undefined, // Não temos ID ainda (será gerado ao aceitar)
           },
         }));
 
@@ -559,7 +561,48 @@ export const PatientRegistrationSteps =
 
       try {
         console.log(
-          '📋 [PatientRegistrationSteps] Preparando dados para Edge Function...'
+          '📝 [PatientRegistrationSteps] PASSO 1: Salvar contrato no banco'
+        );
+
+        // IMPORTANTE: Salvar o contrato no banco ANTES de enviar para Edge Function
+        // Determinar o ID da pessoa que vai assinar (responsável financeiro ou legal)
+        let pessoaIdParaContrato = '';
+
+        if (registrationData.responsavelFinanceiro?.isSameAsLegal) {
+          // Usar ID do existente ou temporário (será atualizado na Edge Function)
+          pessoaIdParaContrato =
+            registrationData.existingPersonId || 'temp-legal-' + Date.now();
+        } else if (registrationData.responsavelFinanceiro?.existingPersonId) {
+          // Usar ID da pessoa financeira existente
+          pessoaIdParaContrato =
+            registrationData.responsavelFinanceiro.existingPersonId;
+        } else {
+          // Nova pessoa financeira - usar temporário (será atualizado na Edge Function)
+          pessoaIdParaContrato = 'temp-financeiro-' + Date.now();
+        }
+
+        console.log(
+          '👤 [PatientRegistrationSteps] Pessoa para contrato:',
+          pessoaIdParaContrato
+        );
+
+        // Gerar e SALVAR o contrato no banco
+        const contractVariables = registrationData.contrato?.contractVariables;
+        if (!contractVariables) {
+          throw new Error('Variáveis do contrato não encontradas');
+        }
+
+        const contract = await generateContract(
+          pessoaIdParaContrato,
+          contractVariables
+        );
+        console.log(
+          '✅ [PatientRegistrationSteps] Contrato salvo no banco:',
+          contract.id
+        );
+
+        console.log(
+          '📋 [PatientRegistrationSteps] PASSO 2: Preparando dados para Edge Function...'
         );
 
         // AI dev note: Simplificando preparação de telefone para usuários existentes
@@ -577,7 +620,7 @@ export const PatientRegistrationSteps =
                 .replace(/^55/, '')
             : '');
 
-        // Preparar dados para a Edge Function
+        // Preparar dados para a Edge Function (agora com o ID do contrato salvo)
         const finalizationData: FinalizationData = {
           whatsappJid: whatsappJid,
           phoneNumber: phoneNumber,
@@ -650,8 +693,8 @@ export const PatientRegistrationSteps =
             usoNome: registrationData.autorizacoes!.usoNome ?? false,
           },
 
-          // ID do contrato
-          contratoId: registrationData.contrato!.contractId,
+          // ID do contrato (agora salvo no banco)
+          contratoId: contract.id,
         };
 
         console.log('📋 [PatientRegistrationSteps] Dados preparados:', {
@@ -676,7 +719,7 @@ export const PatientRegistrationSteps =
         });
 
         console.log(
-          '📤 [PatientRegistrationSteps] Enviando dados para Edge Function...'
+          '📤 [PatientRegistrationSteps] PASSO 3: Enviando dados para Edge Function...'
         );
         console.log(
           '📋 [PatientRegistrationSteps] Dados completos a serem enviados:',
@@ -687,7 +730,7 @@ export const PatientRegistrationSteps =
           new Date().toISOString()
         );
 
-        // Chamar Edge Function
+        // Chamar Edge Function (que vai criar paciente, responsáveis e assinar o contrato)
         const result = await finalizePatientRegistration(finalizationData);
 
         console.log(
@@ -972,9 +1015,14 @@ export const PatientRegistrationSteps =
                 endereco: registrationData.endereco,
                 responsavelFinanceiroMesmoQueLegal:
                   registrationData.responsavelFinanceiro?.isSameAsLegal,
-                responsavelFinanceiro: registrationData.responsavelFinanceiro
-                  ?.personData
-                  ? {
+                responsavelFinanceiro: (() => {
+                  // Se é o mesmo que legal, não precisa exibir
+                  if (registrationData.responsavelFinanceiro?.isSameAsLegal) {
+                    return undefined;
+                  }
+                  // Se tem personData (pessoa existente encontrada por CPF)
+                  if (registrationData.responsavelFinanceiro?.personData) {
+                    return {
                       nome: registrationData.responsavelFinanceiro.personData
                         .nome,
                       cpf: registrationData.responsavelFinanceiro.personData
@@ -987,8 +1035,29 @@ export const PatientRegistrationSteps =
                           .telefone || '',
                       whatsappJid: '',
                       endereco: registrationData.endereco!,
-                    }
-                  : undefined,
+                    };
+                  }
+                  // Se tem newPersonData (nova pessoa cadastrada)
+                  if (registrationData.responsavelFinanceiro?.newPersonData) {
+                    return {
+                      nome: registrationData.responsavelFinanceiro.newPersonData
+                        .nome,
+                      cpf: registrationData.responsavelFinanceiro.newPersonData
+                        .cpf,
+                      email:
+                        registrationData.responsavelFinanceiro.newPersonData
+                          .email,
+                      telefone:
+                        registrationData.responsavelFinanceiro.newPersonData
+                          .whatsapp,
+                      whatsappJid:
+                        registrationData.responsavelFinanceiro.newPersonData
+                          .whatsappJid,
+                      endereco: registrationData.endereco!,
+                    };
+                  }
+                  return undefined;
+                })(),
                 paciente: registrationData.paciente,
                 pediatra: registrationData.pediatra,
                 autorizacoes: registrationData.autorizacoes,

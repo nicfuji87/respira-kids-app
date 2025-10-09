@@ -103,7 +103,36 @@ export function replaceVariables(
 }
 
 /**
- * Gerar contrato para um paciente/pessoa
+ * Gerar PREVIEW do contrato (sem salvar no banco)
+ * @param variables - Variáveis do contrato
+ * @returns Objeto com conteúdo do contrato e template ID
+ */
+export async function generateContractPreview(
+  variables: ContractVariables
+): Promise<{ conteudo: string; templateId: string; templateNome: string }> {
+  try {
+    // 1. Buscar template ativo
+    const template = await fetchContractTemplate();
+
+    // 2. Substituir variáveis
+    const conteudoFinal = replaceVariables(
+      template.conteudo_template,
+      variables
+    );
+
+    return {
+      conteudo: conteudoFinal,
+      templateId: template.id,
+      templateNome: template.nome,
+    };
+  } catch (error) {
+    console.error('❌ Erro em generateContractPreview:', error);
+    throw error;
+  }
+}
+
+/**
+ * Gerar e SALVAR contrato no banco
  * @param pessoaId - ID da pessoa (paciente ou responsável)
  * @param variables - Variáveis do contrato
  * @param agendamentoId - ID do agendamento (opcional)
@@ -115,29 +144,23 @@ export async function generateContract(
   agendamentoId?: string
 ): Promise<UserContract> {
   try {
-    // 1. Buscar template ativo
-    const template = await fetchContractTemplate();
+    // 1. Gerar preview (busca template e substitui variáveis)
+    const preview = await generateContractPreview(variables);
 
-    // 2. Substituir variáveis
-    const conteudoFinal = replaceVariables(
-      template.conteudo_template,
-      variables
-    );
-
-    // 3. Preparar dados do contrato
+    // 2. Preparar dados do contrato
     const contractData = {
-      contract_template_id: template.id,
+      contract_template_id: preview.templateId,
       pessoa_id: pessoaId,
       agendamento_id: agendamentoId || null,
       nome_contrato: `Contrato Fisioterapia - ${variables.paciente} - ${variables.hoje}`,
-      conteudo_final: conteudoFinal,
+      conteudo_final: preview.conteudo,
       variaveis_utilizadas: variables as unknown as Record<string, string>,
       status_contrato: 'gerado' as const,
       data_geracao: new Date().toISOString(),
       ativo: true,
     };
 
-    // 4. Inserir no banco
+    // 3. Inserir no banco
     const { data, error } = await supabase
       .from('user_contracts')
       .insert(contractData)

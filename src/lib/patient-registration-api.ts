@@ -603,8 +603,9 @@ export async function searchPersonByCPF(
       };
     }
 
-    // Buscar pessoa por CPF
-    const { data: pessoa, error: pessoaError } = await supabase
+    // Buscar pessoa por CPF (primeiro tentar sem formatação)
+    console.log('🔍 [searchPersonByCPF] Buscando por CPF limpo:', cpfLimpo);
+    let { data: pessoa, error: pessoaError } = await supabase
       .from('vw_usuarios_admin')
       .select(
         `
@@ -627,6 +628,44 @@ export async function searchPersonByCPF(
       .eq('ativo', true)
       .maybeSingle();
 
+    // Se não encontrou, tentar com formatação (XXX.XXX.XXX-XX)
+    if (!pessoa && !pessoaError) {
+      const cpfFormatado = cpfLimpo.replace(
+        /(\d{3})(\d{3})(\d{3})(\d{2})/,
+        '$1.$2.$3-$4'
+      );
+      console.log(
+        '🔍 [searchPersonByCPF] Não encontrou sem formatação, tentando com formatação:',
+        cpfFormatado
+      );
+
+      const result = await supabase
+        .from('vw_usuarios_admin')
+        .select(
+          `
+          id,
+          nome,
+          cpf_cnpj,
+          email,
+          telefone,
+          tipo_pessoa_codigo,
+          cep,
+          logradouro,
+          numero_endereco,
+          complemento_endereco,
+          bairro,
+          cidade,
+          estado
+        `
+        )
+        .eq('cpf_cnpj', cpfFormatado)
+        .eq('ativo', true)
+        .maybeSingle();
+
+      pessoa = result.data;
+      pessoaError = result.error;
+    }
+
     if (pessoaError) {
       console.error('❌ [searchPersonByCPF] Erro ao buscar:', pessoaError);
       return {
@@ -636,7 +675,9 @@ export async function searchPersonByCPF(
     }
 
     if (!pessoa) {
-      console.log('❌ [searchPersonByCPF] Pessoa não encontrada');
+      console.log(
+        '❌ [searchPersonByCPF] Pessoa não encontrada - tentamos CPF limpo e formatado'
+      );
       return { exists: false };
     }
 

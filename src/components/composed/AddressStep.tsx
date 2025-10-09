@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
-import { MapPin, Loader2, Check } from 'lucide-react';
+import { Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   fetchAddressByCep,
@@ -48,7 +48,7 @@ export const AddressStep = React.memo<AddressStepProps>(
 
     console.log('📍 [AddressStep] Renderizado');
 
-    // Formatar CEP automaticamente
+    // Formatar CEP automaticamente e buscar quando completo
     const handleCepChange = (value: string) => {
       const numericValue = value.replace(/\D/g, '');
       const formattedCep = numericValue.replace(/^(\d{5})(\d)/, '$1-$2');
@@ -65,20 +65,22 @@ export const AddressStep = React.memo<AddressStepProps>(
       }
 
       if (errors.cep) setErrors((prev) => ({ ...prev, cep: '' }));
+
+      // Buscar automaticamente quando CEP estiver completo (8 dígitos)
+      if (numericValue.length === 8) {
+        handleSearchCepAuto(formattedCep);
+      }
     };
 
-    // Buscar CEP via ViaCEP
-    const handleSearchCep = useCallback(async () => {
-      console.log('🔍 [AddressStep] Buscando CEP:', cep);
+    // Buscar CEP via ViaCEP (automática)
+    const handleSearchCepAuto = useCallback(async (cepToSearch: string) => {
+      console.log(
+        '🔍 [AddressStep] Buscando CEP automaticamente:',
+        cepToSearch
+      );
 
-      if (!cep) {
-        setErrors((prev) => ({ ...prev, cep: 'Digite um CEP para buscar' }));
-        return;
-      }
-
-      const cleanCep = cep.replace(/\D/g, '');
+      const cleanCep = cepToSearch.replace(/\D/g, '');
       if (cleanCep.length !== 8) {
-        setErrors((prev) => ({ ...prev, cep: 'CEP deve ter 8 dígitos' }));
         return;
       }
 
@@ -86,7 +88,7 @@ export const AddressStep = React.memo<AddressStepProps>(
       setErrors((prev) => ({ ...prev, cep: '' }));
 
       try {
-        const result = await fetchAddressByCep(cep);
+        const result = await fetchAddressByCep(cepToSearch);
 
         if (result.success && result.data) {
           console.log('✅ [AddressStep] CEP encontrado:', result.data);
@@ -115,15 +117,7 @@ export const AddressStep = React.memo<AddressStepProps>(
       } finally {
         setIsSearchingCep(false);
       }
-    }, [cep]);
-
-    // Permitir busca com Enter
-    const handleCepKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleSearchCep();
-      }
-    };
+    }, []);
 
     const validateForm = useCallback((): boolean => {
       const newErrors: Record<string, string> = {};
@@ -216,44 +210,25 @@ export const AddressStep = React.memo<AddressStepProps>(
             >
               CEP <span className="text-destructive">*</span>
             </Label>
-            <div className="flex gap-2">
+            <div className="relative">
               <Input
                 id="cep"
                 type="text"
                 placeholder="00000-000"
                 value={cep}
                 onChange={(e) => handleCepChange(e.target.value)}
-                onKeyDown={handleCepKeyDown}
                 maxLength={9}
                 className={cn(
-                  'h-12 text-base flex-1',
+                  'h-12 text-base',
                   errors.cep && 'border-destructive'
                 )}
+                disabled={isSearchingCep}
               />
-              <Button
-                type="button"
-                onClick={handleSearchCep}
-                disabled={isSearchingCep || cep.replace(/\D/g, '').length !== 8}
-                size="lg"
-                className="h-12 px-6"
-              >
-                {isSearchingCep ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Buscando...
-                  </>
-                ) : cepFound ? (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Buscar
-                  </>
-                ) : (
-                  <>
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Buscar
-                  </>
-                )}
-              </Button>
+              {isSearchingCep && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
             </div>
             {errors.cep && (
               <p className="text-sm text-destructive">{errors.cep}</p>
@@ -376,7 +351,8 @@ export const AddressStep = React.memo<AddressStepProps>(
           </div>
 
           <p className="text-xs text-muted-foreground/70 italic">
-            💡 Digite o CEP e clique em "Buscar" para preenchimento automático
+            💡 O endereço será preenchido automaticamente ao digitar o CEP
+            completo
           </p>
 
           {/* Número e Complemento */}

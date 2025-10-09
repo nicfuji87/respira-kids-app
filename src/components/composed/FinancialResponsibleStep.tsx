@@ -107,49 +107,67 @@ export const FinancialResponsibleStep =
         }
       }, [isSameAsLegal, onContinue]);
 
-      const handleCPFSearch = useCallback(async () => {
-        console.log(
-          '🔍 [FinancialResponsibleStep] handleCPFSearch - CPF:',
-          cpf
-        );
+      const handleCPFSearch = useCallback(
+        async (cpfToSearch?: string) => {
+          const cpfValue = cpfToSearch || cpf;
+          console.log(
+            '🔍 [FinancialResponsibleStep] handleCPFSearch - CPF:',
+            cpfValue
+          );
 
-        // Validar CPF
-        const cpfLimpo = cpf.replace(/\D/g, '');
-        if (cpfLimpo.length !== 11) {
-          setCpfError('CPF deve ter 11 dígitos');
-          return;
-        }
-
-        setIsSearching(true);
-        setCpfError('');
-
-        try {
-          const result = await searchPersonByCPF(cpfLimpo);
-
-          if (result.error) {
-            setCpfError(result.error);
-            setIsSearching(false);
+          // Validar CPF
+          const cpfLimpo = cpfValue.replace(/\D/g, '');
+          if (cpfLimpo.length !== 11) {
+            setCpfError('CPF deve ter 11 dígitos');
             return;
           }
 
-          if (result.exists && result.person) {
+          setIsSearching(true);
+          setCpfError('');
+
+          try {
             console.log(
-              '✅ [FinancialResponsibleStep] Pessoa encontrada:',
-              result.person.nome
+              '🔍 [FinancialResponsibleStep] Chamando searchPersonByCPF com:',
+              cpfLimpo
             );
-            setFoundPerson(result.person);
-            setStepState('person-found');
-          } else {
-            console.log('❌ [FinancialResponsibleStep] Pessoa não encontrada');
-            setStepState('person-not-found');
+            const result = await searchPersonByCPF(cpfLimpo);
+            console.log(
+              '📋 [FinancialResponsibleStep] Resultado da busca:',
+              result
+            );
+
+            if (result.error) {
+              console.log(
+                '❌ [FinancialResponsibleStep] Erro retornado:',
+                result.error
+              );
+              setCpfError(result.error);
+              setIsSearching(false);
+              return;
+            }
+
+            if (result.exists && result.person) {
+              console.log(
+                '✅ [FinancialResponsibleStep] Pessoa encontrada:',
+                result.person.nome
+              );
+              setFoundPerson(result.person);
+              setStepState('person-found');
+            } else {
+              console.log(
+                '❌ [FinancialResponsibleStep] Pessoa não encontrada'
+              );
+              setStepState('person-not-found');
+            }
+          } catch (err) {
+            console.error('❌ [FinancialResponsibleStep] Erro ao buscar:', err);
+            setCpfError('Erro ao buscar CPF. Tente novamente.');
+          } finally {
+            setIsSearching(false);
           }
-        } catch (err) {
-          console.error('❌ [FinancialResponsibleStep] Erro ao buscar:', err);
-          setCpfError('Erro ao buscar CPF. Tente novamente.');
-        } finally {
-          setIsSearching(false);
-        }
-      }, [cpf]);
+        },
+        [cpf]
+      );
 
       const handleConfirmFoundPerson = useCallback(() => {
         console.log(
@@ -382,16 +400,31 @@ export const FinancialResponsibleStep =
                   CPF do Responsável Financeiro{' '}
                   <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  id="cpf"
-                  type="text"
-                  placeholder="000.000.000-00"
-                  value={cpf}
-                  onChange={(e) => handleCPFChange(e.target.value)}
-                  className="h-11"
-                  maxLength={14}
-                  disabled={isSearching}
-                />
+                <div className="relative">
+                  <Input
+                    id="cpf"
+                    type="text"
+                    placeholder="000.000.000-00"
+                    value={cpf}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      handleCPFChange(value);
+                      // Buscar automaticamente quando CPF estiver completo (11 dígitos)
+                      const cpfLimpo = value.replace(/\D/g, '');
+                      if (cpfLimpo.length === 11) {
+                        handleCPFSearch(value);
+                      }
+                    }}
+                    className="h-11"
+                    maxLength={14}
+                    disabled={isSearching}
+                  />
+                  {isSearching && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
                 {cpfError && (
                   <p className="text-xs text-destructive flex items-center gap-2">
                     <AlertCircle className="w-3 h-3" />
@@ -400,30 +433,22 @@ export const FinancialResponsibleStep =
                 )}
               </div>
 
-              {/* Botões */}
+              {/* Dica */}
+              <p className="text-xs text-muted-foreground/70 italic">
+                💡 A busca será realizada automaticamente ao digitar o CPF
+                completo
+              </p>
+
+              {/* Botão Voltar */}
               <div className="flex gap-3">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleBackToSelection}
-                  className="flex-1 h-12"
+                  className="w-full h-12"
                   disabled={isSearching}
                 >
                   Voltar
-                </Button>
-                <Button
-                  onClick={handleCPFSearch}
-                  className="flex-1 h-12"
-                  disabled={cpf.replace(/\D/g, '').length !== 11 || isSearching}
-                >
-                  {isSearching ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Buscando...
-                    </>
-                  ) : (
-                    'Buscar CPF'
-                  )}
                 </Button>
               </div>
             </div>
