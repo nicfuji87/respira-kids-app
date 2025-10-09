@@ -723,7 +723,7 @@ export const PatientRegistrationSteps =
           // Paciente
           paciente: {
             nome: registrationData.paciente!.nome,
-            dataNascimento: registrationData.paciente!.dataNascimento,
+            dataNascimento: registrationData.paciente!.dataNascimento, // AI dev note: Já vem em formato ISO (yyyy-mm-dd) do DateInput
             sexo: registrationData.paciente!.sexo,
             cpf: registrationData.paciente!.cpf
               ? cleanCPF(registrationData.paciente!.cpf)

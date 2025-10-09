@@ -507,9 +507,8 @@ Deno.serve(async (req: Request) => {
       cpf: data.paciente.cpf || 'não fornecido',
     });
 
-    // Converter data de dd/mm/aaaa para aaaa-mm-dd
-    const [dia, mes, ano] = data.paciente.dataNascimento.split('/');
-    const dataNascimentoISO = `${ano}-${mes}-${dia}`;
+    // AI dev note: Data já vem em formato ISO (yyyy-mm-dd) do frontend
+    const dataNascimentoISO = data.paciente.dataNascimento;
 
     const { data: novoPaciente, error: errorPaciente } = await supabase
       .from('pessoas')
