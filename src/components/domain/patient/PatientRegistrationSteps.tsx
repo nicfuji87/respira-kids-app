@@ -30,10 +30,8 @@ import { ContractReviewStep } from '@/components/composed/ContractReviewStep';
 import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { cn } from '@/lib/utils';
 import {
-  generateContract,
   generateContractPreview,
   type ContractVariables,
-  type UserContract,
 } from '@/lib/contract-api';
 import {
   finalizePatientRegistration,
@@ -638,48 +636,17 @@ export const PatientRegistrationSteps =
 
       try {
         console.log(
-          '📝 [PatientRegistrationSteps] PASSO 1: Salvar contrato no banco'
+          '📋 [PatientRegistrationSteps] Preparando dados para Edge Function...'
         );
 
-        // IMPORTANTE: Salvar o contrato no banco ANTES de enviar para Edge Function
-        // Determinar o ID da pessoa que vai assinar (responsável financeiro ou legal)
-        let pessoaIdParaContrato = '';
-
-        if (registrationData.responsavelFinanceiro?.isSameAsLegal) {
-          // Usar ID do existente ou temporário (será atualizado na Edge Function)
-          pessoaIdParaContrato =
-            registrationData.existingPersonId || 'temp-legal-' + Date.now();
-        } else if (registrationData.responsavelFinanceiro?.existingPersonId) {
-          // Usar ID da pessoa financeira existente
-          pessoaIdParaContrato =
-            registrationData.responsavelFinanceiro.existingPersonId;
-        } else {
-          // Nova pessoa financeira - usar temporário (será atualizado na Edge Function)
-          pessoaIdParaContrato = 'temp-financeiro-' + Date.now();
-        }
-
-        console.log(
-          '👤 [PatientRegistrationSteps] Pessoa para contrato:',
-          pessoaIdParaContrato
-        );
-
-        // Gerar e SALVAR o contrato no banco
+        // Verificar se temos as variáveis do contrato
         const contractVariables = registrationData.contrato?.contractVariables;
         if (!contractVariables) {
           throw new Error('Variáveis do contrato não encontradas');
         }
 
-        const contract = await generateContract(
-          pessoaIdParaContrato,
-          contractVariables
-        );
         console.log(
-          '✅ [PatientRegistrationSteps] Contrato salvo no banco:',
-          contract.id
-        );
-
-        console.log(
-          '📋 [PatientRegistrationSteps] PASSO 2: Preparando dados para Edge Function...'
+          '✅ [PatientRegistrationSteps] Variáveis do contrato preparadas'
         );
 
         // AI dev note: Simplificando preparação de telefone para usuários existentes
@@ -770,8 +737,8 @@ export const PatientRegistrationSteps =
             usoNome: registrationData.autorizacoes!.usoNome ?? false,
           },
 
-          // ID do contrato (agora salvo no banco)
-          contratoId: contract.id,
+          // Variáveis do contrato (Edge Function vai criar o contrato)
+          contractVariables: contractVariables,
         };
 
         console.log('📋 [PatientRegistrationSteps] Dados preparados:', {
@@ -792,7 +759,7 @@ export const PatientRegistrationSteps =
           pediatraId: finalizationData.pediatra.id,
           pediatraNome: finalizationData.pediatra.nome,
           autorizacoes: finalizationData.autorizacoes,
-          contratoId: finalizationData.contratoId,
+          hasContractVariables: !!finalizationData.contractVariables,
         });
 
         console.log(

@@ -64,7 +64,8 @@ interface FinalizationData {
     usoNome: boolean;
   };
 
-  contratoId: string;
+  // AI dev note: Variáveis do contrato (Edge Function cria o contrato após criar as pessoas)
+  contractVariables: Record<string, string>;
 }
 
 interface FinalizationResult {
@@ -106,12 +107,17 @@ Deno.serve(async (req: Request) => {
         hasNewPersonData: !!data.newPersonData,
         pacienteNome: data.paciente.nome,
         pediatraId: data.pediatra.id,
-        contratoId: data.contratoId,
+        hasContractVariables: !!data.contractVariables,
       })
     );
 
     if (action !== 'finalize_registration') {
       throw new Error(`Ação desconhecida: ${action}`);
+    }
+
+    // Validar variáveis do contrato
+    if (!data.contractVariables) {
+      throw new Error('Variáveis do contrato são obrigatórias');
     }
 
     // ============================================
@@ -603,25 +609,65 @@ Deno.serve(async (req: Request) => {
     console.log('✅ [STEP 9] Relacionamento pediatra criado');
 
     // ============================================
-    // STEP 10: Atualizar CONTRATO com ID do paciente
+    // STEP 10: CRIAR E ASSINAR CONTRATO
     // ============================================
-    console.log('📋 [STEP 10] Atualizando contrato...');
-    console.log('📋 [STEP 10] Contrato ID:', data.contratoId);
+    console.log('📋 [STEP 10] Criando contrato...');
+    console.log(
+      '📋 [STEP 10] Responsável Financeiro ID:',
+      responsavelFinanceiroId
+    );
     console.log('📋 [STEP 10] Paciente ID:', pacienteId);
 
-    const { error: errorContrato } = await supabase
-      .from('user_contracts')
-      .update({
-        pessoa_id: pacienteId,
-        assinado_em: new Date().toISOString(),
-      })
-      .eq('id', data.contratoId);
+    // 1. Buscar template ativo
+    const { data: template, error: errorTemplate } = await supabase
+      .from('contract_templates')
+      .select('id, nome, conteudo_template')
+      .eq('ativo', true)
+      .order('versao', { ascending: false })
+      .limit(1)
+      .single();
 
-    if (errorContrato) {
-      console.error('❌ [STEP 10] Erro ao atualizar contrato:', errorContrato);
-      throw new Error('Erro ao atualizar contrato');
+    if (errorTemplate || !template) {
+      console.error('❌ [STEP 10] Erro ao buscar template:', errorTemplate);
+      throw new Error('Template de contrato não encontrado');
     }
-    console.log('✅ [STEP 10] Contrato atualizado e assinado');
+
+    console.log('✅ [STEP 10] Template encontrado:', template.nome);
+
+    // 2. Substituir variáveis no template
+    let conteudoFinal = template.conteudo_template;
+    Object.entries(data.contractVariables).forEach(([key, value]) => {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      conteudoFinal = conteudoFinal.replace(regex, value ?? '');
+    });
+
+    console.log('✅ [STEP 10] Variáveis substituídas no contrato');
+
+    // 3. Criar contrato no banco
+    const { data: contrato, error: errorContrato } = await supabase
+      .from('user_contracts')
+      .insert({
+        contract_template_id: template.id,
+        pessoa_id: responsavelFinanceiroId, // Contrato no nome do resp. financeiro
+        nome_contrato: `Contrato Fisioterapia - ${data.paciente.nome} - ${new Date().toLocaleDateString('pt-BR')}`,
+        conteudo_final: conteudoFinal,
+        variaveis_utilizadas: data.contractVariables,
+        status_contrato: 'assinado',
+        data_geracao: new Date().toISOString(),
+        data_assinatura: new Date().toISOString(),
+        assinatura_digital_id: `whatsapp_${data.whatsappJid || data.phoneNumber}_${Date.now()}`,
+        ativo: true,
+      })
+      .select('id')
+      .single();
+
+    if (errorContrato || !contrato) {
+      console.error('❌ [STEP 10] Erro ao criar contrato:', errorContrato);
+      throw new Error('Erro ao criar contrato');
+    }
+
+    const contratoId = contrato.id;
+    console.log('✅ [STEP 10] Contrato criado e assinado:', contratoId);
 
     // ============================================
     // STEP 11: Enviar webhook de confirmação (se configurado)
@@ -641,7 +687,7 @@ Deno.serve(async (req: Request) => {
             pacienteId,
             responsavelLegalId,
             responsavelFinanceiroId,
-            contratoId: data.contratoId,
+            contratoId: contratoId,
             timestamp: new Date().toISOString(),
           }),
         });
@@ -670,7 +716,7 @@ Deno.serve(async (req: Request) => {
       pacienteId,
       responsavelLegalId,
       responsavelFinanceiroId,
-      contratoId: data.contratoId,
+      contratoId: contratoId,
     });
 
     const result: FinalizationResult = {
@@ -678,7 +724,7 @@ Deno.serve(async (req: Request) => {
       pacienteId,
       responsavelLegalId,
       responsavelFinanceiroId,
-      contratoId: data.contratoId,
+      contratoId: contratoId,
       message: 'Cadastro realizado com sucesso!',
     };
 

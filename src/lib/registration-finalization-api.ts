@@ -3,6 +3,7 @@
 
 import { supabase } from './supabase';
 import { type ExistingUserFullData } from '@/components/domain/patient/PatientRegistrationSteps';
+import { type ContractVariables } from './contract-api';
 
 export interface FinalizationData {
   whatsappJid?: string;
@@ -56,7 +57,8 @@ export interface FinalizationData {
     usoNome: boolean;
   };
 
-  contratoId: string;
+  // AI dev note: Variáveis do contrato (Edge Function vai criar o contrato após criar as pessoas)
+  contractVariables: ContractVariables;
 }
 
 export interface FinalizationResult {
@@ -91,7 +93,8 @@ export async function finalizePatientRegistration(
     pediatraId: data.pediatra.id || 'Novo pediatra',
     pediatraNome: data.pediatra.nome,
     pediatraCrm: data.pediatra.crm || 'Não fornecido',
-    contratoId: data.contratoId,
+    hasContractVariables: !!data.contractVariables,
+    contratanteNome: data.contractVariables?.responsavelLegalNome || '',
     enderecoCep: data.endereco.cep,
     autorizacoes: data.autorizacoes,
   });
