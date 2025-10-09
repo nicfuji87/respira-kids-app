@@ -29,6 +29,7 @@ import { ReviewStep } from '@/components/composed/ReviewStep';
 import { ContractReviewStep } from '@/components/composed/ContractReviewStep';
 import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { cn } from '@/lib/utils';
+import { cleanCPF } from '@/lib/cpf-validator';
 import {
   generateContractPreview,
   type ContractVariables,
@@ -676,7 +677,7 @@ export const PatientRegistrationSteps =
             registrationData.responsavelLegal
               ? {
                   nome: registrationData.responsavelLegal.nome,
-                  cpf: registrationData.responsavelLegal.cpf,
+                  cpf: cleanCPF(registrationData.responsavelLegal.cpf), // AI dev note: Limpar CPF antes de enviar
                   email: registrationData.responsavelLegal.email,
                 }
               : undefined,
@@ -710,14 +711,23 @@ export const PatientRegistrationSteps =
             registrationData.responsavelFinanceiro?.isSameAsLegal ?? true,
           responsavelFinanceiroExistingId:
             registrationData.responsavelFinanceiro?.existingPersonId,
-          newPersonData: registrationData.responsavelFinanceiro?.newPersonData,
+          newPersonData: registrationData.responsavelFinanceiro?.newPersonData
+            ? {
+                ...registrationData.responsavelFinanceiro.newPersonData,
+                cpf: cleanCPF(
+                  registrationData.responsavelFinanceiro.newPersonData.cpf
+                ), // AI dev note: Limpar CPF antes de enviar
+              }
+            : undefined,
 
           // Paciente
           paciente: {
             nome: registrationData.paciente!.nome,
             dataNascimento: registrationData.paciente!.dataNascimento,
             sexo: registrationData.paciente!.sexo,
-            cpf: registrationData.paciente!.cpf || undefined,
+            cpf: registrationData.paciente!.cpf
+              ? cleanCPF(registrationData.paciente!.cpf)
+              : undefined, // AI dev note: Limpar CPF antes de enviar
           },
 
           // Pediatra
