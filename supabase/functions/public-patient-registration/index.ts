@@ -551,7 +551,7 @@ Deno.serve(async (req: Request) => {
         responsavel_cobranca_id: responsavelFinanceiroId, // ⚠️ CRÍTICO
         autorizacao_uso_cientifico: data.autorizacoes.usoCientifico,
         autorizacao_uso_redes_sociais: data.autorizacoes.usoRedesSociais,
-        'autorizacao_uso_do nome': data.autorizacoes.usoNome, // AI dev note: Nome da coluna tem espaço!
+        autorizacao_uso_do_nome: data.autorizacoes.usoNome,
         ativo: true,
       })
       .select('id')
