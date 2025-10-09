@@ -1,17 +1,21 @@
 // AI dev note: Página de sucesso após cadastro público de paciente
 // Exibe mensagem de confirmação e próximos passos
 
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/primitives/button';
 import { Card } from '@/components/primitives/card';
-import { CheckCircle, Download, Home, Mail, MessageCircle } from 'lucide-react';
+import {
+  CheckCircle,
+  Mail,
+  MessageCircle,
+  UserPlus,
+  Instagram,
+} from 'lucide-react';
 import { PublicPageLayout } from '@/components/templates/PublicPageLayout';
 
 export function PatientRegistrationSuccessPage() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
 
   const patientName = searchParams.get('patient_name') || 'Paciente';
   const contractId = searchParams.get('contract_id');
@@ -29,56 +33,17 @@ export function PatientRegistrationSuccessPage() {
     });
   }, [patientName, contractId, patientId]);
 
-  const handleDownloadPDF = async () => {
-    if (!contractId) {
-      alert('Erro: ID do contrato não encontrado.');
-      return;
-    }
+  const handleNewPatient = () => {
+    // Redirecionar para o início do cadastro
+    window.location.href = '/#/cadastro-paciente';
+  };
 
-    setIsDownloadingPDF(true);
-    try {
-      // Chamar Edge Function para gerar PDF
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-contract-pdf`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({
-            contractId,
-            patientName,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Falha ao gerar PDF');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Contrato_${patientName.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      console.log('✅ [PatientRegistrationSuccess] PDF baixado com sucesso');
-    } catch (error) {
-      console.error(
-        '❌ [PatientRegistrationSuccess] Erro ao baixar PDF:',
-        error
-      );
-      alert(
-        'Não foi possível baixar o PDF do contrato. Por favor, entre em contato conosco.'
-      );
-    } finally {
-      setIsDownloadingPDF(false);
-    }
+  const handleInstagramClick = () => {
+    window.open(
+      'https://www.instagram.com/respira.kids/',
+      '_blank',
+      'noopener,noreferrer'
+    );
   };
 
   return (
@@ -172,43 +137,32 @@ export function PatientRegistrationSuccessPage() {
 
         {/* Ações */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          {contractId && (
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleDownloadPDF}
-              disabled={isDownloadingPDF}
-              className="w-full sm:w-auto"
-            >
-              {isDownloadingPDF ? (
-                <>
-                  <span className="animate-spin mr-2">⏳</span>
-                  Gerando PDF...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4 mr-2" />
-                  Baixar Contrato (PDF)
-                </>
-              )}
-            </Button>
-          )}
-
+          {/* Cadastrar Novo Paciente */}
           <Button
             size="lg"
-            onClick={() => navigate('/')}
+            onClick={handleNewPatient}
             className="w-full sm:w-auto"
           >
-            <Home className="w-4 h-4 mr-2" />
-            Ir para Página Inicial
+            <UserPlus className="w-4 h-4 mr-2" />
+            Cadastrar Novo Paciente
+          </Button>
+
+          {/* Seguir no Instagram */}
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={handleInstagramClick}
+            className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0"
+          >
+            <Instagram className="w-4 h-4 mr-2" />
+            Seguir @respira.kids
           </Button>
         </div>
 
         {/* Informação Adicional */}
         <Card className="p-4 bg-muted/50">
           <p className="text-sm text-center text-muted-foreground">
-            💡 <strong>Dúvidas?</strong> Entre em contato conosco pelo WhatsApp
-            ou email que estão no contrato.
+            💡 <strong>Dúvidas?</strong> Entre em contato conosco pelo WhatsApp.
           </p>
         </Card>
       </div>
