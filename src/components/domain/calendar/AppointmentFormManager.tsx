@@ -123,6 +123,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     const [hasConflict, setHasConflict] = useState(false);
     const [conflictDetails, setConflictDetails] = useState<string>('');
     const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
+    const [futureWeekConfirmed, setFutureWeekConfirmed] = useState(false);
 
     // Estados para empresas de faturamento
     const [empresasOptions, setEmpresasOptions] = useState<
@@ -188,6 +189,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setHasConflict(false);
         setConflictDetails('');
         setPastDateConfirmed(false);
+        setFutureWeekConfirmed(false);
       }
     }, [isOpen, initialDate, initialTime, initialPatientId]);
 
@@ -330,34 +332,57 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       if (!formData.empresa_fatura)
         newErrors.empresa_fatura = 'Empresa para faturamento é obrigatória';
 
-      // Validar data no futuro
+      // Validar data no passado ou futuro distante
       if (formData.data_hora) {
         const appointmentDate = parseSupabaseDatetime(formData.data_hora);
         const now = new Date();
-        if (appointmentDate < now) {
-          // Se é data passada e usuário ainda não confirmou, mostrar toast
-          if (!pastDateConfirmed) {
-            toast({
-              title: 'Data anterior à data atual',
-              description:
-                'Você está agendando para uma data anterior à data atual. Deseja confirmar este agendamento?',
-              variant: 'default',
-              action: (
-                <ToastAction
-                  altText="Confirmar agendamento"
-                  onClick={() => {
-                    setPastDateConfirmed(true);
-                    // Trigger save novamente após confirmação
-                    setTimeout(() => handleSave(), 100);
-                  }}
-                >
-                  Confirmar
-                </ToastAction>
-              ),
-            });
-            return false; // Não prosseguir até confirmação
-          }
-          // Se usuário confirmou, apenas mostrar na UI mas permitir salvar
+        const oneWeekFromNow = new Date();
+        oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+
+        // Verificar se é data passada
+        if (appointmentDate < now && !pastDateConfirmed) {
+          const { dismiss } = toast({
+            title: 'Data anterior à data atual',
+            description:
+              'Você está agendando para uma data anterior à data atual. Deseja confirmar este agendamento?',
+            variant: 'default',
+            action: (
+              <ToastAction
+                altText="Confirmar agendamento"
+                onClick={() => {
+                  dismiss();
+                  setPastDateConfirmed(true);
+                  setTimeout(() => handleSave(), 100);
+                }}
+              >
+                Confirmar
+              </ToastAction>
+            ),
+          });
+          return false;
+        }
+
+        // Verificar se é mais de 1 semana no futuro
+        if (appointmentDate > oneWeekFromNow && !futureWeekConfirmed) {
+          const { dismiss } = toast({
+            title: 'Agendamento para mais de 1 semana',
+            description:
+              'Você está agendando para mais de 1 semana após a data atual. Deseja confirmar este agendamento?',
+            variant: 'default',
+            action: (
+              <ToastAction
+                altText="Confirmar agendamento"
+                onClick={() => {
+                  dismiss();
+                  setFutureWeekConfirmed(true);
+                  setTimeout(() => handleSave(), 100);
+                }}
+              >
+                Confirmar
+              </ToastAction>
+            ),
+          });
+          return false;
         }
       }
 
@@ -419,7 +444,15 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       } finally {
         setIsLoading(false);
       }
-    }, [formData, user, onSave, onClose, toast, pastDateConfirmed]);
+    }, [
+      formData,
+      user,
+      onSave,
+      onClose,
+      toast,
+      pastDateConfirmed,
+      futureWeekConfirmed,
+    ]);
 
     // Helper para verificar se a data selecionada é passada
     const isDateInPast = useCallback(() => {
@@ -429,6 +462,17 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       now.setHours(0, 0, 0, 0); // Comparar apenas a data, não a hora
       appointmentDate.setHours(0, 0, 0, 0);
       return appointmentDate < now;
+    }, [formData.data_hora]);
+
+    // Helper para verificar se a data é mais de 1 semana no futuro
+    const isDateMoreThanOneWeekAhead = useCallback(() => {
+      if (!formData.data_hora) return false;
+      const appointmentDate = new Date(formData.data_hora);
+      const oneWeekFromNow = new Date();
+      oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+      oneWeekFromNow.setHours(0, 0, 0, 0);
+      appointmentDate.setHours(0, 0, 0, 0);
+      return appointmentDate > oneWeekFromNow;
     }, [formData.data_hora]);
 
     return (
@@ -485,6 +529,13 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
                     <AlertTriangle className="h-3 w-3" />
                     Data anterior à atual - clique em "Criar Agendamento" para
                     confirmar
+                  </p>
+                )}
+                {isDateMoreThanOneWeekAhead() && !futureWeekConfirmed && (
+                  <p className="text-sm text-blue-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Agendamento para mais de 1 semana - clique em "Criar
+                    Agendamento" para confirmar
                   </p>
                 )}
               </div>

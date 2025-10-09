@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, Edit, Save, XCircle } from 'lucide-react';
+import { useToast } from '@/components/primitives/use-toast';
+import { ToastAction } from '@/components/primitives/toast';
+import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
 
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -154,6 +157,11 @@ export const AppointmentDetailsManager =
       } | null>(null);
 
       const { user } = useAuth();
+      const { toast } = useToast();
+
+      // Estados para confirmação de datas
+      const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
+      const [futureWeekConfirmed, setFutureWeekConfirmed] = useState(false);
 
       // Função wrapper para emitir NFe (apenas para casos de emissão)
       const handleEmitirNfe = async () => {
@@ -301,6 +309,8 @@ export const AppointmentDetailsManager =
             empresaFaturaId: appointment.empresa_fatura_id || '',
           });
           setIsEdited(false);
+          setPastDateConfirmed(false);
+          setFutureWeekConfirmed(false);
         }
       }, [appointment, isOpen]);
 
@@ -397,8 +407,62 @@ export const AppointmentDetailsManager =
             throw new Error('Data e hora são obrigatórias');
           }
 
-          // Salvar agendamento primeiro
+          // Validar data no passado ou futuro distante
           const dataHoraCompleta = `${formData.dataHora}T${formData.timeHora}:00`;
+          const appointmentDate = parseSupabaseDatetime(dataHoraCompleta);
+          const now = new Date();
+          const oneWeekFromNow = new Date();
+          oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+
+          // Verificar se é data passada
+          if (appointmentDate < now && !pastDateConfirmed) {
+            setIsSavingEvolucao(false);
+            const { dismiss } = toast({
+              title: 'Data anterior à data atual',
+              description:
+                'Você está editando para uma data anterior à data atual. Deseja confirmar esta alteração?',
+              variant: 'default',
+              action: (
+                <ToastAction
+                  altText="Confirmar alteração"
+                  onClick={() => {
+                    dismiss();
+                    setPastDateConfirmed(true);
+                    setTimeout(() => handleSaveAll(), 100);
+                  }}
+                >
+                  Confirmar
+                </ToastAction>
+              ),
+            });
+            return;
+          }
+
+          // Verificar se é mais de 1 semana no futuro
+          if (appointmentDate > oneWeekFromNow && !futureWeekConfirmed) {
+            setIsSavingEvolucao(false);
+            const { dismiss } = toast({
+              title: 'Agendamento para mais de 1 semana',
+              description:
+                'Você está editando para mais de 1 semana após a data atual. Deseja confirmar esta alteração?',
+              variant: 'default',
+              action: (
+                <ToastAction
+                  altText="Confirmar alteração"
+                  onClick={() => {
+                    dismiss();
+                    setFutureWeekConfirmed(true);
+                    setTimeout(() => handleSaveAll(), 100);
+                  }}
+                >
+                  Confirmar
+                </ToastAction>
+              ),
+            });
+            return;
+          }
+
+          // Salvar agendamento primeiro
 
           const updateData: AppointmentUpdateData = {
             id: appointment.id,
