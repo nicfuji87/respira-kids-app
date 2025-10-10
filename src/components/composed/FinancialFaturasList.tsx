@@ -544,6 +544,26 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     return `${day}/${month}/${year}`;
   };
 
+  // AI dev note: Função para formatar data e hora convertendo de UTC para horário de Brasília (UTC-3)
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return '--/--/---- --:--';
+
+    // Criar objeto Date a partir da string UTC
+    const dateUTC = new Date(dateString);
+
+    // Converter para horário de Brasília usando toLocaleString
+    const dateBrasilia = dateUTC.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    return dateBrasilia;
+  };
+
   // Função para formatar valor
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -870,6 +890,12 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                           ? formatDate(fatura.vencimento)
                           : 'Não definido'}
                       </div>
+                      {fatura.pago_em && (
+                        <div className="flex items-center gap-2 mt-1 text-green-600 font-medium text-xs">
+                          <Calendar className="h-3 w-3" />
+                          Pago: {formatDateTime(fatura.pago_em)}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="text-muted-foreground mb-1">

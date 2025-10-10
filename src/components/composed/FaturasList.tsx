@@ -73,6 +73,26 @@ const FaturaItem = React.memo<{
       return `${day}/${month}/${year}`;
     };
 
+    // AI dev note: Função para formatar data e hora convertendo de UTC para horário de Brasília (UTC-3)
+    const formatDateTime = (dateString: string) => {
+      if (!dateString) return '--/--/---- --:--';
+
+      // Criar objeto Date a partir da string UTC
+      const dateUTC = new Date(dateString);
+
+      // Converter para horário de Brasília usando toLocaleString
+      const dateBrasilia = dateUTC.toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      return dateBrasilia;
+    };
+
     // AI dev note: Formatar datas das consultas SEM conversão de timezone
     // Mantém exatamente como vem do Supabase
     const formatConsultationDates = (datasConsultas: string[]) => {
@@ -274,6 +294,11 @@ const FaturaItem = React.memo<{
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
                   Venc: {formatDate(fatura.vencimento)}
+                  {fatura.pago_em && (
+                    <span className="text-green-600 font-medium ml-2">
+                      | Pago: {formatDateTime(fatura.pago_em)}
+                    </span>
+                  )}
                 </div>
               )}
               <div className={cn(getValueColor(fatura.status), 'font-medium')}>
