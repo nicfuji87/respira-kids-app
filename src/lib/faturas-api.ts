@@ -794,6 +794,18 @@ export async function editarFatura(
 
     // 7. Desvincular agendamentos removidos
     if (updates.agendamentosParaRemover.length > 0) {
+      // Buscar ID do status "pendente"
+      const { data: statusPendente, error: statusError } = await supabase
+        .from('pagamento_status')
+        .select('id')
+        .eq('codigo', 'pendente')
+        .single();
+
+      if (statusError || !statusPendente) {
+        console.warn('⚠️ Erro ao buscar status pendente:', statusError);
+        // Continua a operação mesmo com erro, apenas não atualiza o status
+      }
+
       const { error: unlinkError } = await supabase
         .from('agendamentos')
         .update({
@@ -801,6 +813,7 @@ export async function editarFatura(
           id_pagamento_externo: null,
           cobranca_gerada_em: null,
           cobranca_gerada_por: null,
+          status_pagamento_id: statusPendente?.id || null,
           atualizado_por: userId === 'system' ? null : userId,
         })
         .in('id', updates.agendamentosParaRemover);
@@ -809,7 +822,7 @@ export async function editarFatura(
         console.warn('⚠️ Erro ao desvincular agendamentos:', unlinkError);
       } else {
         console.log(
-          `✅ ${updates.agendamentosParaRemover.length} agendamentos desvinculados`
+          `✅ ${updates.agendamentosParaRemover.length} agendamentos desvinculados e status retornado para pendente`
         );
       }
     }
@@ -937,7 +950,25 @@ export async function excluirFatura(
 
     console.log('✅ Cobrança cancelada no ASAAS');
 
-    // 5. Desvincular agendamentos
+    // 5. Buscar ID do status "pendente"
+    console.log('🔍 Buscando ID do status "pendente"...');
+    const { data: statusPendente, error: statusError } = await supabase
+      .from('pagamento_status')
+      .select('id')
+      .eq('codigo', 'pendente')
+      .single();
+
+    if (statusError || !statusPendente) {
+      console.error('❌ Erro ao buscar status pendente:', statusError);
+      return {
+        success: false,
+        error: 'Erro ao buscar status de pagamento pendente',
+      };
+    }
+
+    console.log('✅ Status pendente encontrado:', statusPendente.id);
+
+    // 6. Desvincular agendamentos e retornar status para pendente
     console.log('🔗 Desvinculando agendamentos da fatura...');
     const { error: unlinkError } = await supabase
       .from('agendamentos')
@@ -946,6 +977,7 @@ export async function excluirFatura(
         id_pagamento_externo: null,
         cobranca_gerada_em: null,
         cobranca_gerada_por: null,
+        status_pagamento_id: statusPendente.id,
         atualizado_por: userId === 'system' ? null : userId,
       })
       .eq('fatura_id', faturaId);
@@ -958,9 +990,11 @@ export async function excluirFatura(
       };
     }
 
-    console.log('✅ Agendamentos desvinculados');
+    console.log(
+      '✅ Agendamentos desvinculados e status retornado para pendente'
+    );
 
-    // 6. Excluir fatura (soft delete)
+    // 7. Excluir fatura (soft delete)
     const { error: deleteError } = await supabase
       .from('faturas')
       .update({
