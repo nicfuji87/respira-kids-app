@@ -1,6 +1,6 @@
 // AI dev note: Edge Function para desabilitar notificações nativas do Asaas
 // Usa endpoint batch: PUT /v3/notifications/batch
-// IMPORTANTE: campo 'notifications' deve ser ARRAY de objetos, NÃO string JSON
+// IMPORTANTE: cada objeto no array 'notifications' deve ter o campo 'id' da notificação existente
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 interface DisableNotificationsRequest {
@@ -15,6 +15,17 @@ interface DisableNotificationsRequest {
 interface DisableNotificationsResponse {
   success: boolean;
   error?: string;
+}
+
+interface AsaasNotification {
+  id: string;
+  enabled: boolean;
+  emailEnabledForProvider: boolean;
+  smsEnabledForProvider: boolean;
+  emailEnabledForCustomer: boolean;
+  smsEnabledForCustomer: boolean;
+  phoneCallEnabledForCustomer: boolean;
+  whatsappEnabledForCustomer: boolean;
 }
 
 Deno.serve(async (req: Request) => {
@@ -60,21 +71,84 @@ Deno.serve(async (req: Request) => {
 
     console.log('🔕 Desabilitando notificações para cliente:', customerId);
 
+    // Primeiro, buscar as notificações existentes do cliente
+    const getController = new AbortController();
+    const getTimeoutId = setTimeout(() => getController.abort(), 15000);
+
+    const getNotificationsResponse = await fetch(
+      `${apiConfig.baseUrl}/customers/${customerId}/notifications`,
+      {
+        method: 'GET',
+        headers: {
+          access_token: apiConfig.apiKey,
+          'Content-Type': 'application/json',
+          'User-Agent': 'RespiraKids/1.0',
+        },
+        signal: getController.signal,
+      }
+    );
+
+    clearTimeout(getTimeoutId);
+
+    if (!getNotificationsResponse.ok) {
+      console.error(
+        '❌ Erro ao buscar notificações:',
+        getNotificationsResponse.status
+      );
+
+      const response: DisableNotificationsResponse = {
+        success: false,
+        error: `Erro ${getNotificationsResponse.status} ao buscar notificações`,
+      };
+
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const notificationsData = await getNotificationsResponse.json();
+    console.log(
+      '📋 Notificações encontradas:',
+      notificationsData.data?.length || 0
+    );
+
+    // Verificar se há notificações
+    if (
+      !notificationsData.data ||
+      !Array.isArray(notificationsData.data) ||
+      notificationsData.data.length === 0
+    ) {
+      console.log('ℹ️ Nenhuma notificação encontrada para desabilitar');
+
+      const response: DisableNotificationsResponse = {
+        success: true,
+      };
+
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Preparar payload para desabilitar todas as notificações usando batch
-    // CORRIGIDO: notifications é um ARRAY de objetos, não JSON stringificado
+    // IMPORTANTE: Cada objeto precisa ter o 'id' da notificação existente
+    const notificationsArray = notificationsData.data.map(
+      (notification: AsaasNotification) => ({
+        id: notification.id,
+        enabled: false,
+        emailEnabledForProvider: false,
+        smsEnabledForProvider: false,
+        emailEnabledForCustomer: false,
+        smsEnabledForCustomer: false,
+        phoneCallEnabledForCustomer: false,
+        whatsappEnabledForCustomer: false,
+      })
+    );
+
     const notificationsPayload = {
       customer: customerId,
-      notifications: [
-        {
-          enabled: false,
-          emailEnabledForProvider: false,
-          smsEnabledForProvider: false,
-          emailEnabledForCustomer: false,
-          smsEnabledForCustomer: false,
-          phoneCallEnabledForCustomer: false,
-          whatsappEnabledForCustomer: false,
-        },
-      ],
+      notifications: notificationsArray,
     };
 
     console.log(
