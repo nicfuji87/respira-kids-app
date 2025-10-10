@@ -101,15 +101,35 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { action, data } = (await req.json()) as {
+    const requestBody = await req.json();
+    console.log(
+      '🔍 [DEBUG] Request body completo recebido:',
+      JSON.stringify(requestBody)
+    );
+
+    const { action, data } = requestBody as {
       action: string;
       data: FinalizationData;
     };
 
     console.log('🚀 [PUBLIC-PATIENT-REGISTRATION] Iniciando cadastro público');
     console.log('📋 [STEP 0] Ação:', action);
+    console.log('🔍 [DEBUG] data é null?', data === null);
+    console.log('🔍 [DEBUG] data é undefined?', data === undefined);
+    console.log('🔍 [DEBUG] typeof data:', typeof data);
+
+    if (!data) {
+      console.error('❌ [ERROR] data está null ou undefined!');
+      throw new Error('Dados de cadastro não fornecidos no request body');
+    }
+
+    console.log('🔍 [DEBUG] data.paciente existe?', !!data.paciente);
+    console.log('🔍 [DEBUG] data.paciente:', JSON.stringify(data.paciente));
+    console.log('🔍 [DEBUG] data.pediatra existe?', !!data.pediatra);
+    console.log('🔍 [DEBUG] data.pediatra:', JSON.stringify(data.pediatra));
+
     console.log(
-      '📋 [STEP 0] Dados recebidos:',
+      '📋 [STEP 0] Dados recebidos (resumo):',
       JSON.stringify({
         hasExistingUser: !!data.existingPersonId,
         hasResponsavelLegal: !!data.responsavelLegal,
