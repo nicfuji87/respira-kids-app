@@ -117,8 +117,9 @@ Deno.serve(async (req: Request) => {
           data.responsavelFinanceiroMesmoQueLegal,
         responsavelFinanceiroExistingId: data.responsavelFinanceiroExistingId,
         hasNewPersonData: !!data.newPersonData,
-        pacienteNome: data.paciente.nome,
-        pediatraId: data.pediatra.id,
+        pacienteNome: data.paciente?.nome || 'não fornecido',
+        pediatraId: data.pediatra?.id || 'novo pediatra',
+        pediatraNome: data.pediatra?.nome || 'não fornecido',
         hasContractVariables: !!data.contractVariables,
       })
     );
