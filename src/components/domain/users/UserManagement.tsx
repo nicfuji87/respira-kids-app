@@ -176,10 +176,17 @@ export const UserManagement = React.memo<UserManagementProps>(
 
       setUpdating(true);
       try {
-        // Converter data_nascimento se fornecida
+        // AI dev note: Limpar campos de data vazios antes de enviar
         const updateData = { ...data };
-        if (data.data_nascimento) {
-          updateData.data_nascimento = data.data_nascimento;
+
+        // Remover data_nascimento se vazio (responsáveis não precisam ter data de nascimento)
+        // PostgreSQL não aceita string vazia para campos do tipo date
+        if (
+          updateData.data_nascimento === '' ||
+          updateData.data_nascimento === null ||
+          updateData.data_nascimento === undefined
+        ) {
+          delete updateData.data_nascimento;
         }
 
         const result = await updateUsuario(editingUser.id, updateData);

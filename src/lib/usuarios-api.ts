@@ -300,10 +300,23 @@ export async function updateUsuario(
 
     console.log('🔄 Atualizando usuário:', id, 'com dados:', updates);
 
+    // AI dev note: Limpar campos vazios antes de enviar para o Supabase
+    // PostgreSQL não aceita string vazia para campos do tipo date
+    const cleanedUpdates = { ...updates };
+
+    // Remover campos de data vazios
+    if (
+      cleanedUpdates.data_nascimento === '' ||
+      cleanedUpdates.data_nascimento === null ||
+      cleanedUpdates.data_nascimento === undefined
+    ) {
+      delete cleanedUpdates.data_nascimento;
+    }
+
     const { data, error } = await supabase
       .from('pessoas')
       .update({
-        ...updates,
+        ...cleanedUpdates,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
