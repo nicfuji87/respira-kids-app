@@ -102,11 +102,15 @@ export async function getAddressByCep(
 export async function getOrCreateEndereco(
   enderecoData: EnderecoData
 ): Promise<string> {
+  // AI dev note: Normalizar CEP removendo caracteres não numéricos
+  const cepNormalizado = enderecoData.cep.replace(/\D/g, '');
+  const enderecoNormalizado = { ...enderecoData, cep: cepNormalizado };
+
   // Primeiro, verificar se já existe um endereço com esse CEP
   const { data: existingEndereco, error: selectError } = await supabase
     .from('enderecos')
     .select('id')
-    .eq('cep', enderecoData.cep)
+    .eq('cep', cepNormalizado)
     .single();
 
   if (selectError && selectError.code !== 'PGRST116') {
@@ -121,7 +125,7 @@ export async function getOrCreateEndereco(
   // Se não existe, criar novo
   const { data: newEndereco, error: insertError } = await supabase
     .from('enderecos')
-    .insert(enderecoData)
+    .insert(enderecoNormalizado)
     .select('id')
     .single();
 
@@ -140,24 +144,20 @@ export async function updateProfile(
   profileData: CompleteProfileData
 ): Promise<void> {
   try {
-
     // 1. Buscar endereço por CEP
-    
+
     const enderecoData = await getAddressByCep(profileData.cep);
 
     if (!enderecoData) {
       throw new Error('Endereço não encontrado para o CEP informado');
     }
 
-    
-
     // 2. Criar ou buscar endereço
-    
+
     const enderecoId = await getOrCreateEndereco(enderecoData);
-    
 
     // 3. Atualizar dados da pessoa
-    
+
     // Limpar telefone e converter para número
     const cleanTelefone = profileData.telefone.replace(/\D/g, '');
     const telefoneNumber = cleanTelefone ? parseInt(cleanTelefone, 10) : null;
@@ -176,8 +176,6 @@ export async function updateProfile(
       updated_at: new Date().toISOString(),
     };
 
-    
-
     const { error: updateError } = await supabase
       .from('pessoas')
       .update(updateData)
@@ -187,8 +185,6 @@ export async function updateProfile(
       console.error('Erro no update:', updateError); // Debug log
       throw new Error(updateError.message);
     }
-
-    
   } catch (error) {
     console.error('Erro ao atualizar perfil:', error);
     throw error;

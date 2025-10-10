@@ -177,13 +177,17 @@ Deno.serve(async (req: Request) => {
     console.log('📋 [STEP 2] Buscando ou criando endereço...');
     console.log('📋 [STEP 2] CEP:', data.endereco.cep);
 
+    // AI dev note: Normalizar CEP removendo caracteres não numéricos antes de buscar/inserir
+    const cepNormalizado = data.endereco.cep.replace(/\D/g, '');
+    console.log('📋 [STEP 2] CEP normalizado:', cepNormalizado);
+
     let enderecoId: string;
 
     const { data: enderecoExistente, error: errorEnderecoSearch } =
       await supabase
         .from('enderecos')
         .select('id')
-        .eq('cep', data.endereco.cep)
+        .eq('cep', cepNormalizado)
         .eq('logradouro', data.endereco.logradouro)
         .eq('bairro', data.endereco.bairro)
         .eq('cidade', data.endereco.cidade)
@@ -206,7 +210,7 @@ Deno.serve(async (req: Request) => {
       const { data: novoEndereco, error: errorEnderecoInsert } = await supabase
         .from('enderecos')
         .insert({
-          cep: data.endereco.cep,
+          cep: cepNormalizado, // AI dev note: Usar CEP normalizado sem formatação
           logradouro: data.endereco.logradouro,
           bairro: data.endereco.bairro,
           cidade: data.endereco.cidade,

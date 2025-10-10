@@ -298,6 +298,8 @@ export async function updateUsuario(
       };
     }
 
+    console.log('🔄 Atualizando usuário:', id, 'com dados:', updates);
+
     const { data, error } = await supabase
       .from('pessoas')
       .update({
@@ -307,7 +309,7 @@ export async function updateUsuario(
       .eq('id', id)
       .select(
         `
-        id, nome, email, telefone, cpf_cnpj, data_nascimento,
+        id, nome, email, telefone, cpf_cnpj,
         registro_profissional, especialidade, bio_profissional,
         foto_perfil, numero_endereco, complemento_endereco,
         role, is_approved, profile_complete, ativo, bloqueado,
@@ -320,6 +322,8 @@ export async function updateUsuario(
       console.error('❌ Erro ao atualizar usuário:', error);
       return { data: null, error: error.message, success: false };
     }
+
+    console.log('✅ Usuário atualizado com sucesso');
 
     return { data: data as Usuario, error: null, success: true };
   } catch (error) {

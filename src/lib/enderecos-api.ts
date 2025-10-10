@@ -39,7 +39,9 @@ export interface EnderecoViaCepData {
 /**
  * Buscar endereço por CEP usando ViaCEP
  */
-export async function fetchAddressByCep(cep: string): Promise<ApiResponse<EnderecoViaCepData>> {
+export async function fetchAddressByCep(
+  cep: string
+): Promise<ApiResponse<EnderecoViaCepData>> {
   try {
     // Limpar formatação do CEP
     const cleanCep = cep.replace(/\D/g, '');
@@ -47,7 +49,7 @@ export async function fetchAddressByCep(cep: string): Promise<ApiResponse<Endere
     if (cleanCep.length !== 8) {
       return {
         success: false,
-        error: 'CEP deve ter 8 dígitos'
+        error: 'CEP deve ter 8 dígitos',
       };
     }
 
@@ -58,7 +60,7 @@ export async function fetchAddressByCep(cep: string): Promise<ApiResponse<Endere
     if (!response.ok) {
       return {
         success: false,
-        error: 'Erro ao consultar CEP na ViaCEP'
+        error: 'Erro ao consultar CEP na ViaCEP',
       };
     }
 
@@ -67,7 +69,7 @@ export async function fetchAddressByCep(cep: string): Promise<ApiResponse<Endere
     if (data.erro) {
       return {
         success: false,
-        error: 'CEP não encontrado'
+        error: 'CEP não encontrado',
       };
     }
 
@@ -83,13 +85,13 @@ export async function fetchAddressByCep(cep: string): Promise<ApiResponse<Endere
 
     return {
       success: true,
-      data: enderecoData
+      data: enderecoData,
     };
   } catch (error) {
     console.error('❌ Erro ao buscar CEP:', error);
     return {
       success: false,
-      error: 'Não foi possível consultar o CEP'
+      error: 'Não foi possível consultar o CEP',
     };
   }
 }
@@ -132,7 +134,7 @@ export async function fetchEnderecos(
       console.error('❌ Erro ao buscar endereços:', error);
       return {
         success: false,
-        error: `Erro ao buscar endereços: ${error.message}`
+        error: `Erro ao buscar endereços: ${error.message}`,
       };
     }
 
@@ -147,14 +149,14 @@ export async function fetchEnderecos(
         total: count || 0,
         page,
         limit,
-        totalPages
-      }
+        totalPages,
+      },
     };
   } catch (error) {
     console.error('❌ Erro inesperado ao buscar endereços:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao buscar endereços'
+      error: 'Erro inesperado ao buscar endereços',
     };
   }
 }
@@ -166,42 +168,46 @@ export async function createEndereco(
   enderecoData: EnderecoCreateInput
 ): Promise<ApiResponse<Endereco>> {
   try {
-    console.log('➕ Criando endereço:', enderecoData);
+    // AI dev note: Normalizar CEP removendo caracteres não numéricos
+    const cepNormalizado = enderecoData.cep.replace(/\D/g, '');
+    const enderecoNormalizado = { ...enderecoData, cep: cepNormalizado };
+
+    console.log('➕ Criando endereço:', enderecoNormalizado);
 
     // Verificar se já existe endereço com mesmo CEP
     const { data: existing } = await supabase
       .from('enderecos')
       .select('id')
-      .eq('cep', enderecoData.cep)
+      .eq('cep', cepNormalizado)
       .single();
 
     if (existing) {
       return {
         success: false,
-        error: 'Já existe um endereço cadastrado com este CEP'
+        error: 'Já existe um endereço cadastrado com este CEP',
       };
     }
 
     const { data, error } = await supabase
       .from('enderecos')
-      .insert(enderecoData)
+      .insert(enderecoNormalizado)
       .select()
       .single();
 
     if (error) {
       console.error('❌ Erro ao criar endereço:', error);
-      
+
       // Tratar erros específicos
       if (error.code === '23505') {
         return {
           success: false,
-          error: 'CEP já existe no sistema'
+          error: 'CEP já existe no sistema',
         };
       }
 
       return {
         success: false,
-        error: `Erro ao criar endereço: ${error.message}`
+        error: `Erro ao criar endereço: ${error.message}`,
       };
     }
 
@@ -209,13 +215,13 @@ export async function createEndereco(
 
     return {
       success: true,
-      data
+      data,
     };
   } catch (error) {
     console.error('❌ Erro inesperado ao criar endereço:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao criar endereço'
+      error: 'Erro inesperado ao criar endereço',
     };
   }
 }
@@ -231,6 +237,11 @@ export async function updateEndereco(
 
     const { id, ...updateData } = enderecoData;
 
+    // AI dev note: Normalizar CEP se fornecido
+    if (updateData.cep) {
+      updateData.cep = updateData.cep.replace(/\D/g, '');
+    }
+
     // Se está alterando o CEP, verificar se não existe outro endereço com o mesmo CEP
     if (updateData.cep) {
       const { data: existing } = await supabase
@@ -243,7 +254,7 @@ export async function updateEndereco(
       if (existing) {
         return {
           success: false,
-          error: 'Já existe outro endereço cadastrado com este CEP'
+          error: 'Já existe outro endereço cadastrado com este CEP',
         };
       }
     }
@@ -252,7 +263,7 @@ export async function updateEndereco(
       .from('enderecos')
       .update({
         ...updateData,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
@@ -262,7 +273,7 @@ export async function updateEndereco(
       console.error('❌ Erro ao atualizar endereço:', error);
       return {
         success: false,
-        error: `Erro ao atualizar endereço: ${error.message}`
+        error: `Erro ao atualizar endereço: ${error.message}`,
       };
     }
 
@@ -270,13 +281,13 @@ export async function updateEndereco(
 
     return {
       success: true,
-      data
+      data,
     };
   } catch (error) {
     console.error('❌ Erro inesperado ao atualizar endereço:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao atualizar endereço'
+      error: 'Erro inesperado ao atualizar endereço',
     };
   }
 }
@@ -284,7 +295,9 @@ export async function updateEndereco(
 /**
  * Excluir endereço
  */
-export async function deleteEndereco(id: string): Promise<ApiResponse<boolean>> {
+export async function deleteEndereco(
+  id: string
+): Promise<ApiResponse<boolean>> {
   try {
     console.log('🗑️ Verificando dependências para excluir endereço:', id);
 
@@ -293,7 +306,11 @@ export async function deleteEndereco(id: string): Promise<ApiResponse<boolean>> 
       // Verificar pessoas usando este endereço
       { table: 'pessoas', column: 'id_endereco', name: 'pessoas' },
       // Verificar locais de atendimento usando este endereço
-      { table: 'locais_atendimento', column: 'id_endereco', name: 'locais de atendimento' }
+      {
+        table: 'locais_atendimento',
+        column: 'id_endereco',
+        name: 'locais de atendimento',
+      },
     ];
 
     for (const check of dependencyChecks) {
@@ -304,32 +321,32 @@ export async function deleteEndereco(id: string): Promise<ApiResponse<boolean>> 
         .limit(1);
 
       if (error) {
-        console.error(`❌ Erro ao verificar dependência ${check.table}:`, error);
+        console.error(
+          `❌ Erro ao verificar dependência ${check.table}:`,
+          error
+        );
         return {
           success: false,
-          error: `Erro ao verificar dependências: ${error.message}`
+          error: `Erro ao verificar dependências: ${error.message}`,
         };
       }
 
       if (data && data.length > 0) {
         return {
           success: false,
-          error: `Não é possível excluir este endereço porque ele está sendo usado por ${check.name}`
+          error: `Não é possível excluir este endereço porque ele está sendo usado por ${check.name}`,
         };
       }
     }
 
     // Se não há dependências, pode excluir
-    const { error } = await supabase
-      .from('enderecos')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('enderecos').delete().eq('id', id);
 
     if (error) {
       console.error('❌ Erro ao excluir endereço:', error);
       return {
         success: false,
-        error: `Erro ao excluir endereço: ${error.message}`
+        error: `Erro ao excluir endereço: ${error.message}`,
       };
     }
 
@@ -337,13 +354,13 @@ export async function deleteEndereco(id: string): Promise<ApiResponse<boolean>> 
 
     return {
       success: true,
-      data: true
+      data: true,
     };
   } catch (error) {
     console.error('❌ Erro inesperado ao excluir endereço:', error);
     return {
       success: false,
-      error: 'Erro inesperado ao excluir endereço'
+      error: 'Erro inesperado ao excluir endereço',
     };
   }
-} 
+}

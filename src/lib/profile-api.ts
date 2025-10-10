@@ -187,14 +187,18 @@ export async function updateUserProfile(
 export async function upsertEndereco(
   enderecoData: CreateEnderecoData
 ): Promise<string> {
-  console.log('🔄 Criando/atualizando endereço:', enderecoData);
+  // AI dev note: Normalizar CEP removendo caracteres não numéricos
+  const cepNormalizado = enderecoData.cep.replace(/\D/g, '');
+  const enderecoNormalizado = { ...enderecoData, cep: cepNormalizado };
+
+  console.log('🔄 Criando/atualizando endereço:', enderecoNormalizado);
 
   try {
     // Verificar se endereço já existe para este CEP
     const { data: existingEndereco } = await supabase
       .from('enderecos')
       .select('id')
-      .eq('cep', enderecoData.cep)
+      .eq('cep', cepNormalizado)
       .single();
 
     if (existingEndereco) {
@@ -205,7 +209,7 @@ export async function upsertEndereco(
     // Criar novo endereço
     const { data, error } = await supabase
       .from('enderecos')
-      .insert(enderecoData)
+      .insert(enderecoNormalizado)
       .select('id')
       .single();
 
