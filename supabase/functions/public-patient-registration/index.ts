@@ -488,18 +488,21 @@ Deno.serve(async (req: Request) => {
       console.log('📋 [STEP 5] Nome:', data.pediatra.nome);
       console.log('📋 [STEP 5] CRM:', data.pediatra.crm || 'não fornecido');
 
+      // AI dev note: O tipo correto é 'medico' (Médico Pediatra), não 'pediatra'
       const { data: tipoPediatra, error: errorTipoPediatra } = await supabase
         .from('pessoa_tipos')
         .select('id')
-        .eq('codigo', 'pediatra')
+        .eq('codigo', 'medico')
         .single();
 
       if (errorTipoPediatra || !tipoPediatra) {
         console.error(
-          '❌ [STEP 5] Erro ao buscar tipo pediatra:',
+          '❌ [STEP 5] Erro ao buscar tipo médico/pediatra:',
           errorTipoPediatra
         );
-        throw new Error('Tipo de pessoa "pediatra" não encontrado');
+        throw new Error(
+          'Tipo de pessoa "medico" (Médico Pediatra) não encontrado'
+        );
       }
 
       // Criar pessoa do pediatra
