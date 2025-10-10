@@ -185,7 +185,8 @@ export const FinancialProfessionalReport: React.FC<
         query = query.gte('data_hora', startDateFilter);
       }
       if (endDateFilter && periodFilter !== 'todos') {
-        query = query.lte('data_hora', endDateFilter);
+        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
+        query = query.lte('data_hora', endDateFilter + 'T23:59:59');
       }
 
       const { data, error: fetchError } = await query;

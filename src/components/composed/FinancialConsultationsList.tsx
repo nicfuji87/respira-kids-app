@@ -253,7 +253,8 @@ export const FinancialConsultationsList: React.FC<
         countQuery = countQuery.gte('data_hora', startDateFilter);
       }
       if (endDateFilter && periodFilter !== 'todos') {
-        countQuery = countQuery.lte('data_hora', endDateFilter);
+        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
+        countQuery = countQuery.lte('data_hora', endDateFilter + 'T23:59:59');
       }
 
       const { count } = await countQuery;
@@ -270,7 +271,11 @@ export const FinancialConsultationsList: React.FC<
         allConsultasQuery = allConsultasQuery.gte('data_hora', startDateFilter);
       }
       if (endDateFilter && periodFilter !== 'todos') {
-        allConsultasQuery = allConsultasQuery.lte('data_hora', endDateFilter);
+        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
+        allConsultasQuery = allConsultasQuery.lte(
+          'data_hora',
+          endDateFilter + 'T23:59:59'
+        );
       }
 
       // Buscar TODAS as consultas em lotes para evitar limite de 1000
@@ -331,7 +336,8 @@ export const FinancialConsultationsList: React.FC<
         query = query.gte('data_hora', startDateFilter);
       }
       if (endDateFilter && periodFilter !== 'todos') {
-        query = query.lte('data_hora', endDateFilter);
+        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
+        query = query.lte('data_hora', endDateFilter + 'T23:59:59');
       }
 
       // AI dev note: BUSCAR TODAS as consultas do período sem paginação
@@ -681,7 +687,8 @@ export const FinancialConsultationsList: React.FC<
         query = query.gte('data_hora', startDateFilter);
       }
       if (endDateFilter && periodFilter !== 'todos') {
-        query = query.lte('data_hora', endDateFilter);
+        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
+        query = query.lte('data_hora', endDateFilter + 'T23:59:59');
       }
 
       const { data, error: fetchError } = await query;
