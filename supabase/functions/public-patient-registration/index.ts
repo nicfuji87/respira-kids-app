@@ -368,6 +368,30 @@ Deno.serve(async (req: Request) => {
         '✅ [STEP 4] Pessoa existente confirmada:',
         pessoaExistente.nome
       );
+
+      // AI dev note: Atualizar endereço do responsável financeiro existente para o endereço do cadastro
+      console.log(
+        '📋 [STEP 4] Atualizando endereço do responsável financeiro existente...'
+      );
+      const { error: errorUpdateEnderecoFin } = await supabase
+        .from('pessoas')
+        .update({
+          id_endereco: enderecoId,
+          numero_endereco: data.endereco.numero,
+          complemento_endereco: data.endereco.complemento || null,
+        })
+        .eq('id', responsavelFinanceiroId);
+
+      if (errorUpdateEnderecoFin) {
+        console.error(
+          '❌ [STEP 4] Erro ao atualizar endereço financeiro:',
+          errorUpdateEnderecoFin
+        );
+        throw new Error('Erro ao atualizar endereço do responsável financeiro');
+      }
+      console.log(
+        '✅ [STEP 4] Endereço atualizado para responsável financeiro existente'
+      );
     } else if (data.newPersonData) {
       // CENÁRIO 3: Nova pessoa (não encontrada por CPF)
       console.log('📋 [STEP 4] Criando novo responsável financeiro...');
