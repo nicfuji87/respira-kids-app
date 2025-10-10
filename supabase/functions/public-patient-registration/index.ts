@@ -526,13 +526,16 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Criar pessoa do pediatra
+      // AI dev note: Pediatra deve ser AUTO-REFERENCIADO
+      const tempPedId = crypto.randomUUID();
+
       const { data: novoPediatra, error: errorPediatra } = await supabase
         .from('pessoas')
         .insert({
+          id: tempPedId,
           nome: data.pediatra.nome,
           id_tipo_pessoa: tipoPediatra.id,
-          responsavel_cobranca_id: responsavelFinanceiroId, // Temporário
+          responsavel_cobranca_id: tempPedId, // AI dev note: AUTO-REFERÊNCIA
           ativo: true,
         })
         .select('id')
