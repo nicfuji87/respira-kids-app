@@ -1,5 +1,5 @@
 // AI dev note: Edge Function para criar cliente no Asaas
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 interface CreateCustomerRequest {
   apiConfig: {
@@ -28,7 +28,8 @@ Deno.serve(async (req: Request) => {
   // Configurar CORS
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
@@ -41,9 +42,9 @@ Deno.serve(async (req: Request) => {
     if (req.method !== 'POST') {
       return new Response(
         JSON.stringify({ success: false, error: 'Method not allowed' }),
-        { 
-          status: 405, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 405,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
@@ -52,13 +53,13 @@ Deno.serve(async (req: Request) => {
 
     if (!apiConfig?.apiKey || !customerData?.name || !customerData?.cpfCnpj) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Dados obrigatórios não informados' 
+        JSON.stringify({
+          success: false,
+          error: 'Dados obrigatórios não informados',
         }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
@@ -66,8 +67,17 @@ Deno.serve(async (req: Request) => {
     // Normalizar CPF/CNPJ (remover pontuação)
     const normalizedCpfCnpj = customerData.cpfCnpj.replace(/[^\d]/g, '');
 
-    // Normalizar telefone (remover caracteres especiais)
-    const normalizedPhone = customerData.mobilePhone?.replace(/[^\d]/g, '');
+    // AI dev note: Normalizar telefone (remover caracteres especiais e DDI 55)
+    // Asaas exige telefone sem código do país
+    // Exemplos: 556181446666 -> 6181446666 | 5511987652345 -> 11987652345
+    let normalizedPhone = customerData.mobilePhone?.replace(/[^\d]/g, '');
+    if (
+      normalizedPhone &&
+      normalizedPhone.startsWith('55') &&
+      normalizedPhone.length > 11
+    ) {
+      normalizedPhone = normalizedPhone.substring(2); // Remove DDI 55
+    }
 
     // Preparar dados para API do Asaas
     const asaasPayload = {
@@ -77,28 +87,31 @@ Deno.serve(async (req: Request) => {
       mobilePhone: normalizedPhone || '',
       postalCode: customerData.postalCode || '',
       externalReference: customerData.externalReference,
-      addressNumber: customerData.addressNumber || ''
+      addressNumber: customerData.addressNumber || '',
     };
 
     // Remover campos vazios
-    Object.keys(asaasPayload).forEach(key => {
+    Object.keys(asaasPayload).forEach((key) => {
       if (!asaasPayload[key as keyof typeof asaasPayload]) {
         delete asaasPayload[key as keyof typeof asaasPayload];
       }
     });
 
-    console.log('🔄 Criando cliente no Asaas:', JSON.stringify(asaasPayload, null, 2));
+    console.log(
+      '🔄 Criando cliente no Asaas:',
+      JSON.stringify(asaasPayload, null, 2)
+    );
 
     // Chamada para API do Asaas
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
     console.log('📡 Fazendo requisição para API do Asaas...');
-    
+
     const asaasResponse = await fetch(`${apiConfig.baseUrl}/customers`, {
       method: 'POST',
       headers: {
-        'access_token': apiConfig.apiKey,
+        access_token: apiConfig.apiKey,
         'Content-Type': 'application/json',
         'User-Agent': 'RespiraKids/1.0',
       },
@@ -111,7 +124,7 @@ Deno.serve(async (req: Request) => {
     console.log('📥 Resposta da API Asaas recebida:', {
       status: asaasResponse.status,
       statusText: asaasResponse.statusText,
-      ok: asaasResponse.ok
+      ok: asaasResponse.ok,
     });
 
     const asaasData = await asaasResponse.json();
@@ -119,10 +132,10 @@ Deno.serve(async (req: Request) => {
 
     if (asaasResponse.ok) {
       console.log('Cliente criado com sucesso:', asaasData.id);
-      
+
       const response: CreateCustomerResponse = {
         success: true,
-        customer: asaasData
+        customer: asaasData,
       };
 
       return new Response(JSON.stringify(response), {
@@ -131,14 +144,15 @@ Deno.serve(async (req: Request) => {
       });
     } else {
       console.error('Erro da API Asaas:', asaasData);
-      
-      const errorMessage = asaasData.errors?.length > 0 
-        ? asaasData.errors[0].description 
-        : `Erro ${asaasResponse.status} ao criar cliente no Asaas`;
+
+      const errorMessage =
+        asaasData.errors?.length > 0
+          ? asaasData.errors[0].description
+          : `Erro ${asaasResponse.status} ao criar cliente no Asaas`;
 
       const response: CreateCustomerResponse = {
         success: false,
-        error: errorMessage
+        error: errorMessage,
       };
 
       return new Response(JSON.stringify(response), {
@@ -146,7 +160,6 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
   } catch (error) {
     console.error('Erro na Edge Function asaas-create-customer:', error);
 
@@ -161,7 +174,7 @@ Deno.serve(async (req: Request) => {
 
     const response: CreateCustomerResponse = {
       success: false,
-      error: errorMessage
+      error: errorMessage,
     };
 
     return new Response(JSON.stringify(response), {
@@ -169,4 +182,4 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-}); 
+});
