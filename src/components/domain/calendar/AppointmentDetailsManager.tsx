@@ -738,37 +738,8 @@ export const AppointmentDetailsManager =
                           onNfeAction={handleEmitirNfe}
                         />
                       </>
-                    ) : userRole === 'profissional' ? (
-                      <>
-                        {/* AI dev note: Para profissional, exibir APENAS comissão, NUNCA valor do serviço */}
-
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">Valor:</span>
-                          <span className="text-sm font-medium">
-                            R${' '}
-                            {parseFloat(
-                              appointment.valor_servico
-                            ).toLocaleString('pt-BR', {
-                              minimumFractionDigits: 2,
-                            })}
-                          </span>
-                        </div>
-                        <StatusPaymentDisplay
-                          status={appointment.status_pagamento_nome}
-                          statusColor={appointment.status_pagamento_cor}
-                          valor={appointment.valor_servico}
-                          userRole={userRole}
-                          linkNfe={faturaData?.link_nfe || appointment.link_nfe}
-                          idAsaas={
-                            faturaData?.id_asaas ||
-                            appointment.id_pagamento_externo
-                          }
-                          isEmitingNfe={isEmitingNfe}
-                          onNfeAction={handleEmitirNfe}
-                          hideValue={true}
-                        />
-                      </>
                     ) : null}
+                    {/* AI dev note: Profissional não visualiza valores ou comissões em detalhes do agendamento */}
                   </div>
                 </div>
 

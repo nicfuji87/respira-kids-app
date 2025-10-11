@@ -4,6 +4,9 @@ import { FinancialConsultationsList } from '@/components/composed/FinancialConsu
 import { FinancialFaturasList } from '@/components/composed/FinancialFaturasList';
 import { FaturamentoChart } from '@/components/composed/FaturamentoChart';
 import { FinancialProfessionalReport } from '@/components/composed/FinancialProfessionalReport';
+import { ProfessionalFinancialSummary } from '@/components/composed/ProfessionalFinancialSummary';
+import { ProfessionalFinancialConsultations } from '@/components/composed/ProfessionalFinancialConsultations';
+import { ProfessionalFaturamentoChart } from '@/components/composed/ProfessionalFaturamentoChart';
 import {
   Tabs,
   TabsContent,
@@ -43,10 +46,9 @@ interface AppointmentUpdateData {
   empresa_fatura?: string;
 }
 
-// AI dev note: Página Financeiro exclusiva para admin com proteção por PIN
-// Contém lista de consultas, faturas, gráfico anual de faturamento e relatório de profissionais
-// Funcionalidade de cobrança em massa está integrada no FinancialConsultationsList
-// Aba Profissionais: mostra comissões e detalhamento por profissional (admin only)
+// AI dev note: Página Financeiro para admin (com PIN, 4 abas) e profissional (sem PIN, 3 abas)
+// Admin: Consultas, Faturas, Gráfico Anual, Profissionais (com proteção por PIN)
+// Profissional: Resumo, Consultas, Gráfico Anual (sem proteção por PIN, apenas suas comissões)
 
 export const FinanceiroPage: React.FC = () => {
   const { user } = useAuth();
@@ -54,9 +56,14 @@ export const FinanceiroPage: React.FC = () => {
   const { toast } = useToast();
   const [isPinValidated, setIsPinValidated] = useState(false);
   const [isCheckingPin, setIsCheckingPin] = useState(true);
-  const [activeTab, setActiveTab] = useState<
+
+  // AI dev note: Tabs diferentes para admin e profissional
+  const [activeTabAdmin, setActiveTabAdmin] = useState<
     'consultas' | 'faturas' | 'grafico' | 'profissionais'
   >('consultas');
+  const [activeTabProfessional, setActiveTabProfessional] = useState<
+    'resumo' | 'consultas' | 'grafico'
+  >('resumo');
 
   // Estados para modal de detalhes do agendamento
   const [isAppointmentDetailsOpen, setIsAppointmentDetailsOpen] =
@@ -70,44 +77,54 @@ export const FinanceiroPage: React.FC = () => {
   // AI dev note: FaturamentoChart agora busca seus próprios dados com filtros
   // Removido useAdminMetrics para evitar duplicação de queries
 
-  // Verificar se usuário é admin (apenas uma vez no mount)
+  // AI dev note: Verificar se usuário tem acesso (admin ou profissional)
   useEffect(() => {
-    // Não redirecionar enquanto está carregando ou se PIN já foi validado
     if (!user || !user.pessoa) return;
 
-    if (user.pessoa.role !== 'admin') {
+    const userRole = user.pessoa.role;
+    if (userRole !== 'admin' && userRole !== 'profissional') {
       navigate('/dashboard');
       return;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.pessoa?.role, navigate]); // AI dev note: Dependências mínimas para evitar re-execução
+  }, [user?.pessoa?.role, navigate]);
 
-  // Verificar se PIN já foi validado na sessão
+  // AI dev note: Verificar PIN apenas para admin
   useEffect(() => {
     const checkPinSession = async () => {
-      const sessionKey = `pin_validated_${user?.id}_financeiro`;
-      const sessionValidated = sessionStorage.getItem(sessionKey);
+      // Profissional não precisa de PIN
+      if (user?.pessoa?.role === 'profissional') {
+        setIsPinValidated(true);
+        setIsCheckingPin(false);
+        return;
+      }
 
-      if (sessionValidated) {
-        // Verificar se a sessão ainda é válida (30 minutos)
-        const validatedTime = parseInt(sessionValidated);
-        const now = Date.now();
-        const thirtyMinutes = 30 * 60 * 1000;
+      // Admin precisa de PIN
+      if (user?.pessoa?.role === 'admin') {
+        const sessionKey = `pin_validated_${user?.id}_financeiro`;
+        const sessionValidated = sessionStorage.getItem(sessionKey);
 
-        if (now - validatedTime < thirtyMinutes) {
-          setIsPinValidated(true);
-        } else {
-          sessionStorage.removeItem(sessionKey);
+        if (sessionValidated) {
+          // Verificar se a sessão ainda é válida (30 minutos)
+          const validatedTime = parseInt(sessionValidated);
+          const now = Date.now();
+          const thirtyMinutes = 30 * 60 * 1000;
+
+          if (now - validatedTime < thirtyMinutes) {
+            setIsPinValidated(true);
+          } else {
+            sessionStorage.removeItem(sessionKey);
+          }
         }
       }
 
       setIsCheckingPin(false);
     };
 
-    if (user?.id) {
+    if (user?.id && user?.pessoa?.role) {
       checkPinSession();
     }
-  }, [user?.id]);
+  }, [user?.id, user?.pessoa?.role]);
 
   // Handler para sucesso na validação do PIN
   const handlePinSuccess = () => {
@@ -126,7 +143,7 @@ export const FinanceiroPage: React.FC = () => {
 
   // Handler para clique em consulta
   const handleConsultationClick = async (
-    consultation: ConsultationWithPatient
+    consultation: ConsultationWithPatient | { id: string }
   ) => {
     try {
       const appointmentDetails = await fetchAgendamentoById(consultation.id);
@@ -197,10 +214,13 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  // Se não for admin, redirecionar
-  if (user?.pessoa?.role !== 'admin') {
+  // Se não for admin ou profissional, redirecionar
+  if (user?.pessoa?.role !== 'admin' && user?.pessoa?.role !== 'profissional') {
     return null;
   }
+
+  const userRole = user?.pessoa?.role;
+  const isProfessional = userRole === 'profissional';
 
   // Se ainda está verificando PIN
   if (isCheckingPin) {
@@ -213,92 +233,140 @@ export const FinanceiroPage: React.FC = () => {
     );
   }
 
-  // AI dev note: Renderizar página completa sempre, controlar dialog via isOpen
+  // AI dev note: Renderizar versão específica para cada role
   return (
     <>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Financeiro</h1>
           <p className="text-muted-foreground">
-            {isPinValidated
-              ? 'Gestão financeira e faturamento'
-              : 'Área restrita - Autenticação necessária'}
+            {isProfessional
+              ? 'Minhas comissões e consultas'
+              : isPinValidated
+                ? 'Gestão financeira e faturamento'
+                : 'Área restrita - Autenticação necessária'}
           </p>
         </div>
 
-        {/* Conteúdo só aparece após validação do PIN */}
+        {/* Conteúdo - Admin precisa de PIN, Profissional não */}
         {isPinValidated && (
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) =>
-              setActiveTab(
-                value as 'consultas' | 'faturas' | 'grafico' | 'profissionais'
-              )
-            }
-          >
-            <TabsList className="grid w-full grid-cols-4 h-auto">
-              <TabsTrigger value="consultas">Consultas</TabsTrigger>
-              <TabsTrigger value="faturas">Faturas</TabsTrigger>
-              <TabsTrigger value="grafico">Gráfico Anual</TabsTrigger>
-              <TabsTrigger value="profissionais">Profissionais</TabsTrigger>
-            </TabsList>
+          <>
+            {/* Versão Admin */}
+            {!isProfessional && (
+              <Tabs
+                value={activeTabAdmin}
+                onValueChange={(value) =>
+                  setActiveTabAdmin(
+                    value as
+                      | 'consultas'
+                      | 'faturas'
+                      | 'grafico'
+                      | 'profissionais'
+                  )
+                }
+              >
+                <TabsList className="grid w-full grid-cols-4 h-auto">
+                  <TabsTrigger value="consultas">Consultas</TabsTrigger>
+                  <TabsTrigger value="faturas">Faturas</TabsTrigger>
+                  <TabsTrigger value="grafico">Gráfico Anual</TabsTrigger>
+                  <TabsTrigger value="profissionais">Profissionais</TabsTrigger>
+                </TabsList>
 
-            <TabsContent value="consultas" className="space-y-4">
-              <FinancialConsultationsList
-                onConsultationClick={handleConsultationClick}
-              />
-            </TabsContent>
+                <TabsContent value="consultas" className="space-y-4">
+                  <FinancialConsultationsList
+                    onConsultationClick={handleConsultationClick}
+                  />
+                </TabsContent>
 
-            <TabsContent value="faturas" className="space-y-4">
-              <FinancialFaturasList onFaturaClick={handleFaturaClick} />
-            </TabsContent>
+                <TabsContent value="faturas" className="space-y-4">
+                  <FinancialFaturasList onFaturaClick={handleFaturaClick} />
+                </TabsContent>
 
-            <TabsContent value="grafico" className="space-y-4">
-              <FaturamentoChart />
-            </TabsContent>
+                <TabsContent value="grafico" className="space-y-4">
+                  <FaturamentoChart />
+                </TabsContent>
 
-            <TabsContent value="profissionais" className="space-y-4">
-              <FinancialProfessionalReport />
-            </TabsContent>
-          </Tabs>
-        )}
+                <TabsContent value="profissionais" className="space-y-4">
+                  <FinancialProfessionalReport />
+                </TabsContent>
+              </Tabs>
+            )}
 
-        {/* Modal de detalhes do agendamento */}
-        {isPinValidated && (
-          <AppointmentDetailsManager
-            isOpen={isAppointmentDetailsOpen}
-            onClose={handleAppointmentDetailsClose}
-            appointment={selectedAppointmentData}
-            userRole="admin"
-            locaisAtendimento={formData.locaisAtendimento || []}
-            isLoadingLocais={false}
-            onSave={handleAppointmentDetailsSave}
-            onNfeAction={async (appointmentId: string, linkNfe?: string) => {
-              // Implementação de ação de NFe se necessário
-              console.log('NFe action for:', appointmentId, linkNfe);
-            }}
-            onPatientClick={(patientId: string | null) => {
-              if (patientId) {
-                navigate(`/pessoa/${patientId}`);
-              }
-            }}
-            onProfessionalClick={(professionalId: string) => {
-              navigate(`/pessoa/${professionalId}`);
-            }}
-          />
+            {/* Versão Profissional */}
+            {isProfessional && user?.pessoa?.id && (
+              <Tabs
+                value={activeTabProfessional}
+                onValueChange={(value) =>
+                  setActiveTabProfessional(
+                    value as 'resumo' | 'consultas' | 'grafico'
+                  )
+                }
+              >
+                <TabsList className="grid w-full grid-cols-3 h-auto">
+                  <TabsTrigger value="resumo">Resumo</TabsTrigger>
+                  <TabsTrigger value="consultas">Consultas</TabsTrigger>
+                  <TabsTrigger value="grafico">Gráfico Anual</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="resumo" className="space-y-4">
+                  <ProfessionalFinancialSummary
+                    professionalId={user.pessoa.id}
+                  />
+                </TabsContent>
+
+                <TabsContent value="consultas" className="space-y-4">
+                  <ProfessionalFinancialConsultations
+                    professionalId={user.pessoa.id}
+                    onConsultationClick={handleConsultationClick}
+                  />
+                </TabsContent>
+
+                <TabsContent value="grafico" className="space-y-4">
+                  <ProfessionalFaturamentoChart
+                    professionalId={user.pessoa.id}
+                  />
+                </TabsContent>
+              </Tabs>
+            )}
+
+            {/* Modal de detalhes do agendamento */}
+            <AppointmentDetailsManager
+              isOpen={isAppointmentDetailsOpen}
+              onClose={handleAppointmentDetailsClose}
+              appointment={selectedAppointmentData}
+              userRole={userRole as 'admin' | 'profissional'}
+              locaisAtendimento={formData.locaisAtendimento || []}
+              isLoadingLocais={false}
+              onSave={handleAppointmentDetailsSave}
+              onNfeAction={async (appointmentId: string, linkNfe?: string) => {
+                // Implementação de ação de NFe se necessário
+                console.log('NFe action for:', appointmentId, linkNfe);
+              }}
+              onPatientClick={(patientId: string | null) => {
+                if (patientId) {
+                  navigate(`/pessoa/${patientId}`);
+                }
+              }}
+              onProfessionalClick={(professionalId: string) => {
+                navigate(`/pessoa/${professionalId}`);
+              }}
+            />
+          </>
         )}
       </div>
 
-      {/* Dialog de validação de PIN - fecha automaticamente quando isPinValidated = true */}
-      <PinValidationDialog
-        isOpen={!isPinValidated}
-        onClose={() => {
-          navigate('/dashboard');
-        }}
-        onSuccess={handlePinSuccess}
-        title="Acesso ao Financeiro"
-        description="Esta área contém informações sensíveis. Digite seu PIN para continuar."
-      />
+      {/* Dialog de validação de PIN - apenas para admin */}
+      {!isProfessional && (
+        <PinValidationDialog
+          isOpen={!isPinValidated}
+          onClose={() => {
+            navigate('/dashboard');
+          }}
+          onSuccess={handlePinSuccess}
+          title="Acesso ao Financeiro"
+          description="Esta área contém informações sensíveis. Digite seu PIN para continuar."
+        />
+      )}
     </>
   );
 };

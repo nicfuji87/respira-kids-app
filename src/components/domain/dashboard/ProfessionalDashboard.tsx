@@ -5,7 +5,6 @@ import {
   AppointmentsList,
   ConsultationsToEvolve,
   MaterialRequestCard,
-  FaturamentoChart,
 } from '@/components/composed';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -18,6 +17,7 @@ import type {
 
 // AI dev note: ProfessionalDashboard - Componente Domain que combina Composed
 // Dashboard específico para role profissional com dados reais do Supabase
+// Gráfico de faturamento foi movido para Financeiro > Gráfico Anual
 
 interface ProfessionalDashboardProps {
   professionalId: string;
@@ -112,9 +112,6 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
           error={error}
         />
 
-        {/* Gráfico de faturamento */}
-        <FaturamentoChart />
-
         {/* Grid principal */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Próximos agendamentos */}
@@ -125,6 +122,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
             onAppointmentClick={onAppointmentClick}
             userRole={userRole}
             maxItems={5}
+            showValues={false}
           />
 
           {/* Solicitação de material */}
@@ -147,6 +145,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
             onCreateEvolutionClick={onCreateEvolutionClick}
             userRole={userRole}
             maxItems={5} // Mostrar 5 consultas inicialmente, com botão "Ver mais"
+            showValues={false}
           />
         </div>
 
