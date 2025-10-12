@@ -233,7 +233,6 @@ Deno.serve(async (req: Request) => {
           bairro: data.endereco.bairro,
           cidade: data.endereco.cidade,
           estado: data.endereco.estado,
-          ativo: true,
         })
         .select('id')
         .single();
