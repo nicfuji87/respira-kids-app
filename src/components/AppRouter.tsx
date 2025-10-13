@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigation } from '@/hooks/useNavigation';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { ResponsiveLayout } from '@/components/templates/dashboard/ResponsiveLayout';
 import { hasAccessToRoute, type UserRole } from '@/lib/navigation';
 import { signOut } from '@/lib/auth';
@@ -75,12 +76,14 @@ export const AppRouter: React.FC = () => {
   const { currentPath, navigateTo, breadcrumbItems } =
     useNavigation(validUserRole);
 
+  // AI dev note: Inicializar notificações push para usuários autenticados
+  // Pede permissão automaticamente e registra token no Firebase
+  usePushNotifications();
+
   // AI dev note: Só mostrar loading se realmente estiver carregando pela primeira vez
   // Se user existe e canAccessDashboard=true, não precisamos aguardar userRole para navegação
-  
 
   if (loading && !canAccessDashboard) {
-    
     return (
       <div className="min-h-screen bg-gradient-to-br from-bege-fundo to-background flex items-center justify-center p-4">
         <div className="text-center space-y-4">
@@ -94,7 +97,6 @@ export const AppRouter: React.FC = () => {
   }
 
   // AI dev note: Log adicional para debug de navegação
-  
 
   const handleLogout = async () => {
     try {
@@ -134,8 +136,11 @@ export const AppRouter: React.FC = () => {
         <Route path="/dashboard" element={<DashboardPage />} />
 
         {/* Google Calendar OAuth Callback - não requer autenticação adicional */}
-        <Route path="/auth/google/callback" element={<GoogleCalendarCallback />} />
-        
+        <Route
+          path="/auth/google/callback"
+          element={<GoogleCalendarCallback />}
+        />
+
         {/* Debug Google OAuth */}
         <Route path="/debug/google-oauth" element={<GoogleOAuthDebugPage />} />
 

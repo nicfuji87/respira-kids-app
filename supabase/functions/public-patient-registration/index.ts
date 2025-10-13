@@ -254,13 +254,21 @@ Deno.serve(async (req: Request) => {
     // ============================================
     let responsavelLegalId: string;
 
-    if (data.existingPersonId && data.existingUserData) {
+    // AI dev note: Verificar se há pessoa existente (pode vir em existingPersonId ou existingUserData.id)
+    const existingId = data.existingPersonId || data.existingUserData?.id;
+
+    if (existingId && data.existingUserData) {
       // Usar pessoa existente como responsável legal
-      responsavelLegalId = data.existingPersonId;
+      responsavelLegalId = existingId;
       console.log(
         '✅ [STEP 3] Usando pessoa existente como responsável legal:',
         responsavelLegalId
       );
+      console.log('📋 [STEP 3] Dados do usuário existente:', {
+        nome: data.existingUserData.nome,
+        email: data.existingUserData.email,
+        telefone: data.existingUserData.telefone,
+      });
 
       // Atualizar endereço se necessário
       console.log(
