@@ -15,6 +15,8 @@ import {
   Loader2,
   Stethoscope,
   Shield,
+  Clock,
+  SortAsc,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -31,6 +33,8 @@ export interface PatientsListProps {
   onPatientSelect?: (patientId: string) => void;
 }
 
+type SortOption = 'nome' | 'updated_at';
+
 export const PatientsList: React.FC<PatientsListProps> = ({
   className,
   onPatientSelect,
@@ -44,6 +48,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   const [totalPatients, setTotalPatients] = useState(0);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>('nome');
 
   const navigate = useNavigate();
   const ITEMS_PER_PAGE = 20;
@@ -53,7 +58,12 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
   // AI dev note: Função para carregar pacientes com debounce
   const loadPatients = useCallback(
-    async (search: string, page: number, letter?: string | null) => {
+    async (
+      search: string,
+      page: number,
+      letter?: string | null,
+      sort?: SortOption
+    ) => {
       try {
         if (page === 1) {
           setSearchLoading(true);
@@ -68,7 +78,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
           search,
           page,
           ITEMS_PER_PAGE,
-          letter || undefined
+          letter || undefined,
+          sort || 'nome'
         );
 
         if (response.success && response.data) {
@@ -93,25 +104,25 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
   // AI dev note: Carregar inicial
   useEffect(() => {
-    loadPatients('', 1, selectedLetter);
-  }, [loadPatients, selectedLetter]);
+    loadPatients('', 1, selectedLetter, sortBy);
+  }, [loadPatients, selectedLetter, sortBy]);
 
   // AI dev note: Debounce para busca - removido currentPage da dependência
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setCurrentPage(1); // Sempre resetar para página 1 ao buscar
-      loadPatients(searchTerm, 1, selectedLetter);
+      loadPatients(searchTerm, 1, selectedLetter, sortBy);
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, selectedLetter, loadPatients]);
+  }, [searchTerm, selectedLetter, sortBy, loadPatients]);
 
   // AI dev note: Carregar pacientes quando a página muda
   useEffect(() => {
     if (currentPage > 1) {
-      loadPatients(searchTerm, currentPage, selectedLetter);
+      loadPatients(searchTerm, currentPage, selectedLetter, sortBy);
     }
-  }, [currentPage, loadPatients, searchTerm, selectedLetter]);
+  }, [currentPage, loadPatients, searchTerm, selectedLetter, sortBy]);
 
   // AI dev note: Função para navegar para detalhes do paciente
   const handlePatientClick = (patientId: string) => {
@@ -207,51 +218,93 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
   return (
     <div className={cn('space-y-6', className)}>
-      {/* Campo de busca com autocomplete */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
-        <Input
-          type="text"
-          placeholder="Buscar pacientes por nome, email, telefone ou CPF..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 pr-4"
-        />
-        {searchLoading && (
-          <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-        )}
-      </div>
-
-      {/* Navegação alfabética */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-1">
-          <Button
-            variant={selectedLetter === null ? 'default' : 'outline'}
-            size="sm"
-            onClick={clearLetterFilter}
-            className="h-8 w-12 text-xs"
-          >
-            Todos
-          </Button>
-          {ALPHABET.map((letter) => (
-            <Button
-              key={letter}
-              variant={selectedLetter === letter ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleLetterClick(letter)}
-              className="h-8 w-8 text-xs p-0"
-            >
-              {letter}
-            </Button>
-          ))}
+      {/* Campo de busca e filtros */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        {/* Campo de busca com autocomplete */}
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+          <Input
+            type="text"
+            placeholder="Buscar pacientes por nome, email, telefone ou CPF..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 pr-4"
+          />
+          {searchLoading && (
+            <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
         </div>
 
-        {selectedLetter && (
-          <div className="text-sm text-muted-foreground">
-            Mostrando pacientes que começam com "{selectedLetter}"
-          </div>
-        )}
+        {/* Filtro de ordenação */}
+        <div className="flex gap-2">
+          <Button
+            variant={sortBy === 'nome' ? 'default' : 'outline'}
+            size="default"
+            onClick={() => {
+              setSortBy('nome');
+              setCurrentPage(1);
+            }}
+            className="flex items-center gap-2"
+          >
+            <SortAsc className="h-4 w-4" />
+            <span className="hidden sm:inline">Alfabético</span>
+          </Button>
+          <Button
+            variant={sortBy === 'updated_at' ? 'default' : 'outline'}
+            size="default"
+            onClick={() => {
+              setSortBy('updated_at');
+              setSelectedLetter(null); // Limpar filtro de letra ao ordenar por data
+              setCurrentPage(1);
+            }}
+            className="flex items-center gap-2"
+          >
+            <Clock className="h-4 w-4" />
+            <span className="hidden sm:inline">Últimos atualizados</span>
+          </Button>
+        </div>
       </div>
+
+      {/* Navegação alfabética - apenas quando ordenado alfabeticamente */}
+      {sortBy === 'nome' && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-1">
+            <Button
+              variant={selectedLetter === null ? 'default' : 'outline'}
+              size="sm"
+              onClick={clearLetterFilter}
+              className="h-8 w-12 text-xs"
+            >
+              Todos
+            </Button>
+            {ALPHABET.map((letter) => (
+              <Button
+                key={letter}
+                variant={selectedLetter === letter ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleLetterClick(letter)}
+                className="h-8 w-8 text-xs p-0"
+              >
+                {letter}
+              </Button>
+            ))}
+          </div>
+
+          {selectedLetter && (
+            <div className="text-sm text-muted-foreground">
+              Mostrando pacientes que começam com "{selectedLetter}"
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Indicador de ordenação por últimos atualizados */}
+      {sortBy === 'updated_at' && (
+        <div className="text-sm text-muted-foreground flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          <span>Mostrando pacientes ordenados por últimos atualizados</span>
+        </div>
+      )}
 
       {/* Informações de resultados */}
       {!loading && !error && (

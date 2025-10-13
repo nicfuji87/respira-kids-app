@@ -920,7 +920,8 @@ export async function fetchPatients(
   searchTerm: string = '',
   page: number = 1,
   limit: number = 20,
-  startWithLetter?: string
+  startWithLetter?: string,
+  sortBy: 'nome' | 'updated_at' = 'nome'
 ): Promise<ApiResponse<PaginatedUsuarios>> {
   try {
     // AI dev note: Verificação de autenticação
@@ -947,8 +948,14 @@ export async function fetchPatients(
       .from('pacientes_com_responsaveis_view')
       .select('*')
       .eq('tipo_pessoa_codigo', 'paciente')
-      .eq('ativo', true)
-      .order('nome', { ascending: true });
+      .eq('ativo', true);
+
+    // AI dev note: Aplicar ordenação baseada no filtro selecionado
+    if (sortBy === 'updated_at') {
+      query = query.order('updated_at', { ascending: false });
+    } else {
+      query = query.order('nome', { ascending: true });
+    }
 
     // AI dev note: Aplicar filtro por letra inicial no servidor
     if (startWithLetter && startWithLetter.length === 1) {
