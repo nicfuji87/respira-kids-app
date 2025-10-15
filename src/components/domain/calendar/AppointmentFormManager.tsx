@@ -291,6 +291,10 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       (value: string) => {
         updateField('data_hora', value);
 
+        // AI dev note: Resetar confirmações ao mudar data para evitar avisos repetitivos
+        setPastDateConfirmed(false);
+        setFutureWeekConfirmed(false);
+
         if (formData.profissional_id) {
           checkScheduleConflicts(value, formData.profissional_id);
         }

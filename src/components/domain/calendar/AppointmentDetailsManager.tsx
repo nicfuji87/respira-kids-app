@@ -163,6 +163,24 @@ export const AppointmentDetailsManager =
       const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
       const [futureWeekConfirmed, setFutureWeekConfirmed] = useState(false);
 
+      // AI dev note: Regra de negócio - bloquear edição de data/hora quando:
+      // 1. Status da consulta = 'finalizado' OU 'cancelado'
+      // 2. Status de pagamento = 'pago'
+      const isEditingBlocked = React.useMemo(() => {
+        if (!appointment) return false;
+
+        const statusConsulta =
+          appointment.status_consulta_codigo?.toLowerCase() || '';
+        const statusPagamento =
+          appointment.status_pagamento_codigo?.toLowerCase() || '';
+
+        return (
+          statusConsulta === 'finalizado' ||
+          statusConsulta === 'cancelado' ||
+          statusPagamento === 'pago'
+        );
+      }, [appointment]);
+
       // Função wrapper para emitir NFe (apenas para casos de emissão)
       const handleEmitirNfe = async () => {
         const statusLower =
@@ -664,7 +682,19 @@ export const AppointmentDetailsManager =
                     <DatePicker
                       value={formData.dataHora}
                       onChange={(value) => handleInputChange('dataHora', value)}
+                      disabled={isEditingBlocked}
                     />
+                    {isEditingBlocked && (
+                      <p className="text-xs text-muted-foreground">
+                        Data não pode ser alterada (consulta{' '}
+                        {appointment.status_consulta_codigo === 'finalizado'
+                          ? 'finalizada'
+                          : appointment.status_consulta_codigo === 'cancelado'
+                            ? 'cancelada'
+                            : 'com pagamento confirmado'}
+                        )
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="time">Horário</Label>
@@ -676,6 +706,7 @@ export const AppointmentDetailsManager =
                         handleInputChange('timeHora', e.target.value)
                       }
                       className="h-9"
+                      disabled={isEditingBlocked}
                     />
                   </div>
                 </div>

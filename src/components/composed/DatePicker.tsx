@@ -20,6 +20,8 @@ interface DatePickerProps {
   className?: string;
   inputClassName?: string;
   'aria-describedby'?: string;
+  disableFuture?: boolean; // Bloqueia datas futuras (útil para data de nascimento)
+  disablePast?: boolean; // Bloqueia datas passadas (útil para agendamentos)
 }
 
 export const DatePicker = React.memo<DatePickerProps>(
@@ -31,6 +33,8 @@ export const DatePicker = React.memo<DatePickerProps>(
     className,
     inputClassName,
     'aria-describedby': ariaDescribedBy,
+    disableFuture = false,
+    disablePast = false,
   }) => {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -78,7 +82,15 @@ export const DatePicker = React.memo<DatePickerProps>(
               mode="single"
               selected={selectedDate}
               onSelect={handleDateSelect}
-              disabled={(date) => date > new Date()}
+              disabled={(date) => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                if (disableFuture && date > today) return true;
+                if (disablePast && date < today) return true;
+
+                return false;
+              }}
               initialFocus
             />
           </PopoverContent>
