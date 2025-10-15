@@ -12,6 +12,8 @@ import {
 // AI dev note: AddressStep - Etapa de cadastro de endereço do responsável
 // Integra com ViaCEP para busca automática por CEP
 // Verifica se endereço já existe no banco (UNIQUE constraint no CEP)
+// IMPORTANTE: Após buscar o CEP, os campos logradouro/bairro/cidade/estado são bloqueados
+// Apenas número e complemento permanecem editáveis (evita duplicação de CEPs no banco)
 
 export interface AddressData {
   cep: string;
@@ -236,7 +238,7 @@ export const AddressStep = React.memo<AddressStepProps>(
             {cepFound && (
               <p className="text-sm text-green-600 dark:text-green-400 flex items-center">
                 <Check className="w-4 h-4 mr-1" />
-                Endereço encontrado
+                Endereço encontrado. Informe apenas o número e complemento.
               </p>
             )}
           </div>
@@ -259,7 +261,7 @@ export const AddressStep = React.memo<AddressStepProps>(
                 if (errors.logradouro)
                   setErrors((prev) => ({ ...prev, logradouro: '' }));
               }}
-              disabled={isSearchingCep}
+              disabled={isSearchingCep || cepFound}
               className={cn('h-11', errors.logradouro && 'border-destructive')}
             />
             {errors.logradouro && (
@@ -285,7 +287,7 @@ export const AddressStep = React.memo<AddressStepProps>(
                 if (errors.bairro)
                   setErrors((prev) => ({ ...prev, bairro: '' }));
               }}
-              disabled={isSearchingCep}
+              disabled={isSearchingCep || cepFound}
               className={cn('h-11', errors.bairro && 'border-destructive')}
             />
             {errors.bairro && (
@@ -312,7 +314,7 @@ export const AddressStep = React.memo<AddressStepProps>(
                   if (errors.cidade)
                     setErrors((prev) => ({ ...prev, cidade: '' }));
                 }}
-                disabled={isSearchingCep}
+                disabled={isSearchingCep || cepFound}
                 className={cn('h-11', errors.cidade && 'border-destructive')}
               />
               {errors.cidade && (
@@ -337,7 +339,7 @@ export const AddressStep = React.memo<AddressStepProps>(
                   if (errors.estado)
                     setErrors((prev) => ({ ...prev, estado: '' }));
                 }}
-                disabled={isSearchingCep}
+                disabled={isSearchingCep || cepFound}
                 maxLength={2}
                 className={cn(
                   'h-11 text-center',

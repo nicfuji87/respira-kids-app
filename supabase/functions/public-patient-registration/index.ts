@@ -201,15 +201,13 @@ Deno.serve(async (req: Request) => {
 
     let enderecoId: string;
 
+    // AI dev note: Buscar endereço APENAS por CEP (constraint UNIQUE no CEP)
+    // Campos logradouro/bairro/cidade/estado são bloqueados no frontend após busca
     const { data: enderecoExistente, error: errorEnderecoSearch } =
       await supabase
         .from('enderecos')
         .select('id')
         .eq('cep', cepNormalizado)
-        .eq('logradouro', data.endereco.logradouro)
-        .eq('bairro', data.endereco.bairro)
-        .eq('cidade', data.endereco.cidade)
-        .eq('estado', data.endereco.estado)
         .maybeSingle();
 
     if (errorEnderecoSearch) {
@@ -222,7 +220,7 @@ Deno.serve(async (req: Request) => {
 
     if (enderecoExistente) {
       enderecoId = enderecoExistente.id;
-      console.log('✅ [STEP 2] Endereço já existe:', enderecoId);
+      console.log('✅ [STEP 2] Endereço já existe (reutilizando):', enderecoId);
     } else {
       console.log('📋 [STEP 2] Criando novo endereço...');
       const { data: novoEndereco, error: errorEnderecoInsert } = await supabase
