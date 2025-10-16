@@ -34,6 +34,7 @@ const eventLabels: Record<string, string> = {
   appointment_created: 'Agendamento Criado',
   evolution_created: 'Evolução Criada',
   webhook_failed: 'Webhook Falhou',
+  registration_error: 'Erro no Cadastro',
 };
 
 export const WebhooksList = React.memo<WebhooksListProps>(

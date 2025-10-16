@@ -27,6 +27,7 @@ const eventOptions = [
   { value: 'appointment_created', label: 'Agendamento Criado' },
   { value: 'evolution_created', label: 'Evolução Criada' },
   { value: 'webhook_failed', label: 'Webhook Falhou' },
+  { value: 'registration_error', label: 'Erro no Cadastro' },
 ];
 
 export const WebhookForm = React.memo<WebhookFormProps>(

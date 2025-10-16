@@ -13,6 +13,7 @@ import { UserManagement } from '@/components/domain/users';
 import { IntegrationsTemplate } from '@/components/templates/integrations';
 import { PinConfiguration } from './PinConfiguration';
 import { SystemSettingsTemplate } from '@/components/templates/system/SystemSettingsTemplate';
+import { RegistrationLogsManagement } from '@/components/domain/admin/RegistrationLogsManagement';
 import {
   User,
   Building,
@@ -22,6 +23,7 @@ import {
   Package,
   Users,
   Shield,
+  ScrollText,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/navigation';
 
@@ -119,6 +121,13 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
         roles: ['admin'],
         icon: Users,
         content: <UserManagement />,
+      },
+      {
+        id: 'logs',
+        label: 'Logs',
+        roles: ['admin'],
+        icon: ScrollText,
+        content: <RegistrationLogsManagement />,
       },
     ];
 

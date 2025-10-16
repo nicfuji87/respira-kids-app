@@ -112,7 +112,12 @@ Deno.serve(async (req: Request) => {
       data: FinalizationData;
     };
 
+    // AI dev note: Capturar sessionId para logging (opcional, vem do frontend)
+    const sessionId = (data as { sessionId?: string })?.sessionId || 'unknown';
+    const startTime = Date.now();
+
     console.log('🚀 [PUBLIC-PATIENT-REGISTRATION] Iniciando cadastro público');
+    console.log('📋 [LOGGING] Session ID:', sessionId);
     console.log('📋 [STEP 0] Ação:', action);
     console.log('🔍 [DEBUG] data é null?', data === null);
     console.log('🔍 [DEBUG] data é undefined?', data === undefined);
@@ -838,6 +843,23 @@ Deno.serve(async (req: Request) => {
       message: 'Cadastro realizado com sucesso!',
     };
 
+    // AI dev note: Log de sucesso (não-bloqueante, não afeta resposta)
+    try {
+      await supabase.from('public_registration_api_logs').insert({
+        session_id: sessionId,
+        http_status: 200,
+        duration_ms: Date.now() - startTime,
+        edge_function_version: 33,
+        paciente_id: pacienteId,
+        responsavel_legal_id: responsavelLegalId,
+        responsavel_financeiro_id: responsavelFinanceiroId,
+        contrato_id: contratoId,
+      });
+    } catch (logError) {
+      // Nunca falhar por erro de logging
+      console.warn('⚠️ [LOGGING] Erro ao salvar log (ignorado):', logError);
+    }
+
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
@@ -861,6 +883,57 @@ Deno.serve(async (req: Request) => {
           ? `${error.message}\n\nStack: ${error.stack}`
           : String(error),
     };
+
+    // AI dev note: Log de erro (não-bloqueante, não afeta resposta)
+    try {
+      await supabase.from('public_registration_api_logs').insert({
+        session_id: sessionId,
+        http_status: 500,
+        duration_ms: Date.now() - startTime,
+        edge_function_version: 34,
+        error_type: 'database_error', // Classificar melhor se necessário
+        error_details: {
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+      });
+    } catch (logError) {
+      // Nunca falhar por erro de logging
+      console.warn(
+        '⚠️ [LOGGING] Erro ao salvar log de erro (ignorado):',
+        logError
+      );
+    }
+
+    // AI dev note: Inserir evento de erro na webhook_queue (para alertas)
+    try {
+      await supabase.from('webhook_queue').insert({
+        evento: 'registration_error',
+        payload: {
+          tipo: 'registration_error',
+          session_id: sessionId,
+          timestamp: new Date().toISOString(),
+          error: {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+          metadata: {
+            ip_address: req.headers.get('x-forwarded-for'),
+            user_agent: req.headers.get('user-agent'),
+            edge_function_version: 34,
+          },
+        },
+        status: 'pendente',
+        tentativas: 0,
+        max_tentativas: 3,
+      });
+    } catch (webhookError) {
+      // Nunca falhar por erro de webhook
+      console.warn(
+        '⚠️ [WEBHOOK] Erro ao inserir webhook de erro (ignorado):',
+        webhookError
+      );
+    }
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
