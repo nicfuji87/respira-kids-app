@@ -544,7 +544,7 @@ export async function editarFatura(
   try {
     console.log('📝 Iniciando edição da fatura:', faturaId);
 
-    // Validar se usuário tem permissão (apenas admin pode editar faturas)
+    // Validar se usuário tem permissão (admin ou secretaria podem editar faturas)
     if (userId !== 'system') {
       const { data: userData, error: userError } = await supabase
         .from('pessoas')
@@ -552,14 +552,18 @@ export async function editarFatura(
         .eq('id', userId)
         .single();
 
-      if (userError || !userData || userData.role !== 'admin') {
+      if (
+        userError ||
+        !userData ||
+        !['admin', 'secretaria'].includes(userData.role)
+      ) {
         console.error(
           '❌ Usuário sem permissão para editar faturas:',
           userData?.role
         );
         return {
           success: false,
-          error: 'Apenas administradores podem editar faturas',
+          error: 'Apenas administradores e secretárias podem editar faturas',
         };
       }
     }
@@ -871,7 +875,7 @@ export async function excluirFatura(
   try {
     console.log('🗑️ Iniciando exclusão da fatura:', faturaId);
 
-    // Validar se usuário tem permissão (apenas admin pode excluir faturas)
+    // Validar se usuário tem permissão (admin ou secretaria podem excluir faturas)
     if (userId !== 'system') {
       const { data: userData, error: userError } = await supabase
         .from('pessoas')
@@ -879,14 +883,18 @@ export async function excluirFatura(
         .eq('id', userId)
         .single();
 
-      if (userError || !userData || userData.role !== 'admin') {
+      if (
+        userError ||
+        !userData ||
+        !['admin', 'secretaria'].includes(userData.role)
+      ) {
         console.error(
           '❌ Usuário sem permissão para excluir faturas:',
           userData?.role
         );
         return {
           success: false,
-          error: 'Apenas administradores podem excluir faturas',
+          error: 'Apenas administradores e secretárias podem excluir faturas',
         };
       }
     }
@@ -1034,7 +1042,7 @@ export async function emitirNfeFatura(
   try {
     console.log('📄 Iniciando emissão de NFe para fatura:', faturaId);
 
-    // Validar se usuário tem permissão (apenas admin pode emitir NFe)
+    // Validar se usuário tem permissão (admin ou secretaria podem emitir NFe)
     if (userId !== 'system') {
       const { data: userData, error: userError } = await supabase
         .from('pessoas')
@@ -1042,14 +1050,19 @@ export async function emitirNfeFatura(
         .eq('id', userId)
         .single();
 
-      if (userError || !userData || userData.role !== 'admin') {
+      if (
+        userError ||
+        !userData ||
+        !['admin', 'secretaria'].includes(userData.role)
+      ) {
         console.error(
           '❌ Usuário sem permissão para emitir NFe:',
           userData?.role
         );
         return {
           success: false,
-          error: 'Apenas administradores podem emitir notas fiscais',
+          error:
+            'Apenas administradores e secretárias podem emitir notas fiscais',
         };
       }
     }

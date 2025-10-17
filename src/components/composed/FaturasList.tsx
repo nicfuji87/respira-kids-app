@@ -388,42 +388,44 @@ const FaturaItem = React.memo<{
               )}
             </div>
 
-            {/* Botões de ação para admin */}
-            {userRole === 'admin' && fatura.status !== 'pago' && (
-              <div className="flex items-center gap-2">
-                {/* Botão Editar */}
-                {['pendente', 'atrasado'].includes(fatura.status) && onEdit && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto p-1 text-xs text-orange-600 hover:text-orange-800"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit(fatura);
-                    }}
-                    title="Editar fatura"
-                  >
-                    Editar
-                  </Button>
-                )}
+            {/* Botões de ação para admin e secretaria */}
+            {(userRole === 'admin' || userRole === 'secretaria') &&
+              fatura.status !== 'pago' && (
+                <div className="flex items-center gap-2">
+                  {/* Botão Editar */}
+                  {['pendente', 'atrasado'].includes(fatura.status) &&
+                    onEdit && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto p-1 text-xs text-orange-600 hover:text-orange-800"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(fatura);
+                        }}
+                        title="Editar fatura"
+                      >
+                        Editar
+                      </Button>
+                    )}
 
-                {/* Botão Excluir */}
-                {onDelete && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto p-1 text-xs text-red-600 hover:text-red-800"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(fatura);
-                    }}
-                    title="Excluir fatura"
-                  >
-                    Excluir
-                  </Button>
-                )}
-              </div>
-            )}
+                  {/* Botão Excluir */}
+                  {onDelete && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-1 text-xs text-red-600 hover:text-red-800"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(fatura);
+                      }}
+                      title="Excluir fatura"
+                    >
+                      Excluir
+                    </Button>
+                  )}
+                </div>
+              )}
           </div>
         </div>
       </div>

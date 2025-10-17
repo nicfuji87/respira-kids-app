@@ -62,14 +62,18 @@ export const ProfissionalCalendarTemplate =
       onPatientClick,
       onProfessionalClick,
     }) => {
-      // AI dev note: Estados para filtros completos
+      // AI dev note: Estados para filtros completos - suporta multi-seleção
       const [selectedPatient, setSelectedPatient] = useState<string>('');
-      const [selectedTipoServico, setSelectedTipoServico] =
-        useState<string>('all');
-      const [selectedStatusConsulta, setSelectedStatusConsulta] =
-        useState<string>('all');
-      const [selectedStatusPagamento, setSelectedStatusPagamento] =
-        useState<string>('all');
+      const [selectedTipoServico, setSelectedTipoServico] = useState<string[]>(
+        []
+      );
+      const [selectedLocal, setSelectedLocal] = useState<string[]>([]);
+      const [selectedStatusConsulta, setSelectedStatusConsulta] = useState<
+        string[]
+      >([]);
+      const [selectedStatusPagamento, setSelectedStatusPagamento] = useState<
+        string[]
+      >([]);
 
       // AI dev note: Filtrar eventos do profissional com todos os filtros disponíveis
       const getFilteredEvents = useMemo(() => {
@@ -97,36 +101,56 @@ export const ProfissionalCalendarTemplate =
           });
         }
 
-        // AI dev note: Filtrar por tipo de serviço
-        if (selectedTipoServico && selectedTipoServico !== 'all') {
+        // AI dev note: Filtrar por tipo de serviço (multi-seleção)
+        if (selectedTipoServico.length > 0) {
           filteredEvents = filteredEvents.filter((event) => {
             const metadata = event.metadata as { tipoServicoId?: string };
-            return metadata?.tipoServicoId === selectedTipoServico;
+            return (
+              metadata?.tipoServicoId &&
+              selectedTipoServico.includes(metadata.tipoServicoId)
+            );
           });
         }
 
-        // AI dev note: Filtrar por status de consulta
-        if (selectedStatusConsulta && selectedStatusConsulta !== 'all') {
+        // AI dev note: Filtrar por local de atendimento (multi-seleção)
+        if (selectedLocal.length > 0) {
+          filteredEvents = filteredEvents.filter((event) => {
+            const metadata = event.metadata as {
+              appointmentData?: { local_id?: string };
+            };
+            return (
+              metadata?.appointmentData?.local_id &&
+              selectedLocal.includes(metadata.appointmentData.local_id)
+            );
+          });
+        }
+
+        // AI dev note: Filtrar por status de consulta (multi-seleção)
+        if (selectedStatusConsulta.length > 0) {
           filteredEvents = filteredEvents.filter((event) => {
             const metadata = event.metadata as {
               appointmentData?: { status_consulta_id?: string };
             };
             return (
-              metadata?.appointmentData?.status_consulta_id ===
-              selectedStatusConsulta
+              metadata?.appointmentData?.status_consulta_id &&
+              selectedStatusConsulta.includes(
+                metadata.appointmentData.status_consulta_id
+              )
             );
           });
         }
 
-        // AI dev note: Filtrar por status de pagamento
-        if (selectedStatusPagamento && selectedStatusPagamento !== 'all') {
+        // AI dev note: Filtrar por status de pagamento (multi-seleção)
+        if (selectedStatusPagamento.length > 0) {
           filteredEvents = filteredEvents.filter((event) => {
             const metadata = event.metadata as {
               appointmentData?: { status_pagamento_id?: string };
             };
             return (
-              metadata?.appointmentData?.status_pagamento_id ===
-              selectedStatusPagamento
+              metadata?.appointmentData?.status_pagamento_id &&
+              selectedStatusPagamento.includes(
+                metadata.appointmentData.status_pagamento_id
+              )
             );
           });
         }
@@ -139,6 +163,7 @@ export const ProfissionalCalendarTemplate =
         currentUser.email,
         selectedPatient,
         selectedTipoServico,
+        selectedLocal,
         selectedStatusConsulta,
         selectedStatusPagamento,
       ]);
@@ -163,9 +188,10 @@ export const ProfissionalCalendarTemplate =
       // AI dev note: Função para limpar todos os filtros
       const clearFilters = () => {
         setSelectedPatient('');
-        setSelectedTipoServico('all');
-        setSelectedStatusConsulta('all');
-        setSelectedStatusPagamento('all');
+        setSelectedTipoServico([]);
+        setSelectedLocal([]);
+        setSelectedStatusConsulta([]);
+        setSelectedStatusPagamento([]);
       };
 
       return (
@@ -180,13 +206,23 @@ export const ProfissionalCalendarTemplate =
             selectedProfessional="all"
             selectedPatient={selectedPatient}
             selectedTipoServico={selectedTipoServico}
+            selectedLocal={selectedLocal}
             selectedStatusConsulta={selectedStatusConsulta}
             selectedStatusPagamento={selectedStatusPagamento}
             onProfessionalChange={() => {}}
             onPatientChange={setSelectedPatient}
-            onTipoServicoChange={setSelectedTipoServico}
-            onStatusConsultaChange={setSelectedStatusConsulta}
-            onStatusPagamentoChange={setSelectedStatusPagamento}
+            onTipoServicoChange={(value) =>
+              setSelectedTipoServico(Array.isArray(value) ? value : [])
+            }
+            onLocalChange={(value) =>
+              setSelectedLocal(Array.isArray(value) ? value : [])
+            }
+            onStatusConsultaChange={(value) =>
+              setSelectedStatusConsulta(Array.isArray(value) ? value : [])
+            }
+            onStatusPagamentoChange={(value) =>
+              setSelectedStatusPagamento(Array.isArray(value) ? value : [])
+            }
             onClearFilters={clearFilters}
             showProfessionalFilter={false}
             eventCount={getFilteredEvents.length}

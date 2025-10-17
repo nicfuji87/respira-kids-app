@@ -64,16 +64,20 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     onPatientClick,
     onProfessionalClick,
   }) => {
-    // AI dev note: Estados para filtros do admin
+    // AI dev note: Estados para filtros do admin - suporta multi-seleção
     const [selectedProfessional, setSelectedProfessional] =
       useState<string>('all');
     const [selectedPatient, setSelectedPatient] = useState<string>('');
-    const [selectedTipoServico, setSelectedTipoServico] =
-      useState<string>('all');
-    const [selectedStatusConsulta, setSelectedStatusConsulta] =
-      useState<string>('all');
-    const [selectedStatusPagamento, setSelectedStatusPagamento] =
-      useState<string>('all');
+    const [selectedTipoServico, setSelectedTipoServico] = useState<string[]>(
+      []
+    );
+    const [selectedLocal, setSelectedLocal] = useState<string[]>([]);
+    const [selectedStatusConsulta, setSelectedStatusConsulta] = useState<
+      string[]
+    >([]);
+    const [selectedStatusPagamento, setSelectedStatusPagamento] = useState<
+      string[]
+    >([]);
 
     const getFilteredEvents = useMemo(() => {
       let filteredEvents = [...events];
@@ -94,36 +98,56 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
         });
       }
 
-      // AI dev note: Filtrar por tipo de serviço
-      if (selectedTipoServico && selectedTipoServico !== 'all') {
+      // AI dev note: Filtrar por tipo de serviço (multi-seleção)
+      if (selectedTipoServico.length > 0) {
         filteredEvents = filteredEvents.filter((event) => {
           const metadata = event.metadata as { tipoServicoId?: string };
-          return metadata?.tipoServicoId === selectedTipoServico;
+          return (
+            metadata?.tipoServicoId &&
+            selectedTipoServico.includes(metadata.tipoServicoId)
+          );
         });
       }
 
-      // AI dev note: Filtrar por status de consulta
-      if (selectedStatusConsulta && selectedStatusConsulta !== 'all') {
+      // AI dev note: Filtrar por local de atendimento (multi-seleção)
+      if (selectedLocal.length > 0) {
+        filteredEvents = filteredEvents.filter((event) => {
+          const metadata = event.metadata as {
+            appointmentData?: { local_id?: string };
+          };
+          return (
+            metadata?.appointmentData?.local_id &&
+            selectedLocal.includes(metadata.appointmentData.local_id)
+          );
+        });
+      }
+
+      // AI dev note: Filtrar por status de consulta (multi-seleção)
+      if (selectedStatusConsulta.length > 0) {
         filteredEvents = filteredEvents.filter((event) => {
           const metadata = event.metadata as {
             appointmentData?: { status_consulta_id?: string };
           };
           return (
-            metadata?.appointmentData?.status_consulta_id ===
-            selectedStatusConsulta
+            metadata?.appointmentData?.status_consulta_id &&
+            selectedStatusConsulta.includes(
+              metadata.appointmentData.status_consulta_id
+            )
           );
         });
       }
 
-      // AI dev note: Filtrar por status de pagamento
-      if (selectedStatusPagamento && selectedStatusPagamento !== 'all') {
+      // AI dev note: Filtrar por status de pagamento (multi-seleção)
+      if (selectedStatusPagamento.length > 0) {
         filteredEvents = filteredEvents.filter((event) => {
           const metadata = event.metadata as {
             appointmentData?: { status_pagamento_id?: string };
           };
           return (
-            metadata?.appointmentData?.status_pagamento_id ===
-            selectedStatusPagamento
+            metadata?.appointmentData?.status_pagamento_id &&
+            selectedStatusPagamento.includes(
+              metadata.appointmentData.status_pagamento_id
+            )
           );
         });
       }
@@ -160,6 +184,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
       selectedProfessional,
       selectedPatient,
       selectedTipoServico,
+      selectedLocal,
       selectedStatusConsulta,
       selectedStatusPagamento,
       showAllProfessionals,
@@ -185,9 +210,10 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     const clearFilters = () => {
       setSelectedProfessional('all');
       setSelectedPatient('');
-      setSelectedTipoServico('all');
-      setSelectedStatusConsulta('all');
-      setSelectedStatusPagamento('all');
+      setSelectedTipoServico([]);
+      setSelectedLocal([]);
+      setSelectedStatusConsulta([]);
+      setSelectedStatusPagamento([]);
     };
 
     return (
@@ -197,13 +223,23 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
           selectedProfessional={selectedProfessional}
           selectedPatient={selectedPatient}
           selectedTipoServico={selectedTipoServico}
+          selectedLocal={selectedLocal}
           selectedStatusConsulta={selectedStatusConsulta}
           selectedStatusPagamento={selectedStatusPagamento}
           onProfessionalChange={setSelectedProfessional}
           onPatientChange={setSelectedPatient}
-          onTipoServicoChange={setSelectedTipoServico}
-          onStatusConsultaChange={setSelectedStatusConsulta}
-          onStatusPagamentoChange={setSelectedStatusPagamento}
+          onTipoServicoChange={(value) =>
+            setSelectedTipoServico(Array.isArray(value) ? value : [])
+          }
+          onLocalChange={(value) =>
+            setSelectedLocal(Array.isArray(value) ? value : [])
+          }
+          onStatusConsultaChange={(value) =>
+            setSelectedStatusConsulta(Array.isArray(value) ? value : [])
+          }
+          onStatusPagamentoChange={(value) =>
+            setSelectedStatusPagamento(Array.isArray(value) ? value : [])
+          }
           onClearFilters={clearFilters}
           showProfessionalFilter={true}
           eventCount={getFilteredEvents.length}
@@ -214,9 +250,10 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
           {getFilteredEvents.length === 0 &&
           (selectedProfessional !== 'all' ||
             selectedPatient !== '' ||
-            selectedTipoServico !== 'all' ||
-            selectedStatusConsulta !== 'all' ||
-            selectedStatusPagamento !== 'all') ? (
+            selectedTipoServico.length > 0 ||
+            selectedLocal.length > 0 ||
+            selectedStatusConsulta.length > 0 ||
+            selectedStatusPagamento.length > 0) ? (
             <Card className="flex items-center justify-center">
               <div className="text-center space-y-4 p-8">
                 <Filter className="h-12 w-12 text-muted-foreground mx-auto" />
