@@ -15,9 +15,34 @@ type AuthStep =
   | 'complete-profile';
 
 function App() {
-  // AI dev note: Verificar rota pública ANTES de qualquer autenticação
-  // Rotas públicas (ex: /cadastro-paciente) não requerem autenticação
-  const isPublicRoute = window.location.hash.startsWith('#/cadastro-paciente');
+  // AI dev note: Verificar rota pública dinamicamente (reage a mudanças na URL)
+  // Rotas públicas (ex: /cadastro-paciente, /adicionar-responsavel-financeiro) não requerem autenticação
+  const [isPublicRoute, setIsPublicRoute] = useState(() => {
+    const hash = window.location.hash;
+    return (
+      hash.startsWith('#/cadastro-paciente') ||
+      hash.startsWith('#/adicionar-responsavel-financeiro')
+    );
+  });
+
+  // Monitorar mudanças no hash para atualizar isPublicRoute
+  useEffect(() => {
+    const checkPublicRoute = () => {
+      const hash = window.location.hash;
+      const isPublic =
+        hash.startsWith('#/cadastro-paciente') ||
+        hash.startsWith('#/adicionar-responsavel-financeiro');
+      console.log('🔍 [App] Verificando rota pública:', hash, '→', isPublic);
+      setIsPublicRoute(isPublic);
+    };
+
+    // Verificar imediatamente
+    checkPublicRoute();
+
+    // Escutar mudanças no hash
+    window.addEventListener('hashchange', checkPublicRoute);
+    return () => window.removeEventListener('hashchange', checkPublicRoute);
+  }, []);
 
   const {
     loading,
@@ -55,8 +80,14 @@ function App() {
   // AI dev note: Renderizar rotas públicas SEM autenticação
   // Cadastro de paciente é público e não requer login
   if (isPublicRoute) {
+    console.log(
+      '✅ [App] Renderizando PublicRouter para rota:',
+      window.location.hash
+    );
     return <PublicRouter />;
   }
+
+  console.log('🔒 [App] Rota privada detectada, verificando autenticação...');
 
   // Loading state
   if (loading) {
