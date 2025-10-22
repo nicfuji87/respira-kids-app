@@ -46,7 +46,6 @@ export interface AddFinancialResponsibleData {
 }
 
 export interface AddFinancialResponsibleStepsProps {
-  onComplete?: () => void;
   className?: string;
 }
 
@@ -60,7 +59,7 @@ const STEP_TITLES: Record<AddFinancialResponsibleStep, string> = {
 };
 
 export const AddFinancialResponsibleSteps =
-  React.memo<AddFinancialResponsibleStepsProps>(({ onComplete, className }) => {
+  React.memo<AddFinancialResponsibleStepsProps>(({ className }) => {
     const [currentStep, setCurrentStep] =
       useState<AddFinancialResponsibleStep>('phone-validation');
     const [data, setData] = useState<AddFinancialResponsibleData>({});
@@ -253,38 +252,18 @@ export const AddFinancialResponsibleSteps =
       setCurrentStep('phone-validation');
     }, []);
 
-    // Handler para ir para home
-    const handleGoHome = useCallback(() => {
-      if (onComplete) {
-        onComplete();
-      } else {
-        window.location.href = '/';
-      }
-    }, [onComplete]);
-
     // Calcular progresso
     const currentStepIndex = Object.keys(STEP_TITLES).indexOf(currentStep);
-    const totalSteps = Object.keys(STEP_TITLES).length - 1; // -1 porque sucesso não conta
-    const progress = Math.round((currentStepIndex / totalSteps) * 100);
 
     return (
       <div className={cn('space-y-6', className)}>
         {/* Progress Indicator */}
         {currentStep !== 'success' && (
           <ProgressIndicator
-            steps={Object.entries(STEP_TITLES)
-              .filter(([key]) => key !== 'success')
-              .map(([key, title]) => ({
-                id: key,
-                label: title,
-                status:
-                  key === currentStep
-                    ? 'current'
-                    : Object.keys(STEP_TITLES).indexOf(key) < currentStepIndex
-                      ? 'completed'
-                      : 'upcoming',
-              }))}
-            currentProgress={progress}
+            currentStep={currentStepIndex + 1}
+            totalSteps={
+              Object.keys(STEP_TITLES).filter((k) => k !== 'success').length
+            }
           />
         )}
 
@@ -347,7 +326,6 @@ export const AddFinancialResponsibleSteps =
             responsibleName={data.result.financialResponsibleName}
             patientsCount={data.selectedPatients.length}
             patientNames={data.selectedPatients.map((p) => p.nome)}
-            onGoHome={handleGoHome}
             onAddAnother={handleAddAnother}
           />
         )}

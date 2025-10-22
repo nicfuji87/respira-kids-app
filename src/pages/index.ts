@@ -22,3 +22,4 @@ export { GoogleOAuthDebugPage } from './GoogleOAuthDebugPage';
 
 // Public pages (não requer autenticação)
 export { PatientPublicRegistrationPage } from './PatientPublicRegistrationPage';
+export { AddFinancialResponsiblePage } from './AddFinancialResponsiblePage';

@@ -6,14 +6,9 @@ import { AddFinancialResponsibleSteps } from '@/components/domain/financial-resp
 // Acessível sem autenticação, mobile-first, fluxo step-by-step
 
 export const AddFinancialResponsiblePage: React.FC = () => {
-  const handleComplete = () => {
-    // Redirecionar para home ou página de sucesso
-    window.location.href = '/';
-  };
-
   return (
     <PublicPageLayout title="Adicionar Responsável Financeiro">
-      <AddFinancialResponsibleSteps onComplete={handleComplete} />
+      <AddFinancialResponsibleSteps />
     </PublicPageLayout>
   );
 };

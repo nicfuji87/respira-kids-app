@@ -184,8 +184,8 @@ export const NewFinancialResponsibleFormStep =
             const addressData: EnderecoViaCepData = result.data;
             setLogradouro(addressData.logradouro);
             setBairro(addressData.bairro);
-            setCidade(addressData.localidade);
-            setEstado(addressData.uf);
+            setCidade(addressData.cidade);
+            setEstado(addressData.estado);
             setCepFound(true);
           } else {
             setErrors((prev) => ({ ...prev, cep: 'CEP não encontrado' }));
