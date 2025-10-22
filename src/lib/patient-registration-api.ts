@@ -91,13 +91,19 @@ export async function validateWhatsAppAndCheckRegistration(
     // Ex: "556181446666@s.whatsapp.net" → remover "@s.whatsapp.net" = "556181446666"
     const jidNumber = whatsappInfo.jid.replace('@s.whatsapp.net', '');
 
-    // 7. Para o banco, remover código do país (55)
+    // 7. AI dev note: IMPORTANTE - Manter código do país (55) para buscar no banco
+    // O banco armazena com código do país, então buscar com o mesmo formato
     const phoneNumberForDB = jidNumber.startsWith('55')
-      ? jidNumber.slice(2) // Remove "55" para comparar com banco
-      : jidNumber;
+      ? jidNumber // Mantém com "55"
+      : `55${jidNumber}`; // Adiciona "55" se não tiver
 
     // 8. Converter para BigInt para comparação com banco
     const phoneNumberBigInt = BigInt(phoneNumberForDB);
+
+    console.log(
+      '🔍 [validateWhatsApp] Buscando telefone no banco:',
+      phoneNumberForDB
+    );
 
     // 9. Verificar se pessoa já está cadastrada
     const { data: pessoa, error: pessoaError } = await supabase
@@ -117,7 +123,7 @@ export async function validateWhatsAppAndCheckRegistration(
       return {
         isValid: true,
         personExists: false,
-        phoneNumber: phoneNumberForDB, // Sem código país (61981446666)
+        phoneNumber: phoneNumberForDB, // Com código país (556181446666)
         whatsappJid: jidNumber, // Com código país (556181446666)
       };
     }
@@ -167,7 +173,7 @@ export async function validateWhatsAppAndCheckRegistration(
       personId: pessoa.id,
       personFirstName: firstName,
       relatedPatients: patients,
-      phoneNumber: phoneNumberForDB, // Sem código país (61981446666)
+      phoneNumber: phoneNumberForDB, // Com código país (556181446666)
       whatsappJid: jidNumber, // Com código país (556181446666)
     };
   } catch (error) {
