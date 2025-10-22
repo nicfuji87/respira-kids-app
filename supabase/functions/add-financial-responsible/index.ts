@@ -1,8 +1,12 @@
 // AI dev note: Edge Function para adicionar responsável financeiro a pacientes
 // Processa todo o fluxo: validação, criação/busca de pessoa, vínculo e notificação
+// Versão: 3 - Com logging completo (igual ao cadastro de paciente)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import {
+  createClient,
+  SupabaseClient,
+} from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,6 +35,7 @@ interface FinancialResponsibleData {
 }
 
 interface RequestBody {
+  sessionId?: string; // AI dev note: UUID gerado no frontend para rastreamento
   responsiblePhone: string; // Telefone do responsável que está cadastrando
   patientIds: string[]; // IDs dos pacientes
   financialResponsible: FinancialResponsibleData;
@@ -42,14 +47,25 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // AI dev note: Capturar informações da requisição para logging
+  const startTime = Date.now();
+  const ipAddress = req.headers.get('x-forwarded-for') || 'unknown';
+  const userAgent = req.headers.get('user-agent') || 'unknown';
+
+  let supabase: SupabaseClient;
+  let sessionId = 'unknown';
+
   try {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    supabase = createClient(supabaseUrl, supabaseKey);
 
     const body: RequestBody = await req.json();
+    sessionId = body.sessionId || 'unknown';
+
     console.log('📥 [add-financial-responsible] Request recebido:', {
+      sessionId,
       responsiblePhone: body.responsiblePhone,
       patientIds: body.patientIds,
       isSelf: body.financialResponsible.isSelf,
@@ -173,15 +189,19 @@ serve(async (req: Request) => {
         // Criar nova pessoa
         console.log('📝 [add-financial-responsible] Criando nova pessoa');
 
-        // Buscar tipo_pessoa 'responsavel' ou 'paciente' (vamos usar um genérico)
-        const { data: tipoPessoa } = await supabase
+        // AI dev note: CORREÇÃO - Buscar tipo 'responsavel' ao invés de 'paciente'
+        const { data: tipoPessoa, error: errorTipoPessoa } = await supabase
           .from('pessoa_tipos')
           .select('id')
-          .eq('codigo', 'paciente') // Usar tipo paciente como fallback
+          .eq('codigo', 'responsavel')
           .single();
 
-        if (!tipoPessoa) {
-          throw new Error('Tipo de pessoa não encontrado');
+        if (errorTipoPessoa || !tipoPessoa) {
+          console.error(
+            '❌ [add-financial-responsible] Tipo responsavel não encontrado:',
+            errorTipoPessoa
+          );
+          throw new Error('Tipo de pessoa "responsavel" não encontrado');
         }
 
         // Criar/buscar endereço
@@ -358,38 +378,114 @@ serve(async (req: Request) => {
       proximo_retry: new Date().toISOString(),
     });
 
+    // ============================================
+    // LOGGING - SUCESSO
+    // ============================================
+
+    const duration = Date.now() - startTime;
+    const response = {
+      success: true,
+      data: {
+        financialResponsibleId,
+        financialResponsibleName,
+        patientsUpdated: updatedPatients.length,
+        patients: updatedPatients,
+      },
+    };
+
+    // AI dev note: Log de sucesso (reutilizando tabela do cadastro de paciente)
+    try {
+      await supabase.from('public_registration_api_logs').insert({
+        session_id: sessionId,
+        process_type: 'financial_responsible',
+        http_status: 200,
+        duration_ms: duration,
+        edge_function_version: 3,
+        responsavel_legal_id: responsible.id,
+        responsavel_financeiro_id: financialResponsibleId,
+        patient_ids: body.patientIds,
+        response_body: response,
+      });
+    } catch (logError) {
+      // Nunca falhar por erro de logging
+      console.warn('⚠️ [LOGGING] Erro ao salvar log (ignorado):', logError);
+    }
+
     console.log(
       '✅ [add-financial-responsible] Processo concluído com sucesso'
     );
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          financialResponsibleId,
-          financialResponsibleName,
-          patientsUpdated: updatedPatients.length,
-          patients: updatedPatients,
-        },
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
+    return new Response(JSON.stringify(response), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    });
   } catch (error) {
     console.error('❌ [add-financial-responsible] Erro:', error);
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      }
+    console.error(
+      '❌ [ERROR] Stack trace:',
+      error instanceof Error ? error.stack : 'N/A'
     );
+
+    const duration = Date.now() - startTime;
+    const errorResponse = {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    };
+
+    // ============================================
+    // LOGGING - ERRO
+    // ============================================
+
+    // AI dev note: Log de erro (reutilizando tabela do cadastro de paciente)
+    try {
+      if (supabase) {
+        await supabase.from('public_registration_api_logs').insert({
+          session_id: sessionId,
+          process_type: 'financial_responsible',
+          http_status: 400,
+          duration_ms: duration,
+          edge_function_version: 3,
+          error_type: 'database_error', // Classificar melhor se necessário
+          error_details: {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+        });
+
+        // Inserir evento de erro na webhook_queue (para alertas)
+        await supabase.from('webhook_queue').insert({
+          evento: 'financial_responsible_error',
+          payload: {
+            tipo: 'financial_responsible_error',
+            session_id: sessionId,
+            timestamp: new Date().toISOString(),
+            error: {
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            },
+            metadata: {
+              ip_address: ipAddress,
+              user_agent: userAgent,
+              edge_function_version: 3,
+            },
+          },
+          status: 'pendente',
+          tentativas: 0,
+          max_tentativas: 3,
+        });
+      }
+    } catch (logError) {
+      // Nunca falhar por erro de logging
+      console.warn(
+        '⚠️ [LOGGING] Erro ao salvar log de erro (ignorado):',
+        logError
+      );
+    }
+
+    return new Response(JSON.stringify(errorResponse), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+    });
   }
 });
 
