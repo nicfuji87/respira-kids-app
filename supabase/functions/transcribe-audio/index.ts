@@ -1,8 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { OpenAI } from 'https://deno.land/x/openai@v4.24.0/mod.ts';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // AI dev note: Edge Function para transcrição de áudio usando OpenAI Whisper
-// Rate limiting global para controlar custos
+// Busca prompt e configurações da tabela ai_prompts no banco
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +13,7 @@ const corsHeaders = {
 
 interface TranscribeRequest {
   audioBase64: string;
-  audioType: string; // webm, mp3, wav, etc.
+  audioType: string;
   language?: string;
 }
 
@@ -21,31 +21,11 @@ interface TranscribeResponse {
   success: boolean;
   transcription?: string;
   error?: string;
-  duration?: number;
-}
-
-// Rate limiting simples em memória (global)
-const rateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minuto
-const RATE_LIMIT_MAX_REQUESTS = 10; // máximo 10 transcrições por minuto
-
-function checkRateLimit(clientId: string): boolean {
-  const now = Date.now();
-  const requests = rateLimitMap.get(clientId) || [];
-
-  // Remover requests antigas (fora da janela)
-  const validRequests = requests.filter(
-    (time) => now - time < RATE_LIMIT_WINDOW
-  );
-
-  if (validRequests.length >= RATE_LIMIT_MAX_REQUESTS) {
-    return false; // Rate limit exceeded
-  }
-
-  // Adicionar nova request
-  validRequests.push(now);
-  rateLimitMap.set(clientId, validRequests);
-  return true;
+  audioSize?: number;
+  metadata?: {
+    model: string;
+    promptSource: string;
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -56,7 +36,7 @@ Deno.serve(async (req: Request) => {
 
   if (req.method !== 'POST') {
     return new Response(
-      JSON.stringify({ success: false, error: 'Method not allowed' }),
+      JSON.stringify({ success: false, error: 'Método não permitido' }),
       {
         status: 405,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -65,34 +45,15 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    console.log('[DEBUG] Starting transcribe-audio function');
-
-    // Verificar API key diretamente de environment variables
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-
-    console.log('[DEBUG] OpenAI API key found');
-
     // Parse request
-    const {
-      audioBase64,
-      audioType,
-      language = 'pt',
-    }: TranscribeRequest = await req.json();
+    const body = await req.json();
+    const { audioBase64, audioType = 'audio/webm' }: TranscribeRequest = body;
 
-    console.log('[DEBUG] Request parsed:', {
-      hasAudioBase64: !!audioBase64,
-      audioType,
-      language,
-    });
-
-    if (!audioBase64 || !audioType) {
+    if (!audioBase64) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'audioBase64 and audioType are required',
+          error: 'Audio base64 não fornecido',
         }),
         {
           status: 400,
@@ -101,91 +62,125 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log('[DEBUG] Configuration loaded successfully');
+    // Convert base64 to Blob
+    const base64Data = audioBase64.includes(',')
+      ? audioBase64.split(',')[1]
+      : audioBase64;
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const audioBlob = new Blob([bytes], { type: audioType });
 
-    // Rate limiting baseado no IP
-    const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
-    if (!checkRateLimit(clientIp)) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Rate limit exceeded. Try again in a minute.',
-        }),
-        {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+    // Get environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Variáveis de ambiente do Supabase não encontradas');
+    }
+
+    // Create Supabase client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Fetch OpenAI key from Supabase
+    const { data: apiKeys, error: apiError } = await supabase
+      .from('api_keys')
+      .select('encrypted_key')
+      .eq('service_name', 'openai')
+      .eq('is_active', true)
+      .single();
+
+    if (apiError || !apiKeys?.encrypted_key) {
+      throw new Error('Chave OpenAI não encontrada');
+    }
+
+    const openaiKey = apiKeys.encrypted_key;
+
+    // Fetch transcription prompt and model from ai_prompts table
+    const { data: promptData, error: promptError } = await supabase
+      .from('ai_prompts')
+      .select('prompt_content, openai_model')
+      .eq('prompt_name', 'audio_transcription')
+      .eq('is_active', true)
+      .single();
+
+    let promptContent = 'Transcreva o áudio de forma clara e precisa.';
+    let openaiModel = 'whisper-1';
+
+    if (promptData && !promptError) {
+      promptContent = promptData.prompt_content || promptContent;
+      openaiModel = promptData.openai_model || openaiModel;
+    }
+
+    // Prepare OpenAI FormData
+    const openaiFormData = new FormData();
+    const audioFile = new File([audioBlob], 'audio.webm', {
+      type: audioType,
+    });
+    openaiFormData.append('file', audioFile);
+    openaiFormData.append('model', openaiModel);
+    openaiFormData.append('response_format', 'json');
+    openaiFormData.append('language', 'pt');
+
+    if (promptContent && promptContent.trim() !== '') {
+      openaiFormData.append('prompt', promptContent);
+    }
+
+    // Call OpenAI API
+    const openaiResponse = await fetch(
+      'https://api.openai.com/v1/audio/transcriptions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+        },
+        body: openaiFormData,
+        signal: AbortSignal.timeout(60000),
+      }
+    );
+
+    if (!openaiResponse.ok) {
+      const errorText = await openaiResponse.text();
+      throw new Error(
+        `OpenAI API Error: ${openaiResponse.status} - ${errorText.substring(0, 200)}`
       );
     }
 
-    // Converter base64 para blob
-    const audioBuffer = Uint8Array.from(atob(audioBase64), (c) =>
-      c.charCodeAt(0)
-    );
+    const openaiData = await openaiResponse.json();
+    const transcription = openaiData.text?.trim();
 
-    // Verificar tamanho do arquivo (max 25MB para Whisper)
-    const maxSize = 25 * 1024 * 1024; // 25MB
-    if (audioBuffer.length > maxSize) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Audio file too large. Maximum size is 25MB.',
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+    if (!transcription) {
+      throw new Error('Transcrição não encontrada na resposta da OpenAI');
     }
 
-    // Criar arquivo temporário
-    const filename = `audio_${Date.now()}.${audioType === 'audio/webm' ? 'webm' : 'mp3'}`;
-    const file = new File([audioBuffer], filename, { type: audioType });
-
-    // Inicializar OpenAI
-    const openai = new OpenAI({
-      apiKey: openaiApiKey,
-      organization: Deno.env.get('OPENAI_ORG_ID'), // Opcional: Organization ID
-    });
-
-    console.log(
-      `Transcribing audio file: ${filename}, size: ${audioBuffer.length} bytes`
+    return new Response(
+      JSON.stringify({
+        success: true,
+        transcription: transcription,
+        audioSize: audioBlob.size,
+        metadata: {
+          model: openaiModel,
+          promptSource: 'supabase',
+        },
+      } as TranscribeResponse),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
-
-    // Fazer transcrição
-    const startTime = Date.now();
-    const transcription = await openai.audio.transcriptions.create({
-      file: file,
-      model: 'whisper-1',
-      language: language,
-      response_format: 'text',
-      prompt:
-        'Este é um relatório médico de fisioterapia respiratória pediátrica. Use terminologia médica apropriada.',
-    });
-
-    const duration = Date.now() - startTime;
-    console.log(`Transcription completed in ${duration}ms`);
-
-    const response: TranscribeResponse = {
-      success: true,
-      transcription: transcription.trim(),
-      duration: duration,
-    };
-
-    return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
   } catch (error) {
-    console.error('Transcription error:', error);
+    console.error('❌ Transcribe Audio Error:', error);
 
-    const response: TranscribeResponse = {
-      success: false,
-      error: error.message || 'Unknown error occurred',
-    };
-
-    return new Response(JSON.stringify(response), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message || 'Erro interno do servidor',
+      } as TranscribeResponse),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });

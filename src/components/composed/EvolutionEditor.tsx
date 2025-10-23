@@ -92,6 +92,12 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
         setTranscriptionError(null);
 
         try {
+          // AI dev note: Refresh da sessão antes de chamar Edge Function para evitar token expirado
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.warn('⚠️ Aviso ao renovar sessão:', refreshError);
+          }
+
           // Converter para base64
           const audioBase64 = await blobToBase64(audioBlob);
           const audioType = audioBlob.type || 'audio/webm';
@@ -109,7 +115,26 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           );
 
           if (error) {
-            throw error;
+            // AI dev note: Melhorar mensagem de erro baseado no status
+            let errorMessage = 'Erro ao transcrever áudio';
+
+            if (
+              error.message?.includes('401') ||
+              error.message?.includes('Unauthorized')
+            ) {
+              errorMessage =
+                'Sessão expirada. Por favor, recarregue a página e tente novamente.';
+            } else if (
+              error.message?.includes('403') ||
+              error.message?.includes('Forbidden')
+            ) {
+              errorMessage =
+                'Você não tem permissão para usar esta funcionalidade.';
+            } else if (error.message) {
+              errorMessage = error.message;
+            }
+
+            throw new Error(errorMessage);
           }
 
           const result = data as TranscriptionResult;
@@ -125,7 +150,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
             throw new Error(result.error || 'Erro na transcrição');
           }
         } catch (err) {
-          console.error('Erro na transcrição:', err);
+          console.error('❌ Erro na transcrição:', err);
           setTranscriptionError(
             err instanceof Error ? err.message : 'Erro ao transcrever áudio'
           );
