@@ -100,6 +100,9 @@ export interface RecentConsultation {
   selectable?: boolean; // Para modo de seleção de cobrança
   // AI dev note: Campos de comissão para controle de exibição por role
   comissao_tipo_recebimento?: string | null;
+  // AI dev note: Campos adicionais da view vw_agendamentos_completos para filtros de fatura
+  status_consulta_codigo?: string; // Código do status da consulta (ex: 'cancelado', 'finalizado')
+  status_pagamento_codigo?: string; // Código do status de pagamento (ex: 'pago', 'pendente')
 }
 
 // Interface para dados de consentimento

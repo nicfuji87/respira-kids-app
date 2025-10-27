@@ -588,19 +588,59 @@ export const PatientMetricsWithConsultations =
         }
       };
 
-      // Filtrar consultas selecionáveis considerando modo de edição
+      // AI dev note: Filtrar consultas selecionáveis para geração de fatura
+      // REGRAS DE NEGÓCIO - Consultas devem ser INDISPONÍVEIS quando:
+      // 1. Status da consulta = 'cancelado' (consultas canceladas não podem ser faturadas)
+      // 2. Valor da consulta = 0 (consultas gratuitas não geram cobrança)
+      // 3. Status de pagamento = 'pago' (consultas já pagas não podem ser refaturadas)
+      // 4. Consulta já incluída em uma fatura (fatura_id não nulo ou id_pagamento_externo)
+      // 5. Empresas diferentes (consultas de empresas diferentes não podem estar na mesma fatura)
+
+      // Determinar empresa predominante nas consultas já selecionadas
+      const selectedConsultationsData = consultations.filter((c) =>
+        selectedConsultations.includes(c.id)
+      );
+      const selectedEmpresas = selectedConsultationsData
+        .map(
+          (c) =>
+            (c as RecentConsultation & { empresa_fatura_id?: string })
+              .empresa_fatura_id
+        )
+        .filter((id) => id);
+      const empresaAtiva =
+        selectedEmpresas.length > 0 ? selectedEmpresas[0] : null;
+
       const selectableConsultations = consultations.filter((c) => {
         const isFromCurrentFatura =
           editingFatura && originalSelectedIds.includes(c.id);
         const isPaid = c.status_pagamento?.toLowerCase() === 'pago';
         const hasNoFatura = !c.fatura_id && !c.id_pagamento_externo;
 
+        // ✅ VALIDAÇÃO 1: Verificar se consulta está cancelada
+        // AI dev note: Usar type assertion pois status_consulta_codigo vem da view mas não está na interface base
+        const isCancelled =
+          (c as RecentConsultation & { status_consulta_codigo?: string })
+            .status_consulta_codigo === 'cancelado';
+
+        // ✅ VALIDAÇÃO 2: Verificar se consulta tem valor zero
+        const hasZeroValue = Number(c.valor_servico || 0) === 0;
+
+        // ✅ VALIDAÇÃO 3: Verificar se é da mesma empresa (quando há empresa ativa)
+        const consultaEmpresa = (
+          c as RecentConsultation & { empresa_fatura_id?: string }
+        ).empresa_fatura_id;
+        const matchesEmpresa =
+          !empresaAtiva || consultaEmpresa === empresaAtiva;
+
         // Status editáveis em faturas (não pagos)
         const editableStatuses = ['pendente', 'atrasado', 'cobranca_gerada'];
         const currentStatus = c.status_pagamento?.toLowerCase() || '';
 
         return (
-          !isPaid &&
+          !isPaid && // ✅ NÃO PODE ESTAR PAGA
+          !isCancelled && // ✅ NÃO PODE ESTAR CANCELADA
+          !hasZeroValue && // ✅ NÃO PODE TER VALOR ZERO
+          matchesEmpresa && // ✅ DEVE SER DA MESMA EMPRESA
           // Modo normal: apenas consultas pendentes sem fatura
           ((!editingFatura && currentStatus === 'pendente' && hasNoFatura) ||
             // Modo edição: APENAS consultas da própria fatura OU pendentes sem fatura alguma
@@ -1622,6 +1662,28 @@ export const PatientMetricsWithConsultations =
                         !consultation.fatura_id &&
                         !consultation.id_pagamento_externo;
 
+                      // ✅ VALIDAÇÃO 1: Verificar se consulta está cancelada
+                      // AI dev note: Usar type assertion pois status_consulta_codigo vem da view mas não está na interface base
+                      const isCancelled =
+                        (
+                          consultation as RecentConsultation & {
+                            status_consulta_codigo?: string;
+                          }
+                        ).status_consulta_codigo === 'cancelado';
+
+                      // ✅ VALIDAÇÃO 2: Verificar se consulta tem valor zero
+                      const hasZeroValue =
+                        Number(consultation.valor_servico || 0) === 0;
+
+                      // ✅ VALIDAÇÃO 3: Verificar se é da mesma empresa (quando há empresa ativa)
+                      const consultaEmpresa = (
+                        consultation as RecentConsultation & {
+                          empresa_fatura_id?: string;
+                        }
+                      ).empresa_fatura_id;
+                      const matchesEmpresa =
+                        !empresaAtiva || consultaEmpresa === empresaAtiva;
+
                       // Status editáveis em faturas (não pagos)
                       const editableStatuses = [
                         'pendente',
@@ -1632,7 +1694,10 @@ export const PatientMetricsWithConsultations =
                         consultation.status_pagamento?.toLowerCase() || '';
 
                       const isSelectable =
-                        !isPaid &&
+                        !isPaid && // ✅ NÃO PODE ESTAR PAGA
+                        !isCancelled && // ✅ NÃO PODE ESTAR CANCELADA
+                        !hasZeroValue && // ✅ NÃO PODE TER VALOR ZERO
+                        matchesEmpresa && // ✅ DEVE SER DA MESMA EMPRESA
                         // Modo normal: apenas consultas pendentes sem fatura
                         ((!editingFatura &&
                           currentStatus === 'pendente' &&
@@ -1642,6 +1707,26 @@ export const PatientMetricsWithConsultations =
                             ((isFromCurrentFatura &&
                               editableStatuses.includes(currentStatus)) ||
                               (currentStatus === 'pendente' && hasNoFatura))));
+
+                      // Log informativo sobre consultas bloqueadas (para debug)
+                      if (
+                        isSelectionMode &&
+                        !isSelectable &&
+                        process.env.NODE_ENV === 'development'
+                      ) {
+                        const reasons = [];
+                        if (isPaid) reasons.push('PAGA');
+                        if (isCancelled) reasons.push('CANCELADA');
+                        if (hasZeroValue) reasons.push('VALOR_ZERO');
+                        if (!matchesEmpresa) reasons.push('EMPRESA_DIFERENTE');
+                        if (consultation.fatura_id)
+                          reasons.push('JÁ_TEM_FATURA');
+
+                        console.log(
+                          `🚫 Consulta bloqueada ${consultation.id.substring(0, 8)} - ${consultation.servico_nome}:`,
+                          reasons.join(', ')
+                        );
+                      }
 
                       // Debug log para identificar problemas
                       if (
@@ -1653,6 +1738,11 @@ export const PatientMetricsWithConsultations =
                           {
                             isFromCurrentFatura,
                             isPaid,
+                            isCancelled,
+                            hasZeroValue,
+                            matchesEmpresa,
+                            consultaEmpresa,
+                            empresaAtiva,
                             currentStatus,
                             hasNoFatura,
                             hasIdPagamento: !!consultation.id_pagamento_externo,
