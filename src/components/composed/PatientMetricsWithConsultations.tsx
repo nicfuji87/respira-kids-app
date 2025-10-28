@@ -1029,6 +1029,9 @@ export const PatientMetricsWithConsultations =
                   empresa_fatura_id: item.empresa_fatura_id,
                   // AI dev note: Campos de comissão para lógica de exibição
                   comissao_tipo_recebimento: item.comissao_tipo_recebimento,
+                  // AI dev note: Campos de código de status para filtros de fatura
+                  status_consulta_codigo: item.status_consulta_codigo,
+                  status_pagamento_codigo: item.status_pagamento_codigo,
                 }) as RecentConsultation & {
                   tipo_servico_id?: string;
                   tipo_servico_descricao?: string;
