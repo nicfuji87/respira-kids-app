@@ -781,6 +781,7 @@ export const PatientMetricsWithConsultations =
               local_nome,
               status_consulta_nome,
               status_consulta_cor,
+              status_consulta_codigo,
               status_pagamento_nome,
               status_pagamento_cor,
               status_pagamento_codigo,
