@@ -47,7 +47,7 @@ export async function validateWhatsAppAndCheckRegistration(
 
     // 3. Chamar webhook para validar se WhatsApp existe
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
     const webhookResponse = await fetch(
       'https://webhooks-i.infusecomunicacao.online/webhook/verificaWhatsApp',
@@ -517,7 +517,7 @@ export async function validateWhatsAppAndGetJID(phoneNumber: string): Promise<{
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
     const response = await fetch(
       'https://webhooks-i.infusecomunicacao.online/webhook/verificaWhatsApp',
