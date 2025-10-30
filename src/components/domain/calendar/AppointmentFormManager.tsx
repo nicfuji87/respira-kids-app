@@ -125,6 +125,9 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
     const [futureWeekConfirmed, setFutureWeekConfirmed] = useState(false);
 
+    // AI dev note: Armazenar nome do serviço para validação de valor zero apenas para serviços SOCIAL
+    const [selectedServiceName, setSelectedServiceName] = useState<string>('');
+
     // Estados para empresas de faturamento
     const [empresasOptions, setEmpresasOptions] = useState<
       Array<{ id: string; razao_social: string; nome_fantasia?: string }>
@@ -190,6 +193,8 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setConflictDetails('');
         setPastDateConfirmed(false);
         setFutureWeekConfirmed(false);
+        // AI dev note: Resetar nome do serviço ao abrir o formulário
+        setSelectedServiceName('');
       }
     }, [isOpen, initialDate, initialTime, initialPatientId]);
 
@@ -281,6 +286,8 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
         if (serviceData) {
           updateField('valor_servico', serviceData.valor);
+          // AI dev note: Armazenar nome do serviço para validação de valor zero
+          setSelectedServiceName(serviceData.nome || '');
         }
       },
       [updateField]
@@ -331,8 +338,32 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         newErrors.status_consulta_id = 'Status da consulta é obrigatório';
       if (!formData.status_pagamento_id)
         newErrors.status_pagamento_id = 'Status do pagamento é obrigatório';
-      if (!formData.valor_servico || formData.valor_servico <= 0)
-        newErrors.valor_servico = 'Valor deve ser maior que zero';
+
+      // AI dev note: Validação de valor - permitir zero APENAS para serviços que contenham "SOCIAL" no nome
+      console.log('🔍 DEBUG Validação:', {
+        valor: formData.valor_servico,
+        serviceName: selectedServiceName,
+        includes: selectedServiceName.toUpperCase().includes('SOCIAL'),
+      });
+
+      if (
+        formData.valor_servico === undefined ||
+        formData.valor_servico === null
+      ) {
+        newErrors.valor_servico = 'Valor é obrigatório';
+      } else if (formData.valor_servico < 0) {
+        newErrors.valor_servico = 'Valor não pode ser negativo';
+      } else if (formData.valor_servico === 0) {
+        // Permitir valor zero SOMENTE se o nome do serviço contém "SOCIAL"
+        const isSocialService = selectedServiceName
+          .toUpperCase()
+          .includes('SOCIAL');
+        if (!isSocialService) {
+          newErrors.valor_servico =
+            'Valor zero só é permitido para atendimentos SOCIAL';
+        }
+      }
+
       if (!formData.empresa_fatura)
         newErrors.empresa_fatura = 'Empresa para faturamento é obrigatória';
 
