@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Loader2, AlertCircle, User } from 'lucide-react';
+import {
+  CreditCard,
+  Loader2,
+  AlertCircle,
+  User,
+  AlertTriangle,
+} from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -13,6 +19,11 @@ import {
   fetchPatientResponsibles,
   updateBillingResponsible,
 } from '@/lib/patient-api';
+import {
+  validateResponsibleForAsaas,
+  type AsaasValidationResult,
+} from '@/lib/asaas-validation';
+import { supabase } from '@/lib/supabase';
 
 // AI dev note: BillingResponsibleSelect - Composed component que reutiliza Select primitive
 // Lista paciente + responsáveis ativos, permite admin/secretaria alterar responsável cobrança
@@ -48,6 +59,9 @@ export const BillingResponsibleSelect =
       const [loading, setLoading] = useState(true);
       const [updating, setUpdating] = useState(false);
       const [error, setError] = useState<string | null>(null);
+      const [asaasValidation, setAsaasValidation] =
+        useState<AsaasValidationResult | null>(null);
+      const [validatingAsaas, setValidatingAsaas] = useState(false);
 
       // Verificar se usuário pode editar
       const canEdit = userRole === 'admin' || userRole === 'secretaria';
@@ -80,6 +94,56 @@ export const BillingResponsibleSelect =
           loadResponsibles();
         }
       }, [patientId]);
+
+      // AI dev note: Validar dados ASAAS do responsável selecionado em tempo real
+      useEffect(() => {
+        const validateCurrentResponsible = async () => {
+          if (!currentResponsibleId) {
+            setAsaasValidation(null);
+            return;
+          }
+
+          setValidatingAsaas(true);
+
+          try {
+            // Buscar dados completos do responsável via vw_usuarios_admin
+            const { data: responsibleData, error: responsibleError } =
+              await supabase
+                .from('vw_usuarios_admin')
+                .select('nome, cpf_cnpj, email, telefone, cep, numero_endereco')
+                .eq('id', currentResponsibleId)
+                .single();
+
+            if (responsibleError || !responsibleData) {
+              console.error(
+                '❌ Erro ao buscar dados do responsável:',
+                responsibleError
+              );
+              setAsaasValidation(null);
+              return;
+            }
+
+            // Validar dados para ASAAS
+            const validation = validateResponsibleForAsaas({
+              nome: responsibleData.nome,
+              cpf_cnpj: responsibleData.cpf_cnpj,
+              email: responsibleData.email,
+              telefone: responsibleData.telefone,
+              cep: responsibleData.cep,
+              numero_endereco: responsibleData.numero_endereco,
+            });
+
+            setAsaasValidation(validation);
+          } catch (err) {
+            console.error('❌ Erro ao validar responsável:', err);
+            setAsaasValidation(null);
+          } finally {
+            setValidatingAsaas(false);
+          }
+        };
+
+        validateCurrentResponsible();
+      }, [currentResponsibleId]);
 
       // Atualizar responsável pela cobrança
       const handleResponsibleChange = async (responsibleId: string) => {
@@ -193,6 +257,56 @@ export const BillingResponsibleSelect =
               ))}
             </SelectContent>
           </Select>
+
+          {/* AI dev note: Aviso de dados incompletos para ASAAS */}
+          {asaasValidation && !asaasValidation.isValid && !validatingAsaas && (
+            <Alert variant="destructive" className="mt-2">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-semibold text-sm">
+                    ⚠️ Não é possível gerar cobrança para este responsável
+                  </p>
+
+                  {asaasValidation.missingFields.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium">
+                        Campos obrigatórios faltando:
+                      </p>
+                      <ul className="text-xs list-disc list-inside ml-2 mt-1">
+                        {asaasValidation.missingFields.map((field) => (
+                          <li key={field}>{field}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {asaasValidation.warnings.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs font-medium">Avisos:</p>
+                      <ul className="text-xs list-disc list-inside ml-2 mt-1">
+                        {asaasValidation.warnings.map((warning) => (
+                          <li key={warning}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <p className="text-xs mt-2 opacity-90">
+                    Complete o cadastro do responsável antes de gerar cobranças.
+                  </p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Loading da validação ASAAS */}
+          {validatingAsaas && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Validando dados para cobrança...</span>
+            </div>
+          )}
 
           {responsibles.length === 0 && (
             <p className="text-xs text-muted-foreground">

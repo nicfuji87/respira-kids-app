@@ -215,7 +215,15 @@ export const NewFinancialResponsibleFormStep =
         if (!nome.trim()) newErrors.nome = 'Nome é obrigatório';
         if (cpf.replace(/\D/g, '').length !== 11)
           newErrors.cpf = 'CPF inválido';
-        if (!email.includes('@')) newErrors.email = 'E-mail inválido';
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const hasSpecialChars = /[àáâãäåèéêëìíîïòóôõöùúûü]/i.test(email);
+
+        if (!emailRegex.test(email)) {
+          newErrors.email = 'E-mail inválido';
+        } else if (hasSpecialChars) {
+          newErrors.email =
+            'E-mail não pode conter caracteres especiais (ã, ç, é, etc)';
+        }
 
         if (!useSameAddress) {
           if (cep.replace(/\D/g, '').length !== 8)

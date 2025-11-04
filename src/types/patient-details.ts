@@ -28,6 +28,9 @@ export interface PatientDetails extends SupabasePessoa {
   responsavel_financeiro_nome?: string;
   responsavel_financeiro_email?: string;
   responsavel_financeiro_telefone?: number;
+  responsavel_financeiro_cpf?: string;
+  responsavel_financeiro_cep?: string;
+  responsavel_financeiro_numero?: string;
 
   // AI dev note: Responsável pela cobrança/NFe - obrigatório
   responsavel_cobranca_id: string;

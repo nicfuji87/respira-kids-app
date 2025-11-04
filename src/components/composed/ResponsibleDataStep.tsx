@@ -72,8 +72,15 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
     useEffect(() => {
       if (touched.email && email) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const hasSpecialChars = /[àáâãäåèéêëìíîïòóôõöùúûü]/i.test(email);
+
         if (!emailRegex.test(email)) {
           setErrors((prev) => ({ ...prev, email: 'Email inválido' }));
+        } else if (hasSpecialChars) {
+          setErrors((prev) => ({
+            ...prev,
+            email: 'Email não pode conter caracteres especiais (ã, ç, é, etc)',
+          }));
         } else {
           setErrors((prev) => ({ ...prev, email: undefined }));
         }

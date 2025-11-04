@@ -64,6 +64,17 @@ import {
 } from '@/lib/faturas-api';
 import { generateChargeDescription } from '@/lib/charge-description';
 import { FaturasList } from './FaturasList';
+import {
+  validateResponsibleForAsaas,
+  getAsaasValidationErrorMessage,
+  type AsaasValidationResult,
+} from '@/lib/asaas-validation';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/primitives/tooltip';
 
 // AI dev note: PatientMetricsWithConsultations - Componente unificado que combina métricas e lista de consultas
 // Filtros compartilhados entre métricas e consultas, conforme solicitado pelo usuário
@@ -126,6 +137,8 @@ export const PatientMetricsWithConsultations =
       >(editMode?.initialSelectedIds || []);
       const [isGeneratingCharge, setIsGeneratingCharge] = useState(false);
       const [chargeError, setChargeError] = useState<string | null>(null);
+      const [asaasValidation, setAsaasValidation] =
+        useState<AsaasValidationResult | null>(null);
 
       // Estados para modo de edição de fatura
       const [editingFatura, setEditingFatura] =
@@ -500,6 +513,46 @@ export const PatientMetricsWithConsultations =
           const responsibleId =
             patientData.responsavel_cobranca_id || patientId;
           console.log('💳 Responsável pela cobrança:', responsibleId);
+
+          // AI dev note: Validar dados do responsável de cobrança para ASAAS
+          // Buscar dados completos do responsável incluindo endereço
+          const { data: responsibleData, error: responsibleError } =
+            await supabase
+              .from('vw_agendamentos_completos')
+              .select(
+                'responsavel_cobranca_nome, responsavel_cobranca_cpf, responsavel_cobranca_email, responsavel_cobranca_telefone, responsavel_cobranca_cep, responsavel_cobranca_numero'
+              )
+              .eq('paciente_id', patientId)
+              .limit(1)
+              .single();
+
+          if (responsibleError || !responsibleData) {
+            console.error(
+              '❌ Erro ao buscar dados do responsável:',
+              responsibleError
+            );
+          }
+
+          // Validar dados para ASAAS
+          const validation = validateResponsibleForAsaas({
+            nome: responsibleData?.responsavel_cobranca_nome,
+            cpf_cnpj: responsibleData?.responsavel_cobranca_cpf,
+            email: responsibleData?.responsavel_cobranca_email,
+            telefone: responsibleData?.responsavel_cobranca_telefone,
+            cep: responsibleData?.responsavel_cobranca_cep,
+            numero_endereco: responsibleData?.responsavel_cobranca_numero,
+          });
+
+          if (!validation.isValid) {
+            const errorMessage = getAsaasValidationErrorMessage(
+              validation,
+              responsibleData?.responsavel_cobranca_nome || 'Responsável'
+            );
+            console.error('❌ Validação ASAAS falhou:', validation);
+            throw new Error(errorMessage);
+          }
+
+          console.log('✅ Validação ASAAS passou com sucesso');
 
           // Gerar descrição da cobrança
           const consultationDataForDescription = selectedConsultationData.map(
@@ -1126,6 +1179,51 @@ export const PatientMetricsWithConsultations =
         }
       }, [periodFilter, startDate, endDate, isSelectionMode, editingFatura]);
 
+      // AI dev note: Validar dados do responsável de cobrança para ASAAS quando consultas mudam
+      useEffect(() => {
+        const validateResponsible = async () => {
+          if (selectedConsultations.length === 0) {
+            setAsaasValidation(null);
+            return;
+          }
+
+          try {
+            const { data: responsibleData, error: responsibleError } =
+              await supabase
+                .from('vw_agendamentos_completos')
+                .select(
+                  'responsavel_cobranca_nome, responsavel_cobranca_cpf, responsavel_cobranca_email, responsavel_cobranca_telefone, responsavel_cobranca_cep, responsavel_cobranca_numero'
+                )
+                .eq('paciente_id', patientId)
+                .limit(1)
+                .single();
+
+            if (responsibleError || !responsibleData) {
+              console.error(
+                '❌ Erro ao buscar dados do responsável:',
+                responsibleError
+              );
+              return;
+            }
+
+            const validation = validateResponsibleForAsaas({
+              nome: responsibleData.responsavel_cobranca_nome,
+              cpf_cnpj: responsibleData.responsavel_cobranca_cpf,
+              email: responsibleData.responsavel_cobranca_email,
+              telefone: responsibleData.responsavel_cobranca_telefone,
+              cep: responsibleData.responsavel_cobranca_cep,
+              numero_endereco: responsibleData.responsavel_cobranca_numero,
+            });
+
+            setAsaasValidation(validation);
+          } catch (error) {
+            console.error('❌ Erro ao validar responsável:', error);
+          }
+        };
+
+        validateResponsible();
+      }, [selectedConsultations, patientId]);
+
       // Função para formatar valor monetário
       const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -1549,80 +1647,147 @@ export const PatientMetricsWithConsultations =
                           </>
                         )}
 
-                        <Button
-                          variant={selectedCount > 0 ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={
-                            selectedCount > 0
-                              ? editingFatura
-                                ? handleUpdateFatura
-                                : handleGenerateCharge
-                              : toggleSelectionMode
-                          }
-                          disabled={isGeneratingCharge}
-                          className={
-                            selectedCount > 0 ? 'respira-gradient' : ''
-                          }
-                        >
-                          <CreditCard className="h-4 w-4 flex-shrink-0" />
-                          <span className="ml-1.5 sm:ml-2">
-                            {isGeneratingCharge ? (
-                              editingFatura ? (
-                                <>
-                                  <span className="sm:hidden">
-                                    Atualizando...
-                                  </span>
-                                  <span className="hidden sm:inline">
-                                    Atualizando fatura...
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="sm:hidden">Gerando...</span>
-                                  <span className="hidden sm:inline">
-                                    Gerando cobrança...
-                                  </span>
-                                </>
-                              )
-                            ) : selectedCount > 0 ? (
-                              editingFatura ? (
-                                <>
-                                  <span className="sm:hidden">
-                                    Atualizar ({selectedCount})
-                                  </span>
-                                  <span className="hidden sm:inline">
-                                    Atualizar Fatura com {selectedCount}{' '}
-                                    consulta{selectedCount > 1 ? 's' : ''}
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="sm:hidden">
-                                    Gerar ({selectedCount})
-                                  </span>
-                                  <span className="hidden sm:inline">
-                                    Gerar cobrança de {selectedCount} consulta
-                                    {selectedCount > 1 ? 's' : ''}
-                                  </span>
-                                </>
-                              )
-                            ) : editingFatura ? (
-                              <>
-                                <span className="sm:hidden">Editar</span>
-                                <span className="hidden sm:inline">
-                                  Editar consultas da fatura
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant={
+                                  selectedCount > 0 ? 'default' : 'outline'
+                                }
+                                size="sm"
+                                onClick={
+                                  selectedCount > 0
+                                    ? editingFatura
+                                      ? handleUpdateFatura
+                                      : handleGenerateCharge
+                                    : toggleSelectionMode
+                                }
+                                disabled={
+                                  isGeneratingCharge ||
+                                  (selectedCount > 0 &&
+                                    asaasValidation &&
+                                    !asaasValidation.isValid &&
+                                    !editingFatura)
+                                }
+                                className={
+                                  selectedCount > 0 ? 'respira-gradient' : ''
+                                }
+                              >
+                                <CreditCard className="h-4 w-4 flex-shrink-0" />
+                                <span className="ml-1.5 sm:ml-2">
+                                  {isGeneratingCharge ? (
+                                    editingFatura ? (
+                                      <>
+                                        <span className="sm:hidden">
+                                          Atualizando...
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                          Atualizando fatura...
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="sm:hidden">
+                                          Gerando...
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                          Gerando cobrança...
+                                        </span>
+                                      </>
+                                    )
+                                  ) : selectedCount > 0 ? (
+                                    editingFatura ? (
+                                      <>
+                                        <span className="sm:hidden">
+                                          Atualizar ({selectedCount})
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                          Atualizar Fatura com {selectedCount}{' '}
+                                          consulta{selectedCount > 1 ? 's' : ''}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="sm:hidden">
+                                          Gerar ({selectedCount})
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                          Gerar cobrança de {selectedCount}{' '}
+                                          consulta
+                                          {selectedCount > 1 ? 's' : ''}
+                                        </span>
+                                      </>
+                                    )
+                                  ) : editingFatura ? (
+                                    <>
+                                      <span className="sm:hidden">Editar</span>
+                                      <span className="hidden sm:inline">
+                                        Editar consultas da fatura
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="sm:hidden">
+                                        Selecionar
+                                      </span>
+                                      <span className="hidden sm:inline">
+                                        Escolher consultas para gerar cobrança
+                                      </span>
+                                    </>
+                                  )}
                                 </span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="sm:hidden">Selecionar</span>
-                                <span className="hidden sm:inline">
-                                  Escolher consultas para gerar cobrança
-                                </span>
-                              </>
-                            )}
-                          </span>
-                        </Button>
+                              </Button>
+                            </TooltipTrigger>
+                            {selectedCount > 0 &&
+                              asaasValidation &&
+                              !asaasValidation.isValid &&
+                              !editingFatura && (
+                                <TooltipContent className="max-w-xs">
+                                  <div className="space-y-2">
+                                    <p className="font-semibold">
+                                      Não é possível gerar cobrança:
+                                    </p>
+
+                                    {asaasValidation.missingFields.length >
+                                      0 && (
+                                      <div>
+                                        <p className="text-sm font-medium">
+                                          Campos obrigatórios faltando:
+                                        </p>
+                                        <ul className="text-sm list-disc list-inside">
+                                          {asaasValidation.missingFields.map(
+                                            (field) => (
+                                              <li key={field}>{field}</li>
+                                            )
+                                          )}
+                                        </ul>
+                                      </div>
+                                    )}
+
+                                    {asaasValidation.warnings.length > 0 && (
+                                      <div>
+                                        <p className="text-sm font-medium">
+                                          Avisos:
+                                        </p>
+                                        <ul className="text-sm list-disc list-inside">
+                                          {asaasValidation.warnings.map(
+                                            (warning) => (
+                                              <li key={warning}>{warning}</li>
+                                            )
+                                          )}
+                                        </ul>
+                                      </div>
+                                    )}
+
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                      Complete os dados do responsável
+                                      financeiro antes de gerar a cobrança.
+                                    </p>
+                                  </div>
+                                </TooltipContent>
+                              )}
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     )}
 

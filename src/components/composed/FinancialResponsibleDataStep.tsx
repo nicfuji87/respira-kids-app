@@ -123,6 +123,9 @@ export const FinancialResponsibleDataStep =
           newErrors.email = 'Email é obrigatório';
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           newErrors.email = 'Email inválido';
+        } else if (/[àáâãäåèéêëìíîïòóôõöùúûü]/i.test(email)) {
+          newErrors.email =
+            'Email não pode conter caracteres especiais (ã, ç, é, etc)';
         }
 
         if (!whatsapp.trim()) {
