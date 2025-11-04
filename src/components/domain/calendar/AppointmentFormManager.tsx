@@ -381,13 +381,15 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             description:
               'Você está agendando para uma data anterior à data atual. Deseja confirmar este agendamento?',
             variant: 'default',
+            duration: 10000, // Toast visível por 10 segundos
             action: (
               <ToastAction
                 altText="Confirmar agendamento"
                 onClick={() => {
-                  dismiss();
                   setPastDateConfirmed(true);
-                  setTimeout(() => handleSave(), 100);
+                  dismiss(); // Dismiss imediatamente
+                  // Executar handleSave sem delay para melhor responsividade
+                  handleSave();
                 }}
               >
                 Confirmar
@@ -404,13 +406,15 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             description:
               'Você está agendando para mais de 1 semana após a data atual. Deseja confirmar este agendamento?',
             variant: 'default',
+            duration: 10000, // Toast visível por 10 segundos
             action: (
               <ToastAction
                 altText="Confirmar agendamento"
                 onClick={() => {
-                  dismiss();
                   setFutureWeekConfirmed(true);
-                  setTimeout(() => handleSave(), 100);
+                  dismiss(); // Dismiss imediatamente
+                  // Executar handleSave sem delay para melhor responsividade
+                  handleSave();
                 }}
               >
                 Confirmar

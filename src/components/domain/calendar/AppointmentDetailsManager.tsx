@@ -425,59 +425,68 @@ export const AppointmentDetailsManager =
             throw new Error('Data e hora são obrigatórias');
           }
 
-          // Validar data no passado ou futuro distante
+          // AI dev note: Verificar se a data/hora foi realmente alterada
           const dataHoraCompleta = `${formData.dataHora}T${formData.timeHora}:00`;
           const appointmentDate = parseSupabaseDatetime(dataHoraCompleta);
-          const now = new Date();
-          const oneWeekFromNow = new Date();
-          oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+          const originalDate = parseSupabaseDatetime(appointment.data_hora);
 
-          // Verificar se é data passada
-          if (appointmentDate < now && !pastDateConfirmed) {
-            setIsSavingEvolucao(false);
-            const { dismiss } = toast({
-              title: 'Data anterior à data atual',
-              description:
-                'Você está editando para uma data anterior à data atual. Deseja confirmar esta alteração?',
-              variant: 'default',
-              action: (
-                <ToastAction
-                  altText="Confirmar alteração"
-                  onClick={() => {
-                    dismiss();
-                    setPastDateConfirmed(true);
-                    setTimeout(() => handleSaveAll(), 100);
-                  }}
-                >
-                  Confirmar
-                </ToastAction>
-              ),
-            });
-            return;
-          }
+          // AI dev note: Só validar datas se realmente houve mudança na data/hora
+          // Isso evita o toast desnecessário quando apenas salvamos evolução
+          const dateTimeChanged =
+            appointmentDate.getTime() !== originalDate.getTime();
 
-          // Verificar se é mais de 1 semana no futuro
-          if (appointmentDate > oneWeekFromNow && !futureWeekConfirmed) {
-            setIsSavingEvolucao(false);
-            const { dismiss } = toast({
-              title: 'Agendamento para mais de 1 semana',
-              description:
-                'Você está editando para mais de 1 semana após a data atual. Deseja confirmar esta alteração?',
-              variant: 'default',
-              action: (
-                <ToastAction
-                  altText="Confirmar alteração"
-                  onClick={() => {
-                    dismiss();
-                    setFutureWeekConfirmed(true);
-                    setTimeout(() => handleSaveAll(), 100);
-                  }}
-                >
-                  Confirmar
-                </ToastAction>
-              ),
-            });
-            return;
+          if (dateTimeChanged) {
+            const now = new Date();
+            const oneWeekFromNow = new Date();
+            oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+
+            // Verificar se é data passada
+            if (appointmentDate < now && !pastDateConfirmed) {
+              setIsSavingEvolucao(false);
+              const { dismiss } = toast({
+                title: 'Data anterior à data atual',
+                description:
+                  'Você está editando para uma data anterior à data atual. Deseja confirmar esta alteração?',
+                variant: 'default',
+                action: (
+                  <ToastAction
+                    altText="Confirmar alteração"
+                    onClick={() => {
+                      dismiss();
+                      setPastDateConfirmed(true);
+                      setTimeout(() => handleSaveAll(), 100);
+                    }}
+                  >
+                    Confirmar
+                  </ToastAction>
+                ),
+              });
+              return;
+            }
+
+            // Verificar se é mais de 1 semana no futuro
+            if (appointmentDate > oneWeekFromNow && !futureWeekConfirmed) {
+              setIsSavingEvolucao(false);
+              const { dismiss } = toast({
+                title: 'Agendamento para mais de 1 semana',
+                description:
+                  'Você está editando para mais de 1 semana após a data atual. Deseja confirmar esta alteração?',
+                variant: 'default',
+                action: (
+                  <ToastAction
+                    altText="Confirmar alteração"
+                    onClick={() => {
+                      dismiss();
+                      setFutureWeekConfirmed(true);
+                      setTimeout(() => handleSaveAll(), 100);
+                    }}
+                  >
+                    Confirmar
+                  </ToastAction>
+                ),
+              });
+              return;
+            }
           }
 
           // Salvar agendamento primeiro
