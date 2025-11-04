@@ -45,7 +45,7 @@ export interface ConfigurationTabsProps {
 
 export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
   ({ userRole, className }) => {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<string>('');
 
     const tabsConfig: TabConfig[] = [
@@ -144,11 +144,19 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
     useEffect(() => {
       const tabParam = searchParams.get('tab');
       if (tabParam && allowedTabs.some((tab) => tab.id === tabParam)) {
-        setActiveTab(tabParam);
+        if (activeTab !== tabParam) {
+          setActiveTab(tabParam);
+        }
       } else if (!activeTab) {
         setActiveTab(defaultTab);
       }
-    }, [searchParams, allowedTabs, defaultTab, activeTab]);
+    }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Função para mudar a aba e atualizar a URL
+    const handleTabChange = (value: string) => {
+      setActiveTab(value);
+      setSearchParams({ tab: value });
+    };
 
     // Se não há tabs permitidas, mostrar fallback
     if (allowedTabs.length === 0) {
@@ -163,25 +171,18 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       );
     }
 
-    // Grid dinâmico baseado no número de abas disponíveis
-    const getGridCols = (tabCount: number) => {
-      if (tabCount <= 3) return 'grid-cols-1 md:grid-cols-3';
-      if (tabCount <= 4) return 'grid-cols-2 md:grid-cols-4';
-      if (tabCount <= 5) return 'grid-cols-2 md:grid-cols-5';
-      if (tabCount <= 6) return 'grid-cols-3 md:grid-cols-6';
-      // Para 7 abas, usar um layout que funcione bem
-      return 'grid-cols-3 md:grid-cols-4 lg:grid-cols-7';
-    };
-
     return (
       <div className={className}>
         <Tabs
           value={activeTab || defaultTab}
-          onValueChange={setActiveTab}
+          onValueChange={handleTabChange}
           className="w-full"
         >
           <TabsList
-            className={`grid w-full ${getGridCols(allowedTabs.length)} gap-1 h-auto md:h-9 p-1`}
+            className="grid w-full gap-1 h-auto p-1"
+            style={{
+              gridTemplateColumns: `repeat(${allowedTabs.length}, minmax(0, 1fr))`,
+            }}
           >
             {allowedTabs.map((tab) => {
               const IconComponent = tab.icon;

@@ -10,7 +10,7 @@ export const PatientDetailsPage: React.FC = () => {
   const navigate = useNavigate();
 
   const handleBack = () => {
-    navigate('/pacientes');
+    navigate(-1); // Volta para página anterior ao invés de sempre ir para /pacientes
   };
 
   if (!id) {

@@ -2,9 +2,11 @@ import React, { useCallback } from 'react';
 import { PublicPageLayout } from '@/components/templates/PublicPageLayout';
 import { PatientRegistrationSteps } from '@/components/domain/patient/PatientRegistrationSteps';
 import { useToast } from '@/components/primitives/use-toast';
+import { LoggingProvider } from '@/contexts/LoggingContext';
 
 // AI dev note: PatientPublicRegistrationPage - Página pública de cadastro de paciente
 // Acessível sem autenticação, mobile-first, fluxo step-by-step
+// Integrado com LoggingContext para rastreamento completo do processo
 
 export const PatientPublicRegistrationPage: React.FC = () => {
   const { toast } = useToast();
@@ -24,8 +26,10 @@ export const PatientPublicRegistrationPage: React.FC = () => {
   // TODO: Implementar handleCancel quando houver navegação entre etapas
 
   return (
-    <PublicPageLayout title="Cadastro de Paciente">
-      <PatientRegistrationSteps onComplete={handleRegistrationComplete} />
-    </PublicPageLayout>
+    <LoggingProvider>
+      <PublicPageLayout title="Cadastro de Paciente">
+        <PatientRegistrationSteps onComplete={handleRegistrationComplete} />
+      </PublicPageLayout>
+    </LoggingProvider>
   );
 };

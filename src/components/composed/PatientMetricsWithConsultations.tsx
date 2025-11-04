@@ -1665,9 +1665,10 @@ export const PatientMetricsWithConsultations =
                                 disabled={
                                   isGeneratingCharge ||
                                   (selectedCount > 0 &&
-                                    asaasValidation &&
+                                    asaasValidation !== null &&
                                     !asaasValidation.isValid &&
-                                    !editingFatura)
+                                    !editingFatura) ||
+                                  undefined
                                 }
                                 className={
                                   selectedCount > 0 ? 'respira-gradient' : ''

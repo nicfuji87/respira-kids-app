@@ -39,6 +39,8 @@ import {
   type FinalizationData,
 } from '@/lib/registration-finalization-api';
 import { supabase } from '@/lib/supabase';
+import { useRegistrationLogger } from '@/hooks/useRegistrationLogger';
+import type { RegistrationStepName } from '@/lib/registration-logger';
 
 // AI dev note: PatientRegistrationSteps - Domain component que gerencia fluxo de cadastro público
 // Etapas: 1) WhatsApp validation, 2) Identificação responsável, 3) Dados responsável, etc.
@@ -127,6 +129,67 @@ export const PatientRegistrationSteps =
     });
     const [isLoadingContract, setIsLoadingContract] = useState(false);
 
+    // Hook de logging para rastreamento do processo
+    const logger = useRegistrationLogger();
+
+    // AI dev note: Helper para compatibilidade com chamadas antigas de log
+    // Mapeia steps do fluxo local para RegistrationStepName da lib
+    const log = useCallback(
+      (
+        eventType:
+          | 'step_started'
+          | 'step_completed'
+          | 'validation_error'
+          | 'api_error'
+          | 'success',
+        step: string,
+        data?: unknown
+      ) => {
+        // Mapear steps locais para RegistrationStepName
+        const stepMapping: Record<string, RegistrationStepName> = {
+          whatsapp: 'whatsapp',
+          'responsible-identification': 'responsible',
+          'responsible-data': 'responsible',
+          address: 'address',
+          'financial-responsible': 'responsible',
+          'patient-data': 'patient',
+          patient: 'patient',
+          pediatrician: 'pediatrician',
+          authorizations: 'authorizations',
+          review: 'review',
+          contract: 'review',
+          finalization: 'finalization',
+        };
+
+        const mappedStep = stepMapping[step] || 'review';
+
+        switch (eventType) {
+          case 'step_started':
+            logger.logStepStarted(mappedStep);
+            break;
+          case 'step_completed':
+            logger.logStepCompleted(
+              mappedStep,
+              data as Record<string, unknown> | undefined
+            );
+            break;
+          case 'validation_error':
+            logger.logValidationError(
+              mappedStep,
+              (data || {}) as Record<string, unknown>
+            );
+            break;
+          case 'api_error':
+            logger.logApiError(mappedStep, data as Error);
+            break;
+          case 'success':
+            logger.logSuccess(data as Parameters<typeof logger.logSuccess>[0]);
+            break;
+        }
+      },
+      [logger]
+    );
+
     // TODO: onComplete será usado quando implementar a etapa final (após aceite do contrato)
 
     // Handler para conclusão da etapa de WhatsApp (pessoa nova)
@@ -140,6 +203,9 @@ export const PatientRegistrationSteps =
           data.phoneNumber
         );
 
+        // Log de conclusão da etapa WhatsApp
+        log('step_completed', 'whatsapp', { phoneNumber: data.phoneNumber });
+
         setRegistrationData((prev) => ({
           ...prev,
           phoneNumber: data.phoneNumber,
@@ -150,10 +216,13 @@ export const PatientRegistrationSteps =
         console.log(
           '➡️ [PatientRegistrationSteps] Avançando para responsible-identification (novo usuário)'
         );
+        // Log de início da próxima etapa
+        log('step_started', 'responsible-identification');
+
         // Avançar para identificação do responsável
         setCurrentStep('responsible-identification');
       },
-      []
+      [log]
     );
 
     // Handler para pessoa existente querendo cadastrar novo paciente
@@ -163,6 +232,9 @@ export const PatientRegistrationSteps =
           '🔄 [PatientRegistrationSteps] handleExistingPersonContinue - personId:',
           personId
         );
+
+        // Log de conclusão da etapa WhatsApp (pessoa existente)
+        log('step_completed', 'whatsapp', { existingPersonId: personId });
 
         setRegistrationData((prev) => ({
           ...prev,
@@ -174,10 +246,13 @@ export const PatientRegistrationSteps =
         console.log(
           '➡️ [PatientRegistrationSteps] Avançando para responsible-identification'
         );
+        // Log de início da próxima etapa
+        log('step_started', 'responsible-identification');
+
         // Avançar para identificação do responsável
         setCurrentStep('responsible-identification');
       },
-      []
+      [log]
     );
 
     // Handler para identificação do responsável
@@ -192,6 +267,11 @@ export const PatientRegistrationSteps =
           registrationData.existingPersonId
         );
 
+        // Log de conclusão da identificação
+        log('step_completed', 'responsible-identification', {
+          isSelfResponsible,
+        });
+
         setRegistrationData((prev) => ({
           ...prev,
           isSelfResponsible,
@@ -203,12 +283,14 @@ export const PatientRegistrationSteps =
             console.log(
               '✅ [PatientRegistrationSteps] Usuário existente → pula direto para financial-responsible'
             );
+            log('step_started', 'financial-responsible');
             setCurrentStep('financial-responsible');
           } else {
             // Pessoa NOVA e é o responsável → cadastrar dados do responsável primeiro
             console.log(
               '🆕 [PatientRegistrationSteps] Usuário novo → vai para responsible-data'
             );
+            log('step_started', 'responsible-data');
             setCurrentStep('responsible-data');
           }
         } else {
@@ -216,6 +298,7 @@ export const PatientRegistrationSteps =
           console.log(
             '🔄 [PatientRegistrationSteps] Não é responsável → volta para whatsapp'
           );
+          log('step_started', 'whatsapp');
           setCurrentStep('whatsapp');
           setRegistrationData({
             whatsappValidated: false,
@@ -223,44 +306,65 @@ export const PatientRegistrationSteps =
           });
         }
       },
-      [registrationData.existingPersonId]
+      [registrationData.existingPersonId, log]
     );
 
     // Handler para dados do responsável
-    const handleResponsibleData = useCallback((data: ResponsibleData) => {
-      console.log('✅ [PatientRegistrationSteps] handleResponsibleData:', data);
+    const handleResponsibleData = useCallback(
+      (data: ResponsibleData) => {
+        console.log(
+          '✅ [PatientRegistrationSteps] handleResponsibleData:',
+          data
+        );
 
-      setRegistrationData((prev) => ({
-        ...prev,
-        responsavelLegal: data,
-      }));
+        // Log de conclusão da etapa de dados do responsável
+        log('step_completed', 'responsible-data', data);
 
-      console.log(
-        '➡️ [PatientRegistrationSteps] Avançando para address (ETAPA 4)'
-      );
-      // Após dados do responsável, cadastrar endereço
-      setCurrentStep('address');
-    }, []);
+        setRegistrationData((prev) => ({
+          ...prev,
+          responsavelLegal: data,
+        }));
+
+        console.log(
+          '➡️ [PatientRegistrationSteps] Avançando para address (ETAPA 4)'
+        );
+        // Log de início da próxima etapa
+        log('step_started', 'address');
+
+        // Após dados do responsável, cadastrar endereço
+        setCurrentStep('address');
+      },
+      [log]
+    );
 
     // Handler para endereço
-    const handleAddress = useCallback((data: AddressData) => {
-      console.log('✅ [PatientRegistrationSteps] handleAddress:', data);
+    const handleAddress = useCallback(
+      (data: AddressData) => {
+        console.log('✅ [PatientRegistrationSteps] handleAddress:', data);
 
-      setRegistrationData((prev) => ({
-        ...prev,
-        endereco: data,
-      }));
+        // Log de conclusão da etapa de endereço
+        log('step_completed', 'address', data);
 
-      // SEMPRE perguntar sobre responsável financeiro, mesmo para usuários existentes
-      // Cada paciente pode ter um responsável financeiro diferente
-      console.log(
-        '➡️ [PatientRegistrationSteps] Avançando para financial-responsible (ETAPA 5)'
-      );
-      console.log(
-        '💡 [PatientRegistrationSteps] Perguntando sobre responsável financeiro para ESTE paciente'
-      );
-      setCurrentStep('financial-responsible');
-    }, []);
+        setRegistrationData((prev) => ({
+          ...prev,
+          endereco: data,
+        }));
+
+        // SEMPRE perguntar sobre responsável financeiro, mesmo para usuários existentes
+        // Cada paciente pode ter um responsável financeiro diferente
+        console.log(
+          '➡️ [PatientRegistrationSteps] Avançando para financial-responsible (ETAPA 5)'
+        );
+        console.log(
+          '💡 [PatientRegistrationSteps] Perguntando sobre responsável financeiro para ESTE paciente'
+        );
+        // Log de início da próxima etapa
+        log('step_started', 'financial-responsible');
+
+        setCurrentStep('financial-responsible');
+      },
+      [log]
+    );
 
     // Handler para responsável financeiro
     const handleFinancialResponsible = useCallback(
@@ -269,6 +373,9 @@ export const PatientRegistrationSteps =
           '✅ [PatientRegistrationSteps] handleFinancialResponsible:',
           data
         );
+
+        // Log de conclusão da etapa
+        log('step_completed', 'financial-responsible', data);
 
         setRegistrationData((prev) => ({
           ...prev,
@@ -279,57 +386,88 @@ export const PatientRegistrationSteps =
         console.log(
           '➡️ [PatientRegistrationSteps] Avançando para patient-data (ETAPA 6)'
         );
+        log('step_started', 'patient-data');
         setCurrentStep('patient-data');
       },
-      []
+      [log]
     );
 
     // Handler para dados do paciente
-    const handlePatientData = useCallback((data: PatientData) => {
-      console.log('✅ [PatientRegistrationSteps] handlePatientData:', data);
+    const handlePatientData = useCallback(
+      (data: PatientData) => {
+        console.log('✅ [PatientRegistrationSteps] handlePatientData:', data);
 
-      setRegistrationData((prev) => ({
-        ...prev,
-        paciente: data,
-      }));
+        // Log de conclusão da etapa
+        log('step_completed', 'patient', data);
 
-      console.log(
-        '➡️ [PatientRegistrationSteps] Avançando para pediatrician (ETAPA 7)'
-      );
-      // Avançar para etapa de pediatra
-      setCurrentStep('pediatrician');
-    }, []);
+        setRegistrationData((prev) => ({
+          ...prev,
+          paciente: data,
+        }));
+
+        console.log(
+          '➡️ [PatientRegistrationSteps] Avançando para pediatrician (ETAPA 7)'
+        );
+        // Log de início da próxima etapa
+        log('step_started', 'pediatrician');
+
+        // Avançar para etapa de pediatra
+        setCurrentStep('pediatrician');
+      },
+      [log]
+    );
 
     // Handler para pediatra
-    const handlePediatrician = useCallback((data: PediatricianData) => {
-      console.log('✅ [PatientRegistrationSteps] handlePediatrician:', data);
+    const handlePediatrician = useCallback(
+      (data: PediatricianData) => {
+        console.log('✅ [PatientRegistrationSteps] handlePediatrician:', data);
 
-      setRegistrationData((prev) => ({
-        ...prev,
-        pediatra: data,
-      }));
+        // Log de conclusão da etapa
+        log('step_completed', 'pediatrician', data);
 
-      console.log(
-        '➡️ [PatientRegistrationSteps] Avançando para authorizations (ETAPA 8)'
-      );
-      // Avançar para etapa de autorizações
-      setCurrentStep('authorizations');
-    }, []);
+        setRegistrationData((prev) => ({
+          ...prev,
+          pediatra: data,
+        }));
+
+        console.log(
+          '➡️ [PatientRegistrationSteps] Avançando para authorizations (ETAPA 8)'
+        );
+        // Log de início da próxima etapa
+        log('step_started', 'authorizations');
+
+        // Avançar para etapa de autorizações
+        setCurrentStep('authorizations');
+      },
+      [log]
+    );
 
     // Handler para autorizações
-    const handleAuthorizations = useCallback((data: AuthorizationsData) => {
-      console.log('✅ [PatientRegistrationSteps] handleAuthorizations:', data);
+    const handleAuthorizations = useCallback(
+      (data: AuthorizationsData) => {
+        console.log(
+          '✅ [PatientRegistrationSteps] handleAuthorizations:',
+          data
+        );
 
-      setRegistrationData((prev) => ({
-        ...prev,
-        autorizacoes: data,
-      }));
+        // Log de conclusão da etapa
+        log('step_completed', 'authorizations', data);
 
-      console.log(
-        '➡️ [PatientRegistrationSteps] Avançando para review (ETAPA 9)'
-      );
-      setCurrentStep('review');
-    }, []);
+        setRegistrationData((prev) => ({
+          ...prev,
+          autorizacoes: data,
+        }));
+
+        console.log(
+          '➡️ [PatientRegistrationSteps] Avançando para review (ETAPA 9)'
+        );
+        // Log de início da próxima etapa
+        log('step_started', 'review');
+
+        setCurrentStep('review');
+      },
+      [log]
+    );
 
     // Handler para revisão e geração do contrato
     const handleReview = useCallback(async () => {
@@ -597,17 +735,28 @@ export const PatientRegistrationSteps =
         console.log(
           '➡️ [PatientRegistrationSteps] Avançando para contract (ETAPA 10)'
         );
+        // Log de conclusão da revisão
+        log('step_completed', 'review');
+        // Log de início da visualização do contrato
+        log('step_started', 'contract');
+
         setCurrentStep('contract');
       } catch (error) {
         console.error(
           '❌ [PatientRegistrationSteps] Erro ao gerar contrato:',
           error
         );
+        // Log de erro ao gerar contrato
+        log('api_error', 'review', {
+          error:
+            error instanceof Error ? error.message : 'Erro ao gerar contrato',
+        });
+
         alert('Erro ao gerar contrato. Por favor, tente novamente.');
       } finally {
         setIsLoadingContract(false);
       }
-    }, [registrationData]);
+    }, [registrationData, log]);
 
     // Handler para aceite do contrato
     const handleContractAccept = useCallback(async () => {
@@ -783,6 +932,11 @@ export const PatientRegistrationSteps =
           new Date().toISOString()
         );
 
+        // Log de início da finalização
+        log('step_started', 'finalization', {
+          hasContract: !!registrationData.contrato,
+        });
+
         // Chamar Edge Function (que vai criar paciente, responsáveis e assinar o contrato)
         const result = await finalizePatientRegistration(finalizationData);
 
@@ -796,6 +950,9 @@ export const PatientRegistrationSteps =
             '❌ [PatientRegistrationSteps] Erro na finalização:',
             result.error
           );
+
+          // Log de erro na API
+          log('api_error', 'finalization', { error: result.error });
 
           // AI dev note: Se erro menciona que cadastro pode ter funcionado,
           // redirecionar mesmo assim (dados foram criados no backend)
@@ -839,6 +996,12 @@ export const PatientRegistrationSteps =
           result.contratoId
         );
 
+        // Log de sucesso total
+        log('success', 'finalization', {
+          pacienteId: result.pacienteId,
+          contratoId: result.contratoId,
+        });
+
         // Redirecionar para página de sucesso
         const params = new URLSearchParams({
           patient_name: registrationData.paciente!.nome,
@@ -851,6 +1014,12 @@ export const PatientRegistrationSteps =
           '❌ [PatientRegistrationSteps] Erro ao finalizar cadastro:',
           error
         );
+
+        // Log de erro fatal
+        log('api_error', 'finalization', {
+          error: error instanceof Error ? error.message : 'Erro desconhecido',
+          stack: error instanceof Error ? error.stack : undefined,
+        });
 
         // AI dev note: Verificação adicional - consultar banco para ver se cadastro funcionou
         // mesmo com erro de comunicação da Edge Function
@@ -906,14 +1075,17 @@ export const PatientRegistrationSteps =
       } finally {
         setIsLoadingContract(false);
       }
-    }, [registrationData]);
+    }, [registrationData, log]);
 
     // Handler para rejeição do contrato
     const handleContractReject = useCallback(() => {
       console.log('❌ [PatientRegistrationSteps] handleContractReject');
+      // Log de rejeição do contrato
+      log('step_started', 'review');
+
       // Voltar para revisão
       setCurrentStep('review');
-    }, []);
+    }, [log]);
 
     // Handler para voltar etapa
     const handleBack = useCallback(() => {

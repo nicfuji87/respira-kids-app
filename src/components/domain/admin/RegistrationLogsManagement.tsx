@@ -35,6 +35,8 @@ import { ptBR } from 'date-fns/locale';
 import {
   fetchRegistrationLogs,
   fetchLogDetails,
+  fetchAllApiLogs,
+  fetchAllFormData,
   type RegistrationLog,
   type RegistrationFormData,
   type RegistrationApiLog,
@@ -48,8 +50,8 @@ import {
 export const RegistrationLogsManagement = React.memo(() => {
   // Estados
   const [logs, setLogs] = useState<RegistrationLog[]>([]);
-  const [formDataLogs] = useState<RegistrationFormData[]>([]);
-  const [apiLogs] = useState<RegistrationApiLog[]>([]);
+  const [formDataLogs, setFormDataLogs] = useState<RegistrationFormData[]>([]);
+  const [apiLogs, setApiLogs] = useState<RegistrationApiLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<RegistrationLog | null>(null);
@@ -62,8 +64,8 @@ export const RegistrationLogsManagement = React.memo(() => {
   // Filtros
   const [filters, setFilters] = useState<LogFilters>({
     session_id: '',
-    event_type: '',
-    step_name: '',
+    event_type: 'all',
+    step_name: 'all',
     limit: 100,
   });
 
@@ -71,10 +73,29 @@ export const RegistrationLogsManagement = React.memo(() => {
   const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await fetchRegistrationLogs(filters);
+      // Buscar dados de todas as 3 tabelas em paralelo
+      const [logsResult, apiLogsResult, formDataResult] = await Promise.all([
+        fetchRegistrationLogs(filters),
+        fetchAllApiLogs(100),
+        fetchAllFormData(100),
+      ]);
 
-      if (error) throw error;
-      setLogs(data || []);
+      if (logsResult.error) {
+        console.error('Erro ao carregar logs:', logsResult.error);
+      }
+      if (apiLogsResult.error) {
+        console.error('Erro ao carregar logs de API:', apiLogsResult.error);
+      }
+      if (formDataResult.error) {
+        console.error(
+          'Erro ao carregar dados de formulário:',
+          formDataResult.error
+        );
+      }
+
+      setLogs(logsResult.data || []);
+      setApiLogs(apiLogsResult.data || []);
+      setFormDataLogs(formDataResult.data || []);
     } catch (error) {
       console.error('Erro ao carregar logs:', error);
       toast({
@@ -113,8 +134,8 @@ export const RegistrationLogsManagement = React.memo(() => {
   const handleClearFilters = useCallback(() => {
     setFilters({
       session_id: '',
-      event_type: '',
-      step_name: '',
+      event_type: 'all',
+      step_name: 'all',
       limit: 100,
     });
   }, []);
@@ -245,7 +266,7 @@ export const RegistrationLogsManagement = React.memo(() => {
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="step_started">Iniciou Etapa</SelectItem>
               <SelectItem value="step_completed">Completou Etapa</SelectItem>
               <SelectItem value="validation_error">
@@ -271,7 +292,7 @@ export const RegistrationLogsManagement = React.memo(() => {
               <SelectValue placeholder="Todas" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todas</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
               <SelectItem value="whatsapp">WhatsApp</SelectItem>
               <SelectItem value="responsible">Responsável</SelectItem>
               <SelectItem value="address">Endereço</SelectItem>
@@ -289,7 +310,9 @@ export const RegistrationLogsManagement = React.memo(() => {
             size="sm"
             onClick={handleClearFilters}
             disabled={
-              !filters.session_id && !filters.event_type && !filters.step_name
+              !filters.session_id &&
+              filters.event_type === 'all' &&
+              filters.step_name === 'all'
             }
           >
             <X className="h-4 w-4 mr-2" />

@@ -174,9 +174,10 @@ export const getMobileNavigationForRole = (
 // Função para verificar se usuário tem acesso a uma rota
 // AI dev note: Suporte a rotas dinâmicas - se tem acesso a /pacientes, tem acesso a /pacientes/:id
 export const hasAccessToRoute = (route: string, role: UserRole): boolean => {
-  // Exceção especial: secretaria pode acessar detalhes de pessoas via navegação programática
-  // mas não tem o item "Pessoa" no menu
-  if (role === 'secretaria' && route.startsWith('/pessoa/')) {
+  // AI dev note: Todos os roles podem acessar detalhes de pessoas via navegação programática
+  // (ex: ao clicar em responsáveis na página de detalhes do paciente)
+  // mas o item "Pessoa" não aparece no menu
+  if (route.startsWith('/pessoa/')) {
     return true;
   }
 

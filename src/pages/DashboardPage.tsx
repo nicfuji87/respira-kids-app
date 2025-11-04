@@ -177,15 +177,11 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  // Handlers para navegação de pessoas
-  const handlePatientClick = (patientId: string | null) => {
-    if (patientId) {
-      navigate(`/pessoa/${patientId}`);
+  // AI dev note: Handler unificado para navegação de qualquer pessoa (paciente, responsável, profissional)
+  const handlePersonClick = (personId: string | null) => {
+    if (personId) {
+      navigate(`/pessoa/${personId}`);
     }
-  };
-
-  const handleProfessionalClick = (professionalId: string) => {
-    navigate(`/pessoa/${professionalId}`);
   };
 
   const handleNfeAction = async (appointmentId: string, linkNfe?: string) => {
@@ -284,8 +280,8 @@ export const DashboardPage: React.FC = () => {
           isLoadingLocais={false}
           onSave={handleAppointmentDetailsSave}
           onNfeAction={handleNfeAction}
-          onPatientClick={handlePatientClick}
-          onProfessionalClick={handleProfessionalClick}
+          onPatientClick={handlePersonClick}
+          onProfessionalClick={handlePersonClick}
         />
       </>
     );
@@ -307,8 +303,8 @@ export const DashboardPage: React.FC = () => {
           isLoadingLocais={false}
           onSave={handleAppointmentDetailsSave}
           onNfeAction={handleNfeAction}
-          onPatientClick={handlePatientClick}
-          onProfessionalClick={handleProfessionalClick}
+          onPatientClick={handlePersonClick}
+          onProfessionalClick={handlePersonClick}
         />
       </>
     );
@@ -337,8 +333,8 @@ export const DashboardPage: React.FC = () => {
           isLoadingLocais={false}
           onSave={handleAppointmentDetailsSave}
           onNfeAction={handleNfeAction}
-          onPatientClick={handlePatientClick}
-          onProfessionalClick={handleProfessionalClick}
+          onPatientClick={handlePersonClick}
+          onProfessionalClick={handlePersonClick}
         />
       </>
     );

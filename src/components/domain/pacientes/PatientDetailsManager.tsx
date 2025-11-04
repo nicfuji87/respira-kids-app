@@ -184,15 +184,11 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       }
     };
 
-    // Handlers para navegação para detalhes de pessoas
-    const handlePatientClick = (patientId: string | null) => {
-      if (patientId) {
-        navigate(`/pessoa/${patientId}`);
+    // AI dev note: Handler unificado para navegação de qualquer pessoa (paciente, responsável, profissional)
+    const handlePersonClick = (personId: string | null) => {
+      if (personId) {
+        navigate(`/pessoa/${personId}`);
       }
-    };
-
-    const handleProfessionalClick = (professionalId: string) => {
-      navigate(`/pessoa/${professionalId}`);
     };
 
     const handleNfeAction = async (appointmentId: string, linkNfe?: string) => {
@@ -320,10 +316,9 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
               '🔍 [DEBUG] PatientDetailsManager - onResponsibleClick chamado:',
               {
                 responsibleId,
-                handleProfessionalClick: !!handleProfessionalClick,
               }
             );
-            handleProfessionalClick(responsibleId);
+            handlePersonClick(responsibleId);
           }}
         />
 
@@ -371,8 +366,8 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
           isLoadingLocais={isLoadingLocais}
           onSave={handleAppointmentSave}
           onNfeAction={handleNfeAction}
-          onPatientClick={handlePatientClick}
-          onProfessionalClick={handleProfessionalClick}
+          onPatientClick={handlePersonClick}
+          onProfessionalClick={handlePersonClick}
         />
 
         {/* Modal de Novo Agendamento */}

@@ -77,11 +77,11 @@ export async function fetchRegistrationLogs(filters?: LogFilters) {
       query = query.eq('session_id', filters.session_id);
     }
 
-    if (filters?.event_type) {
+    if (filters?.event_type && filters.event_type !== 'all') {
       query = query.eq('event_type', filters.event_type);
     }
 
-    if (filters?.step_name) {
+    if (filters?.step_name && filters.step_name !== 'all') {
       query = query.eq('step_name', filters.step_name);
     }
 
@@ -167,6 +167,44 @@ export async function fetchLogDetails(sessionId: string) {
   } catch (error) {
     console.error('Erro ao buscar detalhes da sessão:', error);
     return { logs: [], formData: [], apiLogs: [], error };
+  }
+}
+
+/**
+ * Buscar todos os logs de API (para tab de API)
+ */
+export async function fetchAllApiLogs(limit = 100) {
+  try {
+    const { data, error } = await supabase
+      .from('public_registration_api_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return { data: data as RegistrationApiLog[], error: null };
+  } catch (error) {
+    console.error('Erro ao buscar logs de API:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Buscar todos os dados de formulário (para tab de Form Data)
+ */
+export async function fetchAllFormData(limit = 100) {
+  try {
+    const { data, error } = await supabase
+      .from('public_registration_form_data')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return { data: data as RegistrationFormData[], error: null };
+  } catch (error) {
+    console.error('Erro ao buscar dados de formulário:', error);
+    return { data: null, error };
   }
 }
 
