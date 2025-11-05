@@ -88,8 +88,11 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
     };
 
     if (view === 'week') {
-      const weekStart = startOfWeek(currentDate, { locale: ptBR });
-      const weekEnd = endOfWeek(currentDate, { locale: ptBR });
+      const weekStart = startOfWeek(currentDate, {
+        weekStartsOn: 1,
+        locale: ptBR,
+      });
+      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1, locale: ptBR });
       const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
       return (
@@ -189,8 +192,11 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
       currentDate.getMonth() + 1,
       0
     );
-    const calendarStart = startOfWeek(monthStart, { locale: ptBR });
-    const calendarEnd = endOfWeek(monthEnd, { locale: ptBR });
+    const calendarStart = startOfWeek(monthStart, {
+      weekStartsOn: 1,
+      locale: ptBR,
+    });
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1, locale: ptBR });
     const calendarDays = eachDayOfInterval({
       start: calendarStart,
       end: calendarEnd,
@@ -202,7 +208,7 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
           <CardContent className="p-0 w-full">
             {/* Header com dias da semana */}
             <div className="grid grid-cols-7 border-b">
-              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
+              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => (
                 <div
                   key={day}
                   className="p-4 text-center font-medium bg-muted/50 border-r last:border-r-0"

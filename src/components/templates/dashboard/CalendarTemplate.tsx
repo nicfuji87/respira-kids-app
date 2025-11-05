@@ -348,8 +348,14 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           if (process.env.NODE_ENV === 'development') {
             filteredEvents = events; // Simplificado para debug
           } else {
-            const weekStart = startOfWeek(currentDate, { locale: ptBR });
-            const weekEnd = endOfWeek(currentDate, { locale: ptBR });
+            const weekStart = startOfWeek(currentDate, {
+              weekStartsOn: 1,
+              locale: ptBR,
+            });
+            const weekEnd = endOfWeek(currentDate, {
+              weekStartsOn: 1,
+              locale: ptBR,
+            });
             filteredEvents = events.filter((event) => {
               const eventDate = new Date(event.start);
               return eventDate >= weekStart && eventDate <= weekEnd;

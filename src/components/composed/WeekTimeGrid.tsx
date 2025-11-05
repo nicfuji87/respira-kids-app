@@ -54,8 +54,11 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
 
     // Calcula dias da semana
     const weekDays = useMemo(() => {
-      const weekStart = startOfWeek(currentDate, { locale: ptBR });
-      const weekEnd = endOfWeek(currentDate, { locale: ptBR });
+      const weekStart = startOfWeek(currentDate, {
+        weekStartsOn: 1,
+        locale: ptBR,
+      });
+      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1, locale: ptBR });
       return eachDayOfInterval({ start: weekStart, end: weekEnd });
     }, [currentDate]);
 

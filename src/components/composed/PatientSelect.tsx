@@ -440,7 +440,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
             className="w-[--radix-popover-trigger-width] p-1"
             align="start"
           >
-            <Command shouldFilter={false} className="overflow-hidden">
+            <Command shouldFilter={false}>
               <CommandInput
                 placeholder="Buscar por nome, email, telefone ou CPF..."
                 value={searchTerm}

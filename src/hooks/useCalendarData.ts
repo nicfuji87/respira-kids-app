@@ -68,8 +68,8 @@ export const useCalendarData = (
       }
 
       case 'week': {
-        const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
-        const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+        const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
         return { start: weekStart, end: weekEnd };
       }
 

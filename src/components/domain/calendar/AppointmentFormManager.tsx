@@ -140,14 +140,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       // removed verbose debug log
     }, [formData]);
 
-    // AI dev note: Retry handleSave após confirmação do toast
-    useEffect(() => {
-      if (shouldRetry) {
-        setShouldRetry(false);
-        handleSave();
-      }
-    }, [shouldRetry, handleSave]);
-
     // Carregar opções de empresas de faturamento
     useEffect(() => {
       const loadEmpresas = async () => {
@@ -503,6 +495,14 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       onSave,
       onClose,
     ]);
+
+    // AI dev note: Retry handleSave após confirmação do toast
+    useEffect(() => {
+      if (shouldRetry) {
+        setShouldRetry(false);
+        handleSave();
+      }
+    }, [shouldRetry, handleSave]);
 
     // Helper para verificar se a data selecionada é passada
     const isDateInPast = useCallback(() => {
