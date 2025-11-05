@@ -437,17 +437,17 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           </PopoverTrigger>
 
           <PopoverContent
-            className="w-[--radix-popover-trigger-width] p-1"
+            className="w-[--radix-popover-trigger-width] p-0"
             align="start"
           >
-            <Command shouldFilter={false}>
+            <Command shouldFilter={false} className="flex flex-col">
               <CommandInput
                 placeholder="Buscar por nome, email, telefone ou CPF..."
                 value={searchTerm}
                 onValueChange={handleSearchChange}
                 className="h-9"
               />
-              <CommandList className="overflow-y-auto">
+              <CommandList className="max-h-[300px] overflow-y-auto">
                 {filteredPatients.length === 0 ? (
                   <CommandEmpty>
                     {isLoading
