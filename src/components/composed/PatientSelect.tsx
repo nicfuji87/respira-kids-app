@@ -1,19 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { User, Phone, Mail, Check, ChevronsUpDown } from 'lucide-react';
+import { User, Phone, Mail, Check, ChevronsUpDown, X } from 'lucide-react';
 
+import { Popover, PopoverContent } from '@/components/primitives/popover';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/primitives/popover';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { cn, normalizeText } from '@/lib/utils';
 import { fetchPacientes } from '@/lib/calendar-services';
 import type { SupabasePessoa } from '@/types/supabase-calendar';
 
-// AI dev note: PatientSelect simplificado para garantir scroll mobile
-// Estrutura HTML/CSS direta sem Command component
+// AI dev note: PatientSelect com solução híbrida - Dialog para mobile, Popover para desktop
+// Mobile: Dialog fullscreen garante scroll funcionando perfeitamente
+// Desktop: Popover tradicional mantém UX familiar
 // BUSCA COMPLETA: Nome, email, CPF e telefone (do paciente e dos responsáveis)
 // Ao digitar 'Nicolas' (responsável), aparece 'Henrique' (paciente) na lista
 
@@ -76,6 +79,17 @@ export const PatientSelect = React.memo<PatientSelectProps>(
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    // AI dev note: Detectar se é mobile para usar modal fullscreen
+    useEffect(() => {
+      const checkMobile = () => {
+        setIsMobile(window.innerWidth <= 768 || 'ontouchstart' in window);
+      };
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     // AI dev note: Debounce otimizado - reduzido para 200ms para melhor UX
     const debouncedSearch = useDebounce(searchTerm, 200);
@@ -295,10 +309,6 @@ export const PatientSelect = React.memo<PatientSelectProps>(
       [onValueChange]
     );
 
-    const handleOpenChange = useCallback((open: boolean) => {
-      setIsOpen(open);
-    }, []);
-
     // AI dev note: Callback para mudanças no campo de busca
     const handleSearchChange = useCallback((search: string) => {
       setSearchTerm(search);
@@ -406,51 +416,59 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
     return (
       <div className={cn('space-y-2', className)}>
-        <Popover open={isOpen} onOpenChange={handleOpenChange}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              aria-expanded={isOpen}
-              disabled={disabled || isLoading}
-              className={cn(
-                'w-full justify-between text-left font-normal',
-                !selectedPatient && 'text-muted-foreground',
-                error && 'border-destructive'
-              )}
-            >
-              {selectedPatient ? (
-                <span className="truncate">{selectedPatient.nome}</span>
-              ) : (
-                <span>{isLoading ? 'Carregando...' : placeholder}</span>
-              )}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
+        {/* Botão que abre o seletor */}
+        <Button
+          variant="outline"
+          onClick={() => setIsOpen(true)}
+          disabled={disabled || isLoading}
+          className={cn(
+            'w-full justify-between text-left font-normal',
+            !selectedPatient && 'text-muted-foreground',
+            error && 'border-destructive'
+          )}
+        >
+          {selectedPatient ? (
+            <span className="truncate">{selectedPatient.nome}</span>
+          ) : (
+            <span>{isLoading ? 'Carregando...' : placeholder}</span>
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
 
-          <PopoverContent
-            className="w-[--radix-popover-trigger-width] p-0"
-            align="start"
-            sideOffset={5}
-          >
-            {/* AI dev note: Solução simplificada sem Command para garantir scroll mobile */}
-            <div className="flex flex-col max-h-[400px]">
-              {/* Input de busca fixo no topo */}
-              <div className="flex items-center border-b px-3 py-2">
+        {/* Mobile: Dialog fullscreen / Desktop: Popover */}
+        {isMobile ? (
+          // AI dev note: Modal fullscreen para mobile - garante scroll funcionando
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogContent className="h-full max-h-full sm:max-h-[90vh] p-0 flex flex-col">
+              <DialogHeader className="px-4 py-3 border-b">
+                <DialogTitle className="flex items-center justify-between">
+                  <span>Selecionar Paciente</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </DialogTitle>
+              </DialogHeader>
+
+              {/* Input de busca fixo */}
+              <div className="px-4 py-3 border-b">
                 <input
                   type="text"
                   placeholder="Buscar por nome, email, telefone ou CPF..."
                   value={searchTerm}
                   onChange={(e) => handleSearchChange(e.target.value)}
-                  className="flex-1 outline-none text-sm"
+                  className="w-full p-2 border rounded-md outline-none text-sm"
                   autoFocus
                 />
               </div>
 
-              {/* Lista scrollável */}
-              <div className="overflow-y-auto" style={{ maxHeight: '350px' }}>
+              {/* Lista scrollável - flex-1 para ocupar resto da tela */}
+              <div className="flex-1 overflow-y-auto px-4">
                 {filteredPatients.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">
+                  <div className="p-8 text-center text-sm text-muted-foreground">
                     {isLoading
                       ? 'Carregando pacientes...'
                       : searchTerm.length < 2
@@ -458,12 +476,15 @@ export const PatientSelect = React.memo<PatientSelectProps>(
                         : 'Nenhum paciente encontrado'}
                   </div>
                 ) : (
-                  <div>
+                  <div className="py-2">
                     {filteredPatients.map((patient) => (
                       <div
                         key={patient.id}
-                        onClick={() => handlePatientSelect(patient)}
-                        className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                        onClick={() => {
+                          handlePatientSelect(patient);
+                          setIsOpen(false);
+                        }}
+                        className="p-3 hover:bg-accent cursor-pointer rounded-md mb-2"
                       >
                         {renderPatientInfo(patient)}
                       </div>
@@ -471,9 +492,55 @@ export const PatientSelect = React.memo<PatientSelectProps>(
                   </div>
                 )}
               </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          // Desktop: Popover tradicional
+          <Popover open={isOpen} onOpenChange={setIsOpen}>
+            <PopoverContent
+              className="w-[600px] p-0"
+              align="start"
+              sideOffset={5}
+            >
+              <div className="flex flex-col max-h-[400px]">
+                <div className="flex items-center border-b px-3 py-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome, email, telefone ou CPF..."
+                    value={searchTerm}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="flex-1 outline-none text-sm"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="overflow-y-auto" style={{ maxHeight: '350px' }}>
+                  {filteredPatients.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      {isLoading
+                        ? 'Carregando pacientes...'
+                        : searchTerm.length < 2
+                          ? 'Digite pelo menos 2 caracteres para buscar'
+                          : 'Nenhum paciente encontrado'}
+                    </div>
+                  ) : (
+                    <div>
+                      {filteredPatients.map((patient) => (
+                        <div
+                          key={patient.id}
+                          onClick={() => handlePatientSelect(patient)}
+                          className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                        >
+                          {renderPatientInfo(patient)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
