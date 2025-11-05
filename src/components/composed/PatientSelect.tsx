@@ -437,55 +437,52 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           </PopoverTrigger>
 
           <PopoverContent
-            className="w-[--radix-popover-trigger-width] p-0"
+            className="w-[--radix-popover-trigger-width] p-0 max-h-[400px]"
             align="start"
           >
-            {/* AI dev note: Scroll otimizado para mobile com -webkit-overflow-scrolling e touch-action */}
-            <Command
-              shouldFilter={false}
-              className="flex flex-col max-h-[400px]"
-            >
-              <CommandInput
-                placeholder="Buscar por nome, email, telefone ou CPF..."
-                value={searchTerm}
-                onValueChange={handleSearchChange}
-                className="h-9 flex-shrink-0"
-              />
-              <CommandList
-                className="max-h-[300px] overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent"
-                style={
-                  {
+            {/* AI dev note: Scroll definitivo - wrapper div próprio para garantir scroll mobile */}
+            <div className="flex flex-col h-full max-h-[400px]">
+              <Command shouldFilter={false} className="overflow-hidden">
+                <CommandInput
+                  placeholder="Buscar por nome, email, telefone ou CPF..."
+                  value={searchTerm}
+                  onValueChange={handleSearchChange}
+                  className="h-9 flex-shrink-0 border-b"
+                />
+                <div
+                  className="overflow-y-auto overscroll-contain max-h-[350px]"
+                  style={{
                     WebkitOverflowScrolling: 'touch',
-                    touchAction: 'pan-y',
-                    overscrollBehavior: 'contain',
-                  } as React.CSSProperties
-                }
-              >
-                {filteredPatients.length === 0 ? (
-                  <CommandEmpty>
-                    {isLoading
-                      ? 'Carregando pacientes...'
-                      : searchTerm.length < 2
-                        ? 'Digite pelo menos 2 caracteres para buscar'
-                        : 'Nenhum paciente encontrado'}
-                  </CommandEmpty>
-                ) : (
-                  <CommandGroup className="[&_[cmdk-item]]:touch-pan-y">
-                    {filteredPatients.map((patient) => (
-                      <CommandItem
-                        key={patient.id}
-                        value={patient.id}
-                        onSelect={() => handlePatientSelect(patient)}
-                        className="p-3 cursor-pointer touch-pan-y"
-                        style={{ touchAction: 'pan-y' } as React.CSSProperties}
-                      >
-                        {renderPatientInfo(patient)}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-              </CommandList>
-            </Command>
+                    scrollbarWidth: 'thin',
+                  }}
+                >
+                  <CommandList>
+                    {filteredPatients.length === 0 ? (
+                      <CommandEmpty>
+                        {isLoading
+                          ? 'Carregando pacientes...'
+                          : searchTerm.length < 2
+                            ? 'Digite pelo menos 2 caracteres para buscar'
+                            : 'Nenhum paciente encontrado'}
+                      </CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {filteredPatients.map((patient) => (
+                          <CommandItem
+                            key={patient.id}
+                            value={patient.id}
+                            onSelect={() => handlePatientSelect(patient)}
+                            className="p-3 cursor-pointer"
+                          >
+                            {renderPatientInfo(patient)}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </div>
+              </Command>
+            </div>
           </PopoverContent>
         </Popover>
 
