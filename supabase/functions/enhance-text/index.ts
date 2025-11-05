@@ -1,8 +1,9 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { OpenAI } from 'https://deno.land/x/openai@v4.24.0/mod.ts';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // AI dev note: Edge Function para melhoramento de texto médico usando OpenAI GPT
-// Prompt especializado para fisioterapia respiratória pediátrica
+// Busca prompt e modelo da tabela ai_prompts no banco
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,13 +68,16 @@ Deno.serve(async (req: Request) => {
   try {
     console.log('[DEBUG] Starting enhance-text function');
 
-    // Verificar API key diretamente de environment variables
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      throw new Error('OpenAI API key not configured');
+    // Get environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Variáveis de ambiente do Supabase não encontradas');
     }
 
-    console.log('[DEBUG] OpenAI API key found');
+    // Create Supabase client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse request
     const { text, action }: EnhanceRequest = await req.json();
@@ -106,8 +110,30 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Usar prompt padrão por enquanto
-    const improvePrompt = `Você é um fisioterapeuta respiratório pediátrico experiente. 
+    // Fetch OpenAI key from Supabase
+    const { data: apiKeys, error: apiError } = await supabase
+      .from('api_keys')
+      .select('encrypted_key')
+      .eq('service_name', 'openai')
+      .eq('is_active', true)
+      .single();
+
+    if (apiError || !apiKeys?.encrypted_key) {
+      throw new Error('Chave OpenAI não encontrada');
+    }
+
+    const openaiApiKey = apiKeys.encrypted_key;
+
+    // Fetch enhance prompt and model from ai_prompts table
+    const { data: promptData, error: promptError } = await supabase
+      .from('ai_prompts')
+      .select('prompt_content, openai_model')
+      .eq('prompt_name', 'enhance_text')
+      .eq('is_active', true)
+      .single();
+
+    // AI dev note: Usar defaults se não encontrar no banco
+    let promptContent = `Você é um fisioterapeuta respiratório pediátrico experiente. 
 Melhore o seguinte texto de evolução médica mantendo:
 - Terminologia médica apropriada
 - Clareza e objetividade
@@ -116,8 +142,14 @@ Melhore o seguinte texto de evolução médica mantendo:
 - Tom profissional e técnico
 
 Texto a melhorar:`;
+    let openaiModel = 'gpt-5-mini';
 
-    console.log('[DEBUG] Configuration loaded successfully');
+    if (promptData && !promptError) {
+      promptContent = promptData.prompt_content || promptContent;
+      openaiModel = promptData.openai_model || openaiModel;
+    }
+
+    console.log(`[DEBUG] Using model: ${openaiModel}`);
 
     // Rate limiting baseado no IP
     const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
@@ -159,7 +191,7 @@ Texto a melhorar:`;
     // Fazer enhancement
     const startTime = Date.now();
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // Usar o modelo encontrado no banco
+      model: openaiModel,
       messages: [
         {
           role: 'system',
@@ -168,7 +200,7 @@ Texto a melhorar:`;
         },
         {
           role: 'user',
-          content: `${improvePrompt}\n\n${text}`,
+          content: `${promptContent}\n\n${text}`,
         },
       ],
       max_tokens: 1500,
