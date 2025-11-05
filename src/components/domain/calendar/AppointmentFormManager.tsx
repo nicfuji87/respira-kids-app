@@ -321,7 +321,65 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       [updateField, formData.data_hora, checkScheduleConflicts]
     );
 
-    // Salvar agendamento
+    // AI dev note: Função separada para realmente criar o agendamento (sem validações de data)
+    const performSave = useCallback(async () => {
+      if (!user?.pessoa?.id) {
+        setErrors({ general: 'Usuário não encontrado' });
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        const appointmentData: CreateAgendamento = {
+          data_hora: formData.data_hora,
+          paciente_id: formData.paciente_id,
+          profissional_id: formData.profissional_id,
+          tipo_servico_id: formData.tipo_servico_id,
+          local_id: formData.local_id || undefined,
+          status_consulta_id: formData.status_consulta_id,
+          status_pagamento_id: formData.status_pagamento_id,
+          valor_servico: formData.valor_servico,
+          observacao: formData.observacao || undefined,
+          agendado_por: user.pessoa.id,
+          empresa_fatura: formData.empresa_fatura,
+        };
+
+        const newAppointment = await createAgendamento(appointmentData);
+
+        toast({
+          title: 'Agendamento criado',
+          description: 'O agendamento foi criado com sucesso.',
+        });
+
+        onSave?.(newAppointment.id);
+        // Reset estados de confirmação ao fechar
+        setPastDateConfirmed(false);
+        setFutureWeekConfirmed(false);
+        onClose();
+      } catch (error: unknown) {
+        console.error('Erro ao criar agendamento:', error);
+
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : 'Erro ao criar agendamento. Tente novamente.';
+
+        setErrors({
+          general: errorMessage,
+        });
+
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível criar o agendamento.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }, [formData, user, onSave, toast, onClose]);
+
+    // Validar e salvar agendamento
     const handleSave = useCallback(async () => {
       // Validar formulário inline para evitar dependência desnecessária
       const newErrors: FormErrors = {};
@@ -385,11 +443,11 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             action: (
               <ToastAction
                 altText="Confirmar agendamento"
-                onClick={() => {
-                  setPastDateConfirmed(true);
+                onClick={async () => {
                   dismiss(); // Dismiss imediatamente
-                  // Executar handleSave sem delay para melhor responsividade
-                  handleSave();
+                  setPastDateConfirmed(true);
+                  // Usar setTimeout para garantir que o state foi atualizado
+                  setTimeout(() => performSave(), 0);
                 }}
               >
                 Confirmar
@@ -410,11 +468,11 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             action: (
               <ToastAction
                 altText="Confirmar agendamento"
-                onClick={() => {
-                  setFutureWeekConfirmed(true);
+                onClick={async () => {
                   dismiss(); // Dismiss imediatamente
-                  // Executar handleSave sem delay para melhor responsividade
-                  handleSave();
+                  setFutureWeekConfirmed(true);
+                  // Usar setTimeout para garantir que o state foi atualizado
+                  setTimeout(() => performSave(), 0);
                 }}
               >
                 Confirmar
@@ -432,65 +490,15 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
       setErrors({});
 
-      if (!user?.pessoa?.id) {
-        setErrors({ general: 'Usuário não encontrado' });
-        return;
-      }
-
-      setIsLoading(true);
-
-      try {
-        const appointmentData: CreateAgendamento = {
-          data_hora: formData.data_hora,
-          paciente_id: formData.paciente_id,
-          profissional_id: formData.profissional_id,
-          tipo_servico_id: formData.tipo_servico_id,
-          local_id: formData.local_id || undefined,
-          status_consulta_id: formData.status_consulta_id,
-          status_pagamento_id: formData.status_pagamento_id,
-          valor_servico: formData.valor_servico,
-          observacao: formData.observacao || undefined,
-          agendado_por: user.pessoa.id,
-          empresa_fatura: formData.empresa_fatura,
-        };
-
-        const newAppointment = await createAgendamento(appointmentData);
-
-        toast({
-          title: 'Agendamento criado',
-          description: 'O agendamento foi criado com sucesso.',
-        });
-
-        onSave?.(newAppointment.id);
-        onClose();
-      } catch (error: unknown) {
-        console.error('Erro ao criar agendamento:', error);
-
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : 'Erro ao criar agendamento. Tente novamente.';
-
-        setErrors({
-          general: errorMessage,
-        });
-
-        toast({
-          title: 'Erro',
-          description: 'Não foi possível criar o agendamento.',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-      }
+      // Se passou todas as validações, executar o salvamento
+      await performSave();
     }, [
       formData,
-      user,
-      onSave,
-      onClose,
       toast,
       pastDateConfirmed,
       futureWeekConfirmed,
+      performSave,
+      selectedServiceName,
     ]);
 
     // Helper para verificar se a data selecionada é passada
@@ -514,8 +522,15 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       return appointmentDate > oneWeekFromNow;
     }, [formData.data_hora]);
 
+    // AI dev note: Limpar estados ao fechar modal
+    const handleClose = useCallback(() => {
+      setPastDateConfirmed(false);
+      setFutureWeekConfirmed(false);
+      onClose();
+    }, [onClose]);
+
     return (
-      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent
           className={cn('max-w-2xl max-h-[90vh] overflow-y-auto', className)}
         >
