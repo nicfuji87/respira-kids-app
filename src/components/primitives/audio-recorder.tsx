@@ -67,20 +67,25 @@ export const AudioRecorder = React.memo<AudioRecorderProps>(
         setPermissionError(null);
 
         // Solicitar permissão do microfone
+        // AI dev note: Configurações otimizadas para transcrição (menor tamanho de arquivo)
+        // Sample rate reduzido de 44100 para 16000 (suficiente para voz)
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            sampleRate: 44100,
+            autoGainControl: true,
+            sampleRate: 16000, // Reduzido para economizar espaço (voz não precisa de 44100)
           },
         });
 
         streamRef.current = stream;
         audioChunksRef.current = [];
 
-        // Configurar MediaRecorder
+        // AI dev note: Configurar MediaRecorder com bitrate otimizado para voz
+        // Isso reduz significativamente o tamanho do arquivo
         const mediaRecorder = new MediaRecorder(stream, {
           mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 32000, // 32kbps é suficiente para transcrição de voz
         });
 
         mediaRecorderRef.current = mediaRecorder;
@@ -301,6 +306,21 @@ export const AudioRecorder = React.memo<AudioRecorderProps>(
         {/* Controles para áudio gravado */}
         {recordedBlob && audioUrl && (
           <div className="space-y-3">
+            {/* Informações do arquivo */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+              <span>Tamanho: {(recordedBlob.size / 1024).toFixed(1)} KB</span>
+              <span>
+                {recordedBlob.size > 25 * 1024 * 1024 && (
+                  <span className="text-destructive font-semibold">
+                    ⚠️ Muito grande! Limite: 25MB
+                  </span>
+                )}
+                {recordedBlob.size <= 25 * 1024 * 1024 && (
+                  <span className="text-green-600">✓ Tamanho OK</span>
+                )}
+              </span>
+            </div>
+
             {/* Player de áudio */}
             <audio
               ref={audioRef}

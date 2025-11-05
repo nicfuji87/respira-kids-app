@@ -73,6 +73,28 @@ Deno.serve(async (req: Request) => {
     }
     const audioBlob = new Blob([bytes], { type: audioType });
 
+    // AI dev note: Verificar tamanho do áudio (limite do Whisper é 25MB)
+    const MAX_SIZE = 25 * 1024 * 1024; // 25MB
+    if (audioBlob.size > MAX_SIZE) {
+      console.error(
+        `❌ Arquivo muito grande: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`
+      );
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Arquivo de áudio muito grande (${(audioBlob.size / 1024 / 1024).toFixed(1)}MB). O limite é 25MB. Tente gravar um áudio mais curto ou com menor qualidade.`,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    console.log(
+      `📊 Tamanho do áudio: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB, Tipo: ${audioType}`
+    );
+
     // Get environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -106,17 +128,48 @@ Deno.serve(async (req: Request) => {
       .eq('is_active', true)
       .single();
 
-    let promptContent = 'Transcreva o áudio de forma clara e precisa.';
-    let openaiModel = 'whisper-1';
+    // AI dev note: Default para gpt-4o-transcribe (melhor qualidade disponível)
+    let promptContent =
+      'A fisioterapeuta está gravando uma evolução clínica de um paciente pediátrico com terminologia médica especializada.';
+    let openaiModel = 'gpt-4o-transcribe';
 
     if (promptData && !promptError) {
       promptContent = promptData.prompt_content || promptContent;
       openaiModel = promptData.openai_model || openaiModel;
     }
 
+    // AI dev note: Determinar extensão correta baseada no tipo MIME
+    // OpenAI Whisper funciona melhor com formatos padrão
+    let fileExtension = 'webm';
+    let fileName = 'audio.webm';
+
+    if (audioType.includes('webm')) {
+      fileExtension = 'webm';
+      fileName = 'audio.webm';
+    } else if (audioType.includes('mp4') || audioType.includes('m4a')) {
+      fileExtension = 'mp4';
+      fileName = 'audio.mp4';
+    } else if (audioType.includes('mp3') || audioType.includes('mpeg')) {
+      fileExtension = 'mp3';
+      fileName = 'audio.mp3';
+    } else if (audioType.includes('wav')) {
+      fileExtension = 'wav';
+      fileName = 'audio.wav';
+    } else if (audioType.includes('ogg')) {
+      fileExtension = 'ogg';
+      fileName = 'audio.ogg';
+    }
+
+    console.log(
+      `📝 Arquivo para Whisper: ${fileName}, Extensão: ${fileExtension}`
+    );
+    console.log(
+      `📝 Prompt configurado: ${promptContent ? `"${promptContent.substring(0, 100)}..."` : 'Nenhum'}`
+    );
+
     // Prepare OpenAI FormData
     const openaiFormData = new FormData();
-    const audioFile = new File([audioBlob], 'audio.webm', {
+    const audioFile = new File([audioBlob], fileName, {
       type: audioType,
     });
     openaiFormData.append('file', audioFile);
@@ -124,11 +177,21 @@ Deno.serve(async (req: Request) => {
     openaiFormData.append('response_format', 'json');
     openaiFormData.append('language', 'pt');
 
+    // AI dev note: Comportamento do prompt varia por modelo:
+    // - whisper-1: Aceita apenas exemplos de texto/vocabulário (224 tokens max)
+    // - gpt-4o-mini-transcribe/gpt-4o-transcribe: Aceita contexto descritivo
     if (promptContent && promptContent.trim() !== '') {
+      console.log(`✅ Adicionando prompt ao modelo ${openaiModel}`);
+      console.log(
+        `📝 Tipo de prompt: ${openaiModel.includes('whisper') ? 'exemplo de texto' : 'contexto descritivo'}`
+      );
       openaiFormData.append('prompt', promptContent);
     }
 
     // Call OpenAI API
+    console.log('🚀 Iniciando chamada para OpenAI Whisper...');
+    const startTime = Date.now();
+
     const openaiResponse = await fetch(
       'https://api.openai.com/v1/audio/transcriptions',
       {
@@ -141,8 +204,13 @@ Deno.serve(async (req: Request) => {
       }
     );
 
+    const duration = Date.now() - startTime;
+    console.log(`⏱️ Tempo de resposta do Whisper: ${duration}ms`);
+
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
+      console.error(`❌ OpenAI API Error: Status ${openaiResponse.status}`);
+      console.error(`❌ Detalhes do erro: ${errorText.substring(0, 500)}`);
       throw new Error(
         `OpenAI API Error: ${openaiResponse.status} - ${errorText.substring(0, 200)}`
       );
@@ -151,9 +219,23 @@ Deno.serve(async (req: Request) => {
     const openaiData = await openaiResponse.json();
     const transcription = openaiData.text?.trim();
 
+    console.log(
+      `📊 Resposta do Whisper recebida. Tamanho da transcrição: ${transcription?.length || 0} caracteres`
+    );
+    console.log(
+      `📝 Primeiros 100 caracteres: ${transcription?.substring(0, 100) || '(vazio)'}`
+    );
+
     if (!transcription) {
+      console.error('❌ Transcrição vazia ou não encontrada na resposta');
+      console.error(
+        '📋 Resposta completa do OpenAI:',
+        JSON.stringify(openaiData, null, 2)
+      );
       throw new Error('Transcrição não encontrada na resposta da OpenAI');
     }
+
+    console.log('✅ Transcrição bem-sucedida!');
 
     return new Response(
       JSON.stringify({
