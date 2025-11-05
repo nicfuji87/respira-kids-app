@@ -124,6 +124,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     const [conflictDetails, setConflictDetails] = useState<string>('');
     const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
     const [futureWeekConfirmed, setFutureWeekConfirmed] = useState(false);
+    const [shouldRetry, setShouldRetry] = useState(false);
 
     // AI dev note: Armazenar nome do serviço para validação de valor zero apenas para serviços SOCIAL
     const [selectedServiceName, setSelectedServiceName] = useState<string>('');
@@ -138,6 +139,14 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     useEffect(() => {
       // removed verbose debug log
     }, [formData]);
+
+    // AI dev note: Retry handleSave após confirmação do toast
+    useEffect(() => {
+      if (shouldRetry) {
+        setShouldRetry(false);
+        handleSave();
+      }
+    }, [shouldRetry, handleSave]);
 
     // Carregar opções de empresas de faturamento
     useEffect(() => {
@@ -321,64 +330,6 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       [updateField, formData.data_hora, checkScheduleConflicts]
     );
 
-    // AI dev note: Função separada para realmente criar o agendamento (sem validações de data)
-    const performSave = useCallback(async () => {
-      if (!user?.pessoa?.id) {
-        setErrors({ general: 'Usuário não encontrado' });
-        return;
-      }
-
-      setIsLoading(true);
-
-      try {
-        const appointmentData: CreateAgendamento = {
-          data_hora: formData.data_hora,
-          paciente_id: formData.paciente_id,
-          profissional_id: formData.profissional_id,
-          tipo_servico_id: formData.tipo_servico_id,
-          local_id: formData.local_id || undefined,
-          status_consulta_id: formData.status_consulta_id,
-          status_pagamento_id: formData.status_pagamento_id,
-          valor_servico: formData.valor_servico,
-          observacao: formData.observacao || undefined,
-          agendado_por: user.pessoa.id,
-          empresa_fatura: formData.empresa_fatura,
-        };
-
-        const newAppointment = await createAgendamento(appointmentData);
-
-        toast({
-          title: 'Agendamento criado',
-          description: 'O agendamento foi criado com sucesso.',
-        });
-
-        onSave?.(newAppointment.id);
-        // Reset estados de confirmação ao fechar
-        setPastDateConfirmed(false);
-        setFutureWeekConfirmed(false);
-        onClose();
-      } catch (error: unknown) {
-        console.error('Erro ao criar agendamento:', error);
-
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : 'Erro ao criar agendamento. Tente novamente.';
-
-        setErrors({
-          general: errorMessage,
-        });
-
-        toast({
-          title: 'Erro',
-          description: 'Não foi possível criar o agendamento.',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    }, [formData, user, onSave, toast, onClose]);
-
     // Validar e salvar agendamento
     const handleSave = useCallback(async () => {
       // Validar formulário inline para evitar dependência desnecessária
@@ -446,8 +397,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
                 onClick={async () => {
                   dismiss(); // Dismiss imediatamente
                   setPastDateConfirmed(true);
-                  // Usar setTimeout para garantir que o state foi atualizado
-                  setTimeout(() => performSave(), 0);
+                  setShouldRetry(true);
                 }}
               >
                 Confirmar
@@ -471,8 +421,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
                 onClick={async () => {
                   dismiss(); // Dismiss imediatamente
                   setFutureWeekConfirmed(true);
-                  // Usar setTimeout para garantir que o state foi atualizado
-                  setTimeout(() => performSave(), 0);
+                  setShouldRetry(true);
                 }}
               >
                 Confirmar
@@ -490,15 +439,69 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
       setErrors({});
 
-      // Se passou todas as validações, executar o salvamento
-      await performSave();
+      if (!user?.pessoa?.id) {
+        setErrors({ general: 'Usuário não encontrado' });
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        const appointmentData: CreateAgendamento = {
+          data_hora: formData.data_hora,
+          paciente_id: formData.paciente_id,
+          profissional_id: formData.profissional_id,
+          tipo_servico_id: formData.tipo_servico_id,
+          local_id: formData.local_id || undefined,
+          status_consulta_id: formData.status_consulta_id,
+          status_pagamento_id: formData.status_pagamento_id,
+          valor_servico: formData.valor_servico,
+          observacao: formData.observacao || undefined,
+          agendado_por: user.pessoa.id,
+          empresa_fatura: formData.empresa_fatura,
+        };
+
+        const newAppointment = await createAgendamento(appointmentData);
+
+        toast({
+          title: 'Agendamento criado',
+          description: 'O agendamento foi criado com sucesso.',
+        });
+
+        onSave?.(newAppointment.id);
+        // Reset estados de confirmação ao fechar
+        setPastDateConfirmed(false);
+        setFutureWeekConfirmed(false);
+        onClose();
+      } catch (error: unknown) {
+        console.error('Erro ao criar agendamento:', error);
+
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : 'Erro ao criar agendamento. Tente novamente.';
+
+        setErrors({
+          general: errorMessage,
+        });
+
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível criar o agendamento.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }, [
       formData,
       toast,
       pastDateConfirmed,
       futureWeekConfirmed,
-      performSave,
       selectedServiceName,
+      user,
+      onSave,
+      onClose,
     ]);
 
     // Helper para verificar se a data selecionada é passada
