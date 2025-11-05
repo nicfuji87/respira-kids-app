@@ -470,13 +470,14 @@ export const PatientSelect = React.memo<PatientSelectProps>(
                         : 'Nenhum paciente encontrado'}
                   </CommandEmpty>
                 ) : (
-                  <CommandGroup>
+                  <CommandGroup className="[&_[cmdk-item]]:touch-pan-y">
                     {filteredPatients.map((patient) => (
                       <CommandItem
                         key={patient.id}
                         value={patient.id}
                         onSelect={() => handlePatientSelect(patient)}
-                        className="p-3 cursor-pointer"
+                        className="p-3 cursor-pointer touch-pan-y"
+                        style={{ touchAction: 'pan-y' } as React.CSSProperties}
                       >
                         {renderPatientInfo(patient)}
                       </CommandItem>
