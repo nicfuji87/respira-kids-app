@@ -2,14 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { User, Phone, Mail, Check, ChevronsUpDown } from 'lucide-react';
 
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/primitives/command';
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -20,8 +12,8 @@ import { cn, normalizeText } from '@/lib/utils';
 import { fetchPacientes } from '@/lib/calendar-services';
 import type { SupabasePessoa } from '@/types/supabase-calendar';
 
-// AI dev note: PatientSelect corrigido com Combobox pattern do shadcn/ui
-// Usa CommandInput para manter foco apropriadamente durante autocomplete
+// AI dev note: PatientSelect simplificado para garantir scroll mobile
+// Estrutura HTML/CSS direta sem Command component
 // BUSCA COMPLETA: Nome, email, CPF e telefone (do paciente e dos responsáveis)
 // Ao digitar 'Nicolas' (responsável), aparece 'Henrique' (paciente) na lista
 
@@ -437,51 +429,48 @@ export const PatientSelect = React.memo<PatientSelectProps>(
           </PopoverTrigger>
 
           <PopoverContent
-            className="w-[--radix-popover-trigger-width] p-0 max-h-[400px]"
+            className="w-[--radix-popover-trigger-width] p-0"
             align="start"
+            sideOffset={5}
           >
-            {/* AI dev note: Scroll definitivo - wrapper div próprio para garantir scroll mobile */}
-            <div className="flex flex-col h-full max-h-[400px]">
-              <Command shouldFilter={false} className="overflow-hidden">
-                <CommandInput
+            {/* AI dev note: Solução simplificada sem Command para garantir scroll mobile */}
+            <div className="flex flex-col max-h-[400px]">
+              {/* Input de busca fixo no topo */}
+              <div className="flex items-center border-b px-3 py-2">
+                <input
+                  type="text"
                   placeholder="Buscar por nome, email, telefone ou CPF..."
                   value={searchTerm}
-                  onValueChange={handleSearchChange}
-                  className="h-9 flex-shrink-0 border-b"
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="flex-1 outline-none text-sm"
+                  autoFocus
                 />
-                <div
-                  className="overflow-y-auto overscroll-contain max-h-[350px]"
-                  style={{
-                    WebkitOverflowScrolling: 'touch',
-                    scrollbarWidth: 'thin',
-                  }}
-                >
-                  <CommandList>
-                    {filteredPatients.length === 0 ? (
-                      <CommandEmpty>
-                        {isLoading
-                          ? 'Carregando pacientes...'
-                          : searchTerm.length < 2
-                            ? 'Digite pelo menos 2 caracteres para buscar'
-                            : 'Nenhum paciente encontrado'}
-                      </CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        {filteredPatients.map((patient) => (
-                          <CommandItem
-                            key={patient.id}
-                            value={patient.id}
-                            onSelect={() => handlePatientSelect(patient)}
-                            className="p-3 cursor-pointer"
-                          >
-                            {renderPatientInfo(patient)}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                </div>
-              </Command>
+              </div>
+
+              {/* Lista scrollável */}
+              <div className="overflow-y-auto" style={{ maxHeight: '350px' }}>
+                {filteredPatients.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    {isLoading
+                      ? 'Carregando pacientes...'
+                      : searchTerm.length < 2
+                        ? 'Digite pelo menos 2 caracteres para buscar'
+                        : 'Nenhum paciente encontrado'}
+                  </div>
+                ) : (
+                  <div>
+                    {filteredPatients.map((patient) => (
+                      <div
+                        key={patient.id}
+                        onClick={() => handlePatientSelect(patient)}
+                        className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                      >
+                        {renderPatientInfo(patient)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </PopoverContent>
         </Popover>
