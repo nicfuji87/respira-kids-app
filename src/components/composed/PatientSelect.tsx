@@ -440,14 +440,27 @@ export const PatientSelect = React.memo<PatientSelectProps>(
             className="w-[--radix-popover-trigger-width] p-0"
             align="start"
           >
-            <Command shouldFilter={false} className="flex flex-col">
+            {/* AI dev note: Scroll otimizado para mobile com -webkit-overflow-scrolling e touch-action */}
+            <Command
+              shouldFilter={false}
+              className="flex flex-col max-h-[400px]"
+            >
               <CommandInput
                 placeholder="Buscar por nome, email, telefone ou CPF..."
                 value={searchTerm}
                 onValueChange={handleSearchChange}
-                className="h-9"
+                className="h-9 flex-shrink-0"
               />
-              <CommandList className="max-h-[300px] overflow-y-auto">
+              <CommandList
+                className="max-h-[300px] overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent"
+                style={
+                  {
+                    WebkitOverflowScrolling: 'touch',
+                    touchAction: 'pan-y',
+                    overscrollBehavior: 'contain',
+                  } as React.CSSProperties
+                }
+              >
                 {filteredPatients.length === 0 ? (
                   <CommandEmpty>
                     {isLoading
