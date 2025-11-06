@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { User, Phone, Mail, Check, ChevronsUpDown, X } from 'lucide-react';
 
-import { Popover, PopoverContent } from '@/components/primitives/popover';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/primitives/popover';
 import {
   Dialog,
   DialogContent,
@@ -15,8 +19,8 @@ import { fetchPacientes } from '@/lib/calendar-services';
 import type { SupabasePessoa } from '@/types/supabase-calendar';
 
 // AI dev note: PatientSelect com solução híbrida - Dialog para mobile, Popover para desktop
-// Mobile: Dialog fullscreen garante scroll funcionando perfeitamente
-// Desktop: Popover tradicional mantém UX familiar
+// Mobile: Dialog fullscreen com botão separado garante scroll funcionando perfeitamente
+// Desktop: Popover com PopoverTrigger integrado mantém UX familiar
 // BUSCA COMPLETA: Nome, email, CPF e telefone (do paciente e dos responsáveis)
 // Ao digitar 'Nicolas' (responsável), aparece 'Henrique' (paciente) na lista
 
@@ -416,87 +420,107 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
     return (
       <div className={cn('space-y-2', className)}>
-        {/* Botão que abre o seletor */}
-        <Button
-          variant="outline"
-          onClick={() => setIsOpen(true)}
-          disabled={disabled || isLoading}
-          className={cn(
-            'w-full justify-between text-left font-normal',
-            !selectedPatient && 'text-muted-foreground',
-            error && 'border-destructive'
-          )}
-        >
-          {selectedPatient ? (
-            <span className="truncate">{selectedPatient.nome}</span>
-          ) : (
-            <span>{isLoading ? 'Carregando...' : placeholder}</span>
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-
-        {/* Mobile: Dialog fullscreen / Desktop: Popover */}
+        {/* Mobile: Dialog fullscreen */}
         {isMobile ? (
-          // AI dev note: Modal fullscreen para mobile - garante scroll funcionando
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="h-full max-h-full sm:max-h-[90vh] p-0 flex flex-col">
-              <DialogHeader className="px-4 py-3 border-b">
-                <DialogTitle className="flex items-center justify-between">
-                  <span>Selecionar Paciente</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </DialogTitle>
-              </DialogHeader>
+          <>
+            {/* Botão para mobile */}
+            <Button
+              variant="outline"
+              onClick={() => setIsOpen(true)}
+              disabled={disabled || isLoading}
+              className={cn(
+                'w-full justify-between text-left font-normal',
+                !selectedPatient && 'text-muted-foreground',
+                error && 'border-destructive'
+              )}
+            >
+              {selectedPatient ? (
+                <span className="truncate">{selectedPatient.nome}</span>
+              ) : (
+                <span>{isLoading ? 'Carregando...' : placeholder}</span>
+              )}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
 
-              {/* Input de busca fixo */}
-              <div className="px-4 py-3 border-b">
-                <input
-                  type="text"
-                  placeholder="Buscar por nome, email, telefone ou CPF..."
-                  value={searchTerm}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  className="w-full p-2 border rounded-md outline-none text-sm"
-                  autoFocus
-                />
-              </div>
+            {/* AI dev note: Modal fullscreen para mobile - garante scroll funcionando */}
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <DialogContent className="h-full max-h-full sm:max-h-[90vh] p-0 flex flex-col">
+                <DialogHeader className="px-4 py-3 border-b">
+                  <DialogTitle className="flex items-center justify-between">
+                    <span>Selecionar Paciente</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </DialogTitle>
+                </DialogHeader>
 
-              {/* Lista scrollável - flex-1 para ocupar resto da tela */}
-              <div className="flex-1 overflow-y-auto px-4">
-                {filteredPatients.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-muted-foreground">
-                    {isLoading
-                      ? 'Carregando pacientes...'
-                      : searchTerm.length < 2
-                        ? 'Digite pelo menos 2 caracteres para buscar'
-                        : 'Nenhum paciente encontrado'}
-                  </div>
-                ) : (
-                  <div className="py-2">
-                    {filteredPatients.map((patient) => (
-                      <div
-                        key={patient.id}
-                        onClick={() => {
-                          handlePatientSelect(patient);
-                          setIsOpen(false);
-                        }}
-                        className="p-3 hover:bg-accent cursor-pointer rounded-md mb-2"
-                      >
-                        {renderPatientInfo(patient)}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
+                {/* Input de busca fixo */}
+                <div className="px-4 py-3 border-b">
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome, email, telefone ou CPF..."
+                    value={searchTerm}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="w-full p-2 border rounded-md outline-none text-sm"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Lista scrollável - flex-1 para ocupar resto da tela */}
+                <div className="flex-1 overflow-y-auto px-4">
+                  {filteredPatients.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-muted-foreground">
+                      {isLoading
+                        ? 'Carregando pacientes...'
+                        : searchTerm.length < 2
+                          ? 'Digite pelo menos 2 caracteres para buscar'
+                          : 'Nenhum paciente encontrado'}
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      {filteredPatients.map((patient) => (
+                        <div
+                          key={patient.id}
+                          onClick={() => {
+                            handlePatientSelect(patient);
+                            setIsOpen(false);
+                          }}
+                          className="p-3 hover:bg-accent cursor-pointer rounded-md mb-2"
+                        >
+                          {renderPatientInfo(patient)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
         ) : (
           // Desktop: Popover tradicional
           <Popover open={isOpen} onOpenChange={setIsOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={disabled || isLoading}
+                className={cn(
+                  'w-full justify-between text-left font-normal',
+                  !selectedPatient && 'text-muted-foreground',
+                  error && 'border-destructive'
+                )}
+              >
+                {selectedPatient ? (
+                  <span className="truncate">{selectedPatient.nome}</span>
+                ) : (
+                  <span>{isLoading ? 'Carregando...' : placeholder}</span>
+                )}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
             <PopoverContent
               className="w-[600px] p-0"
               align="start"
