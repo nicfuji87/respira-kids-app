@@ -7,7 +7,6 @@ import {
 } from '@/components/primitives';
 import {
   LayoutGrid,
-  Receipt,
   DollarSign,
   Building2,
   Settings,
@@ -18,6 +17,8 @@ import {
   CalendarDays,
   ClipboardCheck,
   History,
+  FileText,
+  Users,
 } from 'lucide-react';
 import { DevelopmentPlaceholder } from '@/components/composed';
 import { FornecedorList } from '@/components/domain/fornecedores';
@@ -31,6 +32,7 @@ import {
   FinancialDashboard,
   RelatorioMensal,
   RecorrenciaLogViewer,
+  ConfiguracaoDivisaoSocios,
 } from '@/components/domain/financial';
 import { useSearchParams } from 'react-router-dom';
 
@@ -66,18 +68,11 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           content: <FinancialDashboard />,
         },
         {
-          id: 'receitas',
-          label: 'Receitas',
-          icon: Receipt,
+          id: 'lancamentos',
+          label: 'Lançamentos',
+          icon: FileText,
           roles: ['admin', 'secretaria'],
-          content: <LancamentoList tipo="receita" />,
-        },
-        {
-          id: 'despesas',
-          label: 'Despesas',
-          icon: DollarSign,
-          roles: ['admin', 'secretaria'],
-          content: <LancamentoList tipo="despesa" />,
+          content: <LancamentoList tipo="todos" />,
         },
         {
           id: 'contas_pagar',
@@ -134,7 +129,7 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           content: (
             <div className="space-y-6">
               <Tabs defaultValue="fornecedores" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger
                     value="fornecedores"
                     className="flex items-center gap-2"
@@ -156,6 +151,13 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
                     <Landmark className="h-4 w-4" />
                     Contas Bancárias
                   </TabsTrigger>
+                  <TabsTrigger
+                    value="divisao"
+                    className="flex items-center gap-2"
+                  >
+                    <Users className="h-4 w-4" />
+                    Divisão de Sócios
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="fornecedores" className="mt-6">
@@ -168,6 +170,10 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
 
                 <TabsContent value="contas" className="mt-6">
                   <ContaBancariaList />
+                </TabsContent>
+
+                <TabsContent value="divisao" className="mt-6">
+                  <ConfiguracaoDivisaoSocios />
                 </TabsContent>
               </Tabs>
             </div>

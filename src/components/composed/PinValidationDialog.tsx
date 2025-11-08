@@ -37,24 +37,21 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
   const [attempts, setAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [validationSuccess, setValidationSuccess] = useState(false); // AI dev note: Rastrear sucesso da validação
 
   const maxAttempts = 3;
   const blockDuration = 5 * 60 * 1000; // 5 minutos
 
-  // Reset state quando abrir OU quando fechar após sucesso
+  // Reset state quando abrir
   useEffect(() => {
     if (isOpen) {
-      // Reset state quando abrir
       setPin('');
       setError('');
-      setValidationSuccess(false); // AI dev note: Reset do estado de sucesso
       setLoading(false);
       checkBlockStatus();
       checkPinExists();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]); // AI dev note: checkBlockStatus não muda, não precisa como dependência
+  }, [isOpen]);
 
   const checkPinExists = async () => {
     try {
@@ -137,7 +134,6 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
         // PIN correto
         localStorage.removeItem('pin_attempts');
         localStorage.removeItem('pin_block_time');
-        setValidationSuccess(true);
         setLoading(false);
 
         // Chamar onSuccess que irá fechar o dialog via mudança de isPinValidated
@@ -187,7 +183,8 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
-        if (!open && !validationSuccess) {
+        // Só permite fechar via botão Cancelar ou após validação bem-sucedida
+        if (!open) {
           onClose();
         }
       }}
@@ -195,6 +192,7 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
       <DialogContent
         className="sm:max-w-md"
         onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

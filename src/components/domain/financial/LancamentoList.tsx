@@ -114,6 +114,9 @@ interface LancamentoListProps {
 
 export const LancamentoList = React.memo<LancamentoListProps>(
   ({ tipo = 'todos', showFilters = true, onSelectLancamento, className }) => {
+    const [tipoAtivo, setTipoAtivo] = React.useState<
+      'todos' | 'despesa' | 'receita'
+    >(tipo);
     const [lancamentos, setLancamentos] = React.useState<Lancamento[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = React.useState('');
@@ -191,8 +194,8 @@ export const LancamentoList = React.memo<LancamentoListProps>(
           .order('created_at', { ascending: false });
 
         // Filtro por tipo
-        if (tipo !== 'todos') {
-          query = query.eq('tipo_lancamento', tipo);
+        if (tipoAtivo !== 'todos') {
+          query = query.eq('tipo_lancamento', tipoAtivo);
         }
 
         // Filtro por status
@@ -244,7 +247,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
         setIsLoading(false);
       }
     }, [
-      tipo,
+      tipoAtivo,
       selectedStatus,
       selectedCategoria,
       selectedOrigem,
@@ -476,7 +479,13 @@ export const LancamentoList = React.memo<LancamentoListProps>(
             {showFilters && (
               <div className="space-y-4">
                 {/* Tabs por tipo */}
-                <Tabs value={tipo} className="w-full">
+                <Tabs
+                  value={tipoAtivo}
+                  onValueChange={(value) =>
+                    setTipoAtivo(value as 'todos' | 'despesa' | 'receita')
+                  }
+                  className="w-full"
+                >
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="todos">Todos</TabsTrigger>
                     <TabsTrigger value="despesa">
