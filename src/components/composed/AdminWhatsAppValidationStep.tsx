@@ -197,7 +197,7 @@ export const AdminWhatsAppValidationStep: React.FC<
       onContinue({
         whatsapp,
         jid,
-        existingPerson,
+        existingPerson: existingPerson || undefined,
       });
     }
   };

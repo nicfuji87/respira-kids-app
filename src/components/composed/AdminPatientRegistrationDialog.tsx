@@ -241,12 +241,17 @@ export const AdminPatientRegistrationDialog: React.FC<
   const handleFinancialResponsibleContinue = (data: {
     isSameAsLegal: boolean;
     existingPersonId?: string;
-    personData?: { id?: string };
+    personData?: {
+      nome: string;
+      cpf: string;
+      email?: string;
+      telefone?: string;
+    };
   }) => {
     setFormData((prev) => ({
       ...prev,
       isResponsavelFinanceiroIgualLegal: data.isSameAsLegal,
-      responsavelFinanceiroId: data.existingPersonId || data.personData?.id,
+      responsavelFinanceiroId: data.existingPersonId,
     }));
     goToNextStep();
   };
