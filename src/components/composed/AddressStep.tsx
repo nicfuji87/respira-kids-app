@@ -175,6 +175,11 @@ export const AddressStep = React.memo<AddressStepProps>(
         };
 
         console.log('✅ [AddressStep] Dados válidos:', addressData);
+        console.log('🔍 [DEBUG] Estado details:', {
+          raw: estado,
+          trimmed: estado.trim(),
+          length: estado.trim().length,
+        });
         onContinue(addressData);
       },
       [
