@@ -9,6 +9,7 @@ import {
   PatientAnamnesis,
   PatientHistory,
   MediaGallery,
+  PatientContractSection,
   type LocationOption,
 } from '@/components/composed';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
@@ -321,6 +322,18 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
             handlePersonClick(responsibleId);
           }}
         />
+
+        {/* Contrato do Paciente - apenas para pacientes */}
+        {(!personId ||
+          (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
+          <PatientContractSection
+            patientId={actualId}
+            userRole={
+              (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
+              null
+            }
+          />
+        )}
 
         {/* Seções específicas apenas para pacientes */}
         {(!personId ||

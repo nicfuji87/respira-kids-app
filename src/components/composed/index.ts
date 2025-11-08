@@ -41,6 +41,16 @@ export { StatusPaymentDisplay } from './StatusPaymentDisplay';
 // Configuration
 export { ConfigurationTabs } from './ConfigurationTabs';
 
+// Contract
+export { PatientContractSection } from './PatientContractSection';
+export { ContractViewModal } from './ContractViewModal';
+
+// Admin Patient Registration
+export { AdminPatientRegistrationDialog } from './AdminPatientRegistrationDialog';
+export { AdminWhatsAppValidationStep } from './AdminWhatsAppValidationStep';
+export { AdminPatientDataStep } from './AdminPatientDataStep';
+export { AdminContractGenerationStep } from './AdminContractGenerationStep';
+
 // Development
 export { DevelopmentPlaceholder } from './DevelopmentPlaceholder';
 

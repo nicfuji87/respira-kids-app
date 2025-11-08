@@ -1,15 +1,64 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserPlus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/primitives/button';
-import { PatientsList } from '@/components/composed/PatientsList';
+import {
+  PatientsList,
+  AdminPatientRegistrationDialog,
+} from '@/components/composed';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/components/primitives/use-toast';
 
 // AI dev note: PacientesPage atualizada - usa PatientsList com paginação de 20 itens
 // Lista completa de pacientes com busca integrada e navegação para detalhes
+// Cadastro administrativo integrado para admin/secretaria
 
 export const PacientesPage: React.FC = () => {
+  const navigate = useNavigate();
+  const auth = useAuth();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Verificar role do usuário
+  const userRole = auth.user?.pessoa?.role as
+    | 'admin'
+    | 'profissional'
+    | 'secretaria'
+    | null;
+  const canCreatePatient =
+    userRole && ['admin', 'secretaria'].includes(userRole);
+
   const handleNewPatient = () => {
-    // TODO: Implementar criação de novo paciente
-    console.log('Criando novo paciente');
+    console.log('🔍 Debug - Auth:', {
+      hasUser: !!auth.user,
+      hasPessoa: !!auth.user?.pessoa,
+      role: auth.user?.pessoa?.role,
+      canCreate: canCreatePatient,
+    });
+
+    if (!auth.user) {
+      toast({
+        title: 'Não autenticado',
+        description: 'Você precisa estar logado para cadastrar pacientes',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!canCreatePatient) {
+      toast({
+        title: 'Sem permissão',
+        description: `Apenas administradores e secretária podem cadastrar pacientes. Seu perfil: ${userRole || 'não definido'}`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsDialogOpen(true);
+  };
+
+  const handlePatientCreated = (patientId: string) => {
+    // Navegar para detalhes do paciente recém-criado
+    navigate(`/pacientes/${patientId}`);
   };
 
   return (
@@ -30,6 +79,13 @@ export const PacientesPage: React.FC = () => {
 
       {/* Lista paginada de pacientes */}
       <PatientsList className="w-full" />
+
+      {/* Dialog de cadastro administrativo */}
+      <AdminPatientRegistrationDialog
+        isOpen={isDialogOpen}
+        onClose={() => setIsDialogOpen(false)}
+        onSuccess={handlePatientCreated}
+      />
     </div>
   );
 };

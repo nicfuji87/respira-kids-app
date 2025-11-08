@@ -768,6 +768,95 @@ export async function updateAIHistoryStatus(
 }
 
 /**
+ * Buscar contrato do paciente
+ * Retorna o contrato mais recente e ativo ou null
+ * AI dev note: Suporta retrocompatibilidade com campo legado link_contrato
+ */
+export async function fetchPatientContract(patientId: string): Promise<{
+  contract: {
+    id: string;
+    nome_contrato: string;
+    conteudo_final: string;
+    arquivo_url: string | null;
+    status_contrato: string | null;
+    data_geracao: string | null;
+    data_assinatura: string | null;
+    is_legacy?: boolean;
+  } | null;
+  error?: string;
+}> {
+  try {
+    // Primeiro, buscar na tabela user_contracts (sistema novo)
+    const { data, error } = await supabase
+      .from('user_contracts')
+      .select(
+        `
+        id,
+        nome_contrato,
+        conteudo_final,
+        arquivo_url,
+        status_contrato,
+        data_geracao,
+        data_assinatura,
+        created_at
+      `
+      )
+      .eq('pessoa_id', patientId)
+      .eq('ativo', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Erro ao buscar contrato do paciente:', error);
+      return { contract: null, error: 'Erro ao buscar contrato' };
+    }
+
+    // Se encontrou contrato na tabela nova, retornar
+    if (data) {
+      return { contract: data };
+    }
+
+    // Fallback: verificar campo legado link_contrato na tabela pessoas
+    const { data: pessoaData, error: pessoaError } = await supabase
+      .from('pessoas')
+      .select('id, nome, link_contrato')
+      .eq('id', patientId)
+      .single();
+
+    if (pessoaError) {
+      console.error('Erro ao buscar pessoa:', pessoaError);
+      return { contract: null, error: 'Erro ao buscar dados do paciente' };
+    }
+
+    // Se tem link_contrato preenchido, retornar como contrato legado
+    if (pessoaData?.link_contrato) {
+      return {
+        contract: {
+          id: patientId, // Usar ID da pessoa como identificador
+          nome_contrato: `Contrato - ${pessoaData.nome}`,
+          conteudo_final: '', // Contrato legado não tem conteúdo armazenado
+          arquivo_url: pessoaData.link_contrato,
+          status_contrato: 'assinado', // Assumir que contratos legados estão assinados
+          data_geracao: null,
+          data_assinatura: null,
+          is_legacy: true, // Flag para indicar que é contrato legado
+        },
+      };
+    }
+
+    // Não encontrou contrato em nenhum lugar
+    return { contract: null };
+  } catch (err) {
+    console.error('Erro ao buscar contrato do paciente:', err);
+    return {
+      contract: null,
+      error: err instanceof Error ? err.message : 'Erro desconhecido',
+    };
+  }
+}
+
+/**
  * Buscar responsáveis do paciente para seleção de cobrança
  * Inclui o próprio paciente + responsáveis ativos
  */
