@@ -12,6 +12,7 @@ export { AudioRecorder } from './audio-recorder';
 export { PinInput } from './pin-input';
 export { PhoneInput } from './PhoneInput';
 export { CPFInput, validateCPF } from './CPFInput';
+export { CurrencyInput } from './currency-input';
 export {
   DateInput,
   calculateAge,

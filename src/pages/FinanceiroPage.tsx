@@ -7,6 +7,7 @@ import { FinancialProfessionalReport } from '@/components/composed/FinancialProf
 import { ProfessionalFinancialSummary } from '@/components/composed/ProfessionalFinancialSummary';
 import { ProfessionalFinancialConsultations } from '@/components/composed/ProfessionalFinancialConsultations';
 import { ProfessionalFaturamentoChart } from '@/components/composed/ProfessionalFaturamentoChart';
+import { FinancialTemplate } from '@/components/templates/financial/FinancialTemplate';
 import {
   Tabs,
   TabsContent,
@@ -77,19 +78,23 @@ export const FinanceiroPage: React.FC = () => {
   // AI dev note: FaturamentoChart agora busca seus próprios dados com filtros
   // Removido useAdminMetrics para evitar duplicação de queries
 
-  // AI dev note: Verificar se usuário tem acesso (admin ou profissional)
+  // AI dev note: Verificar se usuário tem acesso (admin, secretaria ou profissional)
   useEffect(() => {
     if (!user || !user.pessoa) return;
 
     const userRole = user.pessoa.role;
-    if (userRole !== 'admin' && userRole !== 'profissional') {
+    if (
+      userRole !== 'admin' &&
+      userRole !== 'profissional' &&
+      userRole !== 'secretaria'
+    ) {
       navigate('/dashboard');
       return;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.pessoa?.role, navigate]);
 
-  // AI dev note: Verificar PIN apenas para admin
+  // AI dev note: Verificar PIN para admin e secretaria
   useEffect(() => {
     const checkPinSession = async () => {
       // Profissional não precisa de PIN
@@ -99,8 +104,11 @@ export const FinanceiroPage: React.FC = () => {
         return;
       }
 
-      // Admin precisa de PIN
-      if (user?.pessoa?.role === 'admin') {
+      // Admin e Secretaria precisam de PIN
+      if (
+        user?.pessoa?.role === 'admin' ||
+        user?.pessoa?.role === 'secretaria'
+      ) {
         const sessionKey = `pin_validated_${user?.id}_financeiro`;
         const sessionValidated = sessionStorage.getItem(sessionKey);
 
@@ -214,13 +222,18 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  // Se não for admin ou profissional, redirecionar
-  if (user?.pessoa?.role !== 'admin' && user?.pessoa?.role !== 'profissional') {
+  // Se não for admin, secretaria ou profissional, redirecionar
+  if (
+    user?.pessoa?.role !== 'admin' &&
+    user?.pessoa?.role !== 'profissional' &&
+    user?.pessoa?.role !== 'secretaria'
+  ) {
     return null;
   }
 
   const userRole = user?.pessoa?.role;
   const isProfessional = userRole === 'profissional';
+  const isAdminOrSecretaria = userRole === 'admin' || userRole === 'secretaria';
 
   // Se ainda está verificando PIN
   if (isCheckingPin) {
@@ -248,46 +261,68 @@ export const FinanceiroPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Conteúdo - Admin precisa de PIN, Profissional não */}
+        {/* Conteúdo - Admin/Secretaria precisa de PIN, Profissional não */}
         {isPinValidated && (
           <>
-            {/* Versão Admin */}
-            {!isProfessional && (
-              <Tabs
-                value={activeTabAdmin}
-                onValueChange={(value) =>
-                  setActiveTabAdmin(
-                    value as
-                      | 'consultas'
-                      | 'faturas'
-                      | 'grafico'
-                      | 'profissionais'
-                  )
-                }
-              >
-                <TabsList className="grid w-full grid-cols-4 h-auto">
-                  <TabsTrigger value="consultas">Consultas</TabsTrigger>
-                  <TabsTrigger value="faturas">Faturas</TabsTrigger>
-                  <TabsTrigger value="grafico">Gráfico Anual</TabsTrigger>
-                  <TabsTrigger value="profissionais">Profissionais</TabsTrigger>
+            {/* Versão Admin e Secretaria - Combina comissões + novo módulo financeiro */}
+            {isAdminOrSecretaria && userRole && (
+              <Tabs defaultValue="comissoes" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 h-auto">
+                  <TabsTrigger value="comissoes">
+                    Comissões e Agendamentos
+                  </TabsTrigger>
+                  <TabsTrigger value="financeiro">
+                    Gestão Financeira
+                  </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="consultas" className="space-y-4">
-                  <FinancialConsultationsList
-                    onConsultationClick={handleConsultationClick}
+                <TabsContent value="comissoes" className="mt-6">
+                  {/* Abas antigas de comissões */}
+                  <Tabs
+                    value={activeTabAdmin}
+                    onValueChange={(value) =>
+                      setActiveTabAdmin(
+                        value as
+                          | 'consultas'
+                          | 'faturas'
+                          | 'grafico'
+                          | 'profissionais'
+                      )
+                    }
+                  >
+                    <TabsList className="grid w-full grid-cols-4 h-auto">
+                      <TabsTrigger value="consultas">Consultas</TabsTrigger>
+                      <TabsTrigger value="faturas">Faturas</TabsTrigger>
+                      <TabsTrigger value="grafico">Gráfico Anual</TabsTrigger>
+                      <TabsTrigger value="profissionais">
+                        Profissionais
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="consultas" className="space-y-4">
+                      <FinancialConsultationsList
+                        onConsultationClick={handleConsultationClick}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="faturas" className="space-y-4">
+                      <FinancialFaturasList onFaturaClick={handleFaturaClick} />
+                    </TabsContent>
+
+                    <TabsContent value="grafico" className="space-y-4">
+                      <FaturamentoChart />
+                    </TabsContent>
+
+                    <TabsContent value="profissionais" className="space-y-4">
+                      <FinancialProfessionalReport />
+                    </TabsContent>
+                  </Tabs>
+                </TabsContent>
+
+                <TabsContent value="financeiro" className="mt-6">
+                  <FinancialTemplate
+                    userRole={userRole as 'admin' | 'secretaria'}
                   />
-                </TabsContent>
-
-                <TabsContent value="faturas" className="space-y-4">
-                  <FinancialFaturasList onFaturaClick={handleFaturaClick} />
-                </TabsContent>
-
-                <TabsContent value="grafico" className="space-y-4">
-                  <FaturamentoChart />
-                </TabsContent>
-
-                <TabsContent value="profissionais" className="space-y-4">
-                  <FinancialProfessionalReport />
                 </TabsContent>
               </Tabs>
             )}
@@ -355,8 +390,8 @@ export const FinanceiroPage: React.FC = () => {
         )}
       </div>
 
-      {/* Dialog de validação de PIN - apenas para admin */}
-      {!isProfessional && (
+      {/* Dialog de validação de PIN - para admin e secretaria */}
+      {isAdminOrSecretaria && (
         <PinValidationDialog
           isOpen={!isPinValidated}
           onClose={() => {

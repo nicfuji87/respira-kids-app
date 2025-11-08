@@ -21,6 +21,9 @@ export {
   SimpleCalendarTemplate,
 } from './dashboard/CalendarTemplateWithData';
 
+// Financial Templates
+export { FinancialTemplate } from './financial/FinancialTemplate';
+
 // Types para Dashboard Templates
 export type { AdminUser } from './dashboard/AdminDashboardTemplate';
 export type { ProfissionalUser } from './dashboard/ProfissionalDashboardTemplate';
