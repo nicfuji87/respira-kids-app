@@ -10,7 +10,10 @@ import { AdminWhatsAppValidationStep } from './AdminWhatsAppValidationStep';
 import { ResponsibleDataStep } from './ResponsibleDataStep';
 import { AddressStep } from './AddressStep';
 import { AdminPatientDataStep } from './AdminPatientDataStep';
-import { FinancialResponsibleStep } from './FinancialResponsibleStep';
+import {
+  FinancialResponsibleStep,
+  type FinancialResponsibleData,
+} from './FinancialResponsibleStep';
 import { PediatricianStep } from './PediatricianStep';
 import { AuthorizationsStep } from './AuthorizationsStep';
 import { AdminContractGenerationStep } from './AdminContractGenerationStep';
@@ -238,16 +241,9 @@ export const AdminPatientRegistrationDialog: React.FC<
     goToNextStep();
   };
 
-  const handleFinancialResponsibleContinue = (data: {
-    isSameAsLegal: boolean;
-    existingPersonId?: string;
-    personData?: {
-      nome: string;
-      cpf: string;
-      email?: string;
-      telefone?: string;
-    };
-  }) => {
+  const handleFinancialResponsibleContinue = (
+    data: FinancialResponsibleData
+  ) => {
     setFormData((prev) => ({
       ...prev,
       isResponsavelFinanceiroIgualLegal: data.isSameAsLegal,

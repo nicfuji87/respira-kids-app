@@ -33,6 +33,7 @@ interface AdminWhatsAppValidationStepProps {
       nome: string;
       cpf_cnpj: string;
       ativo: boolean;
+      email?: string;
       endereco?: {
         id: string;
         cep: string;
