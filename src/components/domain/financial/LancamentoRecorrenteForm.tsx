@@ -259,8 +259,8 @@ export const LancamentoRecorrenteForm =
             eh_divisao_socios: data.eh_divisao_socios,
             ativo: data.ativo,
             observacoes: data.observacoes || null,
-            criado_por: user?.id,
-            atualizado_por: user?.id,
+            criado_por: user?.pessoa?.id || null,
+            atualizado_por: user?.pessoa?.id || null,
           };
 
           if (lancamento?.id) {

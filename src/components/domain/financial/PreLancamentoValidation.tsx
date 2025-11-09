@@ -237,9 +237,9 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
           .from('lancamentos_financeiros')
           .update({
             status_lancamento: 'validado',
-            validado_por: user?.id,
+            validado_por: user?.pessoa?.id || null,
             validado_em: new Date().toISOString(),
-            atualizado_por: user?.id,
+            atualizado_por: user?.pessoa?.id || null,
           })
           .in('id', Array.from(lancamentosSelecionados));
 
@@ -283,9 +283,9 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
           .from('lancamentos_financeiros')
           .update({
             status_lancamento: 'cancelado',
-            cancelado_por: user?.id,
+            cancelado_por: user?.pessoa?.id || null,
             cancelado_em: new Date().toISOString(),
-            atualizado_por: user?.id,
+            atualizado_por: user?.pessoa?.id || null,
           })
           .in('id', Array.from(lancamentosSelecionados));
 

@@ -195,8 +195,8 @@ export const PagamentoForm = React.memo<PagamentoFormProps>(
             conta_bancaria_id: data.conta_bancaria_id || null,
             numero_documento_pagamento: data.numero_documento_pagamento || null,
             observacoes_pagamento: data.observacoes_pagamento || null,
-            pago_por: user?.id,
-            atualizado_por: user?.id,
+            pago_por: user?.pessoa?.id || null,
+            atualizado_por: user?.pessoa?.id || null,
           })
           .eq('id', conta.id);
 
@@ -216,7 +216,7 @@ export const PagamentoForm = React.memo<PagamentoFormProps>(
               data_movimentacao: format(data.data_pagamento, 'yyyy-MM-dd'),
               descricao: `Pagamento - ${conta.lancamento.descricao}`,
               conta_pagar_id: conta.id,
-              criado_por: user?.id,
+              criado_por: user?.pessoa?.id || null,
             });
 
           if (movError) throw movError;

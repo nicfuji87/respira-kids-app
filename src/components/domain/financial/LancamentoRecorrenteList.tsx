@@ -218,7 +218,7 @@ export const LancamentoRecorrenteList =
             .from('lancamentos_recorrentes')
             .update({
               ativo: !lancamento.ativo,
-              atualizado_por: user?.id,
+              atualizado_por: user?.pessoa?.id || null,
             })
             .eq('id', lancamento.id);
 

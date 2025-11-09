@@ -363,8 +363,8 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
           origem_lancamento: 'manual',
           arquivo_url: uploadedFileUrl,
           empresa_fatura: data.empresa_fatura || null,
-          criado_por: user?.id,
-          atualizado_por: user?.id,
+          criado_por: user?.pessoa?.id || null,
+          atualizado_por: user?.pessoa?.id || null,
         };
 
         if (lancamento?.id) {

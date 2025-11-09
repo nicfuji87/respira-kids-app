@@ -196,8 +196,8 @@ export const ContaBancariaForm = React.memo<ContaBancariaFormProps>(
           saldo_inicial: data.saldo_inicial,
           observacoes: data.observacoes || null,
           ativo: data.ativo,
-          criado_por: user?.id,
-          atualizado_por: user?.id,
+          criado_por: user?.pessoa?.id || null,
+          atualizado_por: user?.pessoa?.id || null,
         };
 
         if (conta?.id) {
