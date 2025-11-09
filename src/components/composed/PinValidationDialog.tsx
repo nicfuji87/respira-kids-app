@@ -37,9 +37,15 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
   const [attempts, setAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(isOpen);
 
   const maxAttempts = 3;
   const blockDuration = 5 * 60 * 1000; // 5 minutos
+
+  // Sincronizar estado interno com prop externa
+  useEffect(() => {
+    setInternalOpen(isOpen);
+  }, [isOpen]);
 
   // Reset state quando abrir
   useEffect(() => {
@@ -136,13 +142,17 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
         localStorage.removeItem('pin_block_time');
         setLoading(false);
 
-        // Chamar onSuccess que irá fechar o dialog via mudança de isPinValidated
+        // Fechar dialog imediatamente
+        setInternalOpen(false);
+
+        // Chamar onSuccess
         onSuccess();
 
-        // Limpar estado do PIN após um breve delay
+        // Limpar estado do PIN
         setTimeout(() => {
           setPin('');
           setError('');
+          setAttempts(0);
         }, 100);
       } else {
         // PIN incorreto
@@ -181,9 +191,9 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
 
   return (
     <Dialog
-      open={isOpen}
+      open={internalOpen}
       onOpenChange={(open) => {
-        // Só permite fechar via botão Cancelar ou após validação bem-sucedida
+        setInternalOpen(open);
         if (!open) {
           onClose();
         }
