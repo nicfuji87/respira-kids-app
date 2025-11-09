@@ -59,6 +59,7 @@ interface PreLancamento {
   numero_documento?: string | null;
   data_emissao: string;
   data_competencia: string;
+  data_vencimento?: string | null;
   fornecedor_id?: string | null;
   categoria_contabil_id: string;
   descricao: string;
@@ -321,15 +322,19 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
           editedData[id]?.quantidade_parcelas ?? lancamento.quantidade_parcelas;
         const valorTotal =
           editedData[id]?.valor_total ?? lancamento.valor_total;
-        const dataEmissao = editedData[id]?.data_emissao
-          ? new Date(editedData[id].data_emissao as string)
-          : new Date(lancamento.data_emissao);
+
+        // AI dev note: Usar data_vencimento se fornecida, senão usar data_emissao
+        const dataVencimentoBase = editedData[id]?.data_vencimento
+          ? new Date(editedData[id].data_vencimento as string)
+          : lancamento.data_vencimento
+            ? new Date(lancamento.data_vencimento)
+            : new Date(lancamento.data_emissao);
 
         const contasPagarData = [];
         const valorParcela = Number(valorTotal) / quantidadeParcelas;
 
         for (let i = 0; i < quantidadeParcelas; i++) {
-          const vencimento = new Date(dataEmissao);
+          const vencimento = new Date(dataVencimentoBase);
           vencimento.setMonth(vencimento.getMonth() + i);
 
           contasPagarData.push({
@@ -608,6 +613,9 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                       <TableHead className="min-w-[150px]">Categoria</TableHead>
                       <TableHead className="min-w-[120px]">Valor</TableHead>
                       <TableHead>Parcelas</TableHead>
+                      <TableHead className="min-w-[130px]">
+                        Vencimento
+                      </TableHead>
                       <TableHead className="min-w-[200px]">
                         Observações
                       </TableHead>
@@ -775,6 +783,28 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                                 )
                               }
                               className="h-8 text-sm w-16"
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            <Input
+                              type="date"
+                              value={
+                                (getFieldValue(
+                                  lancamento,
+                                  'data_vencimento'
+                                ) as string) ||
+                                lancamento.data_emissao ||
+                                ''
+                              }
+                              onChange={(e) =>
+                                handleFieldChange(
+                                  lancamento.id,
+                                  'data_vencimento',
+                                  e.target.value
+                                )
+                              }
+                              className="h-8 text-sm"
                             />
                           </TableCell>
 
