@@ -171,7 +171,7 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
           `
           )
           .eq('status_lancamento', 'pre_lancamento')
-          .eq('origem_lancamento', 'api')
+          .eq('origem_lancamento', 'api_ia')
           .order('created_at', { ascending: false });
 
         // Filtro por período
