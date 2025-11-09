@@ -135,12 +135,30 @@ export const AdminPatientDataStep: React.FC<AdminPatientDataStepProps> = ({
 
     setCheckingCpf(true);
     try {
-      const { data } = await supabase
+      // AI dev note: Busca dupla para compatibilidade com dados existentes
+      // Primeiro tenta sem formatação, depois com formatação
+      let { data } = await supabase
         .from('pessoas')
         .select('id, nome')
         .eq('cpf_cnpj', cleanCpf)
         .eq('ativo', true)
         .single();
+
+      // Se não encontrou, tentar com formatação (XXX.XXX.XXX-XX)
+      if (!data) {
+        const cpfFormatado = cleanCpf.replace(
+          /(\d{3})(\d{3})(\d{3})(\d{2})/,
+          '$1.$2.$3-$4'
+        );
+        const result = await supabase
+          .from('pessoas')
+          .select('id, nome')
+          .eq('cpf_cnpj', cpfFormatado)
+          .eq('ativo', true)
+          .single();
+
+        data = result.data;
+      }
 
       if (data) {
         setCpfDuplicated(true);

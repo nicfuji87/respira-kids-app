@@ -5,13 +5,13 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Edit,
   FileText,
   DollarSign,
   Receipt,
   Loader2,
   RefreshCw,
   Eye,
+  Save,
 } from 'lucide-react';
 import {
   Card,
@@ -21,7 +21,6 @@ import {
   CardTitle,
   Input,
   Button,
-  Badge,
   Table,
   TableBody,
   TableCell,
@@ -32,10 +31,8 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-  Checkbox,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -46,15 +43,20 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/primitives';
-import { LancamentoForm } from './LancamentoForm';
+import { CurrencyInput } from '@/components/primitives';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
 // AI dev note: Interface para validação de pré-lançamentos enviados pela API
-// Permite visualizar, editar, aprovar ou rejeitar lançamentos antes da validação final
-// Suporta processamento em lote e visualização de documentos anexados
+// ATUALIZADO: Campos editáveis inline diretamente na tabela
+// Botões de aprovar/excluir no final de cada linha
 
 interface PreLancamento {
   id: string;
@@ -83,12 +85,18 @@ interface PreLancamento {
     nome: string;
     codigo: string;
   } | null;
-  itens?: {
-    descricao: string;
-    quantidade: number;
-    valor_unitario: number;
-    valor_total: number;
-  }[];
+}
+
+interface Fornecedor {
+  id: string;
+  nome_razao_social: string;
+  nome_fantasia?: string | null;
+}
+
+interface Categoria {
+  id: string;
+  nome: string;
+  codigo: string;
 }
 
 interface PreLancamentoValidationProps {
@@ -101,19 +109,46 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
     const [preLancamentos, setPreLancamentos] = React.useState<PreLancamento[]>(
       []
     );
-    const [lancamentosSelecionados, setLancamentosSelecionados] =
-      React.useState<Set<string>>(new Set());
+    const [editedData, setEditedData] = React.useState<
+      Record<string, Partial<PreLancamento>>
+    >({});
+    const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([]);
+    const [categorias, setCategorias] = React.useState<Categoria[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
-    const [isProcessing, setIsProcessing] = React.useState(false);
+    const [isProcessing, setIsProcessing] = React.useState<string | null>(null);
     const [searchTerm, setSearchTerm] = React.useState('');
     const [selectedPeriod, setSelectedPeriod] = React.useState<string>('todos');
-    const [showEditDialog, setShowEditDialog] = React.useState(false);
-    const [lancamentoParaEditar, setLancamentoParaEditar] =
-      React.useState<PreLancamento | null>(null);
     const [showDocumentDialog, setShowDocumentDialog] = React.useState(false);
     const [documentoUrl, setDocumentoUrl] = React.useState<string | null>(null);
     const { user } = useAuth();
     const { toast } = useToast();
+
+    // Carregar fornecedores e categorias
+    React.useEffect(() => {
+      const loadData = async () => {
+        try {
+          const [fornecedoresRes, categoriasRes] = await Promise.all([
+            supabase
+              .from('fornecedores')
+              .select('id, nome_razao_social, nome_fantasia')
+              .eq('ativo', true)
+              .order('nome_fantasia'),
+            supabase
+              .from('categorias_contabeis')
+              .select('id, nome, codigo')
+              .eq('ativo', true)
+              .order('codigo'),
+          ]);
+
+          if (fornecedoresRes.data) setFornecedores(fornecedoresRes.data);
+          if (categoriasRes.data) setCategorias(categoriasRes.data);
+        } catch (error) {
+          console.error('Erro ao carregar dados:', error);
+        }
+      };
+
+      loadData();
+    }, []);
 
     // Carregar pré-lançamentos
     const loadPreLancamentos = React.useCallback(async () => {
@@ -132,12 +167,6 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
             categoria:categoria_contabil_id (
               nome,
               codigo
-            ),
-            itens:lancamento_itens (
-              descricao,
-              quantidade,
-              valor_unitario,
-              valor_total
             )
           `
           )
@@ -170,6 +199,7 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
 
         if (error) throw error;
         setPreLancamentos(data || []);
+        setEditedData({}); // Limpar edições ao recarregar
       } catch (error) {
         console.error('Erro ao carregar pré-lançamentos:', error);
         toast({
@@ -187,31 +217,15 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
       loadPreLancamentos();
     }, [loadPreLancamentos]);
 
-    // Handlers
-    const handleSelecionarLancamento = (
-      lancamentoId: string,
-      checked: boolean
-    ) => {
-      const novosLancamentos = new Set(lancamentosSelecionados);
-      if (checked) {
-        novosLancamentos.add(lancamentoId);
-      } else {
-        novosLancamentos.delete(lancamentoId);
-      }
-      setLancamentosSelecionados(novosLancamentos);
-    };
-
-    const handleSelecionarTodos = (checked: boolean) => {
-      if (checked) {
-        setLancamentosSelecionados(new Set(preLancamentos.map((l) => l.id)));
-      } else {
-        setLancamentosSelecionados(new Set());
-      }
-    };
-
-    const handleEditar = (lancamento: PreLancamento) => {
-      setLancamentoParaEditar(lancamento);
-      setShowEditDialog(true);
+    // Handlers para edição inline
+    const handleFieldChange = (id: string, field: string, value: unknown) => {
+      setEditedData((prev) => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          [field]: value,
+        },
+      }));
     };
 
     const handleVisualizarDocumento = (url: string) => {
@@ -219,18 +233,72 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
       setShowDocumentDialog(true);
     };
 
-    const handleValidarSelecionados = async () => {
-      if (lancamentosSelecionados.size === 0) {
+    const handleSalvarEdicoes = async (id: string) => {
+      const edits = editedData[id];
+      if (!edits || Object.keys(edits).length === 0) {
         toast({
           variant: 'destructive',
-          title: 'Nenhum lançamento selecionado',
-          description: 'Selecione pelo menos um lançamento para validar.',
+          title: 'Sem alterações',
+          description: 'Nenhuma alteração foi feita neste lançamento.',
         });
         return;
       }
 
       try {
-        setIsProcessing(true);
+        setIsProcessing(id);
+
+        const { error } = await supabase
+          .from('lancamentos_financeiros')
+          .update({
+            ...edits,
+            atualizado_por: user?.pessoa?.id || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Alterações salvas',
+          description: 'As alterações foram salvas com sucesso.',
+        });
+
+        // Remover da lista de editados
+        setEditedData((prev) => {
+          const newData = { ...prev };
+          delete newData[id];
+          return newData;
+        });
+
+        loadPreLancamentos();
+      } catch (error) {
+        console.error('Erro ao salvar alterações:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao salvar',
+          description: 'Não foi possível salvar as alterações.',
+        });
+      } finally {
+        setIsProcessing(null);
+      }
+    };
+
+    const handleAprovar = async (id: string) => {
+      try {
+        setIsProcessing(id);
+
+        // Salvar edições primeiro se houver
+        if (editedData[id] && Object.keys(editedData[id]).length > 0) {
+          const { error: updateError } = await supabase
+            .from('lancamentos_financeiros')
+            .update({
+              ...editedData[id],
+              atualizado_por: user?.pessoa?.id || null,
+            })
+            .eq('id', id);
+
+          if (updateError) throw updateError;
+        }
 
         // Atualizar status para validado
         const { error } = await supabase
@@ -241,42 +309,31 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
             validado_em: new Date().toISOString(),
             atualizado_por: user?.pessoa?.id || null,
           })
-          .in('id', Array.from(lancamentosSelecionados));
+          .eq('id', id);
 
         if (error) throw error;
 
         toast({
-          title: 'Lançamentos validados',
-          description: `${lancamentosSelecionados.size} lançamento(s) foram validados com sucesso.`,
+          title: 'Lançamento aprovado',
+          description: 'O lançamento foi aprovado e validado com sucesso.',
         });
 
-        // Limpar seleção e recarregar
-        setLancamentosSelecionados(new Set());
         loadPreLancamentos();
       } catch (error) {
-        console.error('Erro ao validar lançamentos:', error);
+        console.error('Erro ao aprovar:', error);
         toast({
           variant: 'destructive',
-          title: 'Erro ao validar',
-          description: 'Não foi possível validar os lançamentos selecionados.',
+          title: 'Erro ao aprovar',
+          description: 'Não foi possível aprovar o lançamento.',
         });
       } finally {
-        setIsProcessing(false);
+        setIsProcessing(null);
       }
     };
 
-    const handleRejeitarSelecionados = async () => {
-      if (lancamentosSelecionados.size === 0) {
-        toast({
-          variant: 'destructive',
-          title: 'Nenhum lançamento selecionado',
-          description: 'Selecione pelo menos um lançamento para rejeitar.',
-        });
-        return;
-      }
-
+    const handleExcluir = async (id: string) => {
       try {
-        setIsProcessing(true);
+        setIsProcessing(id);
 
         // Atualizar status para cancelado
         const { error } = await supabase
@@ -287,34 +344,26 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
             cancelado_em: new Date().toISOString(),
             atualizado_por: user?.pessoa?.id || null,
           })
-          .in('id', Array.from(lancamentosSelecionados));
+          .eq('id', id);
 
         if (error) throw error;
 
         toast({
-          title: 'Lançamentos rejeitados',
-          description: `${lancamentosSelecionados.size} lançamento(s) foram rejeitados.`,
+          title: 'Lançamento excluído',
+          description: 'O lançamento foi excluído com sucesso.',
         });
 
-        // Limpar seleção e recarregar
-        setLancamentosSelecionados(new Set());
         loadPreLancamentos();
       } catch (error) {
-        console.error('Erro ao rejeitar lançamentos:', error);
+        console.error('Erro ao excluir:', error);
         toast({
           variant: 'destructive',
-          title: 'Erro ao rejeitar',
-          description: 'Não foi possível rejeitar os lançamentos selecionados.',
+          title: 'Erro ao excluir',
+          description: 'Não foi possível excluir o lançamento.',
         });
       } finally {
-        setIsProcessing(false);
+        setIsProcessing(null);
       }
-    };
-
-    const handleEditSuccess = () => {
-      setShowEditDialog(false);
-      setLancamentoParaEditar(null);
-      loadPreLancamentos();
     };
 
     const getTipoIcon = (tipo: 'despesa' | 'receita') => {
@@ -324,10 +373,6 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
         <Receipt className="h-4 w-4 text-green-500" />
       );
     };
-
-    const todosSelecionados =
-      preLancamentos.length > 0 &&
-      preLancamentos.every((l) => lancamentosSelecionados.has(l.id));
 
     // Estatísticas
     const estatisticas = React.useMemo(() => {
@@ -346,6 +391,14 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
       return { total, totalValor, despesas, receitas };
     }, [preLancamentos]);
 
+    // Função para obter valor editado ou original
+    const getFieldValue = (
+      lancamento: PreLancamento,
+      field: keyof PreLancamento
+    ) => {
+      return editedData[lancamento.id]?.[field] ?? lancamento[field];
+    };
+
     return (
       <>
         <Card className={className}>
@@ -354,8 +407,7 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
               <div>
                 <CardTitle>Validação de Pré-Lançamentos</CardTitle>
                 <CardDescription>
-                  Revise e valide lançamentos enviados pela IA antes de
-                  confirmar
+                  Revise, edite e valide lançamentos enviados pela IA
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -370,32 +422,6 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                   />
                   Atualizar
                 </Button>
-                {lancamentosSelecionados.size > 0 && (
-                  <>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleRejeitarSelecionados}
-                      disabled={isProcessing}
-                    >
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Rejeitar ({lancamentosSelecionados.size})
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleValidarSelecionados}
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                      )}
-                      Validar ({lancamentosSelecionados.size})
-                    </Button>
-                  </>
-                )}
               </div>
             </div>
 
@@ -503,10 +529,11 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
             {preLancamentos.length > 0 && (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Atenção!</AlertTitle>
+                <AlertTitle>Campos Editáveis</AlertTitle>
                 <AlertDescription>
-                  Estes lançamentos foram criados automaticamente pela IA e
-                  precisam de validação antes de serem confirmados.
+                  Você pode editar os campos diretamente na tabela. Clique em
+                  "Salvar" para confirmar as alterações ou "Aprovar" para
+                  validar o lançamento.
                 </AlertDescription>
               </Alert>
             )}
@@ -533,86 +560,65 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[50px]">
-                        <Checkbox
-                          checked={todosSelecionados}
-                          onCheckedChange={handleSelecionarTodos}
-                          aria-label="Selecionar todos"
-                        />
-                      </TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Data</TableHead>
                       <TableHead>Documento</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Fornecedor/Cliente</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                      <TableHead>Criado em</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
+                      <TableHead className="min-w-[200px]">Descrição</TableHead>
+                      <TableHead className="min-w-[180px]">
+                        Fornecedor
+                      </TableHead>
+                      <TableHead className="min-w-[150px]">Categoria</TableHead>
+                      <TableHead className="min-w-[120px]">Valor</TableHead>
+                      <TableHead>Parcelas</TableHead>
+                      <TableHead className="text-right min-w-[180px]">
+                        Ações
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {preLancamentos.map((lancamento) => (
-                      <TableRow key={lancamento.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={lancamentosSelecionados.has(lancamento.id)}
-                            onCheckedChange={(checked) =>
-                              handleSelecionarLancamento(
-                                lancamento.id,
-                                checked as boolean
-                              )
-                            }
-                            aria-label={`Selecionar lançamento ${lancamento.id}`}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                {getTipoIcon(lancamento.tipo_lancamento)}
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {lancamento.tipo_lancamento === 'despesa'
-                                  ? 'Despesa'
-                                  : 'Receita'}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">
-                              {format(
-                                new Date(lancamento.data_emissao),
-                                'dd/MM/yyyy'
-                              )}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              Comp.:{' '}
-                              {format(
-                                new Date(lancamento.data_competencia),
-                                'MM/yyyy'
-                              )}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            {lancamento.numero_documento ? (
-                              <span className="text-sm">
-                                {lancamento.numero_documento}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                -
-                              </span>
-                            )}
+                    {preLancamentos.map((lancamento) => {
+                      const hasChanges =
+                        editedData[lancamento.id] &&
+                        Object.keys(editedData[lancamento.id]).length > 0;
+                      const processing = isProcessing === lancamento.id;
+
+                      return (
+                        <TableRow key={lancamento.id}>
+                          <TableCell>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  {getTipoIcon(lancamento.tipo_lancamento)}
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {lancamento.tipo_lancamento === 'despesa'
+                                    ? 'Despesa'
+                                    : 'Receita'}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+
+                          <TableCell>
+                            <Input
+                              value={
+                                getFieldValue(lancamento, 'numero_documento') ||
+                                ''
+                              }
+                              onChange={(e) =>
+                                handleFieldChange(
+                                  lancamento.id,
+                                  'numero_documento',
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Nº doc"
+                              className="h-8 text-sm"
+                            />
                             {lancamento.arquivo_url && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-auto p-0 text-xs justify-start"
+                                className="h-auto p-0 text-xs mt-1"
                                 onClick={() =>
                                   handleVisualizarDocumento(
                                     lancamento.arquivo_url!
@@ -620,192 +626,215 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                                 }
                               >
                                 <FileText className="mr-1 h-3 w-3" />
-                                Ver documento
+                                Ver anexo
                               </Button>
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-w-[200px]">
-                            <span className="text-sm font-medium line-clamp-2">
-                              {lancamento.descricao}
-                            </span>
-                            {lancamento.itens &&
-                              lancamento.itens.length > 0 && (
-                                <span className="text-xs text-muted-foreground">
-                                  {lancamento.itens.length} ite
-                                  {lancamento.itens.length !== 1 ? 'ns' : 'm'}
-                                </span>
-                              )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {lancamento.fornecedor ? (
-                            <span className="text-sm">
-                              {lancamento.fornecedor.nome_fantasia ||
-                                lancamento.fornecedor.nome_razao_social}
-                            </span>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">
-                              Não identificado
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {lancamento.categoria ? (
-                            <Badge
-                              variant="outline"
-                              className="font-mono text-xs"
+                          </TableCell>
+
+                          <TableCell>
+                            <Input
+                              value={
+                                getFieldValue(lancamento, 'descricao') as string
+                              }
+                              onChange={(e) =>
+                                handleFieldChange(
+                                  lancamento.id,
+                                  'descricao',
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Descrição"
+                              className="h-8 text-sm"
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            <Select
+                              value={
+                                (getFieldValue(
+                                  lancamento,
+                                  'fornecedor_id'
+                                ) as string) || ''
+                              }
+                              onValueChange={(value) =>
+                                handleFieldChange(
+                                  lancamento.id,
+                                  'fornecedor_id',
+                                  value
+                                )
+                              }
                             >
-                              {lancamento.categoria.codigo}
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">
-                              Sem categoria
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="text-sm font-medium">
-                              {new Intl.NumberFormat('pt-BR', {
-                                style: 'currency',
-                                currency: 'BRL',
-                              }).format(lancamento.valor_total)}
-                            </span>
-                            {lancamento.quantidade_parcelas > 1 && (
-                              <span className="text-xs text-muted-foreground">
-                                {lancamento.quantidade_parcelas}x
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-xs text-muted-foreground">
-                              {format(new Date(lancamento.created_at), 'dd/MM')}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {format(new Date(lancamento.created_at), 'HH:mm')}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-1">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => handleEditar(lancamento)}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Editar lançamento
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {fornecedores.map((f) => (
+                                  <SelectItem key={f.id} value={f.id}>
+                                    {f.nome_fantasia || f.nome_razao_social}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
 
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-green-600 hover:text-green-700"
-                                    onClick={() => {
-                                      handleSelecionarLancamento(
-                                        lancamento.id,
-                                        true
-                                      );
-                                      handleValidarSelecionados();
-                                    }}
-                                    disabled={isProcessing}
-                                  >
-                                    <CheckCircle className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Validar lançamento
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                          <TableCell>
+                            <Select
+                              value={
+                                getFieldValue(
+                                  lancamento,
+                                  'categoria_contabil_id'
+                                ) as string
+                              }
+                              onValueChange={(value) =>
+                                handleFieldChange(
+                                  lancamento.id,
+                                  'categoria_contabil_id',
+                                  value
+                                )
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categorias.map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    {c.codigo} - {c.nome}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
 
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-red-600 hover:text-red-700"
-                                    onClick={() => {
-                                      handleSelecionarLancamento(
-                                        lancamento.id,
-                                        true
-                                      );
-                                      handleRejeitarSelecionados();
-                                    }}
-                                    disabled={isProcessing}
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Rejeitar lançamento
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          <TableCell>
+                            <CurrencyInput
+                              value={
+                                getFieldValue(
+                                  lancamento,
+                                  'valor_total'
+                                ) as number
+                              }
+                              onChange={(value) =>
+                                handleFieldChange(
+                                  lancamento.id,
+                                  'valor_total',
+                                  value
+                                )
+                              }
+                              className="h-8 text-sm"
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={
+                                getFieldValue(
+                                  lancamento,
+                                  'quantidade_parcelas'
+                                ) as number
+                              }
+                              onChange={(e) =>
+                                handleFieldChange(
+                                  lancamento.id,
+                                  'quantidade_parcelas',
+                                  parseInt(e.target.value) || 1
+                                )
+                              }
+                              className="h-8 text-sm w-16"
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              {hasChanges && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                                        onClick={() =>
+                                          handleSalvarEdicoes(lancamento.id)
+                                        }
+                                        disabled={processing}
+                                      >
+                                        {processing ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Save className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Salvar alterações
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-green-600 hover:text-green-700"
+                                      onClick={() =>
+                                        handleAprovar(lancamento.id)
+                                      }
+                                      disabled={processing}
+                                    >
+                                      {processing ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <CheckCircle className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Aprovar lançamento
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-red-600 hover:text-red-700"
+                                      onClick={() =>
+                                        handleExcluir(lancamento.id)
+                                      }
+                                      disabled={processing}
+                                    >
+                                      {processing ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <XCircle className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Excluir lançamento
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
             )}
           </CardContent>
         </Card>
-
-        {/* Dialog de Edição */}
-        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Editar Pré-Lançamento</DialogTitle>
-              <DialogDescription>
-                Revise e ajuste os dados antes de validar
-              </DialogDescription>
-            </DialogHeader>
-            {lancamentoParaEditar && (
-              <LancamentoForm
-                lancamento={{
-                  ...lancamentoParaEditar,
-                  numero_documento:
-                    lancamentoParaEditar.numero_documento || undefined,
-                  observacoes: lancamentoParaEditar.observacoes || undefined,
-                  fornecedor_id:
-                    lancamentoParaEditar.fornecedor_id || undefined,
-                  pessoa_responsavel_id:
-                    lancamentoParaEditar.pessoa_responsavel_id || undefined,
-                  arquivo_url: lancamentoParaEditar.arquivo_url || undefined,
-                  empresa_fatura: undefined,
-                  data_emissao: new Date(lancamentoParaEditar.data_emissao),
-                  data_competencia: new Date(
-                    lancamentoParaEditar.data_competencia
-                  ),
-                }}
-                onSuccess={handleEditSuccess}
-                onCancel={() => {
-                  setShowEditDialog(false);
-                  setLancamentoParaEditar(null);
-                }}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
 
         {/* Dialog de Documento */}
         <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>

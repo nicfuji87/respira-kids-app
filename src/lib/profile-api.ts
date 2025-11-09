@@ -154,6 +154,13 @@ export async function updateUserProfile(
         : null;
     }
 
+    // AI dev note: Limpar CPF antes de salvar (remover formatação)
+    if (pessoaData.cpf_cnpj !== undefined) {
+      cleanedPessoaData.cpf_cnpj = pessoaData.cpf_cnpj
+        ? pessoaData.cpf_cnpj.replace(/\D/g, '')
+        : null;
+    }
+
     // Atualizar dados da pessoa
     const { error } = await supabase
       .from('pessoas')

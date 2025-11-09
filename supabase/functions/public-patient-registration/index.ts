@@ -70,6 +70,14 @@ function extractPhoneFromJid(jid: string): string {
   return jid.split('@')[0];
 }
 
+// AI dev note: Função helper para limpar CPF antes de salvar no banco
+// Remove toda formatação (pontos, traços) e valida se tem 11 dígitos
+function cleanCPF(cpf: string | null | undefined): string | null {
+  if (!cpf) return null;
+  const cleaned = cpf.replace(/\D/g, '');
+  return cleaned.length === 11 ? cleaned : null;
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -348,7 +356,7 @@ Deno.serve(async (req: Request) => {
           .insert({
             id: tempId, // ID temporário para auto-referência
             nome: data.responsavelLegal.nome,
-            cpf_cnpj: data.responsavelLegal.cpf,
+            cpf_cnpj: cleanCPF(data.responsavelLegal.cpf), // AI dev note: Limpar CPF antes de salvar
             telefone: telefoneResponsavelLegal,
             email: data.responsavelLegal.email,
             id_tipo_pessoa: tipoResponsavel.id,
@@ -479,7 +487,7 @@ Deno.serve(async (req: Request) => {
           .insert({
             id: tempFinId, // ID temporário para auto-referência
             nome: data.newPersonData.nome,
-            cpf_cnpj: data.newPersonData.cpf,
+            cpf_cnpj: cleanCPF(data.newPersonData.cpf), // AI dev note: Limpar CPF antes de salvar
             telefone: telefoneResponsavelFin,
             email: data.newPersonData.email,
             id_tipo_pessoa: tipoResponsavel.id,
@@ -633,7 +641,7 @@ Deno.serve(async (req: Request) => {
         nome: data.paciente.nome,
         data_nascimento: dataNascimentoISO,
         sexo: data.paciente.sexo,
-        cpf_cnpj: data.paciente.cpf || null,
+        cpf_cnpj: cleanCPF(data.paciente.cpf), // AI dev note: Limpar CPF antes de salvar
         id_tipo_pessoa: tipoPaciente.id,
         id_endereco: enderecoId,
         numero_endereco: data.endereco.numero,

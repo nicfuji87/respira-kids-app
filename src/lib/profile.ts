@@ -162,9 +162,14 @@ export async function updateProfile(
     const cleanTelefone = profileData.telefone.replace(/\D/g, '');
     const telefoneNumber = cleanTelefone ? parseInt(cleanTelefone, 10) : null;
 
+    // AI dev note: Limpar CPF antes de salvar (remover formatação)
+    const cleanCpfCnpj = profileData.cpf_cnpj
+      ? profileData.cpf_cnpj.replace(/\D/g, '')
+      : null;
+
     const updateData = {
       nome: profileData.nome,
-      cpf_cnpj: profileData.cpf_cnpj,
+      cpf_cnpj: cleanCpfCnpj, // Salvar CPF sem formatação
       telefone: telefoneNumber, // Salvar como BIGINT
       data_nascimento: profileData.data_nascimento || null,
       numero_endereco: profileData.numero_endereco,
