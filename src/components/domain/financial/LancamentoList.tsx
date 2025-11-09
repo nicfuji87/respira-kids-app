@@ -75,6 +75,7 @@ interface Lancamento {
   valor_total: number;
   quantidade_parcelas: number;
   eh_divisao_socios: boolean;
+  pessoa_responsavel_id?: string | null;
   status_lancamento: string;
   origem_lancamento: string;
   arquivo_url?: string | null;
@@ -848,9 +849,10 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                       quantidade_parcelas:
                         selectedLancamento.quantidade_parcelas,
                       eh_divisao_socios: selectedLancamento.eh_divisao_socios,
-                      categoria_contabil_id: '', // This needs to be provided from the actual data
-                      fornecedor_id: undefined, // This needs to be provided from the actual data
-                      empresa_fatura: undefined, // This needs to be provided from the actual data
+                      pessoa_responsavel_id: selectedLancamento.pessoa_responsavel_id || undefined,
+                      categoria_contabil_id: selectedLancamento.categoria?.id || '',
+                      fornecedor_id: selectedLancamento.fornecedor_id || undefined,
+                      empresa_fatura: undefined,
                       arquivo_url: selectedLancamento.arquivo_url || undefined,
                     }
                   : undefined

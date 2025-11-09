@@ -69,6 +69,7 @@ interface PreLancamento {
   valor_total: number;
   quantidade_parcelas: number;
   eh_divisao_socios: boolean;
+  pessoa_responsavel_id?: string | null;
   status_lancamento: string;
   origem_lancamento: string;
   arquivo_url?: string | null;
@@ -787,6 +788,8 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                   observacoes: lancamentoParaEditar.observacoes || undefined,
                   fornecedor_id:
                     lancamentoParaEditar.fornecedor_id || undefined,
+                  pessoa_responsavel_id:
+                    lancamentoParaEditar.pessoa_responsavel_id || undefined,
                   arquivo_url: lancamentoParaEditar.arquivo_url || undefined,
                   empresa_fatura: undefined,
                   data_emissao: new Date(lancamentoParaEditar.data_emissao),
