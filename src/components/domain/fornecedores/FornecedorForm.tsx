@@ -36,45 +36,78 @@ import type { EnderecoViaCepData } from '@/lib/enderecos-api';
 
 const fornecedorSchema = z
   .object({
-    tipo_pessoa: z.enum(['fisica', 'juridica'] as const),
+    tipo_pessoa: z.enum(['fisica', 'juridica'] as const).optional(),
     nome_razao_social: z
       .string()
-      .min(3, 'Nome deve ter pelo menos 3 caracteres')
-      .max(200, 'Nome muito longo'),
-    nome_fantasia: z.string().max(200, 'Nome fantasia muito longo').optional(),
-    cpf_cnpj: z.string().min(1, 'CPF/CNPJ é obrigatório'),
+      .max(200, 'Nome muito longo')
+      .optional()
+      .or(z.literal('')),
+    nome_fantasia: z
+      .string()
+      .max(200, 'Nome fantasia muito longo')
+      .optional()
+      .or(z.literal('')),
+    cpf_cnpj: z.string().optional().or(z.literal('')),
     inscricao_estadual: z
       .string()
       .max(50, 'Inscrição estadual muito longa')
-      .optional(),
+      .optional()
+      .or(z.literal('')),
     inscricao_municipal: z
       .string()
       .max(50, 'Inscrição municipal muito longa')
-      .optional(),
+      .optional()
+      .or(z.literal('')),
     email: z.string().email('Email inválido').optional().or(z.literal('')),
-    telefone: z.string().optional(),
-    cep: z.string().optional(),
-    numero_endereco: z.string().max(20, 'Número muito longo').optional(),
+    telefone: z.string().optional().or(z.literal('')),
+    cep: z.string().optional().or(z.literal('')),
+    numero_endereco: z
+      .string()
+      .max(20, 'Número muito longo')
+      .optional()
+      .or(z.literal('')),
     complemento_endereco: z
       .string()
       .max(100, 'Complemento muito longo')
-      .optional(),
-    observacoes: z.string().max(500, 'Observações muito longas').optional(),
+      .optional()
+      .or(z.literal('')),
+    observacoes: z
+      .string()
+      .max(500, 'Observações muito longas')
+      .optional()
+      .or(z.literal('')),
     ativo: z.boolean().default(true),
   })
   .refine(
     (data) => {
-      if (data.tipo_pessoa === 'fisica') {
-        return validateCPF(data.cpf_cnpj);
-      } else {
-        // Validação básica de CNPJ (14 dígitos)
-        const cnpj = data.cpf_cnpj.replace(/\D/g, '');
-        return cnpj.length === 14;
+      // Se CPF/CNPJ foi preenchido, validar
+      if (data.cpf_cnpj && data.cpf_cnpj.trim() !== '') {
+        if (data.tipo_pessoa === 'fisica') {
+          return validateCPF(data.cpf_cnpj);
+        } else if (data.tipo_pessoa === 'juridica') {
+          // Validação básica de CNPJ (14 dígitos)
+          const cnpj = data.cpf_cnpj.replace(/\D/g, '');
+          return cnpj.length === 14;
+        }
       }
+      return true; // Permite vazio
     },
     {
       message: 'CPF/CNPJ inválido',
       path: ['cpf_cnpj'],
+    }
+  )
+  .refine(
+    (data) => {
+      // Pelo menos um campo de identificação deve estar preenchido
+      return (
+        (data.nome_razao_social && data.nome_razao_social.trim() !== '') ||
+        (data.nome_fantasia && data.nome_fantasia.trim() !== '')
+      );
+    },
+    {
+      message: 'Informe pelo menos um nome (razão social ou nome fantasia)',
+      path: ['nome_fantasia'],
     }
   );
 
@@ -83,18 +116,18 @@ type FornecedorFormData = z.infer<typeof fornecedorSchema>;
 interface FornecedorFormProps {
   fornecedor?: {
     id: string;
-    tipo_pessoa: 'fisica' | 'juridica';
-    nome_razao_social: string;
-    nome_fantasia?: string;
-    cpf_cnpj: string;
-    inscricao_estadual?: string;
-    inscricao_municipal?: string;
-    email?: string;
-    telefone?: string;
-    id_endereco?: string;
-    numero_endereco?: string;
-    complemento_endereco?: string;
-    observacoes?: string;
+    tipo_pessoa?: 'fisica' | 'juridica' | null;
+    nome_razao_social?: string | null;
+    nome_fantasia?: string | null;
+    cpf_cnpj?: string | null;
+    inscricao_estadual?: string | null;
+    inscricao_municipal?: string | null;
+    email?: string | null;
+    telefone?: string | null;
+    id_endereco?: string | null;
+    numero_endereco?: string | null;
+    complemento_endereco?: string | null;
+    observacoes?: string | null;
     ativo: boolean;
   };
   onSuccess?: () => void;
@@ -161,10 +194,10 @@ export const FornecedorForm = React.memo<FornecedorFormProps>(
         const telefoneNumerico = data.telefone?.replace(/\D/g, '') || null;
 
         const fornecedorData = {
-          tipo_pessoa: data.tipo_pessoa,
-          nome_razao_social: data.nome_razao_social,
+          tipo_pessoa: data.tipo_pessoa || null,
+          nome_razao_social: data.nome_razao_social || null,
           nome_fantasia: data.nome_fantasia || null,
-          cpf_cnpj: data.cpf_cnpj.replace(/\D/g, ''),
+          cpf_cnpj: data.cpf_cnpj ? data.cpf_cnpj.replace(/\D/g, '') : null,
           inscricao_estadual: data.inscricao_estadual || null,
           inscricao_municipal: data.inscricao_municipal || null,
           email: data.email || null,
@@ -325,13 +358,14 @@ export const FornecedorForm = React.memo<FornecedorFormProps>(
                       <FormControl>
                         {tipoPessoa === 'fisica' ? (
                           <CPFInput
-                            value={field.value}
+                            value={field.value || ''}
                             onChange={field.onChange}
                             placeholder="000.000.000-00"
                           />
                         ) : (
                           <Input
                             {...field}
+                            value={field.value || ''}
                             placeholder="00.000.000/0000-00"
                             maxLength={18}
                           />

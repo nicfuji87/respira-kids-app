@@ -113,10 +113,11 @@ export const FornecedorList = React.memo(() => {
     return fornecedores.filter((fornecedor) => {
       const searchLower = searchTerm.toLowerCase();
       return (
-        fornecedor.nome_razao_social.toLowerCase().includes(searchLower) ||
+        (fornecedor.nome_razao_social?.toLowerCase().includes(searchLower) ??
+          false) ||
         (fornecedor.nome_fantasia?.toLowerCase().includes(searchLower) ??
           false) ||
-        fornecedor.cpf_cnpj.includes(searchTerm) ||
+        (fornecedor.cpf_cnpj?.includes(searchTerm) ?? false) ||
         (fornecedor.email?.toLowerCase().includes(searchLower) ?? false)
       );
     });
