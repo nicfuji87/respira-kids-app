@@ -85,6 +85,10 @@ const BANCOS = [
   { codigo: '323', nome: 'Mercado Pago' },
   { codigo: '336', nome: 'C6 Bank' },
   { codigo: '633', nome: 'Banco Rendimento' },
+  {
+    codigo: '461',
+    nome: 'ASAAS GESTÃO FINANCEIRA INSTITUIÇÃO DE PAGAMENTO S.A.',
+  },
 ];
 
 interface Pessoa {
