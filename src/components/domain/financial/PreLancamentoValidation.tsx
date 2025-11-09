@@ -601,8 +601,10 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                           <TableCell>
                             <Input
                               value={
-                                getFieldValue(lancamento, 'numero_documento') ||
-                                ''
+                                (getFieldValue(
+                                  lancamento,
+                                  'numero_documento'
+                                ) as string) || ''
                               }
                               onChange={(e) =>
                                 handleFieldChange(
