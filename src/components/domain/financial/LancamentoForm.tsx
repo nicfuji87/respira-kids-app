@@ -49,12 +49,17 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { normalizeSelectValue } from '@/lib/form-utils';
+import {
+  ProdutoSelect,
+  type ProdutoData,
+} from '@/components/composed/ProdutoSelect';
 
 // AI dev note: Formulário completo para lançamentos financeiros
 // Suporta múltiplos itens, divisão entre sócios, parcelas e upload de documentos
 // Integração com fornecedores e categorias cadastradas
 
 const itemSchema = z.object({
+  produto_id: z.string().uuid().optional().nullable(), // AI dev note: Opcional - se NULL, usa descrição livre
   descricao: z.string().min(3, 'Descrição deve ter pelo menos 3 caracteres'),
   quantidade: z.number().min(0.001, 'Quantidade deve ser maior que zero'),
   valor_unitario: z.number().min(0, 'Valor deve ser maior ou igual a zero'),
@@ -166,6 +171,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
         empresa_fatura: lancamento?.empresa_fatura || null,
         itens: [
           {
+            produto_id: null,
             descricao: '',
             quantidade: 1,
             valor_unitario: 0,
@@ -386,6 +392,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
           const itensData = data.itens.map((item, index) => ({
             lancamento_id: lancamento.id,
             item_numero: index + 1,
+            produto_id: item.produto_id || null,
             descricao: item.descricao,
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
@@ -418,6 +425,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
           const itensData = data.itens.map((item, index) => ({
             lancamento_id: newLancamento.id,
             item_numero: index + 1,
+            produto_id: item.produto_id || null,
             descricao: item.descricao,
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
@@ -773,6 +781,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                     size="sm"
                     onClick={() =>
                       append({
+                        produto_id: null,
                         descricao: '',
                         quantidade: 1,
                         valor_unitario: 0,
@@ -807,12 +816,49 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
+                        {/* Produto Select - Híbrido */}
+                        <div className="md:col-span-2">
+                          <FormLabel>Produto/Serviço</FormLabel>
+                          <ProdutoSelect
+                            value={form.watch(`itens.${index}.descricao`)}
+                            onSelect={(produtoData: ProdutoData) => {
+                              form.setValue(
+                                `itens.${index}.produto_id`,
+                                produtoData.produto_id || null
+                              );
+                              form.setValue(
+                                `itens.${index}.descricao`,
+                                produtoData.descricao
+                              );
+                              form.setValue(
+                                `itens.${index}.quantidade`,
+                                produtoData.quantidade
+                              );
+                              form.setValue(
+                                `itens.${index}.valor_unitario`,
+                                produtoData.valor_unitario
+                              );
+                              if (produtoData.categoria_contabil_id) {
+                                form.setValue(
+                                  `itens.${index}.categoria_contabil_id`,
+                                  produtoData.categoria_contabil_id
+                                );
+                              }
+                              updateItemTotal(index);
+                            }}
+                            placeholder="Buscar produto ou digitar descrição livre..."
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            💡 Busque no catálogo ou digite livremente
+                          </p>
+                        </div>
+
                         <FormField
                           control={form.control}
                           name={`itens.${index}.descricao`}
                           render={({ field }) => (
                             <FormItem className="md:col-span-2">
-                              <FormLabel>Descrição do Item</FormLabel>
+                              <FormLabel>Descrição (editável)</FormLabel>
                               <FormControl>
                                 <Input {...field} />
                               </FormControl>

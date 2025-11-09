@@ -19,6 +19,7 @@ import {
   History,
   FileText,
   Users,
+  Package,
 } from 'lucide-react';
 import { DevelopmentPlaceholder } from '@/components/composed';
 import { FornecedorList } from '@/components/domain/fornecedores';
@@ -34,6 +35,7 @@ import {
   RecorrenciaLogViewer,
   ConfiguracaoDivisaoSocios,
 } from '@/components/domain/financial';
+import { ProdutoList } from '@/components/domain/produtos';
 import { useSearchParams } from 'react-router-dom';
 
 // AI dev note: Template principal do módulo financeiro
@@ -129,13 +131,20 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           content: (
             <div className="space-y-6">
               <Tabs defaultValue="fornecedores" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger
                     value="fornecedores"
                     className="flex items-center gap-2"
                   >
                     <Building2 className="h-4 w-4" />
                     Fornecedores
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="produtos"
+                    className="flex items-center gap-2"
+                  >
+                    <Package className="h-4 w-4" />
+                    Produtos
                   </TabsTrigger>
                   <TabsTrigger
                     value="categorias"
@@ -162,6 +171,10 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
 
                 <TabsContent value="fornecedores" className="mt-6">
                   <FornecedorList />
+                </TabsContent>
+
+                <TabsContent value="produtos" className="mt-6">
+                  <ProdutoList />
                 </TabsContent>
 
                 <TabsContent value="categorias" className="mt-6">
