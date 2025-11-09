@@ -40,12 +40,12 @@ import { supabase } from '@/lib/supabase';
 
 interface Fornecedor {
   id: string;
-  tipo_pessoa: 'fisica' | 'juridica';
-  nome_razao_social: string;
-  nome_fantasia?: string;
-  cpf_cnpj: string;
-  email?: string;
-  telefone?: string;
+  tipo_pessoa?: 'fisica' | 'juridica' | null;
+  nome_razao_social?: string | null;
+  nome_fantasia?: string | null;
+  cpf_cnpj?: string | null;
+  email?: string | null;
+  telefone?: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -123,17 +123,26 @@ export const FornecedorList = React.memo(() => {
   }, [fornecedores, searchTerm]);
 
   // Formatação de documento
-  const formatarDocumento = (cpfCnpj: string, tipo: 'fisica' | 'juridica') => {
-    if (tipo === 'fisica') {
+  const formatarDocumento = (
+    cpfCnpj?: string | null,
+    tipo?: 'fisica' | 'juridica' | null
+  ) => {
+    if (!cpfCnpj) return '-';
+
+    const cleaned = cpfCnpj.replace(/\D/g, '');
+
+    if (tipo === 'fisica' && cleaned.length === 11) {
       // CPF: XXX.XXX.XXX-XX
-      return cpfCnpj.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-    } else {
+      return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    } else if (tipo === 'juridica' && cleaned.length === 14) {
       // CNPJ: XX.XXX.XXX/XXXX-XX
-      return cpfCnpj.replace(
+      return cleaned.replace(
         /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
         '$1.$2.$3/$4-$5'
       );
     }
+
+    return cpfCnpj; // Retorna o valor original se não puder formatar
   };
 
   // Formatação de telefone
@@ -305,21 +314,28 @@ export const FornecedorList = React.memo(() => {
                     <div className="flex items-center">
                       {fornecedor.tipo_pessoa === 'juridica' ? (
                         <Building2 className="h-4 w-4 text-muted-foreground" />
-                      ) : (
+                      ) : fornecedor.tipo_pessoa === 'fisica' ? (
                         <User className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Building2 className="h-4 w-4 text-muted-foreground opacity-50" />
                       )}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div>
                       <p className="font-medium">
-                        {fornecedor.nome_razao_social}
+                        {fornecedor.nome_fantasia ||
+                          fornecedor.nome_razao_social ||
+                          'Sem nome'}
                       </p>
-                      {fornecedor.nome_fantasia && (
-                        <p className="text-sm text-muted-foreground">
-                          {fornecedor.nome_fantasia}
-                        </p>
-                      )}
+                      {fornecedor.nome_razao_social &&
+                        fornecedor.nome_fantasia &&
+                        fornecedor.nome_razao_social !==
+                          fornecedor.nome_fantasia && (
+                          <p className="text-sm text-muted-foreground">
+                            {fornecedor.nome_razao_social}
+                          </p>
+                        )}
                     </div>
                   </TableCell>
                   <TableCell>
