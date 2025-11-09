@@ -625,6 +625,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                       <TableHead>Data</TableHead>
                       <TableHead>Documento</TableHead>
                       <TableHead>Descrição</TableHead>
+                      <TableHead>Observações</TableHead>
                       <TableHead>Fornecedor/Cliente</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
@@ -707,6 +708,26 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                               </div>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell className="max-w-[200px]">
+                          {lancamento.observacoes ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-sm text-muted-foreground line-clamp-2 cursor-help">
+                                    {lancamento.observacoes}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-sm">
+                                  <p>{lancamento.observacoes}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">
+                              -
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {lancamento.fornecedor ? (
