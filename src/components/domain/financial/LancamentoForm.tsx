@@ -78,6 +78,7 @@ const lancamentoSchema = z.object({
   valor_total: z.number().min(0, 'Valor deve ser maior ou igual a zero'),
   quantidade_parcelas: z.number().int().min(1).max(48).default(1),
   eh_divisao_socios: z.boolean().default(false),
+  pessoa_responsavel_id: z.string().uuid().optional().nullable(),
   arquivo: z.any().optional(),
   empresa_fatura: z.string().uuid().optional().nullable(),
   itens: z.array(itemSchema).min(1, 'Adicione pelo menos um item'),
@@ -120,6 +121,7 @@ interface LancamentoFormProps {
     valor_total: number;
     quantidade_parcelas: number;
     eh_divisao_socios: boolean;
+    pessoa_responsavel_id?: string | null;
     arquivo_url?: string;
     empresa_fatura?: string | null;
   };
@@ -133,6 +135,9 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
     const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([]);
     const [categorias, setCategorias] = React.useState<Categoria[]>([]);
     const [empresas, setEmpresas] = React.useState<Empresa[]>([]);
+    const [socios, setSocios] = React.useState<{ id: string; nome: string }[]>(
+      []
+    );
     const [uploadedFileUrl, setUploadedFileUrl] = React.useState<string | null>(
       lancamento?.arquivo_url || null
     );
@@ -157,6 +162,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
         valor_total: lancamento?.valor_total || 0,
         quantidade_parcelas: lancamento?.quantidade_parcelas || 1,
         eh_divisao_socios: lancamento?.eh_divisao_socios || false,
+        pessoa_responsavel_id: lancamento?.pessoa_responsavel_id || null,
         empresa_fatura: lancamento?.empresa_fatura || null,
         itens: [
           {
@@ -177,6 +183,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
     });
 
     const tipoLancamento = form.watch('tipo_lancamento');
+    const ehDivisaoSocios = form.watch('eh_divisao_socios');
     const itens = form.watch('itens');
 
     // Carregar dados auxiliares
@@ -214,6 +221,17 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
 
           if (empError) throw empError;
           setEmpresas(empData || []);
+
+          // Carregar sócios (admin e profissionais)
+          const { data: sociosData, error: sociosError } = await supabase
+            .from('pessoas')
+            .select('id, nome')
+            .in('role', ['admin', 'profissional'])
+            .eq('ativo', true)
+            .order('nome');
+
+          if (sociosError) throw sociosError;
+          setSocios(sociosData || []);
         } catch (error) {
           console.error('Erro ao carregar dados:', error);
           toast({
@@ -338,6 +356,9 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
           valor_total: data.valor_total,
           quantidade_parcelas: data.quantidade_parcelas,
           eh_divisao_socios: data.eh_divisao_socios,
+          pessoa_responsavel_id: data.eh_divisao_socios
+            ? null
+            : data.pessoa_responsavel_id || null,
           status_lancamento: 'validado',
           origem_lancamento: 'manual',
           arquivo_url: uploadedFileUrl,
@@ -411,15 +432,13 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
 
           if (itensError) throw itensError;
 
-          // Se tiver divisão entre sócios, criar registros
+          // Criar divisão de valores
           if (data.eh_divisao_socios) {
-            // Buscar configuração de divisão ativa
+            // Divisão entre sócios - buscar configuração ativa
             const { data: divisaoConfig, error: divisaoError } = await supabase
               .from('configuracao_divisao_socios')
               .select('*')
-              .eq('ativo', true)
-              .gte('data_fim', new Date().toISOString())
-              .lte('data_inicio', new Date().toISOString());
+              .eq('ativo', true);
 
             if (divisaoError) throw divisaoError;
 
@@ -428,7 +447,8 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                 lancamento_id: newLancamento.id,
                 pessoa_id: config.pessoa_id,
                 percentual: config.percentual_divisao,
-                valor: (data.valor_total * config.percentual_divisao) / 100,
+                valor:
+                  (data.valor_total * Number(config.percentual_divisao)) / 100,
               }));
 
               const { error: divisaoInsertError } = await supabase
@@ -437,6 +457,18 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
 
               if (divisaoInsertError) throw divisaoInsertError;
             }
+          } else if (data.pessoa_responsavel_id) {
+            // Lançamento individual - criar divisão com 100% para uma pessoa
+            const { error: divisaoError } = await supabase
+              .from('lancamento_divisao_socios')
+              .insert({
+                lancamento_id: newLancamento.id,
+                pessoa_id: data.pessoa_responsavel_id,
+                percentual: 100,
+                valor: data.valor_total,
+              });
+
+            if (divisaoError) throw divisaoError;
           }
 
           // Criar contas a pagar (uma para cada parcela)
@@ -998,19 +1030,70 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                       </div>
                       <FormDescription>
                         {tipoLancamento === 'despesa'
-                          ? 'Esta despesa será dividida entre os sócios'
-                          : 'Esta receita será dividida entre os sócios'}
+                          ? 'Esta despesa será dividida entre os sócios conforme percentuais configurados'
+                          : 'Esta receita será dividida entre os sócios conforme percentuais configurados'}
                       </FormDescription>
                     </div>
                     <FormControl>
                       <Switch
                         checked={field.value}
-                        onCheckedChange={field.onChange}
+                        onCheckedChange={(checked) => {
+                          field.onChange(checked);
+                          // Limpar pessoa_responsavel_id ao ativar divisão
+                          if (checked) {
+                            form.setValue('pessoa_responsavel_id', null);
+                          }
+                        }}
                       />
                     </FormControl>
                   </FormItem>
                 )}
               />
+
+              {/* Pessoa Responsável - aparece quando NÃO é divisão */}
+              {!ehDivisaoSocios && (
+                <FormField
+                  control={form.control}
+                  name="pessoa_responsavel_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Responsável pelo Pagamento
+                        </div>
+                      </FormLabel>
+                      <Select
+                        onValueChange={(value) =>
+                          field.onChange(normalizeSelectValue(value))
+                        }
+                        value={field.value || '__none__'}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o responsável" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="__none__">Selecione...</SelectItem>
+                          {socios.map((socio) => (
+                            <SelectItem key={socio.id} value={socio.id}>
+                              {socio.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Pessoa que ficará responsável por este{' '}
+                        {tipoLancamento === 'despesa'
+                          ? 'pagamento'
+                          : 'recebimento'}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {/* Upload de Documento */}
               <FormField
