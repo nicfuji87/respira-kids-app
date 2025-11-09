@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Save,
 } from 'lucide-react';
+import { Switch } from '@/components/primitives';
 import {
   Card,
   CardContent,
@@ -71,6 +72,7 @@ interface PreLancamento {
   arquivo_url?: string | null;
   dados_origem?: Record<string, unknown>;
   created_at: string;
+  pago?: boolean; // Indica se já foi pago no momento do cadastro
   fornecedor?: {
     nome_razao_social: string;
     nome_fantasia?: string | null;
@@ -234,6 +236,8 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
       try {
         setIsProcessing(id);
 
+        // Salvar todas as edições incluindo 'pago'
+
         const { error } = await supabase
           .from('lancamentos_financeiros')
           .update({
@@ -274,21 +278,28 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
       try {
         setIsProcessing(id);
 
+        const lancamento = preLancamentos.find((l) => l.id === id);
+        if (!lancamento) throw new Error('Lançamento não encontrado');
+
+        // Preparar dados atualizados (incluindo edições)
+        const edits = editedData[id] || {};
+        const dadosAtualizados = {
+          ...edits,
+          atualizado_por: user?.pessoa?.id || null,
+        };
+
         // Salvar edições primeiro se houver
-        if (editedData[id] && Object.keys(editedData[id]).length > 0) {
+        if (Object.keys(dadosAtualizados).length > 0) {
           const { error: updateError } = await supabase
             .from('lancamentos_financeiros')
-            .update({
-              ...editedData[id],
-              atualizado_por: user?.pessoa?.id || null,
-            })
+            .update(dadosAtualizados)
             .eq('id', id);
 
           if (updateError) throw updateError;
         }
 
         // Atualizar status para validado
-        const { error } = await supabase
+        const { error: statusError } = await supabase
           .from('lancamentos_financeiros')
           .update({
             status_lancamento: 'validado',
@@ -298,11 +309,52 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
           })
           .eq('id', id);
 
-        if (error) throw error;
+        if (statusError) throw statusError;
+
+        // AI dev note: Criar contas a pagar (uma parcela por documento)
+        // Se já estiver marcado como pago, criar com status "pago"
+        const estaPago =
+          (editedData[id]?.pago as boolean | undefined) ??
+          lancamento.pago ??
+          false;
+        const quantidadeParcelas =
+          editedData[id]?.quantidade_parcelas ?? lancamento.quantidade_parcelas;
+        const valorTotal =
+          editedData[id]?.valor_total ?? lancamento.valor_total;
+        const dataEmissao = editedData[id]?.data_emissao
+          ? new Date(editedData[id].data_emissao as string)
+          : new Date(lancamento.data_emissao);
+
+        const contasPagarData = [];
+        const valorParcela = Number(valorTotal) / quantidadeParcelas;
+
+        for (let i = 0; i < quantidadeParcelas; i++) {
+          const vencimento = new Date(dataEmissao);
+          vencimento.setMonth(vencimento.getMonth() + i);
+
+          contasPagarData.push({
+            lancamento_id: id,
+            numero_parcela: i + 1,
+            total_parcelas: quantidadeParcelas,
+            valor_parcela: valorParcela,
+            data_vencimento: format(vencimento, 'yyyy-MM-dd'),
+            status_pagamento: estaPago ? 'pago' : 'pendente',
+            data_pagamento: estaPago ? format(new Date(), 'yyyy-MM-dd') : null,
+            valor_pago: estaPago ? valorParcela : null,
+            valor_final: estaPago ? valorParcela : null,
+            pago_por: estaPago ? user?.pessoa?.id || null : null,
+          });
+        }
+
+        const { error: contasError } = await supabase
+          .from('contas_pagar')
+          .insert(contasPagarData);
+
+        if (contasError) throw contasError;
 
         toast({
           title: 'Lançamento aprovado',
-          description: 'O lançamento foi aprovado e validado com sucesso.',
+          description: `O lançamento foi aprovado e ${quantidadeParcelas} parcela(s) ${estaPago ? 'marcada(s) como paga(s)' : 'criada(s)'} com sucesso.`,
         });
 
         loadPreLancamentos();
@@ -559,6 +611,9 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                       <TableHead className="min-w-[200px]">
                         Observações
                       </TableHead>
+                      <TableHead className="min-w-[100px] text-center">
+                        Pago?
+                      </TableHead>
                       <TableHead className="text-right min-w-[180px]">
                         Ações
                       </TableHead>
@@ -741,6 +796,27 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                               placeholder="Observações..."
                               className="h-8 text-sm"
                             />
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex items-center justify-center">
+                              <Switch
+                                checked={
+                                  (editedData[lancamento.id]?.pago as
+                                    | boolean
+                                    | undefined) ??
+                                  lancamento.pago ??
+                                  false
+                                }
+                                onCheckedChange={(checked) =>
+                                  handleFieldChange(
+                                    lancamento.id,
+                                    'pago',
+                                    checked
+                                  )
+                                }
+                              />
+                            </div>
                           </TableCell>
 
                           <TableCell>
