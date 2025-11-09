@@ -10,7 +10,6 @@ import {
   Receipt,
   Loader2,
   RefreshCw,
-  Eye,
   Save,
 } from 'lucide-react';
 import {
@@ -31,11 +30,6 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -118,8 +112,6 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
     const [isProcessing, setIsProcessing] = React.useState<string | null>(null);
     const [searchTerm, setSearchTerm] = React.useState('');
     const [selectedPeriod, setSelectedPeriod] = React.useState<string>('todos');
-    const [showDocumentDialog, setShowDocumentDialog] = React.useState(false);
-    const [documentoUrl, setDocumentoUrl] = React.useState<string | null>(null);
     const { user } = useAuth();
     const { toast } = useToast();
 
@@ -226,11 +218,6 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
           [field]: value,
         },
       }));
-    };
-
-    const handleVisualizarDocumento = (url: string) => {
-      setDocumentoUrl(url);
-      setShowDocumentDialog(true);
     };
 
     const handleSalvarEdicoes = async (id: string) => {
@@ -569,6 +556,9 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                       <TableHead className="min-w-[150px]">Categoria</TableHead>
                       <TableHead className="min-w-[120px]">Valor</TableHead>
                       <TableHead>Parcelas</TableHead>
+                      <TableHead className="min-w-[200px]">
+                        Observações
+                      </TableHead>
                       <TableHead className="text-right min-w-[180px]">
                         Ações
                       </TableHead>
@@ -616,21 +606,6 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                               placeholder="Nº doc"
                               className="h-8 text-sm"
                             />
-                            {lancamento.arquivo_url && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-auto p-0 text-xs mt-1"
-                                onClick={() =>
-                                  handleVisualizarDocumento(
-                                    lancamento.arquivo_url!
-                                  )
-                                }
-                              >
-                                <FileText className="mr-1 h-3 w-3" />
-                                Ver anexo
-                              </Button>
-                            )}
                           </TableCell>
 
                           <TableCell>
@@ -749,6 +724,26 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                           </TableCell>
 
                           <TableCell>
+                            <Input
+                              value={
+                                (getFieldValue(
+                                  lancamento,
+                                  'observacoes'
+                                ) as string) || ''
+                              }
+                              onChange={(e) =>
+                                handleFieldChange(
+                                  lancamento.id,
+                                  'observacoes',
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Observações..."
+                              className="h-8 text-sm"
+                            />
+                          </TableCell>
+
+                          <TableCell>
                             <div className="flex items-center justify-end gap-1">
                               {hasChanges && (
                                 <TooltipProvider>
@@ -837,40 +832,6 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
             )}
           </CardContent>
         </Card>
-
-        {/* Dialog de Documento */}
-        <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>Documento Anexado</DialogTitle>
-            </DialogHeader>
-            {documentoUrl && (
-              <div className="w-full h-[600px] overflow-auto">
-                <iframe
-                  src={documentoUrl}
-                  className="w-full h-full"
-                  title="Documento"
-                />
-              </div>
-            )}
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (documentoUrl) {
-                    window.open(documentoUrl, '_blank');
-                  }
-                }}
-              >
-                <Eye className="mr-2 h-4 w-4" />
-                Abrir em Nova Aba
-              </Button>
-              <Button onClick={() => setShowDocumentDialog(false)}>
-                Fechar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </>
     );
   }
