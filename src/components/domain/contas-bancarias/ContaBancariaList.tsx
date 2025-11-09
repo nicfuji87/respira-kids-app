@@ -31,6 +31,7 @@ import { ContaBancariaForm } from './ContaBancariaForm';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 // AI dev note: Lista de contas bancárias com filtros e ações CRUD
 // Exibe contas da clínica e de sócios com saldos formatados
@@ -67,22 +68,26 @@ export const ContaBancariaList = React.memo(() => {
   const [deletingConta, setDeletingConta] =
     React.useState<ContaBancaria | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Carregar contas
   const loadContas = React.useCallback(async () => {
     try {
       setIsLoading(true);
 
-      const { data, error } = await supabase
-        .from('contas_bancarias')
-        .select(
-          `
+      let query = supabase.from('contas_bancarias').select(
+        `
           *,
           pessoa:pessoas!contas_bancarias_pessoa_id_fkey(nome)
         `
-        )
-        .order('banco_nome')
-        .order('titular');
+      );
+
+      // Se for profissional, filtrar apenas suas próprias contas
+      if (user?.pessoa?.role === 'profissional' && user?.pessoa?.id) {
+        query = query.eq('pessoa_id', user.pessoa.id);
+      }
+
+      const { data, error } = await query.order('banco_nome').order('titular');
 
       if (error) throw error;
 
@@ -97,7 +102,7 @@ export const ContaBancariaList = React.memo(() => {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, user?.pessoa?.role, user?.pessoa?.id]);
 
   React.useEffect(() => {
     loadContas();
