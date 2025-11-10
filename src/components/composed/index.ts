@@ -48,6 +48,7 @@ export { ContractViewModal } from './ContractViewModal';
 // Admin Patient Registration
 export { AdminPatientRegistrationDialog } from './AdminPatientRegistrationDialog';
 export { AdminWhatsAppValidationStep } from './AdminWhatsAppValidationStep';
+export { SharedScheduleWhatsAppValidationStep } from './SharedScheduleWhatsAppValidationStep';
 export { AdminPatientDataStep } from './AdminPatientDataStep';
 export { AdminContractGenerationStep } from './AdminContractGenerationStep';
 
