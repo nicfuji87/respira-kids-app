@@ -31,10 +31,8 @@ export interface AdminPatientData {
   cepPaciente?: string;
   numeroEnderecoPaciente?: string;
   complementoPaciente?: string;
-  logradouro?: string;
-  bairro?: string;
-  cidade?: string;
-  estado?: string;
+  // AI dev note: logradouro, bairro, cidade, estado do paciente
+  // usam os mesmos campos da seção Endereço (não duplicar)
 
   // Responsável Financeiro
   responsavelFinanceiroId?: string;
