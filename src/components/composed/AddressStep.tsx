@@ -144,6 +144,8 @@ export const AddressStep = React.memo<AddressStepProps>(
 
       if (!estado.trim()) {
         newErrors.estado = 'Estado é obrigatório';
+      } else if (estado.trim().length !== 2) {
+        newErrors.estado = 'Estado deve ser uma sigla de 2 caracteres (ex: SP, RJ, MG)';
       }
 
       if (!numero.trim()) {

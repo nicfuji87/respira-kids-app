@@ -247,6 +247,15 @@ Deno.serve(async (req: Request) => {
 
       // AI dev note: Adicionar trim() em todos os campos para evitar espaços em branco
       // A constraint do banco requer que estado tenha exatamente 2 caracteres
+      const estadoNormalizado = data.endereco.estado?.trim()?.toUpperCase();
+      
+      // Validar estado obrigatório com 2 caracteres
+      if (!estadoNormalizado || estadoNormalizado.length !== 2) {
+        throw new Error(
+          `Estado (UF) deve ter exatamente 2 caracteres (ex: SP, RJ, MG). Recebido: "${estadoNormalizado || '(vazio)'}"`
+        );
+      }
+
       const { data: novoEndereco, error: errorEnderecoInsert } = await supabase
         .from('enderecos')
         .insert({
@@ -254,7 +263,7 @@ Deno.serve(async (req: Request) => {
           logradouro: data.endereco.logradouro?.trim() || '',
           bairro: data.endereco.bairro?.trim() || '',
           cidade: data.endereco.cidade?.trim() || '',
-          estado: data.endereco.estado?.trim()?.toUpperCase() || '', // Trim + uppercase
+          estado: estadoNormalizado, // Já validado com 2 caracteres
         })
         .select('id')
         .single();
