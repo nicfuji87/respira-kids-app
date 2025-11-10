@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { ArrowLeft, ArrowRight, Check, Loader2, Calendar, MapPin, Building2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
-import { Badge } from '@/components/primitives/badge';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { WhatsAppValidationStep, type ExistingUserFullData } from '@/components/composed/WhatsAppValidationStep';
@@ -24,10 +23,6 @@ import { selectSlotAndCreateAppointment } from '@/lib/shared-schedule-api';
 import { supabase } from '@/lib/supabase';
 import type {
   AgendaCompartilhadaCompleta,
-  OpcaoServico,
-  OpcaoLocal,
-  OpcaoEmpresa,
-  SlotDisponivel,
   WizardDataSelecao,
 } from '@/types/shared-schedule';
 
@@ -90,9 +85,11 @@ export const SharedScheduleSelectorWizard = React.memo<SharedScheduleSelectorWiz
         if (error) throw error;
 
         const pacientes = (data || [])
-          .map((item: any) => item.paciente)
-          .filter((p: any) => p && p.ativo)
-          .map((p: any) => ({ id: p.id, nome: p.nome }));
+          .map((item: unknown) => (item as { paciente?: unknown })?.paciente)
+          .filter((p: unknown): p is { id: string; nome: string; ativo: boolean } => 
+            !!p && typeof (p as { ativo?: boolean }).ativo === 'boolean' && (p as { ativo: boolean }).ativo
+          )
+          .map((p) => ({ id: p.id, nome: p.nome }));
 
         setPacientesDoResponsavel(pacientes);
         return pacientes;
@@ -550,18 +547,16 @@ export const SharedScheduleSelectorWizard = React.memo<SharedScheduleSelectorWiz
             </div>
           );
 
-        case 'select-slot':
+        case 'select-slot': {
           // Agrupar slots por data
-          const slotsPorData = useMemo(() => {
-            const grupos: Record<string, typeof agenda.slots> = {};
-            agenda.slots.forEach((slot) => {
-              const date = parseISO(slot.data_hora);
-              const key = format(date, 'yyyy-MM-dd');
-              if (!grupos[key]) grupos[key] = [];
-              grupos[key].push(slot);
-            });
-            return grupos;
-          }, [agenda.slots]);
+          const grupos: Record<string, typeof agenda.slots> = {};
+          agenda.slots.forEach((slot) => {
+            const date = parseISO(slot.data_hora);
+            const key = format(date, 'yyyy-MM-dd');
+            if (!grupos[key]) grupos[key] = [];
+            grupos[key].push(slot);
+          });
+          const slotsPorData = grupos;
 
           return (
             <div className="space-y-4">
@@ -623,8 +618,9 @@ export const SharedScheduleSelectorWizard = React.memo<SharedScheduleSelectorWiz
               </ScrollArea>
             </div>
           );
+        }
 
-        case 'confirmation':
+        case 'confirmation': {
           const slotDate = wizardData.slot_data_hora
             ? parseISO(wizardData.slot_data_hora)
             : null;
@@ -689,6 +685,7 @@ export const SharedScheduleSelectorWizard = React.memo<SharedScheduleSelectorWiz
               </Card>
             </div>
           );
+        }
 
         case 'success':
           return (
@@ -743,7 +740,7 @@ export const SharedScheduleSelectorWizard = React.memo<SharedScheduleSelectorWiz
 
         {/* Progress */}
         {showProgress && (
-          <ProgressIndicator current={stepNumber} total={totalSteps} className="mb-6" />
+          <ProgressIndicator currentStep={stepNumber} totalSteps={totalSteps} className="mb-6" />
         )}
 
         {/* Step Content */}

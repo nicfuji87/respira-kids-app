@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { X, Save, Loader2, Plus } from 'lucide-react';
+import { Save, Loader2, Plus } from 'lucide-react';
 
 import { Button } from '@/components/primitives/button';
 import {

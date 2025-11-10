@@ -23,7 +23,7 @@ import {
   generateUniqueToken,
   isTokenAvailable,
 } from '@/lib/shared-schedule-api';
-import { format, parse, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type {
   ServicoDetalhado,
@@ -80,7 +80,7 @@ export const SharedScheduleCreatorWizard = React.memo<SharedScheduleCreatorWizar
 
     // Estados para step de slots
     const [selectedDate, setSelectedDate] = useState<string>('');
-    const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
+    const [, setSelectedTimes] = useState<string[]>([]);
     const [timeInput, setTimeInput] = useState<string>('');
 
     // Carregar opções quando dialog abre
@@ -681,8 +681,8 @@ export const SharedScheduleCreatorWizard = React.memo<SharedScheduleCreatorWizar
 
           {currentStep !== 'success' && (
             <ProgressIndicator
-              current={stepNumber}
-              total={totalSteps}
+              currentStep={stepNumber}
+              totalSteps={totalSteps}
               className="mb-4"
             />
           )}
