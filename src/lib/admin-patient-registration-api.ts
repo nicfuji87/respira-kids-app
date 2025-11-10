@@ -182,7 +182,7 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
     const { data: pessoa } = await supabase
       .from('pessoas')
       .select('role')
-      .eq('user_id', user.user.id)
+      .eq('auth_user_id', user.user.id)
       .single();
 
     if (!pessoa || !['admin', 'secretaria'].includes(pessoa.role || '')) {
