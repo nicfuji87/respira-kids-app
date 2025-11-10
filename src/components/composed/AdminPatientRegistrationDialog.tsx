@@ -158,6 +158,8 @@ export const AdminPatientRegistrationDialog: React.FC<
       nome: string;
       cpf_cnpj: string;
       email?: string;
+      numero_endereco?: string;
+      complemento_endereco?: string;
       endereco?: {
         id: string;
         cep: string;
