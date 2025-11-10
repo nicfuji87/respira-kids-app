@@ -54,9 +54,8 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
     const [isLoading, setIsLoading] = useState(true);
     const [isCreatorOpen, setIsCreatorOpen] = useState(false);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
-    const [selectedAgenda, setSelectedAgenda] = useState<AgendaCompartilhadaCompleta | null>(
-      null
-    );
+    const [selectedAgenda, setSelectedAgenda] =
+      useState<AgendaCompartilhadaCompleta | null>(null);
     const [agendaToDelete, setAgendaToDelete] = useState<string | null>(null);
 
     // Filtros
@@ -69,7 +68,10 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
     const loadAgendas = useCallback(async () => {
       try {
         setIsLoading(true);
-        const result = await listSharedSchedulesByProfessional(profissionalId, filters);
+        const result = await listSharedSchedulesByProfessional(
+          profissionalId,
+          filters
+        );
 
         if (result.success && result.data) {
           setAgendas(result.data);
@@ -95,7 +97,7 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
       async (token: string) => {
         try {
           const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-          const link = `${appUrl}/#/agenda/${token}`;
+          const link = `${appUrl}/#/agenda-publica/${token}`;
 
           await navigator.clipboard.writeText(link);
           toast({
@@ -113,25 +115,28 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
       [toast]
     );
 
-    const handleEdit = useCallback(async (agendaId: string) => {
-      try {
-        // Buscar agenda completa
-        const agenda = agendas.find((a) => a.id === agendaId);
-        if (!agenda) return;
+    const handleEdit = useCallback(
+      async (agendaId: string) => {
+        try {
+          // Buscar agenda completa
+          const agenda = agendas.find((a) => a.id === agendaId);
+          if (!agenda) return;
 
-        const result = await fetchSharedScheduleByToken(agenda.token);
-        if (result.success && result.data) {
-          setSelectedAgenda(result.data);
-          setIsEditorOpen(true);
+          const result = await fetchSharedScheduleByToken(agenda.token);
+          if (result.success && result.data) {
+            setSelectedAgenda(result.data);
+            setIsEditorOpen(true);
+          }
+        } catch (error) {
+          console.error('Erro ao buscar agenda:', error);
+          toast({
+            title: 'Erro ao carregar agenda',
+            variant: 'destructive',
+          });
         }
-      } catch (error) {
-        console.error('Erro ao buscar agenda:', error);
-        toast({
-          title: 'Erro ao carregar agenda',
-          variant: 'destructive',
-        });
-      }
-    }, [agendas, toast]);
+      },
+      [agendas, toast]
+    );
 
     const handleDelete = useCallback((agendaId: string) => {
       setAgendaToDelete(agendaId);
@@ -156,7 +161,8 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
         console.error('Erro ao deletar agenda:', error);
         toast({
           title: 'Erro ao deletar agenda',
-          description: error instanceof Error ? error.message : 'Erro desconhecido',
+          description:
+            error instanceof Error ? error.message : 'Erro desconhecido',
           variant: 'destructive',
         });
       } finally {
@@ -188,7 +194,13 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
             <div className="space-y-2">
               <Label htmlFor="status-filter">Status</Label>
               <Select
-                value={filters.ativo === undefined ? 'all' : filters.ativo ? 'active' : 'inactive'}
+                value={
+                  filters.ativo === undefined
+                    ? 'all'
+                    : filters.ativo
+                      ? 'active'
+                      : 'inactive'
+                }
                 onValueChange={(value) => {
                   setFilters((prev) => ({
                     ...prev,
@@ -284,8 +296,8 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
             <AlertDialogHeader>
               <AlertDialogTitle>Excluir Agenda</AlertDialogTitle>
               <AlertDialogDescription>
-                Tem certeza que deseja excluir esta agenda? Os agendamentos já realizados
-                serão mantidos, mas o link não estará mais acessível.
+                Tem certeza que deseja excluir esta agenda? Os agendamentos já
+                realizados serão mantidos, mas o link não estará mais acessível.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -306,5 +318,3 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
 );
 
 SharedSchedulesList.displayName = 'SharedSchedulesList';
-
-

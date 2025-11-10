@@ -105,7 +105,7 @@ export async function createSharedSchedule(
 
     // 6. Gerar link completo
     const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-    const link = `${appUrl}/#/agenda/${data.token}`;
+    const link = `${appUrl}/#/agenda-publica/${data.token}`;
 
     return {
       data: { agenda, link },
@@ -509,8 +509,8 @@ export async function fetchSlotsWithSelections(
               )?.nome,
               servico_nome: (selecao.servico as unknown as { nome: string })
                 ?.nome,
-              local_nome: (selecao.local as unknown as { nome: string })
-                ?.nome || null,
+              local_nome:
+                (selecao.local as unknown as { nome: string })?.nome || null,
               empresa_nome: (
                 selecao.empresa as unknown as { razao_social: string }
               )?.razao_social,
@@ -576,7 +576,9 @@ export async function selectSlotAndCreateAppointment(
     if (servicoError) throw servicoError;
 
     // 4. Criar agendamento com referência à agenda compartilhada
-    const agendamentoData: CreateAgendamento & { agenda_compartilhada_id?: string } = {
+    const agendamentoData: CreateAgendamento & {
+      agenda_compartilhada_id?: string;
+    } = {
       data_hora: slot.data_hora,
       paciente_id: selecaoData.paciente_id,
       profissional_id: agenda.profissional_id,
@@ -660,4 +662,3 @@ export async function isTokenAvailable(
     };
   }
 }
-

@@ -12,6 +12,7 @@ export interface AuthUser extends User {
     profile_complete: boolean;
     role: string | null;
     foto_perfil: string | null;
+    pode_atender?: boolean; // AI dev note: Para Agendas Compartilhadas
   };
 }
 
@@ -151,7 +152,9 @@ export async function getUserPessoa(userId: string, timeout = 8000) {
       try {
         const { data, error } = await supabase
           .from('pessoas')
-          .select('id, nome, is_approved, profile_complete, role, foto_perfil')
+          .select(
+            'id, nome, is_approved, profile_complete, role, foto_perfil, pode_atender'
+          )
           .eq('auth_user_id', userId)
           .single();
 

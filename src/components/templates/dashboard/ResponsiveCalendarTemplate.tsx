@@ -195,6 +195,8 @@ export const ResponsiveCalendarTemplate =
               <AdminCalendarTemplate
                 {...baseProps}
                 currentUser={currentUser as AdminUser}
+                showAllProfessionals={true}
+                showSystemEvents={true}
               />
             );
 

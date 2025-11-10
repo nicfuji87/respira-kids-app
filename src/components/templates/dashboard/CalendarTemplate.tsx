@@ -22,7 +22,12 @@ import {
   AppointmentFormManager,
 } from '@/components/domain/calendar';
 import { SharedSchedulesList } from '@/components/domain/calendar/SharedSchedulesList';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/primitives/tabs';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '@/components/primitives/tabs';
 
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
@@ -78,7 +83,7 @@ export interface CalendarTemplateProps {
   onProfessionalClick?: (professionalId: string) => void;
   onNfeAction?: (appointmentId: string, linkNfe?: string) => void;
 
-  // Shared Schedules (for professional role)
+  // Shared Schedules (only for admin with pode_atender = true)
   profissionalId?: string;
   userId?: string;
   showSharedSchedulesTab?: boolean;
@@ -117,6 +122,16 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     userId,
     showSharedSchedulesTab = false,
   }) => {
+    // AI dev note: Debug log para verificar shared schedules props
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [CalendarTemplate] Shared Schedules Props:', {
+        profissionalId,
+        userId,
+        showSharedSchedulesTab,
+        'mostrará tabs?': showSharedSchedulesTab && profissionalId && userId,
+      });
+    }
+
     // AI dev note: These permissions are received but will be used in future implementations
     void canDeleteEvents;
     void canViewAllEvents;
@@ -477,7 +492,9 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           <Tabs defaultValue="calendar" className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="calendar">Agenda</TabsTrigger>
-              <TabsTrigger value="shared-schedules">Agenda Compartilhada</TabsTrigger>
+              <TabsTrigger value="shared-schedules">
+                Agenda Compartilhada
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="calendar" className="mt-0">

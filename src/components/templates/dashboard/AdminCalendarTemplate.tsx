@@ -8,11 +8,13 @@ import { Button } from '@/components/primitives/button';
 import { Filter, X } from 'lucide-react';
 
 // AI dev note: Template específico para admins - sem painéis de estatísticas
+// Admins que fazem atendimentos (pode_atender=true) têm acesso a Agendas Compartilhadas
 export interface AdminUser {
   id: string;
   name: string;
   email: string;
   role: 'admin';
+  podeAtender?: boolean; // Se true, mostra tab de Agenda Compartilhada
 }
 
 export interface AdminCalendarTemplateProps {
@@ -64,6 +66,16 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     onPatientClick,
     onProfessionalClick,
   }) => {
+    // AI dev note: Debug log para verificar se podeAtender está chegando
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [AdminCalendarTemplate] currentUser:', {
+        id: currentUser.id,
+        name: currentUser.name,
+        role: currentUser.role,
+        podeAtender: currentUser.podeAtender,
+        'showSharedSchedulesTab será': currentUser.podeAtender === true,
+      });
+    }
     // AI dev note: Estados para filtros do admin - suporta multi-seleção
     const [selectedProfessional, setSelectedProfessional] =
       useState<string>('all');
@@ -289,6 +301,11 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
               canEditEvents={canEditEvents}
               canDeleteEvents={canDeleteEvents}
               canViewAllEvents={canViewAllEvents}
+              profissionalId={
+                currentUser.podeAtender ? currentUser.id : undefined
+              }
+              userId={currentUser.id}
+              showSharedSchedulesTab={currentUser.podeAtender === true}
             />
           )}
         </div>

@@ -16,12 +16,13 @@ type AuthStep =
 
 function App() {
   // AI dev note: Verificar rota pública dinamicamente (reage a mudanças na URL)
-  // Rotas públicas (ex: /cadastro-paciente, /adicionar-responsavel-financeiro) não requerem autenticação
+  // Rotas públicas (ex: /cadastro-paciente, /adicionar-responsavel-financeiro, /agenda-publica/:token) não requerem autenticação
   const [isPublicRoute, setIsPublicRoute] = useState(() => {
     const hash = window.location.hash;
     return (
       hash.startsWith('#/cadastro-paciente') ||
-      hash.startsWith('#/adicionar-responsavel-financeiro')
+      hash.startsWith('#/adicionar-responsavel-financeiro') ||
+      hash.startsWith('#/agenda-publica/')
     );
   });
 
@@ -31,7 +32,8 @@ function App() {
       const hash = window.location.hash;
       const isPublic =
         hash.startsWith('#/cadastro-paciente') ||
-        hash.startsWith('#/adicionar-responsavel-financeiro');
+        hash.startsWith('#/adicionar-responsavel-financeiro') ||
+        hash.startsWith('#/agenda-publica/');
       console.log('🔍 [App] Verificando rota pública:', hash, '→', isPublic);
       setIsPublicRoute(isPublic);
     };

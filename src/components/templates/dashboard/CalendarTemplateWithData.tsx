@@ -171,6 +171,18 @@ export const CalendarTemplateWithData =
         | 'profissional'
         | 'secretaria';
 
+      // AI dev note: Debug para verificar o que está vindo do user.pessoa
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 [CalendarTemplateWithData] user.pessoa completo:', {
+          id: user.pessoa.id,
+          nome: user.pessoa.nome,
+          role: user.pessoa.role,
+          pode_atender: user.pessoa.pode_atender,
+          'tipo de pode_atender': typeof user.pessoa.pode_atender,
+          'todas as chaves': Object.keys(user.pessoa),
+        });
+      }
+
       const mockUserData = {
         id: user.pessoa.id,
         name: user.pessoa.nome || 'Usuário',
@@ -178,6 +190,7 @@ export const CalendarTemplateWithData =
         role: userRole,
         isApproved: user.pessoa.is_approved,
         profileComplete: user.pessoa.profile_complete,
+        podeAtender: user.pessoa.pode_atender === true, // AI dev note: Comparação estrita
       };
 
       // AI dev note: Renderização responsiva baseada no role
@@ -189,12 +202,18 @@ export const CalendarTemplateWithData =
               responsive,
               userRole,
               'vai renderizar': 'ResponsiveCalendarTemplate',
+              'pode_atender do banco': user.pessoa.pode_atender,
+              'mockUserData.podeAtender': mockUserData.podeAtender,
             }
           );
         }
         const userForResponsive =
           userRole === 'admin'
-            ? { ...mockUserData, role: 'admin' as const }
+            ? {
+                ...mockUserData,
+                role: 'admin' as const,
+                podeAtender: user.pessoa.pode_atender === true,
+              }
             : userRole === 'profissional'
               ? {
                   ...mockUserData,
@@ -240,7 +259,11 @@ export const CalendarTemplateWithData =
           return (
             <AdminCalendarTemplate
               {...commonTemplateProps}
-              currentUser={{ ...mockUserData, role: 'admin' as const }}
+              currentUser={{
+                ...mockUserData,
+                role: 'admin' as const,
+                podeAtender: user.pessoa.pode_atender === true,
+              }}
               showAllProfessionals={true}
               showSystemEvents={true}
             />

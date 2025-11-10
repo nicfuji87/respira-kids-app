@@ -247,9 +247,6 @@ export const ProfissionalCalendarTemplate =
               canEditEvents={canEditEvents}
               canDeleteEvents={canDeleteEvents}
               canViewAllEvents={canViewAllEvents}
-              profissionalId={currentUser.id}
-              userId={currentUser.id}
-              showSharedSchedulesTab={true}
             />
           </div>
         </div>

@@ -38,7 +38,7 @@ export const PublicRouter: React.FC = () => {
         />
 
         {/* Rota de agenda compartilhada (pública via token) */}
-        <Route path="/agenda/:token" element={<SharedSchedulePage />} />
+        <Route path="/agenda-publica/:token" element={<SharedSchedulePage />} />
 
         {/* Redirect padrão APENAS para root */}
         <Route
