@@ -253,12 +253,16 @@ export const AdminPatientRegistrationDialog: React.FC<
   };
 
   const handlePediatricianContinue = (data: {
-    pediatraId?: string;
+    id?: string;
     pessoaId?: string;
+    nome: string;
+    crm?: string;
+    isNew: boolean;
+    noPediatrician?: boolean;
   }) => {
     setFormData((prev) => ({
       ...prev,
-      pediatraId: data.pediatraId || data.pessoaId,
+      pediatraId: data.id, // ID da pessoa_pediatra
     }));
     goToNextStep();
   };
@@ -504,7 +508,7 @@ export const AdminPatientRegistrationDialog: React.FC<
               initialData={
                 formData.pediatraId
                   ? {
-                      pessoaId: formData.pediatraId,
+                      id: formData.pediatraId,
                       nome: '',
                       isNew: false,
                     }

@@ -152,7 +152,6 @@ async function getOrCreateResponsible(data: AdminPatientData): Promise<string> {
         id_endereco: enderecoId,
         numero_endereco: data.numeroEndereco,
         complemento_endereco: data.complementoEndereco,
-        tipo_pessoa: 'responsavel',
         ativo: true,
       })
       .select('id')
@@ -251,7 +250,6 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
         data_nascimento: data.dataNascimentoPaciente,
         sexo: data.sexoPaciente,
         id_tipo_pessoa: tipoPaciente?.id,
-        tipo_pessoa: 'paciente',
         id_endereco: enderecoPacienteId,
         numero_endereco: data.usarEnderecoResponsavel
           ? undefined
@@ -259,6 +257,10 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
         complemento_endereco: data.usarEnderecoResponsavel
           ? undefined
           : data.complementoPaciente,
+        responsavel_cobranca_id: responsavelFinanceiroId,
+        autorizacao_uso_cientifico: data.autorizacoes.uso_imagem_educacional,
+        autorizacao_uso_redes_sociais: data.autorizacoes.uso_imagem_marketing,
+        autorizacao_uso_do_nome: data.autorizacoes.compartilhamento_equipe,
         ativo: true,
       })
       .select('id')
@@ -272,11 +274,11 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
       idade >= 18 ? newPaciente.id : responsavelLegalId;
 
     const { error: relacionamentoError } = await supabase
-      .from('paciente_responsavel')
+      .from('pessoa_responsaveis')
       .insert({
-        id_paciente: newPaciente.id,
+        id_pessoa: newPaciente.id,
         id_responsavel: responsavelRelacionamentoId,
-        tipo_responsavel: 'legal',
+        tipo_responsabilidade: 'legal',
         ativo: true,
       });
 
@@ -286,31 +288,20 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
 
     // 8. Criar relacionamento com responsável financeiro (se diferente)
     if (responsavelFinanceiroId !== responsavelRelacionamentoId) {
-      await supabase.from('paciente_responsavel').insert({
-        id_paciente: newPaciente.id,
+      await supabase.from('pessoa_responsaveis').insert({
+        id_pessoa: newPaciente.id,
         id_responsavel: responsavelFinanceiroId,
-        tipo_responsavel: 'financeiro',
+        tipo_responsabilidade: 'financeiro',
         ativo: true,
       });
     }
 
     // 9. Vincular pediatra (se selecionado)
     if (data.pediatraId) {
-      await supabase.from('paciente_profissional').insert({
-        id_paciente: newPaciente.id,
-        id_profissional: data.pediatraId,
+      await supabase.from('paciente_pediatra').insert({
+        paciente_id: newPaciente.id,
+        pediatra_id: data.pediatraId,
         ativo: true,
-      });
-    }
-
-    // 10. Salvar autorizações
-    for (const [tipo, concedida] of Object.entries(data.autorizacoes)) {
-      await supabase.from('pessoa_autorizacoes').insert({
-        pessoa_id: newPaciente.id,
-        tipo_autorizacao: tipo,
-        concedida,
-        data_autorizacao: new Date().toISOString(),
-        origem: 'cadastro_administrativo',
       });
     }
 
