@@ -34,6 +34,8 @@ interface AdminWhatsAppValidationStepProps {
       cpf_cnpj: string;
       ativo: boolean;
       email?: string;
+      numero_endereco?: string;
+      complemento_endereco?: string;
       endereco?: {
         id: string;
         cep: string;
@@ -64,6 +66,8 @@ export const AdminWhatsAppValidationStep: React.FC<
     cpf_cnpj: string;
     ativo: boolean;
     email?: string;
+    numero_endereco?: string;
+    complemento_endereco?: string;
     endereco?: {
       id: string;
       cep: string;
@@ -102,6 +106,8 @@ export const AdminWhatsAppValidationStep: React.FC<
           cpf_cnpj,
           ativo,
           email,
+          numero_endereco,
+          complemento_endereco,
           enderecos!id_endereco (
             id,
             cep,

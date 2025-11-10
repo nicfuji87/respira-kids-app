@@ -204,6 +204,9 @@ export interface SupabaseAgendamentoCompletoFlat {
 
   // Evolução
   possui_evolucao: string; // 'sim' ou 'não'
+
+  // Agenda Compartilhada (NOVO)
+  agenda_compartilhada_id: string | null;
 }
 
 // Interfaces para dados enriquecidos (com joins) - MANTIDO PARA COMPATIBILIDADE
@@ -250,6 +253,7 @@ export interface CreateAgendamento {
   observacao?: string;
   agendado_por: string;
   empresa_fatura: string;
+  agenda_compartilhada_id?: string; // AI dev note: Rastrear origem de agendas compartilhadas
 }
 
 export interface UpdateAgendamento {

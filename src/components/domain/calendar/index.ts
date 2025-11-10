@@ -11,6 +11,12 @@ export { EventManager } from './EventManager';
 export { AppointmentDetailsManager } from './AppointmentDetailsManager';
 export { AppointmentFormManager } from './AppointmentFormManager';
 
+// Shared Schedules
+export { SharedScheduleCreatorWizard } from './SharedScheduleCreatorWizard';
+export { SharedScheduleEditorDialog } from './SharedScheduleEditorDialog';
+export { SharedScheduleSelectorWizard } from './SharedScheduleSelectorWizard';
+export { SharedSchedulesList } from './SharedSchedulesList';
+
 // Type exports
 export type { MonthViewProps } from './MonthView';
 export type { WeekViewProps } from './WeekView';
@@ -22,6 +28,12 @@ export type {
   AppointmentUpdateData,
 } from './AppointmentDetailsManager';
 export type { EventListModalProps } from './EventListModal';
+
+// Shared Schedules Type exports
+export type { SharedScheduleCreatorWizardProps } from './SharedScheduleCreatorWizard';
+export type { SharedScheduleEditorDialogProps } from './SharedScheduleEditorDialog';
+export type { SharedScheduleSelectorWizardProps } from './SharedScheduleSelectorWizard';
+export type { SharedSchedulesListProps } from './SharedSchedulesList';
 
 // Registry para uso em templates
 export const CalendarComponents = {

@@ -21,7 +21,9 @@ import {
   createPatientAdmin,
   type AdminPatientData,
 } from '@/lib/admin-patient-registration-api';
+import type { ContractVariables } from '@/lib/contract-api';
 import { toast } from '@/components/primitives/use-toast';
+import { formatCPF } from '@/lib/profile';
 import { Loader2 } from 'lucide-react';
 
 interface AdminPatientRegistrationDialogProps {
@@ -67,6 +69,8 @@ export const AdminPatientRegistrationDialog: React.FC<
     },
   });
   const [createdPatientId, setCreatedPatientId] = useState<string | null>(null);
+  const [contractVariables, setContractVariables] =
+    useState<ContractVariables | null>(null);
 
   // Calcular progresso
   const steps: StepType[] = [
@@ -154,7 +158,14 @@ export const AdminPatientRegistrationDialog: React.FC<
       nome: string;
       cpf_cnpj: string;
       email?: string;
-      endereco?: { id: string };
+      endereco?: {
+        id: string;
+        cep: string;
+        logradouro: string;
+        bairro: string;
+        cidade: string;
+        estado: string;
+      };
     };
   }) => {
     const hasExistingPerson = !!data.existingPerson;
@@ -168,6 +179,14 @@ export const AdminPatientRegistrationDialog: React.FC<
       cpfResponsavel: data.existingPerson?.cpf_cnpj,
       emailResponsavel: data.existingPerson?.email,
       enderecoId: data.existingPerson?.endereco?.id,
+      // AI dev note: Salvar dados de endereço do responsável existente
+      cep: data.existingPerson?.endereco?.cep,
+      logradouro: data.existingPerson?.endereco?.logradouro,
+      bairro: data.existingPerson?.endereco?.bairro,
+      cidade: data.existingPerson?.endereco?.cidade,
+      estado: data.existingPerson?.endereco?.estado,
+      numeroEndereco: data.existingPerson?.numero_endereco,
+      complementoEndereco: data.existingPerson?.complemento_endereco,
     }));
 
     // Se responsável já existe, pular direto para dados do paciente
@@ -296,6 +315,11 @@ export const AdminPatientRegistrationDialog: React.FC<
 
       if (result.success && result.patientId) {
         setCreatedPatientId(result.patientId);
+        
+        // Preparar variáveis do contrato antes de mostrar a etapa
+        const variables = await prepareContractVariables();
+        setContractVariables(variables);
+        
         setCurrentStep('contract');
       } else {
         throw new Error(result.error || 'Erro ao criar paciente');
@@ -314,7 +338,7 @@ export const AdminPatientRegistrationDialog: React.FC<
   };
 
   // Preparar variáveis do contrato
-  const prepareContractVariables = () => {
+  const prepareContractVariables = async () => {
     const idade = formData.dataNascimentoPaciente
       ? new Date().getFullYear() -
         new Date(formData.dataNascimentoPaciente).getFullYear()
@@ -328,10 +352,21 @@ export const AdminPatientRegistrationDialog: React.FC<
       ? formData.cpfPaciente
       : formData.cpfResponsavel;
 
+    // AI dev note: Dados de endereço já estão no formData (coletados na etapa WhatsApp ou Address)
+    const enderecoData = {
+      logradouro: formData.logradouro || '',
+      numero: formData.numeroEndereco || '',
+      complemento: formData.complementoEndereco || '',
+      bairro: formData.bairro || '',
+      cidade: formData.cidade || '',
+      estado: formData.estado || '',
+      cep: formData.cep || '',
+    };
+
     return {
       // Responsável Legal
       responsavelLegalNome: responsavelNome || '',
-      responsavelLegalCpf: responsavelCpf || '',
+      responsavelLegalCpf: formatCPF(responsavelCpf || ''),
       responsavelLegalTelefone: formData.whatsappResponsavel || '',
       responsavelLegalEmail:
         formData.emailPaciente || formData.emailResponsavel || '',
@@ -346,26 +381,36 @@ export const AdminPatientRegistrationDialog: React.FC<
 
       // Compatibilidade
       contratante: responsavelNome || '',
-      cpf: responsavelCpf || '',
+      cpf: formatCPF(responsavelCpf || ''),
       telefone: formData.whatsappResponsavel || '',
       email: formData.emailPaciente || formData.emailResponsavel || '',
 
       // Endereço
-      endereco_completo: `${formData.logradouro || ''}, ${formData.numeroEndereco || ''}${formData.complementoEndereco ? `, ${formData.complementoEndereco}` : ''} - ${formData.bairro || ''}, ${formData.cidade || ''}/${formData.estado || ''}`,
-      logradouro: formData.logradouro || '',
-      numero: formData.numeroEndereco || '',
-      complemento: formData.complementoEndereco,
-      bairro: formData.bairro || '',
-      cidade: formData.cidade || '',
-      uf: formData.estado || '',
-      cep: formData.cep || '',
+      endereco_completo: [
+        enderecoData.logradouro,
+        enderecoData.numero && `, ${enderecoData.numero}`,
+        enderecoData.complemento && `, ${enderecoData.complemento}`,
+        enderecoData.bairro && `, ${enderecoData.bairro}`,
+        enderecoData.cidade && `, ${enderecoData.cidade}`,
+        enderecoData.estado && ` - ${enderecoData.estado}`,
+        enderecoData.cep && `, CEP ${enderecoData.cep}`,
+      ]
+        .filter(Boolean)
+        .join(''),
+      logradouro: enderecoData.logradouro,
+      numero: enderecoData.numero,
+      complemento: enderecoData.complemento,
+      bairro: enderecoData.bairro,
+      cidade: enderecoData.cidade,
+      uf: enderecoData.estado,
+      cep: enderecoData.cep,
 
       // Paciente
       paciente: formData.nomePaciente || '',
       dnPac: formData.dataNascimentoPaciente
         ? new Date(formData.dataNascimentoPaciente).toLocaleDateString('pt-BR')
         : '',
-      cpfPac: formData.cpfPaciente || '',
+      cpfPac: formatCPF(formData.cpfPaciente || ''),
 
       // Outros
       hoje: new Date().toLocaleDateString('pt-BR'),
@@ -404,6 +449,7 @@ export const AdminPatientRegistrationDialog: React.FC<
       },
     });
     setCreatedPatientId(null);
+    setContractVariables(null);
     onClose();
   };
 
@@ -542,10 +588,10 @@ export const AdminPatientRegistrationDialog: React.FC<
             </div>
           )}
 
-          {currentStep === 'contract' && createdPatientId && (
+          {currentStep === 'contract' && createdPatientId && contractVariables && (
             <AdminContractGenerationStep
               patientId={createdPatientId}
-              contractVariables={prepareContractVariables()}
+              contractVariables={contractVariables}
               onFinish={handleContractFinish}
               onBack={() => setCurrentStep('authorizations')}
             />

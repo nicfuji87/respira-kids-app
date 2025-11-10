@@ -21,6 +21,8 @@ import {
   AppointmentDetailsManager,
   AppointmentFormManager,
 } from '@/components/domain/calendar';
+import { SharedSchedulesList } from '@/components/domain/calendar/SharedSchedulesList';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/primitives/tabs';
 
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
@@ -31,6 +33,7 @@ import { useToast } from '@/components/primitives/use-toast';
 
 // AI dev note: CalendarTemplate combina componentes Domain do calendário
 // Template base que gerencia estado e comunicação entre componentes
+// Inclui tab para Agenda Compartilhada
 
 export interface CalendarTemplateProps {
   // Events data
@@ -74,6 +77,11 @@ export interface CalendarTemplateProps {
   onPatientClick?: (patientId: string | null) => void;
   onProfessionalClick?: (professionalId: string) => void;
   onNfeAction?: (appointmentId: string, linkNfe?: string) => void;
+
+  // Shared Schedules (for professional role)
+  profissionalId?: string;
+  userId?: string;
+  showSharedSchedulesTab?: boolean;
 }
 
 export const CalendarTemplate = React.memo<CalendarTemplateProps>(
@@ -103,6 +111,11 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     onPatientClick,
     onProfessionalClick,
     onNfeAction,
+
+    // Shared Schedules
+    profissionalId,
+    userId,
+    showSharedSchedulesTab = false,
   }) => {
     // AI dev note: These permissions are received but will be used in future implementations
     void canDeleteEvents;
@@ -459,22 +472,60 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
 
     return (
       <div className={cn('w-full max-w-none', className)}>
-        {/* Calendar Header */}
-        <div className="mb-4">
-          <CalendarHeader
-            currentDate={currentDate}
-            currentView={currentView}
-            onPrevious={handlePreviousClick}
-            onNext={handleNextClick}
-            onToday={handleTodayClick}
-            onDateChange={handleDateChange}
-            onViewChange={handleViewChange}
-            onNewEvent={canCreateEvents ? handleNewEventClick : undefined}
-          />
-        </div>
+        {/* Tabs: Agenda vs Agenda Compartilhada */}
+        {showSharedSchedulesTab && profissionalId && userId ? (
+          <Tabs defaultValue="calendar" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="calendar">Agenda</TabsTrigger>
+              <TabsTrigger value="shared-schedules">Agenda Compartilhada</TabsTrigger>
+            </TabsList>
 
-        {/* Calendar Content - expandido para largura total */}
-        <div className="w-full max-w-none">{renderCurrentView()}</div>
+            <TabsContent value="calendar" className="mt-0">
+              {/* Calendar Header */}
+              <div className="mb-4">
+                <CalendarHeader
+                  currentDate={currentDate}
+                  currentView={currentView}
+                  onPrevious={handlePreviousClick}
+                  onNext={handleNextClick}
+                  onToday={handleTodayClick}
+                  onDateChange={handleDateChange}
+                  onViewChange={handleViewChange}
+                  onNewEvent={canCreateEvents ? handleNewEventClick : undefined}
+                />
+              </div>
+
+              {/* Calendar Content */}
+              <div className="w-full max-w-none">{renderCurrentView()}</div>
+            </TabsContent>
+
+            <TabsContent value="shared-schedules" className="mt-0">
+              <SharedSchedulesList
+                profissionalId={profissionalId}
+                userId={userId}
+              />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <>
+            {/* Calendar Header */}
+            <div className="mb-4">
+              <CalendarHeader
+                currentDate={currentDate}
+                currentView={currentView}
+                onPrevious={handlePreviousClick}
+                onNext={handleNextClick}
+                onToday={handleTodayClick}
+                onDateChange={handleDateChange}
+                onViewChange={handleViewChange}
+                onNewEvent={canCreateEvents ? handleNewEventClick : undefined}
+              />
+            </div>
+
+            {/* Calendar Content - expandido para largura total */}
+            <div className="w-full max-w-none">{renderCurrentView()}</div>
+          </>
+        )}
 
         {/* Appointment Details Modal - Para editar agendamentos existentes */}
         {showEventManager && (

@@ -617,7 +617,14 @@ export const AppointmentDetailsManager =
           >
             <DialogHeader>
               <div className="flex items-center justify-between">
-                <DialogTitle>Detalhes do Agendamento</DialogTitle>
+                <div className="flex items-center gap-2">
+                  <DialogTitle>Detalhes do Agendamento</DialogTitle>
+                  {appointment?.agenda_compartilhada_id && (
+                    <Badge variant="secondary" className="text-xs">
+                      🔗 Agenda Compartilhada
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   {!isLoadingEvolucoes && evolucoes.length === 0 && (
                     <Badge

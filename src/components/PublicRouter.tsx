@@ -3,10 +3,12 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { PatientPublicRegistrationPage } from '@/pages/PatientPublicRegistrationPage';
 import { PatientRegistrationSuccessPage } from '@/pages/public/PatientRegistrationSuccessPage';
 import { AddFinancialResponsiblePage } from '@/pages/AddFinancialResponsiblePage';
+import { SharedSchedulePage } from '@/pages/SharedSchedulePage';
 import { Toaster } from '@/components/primitives/toaster';
 
 // AI dev note: PublicRouter - Roteamento para páginas públicas (sem autenticação)
 // Separado do AppRouter para manter rotas autenticadas isoladas
+// Inclui rota de agenda compartilhada via token
 
 export const PublicRouter: React.FC = () => {
   console.log(
@@ -34,6 +36,9 @@ export const PublicRouter: React.FC = () => {
           path="/adicionar-responsavel-financeiro"
           element={<AddFinancialResponsiblePage />}
         />
+
+        {/* Rota de agenda compartilhada (pública via token) */}
+        <Route path="/agenda/:token" element={<SharedSchedulePage />} />
 
         {/* Redirect padrão APENAS para root */}
         <Route

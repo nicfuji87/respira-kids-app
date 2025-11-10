@@ -255,3 +255,15 @@ export type {
 export type { ReviewStepProps } from './ReviewStep';
 export type { ContractReviewStepProps } from './ContractReviewStep';
 export type { ProgressIndicatorProps } from './ProgressIndicator';
+
+// Shared Schedule Components
+export { ScheduleCard } from './ScheduleCard';
+export { ScheduleLinkDisplay } from './ScheduleLinkDisplay';
+export { SlotsList } from './SlotsList';
+export { AccessDeniedMessage } from './AccessDeniedMessage';
+
+// Shared Schedule Type exports
+export type { ScheduleCardProps } from './ScheduleCard';
+export type { ScheduleLinkDisplayProps } from './ScheduleLinkDisplay';
+export type { SlotsListProps } from './SlotsList';
+export type { AccessDeniedMessageProps } from './AccessDeniedMessage';
