@@ -246,6 +246,10 @@ export const AdminPatientRegistrationDialog: React.FC<
     cep?: string;
     numeroEndereco?: string;
     complemento?: string;
+    logradouro?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
   }) => {
     setFormData((prev) => ({
       ...prev,
@@ -258,6 +262,11 @@ export const AdminPatientRegistrationDialog: React.FC<
       cepPaciente: data.cep,
       numeroEnderecoPaciente: data.numeroEndereco,
       complementoPaciente: data.complemento,
+      // AI dev note: Salvar dados completos do endereço do paciente (se diferente do responsável)
+      logradouro: data.usarEnderecoResponsavel ? prev.logradouro : data.logradouro,
+      bairro: data.usarEnderecoResponsavel ? prev.bairro : data.bairro,
+      cidade: data.usarEnderecoResponsavel ? prev.cidade : data.cidade,
+      estado: data.usarEnderecoResponsavel ? prev.estado : data.estado,
     }));
     goToNextStep();
   };

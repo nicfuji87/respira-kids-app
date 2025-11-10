@@ -23,6 +23,10 @@ interface AdminPatientDataStepProps {
     cep?: string;
     numeroEndereco?: string;
     complemento?: string;
+    logradouro?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
   }) => void;
   onBack: () => void;
   responsavelData: {
@@ -225,6 +229,11 @@ export const AdminPatientDataStep: React.FC<AdminPatientDataStepProps> = ({
         email: formData.usarEmailResponsavel
           ? responsavelData.email
           : formData.email,
+        // AI dev note: Se não usar endereço do responsável, incluir dados completos do ViaCEP
+        logradouro: !formData.usarEnderecoResponsavel ? addressData?.logradouro : undefined,
+        bairro: !formData.usarEnderecoResponsavel ? addressData?.bairro : undefined,
+        cidade: !formData.usarEnderecoResponsavel ? addressData?.cidade : undefined,
+        estado: !formData.usarEnderecoResponsavel ? addressData?.estado : undefined,
       });
     }
   };

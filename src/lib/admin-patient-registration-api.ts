@@ -31,6 +31,10 @@ export interface AdminPatientData {
   cepPaciente?: string;
   numeroEnderecoPaciente?: string;
   complementoPaciente?: string;
+  logradouro?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
 
   // Responsável Financeiro
   responsavelFinanceiroId?: string;
@@ -75,6 +79,11 @@ async function getOrCreateAddress(addressData: {
     }
 
     // Criar novo endereço
+    // AI dev note: estado deve ter exatamente 2 caracteres (sigla UF)
+    if (!addressData.estado || addressData.estado.length !== 2) {
+      throw new Error('Estado (UF) deve ter exatamente 2 caracteres (ex: SP, RJ, MG)');
+    }
+
     const { data, error } = await supabase
       .from('enderecos')
       .insert({
@@ -82,7 +91,7 @@ async function getOrCreateAddress(addressData: {
         logradouro: addressData.logradouro || '',
         bairro: addressData.bairro || '',
         cidade: addressData.cidade || '',
-        estado: addressData.estado || '',
+        estado: addressData.estado,
         ativo: true,
       })
       .select('id')
@@ -215,10 +224,35 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
 
       enderecoPacienteId = responsavelData?.id_endereco;
     } else {
-      // Criar novo endereço para o paciente
-      enderecoPacienteId = await getOrCreateAddress({
-        cep: data.cepPaciente!,
-      });
+      // AI dev note: Paciente tem endereço próprio - usar dados que vieram do frontend
+      // Os dados completos (logradouro, bairro, cidade, estado) já foram buscados via ViaCEP no frontend
+      if (!data.logradouro || !data.bairro || !data.cidade || !data.estado) {
+        // Fallback: buscar via ViaCEP se dados não vieram do frontend
+        const cleanCep = data.cepPaciente!.replace(/\D/g, '');
+        const viaCepResponse = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const viaCepData = await viaCepResponse.json();
+        
+        if (viaCepData.erro) {
+          throw new Error('CEP não encontrado');
+        }
+
+        enderecoPacienteId = await getOrCreateAddress({
+          cep: data.cepPaciente!,
+          logradouro: viaCepData.logradouro,
+          bairro: viaCepData.bairro,
+          cidade: viaCepData.localidade,
+          estado: viaCepData.uf,
+        });
+      } else {
+        // Usar dados que já vieram do frontend
+        enderecoPacienteId = await getOrCreateAddress({
+          cep: data.cepPaciente!,
+          logradouro: data.logradouro,
+          bairro: data.bairro,
+          cidade: data.cidade,
+          estado: data.estado, // Já vem com 2 caracteres do ViaCEP
+        });
+      }
     }
 
     // 4. Buscar tipo paciente
