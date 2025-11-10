@@ -905,10 +905,15 @@ export const FinancialConsultationsList: React.FC<
             );
           }
 
-          // Buscar dados do paciente (CPF)
+          // AI dev note: REGRA DE NEGÓCIO - responsavel_cobranca_id é a fonte única da verdade
+          // - Paciente pode ter VÁRIOS responsáveis financeiros (relações múltiplas)
+          // - Mas tem apenas 1 responsavel_cobranca_id (campo direto na tabela pessoas)
+          // - Paciente pode ser MAIOR e ainda ter um responsável de cobrança diferente dele
+          // - SEMPRE validar e usar o CPF do responsavel_cobranca_id, nunca do paciente
+          // - Menores nem sempre têm CPF cadastrado (normal e esperado)
           const { data: patientData, error: patientError } = await supabase
             .from('pessoas')
-            .select('nome, cpf_cnpj')
+            .select('id, nome, cpf_cnpj, responsavel_cobranca_id')
             .eq('id', patientId)
             .single();
 
@@ -916,9 +921,25 @@ export const FinancialConsultationsList: React.FC<
             throw new Error('Dados do paciente não encontrados');
           }
 
-          if (!patientData.cpf_cnpj) {
+          // Determinar responsável de cobrança (fonte única da verdade)
+          const responsibleId =
+            patientData.responsavel_cobranca_id || patientId;
+
+          // Buscar dados do responsável de cobrança
+          const { data: responsibleData, error: responsibleError } =
+            await supabase
+              .from('pessoas')
+              .select('nome, cpf_cnpj')
+              .eq('id', responsibleId)
+              .single();
+
+          if (responsibleError || !responsibleData) {
+            throw new Error('Dados do responsável de cobrança não encontrados');
+          }
+
+          if (!responsibleData.cpf_cnpj) {
             throw new Error(
-              `Paciente ${patientName} não possui CPF cadastrado`
+              `Responsável de cobrança (${responsibleData.nome}) não possui CPF cadastrado`
             );
           }
 
@@ -935,9 +956,10 @@ export const FinancialConsultationsList: React.FC<
             })
           );
 
+          // AI dev note: Usar dados do paciente para descrição (nome e CPF do responsável)
           const patientDataForDescription: PatientData = {
             nome: patientData.nome,
-            cpf_cnpj: patientData.cpf_cnpj,
+            cpf_cnpj: responsibleData.cpf_cnpj, // CPF do responsável de cobrança
           };
 
           // Gerar descrição da cobrança
@@ -946,11 +968,8 @@ export const FinancialConsultationsList: React.FC<
             patientDataForDescription
           );
 
-          // Definir responsável (financeiro > legal > paciente)
-          const responsibleId =
-            patientConsultations[0].responsavel_financeiro_id ||
-            patientConsultations[0].responsavel_legal_id ||
-            patientId;
+          // AI dev note: Usar o mesmo responsibleId já determinado acima
+          // Não buscar de novo dos agendamentos pois pode ter inconsistência
 
           const totalValue = patientConsultations.reduce(
             (sum, c) => sum + (c.valor_servico || 0),
