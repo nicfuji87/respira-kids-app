@@ -8,10 +8,11 @@ import {
   MapPin,
   Building2,
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/primitives/button';
+import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
 import { Label } from '@/components/primitives/label';
 import {
   Card,
@@ -622,9 +623,10 @@ export const SharedScheduleSelectorWizard =
 
           case 'select-slot': {
             // Agrupar slots por data
+            // AI dev note: Usar parseSupabaseDatetime para manter horário exato (sem conversão de timezone)
             const grupos: Record<string, typeof agenda.slots> = {};
             agenda.slots.forEach((slot) => {
-              const date = parseISO(slot.data_hora);
+              const date = parseSupabaseDatetime(slot.data_hora);
               const key = format(date, 'yyyy-MM-dd');
               if (!grupos[key]) grupos[key] = [];
               grupos[key].push(slot);
@@ -647,7 +649,11 @@ export const SharedScheduleSelectorWizard =
                     {Object.entries(slotsPorData)
                       .sort(([a], [b]) => a.localeCompare(b))
                       .map(([dateKey, slots]) => {
-                        const date = parseISO(dateKey);
+                        // dateKey está no formato yyyy-MM-dd, criar Date simples
+                        const [year, month, day] = dateKey
+                          .split('-')
+                          .map(Number);
+                        const date = new Date(year, month - 1, day);
                         const diaFormatado = format(
                           date,
                           "EEEE, dd 'de' MMMM",
@@ -667,8 +673,9 @@ export const SharedScheduleSelectorWizard =
                                   a.data_hora.localeCompare(b.data_hora)
                                 )
                                 .map((slot) => {
+                                  // AI dev note: Usar parseSupabaseDatetime para manter horário exato (sem conversão de timezone)
                                   const hora = format(
-                                    parseISO(slot.data_hora),
+                                    parseSupabaseDatetime(slot.data_hora),
                                     'HH:mm'
                                   );
                                   const isSelected =
@@ -708,8 +715,9 @@ export const SharedScheduleSelectorWizard =
           }
 
           case 'confirmation': {
+            // AI dev note: Usar parseSupabaseDatetime para manter horário exato (sem conversão de timezone)
             const slotDate = wizardData.slot_data_hora
-              ? parseISO(wizardData.slot_data_hora)
+              ? parseSupabaseDatetime(wizardData.slot_data_hora)
               : null;
 
             return (
