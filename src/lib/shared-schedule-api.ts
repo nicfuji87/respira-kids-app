@@ -581,6 +581,13 @@ export async function selectSlotAndCreateAppointment(
 
     // Verificar se a reserva foi bem-sucedida
     const resultado = Array.isArray(reserva) ? reserva[0] : reserva;
+
+    console.log('🔍 [selectSlotAndCreateAppointment] Resultado processado:', {
+      resultado,
+      sucesso: resultado?.sucesso,
+      mensagem: resultado?.mensagem,
+    });
+
     if (!resultado?.sucesso) {
       // Slot não disponível ou conflito de horário
       throw new Error(
