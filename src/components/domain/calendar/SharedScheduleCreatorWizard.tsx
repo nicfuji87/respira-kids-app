@@ -23,7 +23,6 @@ import {
   generateUniqueToken,
   isTokenAvailable,
 } from '@/lib/shared-schedule-api';
-import { convertBrasiliaToUTC } from '@/lib/calendar-mappers';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type {
@@ -270,12 +269,11 @@ export const SharedScheduleCreatorWizard =
           return;
         }
 
-        // Criar timestamp E CONVERTER PARA UTC
+        // Criar timestamp (SEM conversão - igual ao agendamento padrão)
         const dateTime = `${selectedDate}T${timeInput}:00`;
-        const dateTimeUTC = convertBrasiliaToUTC(dateTime);
 
         // Verificar se já existe
-        if (wizardData.slots_data_hora.includes(dateTimeUTC)) {
+        if (wizardData.slots_data_hora.includes(dateTime)) {
           toast({
             title: 'Horário já adicionado',
             variant: 'destructive',
@@ -285,7 +283,7 @@ export const SharedScheduleCreatorWizard =
 
         setWizardData((prev) => ({
           ...prev,
-          slots_data_hora: [...prev.slots_data_hora, dateTimeUTC].sort(),
+          slots_data_hora: [...prev.slots_data_hora, dateTime].sort(),
         }));
 
         setTimeInput('');

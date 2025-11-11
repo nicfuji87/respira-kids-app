@@ -24,7 +24,6 @@ import {
   addSlotsToSchedule,
   removeSlots,
 } from '@/lib/shared-schedule-api';
-import { convertBrasiliaToUTC } from '@/lib/calendar-mappers';
 import { supabase } from '@/lib/supabase';
 import type {
   AgendaCompartilhadaCompleta,
@@ -247,11 +246,10 @@ export const SharedScheduleEditorDialog =
 
         try {
           const dateTime = `${selectedDate}T${timeInput}:00`;
-          const dateTimeUTC = convertBrasiliaToUTC(dateTime);
 
           const result = await addSlotsToSchedule({
             agenda_id: agenda.id,
-            slots_data_hora: [dateTimeUTC],
+            slots_data_hora: [dateTime],
           });
 
           if (!result.success) {
