@@ -1,12 +1,13 @@
 import React from 'react';
 import { Calendar, Clock, User, Trash2, CheckCircle2 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { cn } from '@/lib/utils';
+import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
 import type { AgendaSlotComSelecao } from '@/types/shared-schedule';
 
 // AI dev note: SlotsList - Composed
@@ -26,8 +27,9 @@ export const SlotsList = React.memo<SlotsListProps>(
     const slotsOcupados = slots.filter((s) => !s.disponivel);
 
     const formatSlotDateTime = (dataHora: string) => {
-      const date = parseISO(dataHora);
-      const dia = format(date, "EEEE, dd/MM", { locale: ptBR });
+      // AI dev note: Usar parseSupabaseDatetime para manter horário exato (sem conversão de timezone)
+      const date = parseSupabaseDatetime(dataHora);
+      const dia = format(date, 'EEEE, dd/MM', { locale: ptBR });
       const hora = format(date, 'HH:mm', { locale: ptBR });
       return { dia, hora };
     };
@@ -156,5 +158,3 @@ export const SlotsList = React.memo<SlotsListProps>(
 );
 
 SlotsList.displayName = 'SlotsList';
-
-
