@@ -16,6 +16,48 @@ import type { AdminUser } from '@/components/templates/dashboard/AdminCalendarTe
 import type { ProfissionalUser } from '@/components/templates/dashboard/ProfissionalCalendarTemplate';
 import type { SecretariaUser } from '@/components/templates/dashboard/SecretariaCalendarTemplate';
 
+// ============================================
+// CONVERSÃO DE TIMEZONE (BRASÍLIA ↔ UTC)
+// ============================================
+
+/**
+ * AI dev note: Converte horário de Brasília para UTC para salvar no banco
+ *
+ * PROBLEMA: O banco Supabase armazena timestamps em UTC, mas a aplicação
+ * opera no timezone de Brasília (America/Sao_Paulo = UTC-3).
+ *
+ * Quando o usuário digita "20:00", ele espera 20:00 em Brasília, mas se
+ * enviarmos "2025-11-13T20:00:00" para o Supabase, ele interpreta como
+ * 20:00 UTC, que é 17:00 Brasília.
+ *
+ * @param localDateTime - String no formato "YYYY-MM-DDTHH:mm:ss" (horário de Brasília)
+ * @returns String no formato ISO UTC pronta para o Supabase
+ *
+ * @example
+ * // Usuário digita 20:00 em Brasília
+ * convertBrasiliaToUTC("2025-11-13T20:00:00")
+ * // Retorna: "2025-11-13T23:00:00.000Z" (20:00 BRT = 23:00 UTC)
+ */
+export const convertBrasiliaToUTC = (localDateTime: string): string => {
+  // Parse manual da string para obter componentes
+  const [datePart, timePart] = localDateTime.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+  const second = timePart.split(':')[2] ? Number(timePart.split(':')[2]) : 0;
+
+  // Criar string ISO com offset de Brasília (-03:00)
+  const brasiliaISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}-03:00`;
+
+  // Converter para UTC
+  const utcDate = new Date(brasiliaISO);
+
+  return utcDate.toISOString();
+};
+
+// ============================================
+// PARSE DE DATAS DO SUPABASE
+// ============================================
+
 // AI dev note: Helper para parse de data do Supabase sem conversão de timezone
 // Mantém horário exato como está salvo no banco (09:00 UTC → 09:00 local)
 export const parseSupabaseDatetime = (dataHoraStr: string): Date => {
