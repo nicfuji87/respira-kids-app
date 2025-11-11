@@ -92,7 +92,7 @@ export const SharedScheduleSelectorWizard =
             .from('pessoa_responsaveis')
             .select(
               `
-            paciente:pessoas!pessoa_responsaveis_id_paciente_fkey (
+            paciente:pessoas!pessoa_responsaveis_id_pessoa_fkey (
               id,
               nome,
               ativo
