@@ -547,6 +547,15 @@ export async function selectSlotAndCreateAppointment(
   statusPendentePagamentoId: string
 ): Promise<ApiResponse<{ agendamento_id: string; selecao_id: string }>> {
   try {
+    console.log(
+      '🎯 [selectSlotAndCreateAppointment] Iniciando seleção de slot:',
+      {
+        slot_id: selecaoData.slot_id,
+        agenda_id: selecaoData.agenda_id,
+        paciente_id: selecaoData.paciente_id,
+      }
+    );
+
     // 1. Buscar dados do slot
     const { data: slot, error: slotError } = await supabase
       .from('agenda_slots')
@@ -554,17 +563,30 @@ export async function selectSlotAndCreateAppointment(
       .eq('id', selecaoData.slot_id)
       .single();
 
+    console.log('📅 [selectSlotAndCreateAppointment] Slot encontrado:', {
+      slot,
+      slotError,
+    });
     if (slotError) throw slotError;
     if (!slot?.disponivel) throw new Error('Slot não disponível');
 
     // 2. Buscar agenda para pegar profissional_id
+    console.log(
+      '🔍 [selectSlotAndCreateAppointment] Buscando agenda:',
+      slot.agenda_id
+    );
     const { data: agenda, error: agendaError } = await supabase
       .from('agendas_compartilhadas')
       .select('profissional_id')
       .eq('id', slot.agenda_id)
-      .single();
+      .maybeSingle();
 
+    console.log('📋 [selectSlotAndCreateAppointment] Agenda encontrada:', {
+      agenda,
+      agendaError,
+    });
     if (agendaError) throw agendaError;
+    if (!agenda) throw new Error('Agenda não encontrada');
 
     // 3. Buscar valor do serviço
     const { data: servico, error: servicoError } = await supabase
