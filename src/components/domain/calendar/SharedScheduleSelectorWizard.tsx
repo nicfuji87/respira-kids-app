@@ -350,7 +350,42 @@ export const SharedScheduleSelectorWizard =
           );
 
           if (!result.success || !result.data) {
-            throw new Error(result.error || 'Erro ao criar agendamento');
+            // Erro ao reservar slot - pode ser race condition ou conflito de horário
+            toast({
+              title: 'Horário não disponível',
+              description:
+                result.error ||
+                'Este horário já foi reservado. Por favor, escolha outro horário disponível.',
+              variant: 'destructive',
+            });
+
+            // VOLTAR PARA A ETAPA DE SELEÇÃO DE SLOT para escolher outro
+            setCurrentStep('select-slot');
+
+            // RECARREGAR SLOTS DISPONÍVEIS (removendo o que já foi reservado)
+            try {
+              const { data: slotsAtualizados, error: slotsError } =
+                await supabase
+                  .from('agenda_slots')
+                  .select('*')
+                  .eq('agenda_id', agenda.id)
+                  .eq('disponivel', true)
+                  .order('data_hora', { ascending: true });
+
+              if (slotsError) throw slotsError;
+
+              console.log(
+                '🔄 [SharedScheduleSelectorWizard] Slots atualizados após conflito:',
+                slotsAtualizados?.length
+              );
+
+              // Atualizar a lista de slots no estado (se necessário)
+              // Nota: A lista será atualizada automaticamente na próxima renderização
+            } catch (reloadError) {
+              console.error('Erro ao recarregar slots:', reloadError);
+            }
+
+            return; // Não continuar com o fluxo
           }
 
           setCurrentStep('success');

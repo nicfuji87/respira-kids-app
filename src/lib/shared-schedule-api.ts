@@ -548,7 +548,7 @@ export async function selectSlotAndCreateAppointment(
 ): Promise<ApiResponse<{ agendamento_id: string; selecao_id: string }>> {
   try {
     console.log(
-      '🎯 [selectSlotAndCreateAppointment] Iniciando seleção de slot:',
+      '🎯 [selectSlotAndCreateAppointment] Iniciando reserva atômica de slot:',
       {
         slot_id: selecaoData.slot_id,
         agenda_id: selecaoData.agenda_id,
@@ -556,39 +556,44 @@ export async function selectSlotAndCreateAppointment(
       }
     );
 
-    // 1. Buscar dados do slot
-    const { data: slot, error: slotError } = await supabase
-      .from('agenda_slots')
-      .select('agenda_id, data_hora, disponivel')
-      .eq('id', selecaoData.slot_id)
-      .single();
-
-    console.log('📅 [selectSlotAndCreateAppointment] Slot encontrado:', {
-      slot,
-      slotError,
-    });
-    if (slotError) throw slotError;
-    if (!slot?.disponivel) throw new Error('Slot não disponível');
-
-    // 2. Buscar agenda para pegar profissional_id
-    console.log(
-      '🔍 [selectSlotAndCreateAppointment] Buscando agenda:',
-      slot.agenda_id
+    // 1. RESERVAR SLOT DE FORMA ATÔMICA (com verificação de conflito de horário)
+    // Esta função usa SELECT FOR UPDATE para garantir que apenas 1 pessoa reserve o slot
+    // Também verifica se o profissional já tem agendamento nesse horário
+    const { data: reserva, error: reservaError } = await supabase.rpc(
+      'fn_reservar_slot_atomico',
+      {
+        p_slot_id: selecaoData.slot_id,
+        p_paciente_id: selecaoData.paciente_id,
+        p_responsavel_id: selecaoData.responsavel_id,
+        p_tipo_servico_id: selecaoData.tipo_servico_id,
+        p_local_id: selecaoData.local_id,
+        p_empresa_id: selecaoData.empresa_id,
+        p_responsavel_whatsapp: selecaoData.responsavel_whatsapp,
+      }
     );
-    const { data: agenda, error: agendaError } = await supabase
-      .from('agendas_compartilhadas')
-      .select('profissional_id')
-      .eq('id', slot.agenda_id)
-      .maybeSingle();
 
-    console.log('📋 [selectSlotAndCreateAppointment] Agenda encontrada:', {
-      agenda,
-      agendaError,
+    console.log('🔒 [selectSlotAndCreateAppointment] Resultado da reserva:', {
+      reserva,
+      reservaError,
     });
-    if (agendaError) throw agendaError;
-    if (!agenda) throw new Error('Agenda não encontrada');
 
-    // 3. Buscar valor do serviço
+    if (reservaError) throw reservaError;
+
+    // Verificar se a reserva foi bem-sucedida
+    const resultado = Array.isArray(reserva) ? reserva[0] : reserva;
+    if (!resultado?.sucesso) {
+      // Slot não disponível ou conflito de horário
+      throw new Error(
+        resultado?.mensagem || 'Não foi possível reservar este horário'
+      );
+    }
+
+    console.log('✅ [selectSlotAndCreateAppointment] Slot reservado:', {
+      profissional_id: resultado.profissional_id,
+      data_hora: resultado.slot_data_hora,
+    });
+
+    // 2. Buscar valor do serviço
     const { data: servico, error: servicoError } = await supabase
       .from('tipo_servicos')
       .select('valor')
@@ -597,13 +602,13 @@ export async function selectSlotAndCreateAppointment(
 
     if (servicoError) throw servicoError;
 
-    // 4. Criar agendamento com referência à agenda compartilhada
+    // 3. Criar agendamento com referência à agenda compartilhada
     const agendamentoData: CreateAgendamento & {
       agenda_compartilhada_id?: string;
     } = {
-      data_hora: slot.data_hora,
+      data_hora: resultado.slot_data_hora,
       paciente_id: selecaoData.paciente_id,
-      profissional_id: agenda.profissional_id,
+      profissional_id: resultado.profissional_id,
       tipo_servico_id: selecaoData.tipo_servico_id,
       local_id: selecaoData.local_id || undefined,
       status_consulta_id: statusAgendadoId,
@@ -612,18 +617,25 @@ export async function selectSlotAndCreateAppointment(
       observacao: 'Agendamento via agenda compartilhada',
       agendado_por: selecaoData.responsavel_id,
       empresa_fatura: selecaoData.empresa_id,
-      agenda_compartilhada_id: slot.agenda_id, // AI dev note: Rastrear origem
+      agenda_compartilhada_id: resultado.agenda_id, // AI dev note: Rastrear origem
     };
 
     const agendamentoCriado = await createAgendamento(agendamentoData);
 
-    // 5. Criar registro de seleção
+    console.log('📅 [selectSlotAndCreateAppointment] Agendamento criado:', {
+      agendamento_id: agendamentoCriado.id,
+    });
+
+    // 4. Atualizar o registro de seleção com o ID do agendamento
+    // (A seleção já foi criada pela função atômica)
     const { data: selecao, error: selecaoError } = await supabase
       .from('agenda_selecoes')
-      .insert({
-        ...selecaoData,
+      .update({
         agendamento_id: agendamentoCriado.id,
+        responsavel_whatsapp_validado_em: new Date().toISOString(),
       })
+      .eq('slot_id', selecaoData.slot_id)
+      .eq('paciente_id', selecaoData.paciente_id)
       .select()
       .single();
 
@@ -638,7 +650,7 @@ export async function selectSlotAndCreateAppointment(
       success: true,
     };
   } catch (error) {
-    console.error('Erro ao selecionar slot:', error);
+    console.error('❌ [selectSlotAndCreateAppointment] Erro:', error);
     return {
       data: null,
       error: error instanceof Error ? error.message : 'Erro desconhecido',
