@@ -75,8 +75,12 @@ export const SharedScheduleWhatsAppValidationStep =
             if (!result.isValid) {
               setErrorMessage(result.errorMessage || 'Número inválido');
             } else if (!result.personExists) {
-              // Pessoa NÃO cadastrada → acesso negado
-              setErrorMessage('Número não cadastrado no sistema');
+              // Pessoa NÃO cadastrada → acesso negado IMEDIATAMENTE
+              console.log(
+                '❌ [SharedScheduleWhatsAppValidation] Pessoa não cadastrada - mostrando acesso negado'
+              );
+              onAccessDenied();
+              return;
             }
 
             await trackRegistrationAttempt({
@@ -94,7 +98,7 @@ export const SharedScheduleWhatsAppValidationStep =
         }, 800);
 
         return () => clearTimeout(timeoutId);
-      }, [phoneNumber]);
+      }, [phoneNumber, onAccessDenied]);
 
       // Timer para expiração do código
       useEffect(() => {
@@ -296,34 +300,6 @@ export const SharedScheduleWhatsAppValidationStep =
                 </div>
               )}
 
-              {/* Mensagem - pessoa NÃO cadastrada (acesso negado) */}
-              {validationResult?.isValid && !validationResult.personExists && (
-                <div className="space-y-4 p-5 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
-                  <div>
-                    <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100">
-                      Cadastro não encontrado
-                    </h3>
-                    <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-                      Seu número não está cadastrado em nosso sistema.
-                    </p>
-                  </div>
-
-                  <p className="text-sm text-orange-800 dark:text-orange-200">
-                    Esta agenda é exclusiva para responsáveis cadastrados. Entre
-                    em contato conosco para realizar seu cadastro.
-                  </p>
-
-                  <Button
-                    onClick={onAccessDenied}
-                    variant="outline"
-                    size="lg"
-                    className="w-full h-12 text-base"
-                  >
-                    Ver informações de contato
-                  </Button>
-                </div>
-              )}
-
               {/* Erro ao enviar código */}
               {codeError && validationState === 'phone-input' && (
                 <p className="text-sm text-destructive text-center">
@@ -423,11 +399,6 @@ export const SharedScheduleWhatsAppValidationStep =
               </div>
             </div>
           )}
-
-          {/* Informação adicional */}
-          <p className="text-xs text-center text-muted-foreground">
-            Seus dados são protegidos conforme a LGPD
-          </p>
         </div>
       );
     }
