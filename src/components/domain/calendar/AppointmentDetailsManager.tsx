@@ -76,6 +76,7 @@ export interface AppointmentUpdateData {
   local_id?: string;
   valor_servico?: number;
   status_consulta_id?: string;
+  status_pagamento_id?: string;
   tipo_servico_id?: string;
   empresa_fatura?: string;
 }
@@ -126,6 +127,11 @@ export const AppointmentDetailsManager =
         SupabaseTipoServico[]
       >([]);
       const [isLoadingTipoServico, setIsLoadingTipoServico] = useState(false);
+
+      // Estados para status de pagamento
+      const [pagamentoStatusOptions, setPagamentoStatusOptions] = useState<
+        Array<{ id: string; codigo: string; descricao: string }>
+      >([]);
 
       // Estado para empresas de faturamento (NOVO)
       const [empresasOptions, setEmpresasOptions] = useState<
@@ -275,6 +281,32 @@ export const AppointmentDetailsManager =
 
         if (isOpen) {
           loadTiposServico();
+        }
+      }, [isOpen]);
+
+      // Carregar opções de status de pagamento
+      useEffect(() => {
+        const loadPagamentoStatus = async () => {
+          try {
+            const { data, error } = await supabase
+              .from('pagamento_status')
+              .select('id, codigo, descricao')
+              .eq('ativo', true)
+              .order('descricao');
+
+            if (error) {
+              console.error('Erro ao carregar status de pagamento:', error);
+              return;
+            }
+
+            setPagamentoStatusOptions(data || []);
+          } catch (error) {
+            console.error('Erro ao carregar status de pagamento:', error);
+          }
+        };
+
+        if (isOpen) {
+          loadPagamentoStatus();
         }
       }, [isOpen]);
 
@@ -505,7 +537,18 @@ export const AppointmentDetailsManager =
             (userRole === 'admin' || userRole === 'secretaria') &&
             formData.valorServico !== appointment.valor_servico
           ) {
-            updateData.valor_servico = parseFloat(formData.valorServico);
+            const novoValor = parseFloat(formData.valorServico);
+            updateData.valor_servico = novoValor;
+
+            // AI dev note: Se valor zerado, alterar status de pagamento para 'pago' automaticamente
+            if (novoValor === 0) {
+              const statusPago = pagamentoStatusOptions.find(
+                (s) => s.codigo === 'pago'
+              );
+              if (statusPago) {
+                updateData.status_pagamento_id = statusPago.id;
+              }
+            }
           }
 
           // Salvar agendamento através da callback do parent (para manter o flow existente)

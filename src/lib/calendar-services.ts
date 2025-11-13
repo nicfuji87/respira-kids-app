@@ -933,6 +933,7 @@ export const updateAgendamentoDetails = async (appointmentData: {
   local_id?: string;
   valor_servico?: number;
   status_consulta_id?: string;
+  status_pagamento_id?: string;
   tipo_servico_id?: string;
   observacao?: string;
   empresa_fatura?: string;
