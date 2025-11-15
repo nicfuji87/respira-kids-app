@@ -407,7 +407,8 @@ export async function fetchWeekBirthdays(): Promise<
       return [];
     }
 
-    // Buscar agendamentos das duas semanas para esses pacientes
+    // Buscar agendamentos durante todo o período de amostragem
+    // (semana atual + semana seguinte) para esses pacientes
     const patientIds = birthdaysThisWeek.map((p) => p.id);
     const { data: agendamentos } = await supabase
       .from('agendamentos')
@@ -477,7 +478,8 @@ export async function fetchWeekBirthdays(): Promise<
       const isCurrentWeek =
         birthdayThisYear >= monday && birthdayThisYear <= sunday;
 
-      // Agendamentos do paciente nesta semana
+      // Agendamentos do paciente durante todo o período de amostragem
+      // (semana atual + semana seguinte)
       const agendamentosP = (agendamentos || [])
         .filter((a) => a.paciente_id === p.id)
         .map((a) => ({
