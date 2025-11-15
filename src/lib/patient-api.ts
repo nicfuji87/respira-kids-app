@@ -335,7 +335,7 @@ export async function fetchPatientMedicalReports(
 
 /**
  * Buscar aniversários da semana (segunda a domingo)
- * AI dev note: Retorna pacientes com aniversário na semana atual
+ * AI dev note: Retorna pacientes com aniversário na semana atual e na semana seguinte
  * Destaque para pacientes com agendamento na semana
  */
 export async function fetchWeekBirthdays(): Promise<
@@ -354,6 +354,15 @@ export async function fetchWeekBirthdays(): Promise<
     sunday.setDate(monday.getDate() + 6);
     sunday.setHours(23, 59, 59, 999);
 
+    // Calcular início (segunda-feira) e fim (domingo) da semana seguinte
+    const nextMonday = new Date(monday);
+    nextMonday.setDate(monday.getDate() + 7);
+    nextMonday.setHours(0, 0, 0, 0);
+
+    const nextSunday = new Date(nextMonday);
+    nextSunday.setDate(nextMonday.getDate() + 6);
+    nextSunday.setHours(23, 59, 59, 999);
+
     // Buscar todos os pacientes com data de nascimento
     const { data: pacientes, error: pacientesError } = await supabase
       .from('pacientes_com_responsaveis_view')
@@ -371,7 +380,7 @@ export async function fetchWeekBirthdays(): Promise<
       return [];
     }
 
-    // Filtrar pacientes cujo aniversário cai na semana (independente do ano)
+    // Filtrar pacientes cujo aniversário cai na semana atual ou na semana seguinte (independente do ano)
     const birthdaysThisWeek = pacientes.filter((p) => {
       if (!p.data_nascimento) return false;
 
@@ -386,22 +395,26 @@ export async function fetchWeekBirthdays(): Promise<
         birthDay
       );
 
-      // Verificar se o aniversário cai entre segunda e domingo
-      return birthdayThisYear >= monday && birthdayThisYear <= sunday;
+      // Verificar se o aniversário cai entre segunda e domingo da semana atual
+      // ou entre segunda e domingo da semana seguinte
+      return (
+        (birthdayThisYear >= monday && birthdayThisYear <= sunday) ||
+        (birthdayThisYear >= nextMonday && birthdayThisYear <= nextSunday)
+      );
     });
 
     if (birthdaysThisWeek.length === 0) {
       return [];
     }
 
-    // Buscar agendamentos da semana para esses pacientes
+    // Buscar agendamentos das duas semanas para esses pacientes
     const patientIds = birthdaysThisWeek.map((p) => p.id);
     const { data: agendamentos } = await supabase
       .from('agendamentos')
       .select('id, paciente_id, data_hora, profissional_id')
       .in('paciente_id', patientIds)
       .gte('data_hora', monday.toISOString())
-      .lte('data_hora', sunday.toISOString())
+      .lte('data_hora', nextSunday.toISOString())
       .eq('ativo', true)
       .order('data_hora', { ascending: true });
 

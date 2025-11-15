@@ -16,7 +16,7 @@ import { fetchWeekBirthdays } from '@/lib/patient-api';
 import type { WeekBirthdaysProps, WeekBirthday } from '@/types/patient-details';
 
 // AI dev note: WeekBirthdays - Component Composed para exibir aniversários da semana
-// Exibe pacientes com aniversário de segunda a domingo da semana atual
+// Exibe pacientes com aniversário de segunda a domingo da semana atual e da semana seguinte
 // Destaque visual para pacientes que têm agendamento na semana
 // Reutiliza primitives: Card, Badge, Button, Skeleton
 
