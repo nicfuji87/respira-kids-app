@@ -334,6 +334,168 @@ export async function fetchPatientMedicalReports(
 }
 
 /**
+ * Buscar aniversários da semana (segunda a domingo)
+ * AI dev note: Retorna pacientes com aniversário na semana atual
+ * Destaque para pacientes com agendamento na semana
+ */
+export async function fetchWeekBirthdays(): Promise<
+  import('@/types/patient-details').WeekBirthday[]
+> {
+  try {
+    // Calcular início (segunda-feira) e fim (domingo) da semana atual
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = domingo, 1 = segunda, ...
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Ajustar para segunda-feira
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    // Buscar todos os pacientes com data de nascimento
+    const { data: pacientes, error: pacientesError } = await supabase
+      .from('pacientes_com_responsaveis_view')
+      .select('id, nome, data_nascimento')
+      .eq('tipo_pessoa_codigo', 'paciente')
+      .eq('ativo', true)
+      .not('data_nascimento', 'is', null);
+
+    if (pacientesError) {
+      console.error('Erro ao buscar pacientes:', pacientesError);
+      return [];
+    }
+
+    if (!pacientes || pacientes.length === 0) {
+      return [];
+    }
+
+    // Filtrar pacientes cujo aniversário cai na semana (independente do ano)
+    const birthdaysThisWeek = pacientes.filter((p) => {
+      if (!p.data_nascimento) return false;
+
+      const birthDate = new Date(p.data_nascimento + 'T00:00:00');
+      const birthMonth = birthDate.getMonth(); // 0-11
+      const birthDay = birthDate.getDate(); // 1-31
+
+      // Criar data do aniversário no ano atual
+      const birthdayThisYear = new Date(
+        today.getFullYear(),
+        birthMonth,
+        birthDay
+      );
+
+      // Verificar se o aniversário cai entre segunda e domingo
+      return birthdayThisYear >= monday && birthdayThisYear <= sunday;
+    });
+
+    if (birthdaysThisWeek.length === 0) {
+      return [];
+    }
+
+    // Buscar agendamentos da semana para esses pacientes
+    const patientIds = birthdaysThisWeek.map((p) => p.id);
+    const { data: agendamentos } = await supabase
+      .from('agendamentos')
+      .select('id, paciente_id, data_hora, profissional_id')
+      .in('paciente_id', patientIds)
+      .gte('data_hora', monday.toISOString())
+      .lte('data_hora', sunday.toISOString())
+      .eq('ativo', true)
+      .order('data_hora', { ascending: true });
+
+    // Buscar nomes dos profissionais separadamente
+    let profissionaisNomes: Record<string, string> = {};
+    if (agendamentos && agendamentos.length > 0) {
+      const profissionalIds = Array.from(
+        new Set(
+          agendamentos.map((a) => a.profissional_id).filter(Boolean) as string[]
+        )
+      );
+
+      if (profissionalIds.length > 0) {
+        const { data: profissionais } = await supabase
+          .from('pessoas')
+          .select('id, nome')
+          .in('id', profissionalIds);
+
+        if (profissionais) {
+          profissionaisNomes = profissionais.reduce(
+            (acc, prof) => {
+              acc[prof.id] = prof.nome;
+              return acc;
+            },
+            {} as Record<string, string>
+          );
+        }
+      }
+    }
+
+    // Montar resultado final
+    const weekBirthdays = birthdaysThisWeek.map((p) => {
+      const birthDate = new Date(p.data_nascimento + 'T00:00:00');
+      const birthMonth = birthDate.getMonth();
+      const birthDay = birthDate.getDate();
+
+      // Criar data do aniversário no ano atual para calcular dia da semana
+      const birthdayThisYear = new Date(
+        today.getFullYear(),
+        birthMonth,
+        birthDay
+      );
+
+      // Calcular idade
+      const idade = today.getFullYear() - birthDate.getFullYear();
+
+      // Dia da semana em português
+      const diasSemana = [
+        'Domingo',
+        'Segunda-feira',
+        'Terça-feira',
+        'Quarta-feira',
+        'Quinta-feira',
+        'Sexta-feira',
+        'Sábado',
+      ];
+      const dia_semana = diasSemana[birthdayThisYear.getDay()];
+
+      // Agendamentos do paciente nesta semana
+      const agendamentosP = (agendamentos || [])
+        .filter((a) => a.paciente_id === p.id)
+        .map((a) => ({
+          id: a.id,
+          data_hora: a.data_hora,
+          profissional_nome: a.profissional_id
+            ? profissionaisNomes[a.profissional_id] || null
+            : null,
+        }));
+
+      return {
+        id: p.id,
+        nome: p.nome,
+        data_nascimento: p.data_nascimento,
+        idade,
+        dia_semana,
+        dia_mes: birthDay,
+        mes: birthMonth + 1, // 1-12
+        tem_agendamento: agendamentosP.length > 0,
+        agendamentos: agendamentosP.length > 0 ? agendamentosP : undefined,
+      };
+    });
+
+    // Ordenar por mês e dia
+    return weekBirthdays.sort((a, b) => {
+      if (a.mes !== b.mes) return a.mes - b.mes;
+      return a.dia_mes - b.dia_mes;
+    });
+  } catch (err) {
+    console.error('Erro ao buscar aniversários da semana:', err);
+    return [];
+  }
+}
+
+/**
  * Salvar novo relatório médico do paciente
  * AI dev note: Relatórios médicos são gerados a partir de evoluções
  */

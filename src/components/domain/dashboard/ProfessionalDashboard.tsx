@@ -5,6 +5,7 @@ import {
   AppointmentsList,
   ConsultationsToEvolve,
   MaterialRequestCard,
+  WeekBirthdays,
 } from '@/components/composed';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -111,6 +112,9 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
           loading={loading}
           error={error}
         />
+
+        {/* Aniversários da semana */}
+        <WeekBirthdays maxItems={20} />
 
         {/* Grid principal */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

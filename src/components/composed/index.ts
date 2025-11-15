@@ -90,6 +90,7 @@ export { PatientMedicalReports } from './PatientMedicalReports';
 export { PatientHistory } from './PatientHistory';
 export { MediaGallery } from './MediaGallery';
 export { BillingResponsibleSelect } from './BillingResponsibleSelect';
+export { WeekBirthdays } from './WeekBirthdays';
 
 // Financial Components
 export { PinConfiguration } from './PinConfiguration';

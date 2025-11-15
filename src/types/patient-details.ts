@@ -197,6 +197,29 @@ export interface PatientMedicalReportsProps {
   className?: string;
 }
 
+// Interface para aniversários da semana
+export interface WeekBirthday {
+  id: string;
+  nome: string;
+  data_nascimento: string;
+  idade: number;
+  dia_semana: string; // "Segunda-feira", "Terça-feira", etc.
+  dia_mes: number;
+  mes: number;
+  tem_agendamento: boolean;
+  agendamentos?: {
+    id: string;
+    data_hora: string;
+    profissional_nome?: string | null;
+  }[];
+}
+
+export interface WeekBirthdaysProps {
+  className?: string;
+  onPatientClick?: (patientId: string) => void;
+  maxItems?: number;
+}
+
 // Interface para relatório de evolução
 export interface RelatorioEvolucao {
   id: string;
