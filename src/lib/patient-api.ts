@@ -357,7 +357,7 @@ export async function fetchWeekBirthdays(): Promise<
     // Buscar todos os pacientes com data de nascimento
     const { data: pacientes, error: pacientesError } = await supabase
       .from('pacientes_com_responsaveis_view')
-      .select('id, nome, data_nascimento')
+      .select('id, nome, data_nascimento, responsavel_legal_nome')
       .eq('tipo_pessoa_codigo', 'paciente')
       .eq('ativo', true)
       .not('data_nascimento', 'is', null);
@@ -479,6 +479,7 @@ export async function fetchWeekBirthdays(): Promise<
         dia_semana,
         dia_mes: birthDay,
         mes: birthMonth + 1, // 1-12
+        responsavel_legal_nome: p.responsavel_legal_nome || null,
         tem_agendamento: agendamentosP.length > 0,
         agendamentos: agendamentosP.length > 0 ? agendamentosP : undefined,
       };

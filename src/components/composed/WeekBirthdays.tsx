@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Cake, Calendar, Clock, RefreshCw } from 'lucide-react';
 import {
   Card,
@@ -21,6 +22,7 @@ import type { WeekBirthdaysProps, WeekBirthday } from '@/types/patient-details';
 
 export const WeekBirthdays = React.memo<WeekBirthdaysProps>(
   ({ className, onPatientClick, maxItems = 20 }) => {
+    const navigate = useNavigate();
     const [birthdays, setBirthdays] = useState<WeekBirthday[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -76,6 +78,15 @@ export const WeekBirthdays = React.memo<WeekBirthdaysProps>(
       'Sábado',
       'Domingo',
     ];
+
+    // Handler para navegar aos detalhes do paciente
+    const handlePatientClick = (patientId: string) => {
+      if (onPatientClick) {
+        onPatientClick(patientId);
+      } else {
+        navigate(`/pacientes/${patientId}`);
+      }
+    };
 
     return (
       <Card className={cn('w-full', className)}>
@@ -154,11 +165,8 @@ export const WeekBirthdays = React.memo<WeekBirthdaysProps>(
                         {birthdaysForDay.map((birthday) => (
                           <div
                             key={birthday.id}
-                            onClick={() => onPatientClick?.(birthday.id)}
                             className={cn(
                               'p-3 rounded-lg border transition-colors',
-                              onPatientClick &&
-                                'cursor-pointer hover:bg-accent',
                               birthday.tem_agendamento
                                 ? 'border-verde-pipa bg-verde-pipa/5'
                                 : 'border-border bg-card'
@@ -167,9 +175,21 @@ export const WeekBirthdays = React.memo<WeekBirthdaysProps>(
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="font-medium text-sm truncate">
-                                    {birthday.nome}
-                                  </p>
+                                  <div className="flex flex-col gap-0.5 min-w-0">
+                                    <button
+                                      onClick={() =>
+                                        handlePatientClick(birthday.id)
+                                      }
+                                      className="font-medium text-sm truncate hover:underline hover:text-primary transition-colors text-left"
+                                    >
+                                      {birthday.nome}
+                                    </button>
+                                    {birthday.responsavel_legal_nome && (
+                                      <span className="text-xs text-muted-foreground truncate">
+                                        Resp: {birthday.responsavel_legal_nome}
+                                      </span>
+                                    )}
+                                  </div>
                                   <Badge
                                     variant="outline"
                                     className="text-xs shrink-0"

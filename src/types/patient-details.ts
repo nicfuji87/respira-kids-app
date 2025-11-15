@@ -206,6 +206,7 @@ export interface WeekBirthday {
   dia_semana: string; // "Segunda-feira", "Terça-feira", etc.
   dia_mes: number;
   mes: number;
+  responsavel_legal_nome?: string | null;
   tem_agendamento: boolean;
   agendamentos?: {
     id: string;
