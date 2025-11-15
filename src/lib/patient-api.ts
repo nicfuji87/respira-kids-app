@@ -473,6 +473,10 @@ export async function fetchWeekBirthdays(): Promise<
       ];
       const dia_semana = diasSemana[birthdayThisYear.getDay()];
 
+      // Verificar se é da semana atual ou da semana seguinte
+      const isCurrentWeek =
+        birthdayThisYear >= monday && birthdayThisYear <= sunday;
+
       // Agendamentos do paciente nesta semana
       const agendamentosP = (agendamentos || [])
         .filter((a) => a.paciente_id === p.id)
@@ -494,12 +498,18 @@ export async function fetchWeekBirthdays(): Promise<
         mes: birthMonth + 1, // 1-12
         responsavel_legal_nome: p.responsavel_legal_nome || null,
         tem_agendamento: agendamentosP.length > 0,
+        isCurrentWeek,
         agendamentos: agendamentosP.length > 0 ? agendamentosP : undefined,
       };
     });
 
-    // Ordenar por mês e dia
+    // Ordenar: primeiro por semana (atual primeiro), depois por mês e dia
     return weekBirthdays.sort((a, b) => {
+      // Semana atual primeiro (true vem antes de false)
+      if (a.isCurrentWeek !== b.isCurrentWeek) {
+        return a.isCurrentWeek ? -1 : 1;
+      }
+      // Depois por mês e dia
       if (a.mes !== b.mes) return a.mes - b.mes;
       return a.dia_mes - b.dia_mes;
     });

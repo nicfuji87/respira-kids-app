@@ -208,6 +208,7 @@ export interface WeekBirthday {
   mes: number;
   responsavel_legal_nome?: string | null;
   tem_agendamento: boolean;
+  isCurrentWeek: boolean; // true = semana atual, false = semana seguinte
   agendamentos?: {
     id: string;
     data_hora: string;

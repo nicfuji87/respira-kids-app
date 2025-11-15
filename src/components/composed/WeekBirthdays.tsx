@@ -55,17 +55,22 @@ export const WeekBirthdays = React.memo<WeekBirthdaysProps>(
       }).format(date);
     };
 
-    // Agrupar por dia da semana
-    const groupedByDay = birthdays.reduce(
+    // Agrupar primeiro por semana, depois por dia da semana
+    const groupedByWeekAndDay = birthdays.reduce(
       (acc, birthday) => {
+        const weekKey = birthday.isCurrentWeek ? 'current' : 'next';
         const day = birthday.dia_semana;
-        if (!acc[day]) {
-          acc[day] = [];
+
+        if (!acc[weekKey]) {
+          acc[weekKey] = {};
         }
-        acc[day].push(birthday);
+        if (!acc[weekKey][day]) {
+          acc[weekKey][day] = [];
+        }
+        acc[weekKey][day].push(birthday);
         return acc;
       },
-      {} as Record<string, WeekBirthday[]>
+      {} as Record<string, Record<string, WeekBirthday[]>>
     );
 
     // Ordenar dias da semana
@@ -143,114 +148,251 @@ export const WeekBirthdays = React.memo<WeekBirthdaysProps>(
           {/* Birthdays List */}
           {!loading && !error && birthdays.length > 0 && (
             <ScrollArea className="h-[400px] pr-4">
-              <div className="space-y-4">
-                {diasOrdenados.map((dia) => {
-                  const birthdaysForDay = groupedByDay[dia];
-                  if (!birthdaysForDay || birthdaysForDay.length === 0) {
-                    return null;
-                  }
+              <div className="space-y-6">
+                {/* Semana Atual */}
+                {groupedByWeekAndDay.current && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b">
+                      <h3 className="text-sm font-bold text-foreground">
+                        Semana Atual
+                      </h3>
+                    </div>
+                    {diasOrdenados.map((dia) => {
+                      const birthdaysForDay =
+                        groupedByWeekAndDay.current?.[dia];
+                      if (!birthdaysForDay || birthdaysForDay.length === 0) {
+                        return null;
+                      }
 
-                  return (
-                    <div key={dia} className="space-y-2">
-                      {/* Dia da semana */}
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <h4 className="text-sm font-semibold text-foreground">
-                          {dia}
-                        </h4>
-                      </div>
+                      return (
+                        <div key={`current-${dia}`} className="space-y-2">
+                          {/* Dia da semana */}
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <h4 className="text-sm font-semibold text-foreground">
+                              {dia}
+                            </h4>
+                          </div>
 
-                      {/* Lista de aniversariantes */}
-                      <div className="space-y-2 ml-6">
-                        {birthdaysForDay.map((birthday) => (
-                          <div
-                            key={birthday.id}
-                            className={cn(
-                              'p-3 rounded-lg border transition-colors',
-                              birthday.tem_agendamento
-                                ? 'border-verde-pipa bg-verde-pipa/5'
-                                : 'border-border bg-card'
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <div className="flex flex-col gap-0.5 min-w-0">
-                                    <button
-                                      onClick={() =>
-                                        handlePatientClick(birthday.id)
-                                      }
-                                      className="font-medium text-sm truncate hover:underline hover:text-primary transition-colors text-left"
-                                    >
-                                      {birthday.nome}
-                                    </button>
-                                    {birthday.responsavel_legal_nome && (
-                                      <span className="text-xs text-muted-foreground truncate">
-                                        Resp: {birthday.responsavel_legal_nome}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs shrink-0"
-                                  >
-                                    {birthday.idade}{' '}
-                                    {birthday.idade === 1 ? 'ano' : 'anos'}
-                                  </Badge>
-                                  {birthday.tem_agendamento && (
-                                    <Badge className="bg-verde-pipa hover:bg-verde-pipa/90 text-xs shrink-0">
-                                      Tem consulta
-                                    </Badge>
-                                  )}
-                                </div>
-
-                                {/* Agendamentos */}
-                                {birthday.tem_agendamento &&
-                                  birthday.agendamentos && (
-                                    <div className="mt-2 space-y-1">
-                                      {birthday.agendamentos.map(
-                                        (agendamento) => (
-                                          <div
-                                            key={agendamento.id}
-                                            className="flex items-center gap-2 text-xs text-muted-foreground"
-                                          >
-                                            <Clock className="h-3 w-3" />
-                                            <span>
-                                              {formatDateTime(
-                                                agendamento.data_hora
-                                              )}
-                                            </span>
-                                            {agendamento.profissional_nome && (
-                                              <>
-                                                <span>•</span>
-                                                <span>
-                                                  {
-                                                    agendamento.profissional_nome
-                                                  }
-                                                </span>
-                                              </>
-                                            )}
-                                          </div>
-                                        )
+                          {/* Lista de aniversariantes */}
+                          <div className="space-y-2 ml-6">
+                            {birthdaysForDay.map((birthday) => (
+                              <div
+                                key={birthday.id}
+                                className={cn(
+                                  'p-3 rounded-lg border transition-colors',
+                                  birthday.tem_agendamento
+                                    ? 'border-verde-pipa bg-verde-pipa/5'
+                                    : 'border-border bg-card'
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <div className="flex flex-col gap-0.5 min-w-0">
+                                        <button
+                                          onClick={() =>
+                                            handlePatientClick(birthday.id)
+                                          }
+                                          className="font-medium text-sm truncate hover:underline hover:text-primary transition-colors text-left"
+                                        >
+                                          {birthday.nome}
+                                        </button>
+                                        {birthday.responsavel_legal_nome && (
+                                          <span className="text-xs text-muted-foreground truncate">
+                                            Resp:{' '}
+                                            {birthday.responsavel_legal_nome}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs shrink-0"
+                                      >
+                                        {birthday.idade}{' '}
+                                        {birthday.idade === 1 ? 'ano' : 'anos'}
+                                      </Badge>
+                                      {birthday.tem_agendamento && (
+                                        <Badge className="bg-verde-pipa hover:bg-verde-pipa/90 text-xs shrink-0">
+                                          Tem consulta
+                                        </Badge>
                                       )}
                                     </div>
-                                  )}
-                              </div>
 
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                                <Cake className="h-3 w-3" />
-                                <span>
-                                  {String(birthday.dia_mes).padStart(2, '0')}/
-                                  {String(birthday.mes).padStart(2, '0')}
-                                </span>
+                                    {/* Agendamentos */}
+                                    {birthday.tem_agendamento &&
+                                      birthday.agendamentos && (
+                                        <div className="mt-2 space-y-1">
+                                          {birthday.agendamentos.map(
+                                            (agendamento) => (
+                                              <div
+                                                key={agendamento.id}
+                                                className="flex items-center gap-2 text-xs text-muted-foreground"
+                                              >
+                                                <Clock className="h-3 w-3" />
+                                                <span>
+                                                  {formatDateTime(
+                                                    agendamento.data_hora
+                                                  )}
+                                                </span>
+                                                {agendamento.profissional_nome && (
+                                                  <>
+                                                    <span>•</span>
+                                                    <span>
+                                                      {
+                                                        agendamento.profissional_nome
+                                                      }
+                                                    </span>
+                                                  </>
+                                                )}
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
+                                      )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                                    <Cake className="h-3 w-3" />
+                                    <span>
+                                      {String(birthday.dia_mes).padStart(
+                                        2,
+                                        '0'
+                                      )}
+                                      /{String(birthday.mes).padStart(2, '0')}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Semana Seguinte */}
+                {groupedByWeekAndDay.next && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b">
+                      <h3 className="text-sm font-bold text-foreground">
+                        Semana Seguinte
+                      </h3>
                     </div>
-                  );
-                })}
+                    {diasOrdenados.map((dia) => {
+                      const birthdaysForDay = groupedByWeekAndDay.next?.[dia];
+                      if (!birthdaysForDay || birthdaysForDay.length === 0) {
+                        return null;
+                      }
+
+                      return (
+                        <div key={`next-${dia}`} className="space-y-2">
+                          {/* Dia da semana */}
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <h4 className="text-sm font-semibold text-foreground">
+                              {dia}
+                            </h4>
+                          </div>
+
+                          {/* Lista de aniversariantes */}
+                          <div className="space-y-2 ml-6">
+                            {birthdaysForDay.map((birthday) => (
+                              <div
+                                key={birthday.id}
+                                className={cn(
+                                  'p-3 rounded-lg border transition-colors',
+                                  birthday.tem_agendamento
+                                    ? 'border-verde-pipa bg-verde-pipa/5'
+                                    : 'border-border bg-card'
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <div className="flex flex-col gap-0.5 min-w-0">
+                                        <button
+                                          onClick={() =>
+                                            handlePatientClick(birthday.id)
+                                          }
+                                          className="font-medium text-sm truncate hover:underline hover:text-primary transition-colors text-left"
+                                        >
+                                          {birthday.nome}
+                                        </button>
+                                        {birthday.responsavel_legal_nome && (
+                                          <span className="text-xs text-muted-foreground truncate">
+                                            Resp:{' '}
+                                            {birthday.responsavel_legal_nome}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs shrink-0"
+                                      >
+                                        {birthday.idade}{' '}
+                                        {birthday.idade === 1 ? 'ano' : 'anos'}
+                                      </Badge>
+                                      {birthday.tem_agendamento && (
+                                        <Badge className="bg-verde-pipa hover:bg-verde-pipa/90 text-xs shrink-0">
+                                          Tem consulta
+                                        </Badge>
+                                      )}
+                                    </div>
+
+                                    {/* Agendamentos */}
+                                    {birthday.tem_agendamento &&
+                                      birthday.agendamentos && (
+                                        <div className="mt-2 space-y-1">
+                                          {birthday.agendamentos.map(
+                                            (agendamento) => (
+                                              <div
+                                                key={agendamento.id}
+                                                className="flex items-center gap-2 text-xs text-muted-foreground"
+                                              >
+                                                <Clock className="h-3 w-3" />
+                                                <span>
+                                                  {formatDateTime(
+                                                    agendamento.data_hora
+                                                  )}
+                                                </span>
+                                                {agendamento.profissional_nome && (
+                                                  <>
+                                                    <span>•</span>
+                                                    <span>
+                                                      {
+                                                        agendamento.profissional_nome
+                                                      }
+                                                    </span>
+                                                  </>
+                                                )}
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
+                                      )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                                    <Cake className="h-3 w-3" />
+                                    <span>
+                                      {String(birthday.dia_mes).padStart(
+                                        2,
+                                        '0'
+                                      )}
+                                      /{String(birthday.mes).padStart(2, '0')}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </ScrollArea>
           )}
