@@ -55,3 +55,26 @@ export function formatInscricaoEstadual(ie: string): string {
   // Formato genérico para a maioria dos estados (pode ser ajustado por estado específico se necessário)
   return numbers.replace(/(\d{3})(\d{3})(\d{3})(\d{3})/, '$1.$2.$3.$4');
 }
+
+/**
+ * Formata data/hora no padrão brasileiro
+ * Exemplo: "15/11/2024 às 14:30"
+ * @param date - Data em formato ISO string ou Date
+ * @returns String formatada no padrão brasileiro
+ */
+export function formatDateTimeBR(date: string | Date): string {
+  if (!date) return '';
+
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+  // Verificar se é data válida
+  if (isNaN(dateObj.getTime())) return '';
+
+  return dateObj.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}

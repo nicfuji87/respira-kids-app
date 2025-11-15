@@ -140,46 +140,24 @@ export async function getPatientById(patientId: string) {
 
 /**
  * Buscar anamnese do paciente
- * Usa relatorio_evolucao com tipo 'anamnese' através dos agendamentos do paciente
+ * AI dev note: Anamnese agora é permanente e vinculada diretamente à pessoa
  */
 export async function fetchPatientAnamnesis(
   patientId: string
 ): Promise<string | null> {
   try {
-    // Buscar tipo de relatório 'anamnese'
-    const { data: tipoData, error: tipoError } = await supabase
-      .from('relatorios_tipo')
-      .select('id')
-      .eq('codigo', 'anamnese')
-      .single();
-
-    if (tipoError || !tipoData) {
-      console.error('Erro ao buscar tipo anamnese:', tipoError);
-      return null;
-    }
-
-    // AI dev note: Buscar anamnese através dos agendamentos do paciente
-    // Anamnese está relacionada a agendamentos, não diretamente ao paciente
     const { data, error } = await supabase
-      .from('relatorio_evolucao')
-      .select(
-        `
-        conteudo,
-        agendamentos!inner(paciente_id)
-      `
-      )
-      .eq('tipo_relatorio_id', tipoData.id)
-      .eq('agendamentos.paciente_id', patientId)
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .from('pessoas')
+      .select('anamnese')
+      .eq('id', patientId)
       .single();
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       console.error('Erro ao buscar anamnese:', error);
       return null;
     }
 
-    return data?.conteudo || null;
+    return data?.anamnese || null;
   } catch (err) {
     console.error('Erro ao buscar anamnese do paciente:', err);
     return null;
@@ -188,75 +166,207 @@ export async function fetchPatientAnamnesis(
 
 /**
  * Salvar anamnese do paciente
- * Cria/atualiza relatorio_evolucao com tipo 'anamnese' associado ao agendamento mais recente
+ * AI dev note: Anamnese agora é permanente e vinculada diretamente à pessoa
  */
 export async function savePatientAnamnesis(
   patientId: string,
   content: string
 ): Promise<void> {
   try {
-    // Buscar tipo de relatório 'anamnese'
-    const { data: tipoData, error: tipoError } = await supabase
-      .from('relatorios_tipo')
-      .select('id')
-      .eq('codigo', 'anamnese')
-      .single();
+    const { error } = await supabase
+      .from('pessoas')
+      .update({
+        anamnese: content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', patientId);
 
-    if (tipoError || !tipoData) {
-      throw new Error('Tipo de relatório anamnese não encontrado');
-    }
-
-    // AI dev note: Buscar agendamento mais recente do paciente para associar anamnese
-    // Anamnese deve estar relacionada a um agendamento real, não diretamente ao paciente
-    const { data: agendamentoData, error: agendamentoError } = await supabase
-      .from('agendamentos')
-      .select('id')
-      .eq('paciente_id', patientId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (agendamentoError || !agendamentoData) {
-      throw new Error(
-        'Nenhum agendamento encontrado para este paciente. Crie um agendamento primeiro.'
-      );
-    }
-
-    // Verificar se já existe anamnese para este paciente
-    const { data: existingData } = await supabase
-      .from('relatorio_evolucao')
-      .select('id, id_agendamento')
-      .eq('tipo_relatorio_id', tipoData.id)
-      .in('id_agendamento', [agendamentoData.id])
-      .single();
-
-    if (existingData) {
-      // Atualizar existente
-      const { error } = await supabase
-        .from('relatorio_evolucao')
-        .update({
-          conteudo: content,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingData.id);
-
-      if (error) {
-        throw new Error(error.message);
-      }
-    } else {
-      // Criar novo associado ao agendamento mais recente
-      const { error } = await supabase.from('relatorio_evolucao').insert({
-        id_agendamento: agendamentoData.id,
-        tipo_relatorio_id: tipoData.id,
-        conteudo: content,
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
+    if (error) {
+      throw new Error(error.message);
     }
   } catch (err) {
     console.error('Erro ao salvar anamnese:', err);
+    throw err;
+  }
+}
+
+/**
+ * Buscar observações do paciente
+ * AI dev note: Observações são permanentes e vinculadas diretamente à pessoa
+ */
+export async function fetchPatientObservations(
+  patientId: string
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('pessoas')
+      .select('observacoes')
+      .eq('id', patientId)
+      .single();
+
+    if (error) {
+      console.error('Erro ao buscar observações:', error);
+      return null;
+    }
+
+    return data?.observacoes || null;
+  } catch (err) {
+    console.error('Erro ao buscar observações do paciente:', err);
+    return null;
+  }
+}
+
+/**
+ * Salvar observações do paciente
+ * AI dev note: Observações são permanentes e vinculadas diretamente à pessoa
+ */
+export async function savePatientObservations(
+  patientId: string,
+  content: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('pessoas')
+      .update({
+        observacoes: content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', patientId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  } catch (err) {
+    console.error('Erro ao salvar observações:', err);
+    throw err;
+  }
+}
+
+/**
+ * Buscar relatórios médicos do paciente
+ * AI dev note: Relatórios médicos são múltiplos e vinculados à pessoa
+ */
+export async function fetchPatientMedicalReports(
+  patientId: string
+): Promise<import('@/types/patient-details').MedicalReport[]> {
+  try {
+    const { data: tipoData, error: tipoError } = await supabase
+      .from('relatorios_tipo')
+      .select('id')
+      .eq('codigo', 'relatorio_medico')
+      .single();
+
+    if (tipoError || !tipoData) {
+      console.error('Erro ao buscar tipo relatorio_medico:', tipoError);
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from('relatorios_medicos')
+      .select(
+        `
+        id,
+        id_pessoa,
+        conteudo,
+        pdf_url,
+        criado_por,
+        atualizado_por,
+        created_at,
+        updated_at,
+        transcricao
+      `
+      )
+      .eq('id_pessoa', patientId)
+      .eq('tipo_relatorio_id', tipoData.id)
+      .eq('ativo', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Erro ao buscar relatórios médicos:', error);
+      return [];
+    }
+
+    // Buscar nomes dos criadores/atualizadores separadamente
+    const reportsWithNames = await Promise.all(
+      (data || []).map(async (item) => {
+        let criadoPorNome = null;
+        let atualizadoPorNome = null;
+
+        if (item.criado_por) {
+          const { data: criadoPor } = await supabase
+            .from('pessoas')
+            .select('nome')
+            .eq('id', item.criado_por)
+            .single();
+          criadoPorNome = criadoPor?.nome || null;
+        }
+
+        if (item.atualizado_por) {
+          const { data: atualizadoPor } = await supabase
+            .from('pessoas')
+            .select('nome')
+            .eq('id', item.atualizado_por)
+            .single();
+          atualizadoPorNome = atualizadoPor?.nome || null;
+        }
+
+        return {
+          id: item.id,
+          id_pessoa: item.id_pessoa,
+          conteudo: item.conteudo || '',
+          pdf_url: item.pdf_url,
+          criado_por: item.criado_por,
+          criado_por_nome: criadoPorNome,
+          atualizado_por: item.atualizado_por,
+          atualizado_por_nome: atualizadoPorNome,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          transcricao: item.transcricao || false,
+        };
+      })
+    );
+
+    return reportsWithNames;
+  } catch (err) {
+    console.error('Erro ao buscar relatórios médicos:', err);
+    return [];
+  }
+}
+
+/**
+ * Salvar novo relatório médico do paciente
+ * AI dev note: Relatórios médicos são gerados a partir de evoluções
+ */
+export async function savePatientMedicalReport(
+  patientId: string,
+  content: string,
+  userId: string
+): Promise<void> {
+  try {
+    const { data: tipoData, error: tipoError } = await supabase
+      .from('relatorios_tipo')
+      .select('id')
+      .eq('codigo', 'relatorio_medico')
+      .single();
+
+    if (tipoError || !tipoData) {
+      throw new Error('Tipo de relatório médico não encontrado');
+    }
+
+    const { error } = await supabase.from('relatorios_medicos').insert({
+      id_pessoa: patientId,
+      tipo_relatorio_id: tipoData.id,
+      conteudo: content,
+      criado_por: userId,
+      transcricao: false,
+      ativo: true,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  } catch (err) {
+    console.error('Erro ao salvar relatório médico:', err);
     throw err;
   }
 }

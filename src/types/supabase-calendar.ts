@@ -190,6 +190,12 @@ export interface SupabaseAgendamentoCompletoFlat {
   // Agendado Por (NOVOS)
   agendado_por_nome: string | null;
 
+  // Auditoria (NOVOS)
+  criado_por: string | null;
+  criado_por_nome: string | null;
+  atualizado_por: string | null;
+  atualizado_por_nome: string | null;
+
   // Comissão (NOVOS)
   comissao_tipo_recebimento: string | null;
   comissao_valor_fixo: string | null;

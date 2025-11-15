@@ -200,6 +200,12 @@ export const fetchAgendamentos = async (
       ),
       agendado_por_pessoa:pessoas!agendamentos_agendado_por_fkey (
         id, nome, email
+      ),
+      criado_por_pessoa:pessoas!agendamentos_criado_por_fkey (
+        id, nome
+      ),
+      atualizado_por_pessoa:pessoas!agendamentos_atualizado_por_fkey (
+        id, nome
       )
     `
     )
@@ -947,6 +953,22 @@ export const updateAgendamentoDetails = async (appointmentData: {
     )
   );
 
+  // AI dev note: Adicionar atualizado_por (pegar do usuário atual)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const { data: pessoa } = await supabase
+      .from('pessoas')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (pessoa) {
+      cleanUpdateFields.atualizado_por = pessoa.id;
+    }
+  }
+
   const { error } = await supabase
     .from('agendamentos')
     .update(cleanUpdateFields)
@@ -973,9 +995,29 @@ export const updatePaymentStatus = async (
   agendamentoId: string,
   statusPagamentoId: string
 ): Promise<SupabaseAgendamentoCompletoFlat> => {
+  // AI dev note: Adicionar atualizado_por
+  const updateData: { status_pagamento_id: string; atualizado_por?: string } = {
+    status_pagamento_id: statusPagamentoId,
+  };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const { data: pessoa } = await supabase
+      .from('pessoas')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (pessoa) {
+      updateData.atualizado_por = pessoa.id;
+    }
+  }
+
   const { error } = await supabase
     .from('agendamentos')
-    .update({ status_pagamento_id: statusPagamentoId })
+    .update(updateData)
     .eq('id', agendamentoId);
 
   if (error) {

@@ -282,17 +282,80 @@ export const fetchPersonAnamnesis = async (
   }
 };
 
-// Função para salvar anamnese de pessoa
+/**
+ * Salvar anamnese de pessoa
+ * AI dev note: Anamnese agora é permanente e vinculada diretamente à pessoa
+ */
 export const savePersonAnamnesis = async (
   personId: string,
   content: string
 ): Promise<void> => {
   try {
-    // AI dev note: Implementar salvamento de anamnese se necessário
-    // Por enquanto só log, pode ser expandido posteriormente
-    console.log('Salvando anamnese para pessoa:', personId, content);
+    const { error } = await supabase
+      .from('pessoas')
+      .update({
+        anamnese: content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', personId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
   } catch (error) {
     console.error('Erro ao salvar anamnese da pessoa:', error);
+    throw error;
+  }
+};
+
+/**
+ * Buscar observações de pessoa
+ * AI dev note: Observações são permanentes e vinculadas diretamente à pessoa
+ */
+export const fetchPersonObservations = async (
+  personId: string
+): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('pessoas')
+      .select('observacoes')
+      .eq('id', personId)
+      .single();
+
+    if (error) {
+      console.error('Erro ao buscar observações:', error);
+      return null;
+    }
+
+    return data?.observacoes || null;
+  } catch (error) {
+    console.error('Erro ao buscar observações da pessoa:', error);
+    return null;
+  }
+};
+
+/**
+ * Salvar observações de pessoa
+ * AI dev note: Observações são permanentes e vinculadas diretamente à pessoa
+ */
+export const savePersonObservations = async (
+  personId: string,
+  content: string
+): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('pessoas')
+      .update({
+        observacoes: content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', personId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  } catch (error) {
+    console.error('Erro ao salvar observações da pessoa:', error);
     throw error;
   }
 };

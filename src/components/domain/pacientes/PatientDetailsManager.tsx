@@ -6,7 +6,8 @@ import { Alert, AlertDescription } from '@/components/primitives/alert';
 import {
   PatientCompleteInfo,
   PatientMetricsWithConsultations,
-  PatientAnamnesis,
+  PatientAnamnesisWithObservations,
+  PatientMedicalReports,
   PatientHistory,
   MediaGallery,
   PatientContractSection,
@@ -18,11 +19,15 @@ import {
   fetchPatientDetails,
   fetchPatientAnamnesis,
   savePatientAnamnesis,
+  fetchPatientObservations,
+  savePatientObservations,
 } from '@/lib/patient-api';
 import {
   fetchPersonDetails,
   fetchPersonAnamnesis,
   savePersonAnamnesis,
+  fetchPersonObservations,
+  savePersonObservations,
 } from '@/lib/person-api';
 
 import {
@@ -59,6 +64,7 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
     }
     const [patient, setPatient] = useState<PatientDetails | null>(null);
     const [anamnesis, setAnamnesis] = useState<string>('');
+    const [observations, setObservations] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -88,30 +94,37 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
 
           // AI dev note: Carregar dados da pessoa/paciente baseado no tipo de ID
           let patientResponse;
-          let anamnesisData;
+          let anamnesisData = null;
+          let observationsData = null;
 
           if (personId) {
             // Se personId foi fornecido, usar API de pessoa genérica
-            const [personResp, personAnamnesis] = await Promise.all([
-              fetchPersonDetails(
-                actualId,
-                user?.role as 'admin' | 'profissional' | 'secretaria'
-              ),
-              fetchPersonAnamnesis(actualId),
-            ]);
+            const [personResp, personAnamnesis, personObservations] =
+              await Promise.all([
+                fetchPersonDetails(
+                  actualId,
+                  user?.role as 'admin' | 'profissional' | 'secretaria'
+                ),
+                fetchPersonAnamnesis(actualId),
+                fetchPersonObservations(actualId),
+              ]);
             patientResponse = {
               patient: personResp.person,
               error: personResp.error,
             };
             anamnesisData = personAnamnesis;
+            observationsData = personObservations;
           } else {
             // Se apenas patientId foi fornecido, usar API de paciente tradicional
-            const [patientResp, patientAnamnesis] = await Promise.all([
-              fetchPatientDetails(actualId),
-              fetchPatientAnamnesis(actualId),
-            ]);
+            const [patientResp, patientAnamnesis, patientObservations] =
+              await Promise.all([
+                fetchPatientDetails(actualId),
+                fetchPatientAnamnesis(actualId),
+                fetchPatientObservations(actualId),
+              ]);
             patientResponse = patientResp;
             anamnesisData = patientAnamnesis;
+            observationsData = patientObservations;
           }
 
           if (patientResponse.error) {
@@ -119,6 +132,7 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
           } else if (patientResponse.patient) {
             setPatient(patientResponse.patient);
             setAnamnesis(anamnesisData || '');
+            setObservations(observationsData || '');
           } else {
             setError('Paciente não encontrado');
           }
@@ -158,6 +172,16 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
         await savePatientAnamnesis(actualId, content);
       }
       setAnamnesis(content);
+    };
+
+    // Handler para atualização de observações
+    const handleObservationsUpdate = async (content: string) => {
+      if (personId) {
+        await savePersonObservations(actualId, content);
+      } else {
+        await savePatientObservations(actualId, content);
+      }
+      setObservations(content);
     };
 
     // Handler para click na consulta recente
@@ -351,12 +375,18 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
               }
             />
 
-            {/* Anamnese do Paciente */}
-            <PatientAnamnesis
-              patientId={actualId}
-              initialValue={anamnesis}
-              onUpdate={handleAnamnesisUpdate}
+            {/* Anamnese e Observações do Paciente (com abas) */}
+            <PatientAnamnesisWithObservations
+              patientId={personId ? undefined : actualId}
+              personId={personId}
+              initialAnamnese={anamnesis}
+              initialObservations={observations}
+              onUpdateAnamnese={handleAnamnesisUpdate}
+              onUpdateObservations={handleObservationsUpdate}
             />
+
+            {/* Relatórios Médicos do Paciente */}
+            <PatientMedicalReports patientId={actualId} />
 
             {/* Histórico Compilado com IA */}
             <PatientHistory patientId={actualId} />

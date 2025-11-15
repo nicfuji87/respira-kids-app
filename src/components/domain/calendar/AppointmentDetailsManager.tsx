@@ -32,7 +32,7 @@ import {
   type LocationOption,
 } from '@/components/composed';
 import { Textarea } from '@/components/primitives/textarea';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTimeBR } from '@/lib/utils';
 import {
   fetchConsultaStatus,
   fetchTiposServico,
@@ -1087,6 +1087,35 @@ export const AppointmentDetailsManager =
                     criadoPor={user?.pessoa?.id}
                     disabled={isSavingEvolucao}
                   />
+
+                  {/* Seção de Auditoria */}
+                  <Separator className="my-4" />
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground font-medium">
+                      Informações de Auditoria
+                    </Label>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div>
+                        Criado por:{' '}
+                        <strong className="text-foreground">
+                          {appointment.criado_por_nome ||
+                            appointment.agendado_por_nome ||
+                            'Sistema'}
+                        </strong>{' '}
+                        em {formatDateTimeBR(appointment.created_at)}
+                      </div>
+                      {appointment.updated_at &&
+                        appointment.created_at !== appointment.updated_at && (
+                          <div>
+                            Última alteração:{' '}
+                            <strong className="text-foreground">
+                              {appointment.atualizado_por_nome || 'Sistema'}
+                            </strong>{' '}
+                            em {formatDateTimeBR(appointment.updated_at)}
+                          </div>
+                        )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </ScrollArea>

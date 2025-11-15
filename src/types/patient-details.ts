@@ -48,8 +48,9 @@ export interface PatientDetails extends SupabasePessoa {
   // Origem da indicação
   origem_indicacao?: string | null;
 
-  // Anamnese
+  // Anamnese e Observações (permanentes, vinculadas à pessoa)
   anamnese?: string | null;
+  observacoes?: string | null;
 
   // AI dev note: Novos campos de pediatras - vindos da view atualizada
   pediatras_nomes?: string | null;
@@ -163,6 +164,35 @@ export interface PatientAnamnesisProps {
 
 // Interface para histórico do paciente
 export interface PatientHistoryProps {
+  patientId: string;
+  className?: string;
+}
+
+// Interface para observações
+export interface PatientObservationsProps {
+  patientId?: string;
+  personId?: string;
+  initialValue?: string;
+  onUpdate: (observacoes: string) => Promise<void>;
+  className?: string;
+}
+
+// Interface para relatório médico
+export interface MedicalReport {
+  id: string;
+  id_pessoa: string;
+  conteudo: string;
+  pdf_url: string | null;
+  criado_por: string | null;
+  criado_por_nome?: string | null;
+  atualizado_por: string | null;
+  atualizado_por_nome?: string | null;
+  created_at: string;
+  updated_at: string;
+  transcricao: boolean;
+}
+
+export interface PatientMedicalReportsProps {
   patientId: string;
   className?: string;
 }
