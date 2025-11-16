@@ -13,7 +13,6 @@ import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { DatePicker } from '@/components/composed/DatePicker';
 import { Checkbox } from '@/components/primitives/checkbox';
-import { ScrollArea } from '@/components/primitives/scroll-area';
 import { SlotsList } from '@/components/composed/SlotsList';
 import { Separator } from '@/components/primitives/separator';
 import { cn } from '@/lib/utils';
@@ -351,15 +350,9 @@ export const SharedScheduleEditorDialog =
       return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
           <DialogContent
-            className={cn(
-              'w-[95vw] sm:max-w-4xl',
-              'max-h-[85vh] sm:max-h-[90vh]',
-              'p-0',
-              'flex flex-col',
-              className
-            )}
+            className={cn('w-[95vw] sm:max-w-4xl', 'p-4 sm:p-6', className)}
           >
-            <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
+            <DialogHeader className="pb-4">
               <DialogTitle>Editar Agenda Compartilhada</DialogTitle>
               <DialogDescription>
                 Altere as informações da agenda e gerencie os horários
@@ -367,8 +360,8 @@ export const SharedScheduleEditorDialog =
               </DialogDescription>
             </DialogHeader>
 
-            <ScrollArea className="flex-1 px-4 sm:px-6">
-              <div className="space-y-3 sm:space-y-6 py-4">
+            <div className="max-h-[60vh] overflow-y-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+              <div className="space-y-3 sm:space-y-6">
                 {/* Informações Básicas */}
                 <div className="space-y-3 sm:space-y-4">
                   <h3 className="text-sm font-semibold">Informações Básicas</h3>
@@ -589,10 +582,10 @@ export const SharedScheduleEditorDialog =
                   )}
                 </div>
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Footer */}
-            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 px-4 sm:px-6 py-4 border-t shrink-0 bg-background">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-4 border-t">
               <Button
                 variant="outline"
                 onClick={onClose}
