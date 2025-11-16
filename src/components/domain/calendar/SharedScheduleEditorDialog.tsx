@@ -304,11 +304,61 @@ export const SharedScheduleEditorDialog =
         [agenda, toast]
       );
 
+      const handleRemoveOccupiedSlot = useCallback(
+        async (slotId: string, slotInfo: { paciente_nome?: string }) => {
+          if (!agenda) return;
+
+          // Confirmar remoção de slot ocupado
+          if (
+            !window.confirm(
+              `Este horário está ocupado${slotInfo.paciente_nome ? ` por ${slotInfo.paciente_nome}` : ''}.\n\n` +
+                'Remover este slot irá marcá-lo como deletado mas manterá o agendamento.\n\n' +
+                'Deseja continuar?'
+            )
+          ) {
+            return;
+          }
+
+          try {
+            const result = await removeSlots([slotId], true); // forceRemoveOccupied = true
+
+            if (!result.success) {
+              throw new Error(result.error || 'Erro ao remover slot');
+            }
+
+            toast({
+              title: 'Slot removido com sucesso!',
+              description: 'O agendamento foi mantido.',
+            });
+
+            // Recarregar slots
+            loadSlots(agenda.id);
+          } catch (error) {
+            console.error('Erro ao remover slot ocupado:', error);
+            toast({
+              title: 'Erro ao remover horário',
+              description:
+                error instanceof Error ? error.message : 'Erro desconhecido',
+              variant: 'destructive',
+            });
+          }
+        },
+        [agenda, toast]
+      );
+
       if (!agenda) return null;
 
       return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-          <DialogContent className={cn('max-w-4xl max-h-[90vh]', className)}>
+          <DialogContent
+            className={cn(
+              'w-[95vw] max-w-4xl',
+              'max-h-[95vh] sm:max-h-[90vh]',
+              'h-[95vh] sm:h-auto',
+              'flex flex-col',
+              className
+            )}
+          >
             <DialogHeader>
               <DialogTitle>Editar Agenda Compartilhada</DialogTitle>
               <DialogDescription>
@@ -317,7 +367,7 @@ export const SharedScheduleEditorDialog =
               </DialogDescription>
             </DialogHeader>
 
-            <ScrollArea className="max-h-[calc(90vh-200px)] pr-4">
+            <ScrollArea className="flex-1 min-h-0 pr-2 sm:pr-4 overflow-y-auto">
               <div className="space-y-6 py-4">
                 {/* Informações Básicas */}
                 <div className="space-y-4">
@@ -333,7 +383,7 @@ export const SharedScheduleEditorDialog =
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Data de Início</Label>
                       <DatePicker value={dataInicio} onChange={setDataInicio} />
@@ -358,7 +408,7 @@ export const SharedScheduleEditorDialog =
                       <Loader2 className="w-6 h-6 animate-spin" />
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {servicos.map((servico) => (
                         <div
                           key={servico.id}
@@ -399,7 +449,7 @@ export const SharedScheduleEditorDialog =
                       <Loader2 className="w-6 h-6 animate-spin" />
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {locais.map((local) => (
                         <div
                           key={local.id}
@@ -440,7 +490,7 @@ export const SharedScheduleEditorDialog =
                       <Loader2 className="w-6 h-6 animate-spin" />
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {empresas.map((empresa) => (
                         <div
                           key={empresa.id}
@@ -480,7 +530,7 @@ export const SharedScheduleEditorDialog =
                   </div>
 
                   {/* Adicionar novo slot */}
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <div className="flex-1">
                       <DatePicker
                         value={selectedDate}
@@ -500,6 +550,7 @@ export const SharedScheduleEditorDialog =
                       type="button"
                       onClick={handleAddSlot}
                       disabled={!selectedDate || !timeInput}
+                      className="w-full sm:w-auto"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Adicionar
@@ -515,6 +566,8 @@ export const SharedScheduleEditorDialog =
                     <SlotsList
                       slots={slots}
                       onRemoveSlot={handleRemoveSlot}
+                      onRemoveOccupiedSlot={handleRemoveOccupiedSlot}
+                      showRemoveOccupied={true}
                       disableScroll={true}
                     />
                   )}
@@ -523,15 +576,20 @@ export const SharedScheduleEditorDialog =
             </ScrollArea>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-2 pt-4 border-t">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-4 border-t mt-auto sticky bottom-0 bg-background z-10">
               <Button
                 variant="outline"
                 onClick={onClose}
                 disabled={isSubmitting}
+                className="w-full sm:w-auto"
               >
                 Cancelar
               </Button>
-              <Button onClick={handleSave} disabled={isSubmitting}>
+              <Button
+                onClick={handleSave}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto"
+              >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

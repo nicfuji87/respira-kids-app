@@ -320,12 +320,14 @@ export async function fetchSharedScheduleByToken(
       .in('id', empresasIdsArray)
       .eq('ativo', true);
 
-    // 5. Buscar apenas slots disponíveis
+    // 5. Buscar apenas slots disponíveis e não deletados
+    // AI dev note: Filtro duplo - disponível E não deletado (soft delete)
     const { data: slots } = await supabase
       .from('agenda_slots')
       .select('*')
       .eq('agenda_id', agendaStats.id)
       .eq('disponivel', true)
+      .is('deleted_at', null)
       .order('data_hora', { ascending: true });
 
     const agendaCompleta: AgendaCompartilhadaCompleta = {
@@ -433,28 +435,72 @@ export async function addSlotsToSchedule(
 }
 
 // ============================================
-// REMOVER SLOTS (apenas disponíveis)
+// REMOVER SLOTS (soft delete com validação)
 // ============================================
 
 export async function removeSlots(
-  slotIds: string[]
-): Promise<ApiResponse<void>> {
+  slotIds: string[],
+  forceRemoveOccupied: boolean = false
+): Promise<ApiResponse<{ removed: number; hasAgendamentos?: boolean }>> {
   try {
-    const { error } = await supabase
+    console.log('🗑️ [removeSlots] Iniciando remoção:', {
+      slotIds,
+      forceRemoveOccupied,
+    });
+
+    // AI dev note: Verificar se slots têm agendamentos confirmados
+    const { data: selecoes, error: selecoesError } = await supabase
+      .from('agenda_selecoes')
+      .select('slot_id, agendamento_id')
+      .in('slot_id', slotIds);
+
+    if (selecoesError) throw selecoesError;
+
+    const slotsComAgendamento = selecoes?.filter((s) => s.agendamento_id) || [];
+
+    console.log('🔍 [removeSlots] Verificação:', {
+      totalSelecoes: selecoes?.length || 0,
+      slotsComAgendamento: slotsComAgendamento.length,
+    });
+
+    // Se tem agendamentos confirmados e não forçou remoção, bloquear
+    if (!forceRemoveOccupied && slotsComAgendamento.length > 0) {
+      console.warn(
+        '⚠️ [removeSlots] Tentativa de remover slots com agendamentos bloqueada'
+      );
+      return {
+        data: null,
+        error:
+          'Não é possível remover slots com agendamentos confirmados. Confirme a remoção para prosseguir.',
+        success: false,
+      };
+    }
+
+    // AI dev note: Soft delete - marcar como deletado em vez de remover fisicamente
+    // Mantém integridade referencial e permite auditoria
+    const { error, count } = await supabase
       .from('agenda_slots')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .in('id', slotIds)
-      .eq('disponivel', true); // Só remove se disponível
+      .is('deleted_at', null); // Só marca se ainda não foi deletado
 
     if (error) throw error;
 
+    console.log('✅ [removeSlots] Slots removidos (soft delete):', {
+      count,
+      hasAgendamentos: slotsComAgendamento.length > 0,
+    });
+
     return {
-      data: null,
+      data: {
+        removed: count || 0,
+        hasAgendamentos: slotsComAgendamento.length > 0,
+      },
       error: null,
       success: true,
     };
   } catch (error) {
-    console.error('Erro ao remover slots:', error);
+    console.error('❌ [removeSlots] Erro:', error);
     return {
       data: null,
       error: error instanceof Error ? error.message : 'Erro desconhecido',
@@ -471,10 +517,12 @@ export async function fetchSlotsWithSelections(
   agendaId: string
 ): Promise<ApiResponse<AgendaSlotComSelecao[]>> {
   try {
+    // AI dev note: Filtrar slots deletados (soft delete)
     const { data: slots, error: slotsError } = await supabase
       .from('agenda_slots')
       .select('*')
       .eq('agenda_id', agendaId)
+      .is('deleted_at', null)
       .order('data_hora', { ascending: true });
 
     if (slotsError) throw slotsError;

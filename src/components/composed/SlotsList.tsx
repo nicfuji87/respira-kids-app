@@ -17,18 +17,25 @@ import type { AgendaSlotComSelecao } from '@/types/shared-schedule';
 export interface SlotsListProps {
   slots: AgendaSlotComSelecao[];
   onRemoveSlot?: (slotId: string) => void;
+  onRemoveOccupiedSlot?: (
+    slotId: string,
+    slotInfo: { paciente_nome?: string; agendamento_id?: string | null }
+  ) => void; // AI dev note: Nova função para remover slots ocupados
   maxHeight?: string;
   className?: string;
   disableScroll?: boolean; // AI dev note: Desabilitar ScrollArea interno quando usado dentro de outro ScrollArea
+  showRemoveOccupied?: boolean; // AI dev note: Mostrar botão de remoção em slots ocupados
 }
 
 export const SlotsList = React.memo<SlotsListProps>(
   ({
     slots,
     onRemoveSlot,
+    onRemoveOccupiedSlot,
     maxHeight = '400px',
     className,
     disableScroll = false,
+    showRemoveOccupied = false,
   }) => {
     const slotsDisponiveis = slots.filter((s) => s.disponivel);
     const slotsOcupados = slots.filter((s) => !s.disponivel);
@@ -147,9 +154,24 @@ export const SlotsList = React.memo<SlotsListProps>(
                           </div>
                         </div>
 
-                        <Badge variant="secondary" className="shrink-0">
-                          Ocupado
-                        </Badge>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="secondary">Ocupado</Badge>
+                          {showRemoveOccupied && onRemoveOccupiedSlot && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                onRemoveOccupiedSlot(slot.id, {
+                                  paciente_nome: slot.selecao?.paciente_nome,
+                                  agendamento_id: null, // Será buscado no handler se necessário
+                                })
+                              }
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
