@@ -19,10 +19,17 @@ export interface SlotsListProps {
   onRemoveSlot?: (slotId: string) => void;
   maxHeight?: string;
   className?: string;
+  disableScroll?: boolean; // AI dev note: Desabilitar ScrollArea interno quando usado dentro de outro ScrollArea
 }
 
 export const SlotsList = React.memo<SlotsListProps>(
-  ({ slots, onRemoveSlot, maxHeight = '400px', className }) => {
+  ({
+    slots,
+    onRemoveSlot,
+    maxHeight = '400px',
+    className,
+    disableScroll = false,
+  }) => {
     const slotsDisponiveis = slots.filter((s) => s.disponivel);
     const slotsOcupados = slots.filter((s) => !s.disponivel);
 
@@ -33,6 +40,12 @@ export const SlotsList = React.memo<SlotsListProps>(
       const hora = format(date, 'HH:mm', { locale: ptBR });
       return { dia, hora };
     };
+
+    // AI dev note: Componente wrapper para slots - pode ser ScrollArea ou div simples
+    const SlotsWrapper = disableScroll ? 'div' : ScrollArea;
+    const wrapperProps = disableScroll
+      ? { className: 'space-y-2' }
+      : { style: { maxHeight }, className: 'pr-4' };
 
     return (
       <div className={cn('space-y-4', className)}>
@@ -46,7 +59,7 @@ export const SlotsList = React.memo<SlotsListProps>(
               </h4>
             </div>
 
-            <ScrollArea style={{ maxHeight }} className="pr-4">
+            <SlotsWrapper {...wrapperProps}>
               <div className="space-y-2">
                 {slotsDisponiveis.map((slot) => {
                   const { dia, hora } = formatSlotDateTime(slot.data_hora);
@@ -81,7 +94,7 @@ export const SlotsList = React.memo<SlotsListProps>(
                   );
                 })}
               </div>
-            </ScrollArea>
+            </SlotsWrapper>
           </div>
         )}
 
@@ -95,7 +108,7 @@ export const SlotsList = React.memo<SlotsListProps>(
               </h4>
             </div>
 
-            <ScrollArea style={{ maxHeight }} className="pr-4">
+            <SlotsWrapper {...wrapperProps}>
               <div className="space-y-2">
                 {slotsOcupados.map((slot) => {
                   const { dia, hora } = formatSlotDateTime(slot.data_hora);
@@ -142,7 +155,7 @@ export const SlotsList = React.memo<SlotsListProps>(
                   );
                 })}
               </div>
-            </ScrollArea>
+            </SlotsWrapper>
           </div>
         )}
 

@@ -246,6 +246,29 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             setConflictDetails(
               `Conflito com agendamento existente: ${conflict.paciente.nome} às ${format(parseSupabaseDatetime(conflict.data_hora), 'HH:mm', { locale: ptBR })}`
             );
+            return; // Conflito já detectado
+          }
+
+          // AI dev note: Verificar se existe agenda pública com slot disponível neste horário
+          // Se sim, avisar que será removido da agenda pública
+          const { data: slotsPublicos } = await supabase
+            .from('agenda_slots')
+            .select('id, agenda_id, agendas_compartilhadas!inner(titulo)')
+            .eq('data_hora', data_hora)
+            .eq('disponivel', true)
+            .eq('agendas_compartilhadas.profissional_id', profissional_id)
+            .eq('agendas_compartilhadas.ativo', true);
+
+          if (slotsPublicos && slotsPublicos.length > 0) {
+            const agendaTitulo = (
+              slotsPublicos[0].agendas_compartilhadas as unknown as {
+                titulo: string;
+              }
+            )?.titulo;
+            setHasConflict(false); // Não é um bloqueio, apenas aviso
+            setConflictDetails(
+              `⚠️ Este horário está na agenda pública "${agendaTitulo || 'compartilhada'}". Ao criar este agendamento, ele será removido automaticamente da lista de horários públicos disponíveis.`
+            );
           } else {
             setHasConflict(false);
             setConflictDetails('');

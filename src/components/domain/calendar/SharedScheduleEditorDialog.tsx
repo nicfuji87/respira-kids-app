@@ -515,7 +515,7 @@ export const SharedScheduleEditorDialog =
                     <SlotsList
                       slots={slots}
                       onRemoveSlot={handleRemoveSlot}
-                      maxHeight="300px"
+                      disableScroll={true}
                     />
                   )}
                 </div>
