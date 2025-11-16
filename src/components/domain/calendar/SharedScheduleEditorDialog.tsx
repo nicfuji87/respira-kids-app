@@ -352,14 +352,14 @@ export const SharedScheduleEditorDialog =
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
           <DialogContent
             className={cn(
-              'w-[95vw] max-w-4xl',
-              'max-h-[90vh]',
+              'w-[95vw] sm:max-w-4xl',
+              'max-h-[85vh] sm:max-h-[90vh]',
+              'p-0',
               'flex flex-col',
-              'overflow-hidden',
               className
             )}
           >
-            <DialogHeader>
+            <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
               <DialogTitle>Editar Agenda Compartilhada</DialogTitle>
               <DialogDescription>
                 Altere as informações da agenda e gerencie os horários
@@ -367,8 +367,8 @@ export const SharedScheduleEditorDialog =
               </DialogDescription>
             </DialogHeader>
 
-            <ScrollArea className="flex-1 min-h-0 pr-2 sm:pr-4">
-              <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
+            <ScrollArea className="flex-1 px-4 sm:px-6">
+              <div className="space-y-3 sm:space-y-6 py-4">
                 {/* Informações Básicas */}
                 <div className="space-y-3 sm:space-y-4">
                   <h3 className="text-sm font-semibold">Informações Básicas</h3>
@@ -404,7 +404,7 @@ export const SharedScheduleEditorDialog =
                 <Separator />
 
                 {/* Serviços */}
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <h3 className="text-sm font-semibold">
                     Serviços Disponíveis *
                   </h3>
@@ -445,7 +445,7 @@ export const SharedScheduleEditorDialog =
                 <Separator />
 
                 {/* Locais */}
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <h3 className="text-sm font-semibold">
                     Locais de Atendimento *
                   </h3>
@@ -486,7 +486,7 @@ export const SharedScheduleEditorDialog =
                 <Separator />
 
                 {/* Empresas */}
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <h3 className="text-sm font-semibold">
                     Empresas de Faturamento *
                   </h3>
@@ -592,7 +592,7 @@ export const SharedScheduleEditorDialog =
             </ScrollArea>
 
             {/* Footer */}
-            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-4 border-t mt-auto bg-background">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 px-4 sm:px-6 py-4 border-t shrink-0 bg-background">
               <Button
                 variant="outline"
                 onClick={onClose}
