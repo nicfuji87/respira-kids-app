@@ -353,9 +353,9 @@ export const SharedScheduleEditorDialog =
           <DialogContent
             className={cn(
               'w-[95vw] max-w-4xl',
-              'max-h-[95vh] sm:max-h-[90vh]',
-              'h-[95vh] sm:h-auto',
+              'max-h-[90vh]',
               'flex flex-col',
+              'overflow-hidden',
               className
             )}
           >
@@ -367,30 +367,35 @@ export const SharedScheduleEditorDialog =
               </DialogDescription>
             </DialogHeader>
 
-            <ScrollArea className="flex-1 min-h-0 pr-2 sm:pr-4 overflow-y-auto">
-              <div className="space-y-6 py-4">
+            <ScrollArea className="flex-1 min-h-0 pr-2 sm:pr-4">
+              <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
                 {/* Informações Básicas */}
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <h3 className="text-sm font-semibold">Informações Básicas</h3>
 
                   <div className="space-y-2">
-                    <Label htmlFor="edit-titulo">Título *</Label>
+                    <Label htmlFor="edit-titulo" className="text-xs sm:text-sm">
+                      Título *
+                    </Label>
                     <Input
                       id="edit-titulo"
                       value={titulo}
                       onChange={(e) => setTitulo(e.target.value)}
                       maxLength={100}
+                      className="h-9 sm:h-10"
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-2">
-                      <Label>Data de Início</Label>
+                      <Label className="text-xs sm:text-sm">
+                        Data de Início
+                      </Label>
                       <DatePicker value={dataInicio} onChange={setDataInicio} />
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Data de Fim</Label>
+                      <Label className="text-xs sm:text-sm">Data de Fim</Label>
                       <DatePicker value={dataFim} onChange={setDataFim} />
                     </div>
                   </div>
@@ -527,18 +532,28 @@ export const SharedScheduleEditorDialog =
 
                   {/* Adicionar novo slot - Layout otimizado mobile */}
                   <div className="space-y-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <DatePicker
-                        value={selectedDate}
-                        onChange={setSelectedDate}
-                        placeholder="Data"
-                      />
-                      <Input
-                        type="time"
-                        value={timeInput}
-                        onChange={(e) => setTimeInput(e.target.value)}
-                        placeholder="Horário"
-                      />
+                    <div className="flex flex-col gap-2">
+                      <div className="w-full">
+                        <Label className="text-xs text-muted-foreground mb-1">
+                          Data
+                        </Label>
+                        <DatePicker
+                          value={selectedDate}
+                          onChange={setSelectedDate}
+                          placeholder="Selecione a data"
+                        />
+                      </div>
+                      <div className="w-full">
+                        <Label className="text-xs text-muted-foreground mb-1">
+                          Horário
+                        </Label>
+                        <Input
+                          type="time"
+                          value={timeInput}
+                          onChange={(e) => setTimeInput(e.target.value)}
+                          className="w-full h-10"
+                        />
+                      </div>
                     </div>
                     <Button
                       type="button"

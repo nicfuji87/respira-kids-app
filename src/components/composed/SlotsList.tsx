@@ -92,7 +92,7 @@ export const SlotsList = React.memo<SlotsListProps>(
                           variant="ghost"
                           size="sm"
                           onClick={() => onRemoveSlot(slot.id)}
-                          className="text-destructive hover:text-destructive"
+                          className="text-destructive hover:text-destructive shrink-0 h-8 w-8 p-0"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -153,8 +153,13 @@ export const SlotsList = React.memo<SlotsListProps>(
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="secondary">Ocupado</Badge>
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2 shrink-0">
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] sm:text-xs px-2 py-0.5"
+                          >
+                            Ocupado
+                          </Badge>
                           {showRemoveOccupied && onRemoveOccupiedSlot && (
                             <Button
                               variant="ghost"
@@ -162,12 +167,12 @@ export const SlotsList = React.memo<SlotsListProps>(
                               onClick={() =>
                                 onRemoveOccupiedSlot(slot.id, {
                                   paciente_nome: slot.selecao?.paciente_nome,
-                                  agendamento_id: null, // Será buscado no handler se necessário
+                                  agendamento_id: null,
                                 })
                               }
-                              className="text-destructive hover:text-destructive"
+                              className="text-destructive hover:text-destructive shrink-0 h-7 w-7 sm:h-8 sm:w-8 p-0"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </Button>
                           )}
                         </div>
