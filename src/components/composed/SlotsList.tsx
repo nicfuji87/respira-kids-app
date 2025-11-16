@@ -73,12 +73,12 @@ export const SlotsList = React.memo<SlotsListProps>(
                   return (
                     <div
                       key={slot.id}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      className="flex items-center justify-between p-2 sm:p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-green-500" />
-                        <div>
-                          <p className="text-sm font-medium capitalize">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium capitalize truncate">
                             {dia}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -122,29 +122,28 @@ export const SlotsList = React.memo<SlotsListProps>(
                   return (
                     <div
                       key={slot.id}
-                      className="p-3 rounded-lg border bg-muted/50"
+                      className="p-2 sm:p-3 rounded-lg border bg-muted/50"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
+                        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                          <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Calendar className="w-3 h-3 text-muted-foreground" />
-                              <p className="text-sm font-medium capitalize">
+                            <div className="flex items-center gap-1 sm:gap-2 mb-1">
+                              <Calendar className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <p className="text-xs sm:text-sm font-medium capitalize truncate">
                                 {dia} - {hora}
                               </p>
                             </div>
 
                             {slot.selecao && (
-                              <div className="space-y-1 text-xs text-muted-foreground">
+                              <div className="space-y-0.5 text-xs text-muted-foreground">
                                 <p className="flex items-center gap-1">
-                                  <User className="w-3 h-3" />
+                                  <User className="w-3 h-3 shrink-0" />
                                   <span className="truncate">
-                                    {slot.selecao.paciente_nome} (
-                                    {slot.selecao.responsavel_nome})
+                                    {slot.selecao.paciente_nome}
                                   </span>
                                 </p>
-                                <p className="truncate">
+                                <p className="truncate text-[11px] sm:text-xs">
                                   {slot.selecao.servico_nome}
                                   {slot.selecao.local_nome &&
                                     ` • ${slot.selecao.local_nome}`}

@@ -522,23 +522,17 @@ export const SharedScheduleEditorDialog =
                 <Separator />
 
                 {/* Gerenciar Slots */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">
-                      Gerenciar Horários
-                    </h3>
-                  </div>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold">Gerenciar Horários</h3>
 
-                  {/* Adicionar novo slot */}
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1">
+                  {/* Adicionar novo slot - Layout otimizado mobile */}
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <DatePicker
                         value={selectedDate}
                         onChange={setSelectedDate}
                         placeholder="Data"
                       />
-                    </div>
-                    <div className="flex-1">
                       <Input
                         type="time"
                         value={timeInput}
@@ -550,33 +544,40 @@ export const SharedScheduleEditorDialog =
                       type="button"
                       onClick={handleAddSlot}
                       disabled={!selectedDate || !timeInput}
-                      className="w-full sm:w-auto"
+                      className="w-full"
+                      size="sm"
                     >
                       <Plus className="w-4 h-4 mr-2" />
-                      Adicionar
+                      Adicionar Horário
                     </Button>
                   </div>
 
-                  {/* Lista de slots */}
+                  {/* Lista de slots - mais compacta */}
                   {isLoadingSlots ? (
                     <div className="flex justify-center py-4">
                       <Loader2 className="w-6 h-6 animate-spin" />
                     </div>
+                  ) : slots.length > 0 ? (
+                    <div className="pt-2">
+                      <SlotsList
+                        slots={slots}
+                        onRemoveSlot={handleRemoveSlot}
+                        onRemoveOccupiedSlot={handleRemoveOccupiedSlot}
+                        showRemoveOccupied={true}
+                        disableScroll={true}
+                      />
+                    </div>
                   ) : (
-                    <SlotsList
-                      slots={slots}
-                      onRemoveSlot={handleRemoveSlot}
-                      onRemoveOccupiedSlot={handleRemoveOccupiedSlot}
-                      showRemoveOccupied={true}
-                      disableScroll={true}
-                    />
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Nenhum horário cadastrado
+                    </p>
                   )}
                 </div>
               </div>
             </ScrollArea>
 
             {/* Footer */}
-            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-4 border-t mt-auto sticky bottom-0 bg-background z-10">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-4 border-t mt-auto bg-background">
               <Button
                 variant="outline"
                 onClick={onClose}
