@@ -66,7 +66,11 @@ export const AdminContractGenerationStep: React.FC<
       setSending(true);
       setError(null);
 
-      // Atualizar status do contrato para "Aguardando"
+      console.log(
+        '📤 [AdminContractGeneration] Enviando contrato via WhatsApp'
+      );
+
+      // Atualizar status do contrato para "pendente" (aguardando envio)
       const { error: updateError } = await supabase
         .from('user_contracts')
         .update({
@@ -76,42 +80,53 @@ export const AdminContractGenerationStep: React.FC<
         .eq('id', contract.id);
 
       if (updateError) {
+        console.error(
+          '❌ [AdminContractGeneration] Erro ao atualizar contrato:',
+          updateError
+        );
         throw new Error('Erro ao atualizar status do contrato');
       }
 
-      // Criar payload do webhook
+      // AI dev note: Seguir o mesmo formato do PatientContractSection (linha 363-376)
+      // Usar 'evento' e 'payload' como padrão do sistema
       const webhookPayload = {
-        type: 'contract_generated',
-        contract_id: contract.id,
-        patient_id: patientId,
-        patient_name: contractVariables.paciente,
-        responsible_name: contractVariables.responsavelLegalNome,
-        responsible_whatsapp: contractVariables.responsavelLegalTelefone,
-        contract_name: contract.nome_contrato,
-        timestamp: new Date().toISOString(),
+        evento: 'contrato_gerado',
+        payload: {
+          contrato_id: contract.id,
+          paciente_id: patientId,
+          paciente_nome: contractVariables.paciente,
+          responsavel_nome: contractVariables.responsavelLegalNome,
+          responsavel_telefone: contractVariables.responsavelLegalTelefone,
+          responsavel_email: contractVariables.email || '',
+        },
       };
+
+      console.log(
+        '🔗 [AdminContractGeneration] Inserindo webhook na fila:',
+        webhookPayload
+      );
 
       // Inserir na fila de webhooks
       const { error: webhookError } = await supabase
         .from('webhook_queue')
-        .insert({
-          type: 'contract_generated',
-          payload: webhookPayload,
-          status: 'pending',
-          retry_count: 0,
-        });
+        .insert(webhookPayload);
 
       if (webhookError) {
-        console.error('Erro ao criar webhook:', webhookError);
-        // Não bloquear o fluxo por erro no webhook
+        console.error(
+          '❌ [AdminContractGeneration] Erro ao criar webhook:',
+          webhookError
+        );
+        throw new Error('Erro ao agendar envio do contrato');
       }
+
+      console.log('✅ [AdminContractGeneration] Webhook criado com sucesso');
 
       setSent(true);
 
       // Mostrar toast de sucesso
       toast({
         title: 'Contrato enviado!',
-        description: 'Contrato enviado via WhatsApp para o responsável',
+        description: 'Contrato será enviado via WhatsApp para o responsável',
         duration: 5000,
       });
 
@@ -120,11 +135,23 @@ export const AdminContractGenerationStep: React.FC<
         onFinish();
       }, 2000);
     } catch (err) {
-      console.error('Erro ao enviar contrato:', err);
+      console.error('❌ [AdminContractGeneration] Erro geral:', err);
       setError(err instanceof Error ? err.message : 'Erro ao enviar contrato');
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSendLater = () => {
+    console.log('⏭️ [AdminContractGeneration] Envio de contrato adiado');
+
+    toast({
+      title: 'Cadastro concluído!',
+      description:
+        'Contrato poderá ser enviado depois na tela de detalhes do paciente',
+    });
+
+    onFinish();
   };
 
   if (loading) {
@@ -239,30 +266,43 @@ export const AdminContractGenerationStep: React.FC<
           Voltar
         </button>
 
-        {!sent ? (
-          <Button
-            onClick={handleSendContract}
-            disabled={sending || !contract}
-            size="default"
-          >
-            {sending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Enviando...
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4 mr-2" />
-                Enviar para Responsável via WhatsApp
-              </>
-            )}
-          </Button>
-        ) : (
-          <Button onClick={onFinish} variant="default">
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Concluir Cadastro
-          </Button>
-        )}
+        <div className="flex gap-3">
+          {!sent ? (
+            <>
+              <Button
+                onClick={handleSendLater}
+                disabled={sending || !contract}
+                variant="outline"
+                size="default"
+              >
+                Enviar Depois
+              </Button>
+
+              <Button
+                onClick={handleSendContract}
+                disabled={sending || !contract}
+                size="default"
+              >
+                {sending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Enviar via WhatsApp
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <Button onClick={onFinish} variant="default">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Concluir Cadastro
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
