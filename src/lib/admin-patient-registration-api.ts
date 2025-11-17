@@ -235,9 +235,17 @@ async function getOrCreateResponsible(data: AdminPatientData): Promise<string> {
       endereco: enderecoId,
     });
 
+    // AI dev note: Gerar UUID antecipadamente para usar como responsavel_cobranca_id
+    // Responsável é seu próprio responsável financeiro (auto-responsabilidade)
+    const { data: uuidData } = await supabase.rpc('gen_random_uuid');
+    const newId = uuidData as string;
+
+    console.log('🆔 [getOrCreateResponsible] UUID gerado:', newId);
+
     const { data: newPessoa, error } = await supabase
       .from('pessoas')
       .insert({
+        id: newId,
         nome: data.nomeResponsavel!,
         cpf_cnpj: cleanCpf,
         email: data.emailResponsavel,
@@ -246,6 +254,7 @@ async function getOrCreateResponsible(data: AdminPatientData): Promise<string> {
         id_endereco: enderecoId,
         numero_endereco: data.numeroEndereco,
         complemento_endereco: data.complementoEndereco,
+        responsavel_cobranca_id: newId, // Auto-responsabilidade
         ativo: true,
       })
       .select('id')
