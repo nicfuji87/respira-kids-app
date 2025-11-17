@@ -550,114 +550,67 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
     }
 
     // 9. Processar e vincular pediatra
-    // AI dev note: Seguir o mesmo padrão do cadastro público (STEP 5 e STEP 9)
+    // AI dev note: Usar função RPC que valida permissões e bypassa RLS de forma segura
     if (!data.noPediatrician && data.pediatraNome) {
       console.log('👨‍⚕️ [createPatientAdmin] Processando pediatra...');
 
-      let pediatraId: string;
-
       if (data.pediatraId && !data.pediatraIsNew) {
-        // Usar pediatra existente
-        pediatraId = data.pediatraId;
+        // Usar pediatra existente - apenas vincular
         console.log(
           '✅ [createPatientAdmin] Usando pediatra existente:',
-          pediatraId
+          data.pediatraId
         );
+
+        const { error: pediatraError } = await supabase
+          .from('paciente_pediatra')
+          .insert({
+            paciente_id: newPaciente.id,
+            pediatra_id: data.pediatraId,
+            ativo: true,
+          });
+
+        if (pediatraError) {
+          console.error(
+            '❌ [createPatientAdmin] Erro ao vincular pediatra:',
+            pediatraError
+          );
+        } else {
+          console.log('✅ [createPatientAdmin] Pediatra vinculado ao paciente');
+        }
       } else {
-        // Criar novo pediatra
+        // Criar novo pediatra usando função RPC
         console.log(
-          '🆕 [createPatientAdmin] Criando novo pediatra:',
+          '🆕 [createPatientAdmin] Criando novo pediatra via RPC:',
           data.pediatraNome
         );
 
-        // Buscar tipo 'medico' para pediatra
-        const { data: tipoMedico, error: tipoMedicoError } = await supabase
-          .from('pessoa_tipos')
-          .select('id')
-          .eq('codigo', 'medico')
-          .maybeSingle();
-
-        if (tipoMedicoError || !tipoMedico) {
-          console.error(
-            '❌ [createPatientAdmin] Erro ao buscar tipo médico:',
-            tipoMedicoError
-          );
-          throw new Error('Tipo médico não encontrado no sistema');
-        }
-
-        // Criar pessoa do tipo médico
-        const tempPedId = crypto.randomUUID();
-        const { data: novoPediatra, error: errorNovoPediatra } = await supabase
-          .from('pessoas')
-          .insert({
-            id: tempPedId,
-            nome: data.pediatraNome,
-            id_tipo_pessoa: tipoMedico.id,
-            responsavel_cobranca_id: tempPedId, // Auto-referência
-            ativo: true,
-          })
-          .select('id')
-          .maybeSingle();
-
-        if (errorNovoPediatra || !novoPediatra) {
-          console.error(
-            '❌ [createPatientAdmin] Erro ao criar pessoa pediatra:',
-            errorNovoPediatra
-          );
-          throw new Error('Erro ao criar pediatra');
-        }
-
-        const pediatraPessoaId = novoPediatra.id;
-        console.log(
-          '✅ [createPatientAdmin] Pessoa pediatra criada:',
-          pediatraPessoaId
+        const { data: result, error: rpcError } = await supabase.rpc(
+          'create_and_link_pediatrician',
+          {
+            p_paciente_id: newPaciente.id,
+            p_nome: data.pediatraNome,
+            p_crm: data.pediatraCrm || null,
+          }
         );
 
-        // Criar registro na tabela pessoa_pediatra
-        const { data: pessoaPediatra, error: errorPessoaPediatra } =
-          await supabase
-            .from('pessoa_pediatra')
-            .insert({
-              pessoa_id: pediatraPessoaId,
-              crm: data.pediatraCrm || null,
-              especialidade: 'Pediatria',
-              ativo: true,
-            })
-            .select('id')
-            .maybeSingle();
-
-        if (errorPessoaPediatra || !pessoaPediatra) {
+        if (rpcError || !result || result.length === 0) {
           console.error(
-            '❌ [createPatientAdmin] Erro ao criar pessoa_pediatra:',
-            errorPessoaPediatra
+            '❌ [createPatientAdmin] Erro ao criar pediatra via RPC:',
+            rpcError
           );
-          throw new Error('Erro ao criar registro de pediatra');
+          // Não bloquear o cadastro por erro no pediatra
+          console.warn('⚠️ [createPatientAdmin] Continuando sem pediatra');
+        } else if (!result[0].success) {
+          console.error(
+            '❌ [createPatientAdmin] RPC retornou erro:',
+            result[0].message
+          );
+        } else {
+          console.log(
+            '✅ [createPatientAdmin] Pediatra criado e vinculado via RPC:',
+            result[0].pediatra_id
+          );
         }
-
-        pediatraId = pessoaPediatra.id;
-        console.log(
-          '✅ [createPatientAdmin] Registro pessoa_pediatra criado:',
-          pediatraId
-        );
-      }
-
-      // Vincular pediatra ao paciente
-      console.log('🔗 [createPatientAdmin] Vinculando pediatra ao paciente...');
-      const { error: pediatraError } = await supabase
-        .from('paciente_pediatra')
-        .insert({
-          paciente_id: newPaciente.id,
-          pediatra_id: pediatraId,
-          ativo: true,
-        });
-
-      if (pediatraError) {
-        console.error(
-          '❌ [createPatientAdmin] Erro ao vincular pediatra:',
-          pediatraError
-        );
-      } else {
-        console.log('✅ [createPatientAdmin] Pediatra vinculado ao paciente');
       }
     } else if (data.noPediatrician) {
       console.log('⏭️ [createPatientAdmin] Paciente não possui pediatra');

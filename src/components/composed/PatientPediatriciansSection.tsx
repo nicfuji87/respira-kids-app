@@ -119,76 +119,55 @@ export const PatientPediatriciansSection: React.FC<
 
       let pediatraId: string;
 
-      // Se é novo, criar pediatra completo
+      // Se é novo, criar pediatra completo usando função RPC
       if (data.isNew && !data.noPediatrician) {
-        console.log('🆕 [PatientPediatricians] Criando novo pediatra');
+        console.log('🆕 [PatientPediatricians] Criando novo pediatra via RPC');
 
-        // Buscar tipo 'medico'
-        const { data: tipoMedico, error: tipoError } = await supabase
-          .from('pessoa_tipos')
-          .select('id')
-          .eq('codigo', 'medico')
-          .maybeSingle();
+        // AI dev note: Usar função RPC que bypassa RLS de forma segura
+        // Valida permissões (admin/secretaria) no backend
+        const { data: result, error: rpcError } = await supabase.rpc(
+          'create_and_link_pediatrician',
+          {
+            p_paciente_id: patientId,
+            p_nome: data.nome,
+            p_crm: data.crm || null,
+          }
+        );
 
-        if (tipoError || !tipoMedico) {
-          throw new Error('Tipo médico não encontrado');
+        if (rpcError || !result || result.length === 0) {
+          console.error('❌ Erro ao criar pediatra via RPC:', rpcError);
+          throw new Error(
+            result?.[0]?.message || 'Erro ao criar registro de pediatra'
+          );
         }
 
-        // Criar pessoa
-        const pessoaId = crypto.randomUUID();
-        const { error: pessoaError } = await supabase.from('pessoas').insert({
-          id: pessoaId,
-          nome: data.nome,
-          id_tipo_pessoa: tipoMedico.id,
-          responsavel_cobranca_id: pessoaId,
-          ativo: true,
-        });
-
-        if (pessoaError) {
-          console.error('❌ Erro ao criar pessoa:', pessoaError);
-          throw new Error('Erro ao criar pessoa do pediatra');
+        if (!result[0].success) {
+          throw new Error(result[0].message || 'Erro ao criar pediatra');
         }
 
-        // Criar pessoa_pediatra
-        const { data: pessoaPediatra, error: pediatraError } = await supabase
-          .from('pessoa_pediatra')
-          .insert({
-            pessoa_id: pessoaId,
-            crm: data.crm || null,
-            especialidade: 'Pediatria',
-            ativo: true,
-          })
-          .select('id')
-          .maybeSingle();
-
-        if (pediatraError || !pessoaPediatra) {
-          console.error('❌ Erro ao criar pessoa_pediatra:', pediatraError);
-          throw new Error('Erro ao criar registro de pediatra');
-        }
-
-        pediatraId = pessoaPediatra.id;
-        console.log('✅ Novo pediatra criado:', pediatraId);
+        console.log('✅ Novo pediatra criado via RPC:', result[0].pediatra_id);
+        // Não precisa vincular - a função RPC já faz isso
       } else if (data.id) {
-        // Usar pediatra existente
+        // Usar pediatra existente - apenas vincular
         pediatraId = data.id;
         console.log('✅ Usando pediatra existente:', pediatraId);
+
+        // Vincular ao paciente
+        console.log('🔗 Vinculando pediatra ao paciente...');
+        const { error: vinculoError } = await supabase
+          .from('paciente_pediatra')
+          .insert({
+            paciente_id: patientId,
+            pediatra_id: pediatraId,
+            ativo: true,
+          });
+
+        if (vinculoError) {
+          console.error('❌ Erro ao vincular pediatra:', vinculoError);
+          throw new Error('Erro ao vincular pediatra ao paciente');
+        }
       } else {
         throw new Error('Dados do pediatra inválidos');
-      }
-
-      // Vincular ao paciente
-      console.log('🔗 Vinculando pediatra ao paciente...');
-      const { error: vinculoError } = await supabase
-        .from('paciente_pediatra')
-        .insert({
-          paciente_id: patientId,
-          pediatra_id: pediatraId,
-          ativo: true,
-        });
-
-      if (vinculoError) {
-        console.error('❌ Erro ao vincular pediatra:', vinculoError);
-        throw new Error('Erro ao vincular pediatra ao paciente');
       }
 
       toast({
