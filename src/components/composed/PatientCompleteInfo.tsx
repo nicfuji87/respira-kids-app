@@ -9,7 +9,6 @@ import {
   Shield,
   Check,
   X,
-  Stethoscope,
 } from 'lucide-react';
 import {
   Card,
@@ -22,6 +21,7 @@ import { Button } from '@/components/primitives/button';
 import { cn } from '@/lib/utils';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
+import { PatientPediatriciansSection } from './PatientPediatriciansSection';
 
 // AI dev note: PatientCompleteInfo - Component Composed que une informações pessoais, contato, endereço, responsáveis e consentimentos
 // Substitui múltiplos cards por um único card organizado em seções
@@ -462,49 +462,8 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
             </div>
           )}
 
-          {/* Seção: Médicos Pediatras */}
-          {(patient.pediatras_nomes || patient.total_pediatras) && (
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <Stethoscope className="h-4 w-4" />
-                Médicos Pediatras
-              </h4>
-              <div className="space-y-3">
-                {patient.pediatras_nomes ? (
-                  (() => {
-                    const nomes = patient.pediatras_nomes.split(', ');
-                    const crms = patient.pediatras_crms?.split(', ') || [];
-                    const especialidades =
-                      patient.pediatras_especialidades?.split(', ') || [];
-
-                    return nomes.map((nome, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <Stethoscope className="h-4 w-4 text-muted-foreground mt-1" />
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium">{nome}</p>
-                          {crms[index] && crms[index] !== 'Não informado' && (
-                            <p className="text-sm text-muted-foreground">
-                              <strong>CRM:</strong> {crms[index]}
-                            </p>
-                          )}
-                          {especialidades[index] && (
-                            <p className="text-sm text-muted-foreground">
-                              <strong>Especialidade:</strong>{' '}
-                              {especialidades[index]}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ));
-                  })()
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum médico pediatra cadastrado
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Seção: Médicos Pediatras - Gerenciável */}
+          <PatientPediatriciansSection patientId={patient.id} />
 
           {/* Seção: Consentimentos e Autorizações */}
           <div className="space-y-4">

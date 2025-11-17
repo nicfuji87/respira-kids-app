@@ -231,6 +231,7 @@ export {
 export { FinancialResponsibleDataStep } from './FinancialResponsibleDataStep';
 export { PatientDataStep } from './PatientDataStep';
 export { PediatricianStep } from './PediatricianStep';
+export { PatientPediatriciansSection } from './PatientPediatriciansSection';
 export { AuthorizationsStep } from './AuthorizationsStep';
 export { ReviewStep } from './ReviewStep';
 export { ContractReviewStep } from './ContractReviewStep';
