@@ -146,7 +146,7 @@ export const AdminPatientDataStep: React.FC<AdminPatientDataStepProps> = ({
         .select('id, nome')
         .eq('cpf_cnpj', cleanCpf)
         .eq('ativo', true)
-        .single();
+        .maybeSingle();
 
       // Se não encontrou, tentar com formatação (XXX.XXX.XXX-XX)
       if (!data) {
@@ -159,7 +159,7 @@ export const AdminPatientDataStep: React.FC<AdminPatientDataStepProps> = ({
           .select('id, nome')
           .eq('cpf_cnpj', cpfFormatado)
           .eq('ativo', true)
-          .single();
+          .maybeSingle();
 
         data = result.data;
       }
@@ -230,10 +230,18 @@ export const AdminPatientDataStep: React.FC<AdminPatientDataStepProps> = ({
           ? responsavelData.email
           : formData.email,
         // AI dev note: Se não usar endereço do responsável, incluir dados completos do ViaCEP
-        logradouro: !formData.usarEnderecoResponsavel ? addressData?.logradouro : undefined,
-        bairro: !formData.usarEnderecoResponsavel ? addressData?.bairro : undefined,
-        cidade: !formData.usarEnderecoResponsavel ? addressData?.cidade : undefined,
-        estado: !formData.usarEnderecoResponsavel ? addressData?.estado : undefined,
+        logradouro: !formData.usarEnderecoResponsavel
+          ? addressData?.logradouro
+          : undefined,
+        bairro: !formData.usarEnderecoResponsavel
+          ? addressData?.bairro
+          : undefined,
+        cidade: !formData.usarEnderecoResponsavel
+          ? addressData?.cidade
+          : undefined,
+        estado: !formData.usarEnderecoResponsavel
+          ? addressData?.estado
+          : undefined,
       });
     }
   };

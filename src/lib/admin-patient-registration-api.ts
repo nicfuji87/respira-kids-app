@@ -235,20 +235,9 @@ async function getOrCreateResponsible(data: AdminPatientData): Promise<string> {
       endereco: enderecoId,
     });
 
-    // AI dev note: Gerar UUID usando extensão uuid-ossp do Postgres
+    // AI dev note: Gerar UUID no JavaScript usando crypto.randomUUID()
     // Responsável é seu próprio responsável financeiro (auto-responsabilidade)
-    const { data: uuidResult, error: uuidError } =
-      await supabase.rpc('uuid_generate_v4');
-
-    if (uuidError || !uuidResult) {
-      console.error(
-        '❌ [getOrCreateResponsible] Erro ao gerar UUID:',
-        uuidError
-      );
-      throw new Error('Não foi possível gerar UUID');
-    }
-
-    const newId = uuidResult as string;
+    const newId = crypto.randomUUID();
     console.log('🆔 [getOrCreateResponsible] UUID gerado:', newId);
 
     const { data: newPessoa, error } = await supabase
