@@ -74,19 +74,20 @@ export const PatientPediatriciansSection: React.FC<
 
       // Transformar dados
       const pediatras: Pediatrician[] = (data || []).map((item) => {
-        const pessoaPediatra = item.pessoa_pediatra as {
-          id: string;
-          pessoa_id: string;
-          crm?: string;
-          especialidade?: string;
-          pessoas?: { id: string; nome: string };
-        } | null;
+        // AI dev note: pessoa_pediatra pode ser array ou objeto dependendo da query
+        const pessoaPediatra = Array.isArray(item.pessoa_pediatra)
+          ? item.pessoa_pediatra[0]
+          : item.pessoa_pediatra;
+
+        const pessoas = Array.isArray(pessoaPediatra?.pessoas)
+          ? pessoaPediatra.pessoas[0]
+          : pessoaPediatra?.pessoas;
 
         return {
           id: item.id,
           pediatra_id: item.pediatra_id,
           pessoa_id: pessoaPediatra?.pessoa_id || '',
-          nome: pessoaPediatra?.pessoas?.nome || 'Nome não encontrado',
+          nome: pessoas?.nome || 'Nome não encontrado',
           crm: pessoaPediatra?.crm,
           especialidade: pessoaPediatra?.especialidade,
           data_inicio: item.data_inicio,
