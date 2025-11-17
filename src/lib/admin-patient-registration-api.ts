@@ -235,11 +235,20 @@ async function getOrCreateResponsible(data: AdminPatientData): Promise<string> {
       endereco: enderecoId,
     });
 
-    // AI dev note: Gerar UUID antecipadamente para usar como responsavel_cobranca_id
+    // AI dev note: Gerar UUID usando extensão uuid-ossp do Postgres
     // Responsável é seu próprio responsável financeiro (auto-responsabilidade)
-    const { data: uuidData } = await supabase.rpc('gen_random_uuid');
-    const newId = uuidData as string;
+    const { data: uuidResult, error: uuidError } =
+      await supabase.rpc('uuid_generate_v4');
 
+    if (uuidError || !uuidResult) {
+      console.error(
+        '❌ [getOrCreateResponsible] Erro ao gerar UUID:',
+        uuidError
+      );
+      throw new Error('Não foi possível gerar UUID');
+    }
+
+    const newId = uuidResult as string;
     console.log('🆔 [getOrCreateResponsible] UUID gerado:', newId);
 
     const { data: newPessoa, error } = await supabase

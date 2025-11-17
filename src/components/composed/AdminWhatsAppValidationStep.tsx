@@ -119,10 +119,9 @@ export const AdminWhatsAppValidationStep: React.FC<
         `
         )
         .eq('telefone', phoneNumber)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 = no rows found
+      if (error) {
         console.error('Erro ao buscar pessoa:', error);
         return null;
       }
