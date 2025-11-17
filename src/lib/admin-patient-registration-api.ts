@@ -39,7 +39,11 @@ export interface AdminPatientData {
   isResponsavelFinanceiroIgualLegal: boolean;
 
   // Pediatra
-  pediatraId?: string;
+  pediatraId?: string; // ID da pessoa_pediatra (se existente)
+  pediatraNome?: string;
+  pediatraCrm?: string;
+  pediatraIsNew?: boolean;
+  noPediatrician?: boolean;
 
   // Autorizações
   autorizacoes: {
@@ -545,18 +549,105 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
       }
     }
 
-    // 9. Vincular pediatra (se selecionado)
-    if (data.pediatraId) {
-      console.log(
-        '👨‍⚕️ [createPatientAdmin] Vinculando pediatra:',
-        data.pediatraId
-      );
+    // 9. Processar e vincular pediatra
+    // AI dev note: Seguir o mesmo padrão do cadastro público (STEP 5 e STEP 9)
+    if (!data.noPediatrician && data.pediatraNome) {
+      console.log('👨‍⚕️ [createPatientAdmin] Processando pediatra...');
 
+      let pediatraId: string;
+
+      if (data.pediatraId && !data.pediatraIsNew) {
+        // Usar pediatra existente
+        pediatraId = data.pediatraId;
+        console.log(
+          '✅ [createPatientAdmin] Usando pediatra existente:',
+          pediatraId
+        );
+      } else {
+        // Criar novo pediatra
+        console.log(
+          '🆕 [createPatientAdmin] Criando novo pediatra:',
+          data.pediatraNome
+        );
+
+        // Buscar tipo 'medico' para pediatra
+        const { data: tipoMedico, error: tipoMedicoError } = await supabase
+          .from('pessoa_tipos')
+          .select('id')
+          .eq('codigo', 'medico')
+          .maybeSingle();
+
+        if (tipoMedicoError || !tipoMedico) {
+          console.error(
+            '❌ [createPatientAdmin] Erro ao buscar tipo médico:',
+            tipoMedicoError
+          );
+          throw new Error('Tipo médico não encontrado no sistema');
+        }
+
+        // Criar pessoa do tipo médico
+        const tempPedId = crypto.randomUUID();
+        const { data: novoPediatra, error: errorNovoPediatra } = await supabase
+          .from('pessoas')
+          .insert({
+            id: tempPedId,
+            nome: data.pediatraNome,
+            id_tipo_pessoa: tipoMedico.id,
+            responsavel_cobranca_id: tempPedId, // Auto-referência
+            ativo: true,
+          })
+          .select('id')
+          .maybeSingle();
+
+        if (errorNovoPediatra || !novoPediatra) {
+          console.error(
+            '❌ [createPatientAdmin] Erro ao criar pessoa pediatra:',
+            errorNovoPediatra
+          );
+          throw new Error('Erro ao criar pediatra');
+        }
+
+        const pediatraPessoaId = novoPediatra.id;
+        console.log(
+          '✅ [createPatientAdmin] Pessoa pediatra criada:',
+          pediatraPessoaId
+        );
+
+        // Criar registro na tabela pessoa_pediatra
+        const { data: pessoaPediatra, error: errorPessoaPediatra } =
+          await supabase
+            .from('pessoa_pediatra')
+            .insert({
+              pessoa_id: pediatraPessoaId,
+              crm: data.pediatraCrm || null,
+              especialidade: 'Pediatria',
+              ativo: true,
+            })
+            .select('id')
+            .maybeSingle();
+
+        if (errorPessoaPediatra || !pessoaPediatra) {
+          console.error(
+            '❌ [createPatientAdmin] Erro ao criar pessoa_pediatra:',
+            errorPessoaPediatra
+          );
+          throw new Error('Erro ao criar registro de pediatra');
+        }
+
+        pediatraId = pessoaPediatra.id;
+        console.log(
+          '✅ [createPatientAdmin] Registro pessoa_pediatra criado:',
+          pediatraId
+        );
+      }
+
+      // Vincular pediatra ao paciente
+      console.log('🔗 [createPatientAdmin] Vinculando pediatra ao paciente...');
       const { error: pediatraError } = await supabase
         .from('paciente_pediatra')
         .insert({
           paciente_id: newPaciente.id,
-          pediatra_id: data.pediatraId,
+          pediatra_id: pediatraId,
           ativo: true,
         });
 
@@ -566,8 +657,10 @@ export async function createPatientAdmin(data: AdminPatientData): Promise<{
           pediatraError
         );
       } else {
-        console.log('✅ [createPatientAdmin] Pediatra vinculado');
+        console.log('✅ [createPatientAdmin] Pediatra vinculado ao paciente');
       }
+    } else if (data.noPediatrician) {
+      console.log('⏭️ [createPatientAdmin] Paciente não possui pediatra');
     }
 
     console.log(

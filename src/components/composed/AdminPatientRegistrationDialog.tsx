@@ -263,7 +263,9 @@ export const AdminPatientRegistrationDialog: React.FC<
       numeroEnderecoPaciente: data.numeroEndereco,
       complementoPaciente: data.complemento,
       // AI dev note: Salvar dados completos do endereço do paciente (se diferente do responsável)
-      logradouro: data.usarEnderecoResponsavel ? prev.logradouro : data.logradouro,
+      logradouro: data.usarEnderecoResponsavel
+        ? prev.logradouro
+        : data.logradouro,
       bairro: data.usarEnderecoResponsavel ? prev.bairro : data.bairro,
       cidade: data.usarEnderecoResponsavel ? prev.cidade : data.cidade,
       estado: data.usarEnderecoResponsavel ? prev.estado : data.estado,
@@ -292,7 +294,11 @@ export const AdminPatientRegistrationDialog: React.FC<
   }) => {
     setFormData((prev) => ({
       ...prev,
-      pediatraId: data.id, // ID da pessoa_pediatra
+      pediatraId: data.id, // ID da pessoa_pediatra (se existente)
+      pediatraNome: data.nome,
+      pediatraCrm: data.crm,
+      pediatraIsNew: data.isNew,
+      noPediatrician: data.noPediatrician,
     }));
     goToNextStep();
   };
@@ -326,11 +332,11 @@ export const AdminPatientRegistrationDialog: React.FC<
 
       if (result.success && result.patientId) {
         setCreatedPatientId(result.patientId);
-        
+
         // Preparar variáveis do contrato antes de mostrar a etapa
         const variables = await prepareContractVariables();
         setContractVariables(variables);
-        
+
         setCurrentStep('contract');
       } else {
         throw new Error(result.error || 'Erro ao criar paciente');
@@ -599,14 +605,16 @@ export const AdminPatientRegistrationDialog: React.FC<
             </div>
           )}
 
-          {currentStep === 'contract' && createdPatientId && contractVariables && (
-            <AdminContractGenerationStep
-              patientId={createdPatientId}
-              contractVariables={contractVariables}
-              onFinish={handleContractFinish}
-              onBack={() => setCurrentStep('authorizations')}
-            />
-          )}
+          {currentStep === 'contract' &&
+            createdPatientId &&
+            contractVariables && (
+              <AdminContractGenerationStep
+                patientId={createdPatientId}
+                contractVariables={contractVariables}
+                onFinish={handleContractFinish}
+                onBack={() => setCurrentStep('authorizations')}
+              />
+            )}
         </div>
       </DialogContent>
     </Dialog>
