@@ -70,12 +70,13 @@ export const AdminContractGenerationStep: React.FC<
         '📤 [AdminContractGeneration] Enviando contrato via WhatsApp'
       );
 
-      // Atualizar status do contrato para "pendente" (aguardando envio)
+      // AI dev note: Status válidos: 'rascunho', 'gerado', 'assinado', 'cancelado'
+      // 'pendente' NÃO existe! Usar 'gerado' (contrato gerado aguardando assinatura)
       const { error: updateError } = await supabase
         .from('user_contracts')
         .update({
           arquivo_url: 'Aguardando',
-          status_contrato: 'pendente',
+          status_contrato: 'gerado', // Status correto
         })
         .eq('id', contract.id);
 

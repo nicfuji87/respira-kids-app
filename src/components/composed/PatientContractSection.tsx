@@ -350,12 +350,13 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
           contractVariables
         );
 
-        // Atualizar status para "Aguardando" no arquivo_url
+        // AI dev note: Status válidos: 'rascunho', 'gerado', 'assinado', 'cancelado'
+        // Usar 'gerado' (contrato foi gerado e aguarda assinatura)
         await supabase
           .from('user_contracts')
           .update({
             arquivo_url: 'Aguardando',
-            status_contrato: 'pendente',
+            status_contrato: 'gerado',
           })
           .eq('id', newContract.id);
 
@@ -379,7 +380,7 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
         setContract({
           ...newContract,
           arquivo_url: 'Aguardando',
-          status_contrato: 'pendente',
+          status_contrato: 'gerado',
         });
 
         toast({
