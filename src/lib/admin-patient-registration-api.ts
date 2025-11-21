@@ -231,6 +231,57 @@ async function getOrCreateResponsible(data: AdminPatientData): Promise<string> {
     // Normalizar CPF
     const cleanCpf = data.cpfResponsavel!.replace(/\D/g, '');
 
+    // AI dev note: Verificar se já existe pessoa com este CPF (para evitar erro 23P01)
+    // Pode acontecer se a pessoa mudou de telefone mas manteve o CPF
+    console.log(
+      '🔍 [getOrCreateResponsible] Verificando CPF existente:',
+      cleanCpf
+    );
+    const { data: existingPersonByCpf, error: cpfError } = await supabase
+      .from('pessoas')
+      .select('id, ativo')
+      .eq('cpf_cnpj', cleanCpf)
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (cpfError) {
+      console.error(
+        '❌ [getOrCreateResponsible] Erro ao verificar CPF:',
+        cpfError
+      );
+      // Não bloquear, tentar insert e tratar erro se necessário
+    }
+
+    if (existingPersonByCpf) {
+      console.log(
+        '✅ [getOrCreateResponsible] Pessoa encontrada por CPF:',
+        existingPersonByCpf.id
+      );
+
+      // Atualizar dados se necessário (telefone, endereço, email)
+      // Mas por segurança, apenas retornamos o ID e atualizamos telefone se diferente
+      // O update completo pode ser perigoso sem confirmação do usuário
+      const { error: updateError } = await supabase
+        .from('pessoas')
+        .update({
+          telefone: parseInt(phoneNumber), // Atualizar telefone para o atual
+          email: data.emailResponsavel || undefined, // Atualizar email se fornecido
+          // Não atualizamos endereço automaticamente para não sobrescrever
+        })
+        .eq('id', existingPersonByCpf.id);
+
+      if (updateError) {
+        console.error(
+          '❌ [getOrCreateResponsible] Erro ao atualizar pessoa existente:',
+          updateError
+        );
+      } else {
+        console.log('✅ [getOrCreateResponsible] Dados da pessoa atualizados');
+      }
+
+      return existingPersonByCpf.id;
+    }
+
     console.log('📝 [getOrCreateResponsible] Dados do novo responsável:', {
       nome: data.nomeResponsavel,
       cpf: cleanCpf,
