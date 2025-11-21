@@ -244,28 +244,32 @@ async function getOrCreateResponsible(data: AdminPatientData): Promise<string> {
     const newId = crypto.randomUUID();
     console.log('🆔 [getOrCreateResponsible] UUID gerado:', newId);
 
+    const insertData = {
+      id: newId,
+      nome: data.nomeResponsavel!,
+      cpf_cnpj: cleanCpf,
+      email: data.emailResponsavel || null,
+      telefone: parseInt(phoneNumber), // Converter para bigint
+      id_tipo_pessoa: tipoResponsavel.id,
+      id_endereco: enderecoId,
+      numero_endereco: data.numeroEndereco || null,
+      complemento_endereco: data.complementoEndereco || null,
+      responsavel_cobranca_id: newId, // Auto-responsabilidade
+      ativo: true,
+    };
+
+    console.log('📝 [getOrCreateResponsible] Payload insert:', insertData);
+
     const { data: newPessoa, error } = await supabase
       .from('pessoas')
-      .insert({
-        id: newId,
-        nome: data.nomeResponsavel!,
-        cpf_cnpj: cleanCpf,
-        email: data.emailResponsavel,
-        telefone: phoneNumber,
-        id_tipo_pessoa: tipoResponsavel.id,
-        id_endereco: enderecoId,
-        numero_endereco: data.numeroEndereco,
-        complemento_endereco: data.complementoEndereco,
-        responsavel_cobranca_id: newId, // Auto-responsabilidade
-        ativo: true,
-      })
+      .insert(insertData)
       .select('id')
       .maybeSingle();
 
     if (error) {
       console.error(
         '❌ [getOrCreateResponsible] Erro ao criar responsável:',
-        error
+        JSON.stringify(error, null, 2) // Log detalhado do erro
       );
       throw error;
     }
