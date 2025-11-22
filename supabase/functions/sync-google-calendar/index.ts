@@ -250,7 +250,9 @@ async function syncEventForRecipient(
   const calendarId = recipient.google_calendar_id || 'primary';
 
   // 2. DELETE
-  if (operation === 'DELETE' || !agendamento.ativo) {
+  // AI dev note: Deletar evento quando operation=DELETE, !ativo, ou status='erro'
+  const isErro = agendamento.status_consulta_codigo?.toLowerCase() === 'erro';
+  if (operation === 'DELETE' || !agendamento.ativo || isErro) {
     if (agendamento.google_event_id) {
       await deleteGoogleCalendarEvent(
         accessToken,
@@ -347,15 +349,20 @@ function buildEventData(agendamento: any, location: string): any {
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
   };
 
-  // AI dev note: Título apenas com nome do paciente (conforme solicitado)
-  const summary = agendamento.paciente_nome;
+  // AI dev note: Detectar se está cancelado
+  const isCancelado =
+    agendamento.status_consulta_codigo?.toLowerCase() === 'cancelado';
+
+  // AI dev note: Título com prefixo "CANCELADO" quando status for cancelado
+  const summary = isCancelado
+    ? `CANCELADO - ${agendamento.paciente_nome}`
+    : agendamento.paciente_nome;
+
   const description = buildEventDescription(agendamento, location);
   const reminders = buildReminders();
 
   // AI dev note: Determinar cor - priorizar status "Cancelado" = cinza
   // Se cancelado, usar cinza. Caso contrário, usar cor do tipo de serviço
-  const isCancelado =
-    agendamento.status_consulta_codigo?.toLowerCase() === 'cancelado';
   const colorId = isCancelado
     ? '8' // Cinza para cancelados
     : mapServiceColorToGoogleCalendar(
