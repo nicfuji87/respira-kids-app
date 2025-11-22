@@ -98,17 +98,24 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           content: (
             <div className="space-y-6">
               <Tabs defaultValue="lancamentos" className="w-full">
-                <TabsList>
+                <TabsList className="flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid md:grid-cols-2 md:overflow-visible no-scrollbar">
                   <TabsTrigger
                     value="lancamentos"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
                   >
-                    <Repeat className="h-4 w-4" />
-                    Lançamentos
+                    <Repeat className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap md:whitespace-normal">
+                      Lançamentos
+                    </span>
                   </TabsTrigger>
-                  <TabsTrigger value="logs" className="flex items-center gap-2">
-                    <History className="h-4 w-4" />
-                    Histórico de Processamento
+                  <TabsTrigger
+                    value="logs"
+                    className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
+                  >
+                    <History className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap md:whitespace-normal">
+                      Histórico de Processamento
+                    </span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -131,41 +138,51 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           content: (
             <div className="space-y-6">
               <Tabs defaultValue="fornecedores" className="w-full">
-                <TabsList className="grid w-full grid-cols-5">
+                <TabsList className="flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid md:grid-cols-5 md:overflow-visible no-scrollbar">
                   <TabsTrigger
                     value="fornecedores"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
                   >
-                    <Building2 className="h-4 w-4" />
-                    Fornecedores
+                    <Building2 className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap md:whitespace-normal">
+                      Fornecedores
+                    </span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="produtos"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
                   >
-                    <Package className="h-4 w-4" />
-                    Produtos
+                    <Package className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap md:whitespace-normal">
+                      Produtos
+                    </span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="categorias"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
                   >
-                    <FolderTree className="h-4 w-4" />
-                    Categorias
+                    <FolderTree className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap md:whitespace-normal">
+                      Categorias
+                    </span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="contas"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
                   >
-                    <Landmark className="h-4 w-4" />
-                    Contas Bancárias
+                    <Landmark className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap md:whitespace-normal">
+                      Contas Bancárias
+                    </span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="divisao"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
                   >
-                    <Users className="h-4 w-4" />
-                    Divisão de Sócios
+                    <Users className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap md:whitespace-normal">
+                      Divisão de Sócios
+                    </span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -248,22 +265,17 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           onValueChange={handleTabChange}
           className="w-full"
         >
-          <TabsList
-            className="grid w-full gap-1 h-auto p-1"
-            style={{
-              gridTemplateColumns: `repeat(${allowedTabs.length}, minmax(0, 1fr))`,
-            }}
-          >
+          <TabsList className="flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid md:overflow-visible no-scrollbar">
             {allowedTabs.map((tab) => {
               const IconComponent = tab.icon;
               return (
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
-                  className="flex items-center gap-2 h-10 text-xs md:text-sm px-3"
+                  className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1 md:flex-auto justify-center"
                 >
                   <IconComponent className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate max-w-[80px] md:max-w-[120px] lg:max-w-full">
+                  <span className="whitespace-nowrap md:whitespace-normal md:truncate max-w-none md:max-w-[120px] lg:max-w-full">
                     {tab.label}
                   </span>
                 </TabsTrigger>

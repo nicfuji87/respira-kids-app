@@ -139,12 +139,7 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
     <div className={cn('w-full space-y-6', className)}>
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList
-          className={`grid w-full gap-1 h-auto p-1`}
-          style={{
-            gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))`,
-          }}
-        >
+        <TabsList className="flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid md:grid-cols-7 md:overflow-visible no-scrollbar">
           {visibleTabs.map((tab) => {
             const IconComponent = tab.icon;
             return (
@@ -152,16 +147,16 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
                 key={tab.id}
                 value={tab.id}
                 className={cn(
-                  'flex flex-col items-center gap-1.5 h-14 text-xs p-2',
+                  'flex flex-col items-center gap-1.5 h-14 text-xs p-2 min-w-[80px] md:min-w-0 flex-1 md:flex-auto',
                   !tab.implemented && 'opacity-70'
                 )}
               >
                 <IconComponent className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate text-center leading-tight">
+                <span className="whitespace-nowrap md:whitespace-normal md:truncate text-center leading-tight">
                   {tab.label}
                 </span>
                 {!tab.implemented && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
                     Em breve
                   </span>
                 )}
