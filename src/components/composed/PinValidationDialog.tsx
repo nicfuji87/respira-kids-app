@@ -142,8 +142,19 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
         localStorage.removeItem('pin_block_time');
         setLoading(false);
 
+        // Fechar dialog visualmente imediatamente
+        setInternalOpen(false);
+
         // Chamar onSuccess
         onSuccess();
+
+        // Limpar estado após fechar
+        setTimeout(() => {
+          setPin('');
+          setError('');
+          setAttempts(0);
+        }, 300);
+
         return;
       } else {
         // PIN incorreto

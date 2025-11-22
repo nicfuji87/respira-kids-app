@@ -391,9 +391,9 @@ export const FinanceiroPage: React.FC = () => {
       </div>
 
       {/* Dialog de validação de PIN - para admin e secretaria */}
-      {isAdminOrSecretaria && !isPinValidated && (
+      {isAdminOrSecretaria && (
         <PinValidationDialog
-          isOpen={true}
+          isOpen={!isPinValidated}
           onClose={() => {
             navigate('/dashboard');
           }}
