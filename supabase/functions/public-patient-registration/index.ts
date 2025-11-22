@@ -247,9 +247,51 @@ Deno.serve(async (req: Request) => {
 
       // AI dev note: Adicionar trim() em todos os campos para evitar espaços em branco
       // A constraint do banco requer que estado tenha exatamente 2 caracteres
-      const estadoNormalizado = data.endereco.estado?.trim()?.toUpperCase();
-      
+      let estadoNormalizado = data.endereco.estado?.trim()?.toUpperCase();
+      let logradouro = data.endereco.logradouro?.trim() || '';
+      let bairro = data.endereco.bairro?.trim() || '';
+      let cidade = data.endereco.cidade?.trim() || '';
+
       // Validar estado obrigatório com 2 caracteres
+      // SE FALHAR: Tentar buscar no ViaCEP como fallback (resiliência para dados incompletos)
+      if (!estadoNormalizado || estadoNormalizado.length !== 2) {
+        console.warn(
+          `⚠️ [STEP 2] Estado inválido ou vazio ("${estadoNormalizado}"). Tentando buscar no ViaCEP...`
+        );
+
+        try {
+          const viaCepResponse = await fetch(
+            `https://viacep.com.br/ws/${cepNormalizado}/json/`
+          );
+          const viaCepData = await viaCepResponse.json();
+
+          if (viaCepData.erro) {
+            throw new Error('CEP não encontrado no ViaCEP');
+          }
+
+          console.log(
+            '✅ [STEP 2] Dados recuperados do ViaCEP:',
+            viaCepData.uf
+          );
+
+          // Preencher dados faltantes
+          estadoNormalizado = viaCepData.uf;
+          if (!logradouro) logradouro = viaCepData.logradouro;
+          if (!bairro) bairro = viaCepData.bairro;
+          if (!cidade) cidade = viaCepData.localidade;
+        } catch (viaCepError) {
+          console.error(
+            '❌ [STEP 2] Falha no fallback do ViaCEP:',
+            viaCepError
+          );
+          // Se falhar o fallback, lança o erro original
+          throw new Error(
+            `Estado (UF) deve ter exatamente 2 caracteres (ex: SP, RJ, MG). Recebido: "${estadoNormalizado || '(vazio)'}" e falha ao buscar automaticamente.`
+          );
+        }
+      }
+
+      // Revalidar após fallback
       if (!estadoNormalizado || estadoNormalizado.length !== 2) {
         throw new Error(
           `Estado (UF) deve ter exatamente 2 caracteres (ex: SP, RJ, MG). Recebido: "${estadoNormalizado || '(vazio)'}"`
@@ -260,9 +302,9 @@ Deno.serve(async (req: Request) => {
         .from('enderecos')
         .insert({
           cep: cepNormalizado, // AI dev note: Usar CEP normalizado sem formatação
-          logradouro: data.endereco.logradouro?.trim() || '',
-          bairro: data.endereco.bairro?.trim() || '',
-          cidade: data.endereco.cidade?.trim() || '',
+          logradouro: logradouro,
+          bairro: bairro,
+          cidade: cidade,
           estado: estadoNormalizado, // Já validado com 2 caracteres
         })
         .select('id')
