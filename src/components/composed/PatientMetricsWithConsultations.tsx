@@ -2024,7 +2024,7 @@ export const PatientMetricsWithConsultations =
                             </div>
 
                             {/* Status badges */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <Badge
                                 variant="outline"
                                 className="text-xs"

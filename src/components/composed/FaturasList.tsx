@@ -324,9 +324,9 @@ const FaturaItem = React.memo<{
           </div>
 
           {/* Linha 3: Ações */}
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-3 pt-2 mt-2 border-t border-border/50 sm:border-none sm:pt-0 sm:mt-0">
             {/* Links e ações principais */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Link ASAAS */}
               {asaasUrl && (
                 <Button
@@ -391,7 +391,7 @@ const FaturaItem = React.memo<{
             {/* Botões de ação para admin e secretaria */}
             {(userRole === 'admin' || userRole === 'secretaria') &&
               fatura.status !== 'pago' && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 mt-2 sm:mt-0">
                   {/* Botão Editar */}
                   {['pendente', 'atrasado'].includes(fatura.status) &&
                     onEdit && (

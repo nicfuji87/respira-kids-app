@@ -142,18 +142,9 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
         localStorage.removeItem('pin_block_time');
         setLoading(false);
 
-        // Fechar dialog imediatamente
-        setInternalOpen(false);
-
         // Chamar onSuccess
         onSuccess();
-
-        // Limpar estado do PIN
-        setTimeout(() => {
-          setPin('');
-          setError('');
-          setAttempts(0);
-        }, 100);
+        return;
       } else {
         // PIN incorreto
         const newAttempts = attempts + 1;
@@ -171,11 +162,11 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
           );
         }
         setPin('');
+        setLoading(false);
       }
     } catch (error) {
       console.error('Erro ao validar PIN:', error);
       setError('Erro ao validar PIN. Tente novamente.');
-    } finally {
       setLoading(false);
     }
   };
