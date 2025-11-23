@@ -278,6 +278,21 @@ export async function fetchSharedScheduleByToken(
     if (agendaError) throw agendaError;
     if (!agendaStats) throw new Error('Agenda não encontrada');
 
+    // AI dev note: Validar se agenda expirou (data_fim < data_atual)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dataFim = new Date(agendaStats.data_fim);
+    dataFim.setHours(0, 0, 0, 0);
+
+    if (dataFim < today) {
+      return {
+        data: null,
+        error: 'Esta agenda expirou e não está mais disponível',
+        success: false,
+        isExpired: true,
+      };
+    }
+
     // 2. Buscar serviços disponibilizados
     const { data: servicosIds } = await supabase
       .from('agenda_servicos')

@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, AlertTriangle, Calendar } from 'lucide-react';
+import { Loader2, AlertTriangle, Calendar, CalendarOff } from 'lucide-react';
 
 import { SharedScheduleSelectorWizard } from '@/components/domain/calendar/SharedScheduleSelectorWizard';
 import { Button } from '@/components/primitives/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/primitives/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/primitives/card';
 import { fetchSharedScheduleByToken } from '@/lib/shared-schedule-api';
 import type { AgendaCompartilhadaCompleta } from '@/types/shared-schedule';
 
@@ -16,9 +22,12 @@ export const SharedSchedulePage = React.memo(() => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
 
-  const [agenda, setAgenda] = useState<AgendaCompartilhadaCompleta | null>(null);
+  const [agenda, setAgenda] = useState<AgendaCompartilhadaCompleta | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -34,10 +43,18 @@ export const SharedSchedulePage = React.memo(() => {
     try {
       setIsLoading(true);
       setError(null);
+      setIsExpired(false);
 
       const result = await fetchSharedScheduleByToken(token);
 
       if (!result.success || !result.data) {
+        // Verificar se é expiração
+        if (result.isExpired) {
+          setIsExpired(true);
+          setError(result.error || 'Esta agenda expirou');
+          return;
+        }
+
         throw new Error(result.error || 'Agenda não encontrada');
       }
 
@@ -57,7 +74,9 @@ export const SharedSchedulePage = React.memo(() => {
       setAgenda(agenda);
     } catch (error) {
       console.error('Erro ao carregar agenda:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao carregar agenda');
+      setError(
+        error instanceof Error ? error.message : 'Erro ao carregar agenda'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -84,16 +103,53 @@ export const SharedSchedulePage = React.memo(() => {
   if (error || !agenda) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="max-w-md border-destructive">
+        <Card
+          className={
+            isExpired
+              ? 'max-w-md border-amber-500'
+              : 'max-w-md border-destructive'
+          }
+        >
           <CardHeader>
-            <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-3">
-              <AlertTriangle className="w-6 h-6 text-destructive" />
+            <div
+              className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-3 ${
+                isExpired ? 'bg-amber-500/10' : 'bg-destructive/10'
+              }`}
+            >
+              {isExpired ? (
+                <CalendarOff className="w-6 h-6 text-amber-500" />
+              ) : (
+                <AlertTriangle className="w-6 h-6 text-destructive" />
+              )}
             </div>
-            <CardTitle className="text-center">Ops! Algo deu errado</CardTitle>
-            <CardDescription className="text-center">{error}</CardDescription>
+            <CardTitle className="text-center">
+              {isExpired ? 'Agenda Expirada' : 'Ops! Algo deu errado'}
+            </CardTitle>
+            <CardDescription className="text-center">
+              {isExpired ? (
+                <>
+                  Esta agenda estava disponível até o dia{' '}
+                  <span className="font-medium">
+                    {agenda?.data_fim
+                      ? new Date(agenda.data_fim).toLocaleDateString('pt-BR')
+                      : 'a data definida'}
+                  </span>
+                  .
+                  <br />
+                  <br />
+                  Entre em contato para obter um novo link de agendamento.
+                </>
+              ) : (
+                error
+              )}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate('/')}
+            >
               Voltar para o Início
             </Button>
           </CardContent>
@@ -112,11 +168,16 @@ export const SharedSchedulePage = React.memo(() => {
             <Calendar className="w-8 h-8 text-primary" />
             <h1 className="text-3xl font-bold">Respira Kids</h1>
           </div>
-          <p className="text-sm text-muted-foreground">Fisioterapia Pediátrica</p>
+          <p className="text-sm text-muted-foreground">
+            Fisioterapia Pediátrica
+          </p>
         </div>
 
         {/* Wizard */}
-        <SharedScheduleSelectorWizard agenda={agenda} onSuccess={handleSuccess} />
+        <SharedScheduleSelectorWizard
+          agenda={agenda}
+          onSuccess={handleSuccess}
+        />
 
         {/* Footer */}
         <div className="text-center mt-8 text-xs text-muted-foreground">
@@ -128,5 +189,3 @@ export const SharedSchedulePage = React.memo(() => {
 });
 
 SharedSchedulePage.displayName = 'SharedSchedulePage';
-
-

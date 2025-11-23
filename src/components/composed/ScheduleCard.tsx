@@ -47,6 +47,13 @@ export const ScheduleCard = React.memo<ScheduleCardProps>(
           : 'bg-green-500'
       : 'bg-gray-400';
 
+    // AI dev note: Verificar se agenda expirou (data_fim < data_atual)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dataFimCheck = new Date(agenda.data_fim + 'T00:00:00');
+    dataFimCheck.setHours(0, 0, 0, 0);
+    const isExpired = dataFimCheck < today;
+
     return (
       <Card className={cn('hover:shadow-lg transition-shadow', className)}>
         <CardHeader className="pb-3">
@@ -60,9 +67,21 @@ export const ScheduleCard = React.memo<ScheduleCardProps>(
                 <span className="text-xs">{periodoFormatado}</span>
               </CardDescription>
             </div>
-            <Badge variant={agenda.ativo ? 'default' : 'secondary'}>
-              {agenda.ativo ? 'Ativa' : 'Inativa'}
-            </Badge>
+            <div className="flex flex-col gap-2">
+              {/* Badge de Status Ativo/Inativo */}
+              <Badge variant={agenda.ativo ? 'default' : 'secondary'}>
+                {agenda.ativo ? 'Ativa' : 'Inativa'}
+              </Badge>
+              {/* Badge de Expiração */}
+              {isExpired && (
+                <Badge
+                  variant="outline"
+                  className="border-amber-500 text-amber-600 bg-amber-50"
+                >
+                  Expirada
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
 
@@ -162,5 +181,3 @@ export const ScheduleCard = React.memo<ScheduleCardProps>(
 );
 
 ScheduleCard.displayName = 'ScheduleCard';
-
-

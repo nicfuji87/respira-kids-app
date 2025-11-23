@@ -1,5 +1,5 @@
 // AI dev note: Types para sistema de agendas compartilhadas
-// Mapeia tabelas: agendas_compartilhadas, agenda_servicos, agenda_locais, 
+// Mapeia tabelas: agendas_compartilhadas, agenda_servicos, agenda_locais,
 // agenda_empresas, agenda_slots, agenda_selecoes
 
 // ============================================
@@ -249,11 +249,10 @@ export interface ApiResponse<T> {
   data: T | null;
   error: string | null;
   success: boolean;
+  isExpired?: boolean; // Indica se a agenda está expirada
 }
 
 export interface CreateAgendaResponse {
   agenda: AgendaCompartilhada;
   link: string; // URL completa com token
 }
-
-
