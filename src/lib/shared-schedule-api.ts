@@ -601,6 +601,214 @@ export async function fetchSlotsWithSelections(
 }
 
 // ============================================
+// VERIFICAR AGENDAMENTO EXISTENTE
+// ============================================
+
+export async function checkExistingAppointment(
+  agendaId: string,
+  pacienteId: string
+): Promise<
+  ApiResponse<{
+    hasAppointment: boolean;
+    existingAppointment?: {
+      agendamento_id: string;
+      slot_id: string;
+      data_hora: string;
+      tipo_servico_nome: string;
+      local_nome: string | null;
+    };
+  }>
+> {
+  try {
+    console.log('🔍 [checkExistingAppointment] Verificando agendamento:', {
+      agendaId,
+      pacienteId,
+    });
+
+    // Buscar status de agendamento "cancelado"
+    const { data: statusCancelado } = await supabase
+      .from('consulta_status')
+      .select('id')
+      .eq('codigo', 'cancelado')
+      .single();
+
+    // Buscar agendamento ativo do paciente nesta agenda
+    const { data, error } = await supabase
+      .from('agenda_selecoes')
+      .select(
+        `
+        slot_id,
+        agendamento_id,
+        slot:agenda_slots!inner(data_hora),
+        agendamento:agendamentos!inner(
+          id,
+          data_hora,
+          status_consulta_id,
+          ativo,
+          tipo_servico:tipo_servicos(nome),
+          local:locais_atendimento(nome)
+        )
+      `
+      )
+      .eq('agenda_id', agendaId)
+      .eq('paciente_id', pacienteId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+
+    // Se não encontrou, não há agendamento
+    if (!data || !data.agendamento) {
+      console.log(
+        '✅ [checkExistingAppointment] Nenhum agendamento encontrado'
+      );
+      return {
+        data: { hasAppointment: false },
+        error: null,
+        success: true,
+      };
+    }
+
+    // Verificar se agendamento está ativo e não cancelado
+    const agendamentoData = data.agendamento as unknown;
+    const agendamento = Array.isArray(agendamentoData)
+      ? (agendamentoData[0] as {
+          id: string;
+          data_hora: string;
+          status_consulta_id: string;
+          ativo: boolean;
+          tipo_servico: { nome: string } | null;
+          local: { nome: string } | null;
+        })
+      : (agendamentoData as {
+          id: string;
+          data_hora: string;
+          status_consulta_id: string;
+          ativo: boolean;
+          tipo_servico: { nome: string } | null;
+          local: { nome: string } | null;
+        });
+
+    const isAtivo =
+      agendamento.ativo &&
+      agendamento.status_consulta_id !== statusCancelado?.id;
+
+    if (!isAtivo) {
+      console.log(
+        '✅ [checkExistingAppointment] Agendamento encontrado mas não está ativo'
+      );
+      return {
+        data: { hasAppointment: false },
+        error: null,
+        success: true,
+      };
+    }
+
+    console.log('⚠️ [checkExistingAppointment] Agendamento ativo encontrado:', {
+      agendamento_id: agendamento.id,
+      data_hora: agendamento.data_hora,
+    });
+
+    return {
+      data: {
+        hasAppointment: true,
+        existingAppointment: {
+          agendamento_id: agendamento.id,
+          slot_id: data.slot_id,
+          data_hora: agendamento.data_hora,
+          tipo_servico_nome: agendamento.tipo_servico?.nome || 'Não informado',
+          local_nome: agendamento.local?.nome || null,
+        },
+      },
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    console.error('❌ [checkExistingAppointment] Erro:', error);
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      success: false,
+    };
+  }
+}
+
+// ============================================
+// REAGENDAR AGENDAMENTO (TROCAR SLOT)
+// ============================================
+
+export async function rescheduleAppointment(
+  agendaId: string,
+  agendamentoId: string,
+  oldSlotId: string,
+  newSlotId: string,
+  newDataHora: string
+): Promise<ApiResponse<{ agendamento_id: string; slot_id: string }>> {
+  try {
+    console.log('🔄 [rescheduleAppointment] Iniciando reagendamento:', {
+      agendamentoId,
+      oldSlotId,
+      newSlotId,
+    });
+
+    // 1. Verificar se novo slot está disponível
+    const { data: newSlot, error: slotError } = await supabase
+      .from('agenda_slots')
+      .select('disponivel, deleted_at')
+      .eq('id', newSlotId)
+      .eq('agenda_id', agendaId)
+      .is('deleted_at', null)
+      .single();
+
+    if (slotError) throw slotError;
+
+    if (!newSlot || !newSlot.disponivel) {
+      throw new Error('Este horário não está mais disponível');
+    }
+
+    // 2. Executar reagendamento através de RPC para transação atômica
+    const { data: resultado, error: rpcError } = await supabase.rpc(
+      'fn_reagendar_slot',
+      {
+        p_agenda_id: agendaId,
+        p_agendamento_id: agendamentoId,
+        p_old_slot_id: oldSlotId,
+        p_new_slot_id: newSlotId,
+        p_new_data_hora: newDataHora,
+      }
+    );
+
+    if (rpcError) throw rpcError;
+
+    const res = Array.isArray(resultado) ? resultado[0] : resultado;
+
+    if (!res || !res.sucesso) {
+      throw new Error(res?.mensagem || 'Erro ao reagendar');
+    }
+
+    console.log('✅ [rescheduleAppointment] Reagendamento concluído:', {
+      agendamento_id: agendamentoId,
+      new_slot_id: newSlotId,
+    });
+
+    return {
+      data: {
+        agendamento_id: agendamentoId,
+        slot_id: newSlotId,
+      },
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    console.error('❌ [rescheduleAppointment] Erro:', error);
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      success: false,
+    };
+  }
+}
+
+// ============================================
 // SELECIONAR SLOT E CRIAR AGENDAMENTO
 // ============================================
 

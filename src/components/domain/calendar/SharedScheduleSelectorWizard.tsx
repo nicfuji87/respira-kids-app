@@ -7,6 +7,7 @@ import {
   Calendar,
   MapPin,
   Building2,
+  AlertCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -28,13 +29,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
 import { SharedScheduleWhatsAppValidationStep } from '@/components/composed/SharedScheduleWhatsAppValidationStep';
 import { AccessDeniedMessage } from '@/components/composed/AccessDeniedMessage';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/primitives/use-toast';
-import { selectSlotAndCreateAppointment } from '@/lib/shared-schedule-api';
+import {
+  selectSlotAndCreateAppointment,
+  checkExistingAppointment,
+  rescheduleAppointment,
+} from '@/lib/shared-schedule-api';
 import { supabase } from '@/lib/supabase';
 import type {
   AgendaCompartilhadaCompleta,
@@ -85,6 +98,19 @@ export const SharedScheduleSelectorWizard =
       const [wizardData, setWizardData] = useState<Partial<WizardDataSelecao>>(
         {}
       );
+
+      // Estados de reagendamento
+      const [isRescheduling, setIsRescheduling] = useState(false);
+      const [existingAppointmentId, setExistingAppointmentId] = useState<
+        string | null
+      >(null);
+      const [oldSlotId, setOldSlotId] = useState<string | null>(null);
+      const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+      const [existingAppointmentData, setExistingAppointmentData] = useState<{
+        data_hora: string;
+        tipo_servico_nome: string;
+        local_nome: string | null;
+      } | null>(null);
 
       // Carregar pacientes do responsável
       const loadPacientes = useCallback(async (responsavelId: string) => {
@@ -210,7 +236,7 @@ export const SharedScheduleSelectorWizard =
         [agenda]
       );
 
-      const handleNext = useCallback(() => {
+      const handleNext = useCallback(async () => {
         // Validações por step
         if (currentStep === 'select-patient') {
           if (!wizardData.paciente_id) {
@@ -220,6 +246,31 @@ export const SharedScheduleSelectorWizard =
             });
             return;
           }
+
+          // AI dev note: Verificar se paciente já tem agendamento nesta agenda
+          try {
+            const checkResult = await checkExistingAppointment(
+              agenda.id,
+              wizardData.paciente_id
+            );
+
+            if (checkResult.success && checkResult.data?.hasAppointment) {
+              const existing = checkResult.data.existingAppointment!;
+              setExistingAppointmentId(existing.agendamento_id);
+              setOldSlotId(existing.slot_id);
+              setExistingAppointmentData({
+                data_hora: existing.data_hora,
+                tipo_servico_nome: existing.tipo_servico_nome,
+                local_nome: existing.local_nome,
+              });
+              setShowRescheduleDialog(true);
+              return; // Não avança até decidir
+            }
+          } catch (error) {
+            console.error('Erro ao verificar agendamento:', error);
+            // Continua normalmente em caso de erro na verificação
+          }
+
           setCurrentStep(getNextStep('select-patient'));
         } else if (currentStep === 'select-service') {
           if (!wizardData.tipo_servico_id) {
@@ -260,7 +311,7 @@ export const SharedScheduleSelectorWizard =
         } else if (currentStep === 'confirmation') {
           handleConfirm();
         }
-      }, [currentStep, wizardData, toast, getNextStep]);
+      }, [currentStep, wizardData, toast, getNextStep, agenda.id]);
 
       const handleBack = useCallback(() => {
         if (currentStep === 'select-patient') {
@@ -303,10 +354,57 @@ export const SharedScheduleSelectorWizard =
         }
       }, [currentStep, agenda]);
 
-      // Confirmar e criar agendamento
+      // Confirmar e criar/reagendar agendamento
       const handleConfirm = useCallback(async () => {
         try {
           setIsSubmitting(true);
+
+          if (
+            !wizardData.paciente_id ||
+            !wizardData.tipo_servico_id ||
+            !wizardData.empresa_id ||
+            !wizardData.slot_id
+          ) {
+            throw new Error('Dados incompletos');
+          }
+
+          // AI dev note: REAGENDAMENTO - Editar agendamento existente
+          if (isRescheduling && existingAppointmentId && oldSlotId) {
+            console.log('🔄 Reagendando agendamento existente');
+
+            const rescheduleResult = await rescheduleAppointment(
+              agenda.id,
+              existingAppointmentId,
+              oldSlotId,
+              wizardData.slot_id,
+              wizardData.slot_data_hora!
+            );
+
+            if (!rescheduleResult.success) {
+              toast({
+                title: 'Erro ao reagendar',
+                description:
+                  rescheduleResult.error || 'Este horário não está disponível',
+                variant: 'destructive',
+              });
+              setCurrentStep('select-slot');
+              return;
+            }
+
+            setCurrentStep('success');
+            toast({
+              title: 'Reagendamento confirmado!',
+              description: 'Seu horário foi alterado com sucesso',
+            });
+
+            if (onSuccess) {
+              onSuccess(existingAppointmentId);
+            }
+            return;
+          }
+
+          // NOVO AGENDAMENTO
+          console.log('🎯 Criando novo agendamento');
 
           // Buscar status "agendado"
           const { data: statusAgendado } = await supabase
@@ -324,15 +422,6 @@ export const SharedScheduleSelectorWizard =
 
           if (!statusAgendado || !statusPendente) {
             throw new Error('Status não encontrados no sistema');
-          }
-
-          if (
-            !wizardData.paciente_id ||
-            !wizardData.tipo_servico_id ||
-            !wizardData.empresa_id ||
-            !wizardData.slot_id
-          ) {
-            throw new Error('Dados incompletos');
           }
 
           const result = await selectSlotAndCreateAppointment(
@@ -416,6 +505,9 @@ export const SharedScheduleSelectorWizard =
         responsavelWhatsapp,
         toast,
         onSuccess,
+        isRescheduling,
+        existingAppointmentId,
+        oldSlotId,
       ]);
 
       // Progress (calcular dinamicamente baseado nos skips)
@@ -895,7 +987,9 @@ export const SharedScheduleSelectorWizard =
                   </>
                 ) : currentStep === 'confirmation' ? (
                   <>
-                    Confirmar Agendamento
+                    {isRescheduling
+                      ? 'Confirmar Reagendamento'
+                      : 'Confirmar Agendamento'}
                     <Check className="w-4 h-4 ml-2" />
                   </>
                 ) : (
@@ -907,6 +1001,92 @@ export const SharedScheduleSelectorWizard =
               </Button>
             </div>
           )}
+
+          {/* Dialog de Reagendamento */}
+          <Dialog
+            open={showRescheduleDialog}
+            onOpenChange={setShowRescheduleDialog}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-3">
+                  <AlertCircle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <DialogTitle className="text-center">
+                  Agendamento Existente
+                </DialogTitle>
+                <DialogDescription className="text-center space-y-4">
+                  {wizardData.paciente_nome} já tem um horário agendado nesta
+                  agenda.
+                  {existingAppointmentData && (
+                    <Card className="bg-primary/5 mt-4">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm">
+                          Agendamento Atual
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-muted-foreground" />
+                          <span>
+                            {format(
+                              parseSupabaseDatetime(
+                                existingAppointmentData.data_hora
+                              ),
+                              "EEEE, dd/MM 'às' HH:mm",
+                              { locale: ptBR }
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">
+                            Serviço:
+                          </span>
+                          <span>
+                            {existingAppointmentData.tipo_servico_nome}
+                          </span>
+                        </div>
+                        {existingAppointmentData.local_nome && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-muted-foreground" />
+                            <span>{existingAppointmentData.local_nome}</span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                  <p className="text-sm mt-4">O que deseja fazer?</p>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="sm:flex-col gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowRescheduleDialog(false);
+                    // Reseta paciente para escolher outro
+                    setWizardData((prev) => ({
+                      ...prev,
+                      paciente_id: undefined,
+                      paciente_nome: undefined,
+                    }));
+                  }}
+                  className="w-full"
+                >
+                  Manter Este Horário
+                </Button>
+                <Button
+                  onClick={() => {
+                    setIsRescheduling(true);
+                    setShowRescheduleDialog(false);
+                    setCurrentStep(getNextStep('select-patient'));
+                  }}
+                  className="w-full"
+                >
+                  Trocar de Horário
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       );
     }

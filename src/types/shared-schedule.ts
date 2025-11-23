@@ -250,6 +250,7 @@ export interface ApiResponse<T> {
   error: string | null;
   success: boolean;
   isExpired?: boolean; // Indica se a agenda está expirada
+  hasExistingAppointment?: boolean; // Indica se paciente já tem agendamento
 }
 
 export interface CreateAgendaResponse {
