@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,8 @@ import { supabase } from '@/lib/supabase';
 // AI dev note: Componente para validação de PIN ao acessar área restrita
 // Valida o PIN armazenado no user metadata do Supabase
 // Inclui opção de recuperação de PIN
+// IMPORTANTE: O controle de abertura/fechamento é feito EXCLUSIVAMENTE pela prop isOpen
+// O componente NÃO deve tentar fechar a si mesmo - apenas chama onSuccess e o pai fecha
 
 interface PinValidationDialogProps {
   isOpen: boolean;
@@ -37,15 +39,12 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
   const [attempts, setAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [internalOpen, setInternalOpen] = useState(isOpen);
+
+  // Ref para evitar chamadas duplicadas de onSuccess
+  const successCalledRef = useRef(false);
 
   const maxAttempts = 3;
   const blockDuration = 5 * 60 * 1000; // 5 minutos
-
-  // Sincronizar estado interno com prop externa
-  useEffect(() => {
-    setInternalOpen(isOpen);
-  }, [isOpen]);
 
   // Reset state quando abrir
   useEffect(() => {
@@ -53,6 +52,7 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
       setPin('');
       setError('');
       setLoading(false);
+      successCalledRef.current = false;
       checkBlockStatus();
       checkPinExists();
     }
@@ -109,7 +109,7 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
   };
 
   const validatePin = async (enteredPin: string) => {
-    if (isBlocked) return;
+    if (isBlocked || successCalledRef.current) return;
 
     setLoading(true);
     setError('');
@@ -137,24 +137,20 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
       }
 
       if (enteredPin === storedPin) {
-        // PIN correto
+        // PIN correto - marcar como sucesso para evitar chamadas duplicadas
+        successCalledRef.current = true;
         localStorage.removeItem('pin_attempts');
         localStorage.removeItem('pin_block_time');
-        setLoading(false);
 
-        // Fechar dialog visualmente imediatamente
-        setInternalOpen(false);
-
-        // Chamar onSuccess
+        // Chamar onSuccess IMEDIATAMENTE - o pai vai setar isPinValidated=true
+        // e isso vai fazer isOpen=false, fechando o dialog
         onSuccess();
 
-        // Limpar estado após fechar
-        setTimeout(() => {
-          setPin('');
-          setError('');
-          setAttempts(0);
-        }, 300);
-
+        // Limpar estado local
+        setPin('');
+        setError('');
+        setAttempts(0);
+        setLoading(false);
         return;
       } else {
         // PIN incorreto
@@ -191,16 +187,17 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
     window.location.href = '/configuracoes?tab=seguranca&action=reset-pin';
   };
 
+  // Handler para quando o dialog tenta fechar (pelo X ou clicando fora)
+  const handleOpenChange = (open: boolean) => {
+    // Se está tentando fechar E não foi por sucesso, chamar onClose
+    if (!open && !successCalledRef.current) {
+      onClose();
+    }
+    // Se foi sucesso, não fazer nada - o pai já vai fechar via isOpen=false
+  };
+
   return (
-    <Dialog
-      open={internalOpen}
-      onOpenChange={(open) => {
-        setInternalOpen(open);
-        if (!open) {
-          onClose();
-        }
-      }}
-    >
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
         className="sm:max-w-md"
         onPointerDownOutside={(e) => e.preventDefault()}
