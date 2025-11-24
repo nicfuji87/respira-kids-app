@@ -257,22 +257,101 @@ export async function findExistingUserByPhone(phoneNumber: string): Promise<{
   try {
     const phoneNumberBigInt = BigInt(phoneNumber);
 
-    // Buscar pessoa na view (acesso público permitido via RLS)
+    // AI dev note: Buscar apenas RESPONSÁVEIS LEGAIS/AMBOS com DEPENDENTES ATIVOS
+    // Isso evita conflito quando há múltiplos cadastros com mesmo telefone:
+    // - Ignora pacientes com telefone duplicado
+    // - Ignora responsáveis financeiros
+    // - Garante que é um responsável legal ativo com dependentes
+
+    // PASSO 1: Buscar responsáveis legais/ambos que têm dependentes ativos
+    const { data: responsaveis, error: respError } = await supabase
+      .from('pessoas')
+      .select(
+        `
+        id,
+        pessoa_responsaveis!pessoa_responsaveis_id_responsavel_fkey(
+          id,
+          tipo_responsabilidade,
+          ativo
+        )
+      `
+      )
+      .eq('telefone', phoneNumberBigInt)
+      .eq('ativo', true)
+      .not('pessoa_responsaveis', 'is', null);
+
+    if (respError) {
+      console.error('Erro ao buscar responsáveis:', respError);
+      return { exists: false };
+    }
+
+    // Filtrar apenas responsáveis legais ou ambos (ignorar financeiros)
+    const responsaveisLegais = (responsaveis || []).filter(
+      (resp: {
+        id: string;
+        pessoa_responsaveis: Array<{
+          id: string;
+          tipo_responsabilidade: string;
+          ativo: boolean;
+        }>;
+      }) => {
+        const responsabilidadesAtivas = resp.pessoa_responsaveis.filter(
+          (r) => r.ativo
+        );
+        return responsabilidadesAtivas.some(
+          (r) =>
+            r.tipo_responsabilidade === 'legal' ||
+            r.tipo_responsabilidade === 'ambos'
+        );
+      }
+    );
+
+    console.log(
+      '🔍 [findExistingUserByPhone] Responsáveis legais encontrados:',
+      {
+        telefone: phoneNumber,
+        total: responsaveisLegais.length,
+      }
+    );
+
+    // Se não encontrou responsável legal com dependentes, retornar não existe
+    if (responsaveisLegais.length === 0) {
+      console.log(
+        '❌ [findExistingUserByPhone] Nenhum responsável legal encontrado'
+      );
+      return { exists: false };
+    }
+
+    // Se encontrou mais de 1, pegar o primeiro (caso raro, mas previne erro)
+    if (responsaveisLegais.length > 1) {
+      console.warn(
+        '⚠️ [findExistingUserByPhone] Múltiplos responsáveis legais encontrados, usando o primeiro'
+      );
+    }
+
+    const responsavelId = responsaveisLegais[0].id;
+
+    // PASSO 2: Buscar dados completos do responsável na view
     const { data: pessoa, error: pessoaError } = await supabase
       .from('vw_usuarios_admin')
       .select('*')
-      .eq('telefone', phoneNumberBigInt.toString())
+      .eq('id', responsavelId)
       .eq('ativo', true)
       .maybeSingle();
 
     if (pessoaError) {
-      console.error('Erro ao buscar usuário:', pessoaError);
+      console.error('Erro ao buscar dados do responsável:', pessoaError);
       return { exists: false };
     }
 
     if (!pessoa) {
       return { exists: false };
     }
+
+    console.log('✅ [findExistingUserByPhone] Responsável legal encontrado:', {
+      id: pessoa.id,
+      nome: pessoa.nome,
+    });
 
     // Buscar tipo de responsabilidade (legal, financeiro ou ambos)
     const { data: responsabilidades } = await supabase
