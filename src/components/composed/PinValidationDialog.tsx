@@ -138,19 +138,22 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
 
       if (enteredPin === storedPin) {
         // PIN correto - marcar como sucesso para evitar chamadas duplicadas
+        console.log('[PinValidationDialog] PIN correto! Chamando onSuccess...');
         successCalledRef.current = true;
         localStorage.removeItem('pin_attempts');
         localStorage.removeItem('pin_block_time');
 
-        // Chamar onSuccess IMEDIATAMENTE - o pai vai setar isPinValidated=true
-        // e isso vai fazer isOpen=false, fechando o dialog
-        onSuccess();
-
-        // Limpar estado local
+        // Limpar estado local ANTES de chamar onSuccess
         setPin('');
         setError('');
         setAttempts(0);
         setLoading(false);
+
+        // Chamar onSuccess - o pai vai setar isPinValidated=true
+        // e o componente será desmontado (não renderizado mais)
+        console.log('[PinValidationDialog] Chamando onSuccess agora...');
+        onSuccess();
+        console.log('[PinValidationDialog] onSuccess chamado com sucesso');
         return;
       } else {
         // PIN incorreto

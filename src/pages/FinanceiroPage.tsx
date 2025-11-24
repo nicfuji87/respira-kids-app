@@ -135,19 +135,23 @@ export const FinanceiroPage: React.FC = () => {
   }, [user?.id, user?.pessoa?.role]);
 
   // Handler para sucesso na validação do PIN
-  const handlePinSuccess = () => {
+  const handlePinSuccess = React.useCallback(() => {
+    console.log('[FinanceiroPage] handlePinSuccess chamado');
+
     // Salvar na sessão ANTES de setar o estado
     const sessionKey = `pin_validated_${user?.id}_financeiro`;
     sessionStorage.setItem(sessionKey, Date.now().toString());
+    console.log('[FinanceiroPage] Sessão salva:', sessionKey);
 
     // Fechar dialog e mostrar página
     setIsPinValidated(true);
+    console.log('[FinanceiroPage] isPinValidated setado para true');
 
     toast({
       title: 'Acesso autorizado',
       description: 'Área financeira liberada.',
     });
-  };
+  }, [user?.id, toast]);
 
   // Handler para clique em consulta
   const handleConsultationClick = async (
@@ -391,9 +395,11 @@ export const FinanceiroPage: React.FC = () => {
       </div>
 
       {/* Dialog de validação de PIN - para admin e secretaria */}
-      {isAdminOrSecretaria && (
+      {/* AI dev note: Só renderiza o dialog quando PIN NÃO está validado para evitar 
+          problemas de sincronização de estado entre pai e filho */}
+      {isAdminOrSecretaria && !isPinValidated && (
         <PinValidationDialog
-          isOpen={!isPinValidated}
+          isOpen={true}
           onClose={() => {
             navigate('/dashboard');
           }}
