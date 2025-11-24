@@ -294,7 +294,7 @@ const FaturaItem = React.memo<{
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
                   Venc: {formatDate(fatura.vencimento)}
-                  {fatura.pago_em && (
+                  {fatura.pago_em && fatura.status !== 'atrasado' && (
                     <span className="text-green-600 font-medium ml-2">
                       | Pago: {formatDateTime(fatura.pago_em)}
                     </span>

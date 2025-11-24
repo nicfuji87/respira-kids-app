@@ -890,7 +890,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                           ? formatDate(fatura.vencimento)
                           : 'Não definido'}
                       </div>
-                      {fatura.pago_em && (
+                      {fatura.pago_em && fatura.status !== 'atrasado' && (
                         <div className="flex items-center gap-2 mt-1 text-green-600 font-medium text-xs">
                           <Calendar className="h-3 w-3" />
                           Pago: {formatDateTime(fatura.pago_em)}
