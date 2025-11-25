@@ -437,12 +437,15 @@ export const EventCard = React.memo<EventCardProps>(
                 {statusPagamento}
               </Badge>
 
-              {/* Badge de evolução pendente */}
-              {possuiEvolucao === 'não' && (
-                <Badge variant="destructive" className="text-xs px-2 py-1">
-                  Evoluir
-                </Badge>
-              )}
+              {/* AI dev note: Badge de evolução pendente - só exibir para consultas FINALIZADAS sem evolução */}
+              {/* Não exibir se cancelado ou se já possui evolução */}
+              {possuiEvolucao === 'não' &&
+                !isCancelado &&
+                statusConsulta.toLowerCase() === 'finalizado' && (
+                  <Badge variant="destructive" className="text-xs px-2 py-1">
+                    Evoluir
+                  </Badge>
+                )}
             </div>
 
             {/* Linha 5: Profissional */}
@@ -566,14 +569,17 @@ export const EventCard = React.memo<EventCardProps>(
                   </Badge>
                 )}
 
-                {possuiEvolucao === 'não' && (
-                  <Badge
-                    variant="destructive"
-                    className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
-                  >
-                    Evoluir
-                  </Badge>
-                )}
+                {/* AI dev note: Badge de evolução pendente - só exibir para consultas FINALIZADAS sem evolução */}
+                {possuiEvolucao === 'não' &&
+                  !isCancelado &&
+                  statusConsulta.toLowerCase() === 'finalizado' && (
+                    <Badge
+                      variant="destructive"
+                      className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
+                    >
+                      Evoluir
+                    </Badge>
+                  )}
               </div>
 
               <div className="flex items-center gap-3 md:gap-4 text-xs text-muted-foreground flex-wrap">

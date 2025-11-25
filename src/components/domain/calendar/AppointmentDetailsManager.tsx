@@ -143,7 +143,8 @@ export const AppointmentDetailsManager =
       const [evolucoes, setEvolucoes] = useState<
         SupabaseRelatorioEvolucaoCompleto[]
       >([]);
-      const [isLoadingEvolucoes, setIsLoadingEvolucoes] = useState(false);
+      // AI dev note: Iniciar como true para evitar flash do badge "Evolução Pendente" enquanto carrega
+      const [isLoadingEvolucoes, setIsLoadingEvolucoes] = useState(true);
       const [isSavingEvolucao, setIsSavingEvolucao] = useState(false);
 
       // Estados para edição de evoluções
@@ -367,7 +368,14 @@ export const AppointmentDetailsManager =
       // Carregar evoluções existentes quando appointment mudar
       useEffect(() => {
         const loadEvolucoes = async () => {
-          if (!appointment || !isOpen) return;
+          // AI dev note: Resetar estados quando modal não está aberto
+          if (!isOpen) {
+            setEvolucoes([]);
+            setIsLoadingEvolucoes(true);
+            return;
+          }
+
+          if (!appointment) return;
 
           setIsLoadingEvolucoes(true);
           try {

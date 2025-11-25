@@ -313,15 +313,18 @@ export const RecentConsultations = React.memo<RecentConsultationsProps>(
                         {consultation.status_pagamento}
                       </Badge>
 
-                      {/* Badge de evolução - apenas se não possui */}
-                      {consultation.possui_evolucao === 'não' && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs px-1.5 py-0.5 h-5 bg-yellow-50 text-yellow-800 border-yellow-200"
-                        >
-                          Evoluir Paciente
-                        </Badge>
-                      )}
+                      {/* AI dev note: Badge de evolução - apenas para consultas FINALIZADAS sem evolução */}
+                      {/* Não exibir se cancelado ou se já possui evolução */}
+                      {consultation.possui_evolucao === 'não' &&
+                        consultation.status_consulta.toLowerCase() ===
+                          'finalizado' && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs px-1.5 py-0.5 h-5 bg-yellow-50 text-yellow-800 border-yellow-200"
+                          >
+                            Evoluir Paciente
+                          </Badge>
+                        )}
                     </div>
                   </div>
                 </div>
