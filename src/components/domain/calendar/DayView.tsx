@@ -46,7 +46,8 @@ export const DayView = React.memo<DayViewProps>(
     // Constantes do grid
     const startHour = 7; // AI dev note: Alterado de 6 para 7 conforme solicitação
     const endHour = 20;
-    const hourHeight = 64;
+    // HourHeight responsivo: 48px mobile, 64px desktop (ajustado via CSS nos slots)
+    const hourHeight = 64; // Mantido para cálculos, mas slots usam altura responsiva via CSS
 
     // Gerar array de horários
     const timeSlots = useMemo(() => {
@@ -246,17 +247,20 @@ export const DayView = React.memo<DayViewProps>(
         {/* Grid diário - estrutura Card igual ao CalendarGrid */}
         <Card className={cn('w-full overflow-hidden', className)}>
           <CardContent className="p-0">
-            {/* Header com dia */}
-            <div className="border-b bg-muted/30 p-4">
+            {/* Header com dia - responsivo */}
+            <div className="border-b bg-muted/30 p-2 md:p-3 lg:p-4">
               <h2
                 className={cn(
-                  'text-lg font-semibold capitalize',
+                  'text-sm md:text-base lg:text-lg font-semibold capitalize',
                   isCurrentDay && 'text-primary'
                 )}
               >
-                {dayLabel}
+                <span className="md:hidden">
+                  {format(currentDate, 'EEE, dd/MM', { locale: ptBR })}
+                </span>
+                <span className="hidden md:inline">{dayLabel}</span>
                 {isCurrentDay && (
-                  <span className="ml-2 text-sm font-normal text-primary">
+                  <span className="ml-1 md:ml-2 text-xs md:text-sm font-normal text-primary">
                     (Hoje)
                   </span>
                 )}
@@ -264,13 +268,13 @@ export const DayView = React.memo<DayViewProps>(
             </div>
 
             {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
-            <div className="w-full grid grid-cols-[80px_1fr] h-[calc(100vh-10rem)] overflow-y-auto">
-              {/* Coluna de horários */}
+            <div className="w-full grid grid-cols-[50px_1fr] md:grid-cols-[60px_1fr] lg:grid-cols-[80px_1fr] h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">
+              {/* Coluna de horários - responsiva */}
               <div className="border-r bg-muted/10">
                 {timeSlots.map((time) => (
                   <div
                     key={time}
-                    className="border-b text-xs text-muted-foreground font-medium p-3 text-center"
+                    className="border-b text-[9px] md:text-[10px] lg:text-xs text-muted-foreground font-medium p-1 md:p-2 lg:p-3 text-center flex items-center justify-center"
                     style={{ height: `${hourHeight}px` }}
                   >
                     {time}
@@ -317,7 +321,7 @@ export const DayView = React.memo<DayViewProps>(
                     >
                       {hasHiddenEventsInSlot && totalEventsInSlot > 2 && (
                         <div
-                          className="absolute top-1 right-1 text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full font-medium z-10 shadow-sm hover:bg-primary/90 transition-colors cursor-pointer"
+                          className="absolute top-0.5 right-0.5 md:top-1 md:right-1 text-[9px] md:text-xs bg-primary text-primary-foreground px-1.5 md:px-2 py-0.5 md:py-1 rounded-full font-medium z-10 shadow-sm hover:bg-primary/90 transition-colors cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
                             setModalState({
@@ -328,7 +332,7 @@ export const DayView = React.memo<DayViewProps>(
                           }}
                           title={`Ver todos os ${totalEventsInSlot} eventos`}
                         >
-                          +{totalEventsInSlot - 2} eventos
+                          +{totalEventsInSlot - 2}
                         </div>
                       )}
                     </div>

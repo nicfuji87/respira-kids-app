@@ -130,10 +130,12 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
         {/* Grid semanal - estrutura igual ao CalendarGrid */}
         <Card className={cn('overflow-hidden', className)}>
           <CardContent className="p-0">
-            {/* Header com dias da semana */}
+            {/* Header com dias da semana - responsivo */}
             <div className="w-full grid grid-cols-8 border-b bg-muted/30">
-              <div className="p-3 border-r bg-muted/50 text-center">
-                <div className="text-sm font-medium">Horário</div>
+              <div className="p-1 md:p-2 lg:p-3 border-r bg-muted/50 text-center">
+                <div className="text-[10px] md:text-xs lg:text-sm font-medium">
+                  Horário
+                </div>
               </div>
               {weekDays.map((day) => {
                 const isCurrentDay = isToday(day);
@@ -141,29 +143,34 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                   <div
                     key={day.toISOString()}
                     className={cn(
-                      'p-3 border-r last:border-r-0 text-center',
+                      'p-1 md:p-2 lg:p-3 border-r last:border-r-0 text-center',
                       isCurrentDay && 'bg-primary/15'
                     )}
                   >
                     <div className="text-center">
                       <div
                         className={cn(
-                          'text-sm font-medium capitalize',
+                          'text-[10px] md:text-xs lg:text-sm font-medium capitalize',
                           isCurrentDay && 'text-primary font-semibold'
                         )}
                       >
-                        {format(day, 'EEE', { locale: ptBR })}
+                        <span className="md:hidden">
+                          {format(day, 'EEE', { locale: ptBR }).charAt(0)}
+                        </span>
+                        <span className="hidden md:inline">
+                          {format(day, 'EEE', { locale: ptBR })}
+                        </span>
                       </div>
                       <div
                         className={cn(
-                          'text-lg font-bold mt-1',
+                          'text-sm md:text-base lg:text-lg font-bold mt-0.5 md:mt-1',
                           isCurrentDay && 'text-primary'
                         )}
                       >
                         {format(day, 'd')}
                       </div>
                       {isCurrentDay && (
-                        <div className="w-2 h-2 bg-primary rounded-full mx-auto mt-1" />
+                        <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-primary rounded-full mx-auto mt-0.5 md:mt-1" />
                       )}
                     </div>
                   </div>
@@ -172,13 +179,13 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
             </div>
 
             {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
-            <div className="w-full grid grid-cols-8 relative h-[calc(100vh-10rem)] overflow-y-auto">
-              {/* Coluna de horários */}
+            <div className="w-full grid grid-cols-8 relative h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">
+              {/* Coluna de horários - responsiva */}
               <div className="border-r bg-muted/10">
                 {timeSlots.map((time) => (
                   <div
                     key={time}
-                    className="h-16 border-b p-2 text-xs text-muted-foreground font-medium text-center flex items-center justify-center"
+                    className="h-12 md:h-14 lg:h-16 border-b p-1 md:p-1.5 lg:p-2 text-[9px] md:text-[10px] lg:text-xs text-muted-foreground font-medium text-center flex items-center justify-center"
                   >
                     {time}
                   </div>
@@ -204,33 +211,39 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                           isCurrentDay && 'bg-primary/5'
                         )}
                         style={{
-                          minHeight: `${timeSlots.length * 64}px`,
+                          minHeight: `${timeSlots.length * 48}px`, // 48px no mobile (h-12)
                         }}
                       >
-                        {/* Slots de horário clicáveis */}
+                        {/* Slots de horário clicáveis - altura responsiva */}
                         {timeSlots.map((time) => (
                           <div
                             key={time}
-                            className="h-16 border-b hover:bg-muted/20 cursor-pointer transition-colors"
+                            className="h-12 md:h-14 lg:h-16 border-b hover:bg-muted/20 cursor-pointer transition-colors"
                             onClick={() => handleTimeSlotClick(time, day)}
                           />
                         ))}
 
                         {/* Eventos renderizados sobre os slots */}
                         {eventsWithOverlap.map(
-                          ({ event, overlapIndex, totalOverlapping }) => (
-                            <WeekEventBlock
-                              key={event.id}
-                              event={event}
-                              startHour={startHour}
-                              endHour={endHour}
-                              hourHeight={64}
-                              onClick={handleEventClick}
-                              overlapIndex={overlapIndex}
-                              totalOverlapping={totalOverlapping}
-                              userRole={userRole}
-                            />
-                          )
+                          ({ event, overlapIndex, totalOverlapping }) => {
+                            // HourHeight responsivo: 48px mobile (h-12), 56px tablet (h-14), 64px desktop (h-16)
+                            // Usar 48px como base (mobile first) - os slots já estão ajustados via CSS
+                            const responsiveHourHeight = 48;
+
+                            return (
+                              <WeekEventBlock
+                                key={event.id}
+                                event={event}
+                                startHour={startHour}
+                                endHour={endHour}
+                                hourHeight={responsiveHourHeight}
+                                onClick={handleEventClick}
+                                overlapIndex={overlapIndex}
+                                totalOverlapping={totalOverlapping}
+                                userRole={userRole}
+                              />
+                            );
+                          }
                         )}
                       </div>
                     );

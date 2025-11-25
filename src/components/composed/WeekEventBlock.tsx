@@ -105,7 +105,7 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
         }}
         onClick={handleClick}
       >
-        <div className="w-full h-full p-1">
+        <div className="w-full h-full p-0.5 md:p-1">
           <EventCard
             event={event}
             variant="week"
