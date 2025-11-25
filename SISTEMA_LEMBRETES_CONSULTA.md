@@ -99,7 +99,7 @@ Status: ✅ ATIVO
 
 **Evento:** `appointment_reminder`
 
-**URL Destino:** `https://webhooks-i.infusecomunicacao.online/webhook/webhookRK`
+**URL Destino:** `https://webhooks-i.infusecomunicacao.online/webhook/webhookRK2`
 
 **Payload JSON:**
 
@@ -380,7 +380,7 @@ SELECT cron.schedule(
 **Webhook Configurado:**
 
 - Evento: `appointment_reminder` adicionado à lista de eventos ✅
-- URL: `https://webhooks-i.infusecomunicacao.online/webhook/webhookRK` ✅
+- URL: `https://webhooks-i.infusecomunicacao.online/webhook/webhookRK2` ✅
 
 ---
 

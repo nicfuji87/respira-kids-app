@@ -138,7 +138,7 @@ Ao clicar em "Verificar número":
 
 - Gera código aleatório de 6 dígitos
 - Registra na `webhook_queue`
-- Envia webhook para `https://webhooks-i.infusecomunicacao.online/webhook/webhookRK`
+- Envia webhook para `https://webhooks-i.infusecomunicacao.online/webhook/webhookRK2`
 
 ```json
 {

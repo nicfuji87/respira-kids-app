@@ -202,7 +202,7 @@ USING (true);
 
 ### **Webhook Evolution API**
 
-- Endpoint atual: `https://webhooks-i.infusecomunicacao.online/webhook/webhookRK`
+- Endpoint atual: `https://webhooks-i.infusecomunicacao.online/webhook/webhookRK2`
 - Usado para: Enviar código de validação WhatsApp
 
 ---

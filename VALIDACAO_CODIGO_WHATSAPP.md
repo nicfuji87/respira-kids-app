@@ -44,7 +44,7 @@
 ### **Endpoint**
 
 ```
-POST https://webhooks-i.infusecomunicacao.online/webhook/webhookRK
+POST https://webhooks-i.infusecomunicacao.online/webhook/webhookRK2
 ```
 
 ### **Payload**
