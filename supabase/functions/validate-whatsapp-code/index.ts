@@ -11,10 +11,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// URL do webhook para envio do código
-const WEBHOOK_URL =
-  'https://webhooks-i.infusecomunicacao.online/webhook/webhookRK2';
-
 interface SendCodeRequest {
   action: 'send_code' | 'validate_code';
   whatsappJid: string;
@@ -86,52 +82,58 @@ Deno.serve(async (req: Request) => {
         // Continuar mesmo com erro - prioridade é enviar o código
       }
 
-      // 3. ENVIAR WEBHOOK DIRETAMENTE (sem fila!)
-      const webhookPayload = {
-        tipo: 'validar_whatsapp',
-        timestamp: new Date().toISOString(),
-        data: {
-          whatsapp: phoneNumber,
-          codigo: code,
-          created_at: new Date().toISOString(),
-        },
-        webhook_id: crypto.randomUUID(),
-      };
-
+      // 3. ENVIAR WEBHOOK via pg_net (mais rápido e confiável)
       console.log(
-        `📤 [validate-whatsapp-code] Enviando webhook para ${WEBHOOK_URL}`
+        `📤 [validate-whatsapp-code] Enviando webhook via pg_net para ${phoneNumber}`
       );
 
-      try {
-        const webhookResponse = await fetch(WEBHOOK_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Source': 'RespiraKids-EHR',
-            'User-Agent': 'RespiraKids-Webhook/1.0',
-          },
-          body: JSON.stringify(webhookPayload),
-        });
-
-        if (!webhookResponse.ok) {
-          console.error(`❌ Webhook falhou: ${webhookResponse.status}`);
-          // Tentar inserir na fila como fallback
-          await supabase.from('webhook_queue').insert({
-            evento: 'validar_whatsapp',
-            payload: webhookPayload,
-            status: 'pendente',
-            tentativas: 0,
-            max_tentativas: 3,
-            proximo_retry: new Date().toISOString(),
-          });
-        } else {
-          console.log(
-            `✅ [validate-whatsapp-code] Webhook enviado com sucesso!`
-          );
+      // Usar RPC que chama pg_net diretamente (mais confiável que fetch)
+      const { data: rpcResult, error: rpcError } = await supabase.rpc(
+        'send_whatsapp_validation_webhook',
+        {
+          p_phone_number: phoneNumber,
+          p_codigo: code,
         }
-      } catch (webhookError) {
-        console.error('❌ Erro ao enviar webhook:', webhookError);
+      );
+
+      if (rpcError) {
+        console.error('❌ Erro na RPC:', rpcError);
         // Fallback: inserir na fila
+        const webhookPayload = {
+          tipo: 'validar_whatsapp',
+          timestamp: new Date().toISOString(),
+          data: {
+            whatsapp: phoneNumber,
+            codigo: code,
+            created_at: new Date().toISOString(),
+          },
+          webhook_id: crypto.randomUUID(),
+        };
+        await supabase.from('webhook_queue').insert({
+          evento: 'validar_whatsapp',
+          payload: webhookPayload,
+          status: 'pendente',
+          tentativas: 0,
+          max_tentativas: 3,
+          proximo_retry: new Date().toISOString(),
+        });
+      } else if (rpcResult && rpcResult[0]?.success) {
+        console.log(
+          `✅ [validate-whatsapp-code] Webhook enviado via pg_net! Request ID: ${rpcResult[0]?.request_id}`
+        );
+      } else {
+        console.error('❌ pg_net falhou:', rpcResult?.[0]?.error_msg);
+        // Fallback: inserir na fila
+        const webhookPayload = {
+          tipo: 'validar_whatsapp',
+          timestamp: new Date().toISOString(),
+          data: {
+            whatsapp: phoneNumber,
+            codigo: code,
+            created_at: new Date().toISOString(),
+          },
+          webhook_id: crypto.randomUUID(),
+        };
         await supabase.from('webhook_queue').insert({
           evento: 'validar_whatsapp',
           payload: webhookPayload,
