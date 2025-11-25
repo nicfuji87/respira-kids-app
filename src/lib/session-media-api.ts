@@ -104,15 +104,19 @@ export async function fetchMediaByPatient(
         const agendamento = agendamentoMap.get(agendamentoId);
 
         if (!acc[agendamentoId]) {
+          // AI dev note: Supabase retorna joins como arrays, então acessamos [0]
+          const profissionalData = agendamento?.profissional as
+            | { nome: string }[]
+            | null;
+          const tipoServicoData = agendamento?.tipo_servico as
+            | { nome: string }[]
+            | null;
+
           acc[agendamentoId] = {
             agendamento_id: agendamentoId,
             data_sessao: agendamento?.data_hora || '',
-            profissional_nome:
-              (agendamento?.profissional as { nome: string } | null)?.nome ||
-              'Não informado',
-            tipo_servico:
-              (agendamento?.tipo_servico as { nome: string } | null)?.nome ||
-              'Não informado',
+            profissional_nome: profissionalData?.[0]?.nome || 'Não informado',
+            tipo_servico: tipoServicoData?.[0]?.nome || 'Não informado',
             medias: [],
           };
         }
