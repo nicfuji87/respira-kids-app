@@ -288,31 +288,41 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
                             (event.metadata?.pacienteNome as string) ||
                             event.title.split(' - ').pop() ||
                             event.title;
+                          // Cor do status de pagamento
+                          const corPagamentoHex =
+                            (event.metadata?.statusPagamentoCor as string) ||
+                            '#6B7280';
 
                           return (
                             <div
                               key={event.id}
-                              className="px-1 py-px rounded-sm text-[9px] font-medium text-white truncate leading-tight cursor-pointer hover:opacity-80"
+                              className="flex items-center gap-1 px-1 py-px rounded-sm text-[9px] font-medium text-white leading-tight cursor-pointer hover:opacity-80"
                               style={{ backgroundColor: corEventoHex }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleEventClick(event);
                               }}
-                              title={event.title}
+                              title={`${event.title} - ${event.metadata?.statusPagamento || 'Pagamento não definido'}`}
                             >
-                              {pacienteNome}
+                              {/* Bolinha do status de pagamento */}
+                              <div
+                                className="w-2 h-2 rounded-full flex-shrink-0 border border-white/50"
+                                style={{ backgroundColor: corPagamentoHex }}
+                              />
+                              <span className="truncate">{pacienteNome}</span>
                             </div>
                           );
                         })}
                         {dayEvents.length > mobileMaxEvents && (
                           <div
-                            className="text-[9px] text-muted-foreground cursor-pointer hover:text-primary text-center font-medium"
+                            className="text-[9px] text-muted-foreground cursor-pointer hover:text-primary hover:underline text-center font-medium py-0.5"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleShowMoreEvents(day, dayEvents);
                             }}
+                            title={`Ver todos os ${dayEvents.length} agendamentos`}
                           >
-                            +{dayEvents.length - mobileMaxEvents}
+                            +{dayEvents.length - mobileMaxEvents} mais
                           </div>
                         )}
                       </div>
