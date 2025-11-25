@@ -178,24 +178,17 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
           onValueChange={handleTabChange}
           className="w-full"
         >
-          <TabsList
-            className="grid w-full gap-1 h-auto p-1"
-            style={{
-              gridTemplateColumns: `repeat(${allowedTabs.length}, minmax(0, 1fr))`,
-            }}
-          >
+          <TabsList className="flex flex-wrap justify-start gap-1 h-auto p-2 w-full">
             {allowedTabs.map((tab) => {
               const IconComponent = tab.icon;
               return (
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
-                  className="flex items-center gap-1 h-9 text-xs md:text-sm px-2"
+                  className="flex items-center gap-2 h-9 text-xs sm:text-sm px-3 whitespace-nowrap"
                 >
-                  <IconComponent className="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
-                  <span className="truncate max-w-[60px] md:max-w-[80px] lg:max-w-full">
-                    {tab.label}
-                  </span>
+                  <IconComponent className="h-4 w-4 flex-shrink-0" />
+                  <span>{tab.label}</span>
                 </TabsTrigger>
               );
             })}
