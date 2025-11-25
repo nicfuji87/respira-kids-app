@@ -206,34 +206,50 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
       <>
         <Card className={cn('w-full max-w-none overflow-hidden', className)}>
           <CardContent className="p-0 w-full">
-            {/* Header com dias da semana */}
+            {/* Header com dias da semana - responsivo */}
             <div className="grid grid-cols-7 border-b">
               {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => (
                 <div
                   key={day}
-                  className="p-4 text-center font-medium bg-muted/50 border-r last:border-r-0"
+                  className="p-1.5 md:p-3 lg:p-4 text-center font-medium bg-muted/50 border-r last:border-r-0 text-[10px] md:text-xs lg:text-sm"
                 >
-                  {day}
+                  <span className="hidden md:inline">{day}</span>
+                  <span className="md:hidden">{day.charAt(0)}</span>
                 </div>
               ))}
             </div>
 
             {/* Grid do calendário - altura adaptativa à tela */}
-            <div className="grid grid-cols-7 h-[calc(100vh-8rem)] overflow-hidden">
+            <div className="grid grid-cols-7 h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] lg:h-[calc(100vh-8rem)] overflow-hidden">
               {calendarDays.map((day) => {
                 const dayEvents = getEventsForDate(day);
                 const isCurrentMonth =
                   day.getMonth() === currentDate.getMonth();
                 const isToday = isSameDay(day, new Date());
 
+                // Cores para os eventos
+                const colorToHex: Record<string, string> = {
+                  blue: '#3B82F6',
+                  green: '#22C55E',
+                  orange: '#F97316',
+                  red: '#EF4444',
+                  purple: '#8B5CF6',
+                  pink: '#EC4899',
+                  gray: '#6B7280',
+                };
+
+                // Quantos eventos mostrar no mobile (estilo Google Calendar)
+                const mobileMaxEvents = 3;
+                const desktopMaxEvents = 2;
+
                 return (
                   <div
                     key={day.toISOString()}
                     className={cn(
-                      'border-r border-b last:border-r-0 p-2 cursor-pointer',
+                      'border-r border-b last:border-r-0 p-0.5 md:p-1.5 lg:p-2 cursor-pointer',
                       'hover:bg-muted/50 transition-colors group',
-                      'flex flex-col gap-1',
-                      'min-h-[120px] h-[calc((100vh-8rem)/6)]', // Altura mínima para 3 linhas + altura responsiva
+                      'flex flex-col',
+                      'min-h-[70px] md:min-h-[80px] lg:min-h-[100px]',
                       {
                         'bg-muted/20': !isCurrentMonth,
                         'bg-primary/10': isToday,
@@ -243,37 +259,88 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
                   >
                     {/* Número do dia */}
                     <div
-                      className={cn('text-sm font-medium flex-shrink-0', {
-                        'text-muted-foreground': !isCurrentMonth,
-                        'text-primary font-bold': isToday,
-                      })}
+                      className={cn(
+                        'text-[11px] md:text-xs lg:text-sm font-medium flex-shrink-0 text-center mb-0.5',
+                        {
+                          'text-muted-foreground': !isCurrentMonth,
+                          'text-primary font-bold': isToday,
+                        }
+                      )}
                     >
-                      {format(day, 'd')}
+                      {isToday ? (
+                        <span className="inline-flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary text-primary-foreground text-[10px] md:text-xs">
+                          {format(day, 'd')}
+                        </span>
+                      ) : (
+                        format(day, 'd')
+                      )}
                     </div>
 
-                    {/* Eventos do dia */}
-                    <div className="flex-1 space-y-1">
-                      {dayEvents.slice(0, 2).map((event) => (
-                        <EventCard
-                          key={event.id}
-                          event={event}
-                          variant="month"
-                          onClick={handleEventClick}
-                          className="text-xs"
-                        />
-                      ))}
-                      {dayEvents.length > 2 && (
-                        <div
-                          className="text-xs text-muted-foreground cursor-pointer hover:text-primary hover:underline transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation(); // Evitar triggering do onClick do dia
-                            handleShowMoreEvents(day, dayEvents);
-                          }}
-                          title="Clique para ver todos os eventos do dia"
-                        >
-                          +{dayEvents.length - 2} eventos
-                        </div>
-                      )}
+                    {/* Eventos do dia - estilo Google Calendar */}
+                    <div className="flex-1 flex flex-col gap-px overflow-hidden">
+                      {/* Mobile: barras coloridas com texto truncado */}
+                      <div className="md:hidden flex flex-col gap-px">
+                        {dayEvents.slice(0, mobileMaxEvents).map((event) => {
+                          const corEventoHex = event.color
+                            ? colorToHex[event.color] || '#3B82F6'
+                            : '#3B82F6';
+                          const pacienteNome =
+                            (event.metadata?.pacienteNome as string) ||
+                            event.title.split(' - ').pop() ||
+                            event.title;
+
+                          return (
+                            <div
+                              key={event.id}
+                              className="px-1 py-px rounded-sm text-[9px] font-medium text-white truncate leading-tight cursor-pointer hover:opacity-80"
+                              style={{ backgroundColor: corEventoHex }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEventClick(event);
+                              }}
+                              title={event.title}
+                            >
+                              {pacienteNome}
+                            </div>
+                          );
+                        })}
+                        {dayEvents.length > mobileMaxEvents && (
+                          <div
+                            className="text-[9px] text-muted-foreground cursor-pointer hover:text-primary text-center font-medium"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleShowMoreEvents(day, dayEvents);
+                            }}
+                          >
+                            +{dayEvents.length - mobileMaxEvents}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Desktop: mostrar EventCards */}
+                      <div className="hidden md:flex md:flex-col gap-0.5">
+                        {dayEvents.slice(0, desktopMaxEvents).map((event) => (
+                          <EventCard
+                            key={event.id}
+                            event={event}
+                            variant="month"
+                            onClick={handleEventClick}
+                            className="text-xs"
+                          />
+                        ))}
+                        {dayEvents.length > desktopMaxEvents && (
+                          <div
+                            className="text-[10px] lg:text-xs text-muted-foreground cursor-pointer hover:text-primary hover:underline transition-colors truncate"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleShowMoreEvents(day, dayEvents);
+                            }}
+                            title="Clique para ver todos os eventos do dia"
+                          >
+                            +{dayEvents.length - desktopMaxEvents} eventos
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
