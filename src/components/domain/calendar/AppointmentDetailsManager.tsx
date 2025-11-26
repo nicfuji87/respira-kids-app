@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, MapPin, Edit, Save, XCircle } from 'lucide-react';
+import { MapPin, Edit, Save, XCircle } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 import { ToastAction } from '@/components/primitives/toast';
 import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
@@ -676,20 +676,15 @@ export const AppointmentDetailsManager =
                     </Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  {!isLoadingEvolucoes && evolucoes.length === 0 && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs px-2 py-1 bg-yellow-50 text-yellow-800 border-yellow-200"
-                    >
-                      Evolução Pendente
-                    </Badge>
-                  )}
-                  <Button variant="outline" onClick={onClose} size="sm">
-                    <X className="h-4 w-4 mr-2" />
-                    Fechar
-                  </Button>
-                </div>
+                {/* Badge de Evolução Pendente - o X de fechar é do Dialog */}
+                {!isLoadingEvolucoes && evolucoes.length === 0 && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs px-2 py-1 bg-yellow-50 text-yellow-800 border-yellow-200"
+                  >
+                    Evolução Pendente
+                  </Badge>
+                )}
               </div>
             </DialogHeader>
 
