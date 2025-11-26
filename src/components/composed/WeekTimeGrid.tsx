@@ -82,33 +82,58 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
       return grouped;
     }, [weekDays, events]);
 
-    // Detecção simples de sobreposições
+    // AI dev note: Detecção de sobreposições estilo Google Agenda
+    // Eventos que se sobrepõem no tempo ficam lado a lado
     const getEventsWithOverlapData = (dayEvents: CalendarEvent[]) => {
-      return dayEvents.map((event) => {
-        // Busca eventos no mesmo horário exato
-        const sameTimeEvents = dayEvents.filter((otherEvent) => {
-          if (otherEvent.id === event.id) return false;
-          return event.start.getTime() === otherEvent.start.getTime();
-        });
+      if (dayEvents.length === 0) return [];
 
-        if (sameTimeEvents.length === 0) {
-          // Evento único no horário
-          return {
-            event,
-            overlapIndex: 0,
-            totalOverlapping: 1,
-          };
+      // Função para verificar se dois eventos se sobrepõem no tempo
+      const eventsOverlap = (a: CalendarEvent, b: CalendarEvent): boolean => {
+        return a.start < b.end && a.end > b.start;
+      };
+
+      // Mapa para armazenar informações de layout
+      const layoutInfo: Map<string, { column: number; totalColumns: number }> =
+        new Map();
+
+      // Agrupar eventos que se sobrepõem
+      const overlapGroups: CalendarEvent[][] = [];
+      const sortedEvents = [...dayEvents].sort(
+        (a, b) => a.start.getTime() - b.start.getTime()
+      );
+
+      for (const event of sortedEvents) {
+        let addedToGroup = false;
+        for (const group of overlapGroups) {
+          if (group.some((e) => eventsOverlap(e, event))) {
+            group.push(event);
+            addedToGroup = true;
+            break;
+          }
         }
+        if (!addedToGroup) {
+          overlapGroups.push([event]);
+        }
+      }
 
-        // Eventos no mesmo horário - ordenar por ID para consistência
-        const allSameTime = [event, ...sameTimeEvents].sort((a, b) =>
-          a.id.localeCompare(b.id)
-        );
+      // Atribuir colunas dentro de cada grupo
+      for (const group of overlapGroups) {
+        const totalColumns = group.length;
+        group.sort((a, b) => {
+          const diff = a.start.getTime() - b.start.getTime();
+          return diff !== 0 ? diff : a.id.localeCompare(b.id);
+        });
+        group.forEach((event, index) => {
+          layoutInfo.set(event.id, { column: index, totalColumns });
+        });
+      }
 
+      return dayEvents.map((event) => {
+        const info = layoutInfo.get(event.id) || { column: 0, totalColumns: 1 };
         return {
           event,
-          overlapIndex: allSameTime.findIndex((e) => e.id === event.id),
-          totalOverlapping: allSameTime.length,
+          overlapIndex: info.column,
+          totalOverlapping: info.totalColumns,
         };
       });
     };
@@ -180,12 +205,12 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
 
             {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
             <div className="w-full grid grid-cols-8 relative h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">
-              {/* Coluna de horários - responsiva */}
+              {/* Coluna de horários - altura fixa para consistência com posicionamento de eventos */}
               <div className="border-r bg-muted/10">
                 {timeSlots.map((time) => (
                   <div
                     key={time}
-                    className="h-12 md:h-14 lg:h-16 border-b p-1 md:p-1.5 lg:p-2 text-[9px] md:text-[10px] lg:text-xs text-muted-foreground font-medium text-center flex items-center justify-center"
+                    className="h-12 border-b p-1 text-[9px] md:text-[10px] text-muted-foreground font-medium text-center flex items-center justify-center"
                   >
                     {time}
                   </div>
@@ -214,11 +239,11 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                           minHeight: `${timeSlots.length * 48}px`, // 48px no mobile (h-12)
                         }}
                       >
-                        {/* Slots de horário clicáveis - altura responsiva */}
+                        {/* Slots de horário clicáveis - altura fixa para consistência */}
                         {timeSlots.map((time) => (
                           <div
                             key={time}
-                            className="h-12 md:h-14 lg:h-16 border-b hover:bg-muted/20 cursor-pointer transition-colors"
+                            className="h-12 border-b hover:bg-muted/20 cursor-pointer transition-colors"
                             onClick={() => handleTimeSlotClick(time, day)}
                           />
                         ))}
@@ -226,9 +251,8 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                         {/* Eventos renderizados sobre os slots */}
                         {eventsWithOverlap.map(
                           ({ event, overlapIndex, totalOverlapping }) => {
-                            // HourHeight responsivo: 48px mobile (h-12), 56px tablet (h-14), 64px desktop (h-16)
-                            // Usar 48px como base (mobile first) - os slots já estão ajustados via CSS
-                            const responsiveHourHeight = 48;
+                            // AI dev note: Altura fixa de 48px (h-12) consistente com slots
+                            const hourHeight = 48;
 
                             return (
                               <WeekEventBlock
@@ -236,7 +260,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                                 event={event}
                                 startHour={startHour}
                                 endHour={endHour}
-                                hourHeight={responsiveHourHeight}
+                                hourHeight={hourHeight}
                                 onClick={handleEventClick}
                                 overlapIndex={overlapIndex}
                                 totalOverlapping={totalOverlapping}

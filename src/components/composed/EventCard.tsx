@@ -176,30 +176,23 @@ export const EventCard = React.memo<EventCardProps>(
       );
     }
 
-    // Variante para vista semanal
+    // Variante para vista semanal - SIMPLIFICADA conforme modelo Google Agenda
+    // AI dev note: Mostra apenas nome do paciente + profissional
+    // A cor indica tipo de serviço, bolinha indica status pagamento, horário é pelo grid
     if (variant === 'week') {
-      // AI dev note: CORREÇÃO - Usar dados do metadata ao invés de parsing do título
       const pacienteNome =
         (event.metadata?.pacienteNome as string) ||
         (event.title.includes(' - ')
-          ? event.title.split(' - ').slice(-1)[0] // Último elemento (nome do paciente)
+          ? event.title.split(' - ').slice(-1)[0]
           : event.title);
 
-      const tipoServicoNome =
-        (event.metadata?.tipoServicoNome as string) ||
-        (event.title.includes(' - ')
-          ? event.title.split(' - ').slice(0, -1).join(' - ') // Tudo exceto último (tipo de serviço)
-          : 'Serviço não informado');
-
       const profissionalNome =
-        (event.metadata?.profissionalNome as string) ||
-        'Profissional não informado';
-      const statusConsulta =
-        (event.metadata?.statusConsulta as string) || 'Status não informado';
+        (event.metadata?.profissionalNome as string) || '';
+      const statusConsulta = (event.metadata?.statusConsulta as string) || '';
       const statusPagamento =
         (event.metadata?.statusPagamento as string) || 'Pendente';
+      const tipoServicoNome = (event.metadata?.tipoServicoNome as string) || '';
 
-      // AI dev note: Detectar se agendamento está cancelado
       const isCancelado = statusConsulta.toLowerCase() === 'cancelado';
 
       // Mapa de cores para hex
@@ -213,85 +206,23 @@ export const EventCard = React.memo<EventCardProps>(
         gray: '#6B7280',
       };
 
-      // Cor do tipo de serviço (evento) - cinza se cancelado
       const corEventoHex = isCancelado
-        ? '#9CA3AF' // Cinza médio para cancelados
+        ? '#9CA3AF'
         : event.color
           ? colorToHex[event.color] || '#3B82F6'
           : '#3B82F6';
 
-      // Cor do status de pagamento vinda do metadata
       const corPagamentoHex =
         (event.metadata?.statusPagamentoCor as string) || '#6B7280';
 
-      // Verificar se há erro nos dados
-      const hasError = !event.metadata || !pacienteNome;
-
-      // Renderizar baseado no role e altura disponível
-      let content;
-      if (hasError) {
-        content = (
-          <div className="truncate text-center">
-            Erro de dados no agendamento
-          </div>
-        );
-      } else {
-        // Vista semanal limpa e simples
-        content = (
-          <div className="h-full flex flex-col justify-center p-1 space-y-0.5">
-            {/* Nome do paciente com bolinha - ocultar bolinha se cancelado */}
-            <div className="flex items-center gap-1">
-              {!isCancelado && (
-                <div
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: corPagamentoHex }}
-                />
-              )}
-              <div
-                className={cn(
-                  'truncate font-medium text-[11px] leading-tight',
-                  // AI dev note: Line-through se cancelado
-                  isCancelado && 'line-through opacity-75'
-                )}
-              >
-                {pacienteNome}
-              </div>
-            </div>
-
-            {/* Tipo de serviço */}
-            <div
-              className={cn(
-                'truncate text-[9px] ml-2.5',
-                isCancelado ? 'opacity-60' : 'opacity-85'
-              )}
-            >
-              {tipoServicoNome}
-            </div>
-
-            {/* Profissional */}
-            <div
-              className={cn(
-                'truncate text-[9px] ml-2.5',
-                isCancelado ? 'opacity-50' : 'opacity-75'
-              )}
-            >
-              {profissionalNome}
-            </div>
-          </div>
-        );
-      }
-
-      // Tooltip com informações completas
-      const tooltipContent = hasError
-        ? 'Erro de dados no agendamento'
-        : `${pacienteNome}\n${tipoServicoNome}\n${formatTime(event.start)} - ${formatTime(event.end)}\nStatus: ${statusConsulta}\nPagamento: ${statusPagamento}\nProfissional: ${profissionalNome}\nLocal: ${event.location}`;
+      // Tooltip com todas as informações para quando clicar/hover
+      const tooltipContent = `${pacienteNome}\n${tipoServicoNome}\n${formatTime(event.start)} - ${formatTime(event.end)}\nStatus: ${statusConsulta}\nPagamento: ${statusPagamento}\nProfissional: ${profissionalNome}\nLocal: ${event.location}`;
 
       return (
         <div
           className={cn(
-            'w-full h-full rounded-sm cursor-pointer hover:opacity-90 transition-opacity',
+            'w-full h-full rounded-sm cursor-pointer hover:opacity-90 transition-opacity overflow-hidden',
             'text-white border border-white/10',
-            // AI dev note: Adicionar padrão visual para cancelados
             isCancelado && 'opacity-70',
             className
           )}
@@ -299,7 +230,44 @@ export const EventCard = React.memo<EventCardProps>(
           onClick={(e) => handleClick(e)}
           title={tooltipContent}
         >
-          {content}
+          {/* Conteúdo simplificado: paciente + profissional */}
+          <div className="h-full flex flex-col justify-start p-1 overflow-hidden">
+            {/* Nome do paciente com bolinha de status pagamento */}
+            <div className="flex items-start gap-1 min-w-0">
+              {!isCancelado && (
+                <div
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5"
+                  style={{ backgroundColor: corPagamentoHex }}
+                />
+              )}
+              <div
+                className={cn(
+                  'font-medium text-[10px] leading-tight break-words',
+                  isCancelado && 'line-through opacity-75'
+                )}
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {pacienteNome}
+              </div>
+            </div>
+
+            {/* Nome do profissional - apenas primeiro nome */}
+            {profissionalNome && (
+              <div
+                className={cn(
+                  'text-[8px] leading-tight opacity-80 truncate mt-0.5',
+                  isCancelado && 'opacity-50'
+                )}
+              >
+                {profissionalNome.split(' ')[0]}
+              </div>
+            )}
+          </div>
         </div>
       );
     }
