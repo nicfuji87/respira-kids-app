@@ -42,6 +42,9 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
   }) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const isUpdatingRef = useRef(false);
+    // AI dev note: Flag para rastrear composição IME (acentos em Android/Samsung)
+    // Não processar onInput enquanto composição estiver ativa para evitar apagar palavras
+    const isComposingRef = useRef(false);
 
     // Sincronizar valor externo com editor
     useEffect(() => {
@@ -54,7 +57,27 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
     }, [value]);
 
     // Handle mudanças no conteúdo
+    // AI dev note: Ignorar onInput durante composição IME para evitar bug em tablets Samsung
     const handleInput = useCallback(() => {
+      if (editorRef.current && !disabled && !isComposingRef.current) {
+        isUpdatingRef.current = true;
+        const html = editorRef.current.innerHTML;
+        onChange(html);
+        setTimeout(() => {
+          isUpdatingRef.current = false;
+        }, 0);
+      }
+    }, [onChange, disabled]);
+
+    // AI dev note: Handlers de composição IME para suporte a acentos em Android/Samsung
+    // Composição: quando usuário digita acento, o teclado cria caractere temporário
+    const handleCompositionStart = useCallback(() => {
+      isComposingRef.current = true;
+    }, []);
+
+    const handleCompositionEnd = useCallback(() => {
+      isComposingRef.current = false;
+      // Processar mudança após composição terminar
       if (editorRef.current && !disabled) {
         isUpdatingRef.current = true;
         const html = editorRef.current.innerHTML;
@@ -279,6 +302,8 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
           onInput={handleInput}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={handleCompositionEnd}
           className={cn(
             'p-3 outline-none overflow-y-auto resize-none',
             'prose prose-sm max-w-none',

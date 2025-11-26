@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Edit, Save, XCircle } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 import { ToastAction } from '@/components/primitives/toast';
@@ -31,7 +31,7 @@ import {
   EvolutionEditor,
   type LocationOption,
 } from '@/components/composed';
-import { Textarea } from '@/components/primitives/textarea';
+import { RichTextEditor } from '@/components/primitives/rich-text-editor';
 import { cn, formatDateTimeBR } from '@/lib/utils';
 import {
   fetchConsultaStatus,
@@ -165,6 +165,92 @@ export const AppointmentDetailsManager =
 
       const { user } = useAuth();
       const { toast } = useToast();
+
+      // AI dev note: Auto-save da evolução no localStorage para evitar perda de texto
+      // quando o modal é fechado acidentalmente (ex: clicar fora do modal)
+      const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+      const getAutoSaveKey = useCallback(
+        () => (appointment ? `evolucao_draft_${appointment.id}` : null),
+        [appointment]
+      );
+
+      // Recuperar rascunho do localStorage quando abrir o modal
+      useEffect(() => {
+        if (!isOpen || !appointment) return;
+
+        const key = getAutoSaveKey();
+        if (!key) return;
+
+        const savedDraft = localStorage.getItem(key);
+        if (savedDraft) {
+          try {
+            const draft = JSON.parse(savedDraft);
+            // Verificar se o rascunho tem conteúdo e é recente (menos de 24h)
+            const isRecent = Date.now() - draft.timestamp < 24 * 60 * 60 * 1000;
+            if (draft.content && isRecent && !formData.evolucaoServico) {
+              toast({
+                title: 'Rascunho recuperado',
+                description:
+                  'Encontramos uma evolução não salva. O texto foi restaurado.',
+                action: (
+                  <ToastAction
+                    altText="Descartar rascunho"
+                    onClick={() => {
+                      localStorage.removeItem(key);
+                      setFormData((prev) => ({ ...prev, evolucaoServico: '' }));
+                    }}
+                  >
+                    Descartar
+                  </ToastAction>
+                ),
+              });
+              setFormData((prev) => ({
+                ...prev,
+                evolucaoServico: draft.content,
+              }));
+            }
+          } catch {
+            // Ignorar erros de parse
+            localStorage.removeItem(key);
+          }
+        }
+      }, [
+        isOpen,
+        appointment,
+        getAutoSaveKey,
+        toast,
+        formData.evolucaoServico,
+      ]);
+
+      // Auto-save da evolução no localStorage (debounced)
+      useEffect(() => {
+        const key = getAutoSaveKey();
+        if (!key || !isOpen) return;
+
+        // Limpar timeout anterior
+        if (autoSaveTimeoutRef.current) {
+          clearTimeout(autoSaveTimeoutRef.current);
+        }
+
+        // Só salvar se tiver conteúdo
+        if (formData.evolucaoServico.trim()) {
+          autoSaveTimeoutRef.current = setTimeout(() => {
+            localStorage.setItem(
+              key,
+              JSON.stringify({
+                content: formData.evolucaoServico,
+                timestamp: Date.now(),
+              })
+            );
+          }, 1000); // Debounce de 1 segundo
+        }
+
+        return () => {
+          if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+          }
+        };
+      }, [formData.evolucaoServico, getAutoSaveKey, isOpen]);
 
       // Estados para confirmação de datas
       const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
@@ -616,8 +702,10 @@ export const AppointmentDetailsManager =
               );
             }
 
-            // Limpar campo de evolução
+            // Limpar campo de evolução e rascunho do localStorage
             setFormData((prev) => ({ ...prev, evolucaoServico: '' }));
+            const key = getAutoSaveKey();
+            if (key) localStorage.removeItem(key);
           }
 
           setIsEdited(false);
@@ -1018,13 +1106,14 @@ export const AppointmentDetailsManager =
 
                             {editingEvolucaoId === evolucao.id ? (
                               <div className="space-y-2">
-                                <Textarea
+                                {/* AI dev note: Usar RichTextEditor ao invés de Textarea para manter formatação */}
+                                <RichTextEditor
                                   value={editingContent}
-                                  onChange={(e) =>
-                                    setEditingContent(e.target.value)
-                                  }
-                                  className="min-h-[80px] text-sm"
+                                  onChange={(value) => setEditingContent(value)}
+                                  minHeight={80}
+                                  maxHeight={200}
                                   disabled={isSavingEdit}
+                                  editorBackgroundColor="white"
                                 />
                                 <div className="flex items-center gap-2 justify-end">
                                   <Button
