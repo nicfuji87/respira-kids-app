@@ -15,6 +15,7 @@ export interface WeekEventBlockProps {
   className?: string;
   overlapIndex?: number; // Índice para eventos sobrepostos (0, 1, 2...)
   totalOverlapping?: number; // Total de eventos sobrepostos no mesmo horário
+  zIndex?: number; // Z-index para controle de sobreposição visual
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
@@ -28,6 +29,7 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
     className,
     overlapIndex = 0,
     totalOverlapping = 1,
+    zIndex = 1,
     userRole,
   }) => {
     const calculatePosition = () => {
@@ -63,13 +65,26 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
       const topPosition = (clampedStartMinutes / 60) * hourHeight;
       const height = Math.max(20, (clampedDurationMinutes / 60) * hourHeight);
 
-      // Largura simples e limpa
-      const width =
-        totalOverlapping > 1 ? `${100 / totalOverlapping}%` : '100%';
-      const leftOffset =
-        totalOverlapping > 1
-          ? `${(overlapIndex / totalOverlapping) * 100}%`
-          : '0%';
+      // AI dev note: Estilo Google Agenda - eventos se sobrepõem parcialmente
+      // Cada evento ocupa ~85% da largura e é posicionado com offset
+      // Isso mantém legibilidade e mostra sobreposição visual
+      let width: string;
+      let leftOffset: string;
+
+      if (totalOverlapping === 1) {
+        width = '100%';
+        leftOffset = '0%';
+      } else {
+        // Largura base: eventos ocupam mais espaço, se sobrepondo
+        // Quanto mais eventos, menor a largura mas nunca menos que 50%
+        const baseWidth = Math.max(50, 100 - (totalOverlapping - 1) * 15);
+        width = `${baseWidth}%`;
+
+        // Offset: cada coluna é deslocada proporcionalmente
+        const offsetPercent =
+          (overlapIndex * (100 - baseWidth)) / (totalOverlapping - 1 || 1);
+        leftOffset = `${Math.min(offsetPercent, 100 - baseWidth)}%`;
+      }
 
       return {
         top: topPosition,
@@ -94,7 +109,7 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
       <div
         className={cn(
           'absolute cursor-pointer group',
-          'transition-all duration-200 hover:z-20',
+          'transition-all duration-200',
           className
         )}
         style={{
@@ -102,16 +117,25 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
           height: `${position.height}px`,
           width: position.width,
           left: position.left,
+          zIndex: zIndex,
         }}
         onClick={handleClick}
+        onMouseEnter={(e) => {
+          // Ao passar o mouse, elevar z-index para ficar por cima
+          e.currentTarget.style.zIndex = '100';
+        }}
+        onMouseLeave={(e) => {
+          // Restaurar z-index original
+          e.currentTarget.style.zIndex = String(zIndex);
+        }}
       >
-        <div className="w-full h-full p-0.5 md:p-1">
+        <div className="w-full h-full p-0.5">
           <EventCard
             event={event}
             variant="week"
             onClick={handleClick}
             userRole={userRole}
-            className="h-full w-full"
+            className="h-full w-full shadow-sm hover:shadow-md transition-shadow"
           />
         </div>
       </div>

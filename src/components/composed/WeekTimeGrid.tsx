@@ -83,7 +83,8 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
     }, [weekDays, events]);
 
     // AI dev note: Detecção de sobreposições estilo Google Agenda
-    // Eventos que se sobrepõem no tempo ficam lado a lado
+    // Eventos se sobrepõem parcialmente, mantendo largura mínima legível
+    // Eventos que começam depois ficam "por cima" (maior z-index)
     const getEventsWithOverlapData = (dayEvents: CalendarEvent[]) => {
       if (dayEvents.length === 0) return [];
 
@@ -92,48 +93,88 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
         return a.start < b.end && a.end > b.start;
       };
 
-      // Mapa para armazenar informações de layout
-      const layoutInfo: Map<string, { column: number; totalColumns: number }> =
-        new Map();
-
-      // Agrupar eventos que se sobrepõem
-      const overlapGroups: CalendarEvent[][] = [];
+      // Ordenar por horário de início
       const sortedEvents = [...dayEvents].sort(
         (a, b) => a.start.getTime() - b.start.getTime()
       );
 
-      for (const event of sortedEvents) {
-        let addedToGroup = false;
-        for (const group of overlapGroups) {
-          if (group.some((e) => eventsOverlap(e, event))) {
-            group.push(event);
-            addedToGroup = true;
-            break;
+      // Para cada evento, calcular quantos eventos estão ativos no mesmo momento
+      // e qual a posição horizontal (coluna) do evento
+      const layoutInfo: Map<
+        string,
+        { column: number; maxColumns: number; zIndex: number }
+      > = new Map();
+
+      // Algoritmo de colunas: cada evento ocupa a primeira coluna livre
+      const columns: CalendarEvent[][] = [];
+
+      sortedEvents.forEach((event, eventIndex) => {
+        // Encontrar a primeira coluna onde o evento não sobrepõe nenhum outro
+        let columnIndex = 0;
+        let placed = false;
+
+        while (!placed) {
+          if (!columns[columnIndex]) {
+            columns[columnIndex] = [];
+          }
+
+          // Verificar se há conflito nesta coluna
+          const hasConflict = columns[columnIndex].some((e) =>
+            eventsOverlap(e, event)
+          );
+
+          if (!hasConflict) {
+            columns[columnIndex].push(event);
+            placed = true;
+          } else {
+            columnIndex++;
           }
         }
-        if (!addedToGroup) {
-          overlapGroups.push([event]);
-        }
-      }
 
-      // Atribuir colunas dentro de cada grupo
-      for (const group of overlapGroups) {
-        const totalColumns = group.length;
-        group.sort((a, b) => {
-          const diff = a.start.getTime() - b.start.getTime();
-          return diff !== 0 ? diff : a.id.localeCompare(b.id);
+        // Contar quantas colunas são necessárias no momento deste evento
+        let maxCols = 1;
+        for (let i = 0; i < columns.length; i++) {
+          if (columns[i].some((e) => eventsOverlap(e, event))) {
+            maxCols = Math.max(maxCols, i + 1);
+          }
+        }
+        // Incluir a própria coluna do evento
+        maxCols = Math.max(maxCols, columnIndex + 1);
+
+        layoutInfo.set(event.id, {
+          column: columnIndex,
+          maxColumns: maxCols,
+          zIndex: eventIndex + 1, // Eventos posteriores ficam por cima
         });
-        group.forEach((event, index) => {
-          layoutInfo.set(event.id, { column: index, totalColumns });
+      });
+
+      // Segunda passada: recalcular maxColumns considerando todos os vizinhos
+      sortedEvents.forEach((event) => {
+        const info = layoutInfo.get(event.id)!;
+        let trueMaxCols = info.maxColumns;
+
+        // Verificar todos os eventos que sobrepõem este
+        sortedEvents.forEach((other) => {
+          if (other.id !== event.id && eventsOverlap(event, other)) {
+            const otherInfo = layoutInfo.get(other.id)!;
+            trueMaxCols = Math.max(trueMaxCols, otherInfo.column + 1);
+          }
         });
-      }
+
+        layoutInfo.set(event.id, { ...info, maxColumns: trueMaxCols });
+      });
 
       return dayEvents.map((event) => {
-        const info = layoutInfo.get(event.id) || { column: 0, totalColumns: 1 };
+        const info = layoutInfo.get(event.id) || {
+          column: 0,
+          maxColumns: 1,
+          zIndex: 1,
+        };
         return {
           event,
           overlapIndex: info.column,
-          totalOverlapping: info.totalColumns,
+          totalOverlapping: info.maxColumns,
+          zIndex: info.zIndex,
         };
       });
     };
@@ -250,7 +291,12 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
 
                         {/* Eventos renderizados sobre os slots */}
                         {eventsWithOverlap.map(
-                          ({ event, overlapIndex, totalOverlapping }) => {
+                          ({
+                            event,
+                            overlapIndex,
+                            totalOverlapping,
+                            zIndex,
+                          }) => {
                             // AI dev note: Altura fixa de 48px (h-12) consistente com slots
                             const hourHeight = 48;
 
@@ -264,6 +310,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                                 onClick={handleEventClick}
                                 overlapIndex={overlapIndex}
                                 totalOverlapping={totalOverlapping}
+                                zIndex={zIndex}
                                 userRole={userRole}
                               />
                             );
