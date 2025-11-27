@@ -2,18 +2,17 @@ import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
-import { Loader2, Check } from 'lucide-react';
+import { Loader2, Check, Database, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   fetchAddressByCep,
-  type EnderecoViaCepData,
+  type EnderecoViaCepDataExtended,
 } from '@/lib/enderecos-api';
 
 // AI dev note: AddressStep - Etapa de cadastro de endereço do responsável
-// Integra com ViaCEP para busca automática por CEP
-// Verifica se endereço já existe no banco (UNIQUE constraint no CEP)
-// IMPORTANTE: Após buscar o CEP, os campos logradouro/bairro/cidade/estado são bloqueados
-// Apenas número e complemento permanecem editáveis (evita duplicação de CEPs no banco)
+// Busca primeiro no Supabase, depois no ViaCEP para reutilizar dados já cadastrados
+// Se dados vêm do Supabase: campos preenchidos são bloqueados (dados já validados)
+// Se dados vêm do ViaCEP: campos vazios ficam liberados para preenchimento manual
 
 export interface AddressData {
   cep: string;
@@ -46,6 +45,9 @@ export const AddressStep = React.memo<AddressStepProps>(
 
     const [isSearchingCep, setIsSearchingCep] = useState(false);
     const [cepFound, setCepFound] = useState(false);
+    const [cepSource, setCepSource] = useState<'supabase' | 'viacep' | null>(
+      null
+    );
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     console.log('📍 [AddressStep] Renderizado');
@@ -64,6 +66,7 @@ export const AddressStep = React.memo<AddressStepProps>(
         setCidade('');
         setEstado('');
         setCepFound(false);
+        setCepSource(null);
       }
 
       if (errors.cep) setErrors((prev) => ({ ...prev, cep: '' }));
@@ -95,12 +98,13 @@ export const AddressStep = React.memo<AddressStepProps>(
         if (result.success && result.data) {
           console.log('✅ [AddressStep] CEP encontrado:', result.data);
 
-          const addressData: EnderecoViaCepData = result.data;
+          const addressData: EnderecoViaCepDataExtended = result.data;
           setLogradouro(addressData.logradouro);
           setBairro(addressData.bairro);
           setCidade(addressData.cidade);
           setEstado(addressData.estado);
           setCepFound(true);
+          setCepSource(addressData.source);
         } else {
           console.log('❌ [AddressStep] CEP não encontrado');
           setErrors((prev) => ({
@@ -108,6 +112,7 @@ export const AddressStep = React.memo<AddressStepProps>(
             cep: result.error || 'CEP não encontrado',
           }));
           setCepFound(false);
+          setCepSource(null);
         }
       } catch (error) {
         console.error('❌ [AddressStep] Erro ao buscar CEP:', error);
@@ -116,6 +121,7 @@ export const AddressStep = React.memo<AddressStepProps>(
           cep: 'Erro ao buscar CEP. Tente novamente.',
         }));
         setCepFound(false);
+        setCepSource(null);
       } finally {
         setIsSearchingCep(false);
       }
@@ -145,7 +151,8 @@ export const AddressStep = React.memo<AddressStepProps>(
       if (!estado.trim()) {
         newErrors.estado = 'Estado é obrigatório';
       } else if (estado.trim().length !== 2) {
-        newErrors.estado = 'Estado deve ser uma sigla de 2 caracteres (ex: SP, RJ, MG)';
+        newErrors.estado =
+          'Estado deve ser uma sigla de 2 caracteres (ex: SP, RJ, MG)';
       }
 
       if (!numero.trim()) {
@@ -243,10 +250,27 @@ export const AddressStep = React.memo<AddressStepProps>(
               <p className="text-sm text-destructive">{errors.cep}</p>
             )}
             {cepFound && (
-              <p className="text-sm text-green-600 dark:text-green-400 flex items-center">
-                <Check className="w-4 h-4 mr-1" />
-                Endereço encontrado. Informe apenas o número e complemento.
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-green-600 dark:text-green-400 flex items-center">
+                  <Check className="w-4 h-4 mr-1" />
+                  {logradouro && bairro
+                    ? 'Endereço encontrado. Informe apenas o número e complemento.'
+                    : 'Endereço encontrado. Preencha os campos vazios manualmente.'}
+                </p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  {cepSource === 'supabase' ? (
+                    <>
+                      <Database className="w-3 h-3" />
+                      Dados do sistema
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="w-3 h-3" />
+                      Dados do ViaCEP
+                    </>
+                  )}
+                </p>
+              </div>
             )}
           </div>
 
@@ -268,7 +292,10 @@ export const AddressStep = React.memo<AddressStepProps>(
                 if (errors.logradouro)
                   setErrors((prev) => ({ ...prev, logradouro: '' }));
               }}
-              disabled={isSearchingCep || cepFound}
+              disabled={
+                isSearchingCep ||
+                (cepFound && (cepSource === 'supabase' || logradouro !== ''))
+              }
               className={cn('h-11', errors.logradouro && 'border-destructive')}
             />
             {errors.logradouro && (
@@ -294,7 +321,10 @@ export const AddressStep = React.memo<AddressStepProps>(
                 if (errors.bairro)
                   setErrors((prev) => ({ ...prev, bairro: '' }));
               }}
-              disabled={isSearchingCep || cepFound}
+              disabled={
+                isSearchingCep ||
+                (cepFound && (cepSource === 'supabase' || bairro !== ''))
+              }
               className={cn('h-11', errors.bairro && 'border-destructive')}
             />
             {errors.bairro && (
@@ -321,7 +351,10 @@ export const AddressStep = React.memo<AddressStepProps>(
                   if (errors.cidade)
                     setErrors((prev) => ({ ...prev, cidade: '' }));
                 }}
-                disabled={isSearchingCep || cepFound}
+                disabled={
+                  isSearchingCep ||
+                  (cepFound && (cepSource === 'supabase' || cidade !== ''))
+                }
                 className={cn('h-11', errors.cidade && 'border-destructive')}
               />
               {errors.cidade && (
@@ -346,7 +379,10 @@ export const AddressStep = React.memo<AddressStepProps>(
                   if (errors.estado)
                     setErrors((prev) => ({ ...prev, estado: '' }));
                 }}
-                disabled={isSearchingCep || cepFound}
+                disabled={
+                  isSearchingCep ||
+                  (cepFound && (cepSource === 'supabase' || estado !== ''))
+                }
                 maxLength={2}
                 className={cn(
                   'h-11 text-center',

@@ -4,7 +4,14 @@ import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { PhoneInput } from '@/components/primitives/PhoneInput';
 import { Checkbox } from '@/components/primitives/checkbox';
-import { Loader2, Check, AlertTriangle, ChevronRight } from 'lucide-react';
+import {
+  Loader2,
+  Check,
+  AlertTriangle,
+  ChevronRight,
+  Database,
+  Globe,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   validateWhatsAppOnly,
@@ -13,11 +20,12 @@ import {
 } from '@/lib/financial-responsible-api';
 import {
   fetchAddressByCep,
-  type EnderecoViaCepData,
+  type EnderecoViaCepDataExtended,
 } from '@/lib/enderecos-api';
 
 // AI dev note: NewFinancialResponsibleFormStep - Formulário completo de responsável financeiro
-// Valida WhatsApp, busca pessoa existente por CPF/telefone, integra com ViaCEP
+// Valida WhatsApp, busca pessoa existente por CPF/telefone
+// Busca CEP primeiro no Supabase, depois no ViaCEP para reutilizar dados já cadastrados
 
 export interface NewFinancialResponsibleData {
   phone: string; // Limpo (ex: 61981446666)
@@ -76,6 +84,9 @@ export const NewFinancialResponsibleFormStep =
       const [phoneValid, setPhoneValid] = useState(false);
       const [isSearchingCep, setIsSearchingCep] = useState(false);
       const [cepFound, setCepFound] = useState(false);
+      const [cepSource, setCepSource] = useState<'supabase' | 'viacep' | null>(
+        null
+      );
       const [existingPersonId, setExistingPersonId] = useState<string>();
       const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -181,18 +192,23 @@ export const NewFinancialResponsibleFormStep =
           const result = await fetchAddressByCep(cep);
 
           if (result.success && result.data) {
-            const addressData: EnderecoViaCepData = result.data;
+            const addressData: EnderecoViaCepDataExtended = result.data;
             setLogradouro(addressData.logradouro);
             setBairro(addressData.bairro);
             setCidade(addressData.cidade);
             setEstado(addressData.estado);
             setCepFound(true);
+            setCepSource(addressData.source);
           } else {
             setErrors((prev) => ({ ...prev, cep: 'CEP não encontrado' }));
+            setCepFound(false);
+            setCepSource(null);
           }
         } catch (error) {
           console.error('Erro ao buscar CEP:', error);
           setErrors((prev) => ({ ...prev, cep: 'Erro ao buscar CEP' }));
+          setCepFound(false);
+          setCepSource(null);
         } finally {
           setIsSearchingCep(false);
         }
@@ -463,6 +479,29 @@ export const NewFinancialResponsibleFormStep =
                   {errors.cep && (
                     <p className="text-xs text-respira-error">{errors.cep}</p>
                   )}
+                  {cepFound && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-respira-success flex items-center gap-1">
+                        <Check className="h-3 w-3" />
+                        {logradouro && bairro
+                          ? 'Endereço encontrado. Informe apenas o número e complemento.'
+                          : 'Endereço encontrado. Preencha os campos vazios manualmente.'}
+                      </p>
+                      <p className="text-xs text-respira-text-secondary flex items-center gap-1">
+                        {cepSource === 'supabase' ? (
+                          <>
+                            <Database className="h-3 w-3" />
+                            Dados do sistema
+                          </>
+                        ) : (
+                          <>
+                            <Globe className="h-3 w-3" />
+                            Dados do ViaCEP
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Logradouro */}
@@ -473,8 +512,16 @@ export const NewFinancialResponsibleFormStep =
                     value={logradouro}
                     onChange={(e) => setLogradouro(e.target.value)}
                     placeholder="Rua, Avenida, etc"
-                    disabled={cepFound}
+                    disabled={
+                      cepFound &&
+                      (cepSource === 'supabase' || logradouro !== '')
+                    }
                   />
+                  {errors.logradouro && (
+                    <p className="text-xs text-respira-error">
+                      {errors.logradouro}
+                    </p>
+                  )}
                 </div>
 
                 {/* Número e Complemento */}
@@ -512,8 +559,15 @@ export const NewFinancialResponsibleFormStep =
                     value={bairro}
                     onChange={(e) => setBairro(e.target.value)}
                     placeholder="Bairro"
-                    disabled={cepFound}
+                    disabled={
+                      cepFound && (cepSource === 'supabase' || bairro !== '')
+                    }
                   />
+                  {errors.bairro && (
+                    <p className="text-xs text-respira-error">
+                      {errors.bairro}
+                    </p>
+                  )}
                 </div>
 
                 {/* Cidade e Estado */}
@@ -525,19 +579,33 @@ export const NewFinancialResponsibleFormStep =
                       value={cidade}
                       onChange={(e) => setCidade(e.target.value)}
                       placeholder="Cidade"
-                      disabled={cepFound}
+                      disabled={
+                        cepFound && (cepSource === 'supabase' || cidade !== '')
+                      }
                     />
+                    {errors.cidade && (
+                      <p className="text-xs text-respira-error">
+                        {errors.cidade}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="estado">Estado *</Label>
                     <Input
                       id="estado"
                       value={estado}
-                      onChange={(e) => setEstado(e.target.value)}
+                      onChange={(e) => setEstado(e.target.value.toUpperCase())}
                       placeholder="UF"
                       maxLength={2}
-                      disabled={cepFound}
+                      disabled={
+                        cepFound && (cepSource === 'supabase' || estado !== '')
+                      }
                     />
+                    {errors.estado && (
+                      <p className="text-xs text-respira-error">
+                        {errors.estado}
+                      </p>
+                    )}
                   </div>
                 </div>
               </>

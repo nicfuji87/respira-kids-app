@@ -36,12 +36,97 @@ export interface EnderecoViaCepData {
 
 // === BUSCA POR CEP ===
 
+// AI dev note: Interface estendida para indicar origem dos dados
+export interface EnderecoViaCepDataExtended extends EnderecoViaCepData {
+  source: 'supabase' | 'viacep'; // Indica de onde veio o dado
+}
+
 /**
- * Buscar endereço por CEP usando ViaCEP
+ * Buscar endereço no Supabase por CEP
+ */
+async function fetchAddressFromSupabase(
+  cleanCep: string
+): Promise<EnderecoViaCepData | null> {
+  try {
+    console.log('🔍 Buscando CEP no Supabase:', cleanCep);
+
+    const { data, error } = await supabase
+      .from('enderecos')
+      .select('cep, logradouro, bairro, cidade, estado')
+      .eq('cep', cleanCep)
+      .maybeSingle();
+
+    if (error) {
+      console.error('❌ Erro ao buscar no Supabase:', error);
+      return null;
+    }
+
+    if (data) {
+      console.log('✅ Endereço encontrado no Supabase:', data);
+      return {
+        cep: data.cep,
+        logradouro: data.logradouro || '',
+        bairro: data.bairro || '',
+        cidade: data.cidade || '',
+        estado: data.estado || '',
+      };
+    }
+
+    console.log('ℹ️ CEP não encontrado no Supabase');
+    return null;
+  } catch (error) {
+    console.error('❌ Erro inesperado ao buscar no Supabase:', error);
+    return null;
+  }
+}
+
+/**
+ * Buscar endereço no ViaCEP
+ */
+async function fetchAddressFromViaCep(
+  cleanCep: string
+): Promise<EnderecoViaCepData | null> {
+  try {
+    console.log('🔍 Buscando CEP na ViaCEP:', cleanCep);
+
+    const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+
+    if (!response.ok) {
+      console.error('❌ Erro na requisição ViaCEP');
+      return null;
+    }
+
+    const data: ViaCepResponse = await response.json();
+
+    if (data.erro) {
+      console.log('ℹ️ CEP não encontrado na ViaCEP');
+      return null;
+    }
+
+    const enderecoData: EnderecoViaCepData = {
+      cep: data.cep,
+      logradouro: data.logradouro || '',
+      bairro: data.bairro || '',
+      cidade: data.localidade || '',
+      estado: data.uf || '',
+    };
+
+    console.log('✅ Endereço encontrado na ViaCEP:', enderecoData);
+    return enderecoData;
+  } catch (error) {
+    console.error('❌ Erro ao buscar na ViaCEP:', error);
+    return null;
+  }
+}
+
+/**
+ * Buscar endereço por CEP - Primeiro no Supabase, depois no ViaCEP
+ * AI dev note: Otimização para reutilizar dados já cadastrados (incluindo preenchidos manualmente)
+ * e evitar requisições desnecessárias ao ViaCEP
  */
 export async function fetchAddressByCep(
   cep: string
-): Promise<ApiResponse<EnderecoViaCepData>> {
+): Promise<ApiResponse<EnderecoViaCepDataExtended>> {
   try {
     // Limpar formatação do CEP
     const cleanCep = cep.replace(/\D/g, '');
@@ -53,39 +138,36 @@ export async function fetchAddressByCep(
       };
     }
 
-    console.log('🔍 Buscando CEP na ViaCEP:', cleanCep);
+    // 1. Primeiro, buscar no Supabase (dados já cadastrados)
+    const supabaseData = await fetchAddressFromSupabase(cleanCep);
 
-    const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-
-    if (!response.ok) {
+    if (supabaseData) {
       return {
-        success: false,
-        error: 'Erro ao consultar CEP na ViaCEP',
+        success: true,
+        data: {
+          ...supabaseData,
+          source: 'supabase',
+        },
       };
     }
 
-    const data: ViaCepResponse = await response.json();
+    // 2. Se não encontrou no Supabase, buscar no ViaCEP
+    const viaCepData = await fetchAddressFromViaCep(cleanCep);
 
-    if (data.erro) {
+    if (viaCepData) {
       return {
-        success: false,
-        error: 'CEP não encontrado',
+        success: true,
+        data: {
+          ...viaCepData,
+          source: 'viacep',
+        },
       };
     }
 
-    const enderecoData: EnderecoViaCepData = {
-      cep: data.cep,
-      logradouro: data.logradouro,
-      bairro: data.bairro,
-      cidade: data.localidade,
-      estado: data.uf,
-    };
-
-    console.log('✅ Endereço encontrado na ViaCEP:', enderecoData);
-
+    // 3. Não encontrou em nenhum lugar
     return {
-      success: true,
-      data: enderecoData,
+      success: false,
+      error: 'CEP não encontrado',
     };
   } catch (error) {
     console.error('❌ Erro ao buscar CEP:', error);
