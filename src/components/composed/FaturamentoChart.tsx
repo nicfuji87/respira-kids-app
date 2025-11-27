@@ -54,6 +54,7 @@ type ConsultationStatusFilter =
 
 interface FaturamentoChartProps {
   className?: string;
+  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
 }
 
 const chartConfig = {
@@ -68,7 +69,7 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export const FaturamentoChart = React.memo<FaturamentoChartProps>(
-  ({ className }) => {
+  ({ className, userRole = 'admin' }) => {
     // Estados de filtros
     const [periodFilter, setPeriodFilter] =
       useState<PeriodFilter>('ultimos_12');
@@ -341,6 +342,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
         return {
           totalFaturamento: 0,
           totalAReceber: 0,
+          totalComEvolucao: 0,
           totalConsultas: 0,
           mediaMovel: 0,
         };
@@ -354,6 +356,11 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
         (sum, d) => sum + d.faturamentoAReceber,
         0
       );
+      // AI dev note: Total Com Evolução = Finalizadas com evolução (parte do faturamento pendente)
+      const totalComEvolucao = chartData.reduce(
+        (sum, d) => sum + (d.faturamentoPendente || 0),
+        0
+      );
       const totalConsultas = chartData.reduce(
         (sum, d) => sum + d.consultasRealizadas,
         0
@@ -363,6 +370,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
       return {
         totalFaturamento,
         totalAReceber,
+        totalComEvolucao,
         totalConsultas,
         mediaMovel,
       };
@@ -463,10 +471,10 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Status Consulta" />
+                <SelectValue placeholder="Status da Consulta" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="todos">Todos Status</SelectItem>
                 <SelectItem value="finalizado">Finalizado</SelectItem>
                 <SelectItem value="agendado">Agendado</SelectItem>
                 <SelectItem value="confirmado">Confirmado</SelectItem>
@@ -482,10 +490,10 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Status Pagamento" />
+                <SelectValue placeholder="Status do Pagamento" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="todos">Todos Pagamentos</SelectItem>
                 <SelectItem value="pago">Pago</SelectItem>
                 <SelectItem value="pendente">Pendente</SelectItem>
                 <SelectItem value="aberto">Em aberto</SelectItem>
@@ -502,7 +510,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                 <SelectValue placeholder="Profissional" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="todos">Todos Profissionais</SelectItem>
                 {professionals.map((prof) => (
                   <SelectItem key={prof.id} value={prof.id}>
                     {prof.nome}
@@ -520,7 +528,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                 <SelectValue placeholder="Tipo de Serviço" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="todos">Todos Serviços</SelectItem>
                 {serviceTypes.map((type) => (
                   <SelectItem key={type.id} value={type.id}>
                     {type.nome}
@@ -548,7 +556,14 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
             </Button>
           </div>
           {/* Métricas resumo - baseadas no filtro aplicado */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 p-3 md:p-4 bg-muted/30 rounded-lg border">
+          <div
+            className={cn(
+              'grid gap-3 md:gap-4 p-3 md:p-4 bg-muted/30 rounded-lg border',
+              userRole === 'admin'
+                ? 'grid-cols-2 md:grid-cols-5'
+                : 'grid-cols-2 md:grid-cols-4'
+            )}
+          >
             {/* Total Faturamento */}
             <div className="text-center">
               <div className="text-xs md:text-sm text-muted-foreground">
@@ -579,6 +594,26 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                 % do total
               </div>
             </div>
+
+            {/* Com Evolução - Apenas para Admin */}
+            {userRole === 'admin' && (
+              <div className="text-center">
+                <div className="text-xs md:text-sm text-muted-foreground">
+                  Com Evolução
+                </div>
+                <div className="font-medium text-amarelo-pipa text-sm md:text-base">
+                  {formatCurrency(resumoFiltrado.totalComEvolucao)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {(
+                    (resumoFiltrado.totalComEvolucao /
+                      resumoFiltrado.totalFaturamento) *
+                    100
+                  ).toFixed(0)}
+                  % do total
+                </div>
+              </div>
+            )}
 
             {/* Média */}
             <div className="text-center">
