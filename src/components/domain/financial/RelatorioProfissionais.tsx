@@ -59,11 +59,14 @@ export const RelatorioProfissionais = React.memo<RelatorioProfissionaisProps>(
           setError(null);
 
           // AI dev note: Buscar dados de profissionais com métricas de faturamento
-          const [mesInicio, mesAno] = mes.split('-');
+          // mes formato: "2025-11" -> [ano, mesNum]
+          const [ano, mesNum] = mes.split('-');
           const dataInicio = new Date(`${mes}-01T00:00:00`);
+          // Último dia do mês: new Date(ano, mes, 0) retorna último dia do mês anterior
+          // Como mesNum é 1-indexed e Date usa 0-indexed, passar mesNum diretamente dá o último dia correto
           const dataFim = new Date(
-            parseInt(mesAno),
-            parseInt(mesInicio),
+            parseInt(ano),
+            parseInt(mesNum),
             0,
             23,
             59,
