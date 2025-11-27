@@ -14,15 +14,15 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/primitives/select';
-import { DollarSign, X, Search } from 'lucide-react';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/primitives/popover';
+import { DollarSign, X, Search, ChevronDown, Check } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
+import { Badge } from '@/components/primitives/badge';
+import { Checkbox } from '@/components/primitives/checkbox';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 
@@ -32,25 +32,33 @@ type PeriodFilter =
   | 'ultimos_3'
   | 'ultimos_6'
   | 'ultimos_12'
-  | 'ultimo_ano'
+  | 'ano_atual'
+  | 'ano_anterior'
   | 'ultimos_24'
   | 'todos';
 
-type PaymentStatusFilter =
-  | 'todos'
-  | 'pago'
-  | 'pendente'
-  | 'aberto'
-  | 'cancelado';
-type ConsultationStatusFilter =
-  | 'todos'
-  | 'finalizado'
-  | 'agendado'
-  | 'cancelado'
-  | 'confirmado';
+// AI dev note: Status reais do Supabase
+const CONSULTA_STATUS_OPTIONS = [
+  { codigo: 'agendado', descricao: 'Agendado' },
+  { codigo: 'confirmado', descricao: 'Confirmado' },
+  { codigo: 'finalizado', descricao: 'Finalizado' },
+  { codigo: 'cancelado', descricao: 'Cancelado' },
+  { codigo: 'reagendado', descricao: 'Reagendado' },
+  { codigo: 'faltou', descricao: 'Paciente Faltou' },
+  { codigo: 'erro', descricao: 'Erro' },
+];
+
+const PAGAMENTO_STATUS_OPTIONS = [
+  { codigo: 'pago', descricao: 'Pago' },
+  { codigo: 'pendente', descricao: 'Pendente' },
+  { codigo: 'cobranca_gerada', descricao: 'Cobrança Gerada' },
+  { codigo: 'atrasado', descricao: 'Atrasado' },
+  { codigo: 'cancelado', descricao: 'Cancelado' },
+  { codigo: 'estornado', descricao: 'Estornado' },
+];
 
 // AI dev note: FaturamentoChart - Gráfico comparativo de faturamento mensal
-// Agora com filtros completos que buscam dados brutos e agregam no frontend
+// Com filtros multi-select e métricas detalhadas por status de pagamento e evolução
 
 interface FaturamentoChartProps {
   className?: string;
@@ -58,8 +66,8 @@ interface FaturamentoChartProps {
 }
 
 const chartConfig = {
-  faturamentoAReceber: {
-    label: 'Faturamento a Receber',
+  faturamentoPago: {
+    label: 'Faturamento Pago',
     color: 'hsl(var(--verde-pipa))',
   },
   faturamentoPendente: {
@@ -73,14 +81,14 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
     // Estados de filtros
     const [periodFilter, setPeriodFilter] =
       useState<PeriodFilter>('ultimos_12');
-    const [professionalFilter, setProfessionalFilter] =
-      useState<string>('todos');
-    const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('todos');
-    const [paymentStatusFilter, setPaymentStatusFilter] =
-      useState<PaymentStatusFilter>('todos');
-    const [consultationStatusFilter, setConsultationStatusFilter] =
-      useState<ConsultationStatusFilter>('todos');
-    const [empresaFilter, setEmpresaFilter] = useState<string>('todos');
+    const [professionalFilter, setProfessionalFilter] = useState<string[]>([]);
+    const [serviceTypeFilter, setServiceTypeFilter] = useState<string[]>([]);
+    const [paymentStatusFilter, setPaymentStatusFilter] = useState<string[]>(
+      []
+    );
+    const [consultationStatusFilter, setConsultationStatusFilter] = useState<
+      string[]
+    >([]);
     const [searchQuery, setSearchQuery] = useState('');
 
     // Estados de dados
@@ -126,7 +134,6 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
         if (profsError) {
           console.error('❌ Erro ao buscar profissionais:', profsError);
         } else {
-          console.log('👨‍⚕️ Profissionais carregados:', profsData?.length);
           if (profsData) setProfessionals(profsData);
         }
 
@@ -140,7 +147,6 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
         if (servicesError) {
           console.error('❌ Erro ao buscar tipos de serviço:', servicesError);
         } else {
-          console.log('🏥 Tipos de serviço carregados:', servicesData?.length);
           if (servicesData) setServiceTypes(servicesData);
         }
       };
@@ -158,25 +164,22 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
         let query = supabase
           .from('vw_agendamentos_completos')
           .select(
-            'data_hora, valor_servico, status_consulta_codigo, status_pagamento_codigo, possui_evolucao, paciente_nome'
+            'data_hora, valor_servico, status_consulta_codigo, status_pagamento_codigo, possui_evolucao, paciente_nome, profissional_id, tipo_servico_id'
           )
           .eq('ativo', true);
 
-        // Aplicar filtros
-        if (professionalFilter !== 'todos') {
-          query = query.eq('profissional_id', professionalFilter);
+        // Aplicar filtros multi-select
+        if (professionalFilter.length > 0) {
+          query = query.in('profissional_id', professionalFilter);
         }
-        if (serviceTypeFilter !== 'todos') {
-          query = query.eq('tipo_servico_id', serviceTypeFilter);
+        if (serviceTypeFilter.length > 0) {
+          query = query.in('tipo_servico_id', serviceTypeFilter);
         }
-        if (paymentStatusFilter !== 'todos') {
-          query = query.eq('status_pagamento_codigo', paymentStatusFilter);
+        if (paymentStatusFilter.length > 0) {
+          query = query.in('status_pagamento_codigo', paymentStatusFilter);
         }
-        if (consultationStatusFilter !== 'todos') {
-          query = query.eq('status_consulta_codigo', consultationStatusFilter);
-        }
-        if (empresaFilter !== 'todos') {
-          query = query.eq('empresa_fatura_id', empresaFilter);
+        if (consultationStatusFilter.length > 0) {
+          query = query.in('status_consulta_codigo', consultationStatusFilter);
         }
         if (searchQuery) {
           query = query.ilike('paciente_nome', `%${searchQuery}%`);
@@ -225,7 +228,6 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
       serviceTypeFilter,
       paymentStatusFilter,
       consultationStatusFilter,
-      empresaFilter,
       searchQuery,
     ]);
 
@@ -243,8 +245,11 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
         string,
         {
           periodo: string;
-          faturamentoAReceber: number;
+          faturamentoPago: number;
           faturamentoPendente: number;
+          faturamentoPagoComEvolucao: number;
+          faturamentoPendenteComEvolucao: number;
+          faturamentoTotal: number;
           consultasRealizadas: number;
           consultasComEvolucao: number;
           mes: number;
@@ -264,8 +269,11 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
               month: 'short',
               year: 'numeric',
             }).format(new Date(ano, mes - 1, 1)),
-            faturamentoAReceber: 0,
+            faturamentoPago: 0,
             faturamentoPendente: 0,
+            faturamentoPagoComEvolucao: 0,
+            faturamentoPendenteComEvolucao: 0,
+            faturamentoTotal: 0,
             consultasRealizadas: 0,
             consultasComEvolucao: 0,
             mes,
@@ -275,25 +283,34 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
 
         const dadosMes = dadosPorMes.get(mesKey)!;
         const valor = parseFloat(consulta.valor_servico || '0');
+        const isPago = consulta.status_pagamento_codigo === 'pago';
+        const isPendente =
+          consulta.status_pagamento_codigo === 'pendente' ||
+          consulta.status_pagamento_codigo === 'cobranca_gerada' ||
+          consulta.status_pagamento_codigo === 'atrasado';
+        const temEvolucao = consulta.possui_evolucao === 'sim';
 
-        // Sempre contar consulta
-        dadosMes.consultasRealizadas += 1;
+        // Sempre contar consulta (exceto canceladas)
+        if (consulta.status_consulta_codigo !== 'cancelado') {
+          dadosMes.consultasRealizadas += 1;
+          dadosMes.faturamentoTotal += valor;
 
-        // AI dev note: Lógica de faturamento
-        // Verde (A Receber) = Finalizadas SEM evolução (prontas para faturar)
-        // Amarelo (Pendente) = Finalizadas COM evolução mas ainda em processo
-        if (consulta.status_consulta_codigo === 'finalizado') {
-          if (consulta.possui_evolucao === 'sim') {
-            // COM evolução = ainda em processo (amarelo/pendente)
+          if (temEvolucao) {
             dadosMes.consultasComEvolucao += 1;
-            dadosMes.faturamentoPendente += valor;
-          } else {
-            // SEM evolução = pronta para receber (verde/a receber)
-            dadosMes.faturamentoAReceber += valor;
           }
-        } else if (consulta.status_consulta_codigo === 'agendado') {
-          // Agendadas contam como pendente
-          dadosMes.faturamentoPendente += valor;
+
+          // AI dev note: Lógica de faturamento por status de pagamento
+          if (isPago) {
+            dadosMes.faturamentoPago += valor;
+            if (temEvolucao) {
+              dadosMes.faturamentoPagoComEvolucao += valor;
+            }
+          } else if (isPendente) {
+            dadosMes.faturamentoPendente += valor;
+            if (temEvolucao) {
+              dadosMes.faturamentoPendenteComEvolucao += valor;
+            }
+          }
         }
       });
 
@@ -326,10 +343,12 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
           return allData.slice(-6);
         case 'ultimos_12':
           return allData.slice(-12);
+        case 'ano_atual':
+          return allData.filter((d) => d.ano === currentYear);
+        case 'ano_anterior':
+          return allData.filter((d) => d.ano === currentYear - 1);
         case 'ultimos_24':
           return allData.slice(-24);
-        case 'ultimo_ano':
-          return allData.slice(-12);
         case 'todos':
         default:
           return allData;
@@ -340,41 +359,209 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
     const resumoFiltrado = useMemo(() => {
       if (!chartData || chartData.length === 0) {
         return {
-          totalFaturamento: 0,
-          totalAReceber: 0,
-          totalComEvolucao: 0,
+          faturamentoTotal: 0,
+          faturamentoPendente: 0,
+          faturamentoPagoComEvolucao: 0,
+          faturamentoPendenteComEvolucao: 0,
           totalConsultas: 0,
-          mediaMovel: 0,
         };
       }
 
-      const totalFaturamento = chartData.reduce(
-        (sum, d) => sum + d.faturamentoAReceber + d.faturamentoPendente,
+      const faturamentoTotal = chartData.reduce(
+        (sum, d) => sum + d.faturamentoTotal,
         0
       );
-      const totalAReceber = chartData.reduce(
-        (sum, d) => sum + d.faturamentoAReceber,
+      const faturamentoPendente = chartData.reduce(
+        (sum, d) => sum + d.faturamentoPendente,
         0
       );
-      // AI dev note: Total Com Evolução = Finalizadas com evolução (parte do faturamento pendente)
-      const totalComEvolucao = chartData.reduce(
-        (sum, d) => sum + (d.faturamentoPendente || 0),
+      const faturamentoPagoComEvolucao = chartData.reduce(
+        (sum, d) => sum + d.faturamentoPagoComEvolucao,
+        0
+      );
+      const faturamentoPendenteComEvolucao = chartData.reduce(
+        (sum, d) => sum + d.faturamentoPendenteComEvolucao,
         0
       );
       const totalConsultas = chartData.reduce(
         (sum, d) => sum + d.consultasRealizadas,
         0
       );
-      const mediaMovel = totalFaturamento / chartData.length;
 
       return {
-        totalFaturamento,
-        totalAReceber,
-        totalComEvolucao,
+        faturamentoTotal,
+        faturamentoPendente,
+        faturamentoPagoComEvolucao,
+        faturamentoPendenteComEvolucao,
         totalConsultas,
-        mediaMovel,
       };
     }, [chartData]);
+
+    // Componente de MultiSelect
+    const MultiSelectFilter = ({
+      options,
+      selected,
+      onSelectedChange,
+      placeholder,
+    }: {
+      options: Array<{
+        id?: string;
+        codigo?: string;
+        nome?: string;
+        descricao?: string;
+      }>;
+      selected: string[];
+      onSelectedChange: (values: string[]) => void;
+      placeholder: string;
+    }) => {
+      const [open, setOpen] = useState(false);
+
+      const toggleOption = (value: string) => {
+        if (selected.includes(value)) {
+          onSelectedChange(selected.filter((v) => v !== value));
+        } else {
+          onSelectedChange([...selected, value]);
+        }
+      };
+
+      const getLabel = (opt: {
+        id?: string;
+        codigo?: string;
+        nome?: string;
+        descricao?: string;
+      }) => {
+        return opt.nome || opt.descricao || opt.codigo || '';
+      };
+
+      const getValue = (opt: {
+        id?: string;
+        codigo?: string;
+        nome?: string;
+        descricao?: string;
+      }) => {
+        return opt.id || opt.codigo || '';
+      };
+
+      return (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 justify-between w-full"
+            >
+              <span className="truncate">
+                {selected.length === 0
+                  ? placeholder
+                  : selected.length === 1
+                    ? options.find((o) => getValue(o) === selected[0])
+                      ? getLabel(
+                          options.find((o) => getValue(o) === selected[0])!
+                        )
+                      : placeholder
+                    : `${selected.length} selecionados`}
+              </span>
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[200px] p-0" align="start">
+            <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
+              {options.map((opt) => {
+                const value = getValue(opt);
+                const isSelected = selected.includes(value);
+                return (
+                  <div
+                    key={value}
+                    className={cn(
+                      'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted',
+                      isSelected && 'bg-muted'
+                    )}
+                    onClick={() => toggleOption(value)}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      className="pointer-events-none"
+                    />
+                    <span className="text-sm">{getLabel(opt)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {selected.length > 0 && (
+              <div className="border-t p-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-8 text-xs"
+                  onClick={() => {
+                    onSelectedChange([]);
+                    setOpen(false);
+                  }}
+                >
+                  Limpar seleção
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      );
+    };
+
+    // Componente de Período Select
+    const PeriodSelect = () => (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 justify-between w-full"
+          >
+            <span>
+              {periodFilter === 'mes_atual' && 'Mês Atual'}
+              {periodFilter === 'mes_anterior' && 'Mês Anterior'}
+              {periodFilter === 'ultimos_3' && 'Últimos 3 Meses'}
+              {periodFilter === 'ultimos_6' && 'Últimos 6 Meses'}
+              {periodFilter === 'ultimos_12' && 'Últimos 12 Meses'}
+              {periodFilter === 'ano_atual' && 'Ano Atual'}
+              {periodFilter === 'ano_anterior' && 'Ano Anterior'}
+              {periodFilter === 'ultimos_24' && 'Últimos 24 Meses'}
+              {periodFilter === 'todos' && 'Todos'}
+            </span>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[180px] p-0" align="start">
+          <div className="p-1 space-y-0.5">
+            {[
+              { value: 'mes_atual', label: 'Mês Atual' },
+              { value: 'mes_anterior', label: 'Mês Anterior' },
+              { value: 'ultimos_3', label: 'Últimos 3 Meses' },
+              { value: 'ultimos_6', label: 'Últimos 6 Meses' },
+              { value: 'ultimos_12', label: 'Últimos 12 Meses' },
+              { value: 'ano_atual', label: 'Ano Atual' },
+              { value: 'ano_anterior', label: 'Ano Anterior' },
+              { value: 'ultimos_24', label: 'Últimos 24 Meses' },
+              { value: 'todos', label: 'Todos' },
+            ].map((opt) => (
+              <div
+                key={opt.value}
+                className={cn(
+                  'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted text-sm',
+                  periodFilter === opt.value && 'bg-muted'
+                )}
+                onClick={() => setPeriodFilter(opt.value as PeriodFilter)}
+              >
+                {periodFilter === opt.value && (
+                  <Check className="h-4 w-4 text-primary" />
+                )}
+                {periodFilter !== opt.value && <div className="w-4" />}
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
 
     if (isLoading) {
       return (
@@ -419,6 +606,13 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
       );
     }
 
+    const hasActiveFilters =
+      professionalFilter.length > 0 ||
+      serviceTypeFilter.length > 0 ||
+      paymentStatusFilter.length > 0 ||
+      consultationStatusFilter.length > 0 ||
+      searchQuery;
+
     return (
       <Card className={cn('w-full', className)}>
         <CardHeader>
@@ -442,112 +636,54 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
             />
           </div>
 
-          {/* Linha de filtros */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+          {/* Linha de filtros com multi-select */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
             {/* Período */}
-            <Select
-              value={periodFilter}
-              onValueChange={(value) => setPeriodFilter(value as PeriodFilter)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Período" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mes_atual">Mês Atual</SelectItem>
-                <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
-                <SelectItem value="ultimos_3">Últimos 3 Meses</SelectItem>
-                <SelectItem value="ultimos_6">Últimos 6 Meses</SelectItem>
-                <SelectItem value="ultimos_12">Últimos 12 Meses</SelectItem>
-                <SelectItem value="ultimos_24">Últimos 24 Meses</SelectItem>
-                <SelectItem value="todos">Todos</SelectItem>
-              </SelectContent>
-            </Select>
+            <PeriodSelect />
 
-            {/* Status de Consulta */}
-            <Select
-              value={consultationStatusFilter}
-              onValueChange={(value) =>
-                setConsultationStatusFilter(value as ConsultationStatusFilter)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Status da Consulta" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos Status</SelectItem>
-                <SelectItem value="finalizado">Finalizado</SelectItem>
-                <SelectItem value="agendado">Agendado</SelectItem>
-                <SelectItem value="confirmado">Confirmado</SelectItem>
-                <SelectItem value="cancelado">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Status de Consulta - Multi-select */}
+            <MultiSelectFilter
+              options={CONSULTA_STATUS_OPTIONS}
+              selected={consultationStatusFilter}
+              onSelectedChange={setConsultationStatusFilter}
+              placeholder="Status Consulta"
+            />
 
-            {/* Status de Pagamento */}
-            <Select
-              value={paymentStatusFilter}
-              onValueChange={(value) =>
-                setPaymentStatusFilter(value as PaymentStatusFilter)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Status do Pagamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos Pagamentos</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="aberto">Em aberto</SelectItem>
-                <SelectItem value="cancelado">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Status de Pagamento - Multi-select */}
+            <MultiSelectFilter
+              options={PAGAMENTO_STATUS_OPTIONS}
+              selected={paymentStatusFilter}
+              onSelectedChange={setPaymentStatusFilter}
+              placeholder="Status Pagamento"
+            />
 
-            {/* Profissional */}
-            <Select
-              value={professionalFilter}
-              onValueChange={setProfessionalFilter}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Profissional" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos Profissionais</SelectItem>
-                {professionals.map((prof) => (
-                  <SelectItem key={prof.id} value={prof.id}>
-                    {prof.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Profissional - Multi-select */}
+            <MultiSelectFilter
+              options={professionals.map((p) => ({ id: p.id, nome: p.nome }))}
+              selected={professionalFilter}
+              onSelectedChange={setProfessionalFilter}
+              placeholder="Profissional"
+            />
 
-            {/* Tipo de Serviço */}
-            <Select
-              value={serviceTypeFilter}
-              onValueChange={setServiceTypeFilter}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Tipo de Serviço" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos Serviços</SelectItem>
-                {serviceTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Tipo de Serviço - Multi-select */}
+            <MultiSelectFilter
+              options={serviceTypes.map((s) => ({ id: s.id, nome: s.nome }))}
+              selected={serviceTypeFilter}
+              onSelectedChange={setServiceTypeFilter}
+              placeholder="Tipo de Serviço"
+            />
 
             {/* Botão de limpar filtros */}
             <Button
-              variant="ghost"
+              variant={hasActiveFilters ? 'destructive' : 'ghost'}
               size="sm"
+              className="h-9"
               onClick={() => {
                 setPeriodFilter('ultimos_12');
-                setProfessionalFilter('todos');
-                setServiceTypeFilter('todos');
-                setPaymentStatusFilter('todos');
-                setConsultationStatusFilter('todos');
-                setEmpresaFilter('todos');
+                setProfessionalFilter([]);
+                setServiceTypeFilter([]);
+                setPaymentStatusFilter([]);
+                setConsultationStatusFilter([]);
                 setSearchQuery('');
               }}
             >
@@ -555,107 +691,124 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
               Limpar
             </Button>
           </div>
-          {/* Métricas resumo - baseadas no filtro aplicado */}
-          <div
-            className={cn(
-              'grid gap-3 md:gap-4 p-3 md:p-4 bg-muted/30 rounded-lg border',
-              userRole === 'admin'
-                ? 'grid-cols-2 md:grid-cols-5'
-                : 'grid-cols-2 md:grid-cols-4'
-            )}
-          >
-            {/* Total Faturamento */}
+
+          {/* Badges dos filtros ativos */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap gap-2">
+              {consultationStatusFilter.map((status) => (
+                <Badge
+                  key={`consulta-${status}`}
+                  variant="secondary"
+                  className="cursor-pointer"
+                  onClick={() =>
+                    setConsultationStatusFilter(
+                      consultationStatusFilter.filter((s) => s !== status)
+                    )
+                  }
+                >
+                  {CONSULTA_STATUS_OPTIONS.find((o) => o.codigo === status)
+                    ?.descricao || status}
+                  <X className="ml-1 h-3 w-3" />
+                </Badge>
+              ))}
+              {paymentStatusFilter.map((status) => (
+                <Badge
+                  key={`pagamento-${status}`}
+                  variant="secondary"
+                  className="cursor-pointer"
+                  onClick={() =>
+                    setPaymentStatusFilter(
+                      paymentStatusFilter.filter((s) => s !== status)
+                    )
+                  }
+                >
+                  {PAGAMENTO_STATUS_OPTIONS.find((o) => o.codigo === status)
+                    ?.descricao || status}
+                  <X className="ml-1 h-3 w-3" />
+                </Badge>
+              ))}
+              {professionalFilter.map((id) => (
+                <Badge
+                  key={`prof-${id}`}
+                  variant="secondary"
+                  className="cursor-pointer"
+                  onClick={() =>
+                    setProfessionalFilter(
+                      professionalFilter.filter((p) => p !== id)
+                    )
+                  }
+                >
+                  {professionals.find((p) => p.id === id)?.nome || id}
+                  <X className="ml-1 h-3 w-3" />
+                </Badge>
+              ))}
+              {serviceTypeFilter.map((id) => (
+                <Badge
+                  key={`serv-${id}`}
+                  variant="secondary"
+                  className="cursor-pointer"
+                  onClick={() =>
+                    setServiceTypeFilter(
+                      serviceTypeFilter.filter((s) => s !== id)
+                    )
+                  }
+                >
+                  {serviceTypes.find((s) => s.id === id)?.nome || id}
+                  <X className="ml-1 h-3 w-3" />
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Métricas resumo - 4 métricas principais */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 p-3 md:p-4 bg-muted/30 rounded-lg border">
+            {/* Faturamento Total */}
             <div className="text-center">
               <div className="text-xs md:text-sm text-muted-foreground">
-                Total Faturamento
+                Faturamento
               </div>
-              <div className="font-medium text-foreground text-sm md:text-base">
-                {formatCurrency(resumoFiltrado.totalFaturamento)}
+              <div className="font-bold text-foreground text-lg md:text-xl">
+                {formatCurrency(resumoFiltrado.faturamentoTotal)}
               </div>
               <div className="text-xs text-muted-foreground">
                 {resumoFiltrado.totalConsultas} consultas
               </div>
             </div>
 
-            {/* A Receber */}
+            {/* Faturamento Pendente */}
             <div className="text-center">
               <div className="text-xs md:text-sm text-muted-foreground">
-                A Receber
+                Faturamento Pendente
               </div>
-              <div className="font-medium text-verde-pipa text-sm md:text-base">
-                {formatCurrency(resumoFiltrado.totalAReceber)}
+              <div className="font-bold text-amarelo-pipa text-lg md:text-xl">
+                {formatCurrency(resumoFiltrado.faturamentoPendente)}
+              </div>
+              <div className="text-xs text-muted-foreground">não pago</div>
+            </div>
+
+            {/* Pago c/ Evolução */}
+            <div className="text-center">
+              <div className="text-xs md:text-sm text-muted-foreground">
+                Pago c/ Evolução
+              </div>
+              <div className="font-bold text-verde-pipa text-lg md:text-xl">
+                {formatCurrency(resumoFiltrado.faturamentoPagoComEvolucao)}
               </div>
               <div className="text-xs text-muted-foreground">
-                {(
-                  (resumoFiltrado.totalAReceber /
-                    resumoFiltrado.totalFaturamento) *
-                  100
-                ).toFixed(0)}
-                % do total
+                {userRole === 'profissional' ? 'sua comissão' : 'com evolução'}
               </div>
             </div>
 
-            {/* Com Evolução - Apenas para Admin */}
-            {userRole === 'admin' && (
-              <div className="text-center">
-                <div className="text-xs md:text-sm text-muted-foreground">
-                  Com Evolução
-                </div>
-                <div className="font-medium text-amarelo-pipa text-sm md:text-base">
-                  {formatCurrency(resumoFiltrado.totalComEvolucao)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {(
-                    (resumoFiltrado.totalComEvolucao /
-                      resumoFiltrado.totalFaturamento) *
-                    100
-                  ).toFixed(0)}
-                  % do total
-                </div>
-              </div>
-            )}
-
-            {/* Média */}
+            {/* Pendente c/ Evolução */}
             <div className="text-center">
               <div className="text-xs md:text-sm text-muted-foreground">
-                Média do Período
+                Pendente c/ Evolução
               </div>
-              <div className="font-medium text-sm md:text-base">
-                {formatCurrency(resumoFiltrado.mediaMovel)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {chartData.length} mês(es)
-              </div>
-            </div>
-
-            {/* Melhor Mês do período filtrado */}
-            <div className="text-center">
-              <div className="text-xs md:text-sm text-muted-foreground">
-                Melhor Mês
-              </div>
-              <div className="font-medium text-sm md:text-base">
-                {chartData.length > 0
-                  ? formatCurrency(
-                      Math.max(
-                        ...chartData.map(
-                          (d) => d.faturamentoAReceber + d.faturamentoPendente
-                        )
-                      )
-                    )
-                  : formatCurrency(0)}
+              <div className="font-bold text-orange-500 text-lg md:text-xl">
+                {formatCurrency(resumoFiltrado.faturamentoPendenteComEvolucao)}
               </div>
               <div className="text-xs text-muted-foreground">
-                {chartData.length > 0
-                  ? chartData.find(
-                      (d) =>
-                        d.faturamentoAReceber + d.faturamentoPendente ===
-                        Math.max(
-                          ...chartData.map(
-                            (d) => d.faturamentoAReceber + d.faturamentoPendente
-                          )
-                        )
-                    )?.periodo
-                  : 'N/A'}
+                a receber c/ evolução
               </div>
             </div>
           </div>
@@ -692,7 +845,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                     }}
                   />
                   <Bar
-                    dataKey="faturamentoAReceber"
+                    dataKey="faturamentoPago"
                     stackId="faturamento"
                     fill="hsl(var(--verde-pipa))"
                     radius={[0, 0, 4, 4]}
@@ -708,7 +861,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
-                        className="w-[250px]"
+                        className="w-[280px]"
                         formatter={(value, name, item, index) => (
                           <>
                             <div className="flex items-center gap-2">
@@ -716,7 +869,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                                 className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
                                 style={{
                                   backgroundColor:
-                                    name === 'faturamentoAReceber'
+                                    name === 'faturamentoPago'
                                       ? 'hsl(var(--verde-pipa))'
                                       : 'hsl(var(--amarelo-pipa))',
                                 }}
@@ -727,12 +880,12 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                             <div className="ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums text-foreground">
                               {formatCurrency(Number(value))}
                             </div>
-                            {/* Adicionar informações de consultas no último item */}
+                            {/* Adicionar informações detalhadas no último item */}
                             {index === 1 && item.payload && (
-                              <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                              <div className="mt-2 pt-2 border-t border-border/50 space-y-1 w-full">
                                 <div className="flex justify-between text-xs">
                                   <span className="text-muted-foreground">
-                                    Consultas realizadas:
+                                    Consultas:
                                   </span>
                                   <span className="font-medium">
                                     {item.payload.consultasRealizadas}
@@ -746,14 +899,34 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                                     {item.payload.consultasComEvolucao}
                                   </span>
                                 </div>
-                                <div className="flex justify-between text-xs font-medium">
+                                <div className="flex justify-between text-xs">
                                   <span className="text-muted-foreground">
-                                    Total faturamento:
+                                    Pago c/ evolução:
+                                  </span>
+                                  <span className="font-medium text-verde-pipa">
+                                    {formatCurrency(
+                                      item.payload.faturamentoPagoComEvolucao
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-muted-foreground">
+                                    Pendente c/ evolução:
+                                  </span>
+                                  <span className="font-medium text-orange-500">
+                                    {formatCurrency(
+                                      item.payload
+                                        .faturamentoPendenteComEvolucao
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs font-medium pt-1 border-t">
+                                  <span className="text-muted-foreground">
+                                    Total:
                                   </span>
                                   <span>
                                     {formatCurrency(
-                                      item.payload.faturamentoAReceber +
-                                        item.payload.faturamentoPendente
+                                      item.payload.faturamentoTotal
                                     )}
                                   </span>
                                 </div>
@@ -771,15 +944,18 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
             </ChartContainer>
           </div>
 
-          {/* Indicadores de faturamento - baseados no filtro */}
+          {/* Legenda */}
           <div className="grid grid-cols-2 gap-4 p-3 bg-muted/30 rounded-lg">
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-1">
                 <div className="h-3 w-3 rounded-sm bg-verde-pipa"></div>
-                <span className="text-xs font-medium">A Receber</span>
+                <span className="text-xs font-medium">Pago</span>
               </div>
               <div className="text-lg font-bold text-verde-pipa">
-                {formatCurrency(resumoFiltrado.totalAReceber)}
+                {formatCurrency(
+                  resumoFiltrado.faturamentoTotal -
+                    resumoFiltrado.faturamentoPendente
+                )}
               </div>
             </div>
             <div className="text-center">
@@ -788,9 +964,7 @@ export const FaturamentoChart = React.memo<FaturamentoChartProps>(
                 <span className="text-xs font-medium">Pendente</span>
               </div>
               <div className="text-lg font-bold text-amarelo-pipa">
-                {formatCurrency(
-                  resumoFiltrado.totalFaturamento - resumoFiltrado.totalAReceber
-                )}
+                {formatCurrency(resumoFiltrado.faturamentoPendente)}
               </div>
             </div>
           </div>
