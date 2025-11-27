@@ -59,30 +59,22 @@ export const RelatorioProfissionais = React.memo<RelatorioProfissionaisProps>(
           setError(null);
 
           // AI dev note: Buscar dados de profissionais com métricas de faturamento
-          // mes formato: "2025-11" -> [ano, mesNum]
+          // mes formato: "2025-11" -> usar diretamente para filtro de data
+          // Usar formato simples ISO sem manipulação de timezone para evitar bugs
           const [ano, mesNum] = mes.split('-');
-          const dataInicio = new Date(`${mes}-01T00:00:00`);
-          // Último dia do mês: new Date(ano, mes, 0) retorna último dia do mês anterior
-          // Como mesNum é 1-indexed e Date usa 0-indexed, passar mesNum diretamente dá o último dia correto
-          const dataFim = new Date(
-            parseInt(ano),
-            parseInt(mesNum),
-            0,
-            23,
-            59,
-            59
-          );
+          const proximoMes = parseInt(mesNum) === 12 ? 1 : parseInt(mesNum) + 1;
+          const proximoAno =
+            parseInt(mesNum) === 12 ? parseInt(ano) + 1 : parseInt(ano);
+          const dataInicio = `${mes}-01T00:00:00`;
+          const dataFim = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-01T00:00:00`;
 
           let query = supabase
             .from('vw_agendamentos_completos')
             .select(
               'profissional_id, profissional_nome, valor_servico, status_consulta_codigo, possui_evolucao'
             )
-            .gte(
-              'data_hora',
-              dataInicio.toISOString().split('T')[0] + 'T00:00:00'
-            )
-            .lte('data_hora', dataFim.toISOString())
+            .gte('data_hora', dataInicio)
+            .lt('data_hora', dataFim)
             .eq('ativo', true);
 
           if (profissionalIdFilter && userRole === 'profissional') {
