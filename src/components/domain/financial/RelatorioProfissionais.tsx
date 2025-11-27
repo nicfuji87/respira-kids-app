@@ -120,11 +120,8 @@ export const RelatorioProfissionais = React.memo<RelatorioProfissionaisProps>(
 
             const prof = profissionaisMap.get(profId)!;
 
-            // Contar apenas consultas finalizadas ou agendadas
-            if (
-              agendamento.status_consulta_codigo === 'finalizado' ||
-              agendamento.status_consulta_codigo === 'agendado'
-            ) {
+            // AI dev note: Contar todas consultas exceto canceladas (padronizado com FaturamentoChart)
+            if (agendamento.status_consulta_codigo !== 'cancelado') {
               prof.totalConsultas += 1;
               prof.faturamentoClinica += valor;
 
@@ -133,10 +130,7 @@ export const RelatorioProfissionais = React.memo<RelatorioProfissionaisProps>(
               prof.comissao += valor;
 
               // Contar consultas com evolução (apenas para admin ver)
-              if (
-                agendamento.status_consulta_codigo === 'finalizado' &&
-                agendamento.possui_evolucao === 'sim'
-              ) {
+              if (agendamento.possui_evolucao === 'sim') {
                 prof.consultasComEvolucao += 1;
               }
             }
