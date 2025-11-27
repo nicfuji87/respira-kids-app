@@ -42,6 +42,8 @@ export async function fetchPatientDetails(
       // AI dev note: Garantir que responsavel_cobranca_nome está sempre definido
       responsavel_cobranca_nome:
         data.responsavel_cobranca_nome || data.nome || 'Não definido',
+      // AI dev note: Mapear campo do banco (autorizacao_uso_do_nome) para o esperado pelo TypeScript (autorizacao_uso_nome)
+      autorizacao_uso_nome: data.autorizacao_uso_do_nome,
       endereco: data.cep
         ? {
             cep: data.cep,
@@ -71,12 +73,13 @@ export async function updatePatientConsents(
   consents: PatientConsent
 ): Promise<void> {
   try {
+    // AI dev note: Coluna do banco é autorizacao_uso_do_nome (com "do")
     const { error } = await supabase
       .from('pessoas')
       .update({
         autorizacao_uso_cientifico: consents.autorizacao_uso_cientifico,
         autorizacao_uso_redes_sociais: consents.autorizacao_uso_redes_sociais,
-        autorizacao_uso_nome: consents.autorizacao_uso_nome,
+        autorizacao_uso_do_nome: consents.autorizacao_uso_nome,
         updated_at: new Date().toISOString(),
       })
       .eq('id', patientId);
