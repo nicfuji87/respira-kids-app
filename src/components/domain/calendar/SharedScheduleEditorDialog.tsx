@@ -13,9 +13,11 @@ import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { DatePicker } from '@/components/composed/DatePicker';
 import { Checkbox } from '@/components/primitives/checkbox';
+import { Switch } from '@/components/primitives/switch';
 import { SlotsList } from '@/components/composed/SlotsList';
 import { Separator } from '@/components/primitives/separator';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
+import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/primitives/use-toast';
 import {
@@ -59,6 +61,7 @@ export const SharedScheduleEditorDialog =
       const [titulo, setTitulo] = useState('');
       const [dataInicio, setDataInicio] = useState('');
       const [dataFim, setDataFim] = useState('');
+      const [ativo, setAtivo] = useState(true);
       const [servicosSelecionados, setServicosSelecionados] = useState<
         string[]
       >([]);
@@ -92,6 +95,7 @@ export const SharedScheduleEditorDialog =
           setTitulo(agenda.titulo);
           setDataInicio(agenda.data_inicio);
           setDataFim(agenda.data_fim);
+          setAtivo(agenda.ativo);
           setServicosSelecionados(agenda.servicos.map((s) => s.id));
           setLocaisSelecionados(agenda.locais.map((l) => l.id));
           setEmpresasSelecionadas(agenda.empresas.map((e) => e.id));
@@ -220,11 +224,12 @@ export const SharedScheduleEditorDialog =
             return;
           }
 
-          // Atualizar agenda
+          // Atualizar agenda (incluindo status ativo)
           const result = await updateSharedSchedule(agenda.id, {
             titulo,
             data_inicio: dataInicio,
             data_fim: dataFim,
+            ativo,
             servicos_ids: servicosSelecionados,
             locais_ids: locaisSelecionados,
             empresas_ids: empresasSelecionadas,
@@ -433,6 +438,33 @@ export const SharedScheduleEditorDialog =
                     <div className="space-y-2">
                       <Label className="text-xs sm:text-sm">Data de Fim</Label>
                       <DatePicker value={dataFim} onChange={setDataFim} />
+                    </div>
+                  </div>
+
+                  {/* AI dev note: Switch para ativar/inativar agenda */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                    <div className="space-y-0.5">
+                      <Label
+                        htmlFor="edit-ativo"
+                        className="text-sm font-medium cursor-pointer"
+                      >
+                        Status da Agenda
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {ativo
+                          ? 'Agenda ativa e acessível pelo link público'
+                          : 'Agenda inativa - link não está acessível'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={ativo ? 'default' : 'secondary'}>
+                        {ativo ? 'Ativa' : 'Inativa'}
+                      </Badge>
+                      <Switch
+                        id="edit-ativo"
+                        checked={ativo}
+                        onCheckedChange={setAtivo}
+                      />
                     </div>
                   </div>
                 </div>
