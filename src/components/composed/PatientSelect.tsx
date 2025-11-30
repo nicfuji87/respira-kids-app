@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { User, Phone, Mail, Check, ChevronsUpDown, X } from 'lucide-react';
+import { Phone, Mail, Check, ChevronsUpDown, X } from 'lucide-react';
 
 import {
   Popover,
@@ -14,6 +14,11 @@ import {
 } from '@/components/primitives/dialog';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/primitives/avatar';
 import { cn, normalizeText } from '@/lib/utils';
 import { fetchPacientes } from '@/lib/calendar-services';
 import type { SupabasePessoa } from '@/types/supabase-calendar';
@@ -305,6 +310,16 @@ export const PatientSelect = React.memo<PatientSelectProps>(
       return phoneStr;
     };
 
+    // AI dev note: Extrair iniciais do nome para fallback do avatar
+    const getInitials = (name: string): string => {
+      return name
+        .split(' ')
+        .map((word) => word.charAt(0))
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
+    };
+
     const handlePatientSelect = useCallback(
       (patient: PatientOption) => {
         onValueChange(patient.id);
@@ -348,8 +363,21 @@ export const PatientSelect = React.memo<PatientSelectProps>(
 
       return (
         <div className="flex items-center gap-3 w-full">
+          {/* AI dev note: Avatar com foto de perfil do paciente */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <User className="h-4 w-4 text-muted-foreground" />
+            <Avatar className="h-8 w-8 ring-1 ring-border">
+              {patient.foto_perfil ? (
+                <AvatarImage
+                  src={patient.foto_perfil}
+                  alt={patient.nome}
+                  className="object-cover"
+                />
+              ) : (
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                  {getInitials(patient.nome)}
+                </AvatarFallback>
+              )}
+            </Avatar>
             {isSelected && <Check className="h-4 w-4 text-primary" />}
           </div>
 

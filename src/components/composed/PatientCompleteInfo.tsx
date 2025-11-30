@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import {
   User,
   Mail,
@@ -9,6 +9,11 @@ import {
   Shield,
   Check,
   X,
+  RefreshCw,
+  Upload,
+  Camera,
+  MessageCircle,
+  Trash2,
 } from 'lucide-react';
 import {
   Card,
@@ -18,7 +23,20 @@ import {
 } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
 import { Button } from '@/components/primitives/button';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/primitives/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
+import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
 import { PatientPediatriciansSection } from './PatientPediatriciansSection';
@@ -28,6 +46,15 @@ import { PatientPediatriciansSection } from './PatientPediatriciansSection';
 
 export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
   ({ patient, userRole, className, onResponsibleClick }) => {
+    const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+    const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(
+      patient.foto_perfil || null
+    );
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { toast } = useToast();
+
     // 🔍 DEBUG: Verificar dados dos responsáveis
     console.log('🔍 [DEBUG] PatientCompleteInfo dados:', {
       patient_id: patient.id,
@@ -38,6 +65,211 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
       responsavel_financeiro_nome: patient.responsavel_financeiro_nome,
       onResponsibleClick: !!onResponsibleClick,
     });
+
+    // AI dev note: Verificar se tem telefone para buscar foto do WhatsApp
+    const hasPhone = !!(patient.telefone || patient.responsavel_legal_telefone);
+
+    // AI dev note: Função para disparar webhook de atualização de foto do WhatsApp
+    const handleUpdatePhotoFromWhatsApp = async () => {
+      if (!hasPhone) {
+        toast({
+          title: 'Telefone não cadastrado',
+          description:
+            'Esta pessoa não possui telefone cadastrado para buscar a foto do WhatsApp.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      try {
+        setIsUpdatingPhoto(true);
+
+        // AI dev note: Disparar webhook padrão para atualização de foto
+        // O webhook será processado pelo sistema e enviado para a URL configurada
+        const { error: webhookError } = await supabase
+          .from('webhook_queue')
+          .insert({
+            evento: 'atualizar_foto_perfil_whatsapp',
+            payload: {
+              pessoa_id: patient.id,
+              pessoa_nome: patient.nome,
+              telefone:
+                patient.telefone || patient.responsavel_legal_telefone || null,
+              foto_perfil_atual: patient.foto_perfil || null,
+              timestamp: new Date().toISOString(),
+            },
+            status: 'pendente',
+            tentativas: 0,
+            max_tentativas: 3,
+          });
+
+        if (webhookError) {
+          console.error('❌ Erro ao criar webhook:', webhookError);
+          throw new Error('Erro ao solicitar atualização da foto');
+        }
+
+        toast({
+          title: 'Atualização solicitada',
+          description:
+            'A foto do WhatsApp será atualizada em alguns instantes.',
+          variant: 'default',
+        });
+        setIsPhotoModalOpen(false);
+      } catch (error) {
+        console.error('Erro ao solicitar atualização de foto:', error);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível solicitar a atualização da foto.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsUpdatingPhoto(false);
+      }
+    };
+
+    // AI dev note: Função para upload manual de foto
+    const handleManualPhotoUpload = async (
+      event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      // Validar tipo de arquivo
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: 'Arquivo inválido',
+          description: 'Por favor, selecione uma imagem (JPG, PNG, etc).',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Validar tamanho (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast({
+          title: 'Arquivo muito grande',
+          description: 'A imagem deve ter no máximo 2MB.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      try {
+        setIsUploadingPhoto(true);
+
+        // Definir caminho no bucket
+        const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const filePath = `${patient.id}/profile.${fileExt}`;
+
+        // Upload para o bucket respira-profiles
+        const { error: uploadError } = await supabase.storage
+          .from('respira-profiles')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error('❌ Erro no upload:', uploadError);
+          throw new Error('Erro ao fazer upload da foto');
+        }
+
+        // Obter URL pública
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('respira-profiles').getPublicUrl(filePath);
+
+        // Adicionar timestamp para forçar refresh do cache
+        const urlWithTimestamp = `${publicUrl}?t=${Date.now()}`;
+
+        // Atualizar campo foto_perfil na tabela pessoas
+        const { error: updateError } = await supabase
+          .from('pessoas')
+          .update({
+            foto_perfil: publicUrl,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', patient.id);
+
+        if (updateError) {
+          console.error('❌ Erro ao atualizar pessoa:', updateError);
+          throw new Error('Erro ao salvar a foto no cadastro');
+        }
+
+        // Atualizar estado local
+        setCurrentPhotoUrl(urlWithTimestamp);
+
+        toast({
+          title: 'Foto atualizada',
+          description: 'A foto de perfil foi atualizada com sucesso.',
+          variant: 'default',
+        });
+        setIsPhotoModalOpen(false);
+      } catch (error) {
+        console.error('Erro ao fazer upload da foto:', error);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível atualizar a foto.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsUploadingPhoto(false);
+        // Limpar input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+
+    // AI dev note: Função para remover foto
+    const handleRemovePhoto = async () => {
+      try {
+        setIsUploadingPhoto(true);
+
+        // Atualizar campo foto_perfil para null
+        const { error: updateError } = await supabase
+          .from('pessoas')
+          .update({
+            foto_perfil: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', patient.id);
+
+        if (updateError) {
+          console.error('❌ Erro ao remover foto:', updateError);
+          throw new Error('Erro ao remover a foto');
+        }
+
+        // Atualizar estado local
+        setCurrentPhotoUrl(null);
+
+        toast({
+          title: 'Foto removida',
+          description: 'A foto de perfil foi removida com sucesso.',
+          variant: 'default',
+        });
+        setIsPhotoModalOpen(false);
+      } catch (error) {
+        console.error('Erro ao remover foto:', error);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível remover a foto.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    };
+
+    // AI dev note: Extrair iniciais do nome para fallback do avatar
+    const getInitials = (name: string): string => {
+      return name
+        .split(' ')
+        .map((word) => word.charAt(0))
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
+    };
 
     // AI dev note: Calcular idade com suporte a meses para bebês menores de 1 ano
     const calculateAge = (birthDate: string) => {
@@ -142,6 +374,168 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Seção: Avatar clicável para abrir modal */}
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              {/* AI dev note: Avatar clicável - abre modal para visualização e edição */}
+              <button
+                type="button"
+                onClick={() => setIsPhotoModalOpen(true)}
+                className={cn(
+                  'relative rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
+                  'transition-transform duration-200 hover:scale-105',
+                  (userRole === 'admin' || userRole === 'secretaria') &&
+                    'cursor-pointer'
+                )}
+                disabled={userRole === 'profissional'}
+                aria-label="Ver ou alterar foto de perfil"
+              >
+                <Avatar className="h-20 w-20 ring-2 ring-border">
+                  {currentPhotoUrl ? (
+                    <AvatarImage
+                      src={currentPhotoUrl}
+                      alt={patient.nome}
+                      className="object-cover"
+                    />
+                  ) : (
+                    <AvatarFallback className="bg-muted text-lg font-semibold">
+                      {getInitials(patient.nome)}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+
+                {/* AI dev note: Ícone de câmera indicando que é editável - apenas admin/secretaria */}
+                {(userRole === 'admin' || userRole === 'secretaria') && (
+                  <div
+                    className={cn(
+                      'absolute -bottom-1 -right-1 rounded-full p-1',
+                      'bg-primary text-primary-foreground shadow-sm',
+                      'border-2 border-background'
+                    )}
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                  </div>
+                )}
+              </button>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-semibold truncate">{patient.nome}</h3>
+              {patient.sexo && (
+                <p className="text-sm text-muted-foreground">
+                  {patient.sexo === 'M'
+                    ? 'Masculino'
+                    : patient.sexo === 'F'
+                      ? 'Feminino'
+                      : 'Outro'}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* AI dev note: Modal de visualização e edição da foto de perfil */}
+          <Dialog open={isPhotoModalOpen} onOpenChange={setIsPhotoModalOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Camera className="h-5 w-5" />
+                  Foto de Perfil
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="flex flex-col items-center gap-6 py-4">
+                {/* Foto em tamanho maior */}
+                <div className="relative">
+                  <Avatar className="h-40 w-40 ring-4 ring-border">
+                    {currentPhotoUrl ? (
+                      <AvatarImage
+                        src={currentPhotoUrl}
+                        alt={patient.nome}
+                        className="object-cover"
+                      />
+                    ) : (
+                      <AvatarFallback className="bg-muted text-4xl font-semibold">
+                        {getInitials(patient.nome)}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                </div>
+
+                <p className="text-center text-sm text-muted-foreground">
+                  {patient.nome}
+                </p>
+
+                {/* Botões de ação - apenas admin/secretaria */}
+                {(userRole === 'admin' || userRole === 'secretaria') && (
+                  <div className="flex flex-col gap-3 w-full">
+                    {/* Input de arquivo oculto */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleManualPhotoUpload}
+                      className="hidden"
+                      id="photo-upload-input"
+                    />
+
+                    {/* Botão: Enviar foto manualmente */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingPhoto || isUpdatingPhoto}
+                    >
+                      {isUploadingPhoto ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4" />
+                      )}
+                      Enviar foto do computador
+                    </Button>
+
+                    {/* Botão: Buscar do WhatsApp - só aparece se tiver telefone */}
+                    {hasPhone && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full gap-2"
+                        onClick={handleUpdatePhotoFromWhatsApp}
+                        disabled={isUploadingPhoto || isUpdatingPhoto}
+                      >
+                        {isUpdatingPhoto ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MessageCircle className="h-4 w-4" />
+                        )}
+                        Buscar foto do WhatsApp
+                      </Button>
+                    )}
+
+                    {/* Botão: Remover foto - só aparece se tiver foto */}
+                    {currentPhotoUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={handleRemovePhoto}
+                        disabled={isUploadingPhoto || isUpdatingPhoto}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Remover foto
+                      </Button>
+                    )}
+
+                    {/* Texto informativo */}
+                    <p className="text-xs text-muted-foreground text-center mt-2">
+                      Formatos aceitos: JPG, PNG, WebP (máx. 2MB)
+                    </p>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
           {/* Seção: Informações Básicas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Idade */}

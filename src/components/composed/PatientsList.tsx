@@ -24,6 +24,11 @@ import { Card, CardContent } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/primitives/avatar';
 import { cn } from '@/lib/utils';
 import { fetchPatients } from '@/lib/patient-api';
 import type { Usuario } from '@/types/usuarios';
@@ -177,6 +182,16 @@ export const PatientsList: React.FC<PatientsListProps> = ({
       return phoneStr.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
     }
     return phoneStr;
+  };
+
+  // AI dev note: Extrair iniciais do nome para fallback do avatar
+  const getInitials = (name: string): string => {
+    return name
+      .split(' ')
+      .map((word) => word.charAt(0))
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
   };
 
   // AI dev note: Função para calcular idade com suporte a meses para bebês
@@ -369,10 +384,20 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             >
               <CardContent className="p-4">
                 <div className="flex items-start gap-4">
-                  {/* Avatar */}
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <User className="h-6 w-6 text-primary" />
-                  </div>
+                  {/* AI dev note: Avatar com foto de perfil do paciente */}
+                  <Avatar className="h-12 w-12 shrink-0 ring-2 ring-border">
+                    {patient.foto_perfil ? (
+                      <AvatarImage
+                        src={patient.foto_perfil}
+                        alt={patient.nome}
+                        className="object-cover"
+                      />
+                    ) : (
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                        {getInitials(patient.nome)}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
 
                   {/* Informações principais */}
                   <div className="flex-1 min-w-0">
