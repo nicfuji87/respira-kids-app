@@ -511,16 +511,25 @@ export const AppointmentDetailsManager =
             }
 
             // Mapear para o formato esperado
-            const formattedLogs = (data || []).map((log) => ({
-              id: log.id,
-              campo_alterado: log.campo_alterado,
-              valor_anterior: log.valor_anterior,
-              valor_novo: log.valor_novo,
-              created_at: log.created_at,
-              alterado_por_nome:
-                (log.alterado_por as { nome: string } | null)?.nome ||
-                'Sistema',
-            }));
+            // AI dev note: alterado_por pode vir como objeto ou array dependendo da query
+            const formattedLogs = (data || []).map((log) => {
+              const alteradoPor = log.alterado_por as
+                | { nome: string }
+                | { nome: string }[]
+                | null;
+              const nome = Array.isArray(alteradoPor)
+                ? alteradoPor[0]?.nome
+                : alteradoPor?.nome;
+
+              return {
+                id: log.id,
+                campo_alterado: log.campo_alterado,
+                valor_anterior: log.valor_anterior,
+                valor_novo: log.valor_novo,
+                created_at: log.created_at,
+                alterado_por_nome: nome || 'Sistema',
+              };
+            });
 
             setAuditLogs(formattedLogs);
           } catch (error) {
