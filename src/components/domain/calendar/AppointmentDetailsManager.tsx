@@ -153,6 +153,19 @@ export const AppointmentDetailsManager =
       const [isLoadingProfissionais, setIsLoadingProfissionais] =
         useState(false);
 
+      // AI dev note: Estado para histórico de auditoria (apenas admin vê)
+      const [auditLogs, setAuditLogs] = useState<
+        Array<{
+          id: string;
+          campo_alterado: string;
+          valor_anterior: string;
+          valor_novo: string;
+          created_at: string;
+          alterado_por_nome?: string;
+        }>
+      >([]);
+      const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+
       // Estados para evolução
       const [evolucoes, setEvolucoes] = useState<
         SupabaseRelatorioEvolucaoCompleto[]
@@ -465,6 +478,63 @@ export const AppointmentDetailsManager =
           loadProfissionais();
         }
       }, [isOpen, userRole]);
+
+      // AI dev note: Carregar histórico de auditoria apenas para admin
+      useEffect(() => {
+        const loadAuditLogs = async () => {
+          if (userRole !== 'admin' || !appointment?.id) {
+            setAuditLogs([]);
+            return;
+          }
+
+          setIsLoadingAuditLogs(true);
+          try {
+            const { data, error } = await supabase
+              .from('agendamento_audit_log')
+              .select(
+                `
+                id,
+                campo_alterado,
+                valor_anterior,
+                valor_novo,
+                created_at,
+                alterado_por:pessoas!agendamento_audit_log_alterado_por_fkey(nome)
+              `
+              )
+              .eq('agendamento_id', appointment.id)
+              .order('created_at', { ascending: false });
+
+            if (error) {
+              console.error('Erro ao carregar logs de auditoria:', error);
+              setAuditLogs([]);
+              return;
+            }
+
+            // Mapear para o formato esperado
+            const formattedLogs = (data || []).map((log) => ({
+              id: log.id,
+              campo_alterado: log.campo_alterado,
+              valor_anterior: log.valor_anterior,
+              valor_novo: log.valor_novo,
+              created_at: log.created_at,
+              alterado_por_nome:
+                (log.alterado_por as { nome: string } | null)?.nome ||
+                'Sistema',
+            }));
+
+            setAuditLogs(formattedLogs);
+          } catch (error) {
+            console.error('Erro ao carregar logs de auditoria:', error);
+            setAuditLogs([]);
+          } finally {
+            setIsLoadingAuditLogs(false);
+          }
+        };
+
+        if (isOpen && userRole === 'admin' && appointment?.id) {
+          loadAuditLogs();
+        }
+      }, [isOpen, userRole, appointment?.id]);
 
       // Inicializar formulário quando appointment mudar
       useEffect(() => {
@@ -1048,45 +1118,27 @@ export const AppointmentDetailsManager =
 
                   {/* AI dev note: Apenas admin pode alterar profissional responsável */}
                   {userRole === 'admin' ? (
-                    <div className="space-y-2">
-                      <Select
-                        value={formData.profissionalId}
-                        onValueChange={(value) =>
-                          handleInputChange('profissionalId', value)
-                        }
-                        disabled={isLoadingProfissionais}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecionar profissional..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {profissionaisOptions.map((profissional) => (
-                            <SelectItem
-                              key={profissional.id}
-                              value={profissional.id}
-                            >
-                              <div className="flex flex-col">
-                                <span className="font-medium">
-                                  {profissional.nome}
-                                </span>
-                                {profissional.especialidade && (
-                                  <span className="text-sm text-muted-foreground">
-                                    {profissional.especialidade}
-                                  </span>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {formData.profissionalId !==
-                        appointment.profissional_id && (
-                        <p className="text-xs text-amber-600">
-                          ⚠️ Alteração de profissional será registrada no
-                          relatório de auditoria
-                        </p>
-                      )}
-                    </div>
+                    <Select
+                      value={formData.profissionalId}
+                      onValueChange={(value) =>
+                        handleInputChange('profissionalId', value)
+                      }
+                      disabled={isLoadingProfissionais}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar profissional..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {profissionaisOptions.map((profissional) => (
+                          <SelectItem
+                            key={profissional.id}
+                            value={profissional.id}
+                          >
+                            {profissional.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   ) : (
                     <div className="flex items-start gap-2">
                       <Button
@@ -1302,6 +1354,59 @@ export const AppointmentDetailsManager =
                             em {formatDateTimeBR(appointment.updated_at)}
                           </div>
                         )}
+
+                      {/* AI dev note: Histórico de alterações de profissional - apenas admin */}
+                      {userRole === 'admin' && (
+                        <div className="mt-3">
+                          {isLoadingAuditLogs ? (
+                            <div className="text-xs text-muted-foreground">
+                              Carregando histórico...
+                            </div>
+                          ) : auditLogs.length > 0 ? (
+                            <div className="space-y-2">
+                              <div className="text-xs font-medium text-muted-foreground">
+                                Histórico de Alterações:
+                              </div>
+                              {auditLogs.map((log) => (
+                                <div
+                                  key={log.id}
+                                  className="text-xs border-l-2 border-amber-400 pl-2 py-1 bg-amber-50/50 rounded-r"
+                                >
+                                  <div>
+                                    <strong className="text-foreground">
+                                      {log.campo_alterado === 'profissional_id'
+                                        ? 'Profissional alterado'
+                                        : log.campo_alterado}
+                                    </strong>{' '}
+                                    por{' '}
+                                    <span className="text-foreground">
+                                      {log.alterado_por_nome}
+                                    </span>{' '}
+                                    em{' '}
+                                    {new Date(log.created_at).toLocaleString(
+                                      'pt-BR'
+                                    )}
+                                  </div>
+                                  <div className="text-muted-foreground mt-0.5">
+                                    De:{' '}
+                                    <span className="text-red-600">
+                                      {log.valor_anterior
+                                        ?.replace(/^[^(]+\(/, '')
+                                        .replace(/\)$/, '') || 'N/A'}
+                                    </span>{' '}
+                                    → Para:{' '}
+                                    <span className="text-green-600">
+                                      {log.valor_novo
+                                        ?.replace(/^[^(]+\(/, '')
+                                        .replace(/\)$/, '') || 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
