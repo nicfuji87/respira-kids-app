@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, AlertTriangle, Calendar, CalendarOff } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import {
+  Loader2,
+  AlertTriangle,
+  Calendar,
+  CalendarOff,
+  Phone,
+} from 'lucide-react';
 
 import { SharedScheduleSelectorWizard } from '@/components/domain/calendar/SharedScheduleSelectorWizard';
-import { Button } from '@/components/primitives/button';
 import {
   Card,
   CardContent,
@@ -20,7 +25,6 @@ import type { AgendaCompartilhadaCompleta } from '@/types/shared-schedule';
 
 export const SharedSchedulePage = React.memo(() => {
   const { token } = useParams<{ token: string }>();
-  const navigate = useNavigate();
 
   const [agenda, setAgenda] = useState<AgendaCompartilhadaCompleta | null>(
     null
@@ -135,23 +139,31 @@ export const SharedSchedulePage = React.memo(() => {
                       : 'a data definida'}
                   </span>
                   .
-                  <br />
-                  <br />
-                  Entre em contato para obter um novo link de agendamento.
                 </>
               ) : (
                 error
               )}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => navigate('/')}
+          <CardContent className="space-y-4">
+            <p className="text-sm text-center text-muted-foreground">
+              {isExpired
+                ? 'Entre em contato para obter um novo link de agendamento.'
+                : 'Verifique se o link está correto ou entre em contato com a clínica.'}
+            </p>
+
+            {/* AI dev note: Não redirecionar para cadastro de paciente - manter na página de erro */}
+            <a
+              href="https://wa.me/556181446666"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 p-3 rounded-lg border hover:bg-accent transition-colors"
             >
-              Voltar para o Início
-            </Button>
+              <Phone className="w-4 h-4 text-green-600" />
+              <span className="text-sm font-medium">
+                Entrar em contato via WhatsApp
+              </span>
+            </a>
           </CardContent>
         </Card>
       </div>
