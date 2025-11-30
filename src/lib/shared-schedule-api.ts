@@ -441,6 +441,101 @@ export async function deleteSharedSchedule(
 }
 
 // ============================================
+// BUSCAR AGENDA POR ID (Para Edição - Admin)
+// ============================================
+
+// AI dev note: Busca agenda por ID para edição no painel admin.
+// NÃO filtra por ativo - permite editar agendas inativas também.
+// Diferente de fetchSharedScheduleByToken que é para acesso público.
+
+export async function fetchSharedScheduleById(
+  agendaId: string
+): Promise<ApiResponse<AgendaCompartilhadaCompleta>> {
+  try {
+    // 1. Buscar agenda com stats (sem filtro de ativo)
+    const { data: agendaStats, error: agendaError } = await supabase
+      .from('vw_agendas_compartilhadas_stats')
+      .select('*')
+      .eq('id', agendaId)
+      .single();
+
+    if (agendaError) throw agendaError;
+    if (!agendaStats) throw new Error('Agenda não encontrada');
+
+    // 2. Buscar serviços disponibilizados
+    const { data: servicosIds } = await supabase
+      .from('agenda_servicos')
+      .select('tipo_servico_id')
+      .eq('agenda_id', agendaStats.id);
+
+    const servicosIdsArray = servicosIds?.map((s) => s.tipo_servico_id) || [];
+
+    const { data: servicos } = await supabase
+      .from('tipo_servicos')
+      .select('id, nome, descricao, duracao_minutos, valor, cor, ativo')
+      .in('id', servicosIdsArray)
+      .eq('ativo', true);
+
+    // 3. Buscar locais disponibilizados
+    const { data: locaisIds } = await supabase
+      .from('agenda_locais')
+      .select('local_id')
+      .eq('agenda_id', agendaStats.id);
+
+    const locaisIdsArray = locaisIds?.map((l) => l.local_id) || [];
+
+    const { data: locais } = await supabase
+      .from('locais_atendimento')
+      .select('id, nome, tipo_local, ativo')
+      .in('id', locaisIdsArray)
+      .eq('ativo', true);
+
+    // 4. Buscar empresas disponibilizadas
+    const { data: empresasIds } = await supabase
+      .from('agenda_empresas')
+      .select('empresa_id')
+      .eq('agenda_id', agendaStats.id);
+
+    const empresasIdsArray = empresasIds?.map((e) => e.empresa_id) || [];
+
+    const { data: empresas } = await supabase
+      .from('pessoa_empresas')
+      .select('id, razao_social, nome_fantasia, cnpj, ativo')
+      .in('id', empresasIdsArray)
+      .eq('ativo', true);
+
+    // 5. Buscar todos os slots não deletados (incluindo ocupados para edição)
+    const { data: slots } = await supabase
+      .from('agenda_slots')
+      .select('*')
+      .eq('agenda_id', agendaStats.id)
+      .is('deleted_at', null)
+      .order('data_hora', { ascending: true });
+
+    const agendaCompleta: AgendaCompartilhadaCompleta = {
+      ...agendaStats,
+      servicos: (servicos || []) as ServicoDetalhado[],
+      locais: (locais || []) as LocalDetalhado[],
+      empresas: (empresas || []) as EmpresaDetalhada[],
+      slots: (slots || []) as AgendaSlot[],
+    };
+
+    return {
+      data: agendaCompleta,
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    console.error('Erro ao buscar agenda por ID:', error);
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      success: false,
+    };
+  }
+}
+
+// ============================================
 // BUSCAR AGENDA POR TOKEN (Público)
 // ============================================
 
@@ -558,6 +653,10 @@ export async function listSharedSchedulesByProfessional(
   filters?: AgendaCompartilhadaFilters
 ): Promise<ApiResponse<AgendaCompartilhadaStats[]>> {
   try {
+    // AI dev note: Inativar agendas expiradas antes de listar
+    // Isso garante que agendas expiradas sejam marcadas como inativas automaticamente
+    await supabase.rpc('fn_inativar_agendas_expiradas');
+
     let query = supabase
       .from('vw_agendas_compartilhadas_stats')
       .select('*')

@@ -29,7 +29,7 @@ import { useToast } from '@/components/primitives/use-toast';
 import {
   listSharedSchedulesByProfessional,
   deleteSharedSchedule,
-  fetchSharedScheduleByToken,
+  fetchSharedScheduleById,
 } from '@/lib/shared-schedule-api';
 import type {
   AgendaCompartilhadaStats,
@@ -58,9 +58,9 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
       useState<AgendaCompartilhadaCompleta | null>(null);
     const [agendaToDelete, setAgendaToDelete] = useState<string | null>(null);
 
-    // Filtros
+    // Filtros - AI dev note: padrão é mostrar apenas ativas
     const [filters, setFilters] = useState<AgendaCompartilhadaFilters>({
-      ativo: undefined,
+      ativo: true,
     });
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -118,24 +118,25 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
     const handleEdit = useCallback(
       async (agendaId: string) => {
         try {
-          // Buscar agenda completa
-          const agenda = agendas.find((a) => a.id === agendaId);
-          if (!agenda) return;
-
-          const result = await fetchSharedScheduleByToken(agenda.token);
+          // AI dev note: Buscar por ID permite editar agendas inativas também
+          const result = await fetchSharedScheduleById(agendaId);
           if (result.success && result.data) {
             setSelectedAgenda(result.data);
             setIsEditorOpen(true);
+          } else {
+            throw new Error(result.error || 'Erro ao carregar agenda');
           }
         } catch (error) {
           console.error('Erro ao buscar agenda:', error);
           toast({
             title: 'Erro ao carregar agenda',
+            description:
+              error instanceof Error ? error.message : 'Erro desconhecido',
             variant: 'destructive',
           });
         }
       },
-      [agendas, toast]
+      [toast]
     );
 
     const handleDelete = useCallback((agendaId: string) => {
