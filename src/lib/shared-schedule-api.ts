@@ -24,6 +24,151 @@ import type {
 import type { CreateAgendamento } from '@/types/supabase-calendar';
 
 // ============================================
+// VERIFICAR CONFLITOS DE AGENDAMENTOS (com detalhes)
+// ============================================
+
+// AI dev note: Retorna detalhes do agendamento existente em um horário específico.
+// Usado para validação em tempo real no frontend antes de adicionar slot.
+
+export interface AppointmentConflictDetail {
+  data_hora: string;
+  paciente_nome: string;
+  tipo_servico_nome: string;
+}
+
+export async function checkSlotConflict(
+  profissionalId: string,
+  dataHora: string
+): Promise<ApiResponse<AppointmentConflictDetail | null>> {
+  try {
+    // Buscar status de agendamento "cancelado" para excluir
+    const { data: statusCancelado } = await supabase
+      .from('consulta_status')
+      .select('id')
+      .eq('codigo', 'cancelado')
+      .single();
+
+    // Buscar agendamento ativo do profissional neste horário
+    let query = supabase
+      .from('agendamentos')
+      .select(
+        `
+        data_hora,
+        paciente:pessoas!agendamentos_paciente_id_fkey(nome),
+        tipo_servico:tipo_servicos(nome)
+      `
+      )
+      .eq('profissional_id', profissionalId)
+      .eq('data_hora', dataHora)
+      .eq('ativo', true);
+
+    // Excluir agendamentos cancelados
+    if (statusCancelado?.id) {
+      query = query.neq('status_consulta_id', statusCancelado.id);
+    }
+
+    const { data: agendamento, error } = await query.maybeSingle();
+
+    if (error) throw error;
+
+    if (!agendamento) {
+      return {
+        data: null,
+        error: null,
+        success: true,
+      };
+    }
+
+    return {
+      data: {
+        data_hora: agendamento.data_hora,
+        paciente_nome:
+          (agendamento.paciente as unknown as { nome: string })?.nome ||
+          'Paciente',
+        tipo_servico_nome:
+          (agendamento.tipo_servico as unknown as { nome: string })?.nome ||
+          'Serviço',
+      },
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    console.error('Erro ao verificar conflito:', error);
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      success: false,
+    };
+  }
+}
+
+// ============================================
+// VERIFICAR CONFLITOS DE AGENDAMENTOS (batch)
+// ============================================
+
+// AI dev note: Verifica se o profissional já tem agendamentos ativos
+// nos horários especificados. Retorna os horários com conflito.
+// Usado para validar antes de criar slots em agendas compartilhadas.
+
+export async function checkAppointmentConflicts(
+  profissionalId: string,
+  slotsDataHora: string[]
+): Promise<ApiResponse<{ hasConflicts: boolean; conflictingSlots: string[] }>> {
+  try {
+    if (slotsDataHora.length === 0) {
+      return {
+        data: { hasConflicts: false, conflictingSlots: [] },
+        error: null,
+        success: true,
+      };
+    }
+
+    // Buscar status de agendamento "cancelado" para excluir
+    const { data: statusCancelado } = await supabase
+      .from('consulta_status')
+      .select('id')
+      .eq('codigo', 'cancelado')
+      .single();
+
+    // Buscar agendamentos ativos do profissional nos horários especificados
+    let query = supabase
+      .from('agendamentos')
+      .select('data_hora')
+      .eq('profissional_id', profissionalId)
+      .eq('ativo', true)
+      .in('data_hora', slotsDataHora);
+
+    // Excluir agendamentos cancelados
+    if (statusCancelado?.id) {
+      query = query.neq('status_consulta_id', statusCancelado.id);
+    }
+
+    const { data: agendamentosExistentes, error } = await query;
+
+    if (error) throw error;
+
+    const conflictingSlots =
+      agendamentosExistentes?.map((a) => a.data_hora) || [];
+
+    return {
+      data: {
+        hasConflicts: conflictingSlots.length > 0,
+        conflictingSlots,
+      },
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    console.error('Erro ao verificar conflitos:', error);
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      success: false,
+    };
+  }
+}
+
+// ============================================
 // CRIAR AGENDA COMPARTILHADA
 // ============================================
 
@@ -31,6 +176,37 @@ export async function createSharedSchedule(
   data: CreateAgendaCompartilhada
 ): Promise<ApiResponse<CreateAgendaResponse>> {
   try {
+    // AI dev note: Validar se há conflitos ANTES de criar a agenda
+    // Evita criar agenda órfã se houver slots com agendamentos existentes
+    if (data.slots_data_hora.length > 0) {
+      const conflictCheck = await checkAppointmentConflicts(
+        data.profissional_id,
+        data.slots_data_hora
+      );
+
+      if (!conflictCheck.success) {
+        throw new Error(conflictCheck.error || 'Erro ao verificar conflitos');
+      }
+
+      if (conflictCheck.data?.hasConflicts) {
+        const conflictingTimes = conflictCheck.data.conflictingSlots
+          .map((dt) => {
+            const date = new Date(dt);
+            return date.toLocaleString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+          })
+          .join(', ');
+
+        throw new Error(
+          `Não é possível criar slots nos horários que já possuem agendamentos: ${conflictingTimes}`
+        );
+      }
+    }
+
     // 1. Criar agenda principal
     const { data: agenda, error: agendaError } = await supabase
       .from('agendas_compartilhadas')
@@ -230,8 +406,13 @@ export async function updateSharedSchedule(
 }
 
 // ============================================
-// DELETAR AGENDA COMPARTILHADA
+// DELETAR AGENDA COMPARTILHADA (Soft Delete)
 // ============================================
+
+// AI dev note: Soft delete para manter integridade referencial.
+// A agenda é marcada como inativa (ativo = false) em vez de ser deletada.
+// Isso preserva os agendamentos e slots existentes.
+// A agenda não aparecerá mais na listagem pública (filtro ativo = true).
 
 export async function deleteSharedSchedule(
   agendaId: string
@@ -239,7 +420,7 @@ export async function deleteSharedSchedule(
   try {
     const { error } = await supabase
       .from('agendas_compartilhadas')
-      .delete()
+      .update({ ativo: false })
       .eq('id', agendaId);
 
     if (error) throw error;
@@ -422,6 +603,46 @@ export async function addSlotsToSchedule(
   data: AddSlotsData
 ): Promise<ApiResponse<AgendaSlot[]>> {
   try {
+    // AI dev note: Buscar profissional_id da agenda para validar conflitos
+    const { data: agenda, error: agendaError } = await supabase
+      .from('agendas_compartilhadas')
+      .select('profissional_id')
+      .eq('id', data.agenda_id)
+      .single();
+
+    if (agendaError) throw agendaError;
+    if (!agenda) throw new Error('Agenda não encontrada');
+
+    // Validar se há conflitos com agendamentos existentes
+    if (data.slots_data_hora.length > 0) {
+      const conflictCheck = await checkAppointmentConflicts(
+        agenda.profissional_id,
+        data.slots_data_hora
+      );
+
+      if (!conflictCheck.success) {
+        throw new Error(conflictCheck.error || 'Erro ao verificar conflitos');
+      }
+
+      if (conflictCheck.data?.hasConflicts) {
+        const conflictingTimes = conflictCheck.data.conflictingSlots
+          .map((dt) => {
+            const date = new Date(dt);
+            return date.toLocaleString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+          })
+          .join(', ');
+
+        throw new Error(
+          `Não é possível criar slots nos horários que já possuem agendamentos: ${conflictingTimes}`
+        );
+      }
+    }
+
     const slots = data.slots_data_hora.map((data_hora) => ({
       agenda_id: data.agenda_id,
       data_hora,

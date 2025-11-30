@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Save, Loader2, Plus } from 'lucide-react';
+import { Save, Loader2, Plus, AlertTriangle } from 'lucide-react';
 
 import { Button } from '@/components/primitives/button';
 import {
@@ -15,6 +15,7 @@ import { DatePicker } from '@/components/composed/DatePicker';
 import { Checkbox } from '@/components/primitives/checkbox';
 import { SlotsList } from '@/components/composed/SlotsList';
 import { Separator } from '@/components/primitives/separator';
+import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/primitives/use-toast';
 import {
@@ -22,6 +23,8 @@ import {
   fetchSlotsWithSelections,
   addSlotsToSchedule,
   removeSlots,
+  checkSlotConflict,
+  type AppointmentConflictDetail,
 } from '@/lib/shared-schedule-api';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -72,6 +75,11 @@ export const SharedScheduleEditorDialog =
       // Adicionar novos slots
       const [selectedDate, setSelectedDate] = useState<string>('');
       const [timeInput, setTimeInput] = useState<string>('');
+
+      // AI dev note: Estado para validação em tempo real de conflitos
+      const [slotConflict, setSlotConflict] =
+        useState<AppointmentConflictDetail | null>(null);
+      const [isCheckingConflict, setIsCheckingConflict] = useState(false);
 
       // Opções disponíveis
       const [servicos, setServicos] = useState<ServicoDetalhado[]>([]);
@@ -137,6 +145,41 @@ export const SharedScheduleEditorDialog =
           setIsLoadingOptions(false);
         }
       };
+
+      // AI dev note: Verificar conflito em tempo real quando data+hora mudam
+      useEffect(() => {
+        const checkConflict = async () => {
+          // Limpar conflito anterior
+          setSlotConflict(null);
+
+          // Só verificar se temos data, hora e agenda
+          if (!selectedDate || !timeInput || !agenda) return;
+
+          // Validar formato HH:mm
+          const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+          if (!timeRegex.test(timeInput)) return;
+
+          setIsCheckingConflict(true);
+          try {
+            const dateTime = `${selectedDate}T${timeInput}:00`;
+            const result = await checkSlotConflict(
+              agenda.profissional_id,
+              dateTime
+            );
+            if (result.success && result.data) {
+              setSlotConflict(result.data);
+            }
+          } catch (error) {
+            console.error('Erro ao verificar conflito:', error);
+          } finally {
+            setIsCheckingConflict(false);
+          }
+        };
+
+        // Debounce de 300ms para não fazer muitas requisições
+        const timeoutId = setTimeout(checkConflict, 300);
+        return () => clearTimeout(timeoutId);
+      }, [selectedDate, timeInput, agenda]);
 
       const handleSave = useCallback(async () => {
         if (!agenda) return;
@@ -544,18 +587,40 @@ export const SharedScheduleEditorDialog =
                           type="time"
                           value={timeInput}
                           onChange={(e) => setTimeInput(e.target.value)}
-                          className="w-full h-10"
+                          className={cn(
+                            'w-full h-10',
+                            slotConflict && 'border-amber-500'
+                          )}
                         />
                       </div>
                     </div>
+
+                    {/* AI dev note: Aviso de conflito em tempo real */}
+                    {slotConflict && (
+                      <Alert
+                        variant="destructive"
+                        className="bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription className="text-xs">
+                          <strong>Horário já agendado!</strong> Paciente:{' '}
+                          {slotConflict.paciente_nome}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <Button
                       type="button"
                       onClick={handleAddSlot}
-                      disabled={!selectedDate || !timeInput}
+                      disabled={!selectedDate || !timeInput || !!slotConflict}
                       className="w-full"
                       size="sm"
                     >
-                      <Plus className="w-4 h-4 mr-2" />
+                      {isCheckingConflict ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : (
+                        <Plus className="w-4 h-4 mr-2" />
+                      )}
                       Adicionar Horário
                     </Button>
                   </div>
