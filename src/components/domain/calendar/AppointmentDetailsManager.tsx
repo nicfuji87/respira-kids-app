@@ -39,6 +39,7 @@ import {
   fetchRelatoriosEvolucao,
   saveRelatorioEvolucao,
   updateRelatorioEvolucao,
+  fetchProfissionais,
 } from '@/lib/calendar-services';
 import {
   generatePatientHistoryAI,
@@ -49,6 +50,7 @@ import type {
   SupabaseConsultaStatus,
   SupabaseTipoServico,
   SupabaseRelatorioEvolucaoCompleto,
+  SupabasePessoa,
 } from '@/types/supabase-calendar';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -79,6 +81,8 @@ export interface AppointmentUpdateData {
   status_pagamento_id?: string;
   tipo_servico_id?: string;
   empresa_fatura?: string;
+  // AI dev note: profissional_id só pode ser alterado por admin
+  profissional_id?: string;
 }
 
 interface FormData {
@@ -90,6 +94,8 @@ interface FormData {
   tipoServicoId: string;
   evolucaoServico: string;
   empresaFaturaId: string;
+  // AI dev note: profissionalId só pode ser alterado por admin
+  profissionalId: string;
 }
 
 export const AppointmentDetailsManager =
@@ -116,6 +122,7 @@ export const AppointmentDetailsManager =
         tipoServicoId: '',
         evolucaoServico: '',
         empresaFaturaId: '',
+        profissionalId: '',
       });
 
       const [isEdited, setIsEdited] = useState(false);
@@ -138,6 +145,13 @@ export const AppointmentDetailsManager =
         Array<{ id: string; razao_social: string; nome_fantasia?: string }>
       >([]);
       const [isLoadingEmpresas, setIsLoadingEmpresas] = useState(false);
+
+      // AI dev note: Estado para profissionais (apenas admin pode alterar profissional responsável)
+      const [profissionaisOptions, setProfissionaisOptions] = useState<
+        SupabasePessoa[]
+      >([]);
+      const [isLoadingProfissionais, setIsLoadingProfissionais] =
+        useState(false);
 
       // Estados para evolução
       const [evolucoes, setEvolucoes] = useState<
@@ -427,6 +441,31 @@ export const AppointmentDetailsManager =
         }
       }, [isOpen]);
 
+      // AI dev note: Carregar profissionais apenas para admin (para alterar profissional responsável)
+      useEffect(() => {
+        const loadProfissionais = async () => {
+          // Apenas admin pode alterar profissional
+          if (userRole !== 'admin') {
+            setProfissionaisOptions([]);
+            return;
+          }
+
+          setIsLoadingProfissionais(true);
+          try {
+            const profissionais = await fetchProfissionais();
+            setProfissionaisOptions(profissionais);
+          } catch (error) {
+            console.error('Erro ao carregar profissionais:', error);
+          } finally {
+            setIsLoadingProfissionais(false);
+          }
+        };
+
+        if (isOpen && userRole === 'admin') {
+          loadProfissionais();
+        }
+      }, [isOpen, userRole]);
+
       // Inicializar formulário quando appointment mudar
       useEffect(() => {
         if (appointment && isOpen) {
@@ -444,6 +483,7 @@ export const AppointmentDetailsManager =
             tipoServicoId: appointment.tipo_servico_id,
             evolucaoServico: '',
             empresaFaturaId: appointment.empresa_fatura_id || '',
+            profissionalId: appointment.profissional_id || '',
           });
           setIsEdited(false);
           setPastDateConfirmed(false);
@@ -643,6 +683,16 @@ export const AppointmentDetailsManager =
                 updateData.status_pagamento_id = statusPago.id;
               }
             }
+          }
+
+          // AI dev note: Apenas admin pode alterar profissional responsável
+          // A mudança é registrada no audit log pelo backend
+          if (
+            userRole === 'admin' &&
+            formData.profissionalId &&
+            formData.profissionalId !== appointment.profissional_id
+          ) {
+            updateData.profissional_id = formData.profissionalId;
           }
 
           // Salvar agendamento através da callback do parent (para manter o flow existente)
@@ -992,29 +1042,75 @@ export const AppointmentDetailsManager =
 
                 {/* Responsável pelo Atendimento */}
                 <div className="space-y-3">
-                  <div className="flex items-start gap-2">
-                    <Label className="text-sm font-medium">
-                      Responsável pelo Atendimento:
-                    </Label>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onProfessionalClick?.(appointment.profissional_id);
-                      }}
-                      className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
-                    >
-                      {appointment.profissional_nome}
-                    </Button>
-                  </div>
-                  {appointment.profissional_especialidade && (
-                    <div className="text-sm text-muted-foreground">
-                      {appointment.profissional_especialidade}
+                  <Label className="text-sm font-medium">
+                    Responsável pelo Atendimento:
+                  </Label>
+
+                  {/* AI dev note: Apenas admin pode alterar profissional responsável */}
+                  {userRole === 'admin' ? (
+                    <div className="space-y-2">
+                      <Select
+                        value={formData.profissionalId}
+                        onValueChange={(value) =>
+                          handleInputChange('profissionalId', value)
+                        }
+                        disabled={isLoadingProfissionais}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecionar profissional..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profissionaisOptions.map((profissional) => (
+                            <SelectItem
+                              key={profissional.id}
+                              value={profissional.id}
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  {profissional.nome}
+                                </span>
+                                {profissional.especialidade && (
+                                  <span className="text-sm text-muted-foreground">
+                                    {profissional.especialidade}
+                                  </span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {formData.profissionalId !==
+                        appointment.profissional_id && (
+                        <p className="text-xs text-amber-600">
+                          ⚠️ Alteração de profissional será registrada no
+                          relatório de auditoria
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onProfessionalClick?.(appointment.profissional_id);
+                        }}
+                        className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
+                      >
+                        {appointment.profissional_nome}
+                      </Button>
                     </div>
                   )}
+
+                  {appointment.profissional_especialidade &&
+                    userRole !== 'admin' && (
+                      <div className="text-sm text-muted-foreground">
+                        {appointment.profissional_especialidade}
+                      </div>
+                    )}
                 </div>
 
                 {/* Empresa de Faturamento - Visível apenas para admin e secretaria */}

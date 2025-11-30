@@ -933,6 +933,7 @@ export const fetchAgendamentoById = async (
 };
 
 // AI dev note: Atualiza um agendamento específico (para AppointmentDetailsManager)
+// profissional_id só pode ser alterado por admin e é registrado no audit log
 export const updateAgendamentoDetails = async (appointmentData: {
   id: string;
   data_hora?: string;
@@ -943,29 +944,94 @@ export const updateAgendamentoDetails = async (appointmentData: {
   tipo_servico_id?: string;
   observacao?: string;
   empresa_fatura?: string;
+  profissional_id?: string;
 }): Promise<SupabaseAgendamentoCompletoFlat> => {
-  const { id, ...updateFields } = appointmentData;
+  const { id, profissional_id, ...updateFields } = appointmentData;
 
   // AI dev note: Remover campos undefined E strings vazias para evitar erro UUID
   const cleanUpdateFields = Object.fromEntries(
     Object.entries(updateFields).filter(
       ([, value]) => value !== undefined && value !== ''
     )
-  );
+  ) as Record<string, unknown>;
 
   // AI dev note: Adicionar atualizado_por (pegar do usuário atual)
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  let pessoaId: string | null = null;
+  let pessoaRole: string | null = null;
+
   if (user) {
     const { data: pessoa } = await supabase
       .from('pessoas')
-      .select('id')
+      .select('id, role')
       .eq('auth_user_id', user.id)
       .single();
 
     if (pessoa) {
       cleanUpdateFields.atualizado_por = pessoa.id;
+      pessoaId = pessoa.id;
+      pessoaRole = pessoa.role;
+    }
+  }
+
+  // AI dev note: Tratar mudança de profissional separadamente
+  // Apenas admin pode alterar profissional_id e a mudança é registrada no audit log
+  if (profissional_id) {
+    if (pessoaRole !== 'admin') {
+      throw new Error(
+        'Apenas administradores podem alterar o profissional responsável'
+      );
+    }
+
+    // Buscar o profissional_id atual para comparar
+    const { data: currentAppointment, error: fetchError } = await supabase
+      .from('agendamentos')
+      .select('profissional_id')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('Erro ao buscar agendamento atual:', fetchError);
+      throw fetchError;
+    }
+
+    const profissionalAnterior = currentAppointment?.profissional_id;
+
+    // Só registrar auditoria e atualizar se houve mudança real
+    if (profissionalAnterior !== profissional_id) {
+      // Buscar nomes dos profissionais para o log de auditoria
+      const { data: profissionais } = await supabase
+        .from('pessoas')
+        .select('id, nome')
+        .in('id', [profissionalAnterior, profissional_id].filter(Boolean));
+
+      const nomeProfissionalAnterior =
+        profissionais?.find((p) => p.id === profissionalAnterior)?.nome ||
+        'N/A';
+      const nomeProfissionalNovo =
+        profissionais?.find((p) => p.id === profissional_id)?.nome || 'N/A';
+
+      // Registrar no audit log
+      const { error: auditError } = await supabase
+        .from('agendamento_audit_log')
+        .insert({
+          agendamento_id: id,
+          campo_alterado: 'profissional_id',
+          valor_anterior: `${profissionalAnterior} (${nomeProfissionalAnterior})`,
+          valor_novo: `${profissional_id} (${nomeProfissionalNovo})`,
+          alterado_por: pessoaId,
+        });
+
+      if (auditError) {
+        console.error('Erro ao registrar auditoria:', auditError);
+        // Não falhar a operação por erro de auditoria, apenas logar
+      }
+
+      // Adicionar profissional_id aos campos de atualização
+      cleanUpdateFields.profissional_id = profissional_id;
     }
   }
 
