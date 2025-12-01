@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Baby, Stethoscope, UserPlus, Check, X, Loader2, Save } from 'lucide-react';
+import {
+  Plus,
+  Baby,
+  Stethoscope,
+  UserPlus,
+  Check,
+  X,
+  Loader2,
+  Save,
+} from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
@@ -58,7 +67,169 @@ interface PatientRegistrationSectionProps {
 
 const NOVO_RESPONSAVEL_ID = '__novo__';
 
-export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProps> = ({
+// AI dev note: Funções utilitárias movidas para fora do componente para evitar recriação a cada render
+
+// Função para calcular idade em anos
+const calcularIdadeAnos = (
+  dataNascimento: string | null | undefined
+): number | null => {
+  if (!dataNascimento) return null;
+  const nascimento = new Date(dataNascimento);
+  if (isNaN(nascimento.getTime())) return null;
+
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const mesAtual = hoje.getMonth();
+  const mesNascimento = nascimento.getMonth();
+
+  if (
+    mesAtual < mesNascimento ||
+    (mesAtual === mesNascimento && hoje.getDate() < nascimento.getDate())
+  ) {
+    idade--;
+  }
+
+  return idade >= 0 ? idade : null;
+};
+
+// Função para formatar data de yyyy-mm-dd para dd/mm/yyyy
+const formatarDataExibicao = (data: string | null | undefined): string => {
+  if (!data) return '';
+  const partes = data.split('-');
+  if (partes.length !== 3) return data;
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+};
+
+// AI dev note: Componente ResponsavelFields movido para FORA do componente pai
+// Isso evita que o componente seja recriado a cada render, causando perda de foco nos inputs
+interface ResponsavelFieldsProps {
+  data: ResponsavelCompleto;
+  onUpdate: (field: keyof ResponsavelCompleto, value: string) => void;
+  onSave: () => void;
+  editado: boolean;
+  label: string;
+  isReadOnly: boolean;
+  isSaving: boolean;
+}
+
+const ResponsavelFields: React.FC<ResponsavelFieldsProps> = ({
+  data,
+  onUpdate,
+  onSave,
+  editado,
+  label,
+  isReadOnly,
+  isSaving,
+}) => {
+  const [dataInput, setDataInput] = React.useState(
+    formatarDataExibicao(data.data_nascimento)
+  );
+  const idadeAnos = calcularIdadeAnos(data.data_nascimento);
+
+  // Atualiza o input quando data externa muda
+  React.useEffect(() => {
+    setDataInput(formatarDataExibicao(data.data_nascimento));
+  }, [data.data_nascimento]);
+
+  const handleDataChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    // Remove tudo exceto números
+    const numeros = valor.replace(/\D/g, '');
+
+    // Formata automaticamente com barras
+    let formatado = '';
+    for (let i = 0; i < numeros.length && i < 8; i++) {
+      if (i === 2 || i === 4) formatado += '/';
+      formatado += numeros[i];
+    }
+
+    setDataInput(formatado);
+
+    // Se tiver 8 dígitos, atualiza o campo
+    if (numeros.length === 8) {
+      const dia = numeros.substring(0, 2);
+      const mes = numeros.substring(2, 4);
+      const ano = numeros.substring(4, 8);
+      const dataISO = `${ano}-${mes}-${dia}`;
+      onUpdate('data_nascimento', dataISO);
+    } else if (numeros.length === 0) {
+      onUpdate('data_nascimento', '');
+    }
+  };
+
+  return (
+    <div className="mt-3 p-4 bg-muted/30 rounded-lg space-y-3 border">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Nome Completo</Label>
+          <Input
+            value={data.nome}
+            onChange={(e) => onUpdate('nome', e.target.value)}
+            disabled={isReadOnly}
+            placeholder="Nome completo"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">
+            Data de Nascimento
+            {idadeAnos !== null && (
+              <span className="ml-2 text-primary font-medium">
+                ({idadeAnos} anos)
+              </span>
+            )}
+          </Label>
+          <Input
+            value={dataInput}
+            onChange={handleDataChange}
+            disabled={isReadOnly}
+            placeholder="dd/mm/aaaa"
+            maxLength={10}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">CPF</Label>
+          <Input
+            value={data.cpf_cnpj || ''}
+            onChange={(e) => onUpdate('cpf_cnpj', e.target.value)}
+            disabled={isReadOnly}
+            placeholder="000.000.000-00"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Profissão</Label>
+          <Input
+            value={data.profissao || ''}
+            onChange={(e) => onUpdate('profissao', e.target.value)}
+            disabled={isReadOnly}
+            placeholder="Profissão"
+          />
+        </div>
+      </div>
+
+      {!isReadOnly && editado && (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            onClick={onSave}
+            disabled={isSaving}
+            className="gap-2"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Salvar {label}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const PatientRegistrationSection: React.FC<
+  PatientRegistrationSectionProps
+> = ({
   patientId,
   patientName,
   avaliacaoObstetraId,
@@ -71,7 +242,9 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
   const [responsaveis, setResponsaveis] = useState<ResponsavelCompleto[]>([]);
   const [pediatras, setPediatras] = useState<Pediatra[]>([]);
   const [obstetras, setObstetras] = useState<Obstetra[]>([]);
-  const [pediatraPaciente, setPediatraPaciente] = useState<Pediatra | null>(null);
+  const [pediatraPaciente, setPediatraPaciente] = useState<Pediatra | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   // Estados para pai e mãe selecionados
@@ -87,8 +260,11 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
   const [maeEditado, setMaeEditado] = useState(false);
 
   // Estados para modal de cadastro
-  const [showNewResponsavelDialog, setShowNewResponsavelDialog] = useState(false);
-  const [tipoNovoResponsavel, setTipoNovoResponsavel] = useState<'pai' | 'mae' | null>(null);
+  const [showNewResponsavelDialog, setShowNewResponsavelDialog] =
+    useState(false);
+  const [tipoNovoResponsavel, setTipoNovoResponsavel] = useState<
+    'pai' | 'mae' | null
+  >(null);
   const [showNewPediatraDialog, setShowNewPediatraDialog] = useState(false);
   const [showNewObstetraDialog, setShowNewObstetraDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -113,9 +289,11 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
     setIsLoading(true);
     try {
       // Carregar responsáveis do paciente com dados completos
-      const { data: responsaveisData, error: responsaveisError } = await supabase
-        .from('pessoa_responsaveis')
-        .select(`
+      const { data: responsaveisData, error: responsaveisError } =
+        await supabase
+          .from('pessoa_responsaveis')
+          .select(
+            `
           id,
           tipo_responsabilidade,
           responsavel:id_responsavel(
@@ -125,35 +303,39 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
             data_nascimento,
             bio_profissional
           )
-        `)
-        .eq('id_pessoa', patientId)
-        .eq('ativo', true);
+        `
+          )
+          .eq('id_pessoa', patientId)
+          .eq('ativo', true);
 
       if (responsaveisError) throw responsaveisError;
 
-      const responsaveisFormatados = (responsaveisData || []).map((r) => {
-        const resp = r.responsavel as unknown as { 
-          id: string; 
-          nome: string; 
-          cpf_cnpj?: string | null; 
-          data_nascimento?: string | null;
-          bio_profissional?: string | null;
-        } | null;
-        return {
-          id: resp?.id || '',
-          nome: resp?.nome || '',
-          cpf_cnpj: resp?.cpf_cnpj || null,
-          data_nascimento: resp?.data_nascimento || null,
-          profissao: resp?.bio_profissional || null,
-        };
-      }).filter(r => r.id);
-      
+      const responsaveisFormatados = (responsaveisData || [])
+        .map((r) => {
+          const resp = r.responsavel as unknown as {
+            id: string;
+            nome: string;
+            cpf_cnpj?: string | null;
+            data_nascimento?: string | null;
+            bio_profissional?: string | null;
+          } | null;
+          return {
+            id: resp?.id || '',
+            nome: resp?.nome || '',
+            cpf_cnpj: resp?.cpf_cnpj || null,
+            data_nascimento: resp?.data_nascimento || null,
+            profissao: resp?.bio_profissional || null,
+          };
+        })
+        .filter((r) => r.id);
+
       setResponsaveis(responsaveisFormatados);
 
       // Carregar pediatra do paciente
       const { data: pediatraData, error: pediatraError } = await supabase
         .from('paciente_pediatra')
-        .select(`
+        .select(
+          `
           pediatra:pediatra_id(
             id,
             pessoa_id,
@@ -161,7 +343,8 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
             especialidade,
             pessoa:pessoa_id(nome)
           )
-        `)
+        `
+        )
         .eq('paciente_id', patientId)
         .eq('ativo', true)
         .maybeSingle();
@@ -169,12 +352,12 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       if (pediatraError) throw pediatraError;
 
       if (pediatraData?.pediatra) {
-        const ped = pediatraData.pediatra as unknown as { 
-          id: string; 
-          pessoa_id: string; 
-          crm?: string | null; 
-          especialidade?: string | null; 
-          pessoa?: { nome: string } | null 
+        const ped = pediatraData.pediatra as unknown as {
+          id: string;
+          pessoa_id: string;
+          crm?: string | null;
+          especialidade?: string | null;
+          pessoa?: { nome: string } | null;
         };
         setPediatraPaciente({
           id: ped.id,
@@ -188,13 +371,15 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       // Carregar lista de pediatras para seleção
       const { data: pediatrasData, error: pediatrasError } = await supabase
         .from('pessoa_pediatra')
-        .select(`
+        .select(
+          `
           id,
           pessoa_id,
           crm,
           especialidade,
           pessoa:pessoa_id(nome)
-        `)
+        `
+        )
         .eq('ativo', true)
         .limit(100);
 
@@ -216,13 +401,15 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       // Carregar lista de obstetras para seleção
       const { data: obstetrasData, error: obstetrasError } = await supabase
         .from('pessoa_obstetra')
-        .select(`
+        .select(
+          `
           id,
           pessoa_id,
           crm,
           especialidade,
           pessoa:pessoa_id(nome)
-        `)
+        `
+        )
         .eq('ativo', true)
         .limit(100);
 
@@ -264,7 +451,7 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       return;
     }
     setPaiId(id);
-    const resp = responsaveis.find(r => r.id === id);
+    const resp = responsaveis.find((r) => r.id === id);
     if (resp) {
       setPaiData({ ...resp });
       setPaiEditado(false);
@@ -279,7 +466,7 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       return;
     }
     setMaeId(id);
-    const resp = responsaveis.find(r => r.id === id);
+    const resp = responsaveis.find((r) => r.id === id);
     if (resp) {
       setMaeData({ ...resp });
       setMaeEditado(false);
@@ -305,7 +492,7 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
   // Salvar dados do pai
   const handleSavePai = async () => {
     if (!paiData || !paiId) return;
-    
+
     setIsSaving(true);
     try {
       const { error } = await supabase
@@ -341,7 +528,7 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
   // Salvar dados da mãe
   const handleSaveMae = async () => {
     if (!maeData || !maeId) return;
-    
+
     setIsSaving(true);
     try {
       const { error } = await supabase
@@ -430,12 +617,17 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       });
 
       // Resetar formulário e recarregar dados
-      setNovoResponsavel({ nome: '', cpf_cnpj: '', data_nascimento: '', profissao: '' });
+      setNovoResponsavel({
+        nome: '',
+        cpf_cnpj: '',
+        data_nascimento: '',
+        profissao: '',
+      });
       setShowNewResponsavelDialog(false);
-      
+
       // Após recarregar, selecionar o novo responsável
       await loadData();
-      
+
       // Selecionar como pai ou mãe
       if (tipoNovoResponsavel === 'pai') {
         setPaiId(novaPessoa.id);
@@ -456,7 +648,7 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
           profissao: novoResponsavel.profissao || null,
         });
       }
-      
+
       setTipoNovoResponsavel(null);
     } catch (error) {
       console.error('Erro ao cadastrar responsável:', error);
@@ -603,7 +795,8 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
         .from('pessoas')
         .insert({
           nome: novoMedico.nome,
-          especialidade: novoMedico.especialidade || 'Ginecologia e Obstetrícia',
+          especialidade:
+            novoMedico.especialidade || 'Ginecologia e Obstetrícia',
           registro_profissional: novoMedico.crm || null,
           id_tipo_pessoa: tipoPessoaId,
           ativo: true,
@@ -618,7 +811,8 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
         .insert({
           pessoa_id: novaPessoa.id,
           crm: novoMedico.crm || null,
-          especialidade: novoMedico.especialidade || 'Ginecologia e Obstetrícia',
+          especialidade:
+            novoMedico.especialidade || 'Ginecologia e Obstetrícia',
           ativo: true,
         })
         .select()
@@ -680,138 +874,6 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
     }
   };
 
-  // Função para calcular idade em anos
-  const calcularIdadeAnos = (dataNascimento: string | null | undefined): number | null => {
-    if (!dataNascimento) return null;
-    const nascimento = new Date(dataNascimento);
-    if (isNaN(nascimento.getTime())) return null;
-    
-    const hoje = new Date();
-    let idade = hoje.getFullYear() - nascimento.getFullYear();
-    const mesAtual = hoje.getMonth();
-    const mesNascimento = nascimento.getMonth();
-    
-    if (mesAtual < mesNascimento || (mesAtual === mesNascimento && hoje.getDate() < nascimento.getDate())) {
-      idade--;
-    }
-    
-    return idade >= 0 ? idade : null;
-  };
-
-  // Função para formatar data de yyyy-mm-dd para dd/mm/yyyy
-  const formatarDataExibicao = (data: string | null | undefined): string => {
-    if (!data) return '';
-    const partes = data.split('-');
-    if (partes.length !== 3) return data;
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-  };
-  // Componente para campos editáveis do responsável
-  const ResponsavelFields = ({
-    data,
-    onUpdate,
-    onSave,
-    editado,
-    label,
-  }: {
-    data: ResponsavelCompleto;
-    onUpdate: (field: keyof ResponsavelCompleto, value: string) => void;
-    onSave: () => void;
-    editado: boolean;
-    label: string;
-  }) => {
-    const [dataInput, setDataInput] = React.useState(formatarDataExibicao(data.data_nascimento));
-    const idadeAnos = calcularIdadeAnos(data.data_nascimento);
-
-    // Atualiza o input quando data externa muda
-    React.useEffect(() => {
-      setDataInput(formatarDataExibicao(data.data_nascimento));
-    }, [data.data_nascimento]);
-
-    const handleDataChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const valor = e.target.value;
-      // Remove tudo exceto números
-      const numeros = valor.replace(/\D/g, '');
-      
-      // Formata automaticamente com barras
-      let formatado = '';
-      for (let i = 0; i < numeros.length && i < 8; i++) {
-        if (i === 2 || i === 4) formatado += '/';
-        formatado += numeros[i];
-      }
-      
-      setDataInput(formatado);
-      
-      // Se tiver 8 dígitos, atualiza o campo
-      if (numeros.length === 8) {
-        const dia = numeros.substring(0, 2);
-        const mes = numeros.substring(2, 4);
-        const ano = numeros.substring(4, 8);
-        const dataISO = `${ano}-${mes}-${dia}`;
-        onUpdate('data_nascimento', dataISO);
-      } else if (numeros.length === 0) {
-        onUpdate('data_nascimento', '');
-      }
-    };
-
-    return (
-      <div className="mt-3 p-4 bg-muted/30 rounded-lg space-y-3 border">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Nome Completo</Label>
-            <Input
-              value={data.nome}
-              onChange={(e) => onUpdate('nome', e.target.value)}
-              disabled={isReadOnly}
-              placeholder="Nome completo"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">
-              Data de Nascimento
-              {idadeAnos !== null && (
-                <span className="ml-2 text-primary font-medium">({idadeAnos} anos)</span>
-              )}
-            </Label>
-            <Input
-              value={dataInput}
-              onChange={handleDataChange}
-              disabled={isReadOnly}
-              placeholder="dd/mm/aaaa"
-              maxLength={10}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">CPF</Label>
-            <Input
-              value={data.cpf_cnpj || ''}
-              onChange={(e) => onUpdate('cpf_cnpj', e.target.value)}
-              disabled={isReadOnly}
-              placeholder="000.000.000-00"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Profissão</Label>
-            <Input
-              value={data.profissao || ''}
-              onChange={(e) => onUpdate('profissao', e.target.value)}
-              disabled={isReadOnly}
-              placeholder="Profissão"
-            />
-          </div>
-        </div>
-        
-        {!isReadOnly && editado && (
-          <div className="flex justify-end">
-            <Button size="sm" onClick={onSave} disabled={isSaving} className="gap-2">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Salvar {label}
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -829,8 +891,12 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
             <Baby className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Paciente</p>
-            <p className="text-xl font-bold text-primary">{patientName || 'Não identificado'}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              Paciente
+            </p>
+            <p className="text-xl font-bold text-primary">
+              {patientName || 'Não identificado'}
+            </p>
           </div>
         </div>
       </div>
@@ -848,13 +914,16 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
           </SelectTrigger>
           <SelectContent>
             {responsaveis
-              .filter(r => r.id !== maeId) // Não mostrar se já selecionado como mãe
+              .filter((r) => r.id !== maeId) // Não mostrar se já selecionado como mãe
               .map((r) => (
                 <SelectItem key={r.id} value={r.id}>
                   {r.nome}
                 </SelectItem>
               ))}
-            <SelectItem value={NOVO_RESPONSAVEL_ID} className="text-primary font-medium">
+            <SelectItem
+              value={NOVO_RESPONSAVEL_ID}
+              className="text-primary font-medium"
+            >
               <div className="flex items-center gap-2">
                 <UserPlus className="h-4 w-4" />
                 Cadastrar novo responsável
@@ -862,7 +931,7 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
             </SelectItem>
           </SelectContent>
         </Select>
-        
+
         {paiId && paiData && (
           <ResponsavelFields
             data={paiData}
@@ -870,6 +939,8 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
             onSave={handleSavePai}
             editado={paiEditado}
             label="Pai"
+            isReadOnly={isReadOnly}
+            isSaving={isSaving}
           />
         )}
       </div>
@@ -887,13 +958,16 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
           </SelectTrigger>
           <SelectContent>
             {responsaveis
-              .filter(r => r.id !== paiId) // Não mostrar se já selecionado como pai
+              .filter((r) => r.id !== paiId) // Não mostrar se já selecionado como pai
               .map((r) => (
                 <SelectItem key={r.id} value={r.id}>
                   {r.nome}
                 </SelectItem>
               ))}
-            <SelectItem value={NOVO_RESPONSAVEL_ID} className="text-primary font-medium">
+            <SelectItem
+              value={NOVO_RESPONSAVEL_ID}
+              className="text-primary font-medium"
+            >
               <div className="flex items-center gap-2">
                 <UserPlus className="h-4 w-4" />
                 Cadastrar novo responsável
@@ -901,7 +975,7 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
             </SelectItem>
           </SelectContent>
         </Select>
-        
+
         {maeId && maeData && (
           <ResponsavelFields
             data={maeData}
@@ -909,6 +983,8 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
             onSave={handleSaveMae}
             editado={maeEditado}
             label="Mãe"
+            isReadOnly={isReadOnly}
+            isSaving={isSaving}
           />
         )}
       </div>
@@ -938,7 +1014,9 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
             <div>
               <p className="font-medium">{pediatraPaciente.nome}</p>
               {pediatraPaciente.crm && (
-                <p className="text-xs text-muted-foreground">CRM: {pediatraPaciente.crm}</p>
+                <p className="text-xs text-muted-foreground">
+                  CRM: {pediatraPaciente.crm}
+                </p>
               )}
             </div>
             <Check className="h-5 w-5 text-blue-500" />
@@ -992,11 +1070,16 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
           <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-950/30 rounded-lg border border-pink-200 dark:border-pink-900">
             <div>
               <p className="font-medium">
-                {obstetras.find((o) => o.pessoa_id === avaliacaoObstetraId)?.nome || 'Obstetra selecionado'}
+                {obstetras.find((o) => o.pessoa_id === avaliacaoObstetraId)
+                  ?.nome || 'Obstetra selecionado'}
               </p>
             </div>
             {!isReadOnly && (
-              <Button variant="ghost" size="sm" onClick={() => onObstetraChange(null)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onObstetraChange(null)}
+              >
                 <X className="h-4 w-4" />
               </Button>
             )}
@@ -1027,12 +1110,20 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       </div>
 
       {/* Dialog: Novo Responsável */}
-      <Dialog open={showNewResponsavelDialog} onOpenChange={setShowNewResponsavelDialog}>
+      <Dialog
+        open={showNewResponsavelDialog}
+        onOpenChange={setShowNewResponsavelDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
-              Novo Responsável {tipoNovoResponsavel === 'pai' ? '(Pai)' : tipoNovoResponsavel === 'mae' ? '(Mãe)' : ''}
+              Novo Responsável{' '}
+              {tipoNovoResponsavel === 'pai'
+                ? '(Pai)'
+                : tipoNovoResponsavel === 'mae'
+                  ? '(Mãe)'
+                  : ''}
             </DialogTitle>
             <DialogDescription>
               Cadastre um novo responsável. Somente o nome é obrigatório.
@@ -1045,7 +1136,12 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="resp-nome"
                 value={novoResponsavel.nome}
-                onChange={(e) => setNovoResponsavel({ ...novoResponsavel, nome: e.target.value })}
+                onChange={(e) =>
+                  setNovoResponsavel({
+                    ...novoResponsavel,
+                    nome: e.target.value,
+                  })
+                }
                 placeholder="Nome completo do responsável"
               />
             </div>
@@ -1067,10 +1163,16 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
                     const dia = numeros.substring(0, 2);
                     const mes = numeros.substring(2, 4);
                     const ano = numeros.substring(4, 8);
-                    setNovoResponsavel({ ...novoResponsavel, data_nascimento: `${ano}-${mes}-${dia}` });
+                    setNovoResponsavel({
+                      ...novoResponsavel,
+                      data_nascimento: `${ano}-${mes}-${dia}`,
+                    });
                   } else {
                     // Armazena temporariamente formatado para exibição
-                    setNovoResponsavel({ ...novoResponsavel, data_nascimento: numeros.length > 0 ? formatado : '' });
+                    setNovoResponsavel({
+                      ...novoResponsavel,
+                      data_nascimento: numeros.length > 0 ? formatado : '',
+                    });
                   }
                 }}
                 placeholder="dd/mm/aaaa"
@@ -1083,7 +1185,12 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="resp-cpf"
                 value={novoResponsavel.cpf_cnpj}
-                onChange={(e) => setNovoResponsavel({ ...novoResponsavel, cpf_cnpj: e.target.value })}
+                onChange={(e) =>
+                  setNovoResponsavel({
+                    ...novoResponsavel,
+                    cpf_cnpj: e.target.value,
+                  })
+                }
                 placeholder="000.000.000-00"
               />
             </div>
@@ -1093,14 +1200,23 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="resp-profissao"
                 value={novoResponsavel.profissao}
-                onChange={(e) => setNovoResponsavel({ ...novoResponsavel, profissao: e.target.value })}
+                onChange={(e) =>
+                  setNovoResponsavel({
+                    ...novoResponsavel,
+                    profissao: e.target.value,
+                  })
+                }
                 placeholder="Profissão do responsável"
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewResponsavelDialog(false)} disabled={isSaving}>
+            <Button
+              variant="outline"
+              onClick={() => setShowNewResponsavelDialog(false)}
+              disabled={isSaving}
+            >
               Cancelar
             </Button>
             <Button onClick={handleSaveResponsavel} disabled={isSaving}>
@@ -1112,7 +1228,10 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       </Dialog>
 
       {/* Dialog: Novo Pediatra */}
-      <Dialog open={showNewPediatraDialog} onOpenChange={setShowNewPediatraDialog}>
+      <Dialog
+        open={showNewPediatraDialog}
+        onOpenChange={setShowNewPediatraDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1130,7 +1249,9 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="ped-nome"
                 value={novoMedico.nome}
-                onChange={(e) => setNovoMedico({ ...novoMedico, nome: e.target.value })}
+                onChange={(e) =>
+                  setNovoMedico({ ...novoMedico, nome: e.target.value })
+                }
                 placeholder="Dr(a). Nome Completo"
               />
             </div>
@@ -1140,7 +1261,9 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="ped-crm"
                 value={novoMedico.crm}
-                onChange={(e) => setNovoMedico({ ...novoMedico, crm: e.target.value })}
+                onChange={(e) =>
+                  setNovoMedico({ ...novoMedico, crm: e.target.value })
+                }
                 placeholder="CRM/UF 00000"
               />
             </div>
@@ -1150,14 +1273,23 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="ped-especialidade"
                 value={novoMedico.especialidade}
-                onChange={(e) => setNovoMedico({ ...novoMedico, especialidade: e.target.value })}
+                onChange={(e) =>
+                  setNovoMedico({
+                    ...novoMedico,
+                    especialidade: e.target.value,
+                  })
+                }
                 placeholder="Pediatria"
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewPediatraDialog(false)} disabled={isSaving}>
+            <Button
+              variant="outline"
+              onClick={() => setShowNewPediatraDialog(false)}
+              disabled={isSaving}
+            >
               Cancelar
             </Button>
             <Button onClick={handleSavePediatra} disabled={isSaving}>
@@ -1169,7 +1301,10 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
       </Dialog>
 
       {/* Dialog: Novo Obstetra */}
-      <Dialog open={showNewObstetraDialog} onOpenChange={setShowNewObstetraDialog}>
+      <Dialog
+        open={showNewObstetraDialog}
+        onOpenChange={setShowNewObstetraDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1187,7 +1322,9 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="obs-nome"
                 value={novoMedico.nome}
-                onChange={(e) => setNovoMedico({ ...novoMedico, nome: e.target.value })}
+                onChange={(e) =>
+                  setNovoMedico({ ...novoMedico, nome: e.target.value })
+                }
                 placeholder="Dr(a). Nome Completo"
               />
             </div>
@@ -1197,7 +1334,9 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="obs-crm"
                 value={novoMedico.crm}
-                onChange={(e) => setNovoMedico({ ...novoMedico, crm: e.target.value })}
+                onChange={(e) =>
+                  setNovoMedico({ ...novoMedico, crm: e.target.value })
+                }
                 placeholder="CRM/UF 00000"
               />
             </div>
@@ -1207,14 +1346,23 @@ export const PatientRegistrationSection: React.FC<PatientRegistrationSectionProp
               <Input
                 id="obs-especialidade"
                 value={novoMedico.especialidade}
-                onChange={(e) => setNovoMedico({ ...novoMedico, especialidade: e.target.value })}
+                onChange={(e) =>
+                  setNovoMedico({
+                    ...novoMedico,
+                    especialidade: e.target.value,
+                  })
+                }
                 placeholder="Ginecologia e Obstetrícia"
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewObstetraDialog(false)} disabled={isSaving}>
+            <Button
+              variant="outline"
+              onClick={() => setShowNewObstetraDialog(false)}
+              disabled={isSaving}
+            >
               Cancelar
             </Button>
             <Button onClick={handleSaveObstetra} disabled={isSaving}>

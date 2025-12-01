@@ -132,6 +132,21 @@ import {
 // AI dev note: EvaluationSectionContent - Renderiza o conteúdo de cada seção da avaliação
 // Cada seção tem seus campos específicos com componentes otimizados para preenchimento rápido
 
+// AI dev note: Field movido para fora do componente para evitar recriação a cada render
+// Isso melhora performance e evita problemas de perda de foco em componentes filhos
+interface FieldProps {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+const Field: React.FC<FieldProps> = ({ label, children, className }) => (
+  <div className={cn('space-y-2', className)}>
+    <Label className="text-sm font-medium">{label}</Label>
+    {children}
+  </div>
+);
+
 interface EvaluationSectionContentProps {
   secao: AvaliacaoSecao;
   avaliacao: AvaliacaoClinica;
@@ -151,22 +166,6 @@ export const EvaluationSectionContent: React.FC<
   patientName,
   patientAgeInMonths = 0,
 }) => {
-  // Helper para renderizar campo com label
-  const Field = ({
-    label,
-    children,
-    className,
-  }: {
-    label: string;
-    children: React.ReactNode;
-    className?: string;
-  }) => (
-    <div className={cn('space-y-2', className)}>
-      <Label className="text-sm font-medium">{label}</Label>
-      {children}
-    </div>
-  );
-
   // Renderizar conteúdo baseado na seção
   const renderContent = () => {
     switch (secao.id) {

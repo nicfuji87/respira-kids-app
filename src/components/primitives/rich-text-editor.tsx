@@ -41,18 +41,26 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
     editorBackgroundColor,
   }) => {
     const editorRef = useRef<HTMLDivElement>(null);
-    const isUpdatingRef = useRef(false);
+    // AI dev note: lastValueRef armazena o último valor que veio de dentro do componente
+    // Isso evita re-escrever o innerHTML quando o valor veio de uma digitação do usuário
+    const lastInternalValueRef = useRef<string>(value);
     // AI dev note: Flag para rastrear composição IME (acentos em Android/Samsung)
     // Não processar onInput enquanto composição estiver ativa para evitar apagar palavras
     const isComposingRef = useRef(false);
 
-    // Sincronizar valor externo com editor
+    // AI dev note: Sincronizar valor externo com editor APENAS quando o valor veio de fora
+    // Isso evita perda de foco causada por re-escrita do innerHTML após digitação do usuário
     useEffect(() => {
-      if (editorRef.current && !isUpdatingRef.current) {
-        const editor = editorRef.current;
-        if (editor.innerHTML !== value) {
-          editor.innerHTML = value || '';
+      if (editorRef.current) {
+        // Só atualiza se o valor veio de fora (diferente do último valor interno)
+        if (
+          value !== lastInternalValueRef.current &&
+          editorRef.current.innerHTML !== value
+        ) {
+          editorRef.current.innerHTML = value || '';
         }
+        // Atualiza a referência para o valor atual
+        lastInternalValueRef.current = value;
       }
     }, [value]);
 
@@ -60,12 +68,11 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
     // AI dev note: Ignorar onInput durante composição IME para evitar bug em tablets Samsung
     const handleInput = useCallback(() => {
       if (editorRef.current && !disabled && !isComposingRef.current) {
-        isUpdatingRef.current = true;
         const html = editorRef.current.innerHTML;
+        // Atualiza a referência ANTES de chamar onChange
+        // Assim, quando o useEffect rodar, ele saberá que o valor veio de dentro
+        lastInternalValueRef.current = html;
         onChange(html);
-        setTimeout(() => {
-          isUpdatingRef.current = false;
-        }, 0);
       }
     }, [onChange, disabled]);
 
@@ -79,12 +86,10 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
       isComposingRef.current = false;
       // Processar mudança após composição terminar
       if (editorRef.current && !disabled) {
-        isUpdatingRef.current = true;
         const html = editorRef.current.innerHTML;
+        // Atualiza a referência ANTES de chamar onChange
+        lastInternalValueRef.current = html;
         onChange(html);
-        setTimeout(() => {
-          isUpdatingRef.current = false;
-        }, 0);
       }
     }, [onChange, disabled]);
 
