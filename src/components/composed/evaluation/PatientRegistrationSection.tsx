@@ -8,6 +8,8 @@ import {
   X,
   Loader2,
   Save,
+  Search,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -66,6 +68,7 @@ interface PatientRegistrationSectionProps {
 }
 
 const NOVO_RESPONSAVEL_ID = '__novo__';
+const BUSCAR_RESPONSAVEL_ID = '__buscar__';
 
 // AI dev note: Funções utilitárias movidas para fora do componente para evitar recriação a cada render
 
@@ -269,6 +272,18 @@ export const PatientRegistrationSection: React.FC<
   const [showNewObstetraDialog, setShowNewObstetraDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Estados para busca de responsáveis do sistema
+  const [showBuscarResponsavelDialog, setShowBuscarResponsavelDialog] =
+    useState(false);
+  const [tipoBuscarResponsavel, setTipoBuscarResponsavel] = useState<
+    'pai' | 'mae' | null
+  >(null);
+  const [responsaveisSistema, setResponsaveisSistema] = useState<
+    ResponsavelCompleto[]
+  >([]);
+  const [buscaResponsavel, setBuscaResponsavel] = useState('');
+  const [isLoadingBusca, setIsLoadingBusca] = useState(false);
+
   // Estados para novo responsável
   const [novoResponsavel, setNovoResponsavel] = useState({
     nome: '',
@@ -450,6 +465,12 @@ export const PatientRegistrationSection: React.FC<
       setShowNewResponsavelDialog(true);
       return;
     }
+    if (id === BUSCAR_RESPONSAVEL_ID) {
+      setTipoBuscarResponsavel('pai');
+      setBuscaResponsavel('');
+      setShowBuscarResponsavelDialog(true);
+      return;
+    }
     setPaiId(id);
     const resp = responsaveis.find((r) => r.id === id);
     if (resp) {
@@ -463,6 +484,12 @@ export const PatientRegistrationSection: React.FC<
     if (id === NOVO_RESPONSAVEL_ID) {
       setTipoNovoResponsavel('mae');
       setShowNewResponsavelDialog(true);
+      return;
+    }
+    if (id === BUSCAR_RESPONSAVEL_ID) {
+      setTipoBuscarResponsavel('mae');
+      setBuscaResponsavel('');
+      setShowBuscarResponsavelDialog(true);
       return;
     }
     setMaeId(id);
@@ -486,6 +513,101 @@ export const PatientRegistrationSection: React.FC<
     if (maeData) {
       setMaeData({ ...maeData, [field]: value });
       setMaeEditado(true);
+    }
+  };
+
+  // Buscar responsáveis do sistema
+  const handleBuscarResponsaveis = useCallback(
+    async (termo: string) => {
+      if (termo.length < 2) {
+        setResponsaveisSistema([]);
+        return;
+      }
+
+      setIsLoadingBusca(true);
+      try {
+        // Buscar pessoas que são responsáveis (tipo responsavel) ou que já foram vinculadas como responsáveis
+        const { data, error } = await supabase
+          .from('pessoas')
+          .select('id, nome, cpf_cnpj, data_nascimento, bio_profissional')
+          .ilike('nome', `%${termo}%`)
+          .eq('ativo', true)
+          .limit(20);
+
+        if (error) throw error;
+
+        // Filtrar para não mostrar responsáveis já vinculados ao paciente
+        const idsVinculados = responsaveis.map((r) => r.id);
+        const responsaveisFiltrados = (data || [])
+          .filter((p) => !idsVinculados.includes(p.id))
+          .map((p) => ({
+            id: p.id,
+            nome: p.nome,
+            cpf_cnpj: p.cpf_cnpj,
+            data_nascimento: p.data_nascimento,
+            profissao: p.bio_profissional,
+          }));
+
+        setResponsaveisSistema(responsaveisFiltrados);
+      } catch (error) {
+        console.error('Erro ao buscar responsáveis:', error);
+      } finally {
+        setIsLoadingBusca(false);
+      }
+    },
+    [responsaveis]
+  );
+
+  // Vincular responsável existente do sistema ao paciente
+  const handleVincularResponsavel = async (
+    responsavel: ResponsavelCompleto
+  ) => {
+    setIsSaving(true);
+    try {
+      // Criar vínculo como responsável legal
+      const { error: vinculoError } = await supabase
+        .from('pessoa_responsaveis')
+        .insert({
+          id_pessoa: patientId,
+          id_responsavel: responsavel.id,
+          tipo_responsabilidade: 'legal',
+          ativo: true,
+        });
+
+      if (vinculoError) throw vinculoError;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Responsável vinculado ao paciente.',
+      });
+
+      // Fechar dialog e recarregar dados
+      setShowBuscarResponsavelDialog(false);
+      await loadData();
+
+      // Selecionar como pai ou mãe
+      if (tipoBuscarResponsavel === 'pai') {
+        setPaiId(responsavel.id);
+        setPaiData({ ...responsavel });
+        setPaiEditado(false);
+      } else if (tipoBuscarResponsavel === 'mae') {
+        setMaeId(responsavel.id);
+        setMaeData({ ...responsavel });
+        setMaeEditado(false);
+      }
+
+      setTipoBuscarResponsavel(null);
+      setBuscaResponsavel('');
+      setResponsaveisSistema([]);
+    } catch (error) {
+      console.error('Erro ao vincular responsável:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível vincular o responsável.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -921,6 +1043,15 @@ export const PatientRegistrationSection: React.FC<
                 </SelectItem>
               ))}
             <SelectItem
+              value={BUSCAR_RESPONSAVEL_ID}
+              className="text-blue-600 font-medium"
+            >
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Outro responsável cadastrado...
+              </div>
+            </SelectItem>
+            <SelectItem
               value={NOVO_RESPONSAVEL_ID}
               className="text-primary font-medium"
             >
@@ -964,6 +1095,15 @@ export const PatientRegistrationSection: React.FC<
                   {r.nome}
                 </SelectItem>
               ))}
+            <SelectItem
+              value={BUSCAR_RESPONSAVEL_ID}
+              className="text-blue-600 font-medium"
+            >
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Outro responsável cadastrado...
+              </div>
+            </SelectItem>
             <SelectItem
               value={NOVO_RESPONSAVEL_ID}
               className="text-primary font-medium"
@@ -1222,6 +1362,114 @@ export const PatientRegistrationSection: React.FC<
             <Button onClick={handleSaveResponsavel} disabled={isSaving}>
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Cadastrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Buscar Responsável Existente */}
+      <Dialog
+        open={showBuscarResponsavelDialog}
+        onOpenChange={(open) => {
+          setShowBuscarResponsavelDialog(open);
+          if (!open) {
+            setBuscaResponsavel('');
+            setResponsaveisSistema([]);
+            setTipoBuscarResponsavel(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-500" />
+              Buscar Responsável{' '}
+              {tipoBuscarResponsavel === 'pai'
+                ? '(Pai)'
+                : tipoBuscarResponsavel === 'mae'
+                  ? '(Mãe)'
+                  : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Busque um responsável já cadastrado no sistema para vincular ao
+              paciente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="busca-responsavel">Buscar por nome</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="busca-responsavel"
+                  value={buscaResponsavel}
+                  onChange={(e) => {
+                    setBuscaResponsavel(e.target.value);
+                    handleBuscarResponsaveis(e.target.value);
+                  }}
+                  placeholder="Digite pelo menos 2 caracteres..."
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Lista de resultados */}
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {isLoadingBusca && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+
+              {!isLoadingBusca &&
+                buscaResponsavel.length >= 2 &&
+                responsaveisSistema.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum responsável encontrado com esse nome.
+                  </p>
+                )}
+
+              {!isLoadingBusca &&
+                responsaveisSistema.map((resp) => (
+                  <button
+                    key={resp.id}
+                    type="button"
+                    onClick={() => handleVincularResponsavel(resp)}
+                    disabled={isSaving}
+                    className="w-full p-3 text-left rounded-lg border hover:bg-accent transition-colors flex items-center justify-between gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{resp.nome}</p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {resp.cpf_cnpj && <span>CPF: {resp.cpf_cnpj}</span>}
+                        {resp.profissao && <span>• {resp.profissao}</span>}
+                      </div>
+                    </div>
+                    <Plus className="h-4 w-4 text-primary flex-shrink-0" />
+                  </button>
+                ))}
+            </div>
+
+            {buscaResponsavel.length < 2 && (
+              <p className="text-xs text-muted-foreground text-center">
+                💡 Digite pelo menos 2 caracteres para buscar
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowBuscarResponsavelDialog(false);
+                setBuscaResponsavel('');
+                setResponsaveisSistema([]);
+                setTipoBuscarResponsavel(null);
+              }}
+              disabled={isSaving}
+            >
+              Cancelar
             </Button>
           </DialogFooter>
         </DialogContent>
