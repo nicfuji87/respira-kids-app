@@ -952,6 +952,25 @@ export const EvaluationSectionContent: React.FC<
           return marcosNaFaixa.filter((m) => marcosAtingidos[m.id]).length;
         };
 
+        // Verifica se todos os marcos de uma faixa estão selecionados
+        const todosSelecionados = (faixa: string) => {
+          const marcosNaFaixa = marcosPorFaixa[faixa] || [];
+          return marcosNaFaixa.every((m) => marcosAtingidos[m.id]);
+        };
+
+        // Seleciona ou desmarca todos os marcos de uma faixa
+        const toggleTodosFaixa = (faixa: string) => {
+          const marcosNaFaixa = marcosPorFaixa[faixa] || [];
+          const todosJaSelecionados = todosSelecionados(faixa);
+
+          const novosMarcosAtingidos = { ...marcosAtingidos };
+          marcosNaFaixa.forEach((marco) => {
+            novosMarcosAtingidos[marco.id] = !todosJaSelecionados;
+          });
+
+          onChange({ marcos_motores_atingidos: novosMarcosAtingidos });
+        };
+
         return (
           <div className="space-y-6">
             <div className="p-3 bg-primary/10 rounded-lg">
@@ -973,11 +992,29 @@ export const EvaluationSectionContent: React.FC<
             ) : (
               Object.entries(marcosPorFaixa).map(([faixa, marcos]) => (
                 <div key={faixa} className="border rounded-lg overflow-hidden">
-                  <div className="bg-muted/50 px-4 py-2 flex justify-between items-center">
+                  <div className="bg-muted/50 px-4 py-2 flex justify-between items-center gap-2">
                     <h4 className="font-semibold text-sm">{faixa}</h4>
-                    <span className="text-xs text-muted-foreground">
-                      {contarAtingidos(faixa)}/{marcos.length} atingidos
-                    </span>
+                    <div className="flex items-center gap-3">
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => toggleTodosFaixa(faixa)}
+                          className={cn(
+                            'text-xs px-2 py-1 rounded transition-colors',
+                            todosSelecionados(faixa)
+                              ? 'bg-primary/20 text-primary hover:bg-primary/30'
+                              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                          )}
+                        >
+                          {todosSelecionados(faixa)
+                            ? '✓ Tudo selecionado'
+                            : 'Selecionar tudo'}
+                        </button>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {contarAtingidos(faixa)}/{marcos.length}
+                      </span>
+                    </div>
                   </div>
                   <div className="divide-y">
                     {marcos.map((marco) => (
