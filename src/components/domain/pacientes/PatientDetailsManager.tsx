@@ -11,6 +11,7 @@ import {
   PatientHistory,
   MediaGallery,
   PatientContractSection,
+  PatientClinicalEvaluations,
   type LocationOption,
 } from '@/components/composed';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
@@ -383,6 +384,20 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
               initialObservations={observations}
               onUpdateAnamnese={handleAnamnesisUpdate}
               onUpdateObservations={handleObservationsUpdate}
+            />
+
+            {/* Avaliações Clínicas TM/AC */}
+            <PatientClinicalEvaluations
+              patientId={actualId}
+              patientName={patient.nome}
+              patientBirthDate={patient.data_nascimento}
+              userRole={
+                (user?.pessoa?.role as
+                  | 'admin'
+                  | 'profissional'
+                  | 'secretaria') || null
+              }
+              currentUserId={user?.pessoa?.id}
             />
 
             {/* Relatórios Médicos do Paciente */}

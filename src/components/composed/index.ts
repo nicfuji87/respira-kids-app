@@ -92,6 +92,11 @@ export { MediaGallery } from './MediaGallery';
 export { BillingResponsibleSelect } from './BillingResponsibleSelect';
 export { WeekBirthdays } from './WeekBirthdays';
 
+// Clinical Evaluation Components (TM/AC)
+export { PatientClinicalEvaluations } from './evaluation';
+export { EvaluationFormModal } from './evaluation';
+export { EvaluationSectionContent } from './evaluation';
+
 // Financial Components
 export { PinConfiguration } from './PinConfiguration';
 export { PinValidationDialog } from './PinValidationDialog';
