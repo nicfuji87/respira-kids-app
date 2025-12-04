@@ -1,5 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, Trash2, Play, Pause, Upload, StopCircle } from 'lucide-react';
+import {
+  Mic,
+  Trash2,
+  Play,
+  Pause,
+  Upload,
+  StopCircle,
+  Loader2,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
 import { Progress } from './progress';
@@ -7,8 +15,10 @@ import { Progress } from './progress';
 // AI dev note: AudioRecorder primitive para gravação de áudio com limite de 5 minutos
 // Implementação nativa com MediaRecorder API (compatível com React 19)
 
+// AI dev note: onAudioComplete agora retorna Promise<boolean> para indicar sucesso/falha
+// O componente só limpa o áudio se a transcrição for bem sucedida
 export interface AudioRecorderProps {
-  onAudioComplete: (audioBlob: Blob) => void;
+  onAudioComplete: (audioBlob: Blob) => Promise<boolean> | void;
   disabled?: boolean;
   className?: string;
   maxDuration?: number; // em segundos, default 5 minutos
@@ -196,13 +206,30 @@ export const AudioRecorder = React.memo<AudioRecorderProps>(
       }
     }, [isPlaying, audioUrl]);
 
-    // Confirmar uso do áudio
-    const handleUseAudio = useCallback(() => {
-      if (recordedBlob) {
-        onAudioComplete(recordedBlob);
-        clearRecording();
+    // AI dev note: handleUseAudio agora é async e aguarda o callback retornar
+    // Só limpa o áudio se a transcrição for bem sucedida (retornar true)
+    // Se falhar (retornar false), mantém o áudio para o usuário tentar novamente
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const handleUseAudio = useCallback(async () => {
+      if (recordedBlob && !isProcessing) {
+        setIsProcessing(true);
+
+        try {
+          const result = await onAudioComplete(recordedBlob);
+          // Só limpa se o callback retornou true (sucesso)
+          if (result === true) {
+            clearRecording();
+          }
+          // Se retornar false ou undefined, mantém o áudio
+        } catch (error) {
+          console.error('Erro ao processar áudio:', error);
+          // Em caso de erro, mantém o áudio
+        } finally {
+          setIsProcessing(false);
+        }
       }
-    }, [recordedBlob, onAudioComplete, clearRecording]);
+    }, [recordedBlob, onAudioComplete, clearRecording, isProcessing]);
 
     // Formatar tempo
     const formatTime = useCallback((seconds: number): string => {
@@ -336,7 +363,7 @@ export const AudioRecorder = React.memo<AudioRecorderProps>(
                 variant="outline"
                 size="sm"
                 onClick={togglePlayback}
-                disabled={disabled}
+                disabled={disabled || isProcessing}
                 className="flex items-center gap-2"
               >
                 {isPlaying ? (
@@ -352,7 +379,7 @@ export const AudioRecorder = React.memo<AudioRecorderProps>(
                 variant="outline"
                 size="sm"
                 onClick={clearRecording}
-                disabled={disabled}
+                disabled={disabled || isProcessing}
                 className="flex items-center gap-2"
               >
                 <Trash2 className="h-4 w-4" />
@@ -364,11 +391,20 @@ export const AudioRecorder = React.memo<AudioRecorderProps>(
                 variant="default"
                 size="sm"
                 onClick={handleUseAudio}
-                disabled={disabled}
+                disabled={disabled || isProcessing}
                 className="flex items-center gap-2"
               >
-                <Upload className="h-4 w-4" />
-                Usar áudio
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Usar áudio
+                  </>
+                )}
               </Button>
             </div>
           </div>

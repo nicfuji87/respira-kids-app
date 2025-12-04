@@ -74,18 +74,19 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
       });
     }, []);
 
-    // Transcrever áudio usando Edge Function
+    // AI dev note: transcribeAudio retorna Promise<boolean> para indicar sucesso/falha
+    // O AudioRecorder usa esse retorno para decidir se deve limpar o áudio ou manter
     const transcribeAudio = useCallback(
-      async (audioBlob: Blob) => {
+      async (audioBlob: Blob): Promise<boolean> => {
         // AI dev note: Verificar autenticação antes de chamar Edge Function
         if (!isAuthenticated || !canAccessDashboard || !user) {
           setTranscriptionError('Usuário não autenticado ou sem permissões');
-          return;
+          return false;
         }
 
         if (loading) {
           setTranscriptionError('Aguarde... verificando autenticação');
-          return;
+          return false;
         }
 
         setIsTranscribing(true);
@@ -146,6 +147,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
               : result.transcription;
             onChange(newText);
             setActiveTab('text'); // Voltar para aba de texto
+            return true; // Sucesso - AudioRecorder pode limpar o áudio
           } else {
             throw new Error(result.error || 'Erro na transcrição');
           }
@@ -154,6 +156,7 @@ export const EvolutionEditor = React.memo<EvolutionEditorProps>(
           setTranscriptionError(
             err instanceof Error ? err.message : 'Erro ao transcrever áudio'
           );
+          return false; // Falha - AudioRecorder deve manter o áudio
         } finally {
           setIsTranscribing(false);
         }

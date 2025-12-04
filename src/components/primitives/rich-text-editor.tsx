@@ -50,13 +50,19 @@ export const RichTextEditor = React.memo<RichTextEditorProps>(
 
     // AI dev note: Sincronizar valor externo com editor APENAS quando o valor veio de fora
     // Isso evita perda de foco causada por re-escrita do innerHTML após digitação do usuário
+    // CORREÇÃO: Também sincronizar quando innerHTML está vazio mas value não (caso de montagem/remontagem)
     useEffect(() => {
       if (editorRef.current) {
-        // Só atualiza se o valor veio de fora (diferente do último valor interno)
-        if (
-          value !== lastInternalValueRef.current &&
-          editorRef.current.innerHTML !== value
-        ) {
+        const currentInnerHTML = editorRef.current.innerHTML;
+
+        // AI dev note: Duas condições para atualizar o innerHTML:
+        // 1. Sincronização inicial/remontagem: innerHTML vazio mas value tem conteúdo
+        // 2. Valor mudou de fora: value diferente do último valor interno E innerHTML diferente do value
+        const isInitialSync = !currentInnerHTML && value;
+        const isExternalChange =
+          value !== lastInternalValueRef.current && currentInnerHTML !== value;
+
+        if (isInitialSync || isExternalChange) {
           editorRef.current.innerHTML = value || '';
         }
         // Atualiza a referência para o valor atual
