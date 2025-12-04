@@ -810,21 +810,16 @@ export const fetchProfissionaisForUser = async (
   }
 };
 
-// AI dev note: Busca pacientes com responsáveis usando view unificada
-// View pacientes_com_responsaveis_view inclui nomes dos responsáveis para busca
+// AI dev note: Busca pacientes com responsáveis usando função SECURITY DEFINER
+// Função fn_listar_pacientes_completos() ignora RLS em cascata nos JOINs internos
 // Permite buscar por nome do paciente OU nome do responsável, sempre selecionando o paciente
 export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
-  // AI dev note: Nova view que inclui dados de responsáveis para busca unificada
-  // Campo nomes_responsaveis contém responsáveis concatenados com ' | '
-  const { data, error } = await supabase
-    .from('pacientes_com_responsaveis_view')
-    .select('*')
-    .eq('tipo_pessoa_codigo', 'paciente')
-    .eq('ativo', true)
-    .order('nome');
+  // AI dev note: Usar RPC com SECURITY DEFINER para evitar problemas de RLS em cascata
+  // A view direta tem problemas quando JOINs internos aplicam RLS do usuário autenticado
+  const { data, error } = await supabase.rpc('fn_listar_pacientes_completos');
 
   if (error) {
-    console.error('❌ [DEBUG] fetchPacientes - erro na view unificada:', error);
+    console.error('❌ [DEBUG] fetchPacientes - erro na função RPC:', error);
     throw error;
   }
 

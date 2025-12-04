@@ -118,7 +118,7 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       {
         id: 'users',
         label: 'Usuários',
-        roles: ['admin'],
+        roles: ['admin', 'secretaria'],
         icon: Users,
         content: <UserManagement />,
       },

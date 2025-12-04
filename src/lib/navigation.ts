@@ -53,7 +53,7 @@ export const navigationConfig: NavigationConfig[] = [
     icon: DollarSign,
     label: 'Financeiro',
     href: '/financeiro',
-    roles: ['admin', 'secretaria'], // Admin e secretaria acessam financeiro completo
+    roles: ['admin', 'profissional', 'secretaria'], // Admin e secretaria: completo | Profissional: apenas comissões
   },
   {
     icon: Settings,

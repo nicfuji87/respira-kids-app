@@ -74,8 +74,10 @@ import {
   updateUsuario,
 } from '@/lib/usuarios-api';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 // AI dev note: Gerencia CRUD completo de usuários com modal de edição detalhado
+// AI dev note: Secretária não pode definir role 'admin' - apenas admin pode criar outros admins
 
 export interface UserManagementProps {
   className?: string;
@@ -95,6 +97,12 @@ export const UserManagement = React.memo<UserManagementProps>(
     const [userForRole, setUserForRole] = useState<Usuario | null>(null);
 
     const { toast } = useToast();
+    const { user } = useAuth();
+
+    // AI dev note: Verificar se usuário logado pode definir role 'admin'
+    // Apenas admin pode criar outros admins
+    const currentUserRole = user?.pessoa?.role;
+    const canSetAdminRole = currentUserRole === 'admin';
 
     // Form para edição
     const form = useForm<UsuarioUpdate>();
@@ -592,24 +600,15 @@ export const UserManagement = React.memo<UserManagementProps>(
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="admin">Admin</SelectItem>
+                                {/* AI dev note: Apenas admin pode definir role 'admin' */}
+                                {canSetAdminRole && (
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                )}
                                 <SelectItem value="secretaria">
                                   Secretaria
                                 </SelectItem>
-                                <SelectItem value="fonoaudiologo">
-                                  Fonoaudiólogo
-                                </SelectItem>
-                                <SelectItem value="psicologo">
-                                  Psicólogo
-                                </SelectItem>
-                                <SelectItem value="nutricionista">
-                                  Nutricionista
-                                </SelectItem>
-                                <SelectItem value="fisioterapeuta">
-                                  Fisioterapeuta
-                                </SelectItem>
-                                <SelectItem value="terapeuta_ocupacional">
-                                  Terapeuta Ocupacional
+                                <SelectItem value="profissional">
+                                  Profissional
                                 </SelectItem>
                               </SelectContent>
                             </Select>
@@ -795,14 +794,17 @@ export const UserManagement = React.memo<UserManagementProps>(
             </DialogHeader>
 
             <div className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => handleSetRole('admin')}
-              >
-                <User className="mr-2 h-4 w-4" />
-                Administrador
-              </Button>
+              {/* AI dev note: Apenas admin pode definir role 'admin' */}
+              {canSetAdminRole && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleSetRole('admin')}
+                >
+                  <User className="mr-2 h-4 w-4" />
+                  Administrador
+                </Button>
+              )}
 
               <Button
                 variant="outline"
