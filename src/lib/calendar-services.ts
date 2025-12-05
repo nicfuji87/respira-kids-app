@@ -810,58 +810,83 @@ export const fetchProfissionaisForUser = async (
   }
 };
 
-// AI dev note: Busca pacientes com responsáveis usando view unificada
-// View pacientes_com_responsaveis_view inclui nomes dos responsáveis para busca
-// Permite buscar por nome do paciente OU nome do responsável, sempre selecionando o paciente
+// AI dev note: BUSCA SERVER-SIDE - Busca pacientes no Supabase com termo de pesquisa
+// Esta é a abordagem correta para grandes bancos de dados:
+// - Não carrega todos os registros no cliente
+// - Busca é feita no servidor com ILIKE
+// - Retorna apenas resultados relevantes (máx 50)
+export const searchPacientes = async (
+  searchTerm: string
+): Promise<SupabasePessoa[]> => {
+  // Se termo vazio ou muito curto, retorna vazio
+  if (!searchTerm || searchTerm.trim().length < 2) {
+    return [];
+  }
+
+  const term = searchTerm.trim();
+
+  // AI dev note: Busca server-side usando OR para nome do paciente E nome dos responsáveis
+  // Usa ILIKE para busca case-insensitive com wildcards
+  const { data, error } = await supabase
+    .from('pacientes_com_responsaveis_view')
+    .select('*')
+    .eq('tipo_pessoa_codigo', 'paciente')
+    .eq('ativo', true)
+    .or(
+      `nome.ilike.%${term}%,nomes_responsaveis.ilike.%${term}%,email.ilike.%${term}%,cpf_cnpj.ilike.%${term}%,responsavel_legal_nome.ilike.%${term}%,responsavel_financeiro_nome.ilike.%${term}%`
+    )
+    .order('nome')
+    .limit(50); // Limita a 50 resultados para performance
+
+  if (error) {
+    console.error('❌ [DEBUG] searchPacientes - erro na busca:', error);
+    throw error;
+  }
+
+  return (data || []) as SupabasePessoa[];
+};
+
+// AI dev note: Busca um paciente específico pelo ID (para exibir nome do selecionado)
+export const fetchPacienteById = async (
+  id: string
+): Promise<SupabasePessoa | null> => {
+  if (!id) return null;
+
+  const { data, error } = await supabase
+    .from('pacientes_com_responsaveis_view')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('❌ [DEBUG] fetchPacienteById - erro:', error);
+    return null;
+  }
+
+  return data as SupabasePessoa;
+};
+
+// AI dev note: Função legada mantida para compatibilidade
+// DEPRECATED: Use searchPacientes para busca server-side
 export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
-  // AI dev note: Nova view que inclui dados de responsáveis para busca unificada
-  // Campo nomes_responsaveis contém responsáveis concatenados com ' | '
-  // IMPORTANTE: Limite aumentado para 5000 pois o padrão do Supabase é 1000
-  // e havia pacientes (Yuri posição 1034, Vicente posição 1008) sendo cortados
+  console.warn(
+    '⚠️ fetchPacientes está deprecated. Use searchPacientes para busca server-side.'
+  );
+
   const { data, error } = await supabase
     .from('pacientes_com_responsaveis_view')
     .select('*')
     .eq('tipo_pessoa_codigo', 'paciente')
     .eq('ativo', true)
     .order('nome')
-    .limit(5000);
+    .limit(100); // Limite reduzido - não deve ser usado para busca completa
 
   if (error) {
-    console.error('❌ [DEBUG] fetchPacientes - erro na view unificada:', error);
+    console.error('❌ [DEBUG] fetchPacientes - erro:', error);
     throw error;
   }
 
-  const pacientes = data || [];
-
-  if (pacientes.length > 0) {
-    // trimmed verbose debug output
-
-    // Verificar se a view retorna campos específicos de responsável legal e financeiro
-
-    const primeiroComResponsavel = pacientes.find((p) => p.nomes_responsaveis);
-    if (primeiroComResponsavel) {
-      // no-op
-    }
-
-    // Teste específico para "henrique" - busca em pacientes E responsáveis
-    const henriqueMatches = pacientes.filter((p) => {
-      const nomeMatch = p.nome && p.nome.toLowerCase().includes('henrique');
-      const responsavelMatch =
-        p.nomes_responsaveis &&
-        p.nomes_responsaveis.toLowerCase().includes('henrique');
-      return nomeMatch || responsavelMatch;
-    });
-
-    if (henriqueMatches.length > 0) {
-      // trimmed verbose debug output
-    }
-  } else {
-    // no-op
-  }
-
-  // AI dev note: View retorna estrutura compatível + campo nomes_responsaveis
-  // Interface PatientSelect pode usar nomes_responsaveis para busca expandida
-  return pacientes as SupabasePessoa[];
+  return (data || []) as SupabasePessoa[];
 };
 
 // AI dev note: BACKUP - Função original comentada para rollback seguro
