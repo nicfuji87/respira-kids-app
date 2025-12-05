@@ -1302,9 +1302,9 @@ export async function updateBillingResponsible(
 }
 
 /**
- * Buscar pacientes com paginação
+ * Buscar pacientes com paginação e busca server-side
  * Usa a view pacientes_com_responsaveis_view filtrando apenas pacientes
- * Busca IGUAL ao PatientSelect da Agenda: sem acento, busca em todos os campos
+ * AI dev note: Busca server-side para suportar grandes volumes de pacientes (>1000)
  */
 export async function fetchPatients(
   searchTerm: string = '',
@@ -1332,13 +1332,30 @@ export async function fetchPatients(
       };
     }
 
-    // AI dev note: BUSCAR TODOS os pacientes para filtrar no cliente (igual PatientSelect)
-    // Isso permite busca sem acento usando normalizeText
+    // AI dev note: Normalizar termo de busca para busca server-side
+    const normalizedSearchTerm = searchTerm.trim()
+      ? normalizeText(searchTerm.trim())
+      : '';
+
+    // AI dev note: Query base para pacientes ativos
     let query = supabase
       .from('pacientes_com_responsaveis_view')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('tipo_pessoa_codigo', 'paciente')
       .eq('ativo', true);
+
+    // AI dev note: Aplicar filtro por letra inicial no servidor
+    if (startWithLetter && startWithLetter.length === 1) {
+      query = query.ilike('nome', `${startWithLetter}%`);
+    }
+
+    // AI dev note: Aplicar busca server-side em múltiplos campos
+    if (normalizedSearchTerm && !startWithLetter) {
+      const searchPattern = `%${normalizedSearchTerm}%`;
+      query = query.or(
+        `nome.ilike.${searchPattern},email.ilike.${searchPattern},cpf_cnpj.ilike.${searchPattern},telefone::text.ilike.${searchPattern},nomes_responsaveis.ilike.${searchPattern},responsavel_legal_nome.ilike.${searchPattern},responsavel_financeiro_nome.ilike.${searchPattern}`
+      );
+    }
 
     // AI dev note: Aplicar ordenação baseada no filtro selecionado
     if (sortBy === 'updated_at') {
@@ -1347,12 +1364,11 @@ export async function fetchPatients(
       query = query.order('nome', { ascending: true });
     }
 
-    // AI dev note: Aplicar filtro por letra inicial no servidor
-    if (startWithLetter && startWithLetter.length === 1) {
-      query = query.ilike('nome', `${startWithLetter}%`);
-    }
+    // AI dev note: Aplicar paginação server-side
+    const offset = (page - 1) * limit;
+    query = query.range(offset, offset + limit - 1);
 
-    const { data: allPatients, error } = await query;
+    const { data: patients, error, count } = await query;
 
     if (error) {
       console.error('Erro ao buscar pacientes:', error);
@@ -1363,96 +1379,12 @@ export async function fetchPatients(
       };
     }
 
-    let filteredPatients = allPatients || [];
-
-    // AI dev note: Aplicar busca no cliente com normalizeText (igual PatientSelect)
-    if (searchTerm.trim() && !startWithLetter) {
-      const searchWords = searchTerm
-        .trim()
-        .split(/\s+/)
-        .filter((word) => word.length > 0);
-
-      const normalizedSearchWords = searchWords.map((word) =>
-        normalizeText(word)
-      );
-
-      filteredPatients = filteredPatients.filter((patient) => {
-        if (!patient.nome) return false;
-
-        // Função helper para verificar se todas as palavras estão presentes
-        const matchesAllWords = (text: string) => {
-          const normalizedText = normalizeText(text);
-          return normalizedSearchWords.every((word) =>
-            normalizedText.includes(word)
-          );
-        };
-
-        // Buscar em todos os campos (igual PatientSelect)
-        if (matchesAllWords(patient.nome)) return true;
-        if (
-          patient.nomes_responsaveis &&
-          matchesAllWords(patient.nomes_responsaveis)
-        )
-          return true;
-        if (patient.email && matchesAllWords(patient.email)) return true;
-        if (patient.cpf_cnpj && matchesAllWords(patient.cpf_cnpj)) return true;
-        if (patient.telefone && matchesAllWords(patient.telefone.toString()))
-          return true;
-        if (
-          patient.responsavel_legal_nome &&
-          matchesAllWords(patient.responsavel_legal_nome)
-        )
-          return true;
-        if (
-          patient.responsavel_legal_email &&
-          matchesAllWords(patient.responsavel_legal_email)
-        )
-          return true;
-        if (
-          patient.responsavel_legal_cpf &&
-          matchesAllWords(patient.responsavel_legal_cpf)
-        )
-          return true;
-        if (
-          patient.responsavel_legal_telefone &&
-          matchesAllWords(patient.responsavel_legal_telefone.toString())
-        )
-          return true;
-        if (
-          patient.responsavel_financeiro_nome &&
-          matchesAllWords(patient.responsavel_financeiro_nome)
-        )
-          return true;
-        if (
-          patient.responsavel_financeiro_email &&
-          matchesAllWords(patient.responsavel_financeiro_email)
-        )
-          return true;
-        if (
-          patient.responsavel_financeiro_cpf &&
-          matchesAllWords(patient.responsavel_financeiro_cpf)
-        )
-          return true;
-        if (
-          patient.responsavel_financeiro_telefone &&
-          matchesAllWords(patient.responsavel_financeiro_telefone.toString())
-        )
-          return true;
-
-        return false;
-      });
-    }
-
-    const totalCount = filteredPatients.length;
+    const totalCount = count || 0;
     const totalPages = Math.ceil(totalCount / limit);
-
-    // Aplicar paginação manual
-    const offset = (page - 1) * limit;
-    const paginatedPatients = filteredPatients.slice(offset, offset + limit);
 
     // AI dev note: Enriquecer dados com status de pagamento
     const enrichedData = await Promise.all(
-      paginatedPatients.map(async (patient) => {
+      (patients || []).map(async (patient) => {
         // Buscar status de pagamento das consultas do paciente
         const { data: agendamentos } = await supabase
           .from('vw_agendamentos_completos')

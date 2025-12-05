@@ -49,11 +49,10 @@ export async function fetchUsuarios(
       };
     }
 
-    let query = supabase.from('vw_usuarios_admin').select('*');
-
-    let countQuery = supabase
+    // AI dev note: Usar count: 'exact' na query principal para obter total correto
+    let query = supabase
       .from('vw_usuarios_admin')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact' });
 
     // Aplicar filtros na query principal
     if (filters.busca) {
@@ -69,49 +68,37 @@ export async function fetchUsuarios(
         query = query.or(
           `nome.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`
         );
-        countQuery = countQuery.or(
-          `nome.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`
-        );
       } else {
         // Busca com AND: todas as palavras devem estar presentes no nome
         for (const word of searchWords) {
           query = query.ilike('nome', `%${word}%`);
-          countQuery = countQuery.ilike('nome', `%${word}%`);
         }
       }
     }
 
     if (filters.tipo_pessoa) {
       query = query.eq('tipo_pessoa_codigo', filters.tipo_pessoa);
-      countQuery = countQuery.eq('tipo_pessoa_codigo', filters.tipo_pessoa);
     }
 
     if (filters.role) {
       query = query.eq('role', filters.role);
-      countQuery = countQuery.eq('role', filters.role);
     }
 
     if (filters.is_approved !== undefined) {
       query = query.eq('is_approved', filters.is_approved);
-      countQuery = countQuery.eq('is_approved', filters.is_approved);
     }
 
     if (filters.ativo !== undefined) {
       query = query.eq('ativo', filters.ativo);
-      countQuery = countQuery.eq('ativo', filters.ativo);
     }
 
     if (filters.bloqueado !== undefined) {
       query = query.eq('bloqueado', filters.bloqueado);
-      countQuery = countQuery.eq('bloqueado', filters.bloqueado);
     }
-
-    // Executar count - com limite alto para garantir contagem correta
-    const { count } = await countQuery.limit(10000);
 
     // Buscar dados com paginação
     const offset = (page - 1) * limit;
-    const { data, error } = await query
+    const { data, error, count } = await query
       .range(offset, offset + limit - 1)
       .order('created_at', { ascending: false });
 
