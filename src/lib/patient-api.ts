@@ -1421,48 +1421,119 @@ export async function fetchPatients(
       );
     }
 
-    // AI dev note: Se há termo de busca, fazer duas queries paralelas
-    // O PostgREST tem problemas para parsear .or() com espaços no termo
+    // AI dev note: BUSCA FLEXÍVEL - palavras em qualquer ordem
+    // Busca por nome do paciente OU dados dos responsáveis (nome, telefone, CPF)
     if (searchTerm.trim()) {
-      const searchPattern = `%${searchTerm.trim().replace(/\s+/g, '%')}%`;
+      const palavras = searchTerm
+        .trim()
+        .split(/\s+/)
+        .filter((p) => p.length >= 2);
 
-      // Fazer duas queries: uma pelo nome, outra pelo responsável
-      const [resultadosNome, resultadosResponsavel] = await Promise.all([
-        supabase
-          .from('pacientes_com_responsaveis_view')
-          .select('*', { count: 'exact' })
-          .eq('tipo_pessoa_codigo', 'paciente')
-          .eq('ativo', true)
-          .ilike('nome', searchPattern)
-          .order('nome')
-          .limit(500), // Buscar mais para combinar depois
-        supabase
-          .from('pacientes_com_responsaveis_view')
-          .select('*')
-          .eq('tipo_pessoa_codigo', 'paciente')
-          .eq('ativo', true)
-          .ilike('nomes_responsaveis', searchPattern)
-          .order('nome')
-          .limit(200),
-      ]);
-
-      if (resultadosNome.error) {
-        console.error(
-          'Erro ao buscar pacientes por nome:',
-          resultadosNome.error
-        );
-        return {
-          data: null,
-          error: resultadosNome.error.message,
-          success: false,
-        };
+      if (palavras.length === 0) {
+        return await enrichPatientsWithPaymentStatus([], 0, page, limit);
       }
+
+      const patterns = palavras.map((p) => `%${p}%`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const queries: Promise<any>[] = [];
+
+      // Query 1: Buscar pelo nome do paciente (todas as palavras)
+      let queryNome = supabase
+        .from('pacientes_com_responsaveis_view')
+        .select('*')
+        .eq('tipo_pessoa_codigo', 'paciente')
+        .eq('ativo', true);
+      for (const pattern of patterns) {
+        queryNome = queryNome.ilike('nome', pattern);
+      }
+      queries.push(queryNome.order('nome').limit(500));
+
+      // Query 2: Buscar pelo nome do responsável legal
+      let queryRespLegal = supabase
+        .from('pacientes_com_responsaveis_view')
+        .select('*')
+        .eq('tipo_pessoa_codigo', 'paciente')
+        .eq('ativo', true);
+      for (const pattern of patterns) {
+        queryRespLegal = queryRespLegal.ilike(
+          'responsavel_legal_nome',
+          pattern
+        );
+      }
+      queries.push(queryRespLegal.order('nome').limit(200));
+
+      // Query 3: Buscar pelo nome do responsável financeiro
+      let queryRespFinanceiro = supabase
+        .from('pacientes_com_responsaveis_view')
+        .select('*')
+        .eq('tipo_pessoa_codigo', 'paciente')
+        .eq('ativo', true);
+      for (const pattern of patterns) {
+        queryRespFinanceiro = queryRespFinanceiro.ilike(
+          'responsavel_financeiro_nome',
+          pattern
+        );
+      }
+      queries.push(queryRespFinanceiro.order('nome').limit(200));
+
+      // Query 4: Se for apenas uma palavra, buscar por telefone e CPF
+      if (palavras.length === 1) {
+        const termo = palavras[0];
+        // Telefone e CPF do responsável legal
+        queries.push(
+          supabase
+            .from('pacientes_com_responsaveis_view')
+            .select('*')
+            .eq('tipo_pessoa_codigo', 'paciente')
+            .eq('ativo', true)
+            .ilike('responsavel_legal_telefone::text', `%${termo}%`)
+            .order('nome')
+            .limit(100)
+        );
+        queries.push(
+          supabase
+            .from('pacientes_com_responsaveis_view')
+            .select('*')
+            .eq('tipo_pessoa_codigo', 'paciente')
+            .eq('ativo', true)
+            .ilike('responsavel_legal_cpf', `%${termo}%`)
+            .order('nome')
+            .limit(100)
+        );
+        // Telefone e CPF do responsável financeiro
+        queries.push(
+          supabase
+            .from('pacientes_com_responsaveis_view')
+            .select('*')
+            .eq('tipo_pessoa_codigo', 'paciente')
+            .eq('ativo', true)
+            .ilike('responsavel_financeiro_telefone::text', `%${termo}%`)
+            .order('nome')
+            .limit(100)
+        );
+        queries.push(
+          supabase
+            .from('pacientes_com_responsaveis_view')
+            .select('*')
+            .eq('tipo_pessoa_codigo', 'paciente')
+            .eq('ativo', true)
+            .ilike('responsavel_financeiro_cpf', `%${termo}%`)
+            .order('nome')
+            .limit(100)
+        );
+      }
+
+      // Executar todas as queries em paralelo
+      const resultados = await Promise.all(queries);
 
       // Combinar resultados removendo duplicatas
       const pacientesMap = new Map<string, unknown>();
-      (resultadosNome.data || []).forEach((p) => pacientesMap.set(p.id, p));
-      if (resultadosResponsavel.data) {
-        resultadosResponsavel.data.forEach((p) => {
+      for (const resultado of resultados) {
+        if (resultado.error) {
+          console.warn('⚠️ fetchPatients - erro em query:', resultado.error);
+          continue;
+        }
+        (resultado.data || []).forEach((p: { id: string }) => {
           if (!pacientesMap.has(p.id)) pacientesMap.set(p.id, p);
         });
       }
