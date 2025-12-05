@@ -816,12 +816,15 @@ export const fetchProfissionaisForUser = async (
 export const fetchPacientes = async (): Promise<SupabasePessoa[]> => {
   // AI dev note: Nova view que inclui dados de responsáveis para busca unificada
   // Campo nomes_responsaveis contém responsáveis concatenados com ' | '
+  // IMPORTANTE: Limite aumentado para 5000 pois o padrão do Supabase é 1000
+  // e havia pacientes (Yuri posição 1034, Vicente posição 1008) sendo cortados
   const { data, error } = await supabase
     .from('pacientes_com_responsaveis_view')
     .select('*')
     .eq('tipo_pessoa_codigo', 'paciente')
     .eq('ativo', true)
-    .order('nome');
+    .order('nome')
+    .limit(5000);
 
   if (error) {
     console.error('❌ [DEBUG] fetchPacientes - erro na view unificada:', error);
