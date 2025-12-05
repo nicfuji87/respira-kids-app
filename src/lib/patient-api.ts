@@ -2,7 +2,6 @@
 // Funções centralizadas para CRUD de dados de pacientes
 
 import { supabase } from './supabase';
-import { normalizeText } from './utils';
 import type {
   PatientDetails,
   PatientConsent,
@@ -1332,11 +1331,6 @@ export async function fetchPatients(
       };
     }
 
-    // AI dev note: Normalizar termo de busca para busca server-side
-    const normalizedSearchTerm = searchTerm.trim()
-      ? normalizeText(searchTerm.trim())
-      : '';
-
     // AI dev note: Query base para pacientes ativos
     let query = supabase
       .from('pacientes_com_responsaveis_view')
@@ -1349,12 +1343,13 @@ export async function fetchPatients(
       query = query.ilike('nome', `${startWithLetter}%`);
     }
 
-    // AI dev note: Aplicar busca server-side em múltiplos campos
-    if (normalizedSearchTerm && !startWithLetter) {
-      const searchPattern = `%${normalizedSearchTerm}%`;
-      query = query.or(
-        `nome.ilike.${searchPattern},email.ilike.${searchPattern},cpf_cnpj.ilike.${searchPattern},telefone::text.ilike.${searchPattern},nomes_responsaveis.ilike.${searchPattern},responsavel_legal_nome.ilike.${searchPattern},responsavel_financeiro_nome.ilike.${searchPattern}`
-      );
+    // AI dev note: Aplicar busca server-side
+    // Quando há termo de busca, usar ilike no nome (mais confiável que .or() com espaços)
+    // O PostgREST tem problemas para parsear .or() com espaços no termo
+    if (searchTerm.trim() && !startWithLetter) {
+      // Substituir espaços por % para buscar palavras em qualquer ordem
+      const searchPattern = `%${searchTerm.trim().replace(/\s+/g, '%')}%`;
+      query = query.ilike('nome', searchPattern);
     }
 
     // AI dev note: Aplicar ordenação baseada no filtro selecionado
