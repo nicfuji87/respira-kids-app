@@ -832,9 +832,7 @@ export const searchPacientes = async (
   // Criar pattern para cada palavra
   const patterns = palavras.map((p) => `%${p}%`);
 
-  // AI dev note: Fazer múltiplas queries paralelas para diferentes campos
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const queries: Promise<any>[] = [];
+  // AI dev note: Construir queries para busca paralela
 
   // Query 1: Buscar pelo nome do paciente (todas as palavras devem estar presentes)
   let queryNome = supabase
@@ -845,7 +843,6 @@ export const searchPacientes = async (
   for (const pattern of patterns) {
     queryNome = queryNome.ilike('nome', pattern);
   }
-  queries.push(queryNome.order('nome').limit(30));
 
   // Query 2: Buscar pelo nome do responsável legal
   let queryRespLegal = supabase
@@ -856,7 +853,6 @@ export const searchPacientes = async (
   for (const pattern of patterns) {
     queryRespLegal = queryRespLegal.ilike('responsavel_legal_nome', pattern);
   }
-  queries.push(queryRespLegal.order('nome').limit(20));
 
   // Query 3: Buscar pelo nome do responsável financeiro
   let queryRespFinanceiro = supabase
@@ -870,59 +866,70 @@ export const searchPacientes = async (
       pattern
     );
   }
-  queries.push(queryRespFinanceiro.order('nome').limit(20));
 
-  // Query 4: Se for apenas uma palavra, buscar também por telefone e CPF
+  // Executar queries base em paralelo
+  const [resultadosNome, resultadosRespLegal, resultadosRespFinanceiro] =
+    await Promise.all([
+      queryNome.order('nome').limit(30),
+      queryRespLegal.order('nome').limit(20),
+      queryRespFinanceiro.order('nome').limit(20),
+    ]);
+
+  // Se for apenas uma palavra, buscar também por telefone e CPF
+  let resultadosTelCpf: { data: SupabasePessoa[] | null; error: unknown }[] =
+    [];
   if (palavras.length === 1) {
     const termo = palavras[0];
-    // Buscar por telefone do responsável legal
-    queries.push(
-      supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('*')
-        .eq('tipo_pessoa_codigo', 'paciente')
-        .eq('ativo', true)
-        .ilike('responsavel_legal_telefone::text', `%${termo}%`)
-        .order('nome')
-        .limit(10)
-    );
-    // Buscar por CPF do responsável legal
-    queries.push(
-      supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('*')
-        .eq('tipo_pessoa_codigo', 'paciente')
-        .eq('ativo', true)
-        .ilike('responsavel_legal_cpf', `%${termo}%`)
-        .order('nome')
-        .limit(10)
-    );
-    // Buscar por telefone do responsável financeiro
-    queries.push(
-      supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('*')
-        .eq('tipo_pessoa_codigo', 'paciente')
-        .eq('ativo', true)
-        .ilike('responsavel_financeiro_telefone::text', `%${termo}%`)
-        .order('nome')
-        .limit(10)
-    );
-    // Buscar por CPF do responsável financeiro
-    queries.push(
-      supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('*')
-        .eq('tipo_pessoa_codigo', 'paciente')
-        .eq('ativo', true)
-        .ilike('responsavel_financeiro_cpf', `%${termo}%`)
-        .order('nome')
-        .limit(10)
-    );
+    const [resTelLegal, resCpfLegal, resTelFinanceiro, resCpfFinanceiro] =
+      await Promise.all([
+        supabase
+          .from('pacientes_com_responsaveis_view')
+          .select('*')
+          .eq('tipo_pessoa_codigo', 'paciente')
+          .eq('ativo', true)
+          .ilike('responsavel_legal_telefone::text', `%${termo}%`)
+          .order('nome')
+          .limit(10),
+        supabase
+          .from('pacientes_com_responsaveis_view')
+          .select('*')
+          .eq('tipo_pessoa_codigo', 'paciente')
+          .eq('ativo', true)
+          .ilike('responsavel_legal_cpf', `%${termo}%`)
+          .order('nome')
+          .limit(10),
+        supabase
+          .from('pacientes_com_responsaveis_view')
+          .select('*')
+          .eq('tipo_pessoa_codigo', 'paciente')
+          .eq('ativo', true)
+          .ilike('responsavel_financeiro_telefone::text', `%${termo}%`)
+          .order('nome')
+          .limit(10),
+        supabase
+          .from('pacientes_com_responsaveis_view')
+          .select('*')
+          .eq('tipo_pessoa_codigo', 'paciente')
+          .eq('ativo', true)
+          .ilike('responsavel_financeiro_cpf', `%${termo}%`)
+          .order('nome')
+          .limit(10),
+      ]);
+    resultadosTelCpf = [
+      resTelLegal,
+      resCpfLegal,
+      resTelFinanceiro,
+      resCpfFinanceiro,
+    ];
   }
 
-  // Executar todas as queries em paralelo
-  const resultados = await Promise.all(queries);
+  // Combinar todos os resultados
+  const resultados = [
+    resultadosNome,
+    resultadosRespLegal,
+    resultadosRespFinanceiro,
+    ...resultadosTelCpf,
+  ];
 
   // Combinar resultados removendo duplicatas
   const pacientesMap = new Map<string, SupabasePessoa>();
