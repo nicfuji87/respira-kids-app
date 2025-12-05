@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Phone, Mail, Check, ChevronsUpDown, X, Loader2 } from 'lucide-react';
+import { Phone, Mail, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 
 import {
   Popover,
@@ -339,16 +339,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
               <DialogContent className="h-full max-h-full sm:max-h-[90vh] p-0 flex flex-col">
                 <DialogHeader className="px-4 py-3 border-b">
-                  <DialogTitle className="flex items-center justify-between">
-                    <span>Selecionar Paciente</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setIsOpen(false)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </DialogTitle>
+                  <DialogTitle>Selecionar Paciente</DialogTitle>
                 </DialogHeader>
 
                 <div className="px-4 py-3 border-b">
