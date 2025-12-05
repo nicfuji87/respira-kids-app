@@ -823,27 +823,68 @@ export const searchPacientes = async (
     return [];
   }
 
-  const term = searchTerm.trim();
+  // AI dev note: Substituir espaços por % para buscar palavras em qualquer ordem
+  // O PostgREST tem problemas para parsear .or() com espaços no termo
+  const searchPattern = `%${searchTerm.trim().replace(/\s+/g, '%')}%`;
 
-  // AI dev note: Busca server-side usando OR para nome do paciente E nome dos responsáveis
-  // Usa ILIKE para busca case-insensitive com wildcards
-  const { data, error } = await supabase
-    .from('pacientes_com_responsaveis_view')
-    .select('*')
-    .eq('tipo_pessoa_codigo', 'paciente')
-    .eq('ativo', true)
-    .or(
-      `nome.ilike.%${term}%,nomes_responsaveis.ilike.%${term}%,email.ilike.%${term}%,cpf_cnpj.ilike.%${term}%,responsavel_legal_nome.ilike.%${term}%,responsavel_financeiro_nome.ilike.%${term}%`
-    )
-    .order('nome')
-    .limit(50); // Limita a 50 resultados para performance
+  // AI dev note: Fazer duas queries paralelas - uma pelo nome, outra pelo responsável
+  // Isso evita o problema de parsing do .or() com espaços
+  const [resultadosNome, resultadosResponsavel] = await Promise.all([
+    // Query 1: Buscar pelo nome do paciente
+    supabase
+      .from('pacientes_com_responsaveis_view')
+      .select('*')
+      .eq('tipo_pessoa_codigo', 'paciente')
+      .eq('ativo', true)
+      .ilike('nome', searchPattern)
+      .order('nome')
+      .limit(30),
+    // Query 2: Buscar pelo nome do responsável
+    supabase
+      .from('pacientes_com_responsaveis_view')
+      .select('*')
+      .eq('tipo_pessoa_codigo', 'paciente')
+      .eq('ativo', true)
+      .ilike('nomes_responsaveis', searchPattern)
+      .order('nome')
+      .limit(20),
+  ]);
 
-  if (error) {
-    console.error('❌ [DEBUG] searchPacientes - erro na busca:', error);
-    throw error;
+  if (resultadosNome.error) {
+    console.error(
+      '❌ [DEBUG] searchPacientes - erro na busca por nome:',
+      resultadosNome.error
+    );
+    throw resultadosNome.error;
   }
 
-  return (data || []) as SupabasePessoa[];
+  if (resultadosResponsavel.error) {
+    console.error(
+      '❌ [DEBUG] searchPacientes - erro na busca por responsável:',
+      resultadosResponsavel.error
+    );
+    // Não lança erro - retorna apenas resultados do nome
+  }
+
+  // Combinar resultados removendo duplicatas
+  const pacientesMap = new Map<string, SupabasePessoa>();
+
+  // Adicionar resultados do nome primeiro (prioridade)
+  (resultadosNome.data || []).forEach((p) => {
+    pacientesMap.set(p.id, p as SupabasePessoa);
+  });
+
+  // Adicionar resultados do responsável (se não duplicados)
+  if (resultadosResponsavel.data) {
+    resultadosResponsavel.data.forEach((p) => {
+      if (!pacientesMap.has(p.id)) {
+        pacientesMap.set(p.id, p as SupabasePessoa);
+      }
+    });
+  }
+
+  // Converter para array e limitar a 50
+  return Array.from(pacientesMap.values()).slice(0, 50);
 };
 
 // AI dev note: Busca um paciente específico pelo ID (para exibir nome do selecionado)
