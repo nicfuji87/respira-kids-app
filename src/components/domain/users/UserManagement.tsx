@@ -59,6 +59,7 @@ import {
   TypePersonSelect,
   AddressSelect,
   ResponsibleSelect,
+  BillingResponsibleSelect,
   StatusBadge,
 } from '@/components/composed';
 import type {
@@ -75,6 +76,7 @@ import {
 } from '@/lib/usuarios-api';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
 
 // AI dev note: Gerencia CRUD completo de usuários com modal de edição detalhado
 // AI dev note: Secretária não pode definir role 'admin' - apenas admin pode criar outros admins
@@ -153,8 +155,26 @@ export const UserManagement = React.memo<UserManagementProps>(
       }
     }, [filters, currentPage]);
 
-    const handleEditUser = (usuario: Usuario) => {
-      setEditingUser(usuario);
+    const handleEditUser = async (usuario: Usuario) => {
+      // Se for paciente, buscar o responsavel_cobranca_id diretamente da tabela pessoas
+      let responsavelCobrancaId = usuario.responsavel_cobranca_id;
+
+      if (usuario.tipo_pessoa_codigo === 'paciente') {
+        const { data: pessoaData } = await supabase
+          .from('pessoas')
+          .select('responsavel_cobranca_id')
+          .eq('id', usuario.id)
+          .maybeSingle();
+
+        if (pessoaData) {
+          responsavelCobrancaId = pessoaData.responsavel_cobranca_id;
+        }
+      }
+
+      setEditingUser({
+        ...usuario,
+        responsavel_cobranca_id: responsavelCobrancaId,
+      });
       form.reset({
         nome: usuario.nome || '',
         email: usuario.email || '',
@@ -174,9 +194,6 @@ export const UserManagement = React.memo<UserManagementProps>(
       });
 
       setShowEditModal(true);
-
-      // Verificar se o estado mudou após um pequeno delay
-      setTimeout(() => {}, 100);
     };
 
     const handleUpdateUser = async (data: UsuarioUpdate) => {
@@ -757,6 +774,29 @@ export const UserManagement = React.memo<UserManagementProps>(
                     </CardHeader>
                     <CardContent>
                       <ResponsibleSelect personId={editingUser?.id} />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Responsável pela Cobrança (só para pacientes) */}
+                {editingUser?.tipo_pessoa_codigo === 'paciente' && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">
+                        Responsável pela Cobrança
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <BillingResponsibleSelect
+                        personId={editingUser?.id}
+                        currentBillingResponsibleId={
+                          editingUser?.responsavel_cobranca_id || undefined
+                        }
+                        onBillingResponsibleChange={() => {
+                          // Recarregar dados após mudança
+                          loadData();
+                        }}
+                      />
                     </CardContent>
                   </Card>
                 )}

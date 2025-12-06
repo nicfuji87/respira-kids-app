@@ -62,6 +62,7 @@ export interface Usuario {
 
   // Campos de responsáveis
   responsavel_legal_nome?: string | null;
+  responsavel_cobranca_id?: string | null;
 
   // AI dev note: Campos de status de pagamento
   total_consultas_pagamento?: number;

@@ -1,11 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import {
-  CreditCard,
-  Loader2,
-  AlertCircle,
-  User,
-  AlertTriangle,
-} from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Select,
   SelectContent,
@@ -13,309 +6,1382 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
-import { Alert, AlertDescription } from '@/components/primitives/alert';
+import { Button } from '@/components/primitives/button';
+import { Input } from '@/components/primitives/input';
+import { Label } from '@/components/primitives/label';
+import { Badge } from '@/components/primitives/badge';
+import { PhoneInput } from '@/components/primitives/PhoneInput';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/primitives/dialog';
+import {
+  UserPlus,
+  Check,
+  AlertTriangle,
+  Loader2,
+  DollarSign,
+  Database,
+  Globe,
+  Search,
+  Users,
+  Trash2,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  fetchPatientResponsibles,
-  updateBillingResponsible,
-} from '@/lib/patient-api';
-import {
-  validateResponsibleForAsaas,
-  type AsaasValidationResult,
-} from '@/lib/asaas-validation';
 import { supabase } from '@/lib/supabase';
+import { toast } from '@/components/primitives/use-toast';
+import {
+  validateWhatsAppOnly,
+  findPersonByCpf,
+  findPersonByPhone,
+} from '@/lib/financial-responsible-api';
+import {
+  fetchAddressByCep,
+  type EnderecoViaCepDataExtended,
+} from '@/lib/enderecos-api';
 
-// AI dev note: BillingResponsibleSelect - Composed component que reutiliza Select primitive
-// Lista paciente + responsáveis ativos, permite admin/secretaria alterar responsável cobrança
+// AI dev note: BillingResponsibleSelect - Componente para gerenciar responsável pela cobrança (responsavel_cobranca_id)
+// Mostra apenas responsáveis já associados ao paciente no dropdown
+// Permite buscar outro responsável já cadastrado via modal de busca
+// Permite cadastrar nova pessoa como responsável financeiro
 
-interface BillingResponsibleSelectProps {
-  patientId: string;
-  currentResponsibleId?: string;
-  currentResponsibleName?: string;
-  userRole?: 'admin' | 'profissional' | 'secretaria' | null;
-  onUpdate?: (responsibleId: string, responsibleName: string) => void;
-  disabled?: boolean;
+export interface BillingResponsibleSelectProps {
+  personId?: string; // ID do paciente (alias para patientId)
+  patientId?: string; // ID do paciente para qual estamos gerenciando o responsável de cobrança
+  currentBillingResponsibleId?: string; // ID do responsável atual (alias para currentResponsibleId)
+  currentResponsibleId?: string; // ID do responsável atual
+  currentResponsibleName?: string; // Nome do responsável atual (para exibição)
   className?: string;
+  userRole?: string; // Role do usuário (não usado no componente, mas aceito para compatibilidade)
+  onBillingResponsibleChange?: (responsibleId: string | null) => void;
+  onUpdate?: () => void; // Callback após atualização (alias para onBillingResponsibleChange)
 }
 
-interface ResponsibleOption {
+interface Pessoa {
   id: string;
   nome: string;
-  ativo: boolean;
+  email: string | null;
+  telefone: bigint | null;
+  cpf_cnpj: string | null;
+  tipo_pessoa_nome: string | null;
 }
 
-export const BillingResponsibleSelect =
-  React.memo<BillingResponsibleSelectProps>(
-    ({
-      patientId,
-      currentResponsibleId,
-      currentResponsibleName,
-      userRole,
-      onUpdate,
-      disabled = false,
-      className,
-    }) => {
-      const [responsibles, setResponsibles] = useState<ResponsibleOption[]>([]);
-      const [loading, setLoading] = useState(true);
-      const [updating, setUpdating] = useState(false);
-      const [error, setError] = useState<string | null>(null);
-      const [asaasValidation, setAsaasValidation] =
-        useState<AsaasValidationResult | null>(null);
-      const [validatingAsaas, setValidatingAsaas] = useState(false);
+interface ResponsavelAssociado {
+  id: string;
+  id_responsavel: string;
+  nome: string;
+  email: string | null;
+  tipo_responsabilidade: 'legal' | 'financeiro' | 'ambos';
+  // Dados de endereço
+  cep: string | null;
+  logradouro: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  numero_endereco: string | null;
+  complemento_endereco: string | null;
+}
 
-      // Verificar se usuário pode editar
-      const canEdit = userRole === 'admin' || userRole === 'secretaria';
+export const BillingResponsibleSelect: React.FC<
+  BillingResponsibleSelectProps
+> = ({
+  personId,
+  patientId,
+  currentBillingResponsibleId,
+  currentResponsibleId,
+  // currentResponsibleName não está sendo usado atualmente
+  className,
+  onBillingResponsibleChange,
+  onUpdate,
+}) => {
+  // AI dev note: Aceitar tanto personId quanto patientId para compatibilidade
+  const effectivePatientId = patientId || personId;
+  const effectiveResponsibleId =
+    currentResponsibleId || currentBillingResponsibleId;
 
-      // Carregar responsáveis do paciente
-      useEffect(() => {
-        const loadResponsibles = async () => {
-          setLoading(true);
-          setError(null);
+  // Wrapper para callbacks - onUpdate não recebe parâmetros, onBillingResponsibleChange recebe
+  const triggerCallback = useCallback(
+    (responsibleId?: string | null) => {
+      onUpdate?.();
+      onBillingResponsibleChange?.(responsibleId || null);
+    },
+    [onUpdate, onBillingResponsibleChange]
+  );
 
-          try {
-            const { responsibles: data, error: apiError } =
-              await fetchPatientResponsibles(patientId);
+  // Responsáveis já associados ao paciente
+  const [responsaveisAssociados, setResponsaveisAssociados] = useState<
+    ResponsavelAssociado[]
+  >([]);
+  const [selectedResponsibleId, setSelectedResponsibleId] = useState<
+    string | null
+  >(effectiveResponsibleId || null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-            if (apiError) {
-              setError(apiError);
-              return;
-            }
+  // Modal de busca de responsável existente
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<Pessoa[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-            setResponsibles(data);
-          } catch (err) {
-            setError('Erro ao carregar responsáveis');
-            console.error('Erro ao carregar responsáveis:', err);
-          } finally {
-            setLoading(false);
-          }
-        };
+  // Modal de criar novo responsável
+  const [showAddModal, setShowAddModal] = useState(false);
 
-        if (patientId) {
-          loadResponsibles();
-        }
-      }, [patientId]);
+  // Estados do formulário de novo responsável
+  const [phone, setPhone] = useState('');
+  const [nome, setNome] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [email, setEmail] = useState('');
+  const [cep, setCep] = useState('');
+  const [logradouro, setLogradouro] = useState('');
+  const [numero, setNumero] = useState('');
+  const [complemento, setComplemento] = useState('');
+  const [bairro, setBairro] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [estado, setEstado] = useState('');
 
-      // AI dev note: Validar dados ASAAS do responsável selecionado em tempo real
-      useEffect(() => {
-        const validateCurrentResponsible = async () => {
-          if (!currentResponsibleId) {
-            setAsaasValidation(null);
-            return;
-          }
+  // Estados de validação
+  const [isValidatingPhone, setIsValidatingPhone] = useState(false);
+  const [phoneValid, setPhoneValid] = useState(false);
+  const [validatedJid, setValidatedJid] = useState<string | null>(null); // AI dev note: JID completo retornado pela validação do WhatsApp
+  const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [cepFound, setCepFound] = useState(false);
+  const [cepSource, setCepSource] = useState<'supabase' | 'viacep' | null>(
+    null
+  );
+  const [existingPersonId, setExistingPersonId] = useState<string>();
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [creatingPerson, setCreatingPerson] = useState(false);
 
-          setValidatingAsaas(true);
+  // Estado para usar endereço de responsável existente
+  const [useExistingAddress, setUseExistingAddress] = useState<string | null>(
+    null
+  );
 
-          try {
-            // Buscar dados completos do responsável via vw_usuarios_admin
-            const { data: responsibleData, error: responsibleError } =
-              await supabase
-                .from('vw_usuarios_admin')
-                .select('nome, cpf_cnpj, email, telefone, cep, numero_endereco')
-                .eq('id', currentResponsibleId)
-                .single();
+  // Estado para controlar remoção de responsável
+  const [removingResponsibleId, setRemovingResponsibleId] = useState<
+    string | null
+  >(null);
 
-            if (responsibleError || !responsibleData) {
-              console.error(
-                '❌ Erro ao buscar dados do responsável:',
-                responsibleError
-              );
-              setAsaasValidation(null);
-              return;
-            }
+  // Buscar responsáveis associados ao paciente
+  const fetchResponsaveisAssociados = useCallback(async () => {
+    if (!effectivePatientId) {
+      setLoading(false);
+      return;
+    }
 
-            // Validar dados para ASAAS
-            const validation = validateResponsibleForAsaas({
-              nome: responsibleData.nome,
-              cpf_cnpj: responsibleData.cpf_cnpj,
-              email: responsibleData.email,
-              telefone: responsibleData.telefone,
-              cep: responsibleData.cep,
-              numero_endereco: responsibleData.numero_endereco,
-            });
+    try {
+      // Buscar responsáveis já associados ao paciente com dados de endereço
+      const { data: respData, error: respError } = await supabase
+        .from('pessoa_responsaveis')
+        .select(
+          `
+          id,
+          id_responsavel,
+          tipo_responsabilidade,
+          responsavel:pessoas!pessoa_responsaveis_id_responsavel_fkey(
+            id, 
+            nome, 
+            email,
+            numero_endereco,
+            complemento_endereco,
+            endereco:enderecos!pessoas_id_endereco_fkey(
+              cep,
+              logradouro,
+              bairro,
+              cidade,
+              estado
+            )
+          )
+        `
+        )
+        .eq('id_pessoa', effectivePatientId)
+        .eq('ativo', true);
 
-            setAsaasValidation(validation);
-          } catch (err) {
-            console.error('❌ Erro ao validar responsável:', err);
-            setAsaasValidation(null);
-          } finally {
-            setValidatingAsaas(false);
-          }
-        };
-
-        validateCurrentResponsible();
-      }, [currentResponsibleId]);
-
-      // Atualizar responsável pela cobrança
-      const handleResponsibleChange = async (responsibleId: string) => {
-        const responsible = responsibles.find((r) => r.id === responsibleId);
-        if (!responsible) return;
-
-        setUpdating(true);
-        setError(null);
-
-        try {
-          const { success, error: apiError } = await updateBillingResponsible(
-            patientId,
-            responsibleId,
-            userRole
-          );
-
-          if (!success) {
-            setError(apiError || 'Erro ao atualizar responsável');
-            return;
-          }
-
-          // Notificar atualização
-          onUpdate?.(responsible.id, responsible.nome);
-        } catch (err) {
-          setError('Erro ao atualizar responsável');
-          console.error('Erro ao atualizar responsável:', err);
-        } finally {
-          setUpdating(false);
-        }
-      };
-
-      // Renderizar estado de loading
-      if (loading) {
-        return (
-          <div
-            className={cn(
-              'flex items-center gap-2 text-sm text-muted-foreground',
-              className
-            )}
-          >
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Carregando responsáveis...</span>
-          </div>
-        );
+      if (respError) {
+        console.error('Erro ao carregar responsáveis associados:', respError);
+      } else {
+        const responsaveisFormatados = (respData || []).map((resp) => {
+          const responsavel = resp.responsavel as unknown as {
+            id: string;
+            nome: string;
+            email: string | null;
+            numero_endereco: string | null;
+            complemento_endereco: string | null;
+            endereco: {
+              cep: string;
+              logradouro: string;
+              bairro: string;
+              cidade: string;
+              estado: string;
+            } | null;
+          };
+          return {
+            id: resp.id,
+            id_responsavel: resp.id_responsavel,
+            nome: responsavel?.nome || 'Nome não encontrado',
+            email: responsavel?.email || null,
+            tipo_responsabilidade: resp.tipo_responsabilidade as
+              | 'legal'
+              | 'financeiro'
+              | 'ambos',
+            cep: responsavel?.endereco?.cep || null,
+            logradouro: responsavel?.endereco?.logradouro || null,
+            bairro: responsavel?.endereco?.bairro || null,
+            cidade: responsavel?.endereco?.cidade || null,
+            estado: responsavel?.endereco?.estado || null,
+            numero_endereco: responsavel?.numero_endereco || null,
+            complemento_endereco: responsavel?.complemento_endereco || null,
+          };
+        });
+        setResponsaveisAssociados(responsaveisFormatados);
       }
 
-      // Renderizar erro
+      // Buscar dados do responsável atual
+      if (effectiveResponsibleId) {
+        const { data: responsibleData, error: responsibleError } =
+          await supabase
+            .from('vw_usuarios_admin')
+            .select('id, nome, email, telefone, cpf_cnpj, tipo_pessoa_nome')
+            .eq('id', effectiveResponsibleId)
+            .maybeSingle();
+
+        if (!responsibleError && responsibleData) {
+          setSelectedResponsibleId(responsibleData.id);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [effectivePatientId, effectiveResponsibleId]);
+
+  useEffect(() => {
+    fetchResponsaveisAssociados();
+  }, [fetchResponsaveisAssociados]);
+
+  // Buscar pessoas por nome (para modal de busca)
+  const handleSearchPessoas = useCallback(async () => {
+    if (searchTerm.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('vw_usuarios_admin')
+        .select('id, nome, email, telefone, cpf_cnpj, tipo_pessoa_nome')
+        .ilike('nome', `%${searchTerm}%`)
+        .order('nome')
+        .limit(20);
+
       if (error) {
-        return (
-          <Alert className={cn('border-red-200', className)}>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-sm">{error}</AlertDescription>
-          </Alert>
+        console.error('Erro ao buscar pessoas:', error);
+        setSearchResults([]);
+      } else {
+        setSearchResults(data || []);
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchTerm]);
+
+  // Debounce para busca
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchTerm.length >= 3) {
+        handleSearchPessoas();
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, handleSearchPessoas]);
+
+  // Preencher endereço quando selecionar usar endereço de responsável existente
+  useEffect(() => {
+    if (useExistingAddress) {
+      const responsavel = responsaveisAssociados.find(
+        (r) => r.id_responsavel === useExistingAddress
+      );
+      if (responsavel && responsavel.cep) {
+        setCep(responsavel.cep);
+        setLogradouro(responsavel.logradouro || '');
+        setBairro(responsavel.bairro || '');
+        setCidade(responsavel.cidade || '');
+        setEstado(responsavel.estado || '');
+        setNumero(responsavel.numero_endereco || '');
+        setComplemento(responsavel.complemento_endereco || '');
+        setCepFound(true);
+        setCepSource('supabase');
+      }
+    } else {
+      // Limpar campos de endereço quando desmarcar
+      setCep('');
+      setLogradouro('');
+      setBairro('');
+      setCidade('');
+      setEstado('');
+      setNumero('');
+      setComplemento('');
+      setCepFound(false);
+      setCepSource(null);
+    }
+  }, [useExistingAddress, responsaveisAssociados]);
+
+  // Validar telefone (WhatsApp)
+  useEffect(() => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 11) {
+      setPhoneValid(false);
+      setValidatedJid(null);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setIsValidatingPhone(true);
+
+      try {
+        const result = await validateWhatsAppOnly(phone);
+        setPhoneValid(result.exists);
+
+        if (!result.exists) {
+          setErrors((prev) => ({ ...prev, phone: 'WhatsApp inválido' }));
+          setValidatedJid(null);
+        } else {
+          setErrors((prev) => ({ ...prev, phone: '' }));
+
+          // AI dev note: Salvar o JID completo retornado pela API do WhatsApp
+          // O JID é o número antes do @ (ex: 5511999999999)
+          if (result.jid) {
+            // Remover o @s.whatsapp.net ou qualquer sufixo se existir
+            const jidNumber = result.jid.split('@')[0];
+            setValidatedJid(jidNumber);
+            console.log('📱 JID validado:', jidNumber);
+          }
+
+          // Buscar se pessoa já existe por telefone
+          const existingPerson = await findPersonByPhone(cleanPhone);
+          if (existingPerson) {
+            setExistingPersonId(existingPerson.id);
+            setNome(existingPerson.nome);
+            setCpf(existingPerson.cpf_cnpj || '');
+            setEmail(existingPerson.email || '');
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao validar WhatsApp:', error);
+        setErrors((prev) => ({ ...prev, phone: 'Erro ao validar' }));
+        setValidatedJid(null);
+      } finally {
+        setIsValidatingPhone(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(timeoutId);
+  }, [phone]);
+
+  // Buscar pessoa por CPF
+  useEffect(() => {
+    const cleanCpf = cpf.replace(/\D/g, '');
+    if (cleanCpf.length !== 11) return;
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const existingPerson = await findPersonByCpf(cleanCpf);
+        if (existingPerson) {
+          setExistingPersonId(existingPerson.id);
+          setNome(existingPerson.nome);
+          setEmail(existingPerson.email || '');
+          setPhone(
+            existingPerson.telefone ? existingPerson.telefone.toString() : ''
+          );
+        }
+      } catch (error) {
+        console.error('Erro ao buscar por CPF:', error);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [cpf]);
+
+  // Handler para buscar CEP
+  const handleSearchCep = useCallback(async () => {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return;
+
+    setIsSearchingCep(true);
+    setErrors((prev) => ({ ...prev, cep: '' }));
+
+    try {
+      const result = await fetchAddressByCep(cep);
+
+      if (result.success && result.data) {
+        const addressData: EnderecoViaCepDataExtended = result.data;
+        setLogradouro(addressData.logradouro);
+        setBairro(addressData.bairro);
+        setCidade(addressData.cidade);
+        setEstado(addressData.estado);
+        setCepFound(true);
+        setCepSource(addressData.source);
+      } else {
+        setErrors((prev) => ({ ...prev, cep: 'CEP não encontrado' }));
+        setCepFound(false);
+        setCepSource(null);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+      setErrors((prev) => ({ ...prev, cep: 'Erro ao buscar CEP' }));
+      setCepFound(false);
+      setCepSource(null);
+    } finally {
+      setIsSearchingCep(false);
+    }
+  }, [cep]);
+
+  // Auto-buscar CEP quando completo
+  useEffect(() => {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length === 8) {
+      handleSearchCep();
+    }
+  }, [cep, handleSearchCep]);
+
+  // Validar formulário
+  const validateForm = useCallback((): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!phoneValid) newErrors.phone = 'Telefone WhatsApp válido é obrigatório';
+    if (!nome.trim()) newErrors.nome = 'Nome é obrigatório';
+    if (cpf.replace(/\D/g, '').length !== 11) newErrors.cpf = 'CPF inválido';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const hasSpecialChars = /[àáâãäåèéêëìíîïòóôõöùúûü]/i.test(email);
+
+    if (!emailRegex.test(email)) {
+      newErrors.email = 'E-mail inválido';
+    } else if (hasSpecialChars) {
+      newErrors.email =
+        'E-mail não pode conter caracteres especiais (ã, ç, é, etc)';
+    }
+
+    if (cep.replace(/\D/g, '').length !== 8) newErrors.cep = 'CEP inválido';
+    if (!logradouro.trim()) newErrors.logradouro = 'Logradouro é obrigatório';
+    if (!numero.trim()) newErrors.numero = 'Número é obrigatório';
+    if (!bairro.trim()) newErrors.bairro = 'Bairro é obrigatório';
+    if (!cidade.trim()) newErrors.cidade = 'Cidade é obrigatória';
+    if (!estado.trim()) newErrors.estado = 'Estado é obrigatório';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [
+    phoneValid,
+    nome,
+    cpf,
+    email,
+    cep,
+    logradouro,
+    numero,
+    bairro,
+    cidade,
+    estado,
+  ]);
+
+  // Handler para selecionar responsável do dropdown (associados)
+  const handleSelectResponsible = async (responsibleId: string) => {
+    if (!effectivePatientId) return;
+
+    // Valor especial para abrir modal de busca
+    if (responsibleId === '__SEARCH_OTHER__') {
+      setShowSearchModal(true);
+      return;
+    }
+
+    // Valor especial para abrir modal de cadastro
+    if (responsibleId === '__ADD_NEW__') {
+      setShowAddModal(true);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('pessoas')
+        .update({ responsavel_cobranca_id: responsibleId })
+        .eq('id', effectivePatientId);
+
+      if (error) {
+        console.error('Erro ao atualizar responsável:', error);
+        toast({
+          title: 'Erro ao atualizar responsável',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      toast({
+        title: 'Responsável pela cobrança atualizado',
+      });
+
+      setSelectedResponsibleId(responsibleId);
+      triggerCallback(responsibleId);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handler para selecionar pessoa do modal de busca
+  const handleSelectFromSearch = async (pessoa: Pessoa) => {
+    if (!effectivePatientId) return;
+
+    setSaving(true);
+    try {
+      // Primeiro, verificar se já existe associação
+      const { data: existingAssoc } = await supabase
+        .from('pessoa_responsaveis')
+        .select('id')
+        .eq('id_pessoa', effectivePatientId)
+        .eq('id_responsavel', pessoa.id)
+        .eq('ativo', true)
+        .maybeSingle();
+
+      // Se não existir, criar associação como financeiro
+      if (!existingAssoc) {
+        await supabase.from('pessoa_responsaveis').insert({
+          id_pessoa: effectivePatientId,
+          id_responsavel: pessoa.id,
+          tipo_responsabilidade: 'financeiro',
+          ativo: true,
+        });
+      }
+
+      // Atualizar responsável de cobrança
+      const { error } = await supabase
+        .from('pessoas')
+        .update({ responsavel_cobranca_id: pessoa.id })
+        .eq('id', effectivePatientId);
+
+      if (error) {
+        console.error('Erro ao atualizar responsável:', error);
+        toast({
+          title: 'Erro ao atualizar responsável',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      toast({
+        title: 'Responsável pela cobrança atualizado',
+        description: `${pessoa.nome} foi definido como responsável pela cobrança`,
+      });
+
+      setSelectedResponsibleId(pessoa.id);
+      setShowSearchModal(false);
+      setSearchTerm('');
+      setSearchResults([]);
+
+      // Recarregar responsáveis associados
+      await fetchResponsaveisAssociados();
+
+      triggerCallback(pessoa.id);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // AI dev note: Função para desassociar um responsável do paciente (soft delete via ativo = false)
+  // AI dev note: A tabela pessoa_responsaveis usa id_pessoa (não id_paciente) para referenciar o paciente
+  const handleRemoveResponsible = async (responsibleId: string) => {
+    if (!effectivePatientId) return;
+
+    setRemovingResponsibleId(responsibleId);
+    try {
+      // Desativar a associação (soft delete)
+      const { error } = await supabase
+        .from('pessoa_responsaveis')
+        .update({ ativo: false })
+        .eq('id_pessoa', effectivePatientId)
+        .eq('id_responsavel', responsibleId);
+
+      if (error) {
+        console.error('Erro ao desassociar responsável:', error);
+        toast({
+          title: 'Erro ao desassociar responsável',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Se o responsável removido era o responsável de cobrança, limpar essa referência
+      if (selectedResponsibleId === responsibleId) {
+        const { error: updateError } = await supabase
+          .from('pessoas')
+          .update({ responsavel_cobranca_id: null })
+          .eq('id', effectivePatientId);
+
+        if (updateError) {
+          console.error('Erro ao limpar responsável de cobrança:', updateError);
+        }
+
+        setSelectedResponsibleId(null);
+        triggerCallback(null);
+      }
+
+      toast({
+        title: 'Responsável desassociado',
+        description: 'O responsável foi removido da lista do paciente',
+      });
+
+      // Recarregar responsáveis associados
+      await fetchResponsaveisAssociados();
+    } finally {
+      setRemovingResponsibleId(null);
+    }
+  };
+
+  // Handler para criar nova pessoa e definir como responsável
+  const handleCreateAndSetResponsible = async () => {
+    if (!effectivePatientId || !validateForm()) return;
+
+    // Se pessoa já existe, apenas vincular
+    if (existingPersonId) {
+      const pessoa: Pessoa = {
+        id: existingPersonId,
+        nome: nome.trim(),
+        email: email.trim(),
+        telefone: null,
+        cpf_cnpj: cpf.replace(/\D/g, ''),
+        tipo_pessoa_nome: null,
+      };
+      await handleSelectFromSearch(pessoa);
+      resetForm();
+      setShowAddModal(false);
+      return;
+    }
+
+    setCreatingPerson(true);
+    try {
+      // 1. Buscar tipo pessoa "responsavel"
+      const { data: tipoPessoa, error: tipoPessoaError } = await supabase
+        .from('pessoa_tipos')
+        .select('id')
+        .eq('codigo', 'responsavel')
+        .maybeSingle();
+
+      if (tipoPessoaError || !tipoPessoa) {
+        throw new Error('Tipo de pessoa "responsavel" não encontrado');
+      }
+
+      // 2. Criar ou buscar endereço
+      const cleanCep = cep.replace(/\D/g, '');
+      let enderecoId: string;
+
+      // Verificar se CEP já existe
+      const { data: existingEndereco } = await supabase
+        .from('enderecos')
+        .select('id')
+        .eq('cep', cleanCep)
+        .maybeSingle();
+
+      if (existingEndereco) {
+        enderecoId = existingEndereco.id;
+      } else {
+        // Criar novo endereço
+        const { data: newEndereco, error: enderecoError } = await supabase
+          .from('enderecos')
+          .insert({
+            cep: cleanCep,
+            logradouro,
+            bairro,
+            cidade,
+            estado,
+          })
+          .select('id')
+          .single();
+
+        if (enderecoError) {
+          throw new Error(`Erro ao criar endereço: ${enderecoError.message}`);
+        }
+        enderecoId = newEndereco.id;
+      }
+
+      // 3. Criar nova pessoa
+      // AI dev note: Usar o JID completo retornado pela validação do WhatsApp
+      // O JID já vem no formato correto (ex: 5511999999999) da API
+      if (!validatedJid) {
+        throw new Error(
+          'JID do WhatsApp não disponível. Por favor, aguarde a validação do telefone.'
         );
       }
 
-      // Renderizar apenas visualização para profissional
-      if (!canEdit) {
-        return (
-          <div className={cn('flex items-start gap-3', className)}>
-            <CreditCard className="h-4 w-4 text-muted-foreground mt-1" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Responsável pela Cobrança</p>
-              <p className="text-sm text-muted-foreground">
-                {currentResponsibleName || 'Não definido'}
-              </p>
-            </div>
-          </div>
-        );
+      // AI dev note: Gerar UUID antes para poder definir responsavel_cobranca_id como self-reference
+      // Responsáveis apontam para si mesmos como responsável de cobrança
+      const newPersonId = crypto.randomUUID();
+
+      const { data: novaPessoa, error: pessoaError } = await supabase
+        .from('pessoas')
+        .insert({
+          id: newPersonId,
+          nome: nome.trim(),
+          cpf_cnpj: cpf.replace(/\D/g, ''),
+          email: email.trim(),
+          telefone: validatedJid,
+          id_tipo_pessoa: tipoPessoa.id,
+          id_endereco: enderecoId,
+          numero_endereco: numero,
+          complemento_endereco: complemento || null,
+          ativo: true,
+          is_approved: true,
+          responsavel_cobranca_id: newPersonId, // Self-reference: responsável é seu próprio responsável de cobrança
+        })
+        .select('id')
+        .single();
+
+      if (pessoaError) {
+        throw new Error(`Erro ao criar pessoa: ${pessoaError.message}`);
       }
 
-      // Renderizar select editável
-      return (
-        <div className={cn('space-y-2', className)}>
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-            <label className="text-sm font-medium">
-              Responsável pela Cobrança
-            </label>
-          </div>
+      // 4. Atualizar o paciente com o novo responsável de cobrança
+      const { error: updateError } = await supabase
+        .from('pessoas')
+        .update({ responsavel_cobranca_id: novaPessoa.id })
+        .eq('id', effectivePatientId);
 
-          <Select
-            value={currentResponsibleId || ''}
-            onValueChange={handleResponsibleChange}
-            disabled={disabled || updating || responsibles.length === 0}
-          >
-            <SelectTrigger className="w-full">
-              {updating ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Atualizando...</span>
-                </div>
-              ) : (
-                <SelectValue placeholder="Selecione o responsável pela cobrança" />
-              )}
-            </SelectTrigger>
+      if (updateError) {
+        throw new Error(`Erro ao vincular responsável: ${updateError.message}`);
+      }
 
-            <SelectContent>
-              {responsibles.map((responsible) => (
-                <SelectItem key={responsible.id} value={responsible.id}>
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    <span>{responsible.nome}</span>
-                    {responsible.id === patientId && (
-                      <span className="text-xs text-muted-foreground">
-                        (Próprio paciente)
-                      </span>
+      // 5. Também adicionar como responsável financeiro na tabela pessoa_responsaveis
+      await supabase.from('pessoa_responsaveis').insert({
+        id_pessoa: effectivePatientId,
+        id_responsavel: novaPessoa.id,
+        tipo_responsabilidade: 'financeiro',
+        ativo: true,
+      });
+
+      toast({
+        title: 'Responsável pela cobrança criado e vinculado',
+        description: `${nome.trim()} foi cadastrado como responsável financeiro`,
+      });
+
+      // Atualizar lista e estado
+      await fetchResponsaveisAssociados();
+      setSelectedResponsibleId(novaPessoa.id);
+      triggerCallback(novaPessoa.id);
+      resetForm();
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Erro ao criar responsável:', error);
+      toast({
+        title: 'Erro ao criar responsável',
+        description:
+          error instanceof Error ? error.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
+    } finally {
+      setCreatingPerson(false);
+    }
+  };
+
+  // Limpar formulário
+  const resetForm = () => {
+    setPhone('');
+    setNome('');
+    setCpf('');
+    setEmail('');
+    setCep('');
+    setLogradouro('');
+    setNumero('');
+    setComplemento('');
+    setBairro('');
+    setCidade('');
+    setEstado('');
+    setPhoneValid(false);
+    setValidatedJid(null);
+    setCepFound(false);
+    setCepSource(null);
+    setExistingPersonId(undefined);
+    setErrors({});
+    setUseExistingAddress(null);
+  };
+
+  if (!effectivePatientId) {
+    return (
+      <div className={cn('space-y-2', className)}>
+        <Label>Responsável pela Cobrança</Label>
+        <p className="text-sm text-muted-foreground">
+          Carregando dados do paciente...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('space-y-4', className)}>
+      <Label className="flex items-center gap-2">
+        <DollarSign className="h-4 w-4" />
+        Responsável pela Cobrança
+      </Label>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Carregando...</p>
+      ) : (
+        <div className="space-y-3">
+          {/* Lista de responsáveis associados com botão de excluir */}
+          {responsaveisAssociados.length > 0 && (
+            <div className="space-y-2">
+              {responsaveisAssociados.map((resp) => (
+                <div
+                  key={resp.id_responsavel}
+                  className={cn(
+                    'flex items-center justify-between p-3 border rounded-lg',
+                    selectedResponsibleId === resp.id_responsavel
+                      ? 'bg-primary/5 border-primary/30'
+                      : 'bg-muted/30'
+                  )}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{resp.nome}</p>
+                      {resp.email && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {resp.email}
+                        </p>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      {resp.tipo_responsabilidade === 'legal'
+                        ? 'Legal'
+                        : resp.tipo_responsabilidade === 'financeiro'
+                          ? 'Financeiro'
+                          : 'Legal e Financeiro'}
+                    </Badge>
+                    {selectedResponsibleId === resp.id_responsavel && (
+                      <Badge variant="default" className="text-xs shrink-0">
+                        <DollarSign className="h-3 w-3 mr-1" />
+                        Cobrança
+                      </Badge>
                     )}
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* AI dev note: Aviso de dados incompletos para ASAAS */}
-          {asaasValidation && !asaasValidation.isValid && !validatingAsaas && (
-            <Alert variant="destructive" className="mt-2">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <div className="space-y-2">
-                  <p className="font-semibold text-sm">
-                    ⚠️ Não é possível gerar cobrança para este responsável
-                  </p>
-
-                  {asaasValidation.missingFields.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium">
-                        Campos obrigatórios faltando:
-                      </p>
-                      <ul className="text-xs list-disc list-inside ml-2 mt-1">
-                        {asaasValidation.missingFields.map((field) => (
-                          <li key={field}>{field}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {asaasValidation.warnings.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium">Avisos:</p>
-                      <ul className="text-xs list-disc list-inside ml-2 mt-1">
-                        {asaasValidation.warnings.map((warning) => (
-                          <li key={warning}>{warning}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  <p className="text-xs mt-2 opacity-90">
-                    Complete o cadastro do responsável antes de gerar cobranças.
-                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => handleRemoveResponsible(resp.id_responsavel)}
+                    disabled={removingResponsibleId === resp.id_responsavel}
+                    title="Desassociar responsável"
+                  >
+                    {removingResponsibleId === resp.id_responsavel ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Loading da validação ASAAS */}
-          {validatingAsaas && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>Validando dados para cobrança...</span>
+              ))}
             </div>
           )}
 
-          {responsibles.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              Nenhum responsável encontrado para este paciente
-            </p>
-          )}
+          {/* Select unificado com todas as opções */}
+          <Select
+            value={selectedResponsibleId || ''}
+            onValueChange={handleSelectResponsible}
+            disabled={saving}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione ou adicione um responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              {/* Responsáveis já associados */}
+              {responsaveisAssociados
+                .filter((resp) => resp.id_responsavel) // AI dev note: Filtrar responsáveis sem ID válido para evitar erro do Radix Select
+                .map((resp) => (
+                  <SelectItem
+                    key={resp.id_responsavel}
+                    value={resp.id_responsavel}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{resp.nome}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {resp.tipo_responsabilidade === 'legal'
+                          ? 'Legal'
+                          : resp.tipo_responsabilidade === 'financeiro'
+                            ? 'Financeiro'
+                            : 'Legal e Financeiro'}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                ))}
+
+              {/* Separador - usando div em vez de SelectItem para evitar problemas */}
+              {responsaveisAssociados.filter((r) => r.id_responsavel).length >
+                0 && (
+                <div className="border-t my-1 px-2 py-1">
+                  <span className="text-muted-foreground text-xs">
+                    Outras opções
+                  </span>
+                </div>
+              )}
+
+              {/* Opção de buscar outro já cadastrado */}
+              <SelectItem value="__SEARCH_OTHER__">
+                <div className="flex items-center gap-2 text-primary">
+                  <Search className="h-4 w-4" />
+                  <span>Buscar outro já cadastrado</span>
+                </div>
+              </SelectItem>
+
+              {/* Opção de cadastrar novo */}
+              <SelectItem value="__ADD_NEW__">
+                <div className="flex items-center gap-2 text-primary">
+                  <UserPlus className="h-4 w-4" />
+                  <span>Cadastrar novo responsável</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      );
-    }
+      )}
+
+      {/* Modal de busca de responsável existente */}
+      <Dialog open={showSearchModal} onOpenChange={setShowSearchModal}>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Buscar Responsável
+            </DialogTitle>
+            <DialogDescription>
+              Digite o nome do responsável para buscar no sistema
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Campo de busca */}
+            <div className="space-y-2">
+              <Label htmlFor="search">Nome do responsável</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="search"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Digite pelo menos 3 caracteres..."
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            {/* Resultados da busca */}
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {isSearching && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    Buscando...
+                  </span>
+                </div>
+              )}
+
+              {!isSearching &&
+                searchTerm.length >= 3 &&
+                searchResults.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum resultado encontrado
+                  </p>
+                )}
+
+              {!isSearching &&
+                searchResults.map((pessoa) => (
+                  <button
+                    key={pessoa.id}
+                    onClick={() => handleSelectFromSearch(pessoa)}
+                    disabled={saving}
+                    className="w-full p-3 border rounded-lg hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <p className="font-medium">{pessoa.nome}</p>
+                    {pessoa.email && (
+                      <p className="text-xs text-muted-foreground">
+                        {pessoa.email}
+                      </p>
+                    )}
+                    {pessoa.cpf_cnpj && (
+                      <p className="text-xs text-muted-foreground">
+                        CPF:{' '}
+                        {pessoa.cpf_cnpj.replace(
+                          /(\d{3})(\d{3})(\d{3})(\d{2})/,
+                          '$1.$2.$3-$4'
+                        )}
+                      </p>
+                    )}
+                  </button>
+                ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowSearchModal(false);
+                setSearchTerm('');
+                setSearchResults([]);
+              }}
+            >
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para cadastrar novo responsável */}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Cadastrar Novo Responsável pela Cobrança
+            </DialogTitle>
+            <DialogDescription>
+              Cadastre uma nova pessoa para ser responsável pela cobrança
+              (faturamento e NFe)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Alerta se pessoa existe */}
+            {existingPersonId && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-green-600">
+                  <Check className="h-4 w-4" />
+                  <span>
+                    Pessoa já cadastrada no sistema. Clique em "Vincular" para
+                    usar esta pessoa.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Telefone */}
+            <div className="space-y-2">
+              <Label htmlFor="phone">WhatsApp *</Label>
+              <PhoneInput
+                value={phone}
+                onChange={setPhone}
+                placeholder="(00) 00000-0000"
+                disabled={isValidatingPhone}
+              />
+              {isValidatingPhone && (
+                <p className="text-xs text-muted-foreground animate-pulse">
+                  Validando...
+                </p>
+              )}
+              {phoneValid && (
+                <div className="flex items-center gap-2 text-xs text-green-600">
+                  <Check className="h-3 w-3" />
+                  <span>WhatsApp válido</span>
+                </div>
+              )}
+              {errors.phone && (
+                <div className="flex items-center gap-2 text-xs text-destructive">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>{errors.phone}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Nome */}
+            <div className="space-y-2">
+              <Label htmlFor="nome">Nome completo *</Label>
+              <Input
+                id="nome"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Nome completo"
+              />
+              {errors.nome && (
+                <p className="text-xs text-destructive">{errors.nome}</p>
+              )}
+            </div>
+
+            {/* CPF */}
+            <div className="space-y-2">
+              <Label htmlFor="cpf">CPF *</Label>
+              <Input
+                id="cpf"
+                value={cpf}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '');
+                  const formatted = value.replace(
+                    /(\d{3})(\d{3})(\d{3})(\d{2})/,
+                    '$1.$2.$3-$4'
+                  );
+                  setCpf(formatted);
+                }}
+                placeholder="000.000.000-00"
+                maxLength={14}
+              />
+              {errors.cpf && (
+                <p className="text-xs text-destructive">{errors.cpf}</p>
+              )}
+            </div>
+
+            {/* E-mail */}
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="email@exemplo.com"
+              />
+              {errors.email && (
+                <p className="text-xs text-destructive">{errors.email}</p>
+              )}
+            </div>
+
+            {/* Opção de usar endereço de responsável existente */}
+            {responsaveisAssociados.filter((r) => r.cep).length > 0 && (
+              <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                <Label>Usar endereço de responsável já cadastrado</Label>
+                <Select
+                  value={useExistingAddress || ''}
+                  onValueChange={(value) =>
+                    setUseExistingAddress(
+                      value === '__NEW_ADDRESS__' ? null : value
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Informar novo endereço" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__NEW_ADDRESS__">
+                      <span>Informar novo endereço</span>
+                    </SelectItem>
+                    {responsaveisAssociados
+                      .filter((r) => r.cep)
+                      .map((resp) => (
+                        <SelectItem
+                          key={resp.id_responsavel}
+                          value={resp.id_responsavel}
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-medium">{resp.nome}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {resp.logradouro}, {resp.numero_endereco} -{' '}
+                              {resp.bairro}, {resp.cidade}/{resp.estado}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* CEP */}
+            <div className="space-y-2">
+              <Label htmlFor="cep">CEP *</Label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  id="cep"
+                  value={cep}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    const formatted = value.replace(/^(\d{5})(\d)/, '$1-$2');
+                    setCep(formatted);
+                  }}
+                  placeholder="00000-000"
+                  maxLength={9}
+                  disabled={!!useExistingAddress}
+                />
+                {isSearchingCep && (
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                )}
+                {cepFound && <Check className="h-5 w-5 text-green-600" />}
+              </div>
+              {errors.cep && (
+                <p className="text-xs text-destructive">{errors.cep}</p>
+              )}
+              {cepFound && !useExistingAddress && (
+                <div className="space-y-1">
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    {logradouro && bairro
+                      ? 'Endereço encontrado. Informe apenas o número e complemento.'
+                      : 'Endereço encontrado. Preencha os campos vazios manualmente.'}
+                  </p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    {cepSource === 'supabase' ? (
+                      <>
+                        <Database className="h-3 w-3" />
+                        Dados do sistema
+                      </>
+                    ) : (
+                      <>
+                        <Globe className="h-3 w-3" />
+                        Dados do ViaCEP
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
+              {useExistingAddress && (
+                <p className="text-xs text-green-600 flex items-center gap-1">
+                  <Check className="h-3 w-3" />
+                  Usando endereço do responsável selecionado
+                </p>
+              )}
+            </div>
+
+            {/* Logradouro */}
+            <div className="space-y-2">
+              <Label htmlFor="logradouro">Logradouro *</Label>
+              <Input
+                id="logradouro"
+                value={logradouro}
+                onChange={(e) => setLogradouro(e.target.value)}
+                placeholder="Rua, Avenida, etc"
+                disabled={
+                  !!useExistingAddress ||
+                  (cepFound && (cepSource === 'supabase' || logradouro !== ''))
+                }
+              />
+              {errors.logradouro && (
+                <p className="text-xs text-destructive">{errors.logradouro}</p>
+              )}
+            </div>
+
+            {/* Número e Complemento */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="numero">Número *</Label>
+                <Input
+                  id="numero"
+                  value={numero}
+                  onChange={(e) => setNumero(e.target.value)}
+                  placeholder="123"
+                  disabled={!!useExistingAddress}
+                />
+                {errors.numero && (
+                  <p className="text-xs text-destructive">{errors.numero}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="complemento">Complemento</Label>
+                <Input
+                  id="complemento"
+                  value={complemento}
+                  onChange={(e) => setComplemento(e.target.value)}
+                  placeholder="Apto, Bloco, etc"
+                  disabled={!!useExistingAddress}
+                />
+              </div>
+            </div>
+
+            {/* Bairro */}
+            <div className="space-y-2">
+              <Label htmlFor="bairro">Bairro *</Label>
+              <Input
+                id="bairro"
+                value={bairro}
+                onChange={(e) => setBairro(e.target.value)}
+                placeholder="Bairro"
+                disabled={
+                  !!useExistingAddress ||
+                  (cepFound && (cepSource === 'supabase' || bairro !== ''))
+                }
+              />
+              {errors.bairro && (
+                <p className="text-xs text-destructive">{errors.bairro}</p>
+              )}
+            </div>
+
+            {/* Cidade e Estado */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cidade">Cidade *</Label>
+                <Input
+                  id="cidade"
+                  value={cidade}
+                  onChange={(e) => setCidade(e.target.value)}
+                  placeholder="Cidade"
+                  disabled={
+                    !!useExistingAddress ||
+                    (cepFound && (cepSource === 'supabase' || cidade !== ''))
+                  }
+                />
+                {errors.cidade && (
+                  <p className="text-xs text-destructive">{errors.cidade}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="estado">Estado *</Label>
+                <Input
+                  id="estado"
+                  value={estado}
+                  onChange={(e) => setEstado(e.target.value.toUpperCase())}
+                  placeholder="UF"
+                  maxLength={2}
+                  disabled={
+                    !!useExistingAddress ||
+                    (cepFound && (cepSource === 'supabase' || estado !== ''))
+                  }
+                />
+                {errors.estado && (
+                  <p className="text-xs text-destructive">{errors.estado}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                resetForm();
+                setShowAddModal(false);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateAndSetResponsible}
+              disabled={
+                creatingPerson ||
+                isValidatingPhone ||
+                (!phoneValid && !existingPersonId)
+              }
+            >
+              {creatingPerson ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : existingPersonId ? (
+                'Vincular Pessoa Existente'
+              ) : (
+                'Cadastrar e Vincular'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
+};
 
 BillingResponsibleSelect.displayName = 'BillingResponsibleSelect';
