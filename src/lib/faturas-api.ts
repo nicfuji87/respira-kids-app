@@ -352,6 +352,7 @@ export async function criarFatura(
         descricao: faturaData.descricao,
         empresa_id: faturaData.empresa_id,
         responsavel_cobranca_id: faturaData.responsavel_cobranca_id,
+        paciente_id: faturaData.paciente_id, // AI dev note: Incluir paciente_id na criação da fatura
         vencimento: faturaData.vencimento,
         dados_asaas: faturaData.dados_asaas || {},
         observacoes: faturaData.observacoes,

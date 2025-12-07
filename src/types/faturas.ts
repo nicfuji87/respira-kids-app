@@ -18,6 +18,7 @@ export interface Fatura {
   // Relacionamentos
   empresa_id: string;
   responsavel_cobranca_id: string;
+  paciente_id?: string | null; // AI dev note: ID do paciente relacionado à fatura
 
   // Datas importantes
   vencimento?: string | null; // Date string
@@ -44,6 +45,9 @@ export interface Fatura {
 
 // Interface estendida com dados relacionados para exibição
 export interface FaturaComDetalhes extends Fatura {
+  // Dados do paciente
+  paciente_nome?: string;
+
   // Dados da empresa
   empresa_razao_social?: string;
   empresa_nome_fantasia?: string;
@@ -76,6 +80,7 @@ export interface CriarFaturaInput {
   descricao?: string;
   empresa_id: string;
   responsavel_cobranca_id: string;
+  paciente_id: string; // AI dev note: ID do paciente relacionado à fatura (obrigatório)
   vencimento?: string;
   dados_asaas?: Record<string, unknown>;
   observacoes?: string;

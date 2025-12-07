@@ -815,7 +815,6 @@ export const BillingResponsibleSelect: React.FC<
   if (!effectivePatientId) {
     return (
       <div className={cn('space-y-2', className)}>
-        <Label>Responsável pela Cobrança</Label>
         <p className="text-sm text-muted-foreground">
           Carregando dados do paciente...
         </p>
@@ -825,11 +824,6 @@ export const BillingResponsibleSelect: React.FC<
 
   return (
     <div className={cn('space-y-4', className)}>
-      <Label className="flex items-center gap-2">
-        <DollarSign className="h-4 w-4" />
-        Responsável pela Cobrança
-      </Label>
-
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando...</p>
       ) : (

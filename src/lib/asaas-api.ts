@@ -448,7 +448,7 @@ export async function processPayment(
 
     const { data: agendamentosData, error: agendamentosError } = await supabase
       .from('vw_cobranca_empresas')
-      .select('empresa_id, razao_social, api_token_externo')
+      .select('empresa_id, razao_social, api_token_externo, paciente_id')
       .in('agendamento_id', processData.consultationIds)
       .limit(1)
       .single();
@@ -569,6 +569,7 @@ export async function processPayment(
         descricao: processData.description,
         empresa_id: agendamentosData.empresa_id,
         responsavel_cobranca_id: processData.responsibleId,
+        paciente_id: agendamentosData.paciente_id, // AI dev note: Incluir paciente_id da view
         vencimento: dueDateString,
         dados_asaas: paymentResult.data as Record<string, unknown>,
         agendamento_ids: processData.consultationIds,
