@@ -810,8 +810,9 @@ export const fetchProfissionaisForUser = async (
   }
 };
 
-// AI dev note: BUSCA SERVER-SIDE - Busca pacientes no Supabase com termo de pesquisa
+// AI dev note: BUSCA SERVER-SIDE - Busca pacientes via RPC com suporte a busca sem acentos
 // BUSCA FLEXÍVEL:
+// - Ignora acentos (ex: "Nicolas" encontra "Nícolas")
 // - Palavras podem estar em qualquer ordem (ex: "Fujimoto Henrique" encontra "Henrique Fujimoto")
 // - Busca pelo nome do paciente OU dados dos responsáveis (nome, telefone, CPF)
 export const searchPacientes = async (
@@ -822,134 +823,18 @@ export const searchPacientes = async (
     return [];
   }
 
-  // AI dev note: Dividir o termo em palavras para busca flexível
-  const palavras = searchTerm
-    .trim()
-    .split(/\s+/)
-    .filter((p) => p.length >= 2);
-  if (palavras.length === 0) return [];
+  // Usar função RPC que faz busca com unaccent (ignora acentos)
+  const { data, error } = await supabase.rpc('fn_search_pacientes', {
+    termo_busca: searchTerm.trim(),
+    limite: 50,
+  });
 
-  // Criar pattern para cada palavra
-  const patterns = palavras.map((p) => `%${p}%`);
-
-  // AI dev note: Construir queries para busca paralela
-
-  // Query 1: Buscar pelo nome do paciente (todas as palavras devem estar presentes)
-  let queryNome = supabase
-    .from('pacientes_com_responsaveis_view')
-    .select('*')
-    .eq('tipo_pessoa_codigo', 'paciente')
-    .eq('ativo', true);
-  for (const pattern of patterns) {
-    queryNome = queryNome.ilike('nome', pattern);
+  if (error) {
+    console.error('❌ searchPacientes - erro na busca:', error);
+    throw error;
   }
 
-  // Query 2: Buscar pelo nome do responsável legal
-  let queryRespLegal = supabase
-    .from('pacientes_com_responsaveis_view')
-    .select('*')
-    .eq('tipo_pessoa_codigo', 'paciente')
-    .eq('ativo', true);
-  for (const pattern of patterns) {
-    queryRespLegal = queryRespLegal.ilike('responsavel_legal_nome', pattern);
-  }
-
-  // Query 3: Buscar pelo nome do responsável financeiro
-  let queryRespFinanceiro = supabase
-    .from('pacientes_com_responsaveis_view')
-    .select('*')
-    .eq('tipo_pessoa_codigo', 'paciente')
-    .eq('ativo', true);
-  for (const pattern of patterns) {
-    queryRespFinanceiro = queryRespFinanceiro.ilike(
-      'responsavel_financeiro_nome',
-      pattern
-    );
-  }
-
-  // Executar queries base em paralelo
-  const [resultadosNome, resultadosRespLegal, resultadosRespFinanceiro] =
-    await Promise.all([
-      queryNome.order('nome').limit(30),
-      queryRespLegal.order('nome').limit(20),
-      queryRespFinanceiro.order('nome').limit(20),
-    ]);
-
-  // Se for apenas uma palavra, buscar também por telefone e CPF
-  let resultadosTelCpf: { data: SupabasePessoa[] | null; error: unknown }[] =
-    [];
-  if (palavras.length === 1) {
-    const termo = palavras[0];
-    const [resTelLegal, resCpfLegal, resTelFinanceiro, resCpfFinanceiro] =
-      await Promise.all([
-        supabase
-          .from('pacientes_com_responsaveis_view')
-          .select('*')
-          .eq('tipo_pessoa_codigo', 'paciente')
-          .eq('ativo', true)
-          .ilike('responsavel_legal_telefone::text', `%${termo}%`)
-          .order('nome')
-          .limit(10),
-        supabase
-          .from('pacientes_com_responsaveis_view')
-          .select('*')
-          .eq('tipo_pessoa_codigo', 'paciente')
-          .eq('ativo', true)
-          .ilike('responsavel_legal_cpf', `%${termo}%`)
-          .order('nome')
-          .limit(10),
-        supabase
-          .from('pacientes_com_responsaveis_view')
-          .select('*')
-          .eq('tipo_pessoa_codigo', 'paciente')
-          .eq('ativo', true)
-          .ilike('responsavel_financeiro_telefone::text', `%${termo}%`)
-          .order('nome')
-          .limit(10),
-        supabase
-          .from('pacientes_com_responsaveis_view')
-          .select('*')
-          .eq('tipo_pessoa_codigo', 'paciente')
-          .eq('ativo', true)
-          .ilike('responsavel_financeiro_cpf', `%${termo}%`)
-          .order('nome')
-          .limit(10),
-      ]);
-    resultadosTelCpf = [
-      resTelLegal,
-      resCpfLegal,
-      resTelFinanceiro,
-      resCpfFinanceiro,
-    ];
-  }
-
-  // Combinar todos os resultados
-  const resultados = [
-    resultadosNome,
-    resultadosRespLegal,
-    resultadosRespFinanceiro,
-    ...resultadosTelCpf,
-  ];
-
-  // Combinar resultados removendo duplicatas
-  const pacientesMap = new Map<string, SupabasePessoa>();
-
-  for (const resultado of resultados) {
-    if (resultado.error) {
-      console.warn('⚠️ searchPacientes - erro em query:', resultado.error);
-      continue;
-    }
-    (resultado.data || []).forEach((p: SupabasePessoa) => {
-      if (!pacientesMap.has(p.id)) {
-        pacientesMap.set(p.id, p);
-      }
-    });
-  }
-
-  // Converter para array, ordenar por nome e limitar a 50
-  return Array.from(pacientesMap.values())
-    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
-    .slice(0, 50);
+  return (data || []) as SupabasePessoa[];
 };
 
 // AI dev note: Busca um paciente específico pelo ID (para exibir nome do selecionado)

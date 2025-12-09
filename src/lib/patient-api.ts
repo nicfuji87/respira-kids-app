@@ -1357,8 +1357,10 @@ async function enrichPatientsWithPaymentStatus(
 
 /**
  * Buscar pacientes com paginação e busca server-side
- * Usa a view pacientes_com_responsaveis_view filtrando apenas pacientes
- * AI dev note: Busca server-side para suportar grandes volumes de pacientes (>1000)
+ * AI dev note: Usa função RPC fn_search_pacientes_paginado que:
+ * - Ignora acentos (ex: "Nicolas" encontra "Nícolas")
+ * - Palavras podem estar em qualquer ordem (ex: "Fujimoto Henrique" encontra "Henrique Fujimoto")
+ * - Busca pelo nome do paciente OU dados dos responsáveis (nome, telefone, CPF)
  */
 export async function fetchPatients(
   searchTerm: string = '',
@@ -1386,220 +1388,30 @@ export async function fetchPatients(
       };
     }
 
-    // AI dev note: Calcular offset para paginação
-    const offset = (page - 1) * limit;
-
-    // AI dev note: Se há filtro por letra, fazer query simples
-    if (startWithLetter && startWithLetter.length === 1) {
-      let query = supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('*', { count: 'exact' })
-        .eq('tipo_pessoa_codigo', 'paciente')
-        .eq('ativo', true)
-        .ilike('nome', `${startWithLetter}%`);
-
-      if (sortBy === 'updated_at') {
-        query = query.order('updated_at', { ascending: false });
-      } else {
-        query = query.order('nome', { ascending: true });
-      }
-
-      query = query.range(offset, offset + limit - 1);
-
-      const { data: patients, error, count } = await query;
-
-      if (error) {
-        console.error('Erro ao buscar pacientes:', error);
-        return { data: null, error: error.message, success: false };
-      }
-
-      return await enrichPatientsWithPaymentStatus(
-        patients || [],
-        count || 0,
-        page,
-        limit
-      );
-    }
-
-    // AI dev note: BUSCA FLEXÍVEL - palavras em qualquer ordem
-    // Busca por nome do paciente OU dados dos responsáveis (nome, telefone, CPF)
-    if (searchTerm.trim()) {
-      const palavras = searchTerm
-        .trim()
-        .split(/\s+/)
-        .filter((p) => p.length >= 2);
-
-      if (palavras.length === 0) {
-        return await enrichPatientsWithPaymentStatus([], 0, page, limit);
-      }
-
-      const patterns = palavras.map((p) => `%${p}%`);
-
-      // Query 1: Buscar pelo nome do paciente (todas as palavras)
-      let queryNome = supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('*')
-        .eq('tipo_pessoa_codigo', 'paciente')
-        .eq('ativo', true);
-      for (const pattern of patterns) {
-        queryNome = queryNome.ilike('nome', pattern);
-      }
-
-      // Query 2: Buscar pelo nome do responsável legal
-      let queryRespLegal = supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('*')
-        .eq('tipo_pessoa_codigo', 'paciente')
-        .eq('ativo', true);
-      for (const pattern of patterns) {
-        queryRespLegal = queryRespLegal.ilike(
-          'responsavel_legal_nome',
-          pattern
-        );
-      }
-
-      // Query 3: Buscar pelo nome do responsável financeiro
-      let queryRespFinanceiro = supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('*')
-        .eq('tipo_pessoa_codigo', 'paciente')
-        .eq('ativo', true);
-      for (const pattern of patterns) {
-        queryRespFinanceiro = queryRespFinanceiro.ilike(
-          'responsavel_financeiro_nome',
-          pattern
-        );
-      }
-
-      // Executar queries base em paralelo
-      const [resultadosNome, resultadosRespLegal, resultadosRespFinanceiro] =
-        await Promise.all([
-          queryNome.order('nome').limit(500),
-          queryRespLegal.order('nome').limit(200),
-          queryRespFinanceiro.order('nome').limit(200),
-        ]);
-
-      // Se for apenas uma palavra, buscar também por telefone e CPF
-      type QueryResult = { data: unknown[] | null; error: unknown };
-      let resultadosTelCpf: QueryResult[] = [];
-      if (palavras.length === 1) {
-        const termo = palavras[0];
-        const [resTelLegal, resCpfLegal, resTelFinanceiro, resCpfFinanceiro] =
-          await Promise.all([
-            supabase
-              .from('pacientes_com_responsaveis_view')
-              .select('*')
-              .eq('tipo_pessoa_codigo', 'paciente')
-              .eq('ativo', true)
-              .ilike('responsavel_legal_telefone::text', `%${termo}%`)
-              .order('nome')
-              .limit(100),
-            supabase
-              .from('pacientes_com_responsaveis_view')
-              .select('*')
-              .eq('tipo_pessoa_codigo', 'paciente')
-              .eq('ativo', true)
-              .ilike('responsavel_legal_cpf', `%${termo}%`)
-              .order('nome')
-              .limit(100),
-            supabase
-              .from('pacientes_com_responsaveis_view')
-              .select('*')
-              .eq('tipo_pessoa_codigo', 'paciente')
-              .eq('ativo', true)
-              .ilike('responsavel_financeiro_telefone::text', `%${termo}%`)
-              .order('nome')
-              .limit(100),
-            supabase
-              .from('pacientes_com_responsaveis_view')
-              .select('*')
-              .eq('tipo_pessoa_codigo', 'paciente')
-              .eq('ativo', true)
-              .ilike('responsavel_financeiro_cpf', `%${termo}%`)
-              .order('nome')
-              .limit(100),
-          ]);
-        resultadosTelCpf = [
-          resTelLegal,
-          resCpfLegal,
-          resTelFinanceiro,
-          resCpfFinanceiro,
-        ];
-      }
-
-      // Combinar todos os resultados
-      const resultados = [
-        resultadosNome,
-        resultadosRespLegal,
-        resultadosRespFinanceiro,
-        ...resultadosTelCpf,
-      ];
-
-      // Combinar resultados removendo duplicatas
-      const pacientesMap = new Map<string, unknown>();
-      for (const resultado of resultados) {
-        if (resultado.error) {
-          console.warn('⚠️ fetchPatients - erro em query:', resultado.error);
-          continue;
-        }
-        (resultado.data || []).forEach((p: unknown) => {
-          const patient = p as { id: string };
-          if (!pacientesMap.has(patient.id)) pacientesMap.set(patient.id, p);
-        });
-      }
-
-      // Converter para array, ordenar e paginar
-      const allPatients = Array.from(pacientesMap.values());
-      if (sortBy === 'updated_at') {
-        allPatients.sort(
-          (a: unknown, b: unknown) =>
-            new Date((b as { updated_at: string }).updated_at).getTime() -
-            new Date((a as { updated_at: string }).updated_at).getTime()
-        );
-      } else {
-        allPatients.sort((a: unknown, b: unknown) =>
-          ((a as { nome: string }).nome || '').localeCompare(
-            (b as { nome: string }).nome || ''
-          )
-        );
-      }
-
-      const totalCount = allPatients.length;
-      const paginatedPatients = allPatients.slice(offset, offset + limit);
-
-      return await enrichPatientsWithPaymentStatus(
-        paginatedPatients,
-        totalCount,
-        page,
-        limit
-      );
-    }
-
-    // AI dev note: Query padrão sem filtros de busca
-    let query = supabase
-      .from('pacientes_com_responsaveis_view')
-      .select('*', { count: 'exact' })
-      .eq('tipo_pessoa_codigo', 'paciente')
-      .eq('ativo', true);
-
-    if (sortBy === 'updated_at') {
-      query = query.order('updated_at', { ascending: false });
-    } else {
-      query = query.order('nome', { ascending: true });
-    }
-
-    query = query.range(offset, offset + limit - 1);
-
-    const { data: patients, error, count } = await query;
+    // AI dev note: Usar função RPC que faz busca com unaccent
+    const { data, error } = await supabase.rpc('fn_search_pacientes_paginado', {
+      termo_busca: searchTerm.trim() || '',
+      pagina: page,
+      limite: limit,
+      filtro_letra: startWithLetter || null,
+      ordenar_por: sortBy,
+    });
 
     if (error) {
       console.error('Erro ao buscar pacientes:', error);
       return { data: null, error: error.message, success: false };
     }
 
+    // A função RPC retorna array de objetos com { paciente, total_count }
+    const patients = (data || []).map(
+      (row: { paciente: unknown }) => row.paciente
+    );
+    const totalCount =
+      data && data.length > 0 ? Number(data[0].total_count) : 0;
+
     return await enrichPatientsWithPaymentStatus(
-      patients || [],
-      count || 0,
+      patients,
+      totalCount,
       page,
       limit
     );
