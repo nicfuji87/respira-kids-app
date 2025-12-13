@@ -41,12 +41,12 @@ export async function checkSlotConflict(
   dataHora: string
 ): Promise<ApiResponse<AppointmentConflictDetail | null>> {
   try {
-    // Buscar status de agendamento "cancelado" para excluir
-    const { data: statusCancelado } = await supabase
+    // AI dev note: Buscar status de agendamento "cancelado" e "faltou" para excluir
+    // Quando o paciente falta, o horário fica disponível para novo agendamento
+    const { data: statusParaExcluir } = await supabase
       .from('consulta_status')
       .select('id')
-      .eq('codigo', 'cancelado')
-      .single();
+      .in('codigo', ['cancelado', 'faltou']);
 
     // Buscar agendamento ativo do profissional neste horário
     let query = supabase
@@ -62,9 +62,14 @@ export async function checkSlotConflict(
       .eq('data_hora', dataHora)
       .eq('ativo', true);
 
-    // Excluir agendamentos cancelados
-    if (statusCancelado?.id) {
-      query = query.neq('status_consulta_id', statusCancelado.id);
+    // Excluir agendamentos cancelados e com falta
+    const idsParaExcluir = statusParaExcluir?.map((s) => s.id) || [];
+    if (idsParaExcluir.length > 0) {
+      query = query.not(
+        'status_consulta_id',
+        'in',
+        `(${idsParaExcluir.join(',')})`
+      );
     }
 
     const { data: agendamento, error } = await query.maybeSingle();
@@ -123,12 +128,12 @@ export async function checkAppointmentConflicts(
       };
     }
 
-    // Buscar status de agendamento "cancelado" para excluir
-    const { data: statusCancelado } = await supabase
+    // AI dev note: Buscar status de agendamento "cancelado" e "faltou" para excluir
+    // Quando o paciente falta, o horário fica disponível para novo agendamento
+    const { data: statusParaExcluir } = await supabase
       .from('consulta_status')
       .select('id')
-      .eq('codigo', 'cancelado')
-      .single();
+      .in('codigo', ['cancelado', 'faltou']);
 
     // Buscar agendamentos ativos do profissional nos horários especificados
     let query = supabase
@@ -138,9 +143,14 @@ export async function checkAppointmentConflicts(
       .eq('ativo', true)
       .in('data_hora', slotsDataHora);
 
-    // Excluir agendamentos cancelados
-    if (statusCancelado?.id) {
-      query = query.neq('status_consulta_id', statusCancelado.id);
+    // Excluir agendamentos cancelados e com falta
+    const idsParaExcluir = statusParaExcluir?.map((s) => s.id) || [];
+    if (idsParaExcluir.length > 0) {
+      query = query.not(
+        'status_consulta_id',
+        'in',
+        `(${idsParaExcluir.join(',')})`
+      );
     }
 
     const { data: agendamentosExistentes, error } = await query;

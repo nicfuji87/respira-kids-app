@@ -219,11 +219,13 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
           const existingAppointments = await fetchAgendamentosFromView(filters);
 
-          // AI dev note: Verificar conflitos no mesmo horário, EXCLUINDO agendamentos cancelados
+          // AI dev note: Verificar conflitos no mesmo horário, EXCLUINDO agendamentos cancelados ou com falta
           const conflictingAppointments = existingAppointments.filter(
             (appointment) => {
-              // Ignorar agendamentos cancelados - eles podem ser sobrescritos
-              if (appointment.status_consulta?.codigo === 'cancelado') {
+              // Ignorar agendamentos cancelados ou com falta - eles podem ser sobrescritos
+              // pois o horário ficou disponível
+              const statusCodigo = appointment.status_consulta?.codigo;
+              if (statusCodigo === 'cancelado' || statusCodigo === 'faltou') {
                 return false;
               }
 
