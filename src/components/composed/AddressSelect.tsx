@@ -1,11 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/primitives/select';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Label } from '@/components/primitives/label';
 import {
@@ -15,7 +8,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/primitives/dialog';
-import { Plus, Home } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/primitives/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/primitives/command';
+import { Plus, Home, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { CepSearch } from './CepSearch';
@@ -24,6 +30,7 @@ import { toast } from '@/components/primitives/use-toast';
 
 // AI dev note: AddressSelect é um componente Composed para seleção/criação de endereço
 // Permite escolher endereço existente ou cadastrar novo via CEP
+// Usa Combobox (Popover + Command) para permitir busca/filtro enquanto digita
 
 export interface AddressSelectProps {
   value?: string;
@@ -46,11 +53,12 @@ export const AddressSelect: React.FC<AddressSelectProps> = ({
   value,
   onValueChange,
   disabled = false,
-  placeholder = 'Selecione um endereço',
+  placeholder = 'Buscar endereço...',
   className,
 }) => {
   const [enderecos, setEnderecos] = useState<Endereco[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
   const [showNewAddressModal, setShowNewAddressModal] = useState(false);
   const [newCep, setNewCep] = useState('');
   const [newAddress, setNewAddress] = useState<EnderecoViaCepData | null>(null);
@@ -122,28 +130,69 @@ export const AddressSelect: React.FC<AddressSelectProps> = ({
     return `${endereco.logradouro}, ${endereco.bairro} - ${endereco.cidade}/${endereco.estado} (${endereco.cep})`;
   };
 
+  // Endereço selecionado para exibição no botão
+  const selectedAddress = useMemo(() => {
+    if (!value) return null;
+    return enderecos.find((e) => e.id === value);
+  }, [value, enderecos]);
+
   return (
     <div className={cn('space-y-2', className)}>
       <Label>Endereço</Label>
       <div className="flex gap-2">
-        <Select
-          value={value}
-          onValueChange={onValueChange}
-          disabled={disabled || loading}
-        >
-          <SelectTrigger className="flex-1">
-            <SelectValue
-              placeholder={loading ? 'Carregando...' : placeholder}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {enderecos.map((endereco) => (
-              <SelectItem key={endereco.id} value={endereco.id}>
-                {formatAddress(endereco)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="flex-1 justify-between font-normal"
+              disabled={disabled || loading}
+            >
+              <span className="truncate">
+                {loading
+                  ? 'Carregando...'
+                  : selectedAddress
+                    ? formatAddress(selectedAddress)
+                    : placeholder}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-[var(--radix-popover-trigger-width)] p-0"
+            align="start"
+          >
+            <Command>
+              <CommandInput placeholder="Digite para buscar..." />
+              <CommandList className="max-h-[300px] overflow-y-auto">
+                <CommandEmpty>Nenhum endereço encontrado.</CommandEmpty>
+                <CommandGroup>
+                  {enderecos.map((endereco) => (
+                    <CommandItem
+                      key={endereco.id}
+                      value={formatAddress(endereco)}
+                      onSelect={() => {
+                        onValueChange?.(endereco.id);
+                        setOpen(false);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          value === endereco.id ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      <span className="truncate">
+                        {formatAddress(endereco)}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         <Button
           type="button"
