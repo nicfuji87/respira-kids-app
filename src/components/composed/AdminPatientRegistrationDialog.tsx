@@ -24,6 +24,7 @@ import {
 import type { ContractVariables } from '@/lib/contract-api';
 import { toast } from '@/components/primitives/use-toast';
 import { formatCPF } from '@/lib/profile';
+import { formatDateBR } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
 interface AdminPatientRegistrationDialogProps {
@@ -424,9 +425,8 @@ export const AdminPatientRegistrationDialog: React.FC<
 
       // Paciente
       paciente: formData.nomePaciente || '',
-      dnPac: formData.dataNascimentoPaciente
-        ? new Date(formData.dataNascimentoPaciente).toLocaleDateString('pt-BR')
-        : '',
+      // AI dev note: Usar formatDateBR para evitar bug de timezone onde dia vira dia anterior
+      dnPac: formatDateBR(formData.dataNascimentoPaciente),
       cpfPac: formatCPF(formData.cpfPaciente || ''),
 
       // Outros

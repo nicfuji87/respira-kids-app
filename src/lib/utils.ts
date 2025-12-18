@@ -78,3 +78,37 @@ export function formatDateTimeBR(date: string | Date): string {
     minute: '2-digit',
   });
 }
+
+/**
+ * AI dev note: Formata data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
+ * IMPORTANTE: Usa manipulação de string para EVITAR PROBLEMAS DE TIMEZONE
+ *
+ * Quando usamos new Date('2024-04-16'), JavaScript interpreta como meia-noite UTC.
+ * No Brasil (UTC-3), isso vira 21:00 do dia anterior, causando o bug onde
+ * a data 16/04/2024 aparece como 15/04/2024.
+ *
+ * Esta função resolve o problema dividindo a string diretamente sem usar Date.
+ *
+ * @param dateISO - Data em formato ISO (YYYY-MM-DD) ou ISO com hora
+ * @returns String formatada como DD/MM/YYYY
+ */
+export function formatDateBR(dateISO: string | null | undefined): string {
+  if (!dateISO) return '';
+
+  // Se já está no formato brasileiro (contém /), retorna como está
+  if (dateISO.includes('/')) return dateISO;
+
+  // Extrair apenas a parte da data (remover hora se existir)
+  const datePart = dateISO.split('T')[0];
+
+  // Dividir em ano, mês, dia
+  const parts = datePart.split('-');
+  if (parts.length !== 3) return dateISO;
+
+  const [year, month, day] = parts;
+
+  // Validar partes
+  if (!year || !month || !day) return dateISO;
+
+  return `${day}/${month}/${year}`;
+}

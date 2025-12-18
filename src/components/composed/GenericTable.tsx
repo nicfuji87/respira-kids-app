@@ -144,7 +144,7 @@ export const GenericTable = <T extends Record<string, any>>({
         ) : (
           <>
             {/* Tabela */}
-            <div className="border rounded-lg">
+            <div className="border rounded-lg overflow-hidden md:overflow-visible">
               <Table>
                 <TableHeader>
                   <TableRow>

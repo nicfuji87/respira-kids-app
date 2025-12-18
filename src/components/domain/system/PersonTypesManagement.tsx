@@ -9,10 +9,10 @@ import {
   type GenericTableColumn,
   type FormField,
 } from '@/components/composed';
-import type { 
-  PessoaTipo, 
+import type {
+  PessoaTipo,
   PessoaTipoCreateInput,
-  SystemEntityFilters 
+  SystemEntityFilters,
 } from '@/types/system-config';
 import {
   fetchPessoaTipos,
@@ -30,7 +30,7 @@ export const PersonTypesManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filters] = useState<SystemEntityFilters>({
     page: 1,
-    limit: 10
+    limit: 10,
   });
 
   // Modal states
@@ -42,15 +42,15 @@ export const PersonTypesManagement: React.FC = () => {
   const form = useForm<PessoaTipoCreateInput>({
     defaultValues: {
       nome: '',
-      descricao: ''
-    }
+      descricao: '',
+    },
   });
 
   // === FETCH DATA ===
   const loadData = useCallback(async () => {
     setLoading(true);
     const result = await fetchPessoaTipos(filters);
-    
+
     if (result.success && result.data) {
       setData(result.data.data);
       // setTotal(result.data.total); // This line was removed as per the edit hint
@@ -73,12 +73,12 @@ export const PersonTypesManagement: React.FC = () => {
     // Garantir que o form seja resetado corretamente
     const defaultValues = {
       nome: '',
-      descricao: ''
+      descricao: '',
     };
-    
+
     form.reset(defaultValues);
     setEditingItem(null);
-    
+
     // Pequeno delay para garantir que o form seja resetado antes do modal abrir
     setTimeout(() => {
       setIsFormOpen(true);
@@ -89,9 +89,9 @@ export const PersonTypesManagement: React.FC = () => {
     // Garantir que todos os valores sejam válidos para evitar React.Children.only error
     const formValues = {
       nome: item.nome || '',
-      descricao: item.descricao || ''
+      descricao: item.descricao || '',
     };
-    
+
     form.reset(formValues);
     setEditingItem(item);
     setIsFormOpen(true);
@@ -99,17 +99,17 @@ export const PersonTypesManagement: React.FC = () => {
 
   const handleSubmit = async (formData: PessoaTipoCreateInput) => {
     setIsSubmitting(true);
-    
+
     try {
       let result;
-      
+
       if (editingItem) {
         // Ao editar, preservar código e status originais
         result = await updatePessoaTipo({
           ...formData,
           id: editingItem.id,
           codigo: editingItem.codigo, // Preservar código original
-          ativo: editingItem.ativo    // Preservar status original
+          ativo: editingItem.ativo, // Preservar status original
         });
       } else {
         // Ao criar, gerar código automático baseado no nome
@@ -117,14 +117,14 @@ export const PersonTypesManagement: React.FC = () => {
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-          .replace(/[^a-z0-9]/g, '_')      // Substitui caracteres especiais por _
-          .replace(/_+/g, '_')             // Remove múltiplos _ consecutivos
-          .replace(/^_|_$/g, '');          // Remove _ do início e fim
-          
+          .replace(/[^a-z0-9]/g, '_') // Substitui caracteres especiais por _
+          .replace(/_+/g, '_') // Remove múltiplos _ consecutivos
+          .replace(/^_|_$/g, ''); // Remove _ do início e fim
+
         result = await createPessoaTipo({
           ...formData,
           codigo,
-          ativo: true // Novo registro sempre ativo
+          ativo: true, // Novo registro sempre ativo
         });
       }
 
@@ -159,7 +159,7 @@ export const PersonTypesManagement: React.FC = () => {
     }
 
     const result = await deletePessoaTipo(item.id);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -177,7 +177,7 @@ export const PersonTypesManagement: React.FC = () => {
 
   const handleToggleStatus = async (item: PessoaTipo) => {
     const result = await togglePessoaTipoStatus(item.id, !item.ativo);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -198,18 +198,18 @@ export const PersonTypesManagement: React.FC = () => {
     {
       key: 'codigo',
       label: 'Código',
-      className: 'w-32'
+      className: 'w-32',
     },
     {
       key: 'nome',
       label: 'Nome',
-      className: 'font-medium'
+      className: 'font-medium',
     },
     {
       key: 'descricao',
       label: 'Descrição',
       render: (item) => item.descricao || '-',
-      className: 'text-muted-foreground'
+      className: 'text-muted-foreground hidden md:table-cell',
     },
     {
       key: 'ativo',
@@ -223,13 +223,13 @@ export const PersonTypesManagement: React.FC = () => {
           <StatusBadge ativo={item.ativo} />
         </button>
       ),
-      className: 'w-24'
+      className: 'w-24',
     },
     {
       key: 'created_at',
       label: 'Criado em',
       render: (item) => new Date(item.created_at).toLocaleDateString('pt-BR'),
-      className: 'w-32 text-sm text-muted-foreground'
+      className: 'w-32 text-sm text-muted-foreground hidden md:table-cell',
     },
     {
       key: 'actions',
@@ -242,8 +242,8 @@ export const PersonTypesManagement: React.FC = () => {
           canToggleStatus={false}
         />
       ),
-      className: 'w-16'
-    }
+      className: 'w-16',
+    },
   ];
 
   // === FORM FIELDS ===
@@ -253,14 +253,14 @@ export const PersonTypesManagement: React.FC = () => {
       label: 'Nome',
       type: 'text',
       placeholder: 'Ex: Paciente, Profissional, Responsável',
-      required: true
+      required: true,
     },
     {
       name: 'descricao',
       label: 'Descrição',
       type: 'textarea',
-      placeholder: 'Descrição opcional do tipo de pessoa'
-    }
+      placeholder: 'Descrição opcional do tipo de pessoa',
+    },
   ];
 
   return (
@@ -286,8 +286,8 @@ export const PersonTypesManagement: React.FC = () => {
         fields={formFields}
         title={editingItem ? 'Editar Tipo de Pessoa' : 'Novo Tipo de Pessoa'}
         description={
-          editingItem 
-            ? 'Altere os dados do tipo de pessoa' 
+          editingItem
+            ? 'Altere os dados do tipo de pessoa'
             : 'Preencha os dados para criar um novo tipo'
         }
         isEditing={!!editingItem}
@@ -297,4 +297,4 @@ export const PersonTypesManagement: React.FC = () => {
   );
 };
 
-PersonTypesManagement.displayName = 'PersonTypesManagement'; 
+PersonTypesManagement.displayName = 'PersonTypesManagement';

@@ -16,7 +16,7 @@ import {
 } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
 
-import { cn } from '@/lib/utils';
+import { cn, formatDateBR } from '@/lib/utils';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
 
 // AI dev note: PatientPersonalInfo - Component Composed para exibir informações pessoais do paciente
@@ -103,10 +103,8 @@ export const PatientPersonalInfo = React.memo<PatientPersonalInfoProps>(
                       {calculateAge(patient.data_nascimento)} anos
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Nascimento:{' '}
-                      {new Date(patient.data_nascimento).toLocaleDateString(
-                        'pt-BR'
-                      )}
+                      {/* AI dev note: Usar formatDateBR para evitar bug de timezone */}
+                      Nascimento: {formatDateBR(patient.data_nascimento)}
                     </p>
                   </div>
                 </div>

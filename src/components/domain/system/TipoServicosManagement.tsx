@@ -9,10 +9,10 @@ import {
   type GenericTableColumn,
   type FormField,
 } from '@/components/composed';
-import type { 
-  TipoServico, 
+import type {
+  TipoServico,
   TipoServicoCreateInput,
-  SystemEntityFilters 
+  SystemEntityFilters,
 } from '@/types/system-config';
 import {
   fetchTipoServicos,
@@ -30,7 +30,7 @@ export const TipoServicosManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filters] = useState<SystemEntityFilters>({
     page: 1,
-    limit: 10
+    limit: 10,
   });
 
   // Modal states
@@ -46,8 +46,8 @@ export const TipoServicosManagement: React.FC = () => {
       duracao_minutos: 60,
       valor: 0,
       cor: '#3B82F6',
-      ativo: true
-    }
+      ativo: true,
+    },
   });
 
   // === DATA LOADING ===
@@ -87,12 +87,12 @@ export const TipoServicosManagement: React.FC = () => {
       duracao_minutos: 60,
       valor: 0,
       cor: '#3B82F6',
-      ativo: true
+      ativo: true,
     };
-    
+
     form.reset(defaultValues);
     setEditingItem(null);
-    
+
     // Pequeno delay para garantir que o form seja resetado antes do modal abrir
     setTimeout(() => {
       setIsFormOpen(true);
@@ -107,9 +107,9 @@ export const TipoServicosManagement: React.FC = () => {
       duracao_minutos: item.duracao_minutos || 60,
       valor: parseFloat(item.valor?.toString() || '0'),
       cor: item.cor || '#3B82F6',
-      ativo: Boolean(item.ativo)
+      ativo: Boolean(item.ativo),
     };
-    
+
     form.reset(formValues);
     setEditingItem(item);
     setIsFormOpen(true);
@@ -117,15 +117,15 @@ export const TipoServicosManagement: React.FC = () => {
 
   const handleSubmit = async (formData: TipoServicoCreateInput) => {
     setIsSubmitting(true);
-    
+
     try {
       let result;
-      
+
       if (editingItem) {
         // Ao editar, manter ID original
         result = await updateTipoServico({
           ...formData,
-          id: editingItem.id
+          id: editingItem.id,
         });
       } else {
         // Ao criar, novo serviço
@@ -163,7 +163,7 @@ export const TipoServicosManagement: React.FC = () => {
     }
 
     const result = await deleteTipoServico(item.id);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -181,7 +181,7 @@ export const TipoServicosManagement: React.FC = () => {
 
   const handleToggleStatus = async (item: TipoServico) => {
     const result = await toggleTipoServicoStatus(item.id, !item.ativo);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -202,42 +202,43 @@ export const TipoServicosManagement: React.FC = () => {
     {
       key: 'nome',
       label: 'Nome',
-      className: 'font-medium'
+      className: 'font-medium',
     },
     {
       key: 'descricao',
       label: 'Descrição',
       render: (item) => item.descricao || '-',
-      className: 'text-muted-foreground max-w-xs truncate'
+      className: 'text-muted-foreground max-w-xs truncate hidden md:table-cell',
     },
     {
       key: 'duracao_minutos',
       label: 'Duração',
       render: (item) => `${item.duracao_minutos} min`,
-      className: 'w-24 text-center'
+      className: 'w-24 text-center hidden md:table-cell',
     },
     {
       key: 'valor',
       label: 'Valor',
-      render: (item) => new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-      }).format(parseFloat(item.valor?.toString() || '0')),
-      className: 'w-32 text-right'
+      render: (item) =>
+        new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        }).format(parseFloat(item.valor?.toString() || '0')),
+      className: 'w-32 text-right',
     },
     {
       key: 'cor',
       label: 'Cor',
       render: (item) => (
         <div className="flex items-center gap-2">
-          <div 
+          <div
             className="w-4 h-4 rounded-full border border-gray-300"
             style={{ backgroundColor: item.cor }}
           />
           <code className="text-xs text-muted-foreground">{item.cor}</code>
         </div>
       ),
-      className: 'w-32'
+      className: 'w-32 hidden md:table-cell',
     },
     {
       key: 'ativo',
@@ -251,13 +252,13 @@ export const TipoServicosManagement: React.FC = () => {
           <StatusBadge ativo={item.ativo} />
         </button>
       ),
-      className: 'w-24'
+      className: 'w-24',
     },
     {
       key: 'created_at',
       label: 'Criado em',
       render: (item) => new Date(item.created_at).toLocaleDateString('pt-BR'),
-      className: 'w-32 text-sm text-muted-foreground'
+      className: 'w-32 text-sm text-muted-foreground hidden md:table-cell',
     },
     {
       key: 'actions',
@@ -270,8 +271,8 @@ export const TipoServicosManagement: React.FC = () => {
           canToggleStatus={false}
         />
       ),
-      className: 'w-16'
-    }
+      className: 'w-16',
+    },
   ];
 
   // === FORM FIELDS ===
@@ -281,34 +282,34 @@ export const TipoServicosManagement: React.FC = () => {
       label: 'Nome',
       type: 'text',
       placeholder: 'Ex: Fisioterapia Respiratória, Avaliação',
-      required: true
+      required: true,
     },
     {
       name: 'descricao',
       label: 'Descrição',
       type: 'textarea',
-      placeholder: 'Descrição detalhada do serviço oferecido'
+      placeholder: 'Descrição detalhada do serviço oferecido',
     },
     {
       name: 'duracao_minutos',
       label: 'Duração (minutos)',
       type: 'number',
       placeholder: '60',
-      required: true
+      required: true,
     },
     {
       name: 'valor',
       label: 'Valor (R$)',
       type: 'number',
       placeholder: '0.00',
-      required: true
+      required: true,
     },
     {
       name: 'cor',
       label: 'Cor',
       type: 'color',
-      required: true
-    }
+      required: true,
+    },
   ];
 
   return (
@@ -334,8 +335,8 @@ export const TipoServicosManagement: React.FC = () => {
         fields={formFields}
         title={editingItem ? 'Editar Tipo de Serviço' : 'Novo Tipo de Serviço'}
         description={
-          editingItem 
-            ? 'Altere os dados do tipo de serviço' 
+          editingItem
+            ? 'Altere os dados do tipo de serviço'
             : 'Preencha os dados para criar um novo serviço'
         }
         isEditing={!!editingItem}
@@ -345,4 +346,4 @@ export const TipoServicosManagement: React.FC = () => {
   );
 };
 
-TipoServicosManagement.displayName = 'TipoServicosManagement'; 
+TipoServicosManagement.displayName = 'TipoServicosManagement';

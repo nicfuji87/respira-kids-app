@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from '@/components/primitives/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/primitives/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
@@ -11,10 +16,10 @@ import {
   CepSearch,
   type GenericTableColumn,
 } from '@/components/composed';
-import type { 
-  Endereco, 
+import type {
+  Endereco,
   EnderecoCreateInput,
-  SystemEntityFilters 
+  SystemEntityFilters,
 } from '@/types/system-config';
 import type { EnderecoViaCepData } from '@/lib/enderecos-api';
 import {
@@ -32,7 +37,7 @@ export const EnderecoManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filters] = useState<SystemEntityFilters>({
     page: 1,
-    limit: 10
+    limit: 10,
   });
 
   // Modal states
@@ -46,7 +51,7 @@ export const EnderecoManagement: React.FC = () => {
     logradouro: '',
     bairro: '',
     cidade: '',
-    estado: ''
+    estado: '',
   });
 
   // === DATA LOADING ===
@@ -84,7 +89,7 @@ export const EnderecoManagement: React.FC = () => {
       logradouro: '',
       bairro: '',
       cidade: '',
-      estado: ''
+      estado: '',
     });
     setEditingItem(null);
     setIsFormOpen(true);
@@ -96,7 +101,7 @@ export const EnderecoManagement: React.FC = () => {
       logradouro: item.logradouro,
       bairro: item.bairro,
       cidade: item.cidade,
-      estado: item.estado
+      estado: item.estado,
     });
     setEditingItem(item);
     setIsFormOpen(true);
@@ -108,22 +113,31 @@ export const EnderecoManagement: React.FC = () => {
       logradouro: address.logradouro,
       bairro: address.bairro,
       cidade: address.cidade,
-      estado: address.estado
+      estado: address.estado,
     });
   };
 
-  const handleInputChange = (field: keyof EnderecoCreateInput, value: string) => {
-    setFormData(prev => ({
+  const handleInputChange = (
+    field: keyof EnderecoCreateInput,
+    value: string
+  ) => {
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validação básica
-    if (!formData.cep || !formData.logradouro || !formData.bairro || !formData.cidade || !formData.estado) {
+    if (
+      !formData.cep ||
+      !formData.logradouro ||
+      !formData.bairro ||
+      !formData.cidade ||
+      !formData.estado
+    ) {
       toast({
         title: 'Erro',
         description: 'Todos os campos são obrigatórios',
@@ -133,15 +147,15 @@ export const EnderecoManagement: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    
+
     try {
       let result;
-      
+
       if (editingItem) {
         // Ao editar, manter ID original
         result = await updateEndereco({
           ...formData,
-          id: editingItem.id
+          id: editingItem.id,
         });
       } else {
         // Ao criar, novo endereço
@@ -174,12 +188,16 @@ export const EnderecoManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: Endereco) => {
-    if (!confirm(`Tem certeza que deseja excluir o endereço "${item.logradouro}, ${item.cidade}"?`)) {
+    if (
+      !confirm(
+        `Tem certeza que deseja excluir o endereço "${item.logradouro}, ${item.cidade}"?`
+      )
+    ) {
       return;
     }
 
     const result = await deleteEndereco(item.id);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -200,33 +218,33 @@ export const EnderecoManagement: React.FC = () => {
     {
       key: 'cep',
       label: 'CEP',
-      className: 'font-medium w-24'
+      className: 'font-medium w-24',
     },
     {
       key: 'logradouro',
       label: 'Logradouro',
-      className: 'font-medium'
+      className: 'font-medium hidden md:table-cell',
     },
     {
       key: 'bairro',
       label: 'Bairro',
-      className: 'text-muted-foreground'
+      className: 'text-muted-foreground hidden md:table-cell',
     },
     {
       key: 'cidade',
       label: 'Cidade',
-      className: 'font-medium'
+      className: 'font-medium',
     },
     {
       key: 'estado',
       label: 'UF',
-      className: 'w-16 text-center font-medium'
+      className: 'w-16 text-center font-medium',
     },
     {
       key: 'created_at',
       label: 'Criado em',
       render: (item) => new Date(item.created_at).toLocaleDateString('pt-BR'),
-      className: 'w-32 text-sm text-muted-foreground'
+      className: 'w-32 text-sm text-muted-foreground hidden md:table-cell',
     },
     {
       key: 'actions',
@@ -239,8 +257,8 @@ export const EnderecoManagement: React.FC = () => {
           canToggleStatus={false}
         />
       ),
-      className: 'w-16'
-    }
+      className: 'w-16',
+    },
   ];
 
   return (
@@ -301,7 +319,9 @@ export const EnderecoManagement: React.FC = () => {
                 type="text"
                 placeholder="Ex: Rua das Flores"
                 value={formData.logradouro}
-                onChange={(e) => handleInputChange('logradouro', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('logradouro', e.target.value)
+                }
                 disabled={isSubmitting}
                 required
               />
@@ -335,7 +355,7 @@ export const EnderecoManagement: React.FC = () => {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="estado">UF *</Label>
                 <Input
@@ -343,7 +363,9 @@ export const EnderecoManagement: React.FC = () => {
                   type="text"
                   placeholder="SP"
                   value={formData.estado}
-                  onChange={(e) => handleInputChange('estado', e.target.value.toUpperCase())}
+                  onChange={(e) =>
+                    handleInputChange('estado', e.target.value.toUpperCase())
+                  }
                   disabled={isSubmitting}
                   maxLength={2}
                   required
@@ -362,7 +384,11 @@ export const EnderecoManagement: React.FC = () => {
                 Cancelar
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Salvando...' : editingItem ? 'Atualizar' : 'Criar'}
+                {isSubmitting
+                  ? 'Salvando...'
+                  : editingItem
+                    ? 'Atualizar'
+                    : 'Criar'}
               </Button>
             </div>
           </form>
@@ -372,4 +398,4 @@ export const EnderecoManagement: React.FC = () => {
   );
 };
 
-EnderecoManagement.displayName = 'EnderecoManagement'; 
+EnderecoManagement.displayName = 'EnderecoManagement';

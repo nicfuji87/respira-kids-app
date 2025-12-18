@@ -3,7 +3,7 @@ import { Input } from '@/components/primitives/input';
 import { Button } from '@/components/primitives/button';
 import { Checkbox } from '@/components/primitives/checkbox';
 import { Search, AlertTriangle, Users, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDateBR } from '@/lib/utils';
 import {
   fetchPatientsByResponsible,
   searchPatientsByName,
@@ -218,10 +218,8 @@ export const PatientSelectionStep = React.memo<PatientSelectionStepProps>(
                       </p>
                       {patient.data_nascimento && (
                         <p className="text-xs text-respira-text-secondary">
-                          Nascimento:{' '}
-                          {new Date(patient.data_nascimento).toLocaleDateString(
-                            'pt-BR'
-                          )}
+                          {/* AI dev note: Usar formatDateBR para evitar bug de timezone */}
+                          Nascimento: {formatDateBR(patient.data_nascimento)}
                         </p>
                       )}
                       {patient.responsavel_legal_nome && (
@@ -291,10 +289,8 @@ export const PatientSelectionStep = React.memo<PatientSelectionStepProps>(
                       </p>
                       {patient.data_nascimento && (
                         <p className="text-xs text-respira-text-secondary">
-                          Nascimento:{' '}
-                          {new Date(patient.data_nascimento).toLocaleDateString(
-                            'pt-BR'
-                          )}
+                          {/* AI dev note: Usar formatDateBR para evitar bug de timezone */}
+                          Nascimento: {formatDateBR(patient.data_nascimento)}
                         </p>
                       )}
                       {patient.cidade && (

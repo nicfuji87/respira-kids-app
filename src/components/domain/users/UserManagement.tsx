@@ -264,6 +264,7 @@ export const UserManagement = React.memo<UserManagementProps>(
       {
         key: 'contato',
         label: 'Contato',
+        className: 'hidden md:table-cell',
         render: (usuario: Usuario) => (
           <div className="space-y-1">
             {usuario.email && (
@@ -284,6 +285,7 @@ export const UserManagement = React.memo<UserManagementProps>(
       {
         key: 'role',
         label: 'Função',
+        className: 'hidden md:table-cell',
         render: (usuario: Usuario) =>
           usuario.role ? (
             <Badge variant="outline" className="capitalize">
@@ -316,6 +318,7 @@ export const UserManagement = React.memo<UserManagementProps>(
       {
         key: 'created_at',
         label: 'Cadastro',
+        className: 'hidden md:table-cell',
         render: (usuario: Usuario) => (
           <div className="flex items-center text-xs">
             <Calendar className="h-3 w-3 mr-1" />
@@ -326,7 +329,7 @@ export const UserManagement = React.memo<UserManagementProps>(
       {
         key: 'approval',
         label: 'Aprovação',
-        className: 'w-32',
+        className: 'w-32 hidden md:table-cell',
         render: (usuario: Usuario) => (
           <div className="flex items-center gap-1">
             {!usuario.is_approved ? (
@@ -356,7 +359,7 @@ export const UserManagement = React.memo<UserManagementProps>(
       {
         key: 'role_actions',
         label: 'Role',
-        className: 'w-40',
+        className: 'w-40 hidden md:table-cell',
         render: (usuario: Usuario) => (
           <div className="flex items-center gap-1">
             <Button

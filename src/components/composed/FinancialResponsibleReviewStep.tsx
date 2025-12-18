@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/primitives/button';
 import { ChevronRight, User, Users, MapPin } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDateBR } from '@/lib/utils';
 import type { ResponsibleData } from './ResponsiblePhoneValidationStep';
 import type { SelectedPatient } from './PatientSelectionStep';
 import type { FinancialResponsibleTypeData } from './FinancialResponsibleTypeStep';
@@ -79,10 +79,8 @@ export const FinancialResponsibleReviewStep =
                   </p>
                   {patient.data_nascimento && (
                     <p className="text-xs text-respira-text-secondary">
-                      Nascimento:{' '}
-                      {new Date(patient.data_nascimento).toLocaleDateString(
-                        'pt-BR'
-                      )}
+                      {/* AI dev note: Usar formatDateBR para evitar bug de timezone */}
+                      Nascimento: {formatDateBR(patient.data_nascimento)}
                     </p>
                   )}
                   {patient.responsavel_legal_nome && (

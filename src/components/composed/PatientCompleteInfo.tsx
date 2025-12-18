@@ -35,7 +35,7 @@ import {
   DialogTitle,
 } from '@/components/primitives/dialog';
 import { useToast } from '@/components/primitives/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, formatDateBR } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
@@ -551,10 +551,8 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                     })()}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Nascimento:{' '}
-                    {new Date(patient.data_nascimento).toLocaleDateString(
-                      'pt-BR'
-                    )}
+                    {/* AI dev note: Usar formatDateBR para evitar bug de timezone */}
+                    Nascimento: {formatDateBR(patient.data_nascimento)}
                   </p>
                 </div>
               </div>

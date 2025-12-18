@@ -1,7 +1,8 @@
 // AI dev note: Edge Function para finalizar cadastro público de paciente
 // Cria todas as entidades no banco de dados seguindo a ordem correta
 // Logs detalhados em cada etapa para rastreamento
-// Versão 39: Logs detalhados de CEP + mensagens de erro melhoradas
+// Versão 40: Fix timezone bug - data de nascimento formatada no webhook para evitar
+//            que sistemas externos (n8n) exibam data errada por problema de fuso horário
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -68,6 +69,20 @@ interface PatientRegistrationData {
 
 function extractPhoneFromJid(jid: string): string {
   return jid.split('@')[0];
+}
+
+// AI dev note: Formata data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
+// Usa manipulação de string para EVITAR PROBLEMAS DE TIMEZONE
+// Quando usamos new Date('2024-04-16'), JavaScript interpreta como meia-noite UTC
+// No Brasil (UTC-3), isso vira 21:00 do dia anterior, causando bugs de exibição
+function formatDateBR(dateISO: string | null | undefined): string {
+  if (!dateISO) return '';
+  // Extrair apenas a parte da data (remover hora se existir)
+  const datePart = dateISO.split('T')[0];
+  const parts = datePart.split('-');
+  if (parts.length !== 3) return dateISO;
+  const [year, month, day] = parts;
+  return `${day}/${month}/${year}`;
 }
 
 // AI dev note: Função helper para limpar CPF antes de salvar no banco
@@ -880,6 +895,8 @@ Deno.serve(async (req: Request) => {
 
     if (webhookUrl) {
       try {
+        // AI dev note: Incluir dados formatados no payload para evitar problemas de timezone
+        // no sistema externo (n8n) ao formatar datas
         const webhookResponse = await fetch(webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -890,6 +907,23 @@ Deno.serve(async (req: Request) => {
             responsavelFinanceiroId,
             contratoId: contratoId,
             timestamp: new Date().toISOString(),
+            // Dados extras já formatados para evitar problemas de timezone
+            paciente: {
+              nome: data.paciente.nome,
+              dataNascimento: data.paciente.dataNascimento, // ISO: YYYY-MM-DD
+              dataNascimentoFormatada: formatDateBR(
+                data.paciente.dataNascimento
+              ), // BR: DD/MM/YYYY
+              sexo: data.paciente.sexo,
+            },
+            responsavelLegal: {
+              nome:
+                data.responsavelLegal?.nome ||
+                data.existingUserData?.nome ||
+                '',
+            },
+            whatsappJid: data.whatsappJid,
+            phoneNumber: data.phoneNumber,
           }),
         });
 
@@ -935,7 +969,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 200,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 37, // AI dev note: Incrementar versão
+        edge_function_version: 40, // AI dev note: Incrementar versão
         paciente_id: pacienteId,
         responsavel_legal_id: responsavelLegalId,
         responsavel_financeiro_id: responsavelFinanceiroId,
@@ -975,7 +1009,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 500,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 37, // AI dev note: Incrementar versão
+        edge_function_version: 40, // AI dev note: Incrementar versão
         error_type: 'database_error',
         error_details: {
           message: error instanceof Error ? error.message : String(error),

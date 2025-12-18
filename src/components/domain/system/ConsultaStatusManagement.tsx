@@ -8,10 +8,10 @@ import {
   type GenericTableColumn,
   type FormField,
 } from '@/components/composed';
-import type { 
-  ConsultaStatus, 
+import type {
+  ConsultaStatus,
   ConsultaStatusCreateInput,
-  SystemEntityFilters 
+  SystemEntityFilters,
 } from '@/types/system-config';
 import {
   fetchConsultaStatus,
@@ -28,7 +28,7 @@ export const ConsultaStatusManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filters] = useState<SystemEntityFilters>({
     page: 1,
-    limit: 10
+    limit: 10,
   });
 
   // Modal states
@@ -40,8 +40,8 @@ export const ConsultaStatusManagement: React.FC = () => {
   const form = useForm<ConsultaStatusCreateInput>({
     defaultValues: {
       descricao: '',
-      cor: '#3B82F6'
-    }
+      cor: '#3B82F6',
+    },
   });
 
   // === DATA LOADING ===
@@ -77,12 +77,12 @@ export const ConsultaStatusManagement: React.FC = () => {
     // Garantir que o form seja resetado corretamente
     const defaultValues = {
       descricao: '',
-      cor: '#3B82F6'
+      cor: '#3B82F6',
     };
-    
+
     form.reset(defaultValues);
     setEditingItem(null);
-    
+
     // Pequeno delay para garantir que o form seja resetado antes do modal abrir
     setTimeout(() => {
       setIsFormOpen(true);
@@ -93,9 +93,9 @@ export const ConsultaStatusManagement: React.FC = () => {
     // Garantir que todos os valores sejam válidos para evitar React.Children.only error
     const formValues = {
       descricao: item.descricao || '',
-      cor: item.cor || '#3B82F6'
+      cor: item.cor || '#3B82F6',
     };
-    
+
     form.reset(formValues);
     setEditingItem(item);
     setIsFormOpen(true);
@@ -103,16 +103,16 @@ export const ConsultaStatusManagement: React.FC = () => {
 
   const handleSubmit = async (formData: ConsultaStatusCreateInput) => {
     setIsSubmitting(true);
-    
+
     try {
       let result;
-      
+
       if (editingItem) {
         // Ao editar, preservar código original
         result = await updateConsultaStatus({
           ...formData,
           id: editingItem.id,
-          codigo: editingItem.codigo // Preservar código original
+          codigo: editingItem.codigo, // Preservar código original
         });
       } else {
         // Ao criar, gerar código automático baseado na descrição
@@ -120,13 +120,13 @@ export const ConsultaStatusManagement: React.FC = () => {
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-          .replace(/[^a-z0-9]/g, '_')      // Substitui caracteres especiais por _
-          .replace(/_+/g, '_')             // Remove múltiplos _ consecutivos
-          .replace(/^_|_$/g, '');          // Remove _ do início e fim
-          
+          .replace(/[^a-z0-9]/g, '_') // Substitui caracteres especiais por _
+          .replace(/_+/g, '_') // Remove múltiplos _ consecutivos
+          .replace(/^_|_$/g, ''); // Remove _ do início e fim
+
         result = await createConsultaStatus({
           ...formData,
-          codigo
+          codigo,
         });
       }
 
@@ -161,7 +161,7 @@ export const ConsultaStatusManagement: React.FC = () => {
     }
 
     const result = await deleteConsultaStatus(item.id);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -182,32 +182,32 @@ export const ConsultaStatusManagement: React.FC = () => {
     {
       key: 'codigo',
       label: 'Código',
-      className: 'w-32'
+      className: 'w-32',
     },
     {
       key: 'descricao',
       label: 'Descrição',
-      className: 'font-medium'
+      className: 'font-medium',
     },
     {
       key: 'cor',
       label: 'Cor',
       render: (item) => (
         <div className="flex items-center gap-2">
-          <div 
+          <div
             className="w-4 h-4 rounded-full border border-gray-300"
             style={{ backgroundColor: item.cor }}
           />
           <code className="text-xs text-muted-foreground">{item.cor}</code>
         </div>
       ),
-      className: 'w-32'
+      className: 'w-32',
     },
     {
       key: 'created_at',
       label: 'Criado em',
       render: (item) => new Date(item.created_at).toLocaleDateString('pt-BR'),
-      className: 'w-32 text-sm text-muted-foreground'
+      className: 'w-32 text-sm text-muted-foreground hidden md:table-cell',
     },
     {
       key: 'actions',
@@ -219,8 +219,8 @@ export const ConsultaStatusManagement: React.FC = () => {
           canToggleStatus={false}
         />
       ),
-      className: 'w-16'
-    }
+      className: 'w-16',
+    },
   ];
 
   // === FORM FIELDS ===
@@ -230,14 +230,14 @@ export const ConsultaStatusManagement: React.FC = () => {
       label: 'Descrição',
       type: 'text',
       placeholder: 'Ex: Agendado, Confirmado, Finalizado',
-      required: true
+      required: true,
     },
     {
       name: 'cor',
       label: 'Cor',
       type: 'color',
-      required: true
-    }
+      required: true,
+    },
   ];
 
   return (
@@ -261,10 +261,12 @@ export const ConsultaStatusManagement: React.FC = () => {
         onSubmit={handleSubmit}
         form={form}
         fields={formFields}
-        title={editingItem ? 'Editar Status de Consulta' : 'Novo Status de Consulta'}
+        title={
+          editingItem ? 'Editar Status de Consulta' : 'Novo Status de Consulta'
+        }
         description={
-          editingItem 
-            ? 'Altere os dados do status de consulta' 
+          editingItem
+            ? 'Altere os dados do status de consulta'
             : 'Preencha os dados para criar um novo status'
         }
         isEditing={!!editingItem}
@@ -274,4 +276,4 @@ export const ConsultaStatusManagement: React.FC = () => {
   );
 };
 
-ConsultaStatusManagement.displayName = 'ConsultaStatusManagement'; 
+ConsultaStatusManagement.displayName = 'ConsultaStatusManagement';
