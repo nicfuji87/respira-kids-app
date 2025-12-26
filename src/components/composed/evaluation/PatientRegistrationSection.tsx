@@ -706,11 +706,17 @@ export const PatientRegistrationSection: React.FC<
       if (tipoPessoaError) throw tipoPessoaError;
 
       // Criar nova pessoa
+      // AI dev note: Se CPF estiver vazio, usar "Não Informado" para satisfazer constraint do banco
+      // O constraint pessoas_cpf_cnpj_format exige que cpf_cnpj seja NULL ou tenha >= 11 caracteres
+      const cpfTratado = novoResponsavel.cpf_cnpj?.trim()
+        ? novoResponsavel.cpf_cnpj.trim()
+        : 'Não Informado';
+
       const { data: novaPessoa, error: pessoaError } = await supabase
         .from('pessoas')
         .insert({
           nome: novoResponsavel.nome,
-          cpf_cnpj: novoResponsavel.cpf_cnpj || null,
+          cpf_cnpj: cpfTratado,
           data_nascimento: novoResponsavel.data_nascimento || null,
           bio_profissional: novoResponsavel.profissao || null,
           id_tipo_pessoa: tipoPessoa.id,
@@ -756,7 +762,7 @@ export const PatientRegistrationSection: React.FC<
         setPaiData({
           id: novaPessoa.id,
           nome: novoResponsavel.nome,
-          cpf_cnpj: novoResponsavel.cpf_cnpj || null,
+          cpf_cnpj: cpfTratado,
           data_nascimento: novoResponsavel.data_nascimento || null,
           profissao: novoResponsavel.profissao || null,
         });
@@ -765,7 +771,7 @@ export const PatientRegistrationSection: React.FC<
         setMaeData({
           id: novaPessoa.id,
           nome: novoResponsavel.nome,
-          cpf_cnpj: novoResponsavel.cpf_cnpj || null,
+          cpf_cnpj: cpfTratado,
           data_nascimento: novoResponsavel.data_nascimento || null,
           profissao: novoResponsavel.profissao || null,
         });
