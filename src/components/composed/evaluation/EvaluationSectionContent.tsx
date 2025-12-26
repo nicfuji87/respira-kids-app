@@ -56,6 +56,7 @@ import type {
   AtivacaoFlexores,
   PadraoLandau,
   AIMSDetalhada,
+  SimNaoNaoSabe,
 } from '@/types/avaliacoes-clinicas';
 import {
   ASSIMETRIAS_OPCOES,
@@ -67,6 +68,7 @@ import {
   QUALIDADE_SONO_OPCOES,
   POSICAO_PREFERENCIA_OPCOES,
   SIM_NAO_SUSPEITA_OPCOES,
+  SIM_NAO_NAO_SABE_OPCOES,
   TIPO_REFLUXO_OPCOES,
   LOCAL_INTERNACAO_OPCOES,
   PLAGIOCEFALIA_TIPO_OPCOES,
@@ -365,17 +367,23 @@ export const EvaluationSectionContent: React.FC<
             </Field>
 
             <Field label="Encaixe precoce?">
-              <BooleanToggle
-                value={avaliacao.encaixe_precoce}
-                onChange={(v) => onChange({ encaixe_precoce: v })}
+              <RadioButtonGroup
+                options={SIM_NAO_NAO_SABE_OPCOES}
+                value={avaliacao.encaixe_precoce || ''}
+                onChange={(v) =>
+                  onChange({ encaixe_precoce: (v as SimNaoNaoSabe) || null })
+                }
                 disabled={isReadOnly}
               />
             </Field>
 
             <Field label="Circular de cordão?">
-              <BooleanToggle
-                value={avaliacao.circular_cordao}
-                onChange={(v) => onChange({ circular_cordao: v })}
+              <RadioButtonGroup
+                options={SIM_NAO_NAO_SABE_OPCOES}
+                value={avaliacao.circular_cordao || ''}
+                onChange={(v) =>
+                  onChange({ circular_cordao: (v as SimNaoNaoSabe) || null })
+                }
                 disabled={isReadOnly}
               />
             </Field>
