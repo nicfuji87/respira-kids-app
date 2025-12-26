@@ -324,7 +324,8 @@ export type QualidadeSono =
   | 'ruim'
   | 'fragmentado'
   | 'dorme_pouco'
-  | 'dorme_muito';
+  | 'dorme_muito'
+  | 'variado';
 
 export type PosicaoPreferencia =
   | 'direita'
@@ -3305,6 +3306,7 @@ export const QUALIDADE_SONO_OPCOES = [
   { valor: 'fragmentado', label: 'Fragmentado (acorda várias vezes)' },
   { valor: 'dorme_pouco', label: 'Dorme pouco' },
   { valor: 'dorme_muito', label: 'Dorme muito' },
+  { valor: 'variado', label: 'Variado' },
 ];
 
 export const POSICAO_PREFERENCIA_OPCOES = [
