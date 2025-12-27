@@ -2585,6 +2585,8 @@ export interface AvaliacaoClinica {
   status: AvaliacaoStatus;
 
   // Seção 1: Cadastro do Paciente
+  pai_id?: string | null;
+  mae_id?: string | null;
   nome_pai?: string | null;
   nome_mae?: string | null;
   obstetra_id?: string | null;

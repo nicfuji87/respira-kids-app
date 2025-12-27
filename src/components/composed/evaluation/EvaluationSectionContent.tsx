@@ -181,7 +181,15 @@ export const EvaluationSectionContent: React.FC<
             <PatientRegistrationSection
               patientId={avaliacao.pessoa_id}
               patientName={patientName}
+              avaliacaoPaiId={avaliacao.pai_id}
+              avaliacaoMaeId={avaliacao.mae_id}
               avaliacaoObstetraId={avaliacao.obstetra_id}
+              onPaiChange={(paiId, nomePai) =>
+                onChange({ pai_id: paiId, nome_pai: nomePai })
+              }
+              onMaeChange={(maeId, nomeMae) =>
+                onChange({ mae_id: maeId, nome_mae: nomeMae })
+              }
               onObstetraChange={(obstetraId) =>
                 onChange({ obstetra_id: obstetraId })
               }

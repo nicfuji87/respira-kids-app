@@ -62,7 +62,11 @@ interface Obstetra {
 interface PatientRegistrationSectionProps {
   patientId: string;
   patientName?: string;
+  avaliacaoPaiId?: string | null;
+  avaliacaoMaeId?: string | null;
   avaliacaoObstetraId?: string | null;
+  onPaiChange: (paiId: string | null, nomePai: string | null) => void;
+  onMaeChange: (maeId: string | null, nomeMae: string | null) => void;
   onObstetraChange: (obstetraId: string | null) => void;
   isReadOnly: boolean;
 }
@@ -235,7 +239,11 @@ export const PatientRegistrationSection: React.FC<
 > = ({
   patientId,
   patientName,
+  avaliacaoPaiId,
+  avaliacaoMaeId,
   avaliacaoObstetraId,
+  onPaiChange,
+  onMaeChange,
   onObstetraChange,
   isReadOnly,
 }) => {
@@ -250,9 +258,9 @@ export const PatientRegistrationSection: React.FC<
   );
   const [isLoading, setIsLoading] = useState(true);
 
-  // Estados para pai e mãe selecionados
-  const [paiId, setPaiId] = useState<string | null>(null);
-  const [maeId, setMaeId] = useState<string | null>(null);
+  // Estados para pai e mãe selecionados - inicializados com valores da avaliação
+  const [paiId, setPaiId] = useState<string | null>(avaliacaoPaiId || null);
+  const [maeId, setMaeId] = useState<string | null>(avaliacaoMaeId || null);
 
   // Estados para dados editáveis do pai
   const [paiData, setPaiData] = useState<ResponsavelCompleto | null>(null);
@@ -458,6 +466,27 @@ export const PatientRegistrationSection: React.FC<
     loadData();
   }, [loadData]);
 
+  // AI dev note: Inicializar dados do pai e mãe quando responsáveis são carregados
+  // e já existem IDs salvos na avaliação
+  useEffect(() => {
+    if (responsaveis.length > 0) {
+      // Inicializar pai se já tiver ID salvo
+      if (avaliacaoPaiId && !paiData) {
+        const resp = responsaveis.find((r) => r.id === avaliacaoPaiId);
+        if (resp) {
+          setPaiData({ ...resp });
+        }
+      }
+      // Inicializar mãe se já tiver ID salvo
+      if (avaliacaoMaeId && !maeData) {
+        const resp = responsaveis.find((r) => r.id === avaliacaoMaeId);
+        if (resp) {
+          setMaeData({ ...resp });
+        }
+      }
+    }
+  }, [responsaveis, avaliacaoPaiId, avaliacaoMaeId, paiData, maeData]);
+
   // Quando seleciona um pai
   const handleSelectPai = (id: string) => {
     if (id === NOVO_RESPONSAVEL_ID) {
@@ -476,6 +505,8 @@ export const PatientRegistrationSection: React.FC<
     if (resp) {
       setPaiData({ ...resp });
       setPaiEditado(false);
+      // AI dev note: Salvar pai_id e nome_pai na avaliação
+      onPaiChange(id, resp.nome);
     }
   };
 
@@ -497,6 +528,8 @@ export const PatientRegistrationSection: React.FC<
     if (resp) {
       setMaeData({ ...resp });
       setMaeEditado(false);
+      // AI dev note: Salvar mae_id e nome_mae na avaliação
+      onMaeChange(id, resp.nome);
     }
   };
 
@@ -585,15 +618,17 @@ export const PatientRegistrationSection: React.FC<
       setShowBuscarResponsavelDialog(false);
       await loadData();
 
-      // Selecionar como pai ou mãe
+      // Selecionar como pai ou mãe e salvar na avaliação
       if (tipoBuscarResponsavel === 'pai') {
         setPaiId(responsavel.id);
         setPaiData({ ...responsavel });
         setPaiEditado(false);
+        onPaiChange(responsavel.id, responsavel.nome);
       } else if (tipoBuscarResponsavel === 'mae') {
         setMaeId(responsavel.id);
         setMaeData({ ...responsavel });
         setMaeEditado(false);
+        onMaeChange(responsavel.id, responsavel.nome);
       }
 
       setTipoBuscarResponsavel(null);
@@ -756,7 +791,7 @@ export const PatientRegistrationSection: React.FC<
       // Após recarregar, selecionar o novo responsável
       await loadData();
 
-      // Selecionar como pai ou mãe
+      // Selecionar como pai ou mãe e salvar na avaliação
       if (tipoNovoResponsavel === 'pai') {
         setPaiId(novaPessoa.id);
         setPaiData({
@@ -766,6 +801,7 @@ export const PatientRegistrationSection: React.FC<
           data_nascimento: novoResponsavel.data_nascimento || null,
           profissao: novoResponsavel.profissao || null,
         });
+        onPaiChange(novaPessoa.id, novoResponsavel.nome);
       } else if (tipoNovoResponsavel === 'mae') {
         setMaeId(novaPessoa.id);
         setMaeData({
@@ -775,6 +811,7 @@ export const PatientRegistrationSection: React.FC<
           data_nascimento: novoResponsavel.data_nascimento || null,
           profissao: novoResponsavel.profissao || null,
         });
+        onMaeChange(novaPessoa.id, novoResponsavel.nome);
       }
 
       setTipoNovoResponsavel(null);
