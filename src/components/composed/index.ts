@@ -97,6 +97,11 @@ export { PatientClinicalEvaluations } from './evaluation';
 export { EvaluationFormModal } from './evaluation';
 export { EvaluationSectionContent } from './evaluation';
 
+// Clinical Evolution Components (Respiratory and Motor/Asymmetry)
+export { EvolutionFormModal } from './evolution';
+export { EvolutionSectionContent } from './evolution';
+export type { EvolutionFormModalProps } from './evolution';
+
 // Financial Components
 export { PinConfiguration } from './PinConfiguration';
 export { PinValidationDialog } from './PinValidationDialog';
