@@ -50,7 +50,8 @@ import {
   updateAvaliacao,
   autoSaveAvaliacao,
   calcularIdadeSemanas,
-  verificarSecaoCompleta,
+  verificarSecaoCompletaDetalhado,
+  getNomeCampo,
   calcularProgressoAvaliacao,
   finalizarAvaliacao,
   deleteAvaliacao,
@@ -251,7 +252,22 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
   ): 'completo' | 'parcial' | 'vazio' => {
     if (!avaliacao) return 'vazio';
     const secao = AVALIACOES_SECOES[secaoIndex];
-    return verificarSecaoCompleta(avaliacao, secao.campos);
+    const resultado = verificarSecaoCompletaDetalhado(avaliacao, secao.campos);
+    return resultado.status;
+  };
+
+  // Obter detalhes dos campos faltantes de uma seção
+  const getSectionDetails = (
+    secaoIndex: number
+  ): { camposFaltantes: string[]; total: number; preenchidos: number } => {
+    if (!avaliacao) return { camposFaltantes: [], total: 0, preenchidos: 0 };
+    const secao = AVALIACOES_SECOES[secaoIndex];
+    const resultado = verificarSecaoCompletaDetalhado(avaliacao, secao.campos);
+    return {
+      camposFaltantes: resultado.camposFaltantes,
+      total: resultado.camposObrigatorios.length,
+      preenchidos: resultado.camposPreenchidos.length,
+    };
   };
 
   // Calcular progresso geral
@@ -409,6 +425,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                       const status = getSectionStatus(index);
                       const isActive = currentSection === index;
                       const corCategoria = getCorCategoria(secao.categoria);
+                      const details = getSectionDetails(index);
 
                       return (
                         <button
@@ -434,25 +451,66 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                         >
                           {renderSectionStatusIcon(status)}
                           <div className="flex-1 min-w-0">
-                            <p
-                              className={cn(
-                                'font-medium truncate',
-                                isActive ? 'text-primary-foreground' : ''
+                            <div className="flex items-center gap-2">
+                              <p
+                                className={cn(
+                                  'font-medium truncate',
+                                  isActive ? 'text-primary-foreground' : ''
+                                )}
+                              >
+                                {secao.numero}. {secao.titulo}
+                              </p>
+                              {/* Contador de campos */}
+                              {details.total > 0 && (
+                                <span
+                                  className={cn(
+                                    'text-[10px] px-1.5 py-0.5 rounded-full',
+                                    isActive
+                                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                                      : status === 'completo'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : status === 'parcial'
+                                          ? 'bg-amber-100 text-amber-700'
+                                          : 'bg-muted text-muted-foreground'
+                                  )}
+                                >
+                                  {details.preenchidos}/{details.total}
+                                </span>
                               )}
-                            >
-                              {secao.numero}. {secao.titulo}
-                            </p>
-                            {secao.descricao && (
+                            </div>
+                            {/* Mostrar campos faltantes em vez de descrição se houver */}
+                            {status === 'parcial' &&
+                            details.camposFaltantes.length > 0 ? (
                               <p
                                 className={cn(
                                   'text-xs truncate',
-                                  isActive
-                                    ? 'text-primary-foreground/70'
-                                    : 'text-muted-foreground'
+                                  isActive ? 'text-amber-200' : 'text-amber-600'
                                 )}
+                                title={details.camposFaltantes
+                                  .map((c) => getNomeCampo(c))
+                                  .join(', ')}
                               >
-                                {secao.descricao}
+                                ⚠️ Falta:{' '}
+                                {details.camposFaltantes
+                                  .slice(0, 2)
+                                  .map((c) => getNomeCampo(c))
+                                  .join(', ')}
+                                {details.camposFaltantes.length > 2 &&
+                                  ` +${details.camposFaltantes.length - 2}`}
                               </p>
+                            ) : (
+                              secao.descricao && (
+                                <p
+                                  className={cn(
+                                    'text-xs truncate',
+                                    isActive
+                                      ? 'text-primary-foreground/70'
+                                      : 'text-muted-foreground'
+                                  )}
+                                >
+                                  {secao.descricao}
+                                </p>
+                              )
                             )}
                           </div>
                         </button>
@@ -704,7 +762,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                           </TooltipTrigger>
                           <TooltipContent
                             side="right"
-                            className="max-w-[200px]"
+                            className="max-w-[280px]"
                           >
                             <p className="font-medium">
                               {secao.numero}. {secao.titulo}
@@ -714,6 +772,37 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                                 {secao.descricao}
                               </p>
                             )}
+                            {/* Mostrar campos faltantes se status for parcial */}
+                            {(() => {
+                              const details = getSectionDetails(index);
+                              if (
+                                status === 'parcial' &&
+                                details.camposFaltantes.length > 0
+                              ) {
+                                return (
+                                  <div className="mt-2 pt-2 border-t border-amber-200">
+                                    <p className="text-xs font-medium text-amber-600">
+                                      Faltam {details.camposFaltantes.length}{' '}
+                                      campo(s):
+                                    </p>
+                                    <ul className="text-xs text-amber-500 mt-1 space-y-0.5">
+                                      {details.camposFaltantes
+                                        .slice(0, 5)
+                                        .map((c) => (
+                                          <li key={c}>• {getNomeCampo(c)}</li>
+                                        ))}
+                                      {details.camposFaltantes.length > 5 && (
+                                        <li className="italic">
+                                          ... e mais{' '}
+                                          {details.camposFaltantes.length - 5}
+                                        </li>
+                                      )}
+                                    </ul>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </TooltipContent>
                         </Tooltip>
                       );

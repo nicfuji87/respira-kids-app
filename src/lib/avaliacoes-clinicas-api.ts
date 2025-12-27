@@ -144,7 +144,9 @@ export async function autoSaveAvaliacao(
 /**
  * Finaliza uma avaliação (muda status para 'finalizada')
  */
-export async function finalizarAvaliacao(id: string): Promise<AvaliacaoClinica> {
+export async function finalizarAvaliacao(
+  id: string
+): Promise<AvaliacaoClinica> {
   return updateAvaliacao(id, { status: 'finalizada' });
 }
 
@@ -208,47 +210,258 @@ export function calcularIdadeSemanas(
 }
 
 /**
+ * Mapeamento de nomes técnicos para nomes legíveis (para exibir no tooltip)
+ */
+export const NOMES_CAMPOS: Record<string, string> = {
+  // Pré-natal
+  numero_gestacoes: 'Número de gestações',
+  idade_gestacional_semanas: 'Idade gestacional',
+  gestacoes_info: 'Informações das gestações',
+  liquido_amniotico: 'Líquido amniótico',
+  liquido_amniotico_outro: 'Líquido amniótico (especificar)',
+  apresentacao_fetal: 'Apresentação fetal',
+  apresentacao_fetal_outra: 'Apresentação fetal (especificar)',
+  encaixe_precoce: 'Encaixe precoce',
+  circular_cordao: 'Circular de cordão',
+  intercorrencias_prenatais: 'Intercorrências pré-natais',
+  // Peri-natal
+  tipo_parto: 'Tipo de parto',
+  instrumentos_parto: 'Instrumentos utilizados',
+  instrumentos_parto_outro: 'Instrumentos (especificar)',
+  duracao_trabalho_parto_minutos: 'Duração do trabalho de parto',
+  intercorrencias_perinatais: 'Intercorrências peri-natais',
+  // Pós-natal
+  apgar_1min: 'APGAR 1 minuto',
+  apgar_5min: 'APGAR 5 minutos',
+  tempo_internacao_dias: 'Tempo de internação',
+  local_internacao: 'Local de internação',
+  local_internacao_outro: 'Local de internação (especificar)',
+  assistencia_ventilatoria: 'Assistência ventilatória',
+  tipos_assistencia_ventilatoria: 'Tipos de assistência ventilatória',
+  tipo_assistencia_ventilatoria_outro: 'Assistência ventilatória (especificar)',
+  tempo_assistencia_ventilatoria_dias: 'Tempo de assistência ventilatória',
+  idade_inclinacao_cabeca_dias: 'Idade quando notou inclinação',
+  // Marcos motores
+  marcos_motores: 'Marcos motores atingidos',
+  // Queixa
+  queixa_principal: 'Queixa principal',
+  // Torcicolo
+  tipo_torcicolo: 'Tipo de torcicolo',
+  lado_afetado_torcicolo: 'Lado afetado',
+  torcicolo_detalhado: 'Detalhes do torcicolo',
+  // Goniometria
+  goniometria: 'Goniometria cervical',
+  // MFS
+  mfs_direito: 'MFS direito',
+  mfs_esquerdo: 'MFS esquerdo',
+  // Tensão
+  tensao_neuromeningea: 'Tensão neuromeníngea',
+  // Sensorial
+  funcoes_sensoriais: 'Funções sensoriais',
+  // Craniometria
+  medidas_craniometricas: 'Medidas craniométricas',
+  // Assimetria
+  assimetria_craniana: 'Assimetria craniana',
+  // FSOS2
+  fsos2: 'FSOS-2',
+  // Funcionalidade
+  funcionalidade_cervical: 'Funcionalidade cervical',
+  // Resposta postural
+  resposta_postural: 'Resposta postural',
+  // AIMS
+  aims_detalhada: 'AIMS detalhada',
+  // Severidade
+  grau_severidade: 'Grau de severidade',
+  severidade_calculada: 'Classificação de severidade',
+  // Diagnóstico
+  diagnostico_cinetico_funcional: 'Diagnóstico cinético-funcional',
+  diagnostico_gerado: 'Diagnóstico gerado',
+  // Objetivos
+  objetivos_tratamento: 'Objetivos do tratamento',
+  plano_tratamento: 'Plano de tratamento',
+  reavaliacao_recomendada: 'Reavaliação recomendada',
+  // Exames
+  exames_complementares: 'Exames complementares',
+};
+
+/**
+ * Retorna o nome legível de um campo
+ */
+export function getNomeCampo(campo: string): string {
+  return NOMES_CAMPOS[campo] || campo.replace(/_/g, ' ');
+}
+
+/**
+ * AI dev note: Campos condicionais - só são obrigatórios se outro campo tiver um valor específico
+ * Formato: campo_condicional -> { dependeDe: campo_pai, valorRequerido: valor | array de valores }
+ * Se valorRequerido for undefined, significa que o campo só é obrigatório se o pai estiver preenchido
+ */
+const CAMPOS_CONDICIONAIS: Record<
+  string,
+  { dependeDe: string; valorRequerido?: unknown | unknown[] }
+> = {
+  // Pré-natal: idade_gestacional só se não for gestação múltipla
+  idade_gestacional_semanas: {
+    dependeDe: 'gestacao_multipla',
+    valorRequerido: false,
+  },
+  // gestacoes_info só se for gestação múltipla
+  gestacoes_info: { dependeDe: 'gestacao_multipla', valorRequerido: true },
+  // Campos "outro" só são obrigatórios se o campo principal for "outro"
+  liquido_amniotico_outro: {
+    dependeDe: 'liquido_amniotico',
+    valorRequerido: 'outro',
+  },
+  apresentacao_fetal_outra: {
+    dependeDe: 'apresentacao_fetal',
+    valorRequerido: 'outra',
+  },
+  local_internacao_outro: {
+    dependeDe: 'local_internacao',
+    valorRequerido: 'outro',
+  },
+  instrumentos_parto_outro: {
+    dependeDe: 'instrumentos_parto',
+    valorRequerido: ['outro'],
+  },
+  tipo_assistencia_ventilatoria_outro: {
+    dependeDe: 'tipos_assistencia_ventilatoria',
+    valorRequerido: ['outro'],
+  },
+  // Assistência ventilatória só se boolean for true
+  tipos_assistencia_ventilatoria: {
+    dependeDe: 'assistencia_ventilatoria',
+    valorRequerido: true,
+  },
+  tempo_assistencia_ventilatoria_dias: {
+    dependeDe: 'assistencia_ventilatoria',
+    valorRequerido: true,
+  },
+};
+
+/**
+ * Verifica se um campo condicional é obrigatório no contexto atual
+ */
+function isCampoObrigatorio(
+  campo: string,
+  avaliacao: AvaliacaoClinica
+): boolean {
+  const condicao = CAMPOS_CONDICIONAIS[campo];
+  if (!condicao) return true; // Campo não condicional é sempre obrigatório
+
+  const valorPai = avaliacao[condicao.dependeDe as keyof AvaliacaoClinica];
+
+  // Se o valor requerido não for definido, o campo é obrigatório se o pai estiver preenchido
+  if (condicao.valorRequerido === undefined) {
+    return valorPai !== null && valorPai !== undefined && valorPai !== '';
+  }
+
+  // Verifica se o valor do pai corresponde ao valor requerido
+  if (Array.isArray(condicao.valorRequerido)) {
+    // Para arrays (ex: instrumentos_parto contém "outro")
+    if (Array.isArray(valorPai)) {
+      return condicao.valorRequerido.some((v) =>
+        (valorPai as unknown[]).includes(v)
+      );
+    }
+    return (condicao.valorRequerido as unknown[]).includes(valorPai);
+  }
+
+  return valorPai === condicao.valorRequerido;
+}
+
+/**
+ * Verifica se um valor está preenchido
+ */
+function isValorPreenchido(valor: unknown): boolean {
+  if (valor === null || valor === undefined || valor === '') return false;
+
+  if (typeof valor === 'object') {
+    if (Array.isArray(valor)) {
+      return valor.length > 0;
+    }
+    if (Object.keys(valor as object).length > 0) {
+      // Verificar se pelo menos um campo interno está preenchido
+      return Object.values(valor as object).some(
+        (v) => v !== null && v !== undefined && v !== ''
+      );
+    }
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Verifica se uma seção está completa baseado nos campos preenchidos
+ * Considera campos condicionais (ex: idade_gestacional só se não for gestação múltipla)
  */
 export function verificarSecaoCompleta(
   avaliacao: AvaliacaoClinica,
   campos: string[]
 ): 'completo' | 'parcial' | 'vazio' {
-  let preenchidos = 0;
+  const resultado = verificarSecaoCompletaDetalhado(avaliacao, campos);
+  return resultado.status;
+}
+
+/**
+ * Verifica se uma seção está completa e retorna detalhes dos campos faltantes
+ */
+export function verificarSecaoCompletaDetalhado(
+  avaliacao: AvaliacaoClinica,
+  campos: string[]
+): {
+  status: 'completo' | 'parcial' | 'vazio';
+  camposObrigatorios: string[];
+  camposPreenchidos: string[];
+  camposFaltantes: string[];
+} {
+  const camposObrigatorios: string[] = [];
+  const camposPreenchidos: string[] = [];
+  const camposFaltantes: string[] = [];
 
   for (const campo of campos) {
+    // Verifica se o campo é obrigatório no contexto atual
+    if (!isCampoObrigatorio(campo, avaliacao)) {
+      continue; // Campo condicional não obrigatório, pula
+    }
+
+    camposObrigatorios.push(campo);
+
     const valor = avaliacao[campo as keyof AvaliacaoClinica];
 
-    // Verifica se o valor está preenchido
-    if (valor !== null && valor !== undefined && valor !== '') {
-      // Para objetos JSONB, verificar se tem conteúdo
-      if (typeof valor === 'object') {
-        if (Array.isArray(valor)) {
-          if (valor.length > 0) preenchidos++;
-        } else if (Object.keys(valor).length > 0) {
-          // Verificar se pelo menos um campo interno está preenchido
-          const temConteudo = Object.values(valor).some(
-            (v) => v !== null && v !== undefined && v !== ''
-          );
-          if (temConteudo) preenchidos++;
-        }
-      } else {
-        preenchidos++;
-      }
+    if (isValorPreenchido(valor)) {
+      camposPreenchidos.push(campo);
+    } else {
+      camposFaltantes.push(campo);
     }
   }
 
-  if (preenchidos === 0) return 'vazio';
-  if (preenchidos === campos.length) return 'completo';
-  return 'parcial';
+  let status: 'completo' | 'parcial' | 'vazio';
+  if (camposPreenchidos.length === 0) {
+    status = 'vazio';
+  } else if (camposFaltantes.length === 0) {
+    status = 'completo';
+  } else {
+    status = 'parcial';
+  }
+
+  return {
+    status,
+    camposObrigatorios,
+    camposPreenchidos,
+    camposFaltantes,
+  };
 }
 
 /**
  * Calcula o progresso geral da avaliação
  */
-export function calcularProgressoAvaliacao(
-  avaliacao: AvaliacaoClinica
-): { total: number; preenchidos: number; percentual: number } {
+export function calcularProgressoAvaliacao(avaliacao: AvaliacaoClinica): {
+  total: number;
+  preenchidos: number;
+  percentual: number;
+} {
   const camposRelevantes = [
     'queixa_principal',
     'numero_gestacoes',
@@ -362,7 +575,11 @@ export function formatarIdade(dataNascimento: string | Date | null): string {
   if (dias < 0) {
     meses--;
     // Pegar o último dia do mês anterior
-    const ultimoDiaMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0).getDate();
+    const ultimoDiaMesAnterior = new Date(
+      hoje.getFullYear(),
+      hoje.getMonth(),
+      0
+    ).getDate();
     dias += ultimoDiaMesAnterior;
   }
 
@@ -451,4 +668,3 @@ export function formatarIdadeSemanas(semanas: number | null): string {
     return `${partes[0]}, ${partes[1]} e ${partes[2]}`;
   }
 }
-
