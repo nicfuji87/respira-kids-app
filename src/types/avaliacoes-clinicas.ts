@@ -2777,22 +2777,123 @@ export interface AvaliacaoClinicaListItem {
 // DEFINIÇÃO DAS SEÇÕES PARA NAVEGAÇÃO
 // =====================================================
 
+/**
+ * Categoria da seção - determina cor e agrupamento
+ * - comum: Seções aplicáveis a todas as avaliações (cinza)
+ * - tmc: Torcicolo Muscular Congênito (verde/emerald)
+ * - assimetria_craniana: Plagiocefalia/Braquicefalia (azul/sky)
+ */
+export type CategoriaSecao = 'comum' | 'tmc' | 'assimetria_craniana';
+
+/**
+ * Grupos lógicos para organização visual
+ */
+export type GrupoSecao =
+  | 'anamnese' // Histórico do paciente
+  | 'exame_torcicolo' // Exame físico específico TMC
+  | 'exame_cranio' // Exame físico específico AC
+  | 'neuromotor' // Avaliação neuromotora
+  | 'classificacao' // Grau de severidade
+  | 'conclusao'; // Diagnóstico e plano
+
+export interface GrupoSecaoInfo {
+  id: GrupoSecao;
+  titulo: string;
+  descricao: string;
+  cor: string; // Tailwind color class
+  corBg: string; // Background color class
+  corBorder: string; // Border color class
+  icone: string; // Emoji ou ícone
+  ordem: number;
+}
+
+export const GRUPOS_SECOES: GrupoSecaoInfo[] = [
+  {
+    id: 'anamnese',
+    titulo: 'Anamnese',
+    descricao: 'Histórico do paciente e gestação',
+    cor: 'text-slate-700',
+    corBg: 'bg-slate-50',
+    corBorder: 'border-slate-300',
+    icone: '📋',
+    ordem: 1,
+  },
+  {
+    id: 'exame_torcicolo',
+    titulo: 'Exame Físico - Torcicolo',
+    descricao: 'Avaliação específica de TMC',
+    cor: 'text-emerald-700',
+    corBg: 'bg-emerald-50',
+    corBorder: 'border-emerald-400',
+    icone: '🟢',
+    ordem: 2,
+  },
+  {
+    id: 'exame_cranio',
+    titulo: 'Exame Físico - Crânio',
+    descricao: 'Avaliação de assimetria craniana',
+    cor: 'text-sky-700',
+    corBg: 'bg-sky-50',
+    corBorder: 'border-sky-400',
+    icone: '🔵',
+    ordem: 3,
+  },
+  {
+    id: 'neuromotor',
+    titulo: 'Avaliação Neuromotora',
+    descricao: 'Funções sensoriais e motoras',
+    cor: 'text-violet-700',
+    corBg: 'bg-violet-50',
+    corBorder: 'border-violet-400',
+    icone: '🟣',
+    ordem: 4,
+  },
+  {
+    id: 'classificacao',
+    titulo: 'Classificação',
+    descricao: 'Grau de severidade e prognóstico',
+    cor: 'text-amber-700',
+    corBg: 'bg-amber-50',
+    corBorder: 'border-amber-400',
+    icone: '⭐',
+    ordem: 5,
+  },
+  {
+    id: 'conclusao',
+    titulo: 'Conclusão',
+    descricao: 'Diagnóstico, objetivos e plano',
+    cor: 'text-gray-700',
+    corBg: 'bg-gray-50',
+    corBorder: 'border-gray-300',
+    icone: '✅',
+    ordem: 6,
+  },
+];
+
 export interface AvaliacaoSecao {
   id: string;
   numero: number;
   titulo: string;
   descricao?: string;
-  icone?: string;
   campos: string[];
+  /** Categoria: comum (ambos), tmc (torcicolo), assimetria_craniana */
+  categoria: CategoriaSecao;
+  /** Grupo para agrupamento visual */
+  grupo: GrupoSecao;
 }
 
 export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
+  // =====================================================
+  // GRUPO: ANAMNESE (Seções 1-7)
+  // =====================================================
   {
     id: 'cadastro',
     numero: 1,
     titulo: 'Cadastro do Paciente',
     descricao: 'Dados do paciente, responsáveis e médicos',
     campos: ['nome_pai', 'nome_mae', 'obstetra_id'],
+    categoria: 'comum',
+    grupo: 'anamnese',
   },
   {
     id: 'queixa',
@@ -2800,6 +2901,8 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
     titulo: 'Queixa Principal',
     descricao: 'Relato dos pais',
     campos: ['queixa_principal'],
+    categoria: 'comum',
+    grupo: 'anamnese',
   },
   {
     id: 'prenatal',
@@ -2817,6 +2920,8 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
       'circular_cordao',
       'intercorrencias_prenatais',
     ],
+    categoria: 'comum',
+    grupo: 'anamnese',
   },
   {
     id: 'perinatal',
@@ -2830,6 +2935,8 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
       'duracao_trabalho_parto_minutos',
       'intercorrencias_perinatais',
     ],
+    categoria: 'comum',
+    grupo: 'anamnese',
   },
   {
     id: 'posnatal',
@@ -2846,6 +2953,8 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
       'assimetrias_percebidas',
       'assimetrias_percebidas_outra',
     ],
+    categoria: 'comum',
+    grupo: 'anamnese',
   },
   {
     id: 'caracteristicas',
@@ -2863,6 +2972,8 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
       'disquesia',
       'habilidades_motoras',
     ],
+    categoria: 'comum',
+    grupo: 'anamnese',
   },
   {
     id: 'marcos_motores',
@@ -2870,7 +2981,13 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
     titulo: 'Marcos Motores',
     descricao: 'Desenvolvimento motor por idade',
     campos: ['marcos_motores_atingidos'],
+    categoria: 'comum',
+    grupo: 'anamnese',
   },
+
+  // =====================================================
+  // GRUPO: EXAME FÍSICO - TORCICOLO (Seções 8-12)
+  // =====================================================
   {
     id: 'torcicolo',
     numero: 8,
@@ -2884,6 +3001,8 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
       'tipo_torcicolo',
       'torcicolo_nodulo',
     ],
+    categoria: 'tmc',
+    grupo: 'exame_torcicolo',
   },
   {
     id: 'goniometria',
@@ -2891,95 +3010,141 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
     titulo: 'Goniometria',
     descricao: 'Medidas cervicais',
     campos: ['goniometria'],
+    categoria: 'tmc',
+    grupo: 'exame_torcicolo',
+  },
+  {
+    id: 'palpacao',
+    numero: 10,
+    titulo: 'Palpação ECOM',
+    descricao: 'Tônus, nódulos e fibrose',
+    campos: ['tonus', 'nodulos_presentes', 'nodulos_localizacao'],
+    categoria: 'tmc',
+    grupo: 'exame_torcicolo',
   },
   {
     id: 'mfs',
-    numero: 10,
+    numero: 11,
     titulo: 'Escala MFS',
     descricao: 'Função muscular',
     campos: ['mfs_direito', 'mfs_esquerdo', 'mfs_observacoes'],
+    categoria: 'tmc',
+    grupo: 'exame_torcicolo',
   },
   {
     id: 'tensao',
-    numero: 11,
-    titulo: 'Tensão Neuromeníngea',
-    campos: ['tensao_neuromeningea', 'tensao_neuromeningea_obs'],
-  },
-  {
-    id: 'sensoriais',
     numero: 12,
-    titulo: 'Funções Sensoriais',
-    descricao: 'Visual, auditiva, oral',
-    campos: ['funcoes_sensoriais'],
+    titulo: 'Tensão Neuromeníngea',
+    descricao: 'Testes neurodinâmicos',
+    campos: ['tensao_neuromeningea', 'tensao_neuromeningea_obs'],
+    categoria: 'tmc',
+    grupo: 'exame_torcicolo',
   },
+
+  // =====================================================
+  // GRUPO: EXAME FÍSICO - CRÂNIO (Seções 13-15)
+  // =====================================================
   {
     id: 'craniometria',
     numero: 13,
     titulo: 'Medidas Craniométricas',
-    descricao: 'CVA / CVAI',
+    descricao: 'CVA / CVAI / CI',
     campos: ['medidas_craniometricas'],
+    categoria: 'assimetria_craniana',
+    grupo: 'exame_cranio',
   },
   {
     id: 'assimetria',
     numero: 14,
     titulo: 'Assimetria Craniana',
-    descricao: 'Plagiocefalia',
+    descricao: 'Plagiocefalia / Braquicefalia',
     campos: ['assimetria_craniana'],
-  },
-  {
-    id: 'palpacao',
-    numero: 15,
-    titulo: 'Palpação Muscular',
-    descricao: 'Tônus e nódulos',
-    campos: ['tonus', 'nodulos_presentes', 'nodulos_localizacao'],
-  },
-  {
-    id: 'motor',
-    numero: 16,
-    titulo: 'Comportamento Motor',
-    descricao: 'Responsividade',
-    campos: ['preferencia_manual', 'reacoes_posturais', 'engajamento_visual'],
+    categoria: 'assimetria_craniana',
+    grupo: 'exame_cranio',
   },
   {
     id: 'fsos2',
-    numero: 17,
+    numero: 15,
     titulo: 'FSOS-2',
-    descricao: 'Escala de simetria',
+    descricao: 'Escala de simetria facial',
     campos: ['fsos2'],
+    categoria: 'assimetria_craniana',
+    grupo: 'exame_cranio',
+  },
+
+  // =====================================================
+  // GRUPO: AVALIAÇÃO NEUROMOTORA (Seções 16-20)
+  // =====================================================
+  {
+    id: 'sensoriais',
+    numero: 16,
+    titulo: 'Funções Sensoriais',
+    descricao: 'Visual, auditiva, oral',
+    campos: ['funcoes_sensoriais'],
+    categoria: 'comum',
+    grupo: 'neuromotor',
+  },
+  {
+    id: 'motor',
+    numero: 17,
+    titulo: 'Comportamento Motor',
+    descricao: 'Responsividade',
+    campos: ['preferencia_manual', 'reacoes_posturais', 'engajamento_visual'],
+    categoria: 'tmc',
+    grupo: 'neuromotor',
   },
   {
     id: 'funcionalidade',
     numero: 18,
-    titulo: 'Funcionalidade Cervical',
-    descricao: 'Observação guiada',
+    titulo: 'Controle Motor Cervical',
+    descricao: 'Supino e Prono',
     campos: ['funcionalidade_cervical'],
+    categoria: 'tmc',
+    grupo: 'neuromotor',
   },
   {
     id: 'resposta',
     numero: 19,
     titulo: 'Resposta Postural',
-    descricao: 'Landau / Tração',
+    descricao: 'Pull-to-Sit / Landau',
     campos: ['landau', 'teste_tracao', 'repercussoes_tronco_membros'],
+    categoria: 'tmc',
+    grupo: 'neuromotor',
   },
   {
     id: 'aims',
     numero: 20,
     titulo: 'AIMS',
-    descricao: 'Investigação padronizada',
+    descricao: 'Alberta Infant Motor Scale',
     campos: ['aims'],
+    categoria: 'tmc',
+    grupo: 'neuromotor',
   },
+
+  // =====================================================
+  // GRUPO: CLASSIFICAÇÃO (Seção 21)
+  // =====================================================
   {
     id: 'severidade',
     numero: 21,
     titulo: 'Grau de Severidade',
-    descricao: 'Estratificação 1-8',
+    descricao: 'Estratificação 1-8 (Automático)',
     campos: ['grau_severidade', 'grau_severidade_obs'],
+    categoria: 'tmc',
+    grupo: 'classificacao',
   },
+
+  // =====================================================
+  // GRUPO: CONCLUSÃO (Seções 22-27)
+  // =====================================================
   {
     id: 'exames',
     numero: 22,
     titulo: 'Exames Complementares',
+    descricao: 'Ultrassom, RX, etc.',
     campos: ['exames_complementares'],
+    categoria: 'comum',
+    grupo: 'conclusao',
   },
   {
     id: 'diagnostico',
@@ -2987,6 +3152,8 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
     titulo: 'Diagnóstico',
     descricao: 'Cinético-funcional',
     campos: ['diagnostico_cinetico_funcional'],
+    categoria: 'comum',
+    grupo: 'conclusao',
   },
   {
     id: 'objetivos',
@@ -2994,12 +3161,17 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
     titulo: 'Objetivos do Tratamento',
     descricao: 'Curto/Médio/Longo prazo',
     campos: ['objetivos_tratamento'],
+    categoria: 'comum',
+    grupo: 'conclusao',
   },
   {
     id: 'plano',
     numero: 25,
     titulo: 'Plano de Tratamento',
+    descricao: 'Condutas e frequência',
     campos: ['plano_tratamento'],
+    categoria: 'comum',
+    grupo: 'conclusao',
   },
   {
     id: 'reavaliacao',
@@ -3007,14 +3179,75 @@ export const AVALIACOES_SECOES: AvaliacaoSecao[] = [
     titulo: 'Reavaliação',
     descricao: 'Próxima avaliação',
     campos: ['reavaliacao_recomendada', 'reavaliacao_outro'],
+    categoria: 'comum',
+    grupo: 'conclusao',
   },
   {
     id: 'observacoes',
     numero: 27,
     titulo: 'Observações Gerais',
+    descricao: 'Notas adicionais',
     campos: ['observacoes_gerais'],
+    categoria: 'comum',
+    grupo: 'conclusao',
   },
 ];
+
+/**
+ * Retorna as seções agrupadas por grupo
+ */
+export function getSecoesAgrupadas(): Map<GrupoSecao, AvaliacaoSecao[]> {
+  const grupos = new Map<GrupoSecao, AvaliacaoSecao[]>();
+
+  for (const secao of AVALIACOES_SECOES) {
+    const grupoAtual = grupos.get(secao.grupo) || [];
+    grupoAtual.push(secao);
+    grupos.set(secao.grupo, grupoAtual);
+  }
+
+  return grupos;
+}
+
+/**
+ * Retorna informações do grupo pelo ID
+ */
+export function getGrupoInfo(grupoId: GrupoSecao): GrupoSecaoInfo | undefined {
+  return GRUPOS_SECOES.find((g) => g.id === grupoId);
+}
+
+/**
+ * Retorna a cor do badge baseado na categoria
+ */
+export function getCorCategoria(categoria: CategoriaSecao): {
+  bg: string;
+  text: string;
+  border: string;
+  badge: 'default' | 'secondary' | 'outline';
+} {
+  switch (categoria) {
+    case 'tmc':
+      return {
+        bg: 'bg-emerald-50',
+        text: 'text-emerald-700',
+        border: 'border-emerald-300',
+        badge: 'default',
+      };
+    case 'assimetria_craniana':
+      return {
+        bg: 'bg-sky-50',
+        text: 'text-sky-700',
+        border: 'border-sky-300',
+        badge: 'secondary',
+      };
+    default:
+      return {
+        bg: 'bg-gray-50',
+        text: 'text-gray-600',
+        border: 'border-gray-200',
+        badge: 'outline',
+      };
+  }
+}
 
 // =====================================================
 // LABELS E OPÇÕES PARA UI

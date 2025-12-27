@@ -59,8 +59,13 @@ import {
 import type {
   AvaliacaoClinica,
   AvaliacaoClinicaUpdate,
+  GrupoSecao,
 } from '@/types/avaliacoes-clinicas';
-import { AVALIACOES_SECOES } from '@/types/avaliacoes-clinicas';
+import {
+  AVALIACOES_SECOES,
+  GRUPOS_SECOES,
+  getCorCategoria,
+} from '@/types/avaliacoes-clinicas';
 import { EvaluationSectionContent } from './EvaluationSectionContent';
 
 // AI dev note: EvaluationFormModal - Modal de formulário de avaliação com navegação por índice
@@ -116,7 +121,9 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
           setAvaliacao(data);
         } else {
           // Criar nova avaliação
-          const idadeSemanas = patientBirthDate ? calcularIdadeSemanas(patientBirthDate) : null;
+          const idadeSemanas = patientBirthDate
+            ? calcularIdadeSemanas(patientBirthDate)
+            : null;
           const novaAvaliacao = await createAvaliacao({
             pessoa_id: patientId,
             data_avaliacao: new Date().toISOString().split('T')[0],
@@ -267,7 +274,9 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
   };
 
   // Renderizar ícone de status da seção
-  const renderSectionStatusIcon = (status: 'completo' | 'parcial' | 'vazio') => {
+  const renderSectionStatusIcon = (
+    status: 'completo' | 'parcial' | 'vazio'
+  ) => {
     switch (status) {
       case 'completo':
         return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
@@ -277,6 +286,29 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
         return <Circle className="h-4 w-4 text-muted-foreground/40" />;
     }
   };
+
+  // Estado para controlar grupos colapsados
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<GrupoSecao>>(
+    new Set()
+  );
+
+  const toggleGroup = (grupo: GrupoSecao) => {
+    setCollapsedGroups((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(grupo)) {
+        newSet.delete(grupo);
+      } else {
+        newSet.add(grupo);
+      }
+      return newSet;
+    });
+  };
+
+  // Agrupa as seções por grupo
+  const secoesAgrupadas = GRUPOS_SECOES.map((grupo) => ({
+    ...grupo,
+    secoes: AVALIACOES_SECOES.filter((s) => s.grupo === grupo.id),
+  }));
 
   // Componente do índice lateral - versão completa para mobile sheet
   const SidebarContentFull = () => (
@@ -292,48 +324,143 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
         </div>
       )}
 
-      {/* Lista de Seções */}
+      {/* Legenda de cores */}
+      <div className="px-4 py-2 border-b flex flex-wrap gap-2 text-xs">
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          <span className="text-muted-foreground">Torcicolo</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-sky-500" />
+          <span className="text-muted-foreground">Crânio</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-gray-400" />
+          <span className="text-muted-foreground">Comum</span>
+        </span>
+      </div>
+
+      {/* Lista de Seções Agrupadas */}
       <ScrollArea className="flex-1">
-        <div className="p-2 space-y-1">
-          {AVALIACOES_SECOES.map((secao, index) => {
-            const status = getSectionStatus(index);
-            const isActive = currentSection === index;
+        <div className="p-2 space-y-2">
+          {secoesAgrupadas.map((grupo) => {
+            const isCollapsed = collapsedGroups.has(grupo.id);
+            const grupoTemSecaoAtiva = grupo.secoes.some(
+              (s) =>
+                AVALIACOES_SECOES.findIndex((sec) => sec.id === s.id) ===
+                currentSection
+            );
+
+            // Calcular progresso do grupo
+            const secoesCompletas = grupo.secoes.filter(
+              (s) =>
+                getSectionStatus(
+                  AVALIACOES_SECOES.findIndex((sec) => sec.id === s.id)
+                ) === 'completo'
+            ).length;
+            const progressoGrupo = Math.round(
+              (secoesCompletas / grupo.secoes.length) * 100
+            );
 
             return (
-              <button
-                key={secao.id}
-                onClick={() => handleSectionClick(index)}
+              <div
+                key={grupo.id}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors text-sm',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'
+                  'rounded-lg border overflow-hidden',
+                  grupo.corBorder
                 )}
               >
-                {renderSectionStatusIcon(status)}
-                <div className="flex-1 min-w-0">
-                  <p
-                    className={cn(
-                      'font-medium truncate',
-                      isActive ? 'text-primary-foreground' : ''
-                    )}
-                  >
-                    {secao.numero}. {secao.titulo}
-                  </p>
-                  {secao.descricao && (
-                    <p
-                      className={cn(
-                        'text-xs truncate',
-                        isActive
-                          ? 'text-primary-foreground/70'
-                          : 'text-muted-foreground'
-                      )}
-                    >
-                      {secao.descricao}
-                    </p>
+                {/* Header do Grupo */}
+                <button
+                  onClick={() => toggleGroup(grupo.id)}
+                  className={cn(
+                    'w-full flex items-center justify-between px-3 py-2 text-left transition-colors',
+                    grupo.corBg,
+                    grupoTemSecaoAtiva && 'ring-2 ring-primary ring-inset'
                   )}
-                </div>
-              </button>
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{grupo.icone}</span>
+                    <div>
+                      <p className={cn('font-semibold text-sm', grupo.cor)}>
+                        {grupo.titulo}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {grupo.secoes.length} seções • {progressoGrupo}%
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      'h-4 w-4 transition-transform',
+                      grupo.cor,
+                      !isCollapsed && 'rotate-90'
+                    )}
+                  />
+                </button>
+
+                {/* Seções do Grupo */}
+                {!isCollapsed && (
+                  <div className="border-t bg-background p-1 space-y-0.5">
+                    {grupo.secoes.map((secao) => {
+                      const index = AVALIACOES_SECOES.findIndex(
+                        (s) => s.id === secao.id
+                      );
+                      const status = getSectionStatus(index);
+                      const isActive = currentSection === index;
+                      const corCategoria = getCorCategoria(secao.categoria);
+
+                      return (
+                        <button
+                          key={secao.id}
+                          onClick={() => handleSectionClick(index)}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors text-sm',
+                            isActive
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-accent',
+                            !isActive && `border-l-3 ${corCategoria.border}`
+                          )}
+                          style={{
+                            borderLeftWidth: isActive ? 0 : '3px',
+                            borderLeftColor: isActive
+                              ? undefined
+                              : secao.categoria === 'tmc'
+                                ? '#10b981'
+                                : secao.categoria === 'assimetria_craniana'
+                                  ? '#0ea5e9'
+                                  : '#9ca3af',
+                          }}
+                        >
+                          {renderSectionStatusIcon(status)}
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className={cn(
+                                'font-medium truncate',
+                                isActive ? 'text-primary-foreground' : ''
+                              )}
+                            >
+                              {secao.numero}. {secao.titulo}
+                            </p>
+                            {secao.descricao && (
+                              <p
+                                className={cn(
+                                  'text-xs truncate',
+                                  isActive
+                                    ? 'text-primary-foreground/70'
+                                    : 'text-muted-foreground'
+                                )}
+                              >
+                                {secao.descricao}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -395,7 +522,9 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                           strokeWidth="3"
                           fill="none"
                           strokeDasharray={75.4}
-                          strokeDashoffset={75.4 - (75.4 * progresso.percentual) / 100}
+                          strokeDashoffset={
+                            75.4 - (75.4 * progresso.percentual) / 100
+                          }
                           className="text-primary"
                         />
                       </svg>
@@ -413,70 +542,184 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
           </div>
         )}
 
-        {/* Lista de Seções */}
+        {/* Lista de Seções Agrupadas */}
         <ScrollArea className="flex-1">
-          <div className={cn('space-y-0.5', expanded ? 'p-2' : 'p-1')}>
-            {AVALIACOES_SECOES.map((secao, index) => {
-              const status = getSectionStatus(index);
-              const isActive = currentSection === index;
+          <div className={cn('space-y-1', expanded ? 'p-2' : 'p-1')}>
+            {expanded
+              ? // Versão expandida com grupos
+                secoesAgrupadas.map((grupo) => {
+                  const isCollapsed = collapsedGroups.has(grupo.id);
+                  const grupoTemSecaoAtiva = grupo.secoes.some(
+                    (s) =>
+                      AVALIACOES_SECOES.findIndex((sec) => sec.id === s.id) ===
+                      currentSection
+                  );
 
-              if (expanded) {
-                // Versão expandida
-                return (
-                  <button
-                    key={secao.id}
-                    onClick={() => setCurrentSection(index)}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors text-xs',
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-accent'
-                    )}
-                  >
-                    {renderSectionStatusIcon(status)}
-                    <span className="flex-1 truncate">
-                      {secao.numero}. {secao.titulo}
-                    </span>
-                  </button>
-                );
-              }
-
-              // Versão compacta - apenas números com tooltip
-              return (
-                <Tooltip key={secao.id}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => setCurrentSection(index)}
+                  return (
+                    <div
+                      key={grupo.id}
                       className={cn(
-                        'w-full flex items-center justify-center p-1.5 rounded-md transition-colors',
-                        isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-accent'
+                        'rounded-md border overflow-hidden',
+                        grupo.corBorder
                       )}
                     >
-                      <div className="relative">
-                        <span
+                      {/* Header do Grupo */}
+                      <button
+                        onClick={() => toggleGroup(grupo.id)}
+                        className={cn(
+                          'w-full flex items-center justify-between px-2 py-1.5 text-left transition-colors',
+                          grupo.corBg,
+                          grupoTemSecaoAtiva && 'ring-1 ring-primary ring-inset'
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm">{grupo.icone}</span>
+                          <p className={cn('font-medium text-xs', grupo.cor)}>
+                            {grupo.titulo}
+                          </p>
+                        </div>
+                        <ChevronRight
                           className={cn(
-                            'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full',
-                            status === 'completo' && !isActive && 'bg-emerald-100 text-emerald-700',
-                            status === 'parcial' && !isActive && 'bg-amber-100 text-amber-700',
-                            status === 'vazio' && !isActive && 'bg-muted text-muted-foreground'
+                            'h-3 w-3 transition-transform',
+                            grupo.cor,
+                            !isCollapsed && 'rotate-90'
+                          )}
+                        />
+                      </button>
+
+                      {/* Seções do Grupo */}
+                      {!isCollapsed && (
+                        <div className="bg-background p-0.5 space-y-0.5">
+                          {grupo.secoes.map((secao) => {
+                            const index = AVALIACOES_SECOES.findIndex(
+                              (s) => s.id === secao.id
+                            );
+                            const status = getSectionStatus(index);
+                            const isActive = currentSection === index;
+
+                            return (
+                              <button
+                                key={secao.id}
+                                onClick={() => setCurrentSection(index)}
+                                className={cn(
+                                  'w-full flex items-center gap-1.5 px-2 py-1 rounded text-left transition-colors text-xs',
+                                  isActive
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'hover:bg-accent'
+                                )}
+                                style={{
+                                  borderLeftWidth: isActive ? 0 : '2px',
+                                  borderLeftColor: isActive
+                                    ? undefined
+                                    : secao.categoria === 'tmc'
+                                      ? '#10b981'
+                                      : secao.categoria ===
+                                          'assimetria_craniana'
+                                        ? '#0ea5e9'
+                                        : '#d1d5db',
+                                }}
+                              >
+                                {renderSectionStatusIcon(status)}
+                                <span className="flex-1 truncate">
+                                  {secao.numero}. {secao.titulo}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              : // Versão compacta - ícones de grupo com números
+                secoesAgrupadas.map((grupo) => (
+                  <div key={grupo.id} className="space-y-0.5">
+                    {/* Ícone do Grupo */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          className={cn(
+                            'flex items-center justify-center py-1 rounded-md text-sm',
+                            grupo.corBg
                           )}
                         >
-                          {secao.numero}
-                        </span>
-                      </div>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="max-w-[200px]">
-                    <p className="font-medium">{secao.numero}. {secao.titulo}</p>
-                    {secao.descricao && (
-                      <p className="text-xs text-muted-foreground">{secao.descricao}</p>
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
+                          {grupo.icone}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <p className="font-medium">{grupo.titulo}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {grupo.secoes.length} seções
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* Números das seções */}
+                    {grupo.secoes.map((secao) => {
+                      const index = AVALIACOES_SECOES.findIndex(
+                        (s) => s.id === secao.id
+                      );
+                      const status = getSectionStatus(index);
+                      const isActive = currentSection === index;
+
+                      return (
+                        <Tooltip key={secao.id}>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => setCurrentSection(index)}
+                              className={cn(
+                                'w-full flex items-center justify-center p-1 rounded transition-colors',
+                                isActive
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'hover:bg-accent'
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  'text-[10px] font-medium w-5 h-5 flex items-center justify-center rounded-full',
+                                  status === 'completo' &&
+                                    !isActive &&
+                                    'bg-emerald-100 text-emerald-700',
+                                  status === 'parcial' &&
+                                    !isActive &&
+                                    'bg-amber-100 text-amber-700',
+                                  status === 'vazio' &&
+                                    !isActive &&
+                                    'bg-muted text-muted-foreground'
+                                )}
+                                style={{
+                                  boxShadow: isActive
+                                    ? undefined
+                                    : secao.categoria === 'tmc'
+                                      ? 'inset 0 0 0 2px #10b981'
+                                      : secao.categoria ===
+                                          'assimetria_craniana'
+                                        ? 'inset 0 0 0 2px #0ea5e9'
+                                        : undefined,
+                                }}
+                              >
+                                {secao.numero}
+                              </span>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="right"
+                            className="max-w-[200px]"
+                          >
+                            <p className="font-medium">
+                              {secao.numero}. {secao.titulo}
+                            </p>
+                            {secao.descricao && (
+                              <p className="text-xs text-muted-foreground">
+                                {secao.descricao}
+                              </p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                ))}
           </div>
         </ScrollArea>
       </div>
@@ -484,7 +727,10 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
   );
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleSaveAndClose()}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => !open && handleSaveAndClose()}
+    >
       <DialogContent className="w-[95vw] max-w-[95vw] md:w-[90vw] md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl h-[95vh] md:h-[90vh] p-0 gap-0 flex flex-col">
         {/* Header */}
         <DialogHeader className="p-4 border-b flex-shrink-0">
@@ -513,7 +759,8 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                 {patientName && (
                   <p className="text-sm text-muted-foreground">
                     Paciente: {patientName}
-                    {patientBirthDate && ` • ${formatarIdade(patientBirthDate)}`}
+                    {patientBirthDate &&
+                      ` • ${formatarIdade(patientBirthDate)}`}
                   </p>
                 )}
               </div>
@@ -567,7 +814,8 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                     patientAgeInMonths={
                       patientBirthDate
                         ? Math.floor(
-                            (new Date().getTime() - new Date(patientBirthDate).getTime()) /
+                            (new Date().getTime() -
+                              new Date(patientBirthDate).getTime()) /
                               (1000 * 60 * 60 * 24 * 30.44)
                           )
                         : 0
@@ -598,7 +846,9 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                         variant="outline"
                         size="sm"
                         onClick={handleNextSection}
-                        disabled={currentSection === AVALIACOES_SECOES.length - 1}
+                        disabled={
+                          currentSection === AVALIACOES_SECOES.length - 1
+                        }
                         className="h-8 px-2"
                       >
                         <span className="hidden sm:inline mr-1">Próxima</span>
@@ -618,7 +868,9 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                           className="h-8 px-3 text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="h-4 w-4" />
-                          <span className="hidden sm:inline ml-1.5">Excluir</span>
+                          <span className="hidden sm:inline ml-1.5">
+                            Excluir
+                          </span>
                         </Button>
                       )}
 
@@ -676,7 +928,9 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isDeleting}
@@ -697,4 +951,3 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
 };
 
 EvaluationFormModal.displayName = 'EvaluationFormModal';
-
