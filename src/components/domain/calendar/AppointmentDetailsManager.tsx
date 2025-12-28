@@ -622,9 +622,9 @@ export const AppointmentDetailsManager =
             const ev = dados.evolucao_respiratoria;
 
             // AVALIAÇÃO INICIAL (ANTES)
-            conteudoResumo += `═══════════════════════════════════════════\n`;
+            conteudoResumo += `─────────────────────\n`;
             conteudoResumo += `📋 AVALIAÇÃO INICIAL (ANTES)\n`;
-            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+            conteudoResumo += `─────────────────────\n\n`;
 
             // 1. Estado Geral da Criança
             conteudoResumo += `👶 Estado Geral da Criança\n`;
@@ -789,9 +789,9 @@ export const AppointmentDetailsManager =
             }
 
             // AVALIAÇÃO RESPIRATÓRIA (ANTES)
-            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `\n─────────────────────\n`;
             conteudoResumo += `🩺 AVALIAÇÃO RESPIRATÓRIA (ANTES)\n`;
-            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+            conteudoResumo += `─────────────────────\n\n`;
 
             const padrao = ev.avaliacao_antes.padrao_respiratorio;
             conteudoResumo += `🫁 Padrão Respiratório\n`;
@@ -907,9 +907,9 @@ export const AppointmentDetailsManager =
             }
 
             // INTERVENÇÃO
-            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `\n─────────────────────\n`;
             conteudoResumo += `💪 INTERVENÇÃO REALIZADA\n`;
-            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+            conteudoResumo += `─────────────────────\n\n`;
 
             const tecnicas = [];
             if (ev.intervencao.afe) tecnicas.push('AFE');
@@ -979,9 +979,9 @@ export const AppointmentDetailsManager =
             }
 
             // RESPOSTA AO TRATAMENTO (DEPOIS)
-            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `\n─────────────────────\n`;
             conteudoResumo += `✅ RESPOSTA AO TRATAMENTO (DEPOIS)\n`;
-            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+            conteudoResumo += `─────────────────────\n\n`;
 
             // Sinais Vitais Após
             const temSinaisVitaisApos =
@@ -1073,9 +1073,9 @@ export const AppointmentDetailsManager =
               ev.orientacoes.posicionamento_dormir ||
               ev.orientacoes.sinais_alerta;
             if (temOrientacoes) {
-              conteudoResumo += `\n═══════════════════════════════════════════\n`;
+              conteudoResumo += `\n─────────────────────\n`;
               conteudoResumo += `📚 ORIENTAÇÕES FORNECIDAS AOS RESPONSÁVEIS\n`;
-              conteudoResumo += `═══════════════════════════════════════════\n\n`;
+              conteudoResumo += `─────────────────────\n\n`;
 
               if (ev.orientacoes.higiene_nasal) {
                 conteudoResumo += `🧴 Higiene Nasal\n`;
@@ -1119,9 +1119,9 @@ export const AppointmentDetailsManager =
             }
 
             // CONDUTA
-            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `\n─────────────────────\n`;
             conteudoResumo += `🎯 CONDUTA E PLANO\n`;
-            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+            conteudoResumo += `─────────────────────\n\n`;
 
             if (ev.conduta.manter_fisioterapia) {
               conteudoResumo += `   ✓ Manter Fisioterapia Respiratória\n`;
@@ -1174,7 +1174,7 @@ export const AppointmentDetailsManager =
             }
 
             // Fechamento
-            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `\n─────────────────────\n`;
           }
 
           if (
