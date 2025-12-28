@@ -1585,8 +1585,8 @@ export const AppointmentDetailsManager =
                 </div>
               </DialogHeader>
 
-              <ScrollArea className="max-h-[70vh] sm:max-h-[600px] pr-2 sm:pr-6">
-                <div className="space-y-6 py-4 overflow-x-auto">
+              <ScrollArea className="flex-1 h-full w-full">
+                <div className="space-y-6 p-4 sm:p-6 w-full">
                   {/* Paciente */}
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
