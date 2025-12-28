@@ -90,7 +90,7 @@ export interface AvaliacaoRespiratoriaAntes {
 // Estado Geral (Antes) - Consolidado com Queixa Principal, Sinais Vitais e Saturação
 export interface EstadoGeralAntes {
   // Queixa Principal (integrado)
-  tosse?: 'seca' | 'produtiva' | null;
+  tosse?: 'sem_tosse' | 'seca' | 'produtiva' | null;
   chiado?: boolean;
   cansaco_respiratorio?: boolean;
   secrecao_cor?: 'clara' | 'amarelada' | 'esverdeada' | null;
@@ -108,7 +108,15 @@ export interface EstadoGeralAntes {
   saturacao_com_suporte?: number; // percentual com suporte O2
 
   // Estado Geral da Criança
-  nivel_alerta: 'ativo' | 'sonolento' | 'irritado' | null;
+  nivel_alerta:
+    | 'ativo'
+    | 'calmo'
+    | 'sonolento'
+    | 'irritado'
+    | 'choroso'
+    | 'agitado'
+    | 'hipoativo'
+    | null;
   tolerancia_manuseio: 'boa' | 'regular' | 'ruim' | null;
   choro_durante_atendimento: 'ausente' | 'leve' | 'moderado' | 'intenso' | null;
 
@@ -143,6 +151,7 @@ export interface IntervencaoRespiratoria {
 export interface AvaliacaoRespiratoriaDepois {
   melhora_padrao_respiratorio: boolean;
   // Mudança na Ausculta - opções selecionáveis
+  ausculta_sem_alteracao: boolean; // Ausculta igual, sem melhora nem piora
   ausculta_melhorou: boolean;
   ausculta_reducao_roncos: boolean;
   ausculta_reducao_sibilos: boolean;
@@ -150,11 +159,14 @@ export interface AvaliacaoRespiratoriaDepois {
   ausculta_melhora_mv: boolean; // Melhora do Murmúrio Vesicular
   eliminacao_secrecao: boolean;
   reducao_desconforto: boolean;
+  // Sinais Vitais Após
   saturacao_o2?: number;
+  frequencia_cardiaca?: number; // FC após intervenção
   comportamento_crianca?:
     | 'calmo'
     | 'sonolento'
     | 'irritado'
+    | 'choroso'
     | 'sem_mudanca'
     | null;
   observacoes?: string;
@@ -538,6 +550,7 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
     },
     avaliacao_depois: {
       melhora_padrao_respiratorio: false,
+      ausculta_sem_alteracao: false,
       ausculta_melhorou: false,
       ausculta_reducao_roncos: false,
       ausculta_reducao_sibilos: false,
@@ -545,6 +558,7 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       ausculta_melhora_mv: false,
       eliminacao_secrecao: false,
       reducao_desconforto: false,
+      frequencia_cardiaca: undefined,
     },
     orientacoes: {
       higiene_nasal: false,

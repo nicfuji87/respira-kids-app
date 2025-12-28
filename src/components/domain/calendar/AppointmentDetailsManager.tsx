@@ -720,6 +720,9 @@ export const AppointmentDetailsManager =
             if (ev.avaliacao_depois.saturacao_o2) {
               conteudoResumo += `• SpO₂ após: ${ev.avaliacao_depois.saturacao_o2}%\n`;
             }
+            if (ev.avaliacao_depois.frequencia_cardiaca) {
+              conteudoResumo += `• FC após: ${ev.avaliacao_depois.frequencia_cardiaca} bpm\n`;
+            }
             if (ev.estado_geral_antes.tolerancia_manuseio) {
               conteudoResumo += `• Tolerância ao manuseio: ${ev.estado_geral_antes.tolerancia_manuseio}\n`;
             }
@@ -728,19 +731,23 @@ export const AppointmentDetailsManager =
             }
 
             // Mudanças na ausculta
-            const mudancasAusculta = [];
-            if (ev.avaliacao_depois.ausculta_melhorou)
-              mudancasAusculta.push('Melhora geral');
-            if (ev.avaliacao_depois.ausculta_reducao_roncos)
-              mudancasAusculta.push('↓ Roncos');
-            if (ev.avaliacao_depois.ausculta_reducao_sibilos)
-              mudancasAusculta.push('↓ Sibilos');
-            if (ev.avaliacao_depois.ausculta_reducao_estertores)
-              mudancasAusculta.push('↓ Estertores');
-            if (ev.avaliacao_depois.ausculta_melhora_mv)
-              mudancasAusculta.push('↑ MV');
-            if (mudancasAusculta.length > 0) {
-              conteudoResumo += `• Mudanças na ausculta: ${mudancasAusculta.join(', ')}\n`;
+            if (ev.avaliacao_depois.ausculta_sem_alteracao) {
+              conteudoResumo += `• Ausculta: Sem alteração\n`;
+            } else {
+              const mudancasAusculta = [];
+              if (ev.avaliacao_depois.ausculta_melhorou)
+                mudancasAusculta.push('Melhora geral');
+              if (ev.avaliacao_depois.ausculta_reducao_roncos)
+                mudancasAusculta.push('↓ Roncos');
+              if (ev.avaliacao_depois.ausculta_reducao_sibilos)
+                mudancasAusculta.push('↓ Sibilos');
+              if (ev.avaliacao_depois.ausculta_reducao_estertores)
+                mudancasAusculta.push('↓ Estertores');
+              if (ev.avaliacao_depois.ausculta_melhora_mv)
+                mudancasAusculta.push('↑ MV');
+              if (mudancasAusculta.length > 0) {
+                conteudoResumo += `• Mudanças na ausculta: ${mudancasAusculta.join(', ')}\n`;
+              }
             }
 
             // ORIENTAÇÕES
@@ -853,12 +860,16 @@ export const AppointmentDetailsManager =
               peep_valor: ev.intervencao.peep_valor || null,
               // Resposta ao Tratamento
               spo2_depois: ev.avaliacao_depois.saturacao_o2 || null,
+              frequencia_cardiaca_depois:
+                ev.avaliacao_depois.frequencia_cardiaca || null,
               melhora_padrao_respiratorio:
                 ev.avaliacao_depois.melhora_padrao_respiratorio || false,
               eliminacao_secrecao:
                 ev.avaliacao_depois.eliminacao_secrecao || false,
               reducao_desconforto:
                 ev.avaliacao_depois.reducao_desconforto || false,
+              ausculta_sem_alteracao:
+                ev.avaliacao_depois.ausculta_sem_alteracao || false,
               ausculta_melhorou: ev.avaliacao_depois.ausculta_melhorou || false,
               // Conduta
               manter_fisioterapia: ev.conduta.manter_fisioterapia || false,

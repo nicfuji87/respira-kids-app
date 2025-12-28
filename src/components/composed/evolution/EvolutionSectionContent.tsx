@@ -139,11 +139,14 @@ export const EvolutionSectionContent: React.FC<
                 <RadioButtonGroup
                   value={estado.tosse}
                   onChange={(v) =>
-                    updateEstado({ tosse: v as 'seca' | 'produtiva' })
+                    updateEstado({
+                      tosse: v as 'sem_tosse' | 'seca' | 'produtiva',
+                    })
                   }
                   options={[
-                    { valor: 'seca', label: 'Tosse Seca' },
-                    { valor: 'produtiva', label: 'Tosse Produtiva' },
+                    { valor: 'sem_tosse', label: '✅ Sem Tosse' },
+                    { valor: 'seca', label: '🫁 Tosse Seca' },
+                    { valor: 'produtiva', label: '💧 Tosse Produtiva' },
                   ]}
                   disabled={disabled}
                 />
@@ -425,20 +428,32 @@ export const EvolutionSectionContent: React.FC<
                 👶 Estado Geral da Criança
               </h4>
 
-              <Field label="Nível de Alerta" required>
+              <Field label="Nível de Alerta / Estado" required>
                 <RadioButtonGroup
                   value={estado.nivel_alerta}
                   onChange={(v) =>
                     updateEstado({
-                      nivel_alerta: v as 'ativo' | 'sonolento' | 'irritado',
+                      nivel_alerta: v as
+                        | 'ativo'
+                        | 'calmo'
+                        | 'sonolento'
+                        | 'irritado'
+                        | 'choroso'
+                        | 'agitado'
+                        | 'hipoativo',
                     })
                   }
                   options={[
-                    { valor: 'ativo', label: '😊 Ativo' },
+                    { valor: 'ativo', label: '⚡ Ativo' },
+                    { valor: 'calmo', label: '😊 Calmo' },
                     { valor: 'sonolento', label: '😴 Sonolento' },
                     { valor: 'irritado', label: '😤 Irritado' },
+                    { valor: 'choroso', label: '😢 Choroso' },
+                    { valor: 'agitado', label: '🏃 Agitado' },
+                    { valor: 'hipoativo', label: '😶 Hipoativo' },
                   ]}
                   disabled={disabled}
+                  layout="grid"
                 />
               </Field>
             </div>
@@ -1254,17 +1269,50 @@ export const EvolutionSectionContent: React.FC<
                 🩺 Mudança na Ausculta Pulmonar
               </h4>
 
-              <BooleanField
-                label="Houve Melhora na Ausculta"
-                value={depois.ausculta_melhorou}
-                onChange={(checked) =>
-                  updateDepois({ ausculta_melhorou: checked })
-                }
-                disabled={disabled}
-              />
+              <div className="flex flex-wrap gap-4">
+                <CheckboxField
+                  label="Sem Alteração (igual)"
+                  checked={depois.ausculta_sem_alteracao}
+                  onChange={(checked) => {
+                    updateDepois({
+                      ausculta_sem_alteracao: checked,
+                      // Se marcar "sem alteração", desmarca as outras opções
+                      ausculta_melhorou: checked
+                        ? false
+                        : depois.ausculta_melhorou,
+                      ausculta_reducao_roncos: checked
+                        ? false
+                        : depois.ausculta_reducao_roncos,
+                      ausculta_reducao_sibilos: checked
+                        ? false
+                        : depois.ausculta_reducao_sibilos,
+                      ausculta_reducao_estertores: checked
+                        ? false
+                        : depois.ausculta_reducao_estertores,
+                      ausculta_melhora_mv: checked
+                        ? false
+                        : depois.ausculta_melhora_mv,
+                    });
+                  }}
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Houve Melhora"
+                  checked={depois.ausculta_melhorou}
+                  onChange={(checked) => {
+                    updateDepois({
+                      ausculta_melhorou: checked,
+                      ausculta_sem_alteracao: checked
+                        ? false
+                        : depois.ausculta_sem_alteracao,
+                    });
+                  }}
+                  disabled={disabled}
+                />
+              </div>
 
               {depois.ausculta_melhorou && (
-                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-purple-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-4 border-l-2 border-purple-200">
                   <CheckboxField
                     label="Redução de Roncos"
                     checked={depois.ausculta_reducao_roncos}
@@ -1301,44 +1349,99 @@ export const EvolutionSectionContent: React.FC<
               )}
             </div>
 
-            <Field label="Saturação de O₂ (%) - Após Intervenção">
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={100}
-                value={depois.saturacao_o2 || ''}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, '');
-                  updateDepois({
-                    saturacao_o2: value ? Number(value) : undefined,
-                  });
-                }}
-                onKeyDown={(e) => {
-                  if (
-                    ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter'].includes(
-                      e.key
-                    ) ||
-                    (e.ctrlKey &&
-                      ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
-                    [
-                      'ArrowLeft',
-                      'ArrowRight',
-                      'ArrowUp',
-                      'ArrowDown',
-                    ].includes(e.key)
-                  ) {
-                    return;
-                  }
-                  if (!/[0-9]/.test(e.key)) {
-                    e.preventDefault();
-                  }
-                }}
-                placeholder="Ex: 98"
-                disabled={disabled}
-                className="w-full sm:w-32"
-              />
-            </Field>
+            {/* Sinais Vitais Após */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-green-700">
+                🌡️ Sinais Vitais Após Intervenção
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="SpO₂ (%)">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={100}
+                    value={depois.saturacao_o2 || ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      updateDepois({
+                        saturacao_o2: value ? Number(value) : undefined,
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        [
+                          'Backspace',
+                          'Delete',
+                          'Tab',
+                          'Escape',
+                          'Enter',
+                        ].includes(e.key) ||
+                        (e.ctrlKey &&
+                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
+                        [
+                          'ArrowLeft',
+                          'ArrowRight',
+                          'ArrowUp',
+                          'ArrowDown',
+                        ].includes(e.key)
+                      ) {
+                        return;
+                      }
+                      if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    placeholder="98"
+                    disabled={disabled}
+                    className="w-full"
+                  />
+                </Field>
+
+                <Field label="FC (bpm)">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={40}
+                    max={220}
+                    value={depois.frequencia_cardiaca || ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      updateDepois({
+                        frequencia_cardiaca: value ? Number(value) : undefined,
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        [
+                          'Backspace',
+                          'Delete',
+                          'Tab',
+                          'Escape',
+                          'Enter',
+                        ].includes(e.key) ||
+                        (e.ctrlKey &&
+                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
+                        [
+                          'ArrowLeft',
+                          'ArrowRight',
+                          'ArrowUp',
+                          'ArrowDown',
+                        ].includes(e.key)
+                      ) {
+                        return;
+                      }
+                      if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    placeholder="115"
+                    disabled={disabled}
+                    className="w-full"
+                  />
+                </Field>
+              </div>
+            </div>
 
             <Field label="Comportamento da Criança Após a Sessão">
               <RadioButtonGroup
@@ -1349,6 +1452,7 @@ export const EvolutionSectionContent: React.FC<
                       | 'calmo'
                       | 'sonolento'
                       | 'irritado'
+                      | 'choroso'
                       | 'sem_mudanca',
                   })
                 }
@@ -1356,6 +1460,7 @@ export const EvolutionSectionContent: React.FC<
                   { valor: 'calmo', label: '😊 Calmo' },
                   { valor: 'sonolento', label: '😴 Sonolento' },
                   { valor: 'irritado', label: '😤 Irritado' },
+                  { valor: 'choroso', label: '😢 Choroso' },
                   { valor: 'sem_mudanca', label: '➖ Sem Mudança' },
                 ]}
                 disabled={disabled}

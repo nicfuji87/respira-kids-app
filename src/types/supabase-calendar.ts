@@ -362,9 +362,11 @@ export interface EvolucaoAnalyticsData {
   peep_valor?: number | null;
   // Resposta ao Tratamento
   spo2_depois?: number | null;
+  frequencia_cardiaca_depois?: number | null;
   melhora_padrao_respiratorio?: boolean;
   eliminacao_secrecao?: boolean;
   reducao_desconforto?: boolean;
+  ausculta_sem_alteracao?: boolean;
   ausculta_melhorou?: boolean;
   // Conduta
   manter_fisioterapia?: boolean;
