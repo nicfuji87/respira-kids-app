@@ -217,14 +217,18 @@ export interface OrientacoesRespiratoria {
   posicionamento_dormir: boolean;
   posicionamento_cabeca_elevada?: boolean;
   posicionamento_alternancia_decubitos?: boolean;
-  posicionamento_evitar_cadeirinhas?: boolean;
+  posicionamento_prono?: boolean; // Posição prona
+  posicionamento_decubito_lateral_direito?: boolean;
+  posicionamento_decubito_lateral_esquerdo?: boolean;
 
   // Sinais de Alerta
   sinais_alerta: boolean;
   sinais_alerta_esforco_respiratorio?: boolean;
   sinais_alerta_piora_tosse_chiado?: boolean;
   sinais_alerta_queda_saturacao?: boolean;
-  sinais_alerta_alteracao_alimentar_sono?: boolean;
+  sinais_alerta_piora_diurese?: boolean; // Piora da diurese
+  sinais_alerta_febre?: boolean; // Febre
+  sinais_alerta_prostracao?: boolean; // Prostração
 
   outras?: string;
 }

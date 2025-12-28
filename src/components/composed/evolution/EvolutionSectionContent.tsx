@@ -272,7 +272,7 @@ export const EvolutionSectionContent: React.FC<
                   />
                 </Field>
 
-                <Field label="SpO₂ (%)">
+                <Field label="SpO₂ (%) (inicial)">
                   <Input
                     type="number"
                     inputMode="numeric"
@@ -1903,6 +1903,16 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-6">
+            {/* Explicação */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <strong>💡 Orientações importantes:</strong> Marque as
+                orientações que foram passadas aos responsáveis durante o
+                atendimento. Essas informações ajudam no acompanhamento e na
+                continuidade do cuidado em casa.
+              </p>
+            </div>
+
             {/* Higiene Nasal */}
             <div className="border rounded-lg p-4 space-y-4">
               <CheckboxField
@@ -1978,13 +1988,37 @@ export const EvolutionSectionContent: React.FC<
                     disabled={disabled}
                   />
                   <CheckboxField
-                    label="Evitar permanência prolongada em cadeirinhas"
+                    label="Prono (barriga para baixo)"
+                    checked={orientacoes.posicionamento_prono || false}
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        posicionamento_prono: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Decúbito lateral direito"
                     checked={
-                      orientacoes.posicionamento_evitar_cadeirinhas || false
+                      orientacoes.posicionamento_decubito_lateral_direito ||
+                      false
                     }
                     onChange={(checked) =>
                       updateOrientacoes({
-                        posicionamento_evitar_cadeirinhas: checked,
+                        posicionamento_decubito_lateral_direito: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Decúbito lateral esquerdo"
+                    checked={
+                      orientacoes.posicionamento_decubito_lateral_esquerdo ||
+                      false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        posicionamento_decubito_lateral_esquerdo: checked,
                       })
                     }
                     disabled={disabled}
@@ -2040,14 +2074,31 @@ export const EvolutionSectionContent: React.FC<
                     disabled={disabled}
                   />
                   <CheckboxField
-                    label="Alteração do padrão alimentar ou sono"
-                    checked={
-                      orientacoes.sinais_alerta_alteracao_alimentar_sono ||
-                      false
-                    }
+                    label="Piora da diurese"
+                    checked={orientacoes.sinais_alerta_piora_diurese || false}
                     onChange={(checked) =>
                       updateOrientacoes({
-                        sinais_alerta_alteracao_alimentar_sono: checked,
+                        sinais_alerta_piora_diurese: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Febre"
+                    checked={orientacoes.sinais_alerta_febre || false}
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        sinais_alerta_febre: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Prostração"
+                    checked={orientacoes.sinais_alerta_prostracao || false}
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        sinais_alerta_prostracao: checked,
                       })
                     }
                     disabled={disabled}
