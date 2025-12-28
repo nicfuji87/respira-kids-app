@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapPin, Edit, Save, XCircle, FileText } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 import { ToastAction } from '@/components/primitives/toast';
@@ -28,7 +28,6 @@ import {
   StatusPaymentDisplay,
   LocationSelect,
   SessionMediaManager,
-  EvolutionEditor,
   EvolutionFormModal,
   type LocationOption,
 } from '@/components/composed';
@@ -47,10 +46,8 @@ import {
   updateRelatorioEvolucao,
   fetchProfissionais,
 } from '@/lib/calendar-services';
-import {
-  generatePatientHistoryAI,
-  checkAIHistoryStatus,
-} from '@/lib/patient-api';
+// AI dev note: generatePatientHistoryAI e checkAIHistoryStatus removidos -
+// agora são chamados apenas via modal de evolução estruturada
 import type {
   SupabaseAgendamentoCompletoFlat,
   SupabaseConsultaStatus,
@@ -98,7 +95,6 @@ interface FormData {
   valorServico: string;
   statusConsultaId: string;
   tipoServicoId: string;
-  evolucaoServico: string;
   empresaFaturaId: string;
   // AI dev note: profissionalId só pode ser alterado por admin
   profissionalId: string;
@@ -126,7 +122,6 @@ export const AppointmentDetailsManager =
         valorServico: '',
         statusConsultaId: '',
         tipoServicoId: '',
-        evolucaoServico: '',
         empresaFaturaId: '',
         profissionalId: '',
       });
@@ -202,91 +197,7 @@ export const AppointmentDetailsManager =
       const { user } = useAuth();
       const { toast } = useToast();
 
-      // AI dev note: Auto-save da evolução no localStorage para evitar perda de texto
-      // quando o modal é fechado acidentalmente (ex: clicar fora do modal)
-      const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-      const getAutoSaveKey = useCallback(
-        () => (appointment ? `evolucao_draft_${appointment.id}` : null),
-        [appointment]
-      );
-
-      // Recuperar rascunho do localStorage quando abrir o modal
-      useEffect(() => {
-        if (!isOpen || !appointment) return;
-
-        const key = getAutoSaveKey();
-        if (!key) return;
-
-        const savedDraft = localStorage.getItem(key);
-        if (savedDraft) {
-          try {
-            const draft = JSON.parse(savedDraft);
-            // Verificar se o rascunho tem conteúdo e é recente (menos de 24h)
-            const isRecent = Date.now() - draft.timestamp < 24 * 60 * 60 * 1000;
-            if (draft.content && isRecent && !formData.evolucaoServico) {
-              toast({
-                title: 'Rascunho recuperado',
-                description:
-                  'Encontramos uma evolução não salva. O texto foi restaurado.',
-                action: (
-                  <ToastAction
-                    altText="Descartar rascunho"
-                    onClick={() => {
-                      localStorage.removeItem(key);
-                      setFormData((prev) => ({ ...prev, evolucaoServico: '' }));
-                    }}
-                  >
-                    Descartar
-                  </ToastAction>
-                ),
-              });
-              setFormData((prev) => ({
-                ...prev,
-                evolucaoServico: draft.content,
-              }));
-            }
-          } catch {
-            // Ignorar erros de parse
-            localStorage.removeItem(key);
-          }
-        }
-      }, [
-        isOpen,
-        appointment,
-        getAutoSaveKey,
-        toast,
-        formData.evolucaoServico,
-      ]);
-
-      // Auto-save da evolução no localStorage (debounced)
-      useEffect(() => {
-        const key = getAutoSaveKey();
-        if (!key || !isOpen) return;
-
-        // Limpar timeout anterior
-        if (autoSaveTimeoutRef.current) {
-          clearTimeout(autoSaveTimeoutRef.current);
-        }
-
-        // Só salvar se tiver conteúdo
-        if (formData.evolucaoServico.trim()) {
-          autoSaveTimeoutRef.current = setTimeout(() => {
-            localStorage.setItem(
-              key,
-              JSON.stringify({
-                content: formData.evolucaoServico,
-                timestamp: Date.now(),
-              })
-            );
-          }, 1000); // Debounce de 1 segundo
-        }
-
-        return () => {
-          if (autoSaveTimeoutRef.current) {
-            clearTimeout(autoSaveTimeoutRef.current);
-          }
-        };
-      }, [formData.evolucaoServico, getAutoSaveKey, isOpen]);
+      // AI dev note: Auto-save de evolução removido - agora usamos apenas evolução estruturada
 
       // Estados para confirmação de datas
       const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
@@ -569,7 +480,6 @@ export const AppointmentDetailsManager =
             valorServico: appointment.valor_servico,
             statusConsultaId: appointment.status_consulta_id,
             tipoServicoId: appointment.tipo_servico_id,
-            evolucaoServico: '',
             empresaFaturaId: appointment.empresa_fatura_id || '',
             profissionalId: appointment.profissional_id || '',
           });
@@ -681,21 +591,49 @@ export const AppointmentDetailsManager =
             dados.evolucao_respiratoria
           ) {
             const ev = dados.evolucao_respiratoria;
-            if (ev.queixa_principal.tosse) {
-              conteudoResumo += `• Tosse: ${ev.queixa_principal.tosse}\n`;
+            // AI dev note: Usando estado_geral_antes que agora contém queixa principal, sinais vitais e saturação
+            if (ev.estado_geral_antes.tosse) {
+              conteudoResumo += `• Tosse: ${ev.estado_geral_antes.tosse}\n`;
             }
-            if (
-              ev.intervencao.afe ||
-              ev.intervencao.drr ||
-              ev.intervencao.vibrocompressao
-            ) {
-              conteudoResumo += `• Intervenção: `;
-              const tecnicas = [];
-              if (ev.intervencao.afe) tecnicas.push('AFE');
-              if (ev.intervencao.drr) tecnicas.push('DRR');
-              if (ev.intervencao.vibrocompressao)
-                tecnicas.push('Vibrocompressão');
-              conteudoResumo += tecnicas.join(', ') + '\n';
+            if (ev.estado_geral_antes.temperatura_aferida) {
+              conteudoResumo += `• Temperatura: ${ev.estado_geral_antes.temperatura_aferida}°C\n`;
+            }
+            if (ev.estado_geral_antes.saturacao_o2) {
+              conteudoResumo += `• SpO₂: ${ev.estado_geral_antes.saturacao_o2}%\n`;
+            }
+            if (ev.avaliacao_antes.padrao_respiratorio.classificacao_clinica) {
+              conteudoResumo += `• Classificação: ${ev.avaliacao_antes.padrao_respiratorio.classificacao_clinica.replace(/_/g, ' ')}\n`;
+            }
+            // Técnicas de desobstrução brônquica
+            const tecnicas = [];
+            if (ev.intervencao.afe) tecnicas.push('AFE');
+            if (ev.intervencao.vibrocompressao)
+              tecnicas.push('Vibrocompressão');
+            if (ev.intervencao.expiração_lenta_prolongada)
+              tecnicas.push('Expiração Lenta Prolongada');
+            if (ev.intervencao.rta) tecnicas.push('RTA');
+            if (ev.intervencao.epap) tecnicas.push('EPAP');
+            if (ev.intervencao.epap_selo_dagua)
+              tecnicas.push("EPAP Selo d'Água");
+            if (ev.intervencao.redirecionamento_fluxo)
+              tecnicas.push('Redirecionamento de Fluxo');
+            if (ev.intervencao.posicionamentos_terapeuticos)
+              tecnicas.push('Posicionamentos');
+            if (ev.intervencao.estimulo_tosse)
+              tecnicas.push('Estímulo à Tosse');
+            if (ev.intervencao.nebulizacao) tecnicas.push('Nebulização');
+            if (ev.intervencao.aspiracao) {
+              let aspText = 'Aspiração';
+              if (ev.intervencao.aspiracao_tipo) {
+                aspText += ` (${ev.intervencao.aspiracao_tipo === 'nao_invasiva' ? 'Não Invasiva' : ev.intervencao.aspiracao_tipo === 'invasiva' ? 'Invasiva' : 'Ambas'})`;
+              }
+              tecnicas.push(aspText);
+            }
+            if (tecnicas.length > 0) {
+              conteudoResumo += `• Intervenção: ${tecnicas.join(', ')}\n`;
+            }
+            if (ev.intervencao.peep_valor) {
+              conteudoResumo += `• PEEP: ${ev.intervencao.peep_valor} cmH₂O\n`;
             }
             if (ev.avaliacao_depois.melhora_padrao_respiratorio) {
               conteudoResumo += `• Resposta: Melhora do padrão respiratório\n`;
@@ -737,10 +675,6 @@ export const AppointmentDetailsManager =
           // Recarregar evoluções
           const evolucoesList = await fetchRelatoriosEvolucao(appointment.id);
           setEvolucoes(evolucoesList);
-
-          // Limpar rascunho do localStorage
-          const key = getAutoSaveKey();
-          if (key) localStorage.removeItem(key);
 
           setShowEvolutionModal(false);
         } catch (error) {
@@ -874,65 +808,8 @@ export const AppointmentDetailsManager =
           // Salvar agendamento através da callback do parent (para manter o flow existente)
           onSave(updateData);
 
-          // Se há evolução, salvar também
-          if (formData.evolucaoServico.trim()) {
-            // AI dev note: Guard clause - verificar se user.pessoa?.id existe antes de salvar evolução
-            if (!user.pessoa?.id) {
-              throw new Error(
-                'Usuário não possui pessoa associada. Contate o administrador.'
-              );
-            }
-
-            await saveRelatorioEvolucao({
-              id_agendamento: appointment.id,
-              conteudo: formData.evolucaoServico.trim(),
-              criado_por: user.pessoa.id,
-            });
-
-            // Recarregar evoluções
-            const evolucoesList = await fetchRelatoriosEvolucao(appointment.id);
-            setEvolucoes(evolucoesList);
-
-            // Trigger automático: gerar histórico com IA se ativo
-            try {
-              const { isActive } = await checkAIHistoryStatus(user.pessoa.id);
-              if (isActive) {
-                // Executar em background sem bloquear a UI
-                generatePatientHistoryAI(
-                  appointment.paciente_id,
-                  user.pessoa.id
-                )
-                  .then((result) => {
-                    if (result.success) {
-                      console.log(
-                        '[DEBUG] Histórico do paciente atualizado automaticamente pela IA'
-                      );
-                    } else {
-                      console.warn(
-                        '[DEBUG] Falha na geração automática de histórico:',
-                        result.error
-                      );
-                    }
-                  })
-                  .catch((error) => {
-                    console.error(
-                      '[DEBUG] Erro na geração automática de histórico:',
-                      error
-                    );
-                  });
-              }
-            } catch (error) {
-              console.warn(
-                '[DEBUG] Erro ao verificar status da IA para histórico:',
-                error
-              );
-            }
-
-            // Limpar campo de evolução e rascunho do localStorage
-            setFormData((prev) => ({ ...prev, evolucaoServico: '' }));
-            const key = getAutoSaveKey();
-            if (key) localStorage.removeItem(key);
-          }
+          // AI dev note: Evolução agora é salva apenas via modal estruturado (EvolutionFormModal)
+          // O campo de texto livre foi removido - toda evolução usa o formato estruturado
 
           setIsEdited(false);
         } catch (error) {
@@ -1423,30 +1300,18 @@ export const AppointmentDetailsManager =
                     {userRole !== 'secretaria' && (
                       <div className="space-y-3">
                         {/* Botão para evolução estruturada */}
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowEvolutionModal(true)}
-                            disabled={isSavingEvolucao}
-                            className="flex items-center gap-2"
-                          >
-                            <FileText className="h-4 w-4" />
-                            Evolução Estruturada
-                          </Button>
-                          <span className="text-xs text-muted-foreground">
-                            ou use o campo de texto livre abaixo
-                          </span>
-                        </div>
-
-                        <EvolutionEditor
-                          value={formData.evolucaoServico}
-                          onChange={(value) =>
-                            handleInputChange('evolucaoServico', value)
-                          }
-                          placeholder="Digite ou grave a evolução do atendimento..."
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => setShowEvolutionModal(true)}
                           disabled={isSavingEvolucao}
-                        />
+                          className="flex items-center gap-2 w-full"
+                        >
+                          <FileText className="h-4 w-4" />
+                          {evolucoes.length > 0
+                            ? 'Adicionar Nova Evolução'
+                            : 'Registrar Evolução'}
+                        </Button>
                       </div>
                     )}
 
@@ -1555,10 +1420,7 @@ export const AppointmentDetailsManager =
                 </Button>
                 <Button
                   onClick={handleSaveAll}
-                  disabled={
-                    isSavingEvolucao ||
-                    (!isEdited && !formData.evolucaoServico.trim())
-                  }
+                  disabled={isSavingEvolucao || !isEdited}
                 >
                   {isSavingEvolucao ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>

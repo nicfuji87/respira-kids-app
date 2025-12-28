@@ -10,12 +10,12 @@ import type {
   TipoEvolucao,
   EvolucaoRespiratoria,
   EvolucaoMotoraAssimetria,
-  QueixaPrincipalRespiratoria,
+  EstadoGeralAntes,
   PadraoRespiratorio,
-  SinaisDesconforto,
+  SinaisDispneia,
+  RitmoRespiratorio,
   AuscultaPulmonar,
   SecrecaoRespiratoria,
-  EstadoGeralCrianca,
   IntervencaoRespiratoria,
   AvaliacaoRespiratoriaDepois,
   OrientacoesRespiratoria,
@@ -29,7 +29,11 @@ import type {
   OrientacoesMotoraAssimetria,
   CondutaMotoraAssimetria,
 } from '@/types/evolucao-clinica';
-import { calcularMetricasCraniometriaEvolucao } from '@/types/evolucao-clinica';
+import {
+  calcularMetricasCraniometriaEvolucao,
+  calcularClassificacaoClinica,
+  getTextoClassificacaoClinica,
+} from '@/types/evolucao-clinica';
 
 // AI dev note: EvolutionSectionContent - Renderiza conteúdo de cada seção da evolução
 // Suporta evolução respiratória e motora/assimetria
@@ -116,129 +120,223 @@ export const EvolutionSectionContent: React.FC<
 
     switch (secaoId) {
       // -----------------------------------------------------------------
-      // QUEIXA PRINCIPAL
+      // ESTADO GERAL (ANTES) - Consolidado: Queixa Principal + Sinais Vitais + Estado + Saturação
       // -----------------------------------------------------------------
-      case 'queixa': {
-        const queixa = evolucao.queixa_principal;
+      case 'estado_geral_antes': {
+        const estado = evolucao.estado_geral_antes;
 
-        const updateQueixa = (
-          updates: Partial<QueixaPrincipalRespiratoria>
-        ) => {
+        const updateEstado = (updates: Partial<EstadoGeralAntes>) => {
           onRespiratoriaChange({
-            queixa_principal: { ...queixa, ...updates },
+            estado_geral_antes: { ...estado, ...updates },
           });
         };
 
         return (
-          <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800">
-                💬 Registre em linguagem objetiva a queixa principal relatada
-                pelo responsável.
-              </p>
+          <div className="space-y-8">
+            {/* Queixa Principal */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <Field label="Tipo de Tosse">
+                <RadioButtonGroup
+                  value={estado.tosse}
+                  onChange={(v) =>
+                    updateEstado({ tosse: v as 'seca' | 'produtiva' })
+                  }
+                  options={[
+                    { valor: 'seca', label: 'Tosse Seca' },
+                    { valor: 'produtiva', label: 'Tosse Produtiva' },
+                  ]}
+                  disabled={disabled}
+                />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-4">
+                <CheckboxField
+                  label="Chiado"
+                  checked={estado.chiado || false}
+                  onChange={(checked) => updateEstado({ chiado: checked })}
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Cansaço Respiratório"
+                  checked={estado.cansaco_respiratorio || false}
+                  onChange={(checked) =>
+                    updateEstado({ cansaco_respiratorio: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Dificuldade Alimentar"
+                  checked={estado.dificuldade_alimentar || false}
+                  onChange={(checked) =>
+                    updateEstado({ dificuldade_alimentar: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Piora Noturna"
+                  checked={estado.piora_noturna || false}
+                  onChange={(checked) =>
+                    updateEstado({ piora_noturna: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Infecção Recente"
+                  checked={estado.infeccao_recente || false}
+                  onChange={(checked) =>
+                    updateEstado({ infeccao_recente: checked })
+                  }
+                  disabled={disabled}
+                />
+              </div>
+
+              {estado.tosse === 'produtiva' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Cor da Secreção">
+                    <RadioButtonGroup
+                      value={estado.secrecao_cor}
+                      onChange={(v) =>
+                        updateEstado({
+                          secrecao_cor: v as
+                            | 'clara'
+                            | 'amarelada'
+                            | 'esverdeada',
+                        })
+                      }
+                      options={[
+                        { valor: 'clara', label: '⚪ Clara' },
+                        { valor: 'amarelada', label: '🟡 Amarelada' },
+                        { valor: 'esverdeada', label: '🟢 Esverdeada' },
+                      ]}
+                      disabled={disabled}
+                    />
+                  </Field>
+
+                  <Field label="Quantidade da Secreção">
+                    <RadioButtonGroup
+                      value={estado.secrecao_quantidade}
+                      onChange={(v) =>
+                        updateEstado({
+                          secrecao_quantidade: v as
+                            | 'pouca'
+                            | 'moderada'
+                            | 'abundante',
+                        })
+                      }
+                      options={[
+                        { valor: 'pouca', label: 'Pouca' },
+                        { valor: 'moderada', label: 'Moderada' },
+                        { valor: 'abundante', label: 'Abundante' },
+                      ]}
+                      disabled={disabled}
+                    />
+                  </Field>
+                </div>
+              )}
             </div>
 
-            <Field label="Tipo de Tosse">
-              <RadioButtonGroup
-                value={queixa.tosse}
-                onChange={(v) =>
-                  updateQueixa({ tosse: v as 'seca' | 'produtiva' })
-                }
-                options={[
-                  { valor: 'seca', label: 'Tosse Seca' },
-                  { valor: 'produtiva', label: 'Tosse Produtiva' },
-                ]}
-                disabled={disabled}
-              />
-            </Field>
+            {/* Sinais Vitais */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-red-700">🌡️ Sinais Vitais</h4>
 
-            <div className="grid grid-cols-2 gap-4">
-              <CheckboxField
-                label="Chiado"
-                checked={queixa.chiado || false}
-                onChange={(checked) => updateQueixa({ chiado: checked })}
-                disabled={disabled}
-              />
-              <CheckboxField
-                label="Cansaço Respiratório"
-                checked={queixa.cansaco_respiratorio || false}
-                onChange={(checked) =>
-                  updateQueixa({ cansaco_respiratorio: checked })
-                }
-                disabled={disabled}
-              />
-              <CheckboxField
-                label="Dificuldade Alimentar"
-                checked={queixa.dificuldade_alimentar || false}
-                onChange={(checked) =>
-                  updateQueixa({ dificuldade_alimentar: checked })
-                }
-                disabled={disabled}
-              />
-              <CheckboxField
-                label="Piora Noturna"
-                checked={queixa.piora_noturna || false}
-                onChange={(checked) => updateQueixa({ piora_noturna: checked })}
-                disabled={disabled}
-              />
-              <CheckboxField
-                label="Infecção Recente"
-                checked={queixa.infeccao_recente || false}
-                onChange={(checked) =>
-                  updateQueixa({ infeccao_recente: checked })
-                }
-                disabled={disabled}
-              />
+              <Field label="Temperatura Aferida (°C)">
+                <Input
+                  type="number"
+                  min={35}
+                  max={42}
+                  step={0.1}
+                  value={estado.temperatura_aferida || ''}
+                  onChange={(e) =>
+                    updateEstado({
+                      temperatura_aferida: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
+                    })
+                  }
+                  placeholder="Ex: 36.5"
+                  disabled={disabled}
+                  className="w-32"
+                />
+              </Field>
             </div>
 
-            {queixa.tosse === 'produtiva' && (
-              <>
-                <Field label="Cor da Secreção">
-                  <RadioButtonGroup
-                    value={queixa.secrecao_cor}
-                    onChange={(v) =>
-                      updateQueixa({
-                        secrecao_cor: v as 'clara' | 'amarelada' | 'esverdeada',
+            {/* Estado Geral da Criança */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-purple-700">
+                👶 Estado Geral da Criança
+              </h4>
+
+              <Field label="Nível de Alerta" required>
+                <RadioButtonGroup
+                  value={estado.nivel_alerta}
+                  onChange={(v) =>
+                    updateEstado({
+                      nivel_alerta: v as 'ativo' | 'sonolento' | 'irritado',
+                    })
+                  }
+                  options={[
+                    { valor: 'ativo', label: '😊 Ativo' },
+                    { valor: 'sonolento', label: '😴 Sonolento' },
+                    { valor: 'irritado', label: '😤 Irritado' },
+                  ]}
+                  disabled={disabled}
+                />
+              </Field>
+            </div>
+
+            {/* Saturação de O₂ */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-green-700">🫁 Saturação de O₂</h4>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="SpO₂ em Ar Ambiente (%)">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={estado.saturacao_o2 || ''}
+                    onChange={(e) =>
+                      updateEstado({
+                        saturacao_o2: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
                       })
                     }
-                    options={[
-                      { valor: 'clara', label: '⚪ Clara' },
-                      { valor: 'amarelada', label: '🟡 Amarelada' },
-                      { valor: 'esverdeada', label: '🟢 Esverdeada' },
-                    ]}
+                    placeholder="Ex: 97"
                     disabled={disabled}
+                    className="w-32"
                   />
                 </Field>
 
-                <Field label="Quantidade da Secreção">
-                  <RadioButtonGroup
-                    value={queixa.secrecao_quantidade}
-                    onChange={(v) =>
-                      updateQueixa({
-                        secrecao_quantidade: v as
-                          | 'pouca'
-                          | 'moderada'
-                          | 'abundante',
+                <Field label="SpO₂ com Suporte (%)">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={estado.saturacao_com_suporte || ''}
+                    onChange={(e) =>
+                      updateEstado({
+                        saturacao_com_suporte: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
                       })
                     }
-                    options={[
-                      { valor: 'pouca', label: 'Pouca' },
-                      { valor: 'moderada', label: 'Moderada' },
-                      { valor: 'abundante', label: 'Abundante' },
-                    ]}
+                    placeholder="Ex: 99"
                     disabled={disabled}
+                    className="w-32"
                   />
                 </Field>
-              </>
-            )}
+              </div>
+            </div>
 
-            <Field label="Observações / Episódios Recentes">
+            {/* Observações Gerais */}
+            <Field label="Observações Gerais">
               <Textarea
-                value={queixa.observacoes || ''}
-                onChange={(e) => updateQueixa({ observacoes: e.target.value })}
-                placeholder="Ex: Mãe relata tosse produtiva predominante à noite, com piora há 2 dias."
+                value={estado.observacoes || ''}
+                onChange={(e) => updateEstado({ observacoes: e.target.value })}
+                placeholder="Observações adicionais sobre o estado geral da criança..."
                 disabled={disabled}
-                rows={3}
+                rows={2}
               />
             </Field>
           </div>
@@ -246,29 +344,38 @@ export const EvolutionSectionContent: React.FC<
       }
 
       // -----------------------------------------------------------------
-      // AVALIAÇÃO ANTES DA INTERVENÇÃO
+      // AVALIAÇÃO RESPIRATÓRIA (SEM TEMPERATURA E SATURAÇÃO - MOVIDOS PARA ESTADO GERAL)
       // -----------------------------------------------------------------
       case 'avaliacao_antes': {
         const avaliacao = evolucao.avaliacao_antes;
 
         const updatePadrao = (updates: Partial<PadraoRespiratorio>) => {
+          const novoPadrao = {
+            ...avaliacao.padrao_respiratorio,
+            ...updates,
+          };
+          // Calcula classificação automaticamente
+          const classificacao = calcularClassificacaoClinica(
+            novoPadrao.ritmo_respiratorio,
+            novoPadrao.dispneia
+          );
           onRespiratoriaChange({
             avaliacao_antes: {
               ...avaliacao,
               padrao_respiratorio: {
-                ...avaliacao.padrao_respiratorio,
-                ...updates,
+                ...novoPadrao,
+                classificacao_clinica: classificacao,
               },
             },
           });
         };
 
-        const updateSinais = (updates: Partial<SinaisDesconforto>) => {
+        const updateSinais = (updates: Partial<SinaisDispneia>) => {
           onRespiratoriaChange({
             avaliacao_antes: {
               ...avaliacao,
-              sinais_desconforto: {
-                ...avaliacao.sinais_desconforto,
+              sinais_dispneia: {
+                ...avaliacao.sinais_dispneia,
                 ...updates,
               },
             },
@@ -293,6 +400,14 @@ export const EvolutionSectionContent: React.FC<
           });
         };
 
+        // Texto descritivo da classificação
+        const classificacaoTexto = avaliacao.padrao_respiratorio
+          .classificacao_clinica
+          ? getTextoClassificacaoClinica(
+              avaliacao.padrao_respiratorio.classificacao_clinica
+            )
+          : null;
+
         return (
           <div className="space-y-8">
             {/* Padrão Respiratório */}
@@ -316,95 +431,164 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
 
-              <Field label="Ritmo">
+              <Field label="Ritmo Respiratório" required>
                 <RadioButtonGroup
-                  value={avaliacao.padrao_respiratorio.ritmo}
+                  value={avaliacao.padrao_respiratorio.ritmo_respiratorio}
                   onChange={(v) =>
-                    updatePadrao({ ritmo: v as 'regular' | 'irregular' })
+                    updatePadrao({ ritmo_respiratorio: v as RitmoRespiratorio })
                   }
                   options={[
-                    { valor: 'regular', label: 'Regular' },
-                    { valor: 'irregular', label: 'Irregular' },
+                    { valor: 'eupneico', label: '✅ Eupneico (Normal)' },
+                    {
+                      valor: 'bradipneico',
+                      label: '🔵 Bradipneico (FR Baixa)',
+                    },
+                    { valor: 'taquipneico', label: '🟠 Taquipneico (FR Alta)' },
                   ]}
                   disabled={disabled}
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <CheckboxField
-                  label="Taquipneia"
-                  checked={avaliacao.padrao_respiratorio.taquipneia}
-                  onChange={(checked) => updatePadrao({ taquipneia: checked })}
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Uso de Musculatura Acessória"
-                  checked={
-                    avaliacao.padrao_respiratorio.uso_musculatura_acessoria
-                  }
-                  onChange={(checked) =>
-                    updatePadrao({ uso_musculatura_acessoria: checked })
-                  }
-                  disabled={disabled}
-                />
-              </div>
+              <BooleanField
+                label="Presença de Dispneia (Sinais de Esforço)"
+                value={avaliacao.padrao_respiratorio.dispneia}
+                onChange={(checked) => updatePadrao({ dispneia: checked })}
+                disabled={disabled}
+              />
             </div>
 
-            {/* Sinais de Desconforto */}
-            <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-orange-700">
-                🔹 Sinais de Desconforto Respiratório
-              </h4>
+            {/* Sinais de Dispneia - Só aparecem se dispneia = true */}
+            {avaliacao.padrao_respiratorio.dispneia && (
+              <div className="border rounded-lg p-4 space-y-4 bg-orange-50">
+                <h4 className="font-medium text-orange-700">
+                  ⚠️ Sinais Associados à Dispneia
+                </h4>
+                <p className="text-sm text-orange-600 mb-4">
+                  Selecione os sinais de esforço respiratório observados:
+                </p>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <CheckboxField
-                  label="Batimento de Asa Nasal"
-                  checked={avaliacao.sinais_desconforto.batimento_asa_nasal}
-                  onChange={(checked) =>
-                    updateSinais({ batimento_asa_nasal: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Tiragem Intercostal"
-                  checked={avaliacao.sinais_desconforto.tiragem_intercostal}
-                  onChange={(checked) =>
-                    updateSinais({ tiragem_intercostal: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Tiragem Subcostal"
-                  checked={avaliacao.sinais_desconforto.tiragem_subcostal}
-                  onChange={(checked) =>
-                    updateSinais({ tiragem_subcostal: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Tiragem Supraclavicular"
-                  checked={avaliacao.sinais_desconforto.tiragem_supraclavicular}
-                  onChange={(checked) =>
-                    updateSinais({ tiragem_supraclavicular: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Gemência"
-                  checked={avaliacao.sinais_desconforto.gemencia}
-                  onChange={(checked) => updateSinais({ gemencia: checked })}
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Postura Antálgica"
-                  checked={avaliacao.sinais_desconforto.postura_antalgica}
-                  onChange={(checked) =>
-                    updateSinais({ postura_antalgica: checked })
-                  }
-                  disabled={disabled}
-                />
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <CheckboxField
+                    label="Uso de Musculatura Acessória"
+                    checked={
+                      avaliacao.sinais_dispneia.uso_musculatura_acessoria
+                    }
+                    onChange={(checked) =>
+                      updateSinais({ uso_musculatura_acessoria: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Batimento de Asa Nasal"
+                    checked={avaliacao.sinais_dispneia.batimento_asa_nasal}
+                    onChange={(checked) =>
+                      updateSinais({ batimento_asa_nasal: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Tiragem Intercostal"
+                    checked={avaliacao.sinais_dispneia.tiragem_intercostal}
+                    onChange={(checked) =>
+                      updateSinais({ tiragem_intercostal: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Tiragem Subcostal"
+                    checked={avaliacao.sinais_dispneia.tiragem_subcostal}
+                    onChange={(checked) =>
+                      updateSinais({ tiragem_subcostal: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Tiragem Supraclavicular"
+                    checked={avaliacao.sinais_dispneia.tiragem_supraclavicular}
+                    onChange={(checked) =>
+                      updateSinais({ tiragem_supraclavicular: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Gemência"
+                    checked={avaliacao.sinais_dispneia.gemencia}
+                    onChange={(checked) => updateSinais({ gemencia: checked })}
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Postura Antálgica"
+                    checked={avaliacao.sinais_dispneia.postura_antalgica}
+                    onChange={(checked) =>
+                      updateSinais({ postura_antalgica: checked })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Classificação Clínica Automática */}
+            {avaliacao.padrao_respiratorio.ritmo_respiratorio && (
+              <div
+                className={cn(
+                  'border rounded-lg p-4 space-y-2',
+                  avaliacao.padrao_respiratorio.classificacao_clinica ===
+                    'taquidispneico'
+                    ? 'bg-red-50 border-red-300'
+                    : avaliacao.padrao_respiratorio.classificacao_clinica ===
+                        'taquipneico_sem_dispneia'
+                      ? 'bg-orange-50 border-orange-300'
+                      : avaliacao.padrao_respiratorio.classificacao_clinica ===
+                          'dispneico_sem_taquipneia'
+                        ? 'bg-yellow-50 border-yellow-300'
+                        : 'bg-green-50 border-green-300'
+                )}
+              >
+                <h4 className="font-medium flex items-center gap-2">
+                  📋 Classificação Clínica (Automática)
+                </h4>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'px-3 py-1 rounded-full text-sm font-semibold',
+                      avaliacao.padrao_respiratorio.classificacao_clinica ===
+                        'taquidispneico'
+                        ? 'bg-red-200 text-red-800'
+                        : avaliacao.padrao_respiratorio
+                              .classificacao_clinica ===
+                            'taquipneico_sem_dispneia'
+                          ? 'bg-orange-200 text-orange-800'
+                          : avaliacao.padrao_respiratorio
+                                .classificacao_clinica ===
+                              'dispneico_sem_taquipneia'
+                            ? 'bg-yellow-200 text-yellow-800'
+                            : 'bg-green-200 text-green-800'
+                    )}
+                  >
+                    {avaliacao.padrao_respiratorio.classificacao_clinica ===
+                      'taquidispneico' && '🔴 Taquidispneico'}
+                    {avaliacao.padrao_respiratorio.classificacao_clinica ===
+                      'taquipneico_sem_dispneia' &&
+                      '🟠 Taquipneico sem Dispneia'}
+                    {avaliacao.padrao_respiratorio.classificacao_clinica ===
+                      'dispneico_sem_taquipneia' &&
+                      '🟡 Dispneico sem Taquipneia'}
+                    {avaliacao.padrao_respiratorio.classificacao_clinica ===
+                      'normal' && '🟢 Normal'}
+                  </span>
+                </div>
+                {classificacaoTexto && (
+                  <p className="text-sm text-muted-foreground italic mt-2">
+                    {classificacaoTexto}
+                  </p>
+                )}
+                <div className="text-xs text-muted-foreground mt-2 pt-2 border-t">
+                  <strong>Legenda:</strong> Taquipneia = frequência elevada |
+                  Dispneia = esforço | Taquidispneia = frequência + esforço
+                </div>
+              </div>
+            )}
 
             {/* Ausculta Pulmonar */}
             <div className="border rounded-lg p-4 space-y-4">
@@ -533,120 +717,11 @@ export const EvolutionSectionContent: React.FC<
                 </>
               )}
             </div>
-
-            {/* Saturação */}
-            <Field label="Saturação de O₂ (%) - Em ar ambiente">
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={avaliacao.saturacao_o2 || ''}
-                onChange={(e) =>
-                  onRespiratoriaChange({
-                    avaliacao_antes: {
-                      ...avaliacao,
-                      saturacao_o2: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    },
-                  })
-                }
-                placeholder="Ex: 97"
-                disabled={disabled}
-                className="w-32"
-              />
-            </Field>
           </div>
         );
       }
 
-      // -----------------------------------------------------------------
-      // ESTADO GERAL
-      // -----------------------------------------------------------------
-      case 'estado_geral': {
-        const estado = evolucao.estado_geral;
-
-        const updateEstado = (updates: Partial<EstadoGeralCrianca>) => {
-          onRespiratoriaChange({
-            estado_geral: { ...estado, ...updates },
-          });
-        };
-
-        return (
-          <div className="space-y-6">
-            <Field label="Nível de Alerta" required>
-              <RadioButtonGroup
-                value={estado.nivel_alerta}
-                onChange={(v) =>
-                  updateEstado({
-                    nivel_alerta: v as 'ativo' | 'sonolento' | 'irritado',
-                  })
-                }
-                options={[
-                  { valor: 'ativo', label: '😊 Ativo' },
-                  { valor: 'sonolento', label: '😴 Sonolento' },
-                  { valor: 'irritado', label: '😤 Irritado' },
-                ]}
-                disabled={disabled}
-              />
-            </Field>
-
-            <Field label="Tolerância ao Manuseio" required>
-              <RadioButtonGroup
-                value={estado.tolerancia_manuseio}
-                onChange={(v) =>
-                  updateEstado({
-                    tolerancia_manuseio: v as 'boa' | 'regular' | 'ruim',
-                  })
-                }
-                options={[
-                  { valor: 'boa', label: '✅ Boa' },
-                  { valor: 'regular', label: '⚠️ Regular' },
-                  { valor: 'ruim', label: '❌ Ruim' },
-                ]}
-                disabled={disabled}
-              />
-            </Field>
-
-            <div className="grid grid-cols-2 gap-4">
-              <CheckboxField
-                label="Choro Durante Atendimento"
-                checked={estado.choro_durante_atendimento}
-                onChange={(checked) =>
-                  updateEstado({ choro_durante_atendimento: checked })
-                }
-                disabled={disabled}
-              />
-              <CheckboxField
-                label="Interferência no Sono"
-                checked={estado.interferencia_sono || false}
-                onChange={(checked) =>
-                  updateEstado({ interferencia_sono: checked })
-                }
-                disabled={disabled}
-              />
-              <CheckboxField
-                label="Interferência na Alimentação"
-                checked={estado.interferencia_alimentacao || false}
-                onChange={(checked) =>
-                  updateEstado({ interferencia_alimentacao: checked })
-                }
-                disabled={disabled}
-              />
-            </div>
-
-            <Field label="Observações">
-              <Textarea
-                value={estado.observacoes || ''}
-                onChange={(e) => updateEstado({ observacoes: e.target.value })}
-                placeholder="Observações adicionais sobre o estado geral..."
-                disabled={disabled}
-                rows={3}
-              />
-            </Field>
-          </div>
-        );
-      }
+      // AI dev note: 'estado_geral' foi consolidado em 'estado_geral_antes' para reduzir seções
 
       // -----------------------------------------------------------------
       // INTERVENÇÃO REALIZADA
@@ -664,28 +739,17 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-6">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-sm text-green-800">
-                🩺 Descreva o que foi realizado, não apenas liste as técnicas.
-              </p>
-            </div>
-
+            {/* Técnicas de Desobstrução Brônquica */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-blue-700">
-                Técnicas de Desobstrução Brônquica
+                🫁 Técnicas de Desobstrução Brônquica
               </h4>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <CheckboxField
                   label="AFE (Aumento do Fluxo Expiratório)"
                   checked={intervencao.afe}
                   onChange={(checked) => updateIntervencao({ afe: checked })}
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="DRR (Drenagem Rítmica Respiratória)"
-                  checked={intervencao.drr}
-                  onChange={(checked) => updateIntervencao({ drr: checked })}
                   disabled={disabled}
                 />
                 <CheckboxField
@@ -704,13 +768,34 @@ export const EvolutionSectionContent: React.FC<
                   }
                   disabled={disabled}
                 />
-              </div>
-            </div>
-
-            <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-purple-700">Outras Técnicas</h4>
-
-              <div className="grid grid-cols-2 gap-4">
+                <CheckboxField
+                  label="RTA (Reequilíbrio Toracoabdominal)"
+                  checked={intervencao.rta}
+                  onChange={(checked) => updateIntervencao({ rta: checked })}
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="EPAP"
+                  checked={intervencao.epap}
+                  onChange={(checked) => updateIntervencao({ epap: checked })}
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="EPAP Selo d'Água"
+                  checked={intervencao.epap_selo_dagua}
+                  onChange={(checked) =>
+                    updateIntervencao({ epap_selo_dagua: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Redirecionamento de Fluxo"
+                  checked={intervencao.redirecionamento_fluxo}
+                  onChange={(checked) =>
+                    updateIntervencao({ redirecionamento_fluxo: checked })
+                  }
+                  disabled={disabled}
+                />
                 <CheckboxField
                   label="Posicionamentos Terapêuticos"
                   checked={intervencao.posicionamentos_terapeuticos}
@@ -728,14 +813,6 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                 />
                 <CheckboxField
-                  label="Aspiração"
-                  checked={intervencao.aspiracao}
-                  onChange={(checked) =>
-                    updateIntervencao({ aspiracao: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
                   label="Nebulização"
                   checked={intervencao.nebulizacao}
                   onChange={(checked) =>
@@ -744,19 +821,149 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                 />
               </div>
+
+              {/* PEEP - aparece se usar EPAP ou EPAP selo d'água */}
+              {(intervencao.epap || intervencao.epap_selo_dagua) && (
+                <Field label="Valor da PEEP (cmH₂O)">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={20}
+                    step={0.5}
+                    value={intervencao.peep_valor || ''}
+                    onChange={(e) =>
+                      updateIntervencao({
+                        peep_valor: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 5"
+                    disabled={disabled}
+                    className="w-32"
+                  />
+                </Field>
+              )}
             </div>
 
-            <Field label="Outras Técnicas Utilizadas">
-              <Textarea
-                value={intervencao.outras_tecnicas || ''}
-                onChange={(e) =>
-                  updateIntervencao({ outras_tecnicas: e.target.value })
+            {/* Aspiração */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-orange-700">🔸 Aspiração</h4>
+
+              <BooleanField
+                label="Realizou Aspiração"
+                value={intervencao.aspiracao}
+                onChange={(checked) =>
+                  updateIntervencao({ aspiracao: checked })
                 }
-                placeholder="Descreva outras técnicas..."
                 disabled={disabled}
-                rows={2}
               />
-            </Field>
+
+              {intervencao.aspiracao && (
+                <div className="space-y-4 pl-4 border-l-2 border-orange-200">
+                  <Field label="Tipo de Aspiração" required>
+                    <RadioButtonGroup
+                      value={intervencao.aspiracao_tipo}
+                      onChange={(v) =>
+                        updateIntervencao({
+                          aspiracao_tipo: v as
+                            | 'invasiva'
+                            | 'nao_invasiva'
+                            | 'ambas',
+                        })
+                      }
+                      options={[
+                        { valor: 'nao_invasiva', label: 'Não Invasiva' },
+                        { valor: 'invasiva', label: 'Invasiva' },
+                        { valor: 'ambas', label: 'Ambas' },
+                      ]}
+                      disabled={disabled}
+                    />
+                  </Field>
+
+                  <Field label="Quantidade de Secreção">
+                    <RadioButtonGroup
+                      value={intervencao.aspiracao_quantidade}
+                      onChange={(v) =>
+                        updateIntervencao({
+                          aspiracao_quantidade: v as
+                            | 'pouca'
+                            | 'moderada'
+                            | 'abundante',
+                        })
+                      }
+                      options={[
+                        { valor: 'pouca', label: 'Pouca' },
+                        { valor: 'moderada', label: 'Moderada' },
+                        { valor: 'abundante', label: 'Abundante' },
+                      ]}
+                      disabled={disabled}
+                    />
+                  </Field>
+
+                  <Field label="Consistência da Secreção">
+                    <RadioButtonGroup
+                      value={intervencao.aspiracao_consistencia}
+                      onChange={(v) =>
+                        updateIntervencao({
+                          aspiracao_consistencia: v as 'fluida' | 'espessa',
+                        })
+                      }
+                      options={[
+                        { valor: 'fluida', label: 'Fluida' },
+                        { valor: 'espessa', label: 'Espessa' },
+                      ]}
+                      disabled={disabled}
+                    />
+                  </Field>
+
+                  <Field label="Aspecto da Secreção">
+                    <RadioButtonGroup
+                      value={intervencao.aspiracao_aspecto}
+                      onChange={(v) =>
+                        updateIntervencao({
+                          aspiracao_aspecto: v as
+                            | 'clara'
+                            | 'amarelada'
+                            | 'esverdeada'
+                            | 'purulenta',
+                        })
+                      }
+                      options={[
+                        { valor: 'clara', label: '⚪ Clara' },
+                        { valor: 'amarelada', label: '🟡 Amarelada' },
+                        { valor: 'esverdeada', label: '🟢 Esverdeada' },
+                        { valor: 'purulenta', label: '🟤 Purulenta' },
+                      ]}
+                      disabled={disabled}
+                    />
+                  </Field>
+
+                  <Field label="Sangramento">
+                    <RadioButtonGroup
+                      value={intervencao.aspiracao_sangramento}
+                      onChange={(v) =>
+                        updateIntervencao({
+                          aspiracao_sangramento: v as
+                            | 'nao'
+                            | 'rajas_sangue'
+                            | 'sangramento_ativo',
+                        })
+                      }
+                      options={[
+                        { valor: 'nao', label: '✅ Sem sangramento' },
+                        { valor: 'rajas_sangue', label: '⚠️ Rajas de sangue' },
+                        {
+                          valor: 'sangramento_ativo',
+                          label: '🔴 Sangramento ativo',
+                        },
+                      ]}
+                      disabled={disabled}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
 
             <Field label="Observações da Intervenção">
               <Textarea
@@ -778,6 +985,7 @@ export const EvolutionSectionContent: React.FC<
       // -----------------------------------------------------------------
       case 'avaliacao_depois': {
         const depois = evolucao.avaliacao_depois;
+        const estado = evolucao.estado_geral_antes;
 
         const updateDepois = (
           updates: Partial<AvaliacaoRespiratoriaDepois>
@@ -787,15 +995,14 @@ export const EvolutionSectionContent: React.FC<
           });
         };
 
+        const updateEstado = (updates: Partial<EstadoGeralAntes>) => {
+          onRespiratoriaChange({
+            estado_geral_antes: { ...estado, ...updates },
+          });
+        };
+
         return (
           <div className="space-y-6">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800">
-                📈 Este é um dos pontos mais importantes da evolução. Registre a
-                resposta imediata ao tratamento.
-              </p>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <BooleanField
                 value={depois.melhora_padrao_respiratorio}
@@ -823,39 +1030,91 @@ export const EvolutionSectionContent: React.FC<
               />
             </div>
 
-            {depois.eliminacao_secrecao && (
-              <Field label="Quantidade de Secreção Eliminada">
+            {/* Tolerância e Comportamento Durante a Sessão */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-purple-700">
+                👶 Tolerância e Comportamento
+              </h4>
+
+              <Field label="Tolerância ao Manuseio" required>
                 <RadioButtonGroup
-                  value={depois.quantidade_secrecao_eliminada}
+                  value={estado.tolerancia_manuseio}
                   onChange={(v) =>
-                    updateDepois({
-                      quantidade_secrecao_eliminada: v as
-                        | 'pouca'
-                        | 'moderada'
-                        | 'abundante',
+                    updateEstado({
+                      tolerancia_manuseio: v as 'boa' | 'regular' | 'ruim',
                     })
                   }
                   options={[
-                    { valor: 'pouca', label: 'Pouca' },
-                    { valor: 'moderada', label: 'Moderada' },
-                    { valor: 'abundante', label: 'Abundante' },
+                    { valor: 'boa', label: '✅ Boa' },
+                    { valor: 'regular', label: '⚠️ Regular' },
+                    { valor: 'ruim', label: '❌ Ruim' },
                   ]}
                   disabled={disabled}
                 />
               </Field>
-            )}
 
-            <Field label="Mudança na Ausculta Pulmonar">
-              <Textarea
-                value={depois.mudanca_ausculta || ''}
-                onChange={(e) =>
-                  updateDepois({ mudanca_ausculta: e.target.value })
+              <CheckboxField
+                label="Choro Durante Atendimento"
+                checked={estado.choro_durante_atendimento}
+                onChange={(checked) =>
+                  updateEstado({ choro_durante_atendimento: checked })
                 }
-                placeholder="Ex: Redução de roncos difusos, melhora do MV..."
                 disabled={disabled}
-                rows={2}
               />
-            </Field>
+            </div>
+
+            {/* Mudança na Ausculta Pulmonar - Checkboxes */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-purple-700">
+                🩺 Mudança na Ausculta Pulmonar
+              </h4>
+
+              <BooleanField
+                label="Houve Melhora na Ausculta"
+                value={depois.ausculta_melhorou}
+                onChange={(checked) =>
+                  updateDepois({ ausculta_melhorou: checked })
+                }
+                disabled={disabled}
+              />
+
+              {depois.ausculta_melhorou && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-purple-200">
+                  <CheckboxField
+                    label="Redução de Roncos"
+                    checked={depois.ausculta_reducao_roncos}
+                    onChange={(checked) =>
+                      updateDepois({ ausculta_reducao_roncos: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Redução de Sibilos"
+                    checked={depois.ausculta_reducao_sibilos}
+                    onChange={(checked) =>
+                      updateDepois({ ausculta_reducao_sibilos: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Redução de Estertores"
+                    checked={depois.ausculta_reducao_estertores}
+                    onChange={(checked) =>
+                      updateDepois({ ausculta_reducao_estertores: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Melhora do Murmúrio Vesicular"
+                    checked={depois.ausculta_melhora_mv}
+                    onChange={(checked) =>
+                      updateDepois({ ausculta_melhora_mv: checked })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+            </div>
 
             <Field label="Saturação de O₂ (%) - Após Intervenção">
               <Input
@@ -927,61 +1186,158 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-6">
+            {/* Higiene Nasal */}
             <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-blue-700">
-                Orientações Fornecidas
-              </h4>
-
-              <div className="grid grid-cols-2 gap-4">
-                <CheckboxField
-                  label="Higiene Nasal"
-                  checked={orientacoes.higiene_nasal}
-                  onChange={(checked) =>
-                    updateOrientacoes({ higiene_nasal: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Posicionamento para Dormir"
-                  checked={orientacoes.posicionamento_dormir}
-                  onChange={(checked) =>
-                    updateOrientacoes({ posicionamento_dormir: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Sinais de Alerta"
-                  checked={orientacoes.sinais_alerta}
-                  onChange={(checked) =>
-                    updateOrientacoes({ sinais_alerta: checked })
-                  }
-                  disabled={disabled}
-                />
-              </div>
+              <CheckboxField
+                label="Higiene Nasal"
+                checked={orientacoes.higiene_nasal}
+                onChange={(checked) =>
+                  updateOrientacoes({ higiene_nasal: checked })
+                }
+                disabled={disabled}
+              />
+              {orientacoes.higiene_nasal && (
+                <div className="pl-6 border-l-2 border-blue-200 space-y-2">
+                  <CheckboxField
+                    label="Técnica demonstrada"
+                    checked={
+                      orientacoes.higiene_nasal_tecnica_demonstrada || false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        higiene_nasal_tecnica_demonstrada: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Frequência orientada conforme idade"
+                    checked={
+                      orientacoes.higiene_nasal_frequencia_orientada || false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        higiene_nasal_frequencia_orientada: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
             </div>
 
-            <Field label="Frequência Sugerida das Sessões">
-              <Input
-                value={orientacoes.frequencia_sessoes || ''}
-                onChange={(e) =>
-                  updateOrientacoes({ frequencia_sessoes: e.target.value })
+            {/* Posicionamento para Dormir e Repouso */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <CheckboxField
+                label="Posicionamento para Dormir e Repouso"
+                checked={orientacoes.posicionamento_dormir}
+                onChange={(checked) =>
+                  updateOrientacoes({ posicionamento_dormir: checked })
                 }
-                placeholder="Ex: 2x por semana"
                 disabled={disabled}
               />
-            </Field>
+              {orientacoes.posicionamento_dormir && (
+                <div className="pl-6 border-l-2 border-blue-200 space-y-2">
+                  <CheckboxField
+                    label="Cabeça elevada"
+                    checked={orientacoes.posicionamento_cabeca_elevada || false}
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        posicionamento_cabeca_elevada: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Alternância de decúbitos"
+                    checked={
+                      orientacoes.posicionamento_alternancia_decubitos || false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        posicionamento_alternancia_decubitos: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Evitar permanência prolongada em cadeirinhas"
+                    checked={
+                      orientacoes.posicionamento_evitar_cadeirinhas || false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        posicionamento_evitar_cadeirinhas: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+            </div>
 
-            <Field label="Cuidados Domiciliares">
-              <Textarea
-                value={orientacoes.cuidados_domiciliares || ''}
-                onChange={(e) =>
-                  updateOrientacoes({ cuidados_domiciliares: e.target.value })
+            {/* Sinais de Alerta */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <CheckboxField
+                label="Sinais de Alerta"
+                checked={orientacoes.sinais_alerta}
+                onChange={(checked) =>
+                  updateOrientacoes({ sinais_alerta: checked })
                 }
-                placeholder="Descreva os cuidados domiciliares orientados..."
                 disabled={disabled}
-                rows={3}
               />
-            </Field>
+              {orientacoes.sinais_alerta && (
+                <div className="pl-6 border-l-2 border-orange-200 space-y-2">
+                  <CheckboxField
+                    label="Aumento do esforço respiratório"
+                    checked={
+                      orientacoes.sinais_alerta_esforco_respiratorio || false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        sinais_alerta_esforco_respiratorio: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Piora da tosse ou chiado"
+                    checked={
+                      orientacoes.sinais_alerta_piora_tosse_chiado || false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        sinais_alerta_piora_tosse_chiado: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Queda de saturação (quando monitorada)"
+                    checked={orientacoes.sinais_alerta_queda_saturacao || false}
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        sinais_alerta_queda_saturacao: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Alteração do padrão alimentar ou sono"
+                    checked={
+                      orientacoes.sinais_alerta_alteracao_alimentar_sono ||
+                      false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        sinais_alerta_alteracao_alimentar_sono: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+            </div>
 
             <Field label="Outras Orientações">
               <Textarea
@@ -1010,86 +1366,194 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-6">
+            {/* Manter Fisioterapia - principal decisão */}
             <BooleanField
               value={conduta.manter_fisioterapia}
               onChange={(checked) =>
-                updateConduta({ manter_fisioterapia: checked })
+                updateConduta({
+                  manter_fisioterapia: checked,
+                  // Limpa campos de alta quando manter fisio
+                  alta: checked ? false : conduta.alta,
+                  alta_parcial: checked ? false : conduta.alta_parcial,
+                })
               }
               label="Manter Fisioterapia Respiratória"
               disabled={disabled}
             />
 
+            {/* Se MANTER fisioterapia: mostra apenas Frequência Sugerida */}
             {conduta.manter_fisioterapia && (
-              <Field label="Frequência Sugerida">
-                <RadioButtonGroup
-                  value={conduta.frequencia_sugerida}
-                  onChange={(v) =>
-                    updateConduta({
-                      frequencia_sugerida: v as
-                        | 'diaria'
-                        | '2x_semana'
-                        | '3x_semana'
-                        | 'semanal',
-                    })
-                  }
-                  options={[
-                    { valor: 'diaria', label: 'Diária' },
-                    { valor: '3x_semana', label: '3x/semana' },
-                    { valor: '2x_semana', label: '2x/semana' },
-                    { valor: 'semanal', label: 'Semanal' },
-                  ]}
-                  disabled={disabled}
-                />
-              </Field>
+              <div className="pl-4 border-l-2 border-green-200 space-y-4">
+                <Field label="Frequência Sugerida">
+                  <RadioButtonGroup
+                    value={conduta.frequencia_sugerida}
+                    onChange={(v) =>
+                      updateConduta({
+                        frequencia_sugerida: v as
+                          | 'diaria'
+                          | '2x_semana'
+                          | '3x_semana'
+                          | 'semanal'
+                          | 'quinzenal'
+                          | 'mensal',
+                      })
+                    }
+                    options={[
+                      { valor: 'diaria', label: 'Diária' },
+                      { valor: '3x_semana', label: '3x/semana' },
+                      { valor: '2x_semana', label: '2x/semana' },
+                      { valor: 'semanal', label: 'Semanal' },
+                      { valor: 'quinzenal', label: 'Quinzenal' },
+                      { valor: 'mensal', label: 'Mensal' },
+                    ]}
+                    disabled={disabled}
+                  />
+                </Field>
+              </div>
             )}
 
-            <Field label="Reavaliação em (dias)">
-              <Input
-                type="number"
-                min={1}
-                value={conduta.reavaliacao_dias || ''}
-                onChange={(e) =>
-                  updateConduta({
-                    reavaliacao_dias: e.target.value
-                      ? Number(e.target.value)
-                      : undefined,
-                  })
-                }
-                placeholder="Ex: 7"
-                disabled={disabled}
-                className="w-32"
-              />
-            </Field>
+            {/* Se NÃO manter fisioterapia: mostra opções de Alta */}
+            {!conduta.manter_fisioterapia && (
+              <div className="pl-4 border-l-2 border-orange-200 space-y-4">
+                <Field label="Tipo de Alta" required>
+                  <RadioButtonGroup
+                    value={
+                      conduta.alta
+                        ? 'completa'
+                        : conduta.alta_parcial
+                          ? 'parcial'
+                          : null
+                    }
+                    onChange={(v) =>
+                      updateConduta({
+                        alta: v === 'completa',
+                        alta_parcial: v === 'parcial',
+                        // Limpa campos quando muda para alta completa
+                        frequencia_sugerida:
+                          v === 'completa' ? null : conduta.frequencia_sugerida,
+                        reavaliacao_dias:
+                          v === 'completa'
+                            ? undefined
+                            : conduta.reavaliacao_dias,
+                        encaminhamento_medico:
+                          v === 'completa'
+                            ? false
+                            : conduta.encaminhamento_medico,
+                        especialista_encaminhamento:
+                          v === 'completa'
+                            ? undefined
+                            : conduta.especialista_encaminhamento,
+                        motivo_encaminhamento:
+                          v === 'completa'
+                            ? undefined
+                            : conduta.motivo_encaminhamento,
+                      })
+                    }
+                    options={[
+                      { valor: 'completa', label: '✅ Alta Completa' },
+                      {
+                        valor: 'parcial',
+                        label: '⏳ Alta Parcial / Acompanhamento',
+                      },
+                    ]}
+                    disabled={disabled}
+                  />
+                </Field>
 
-            <BooleanField
-              value={conduta.encaminhamento_medico}
-              onChange={(checked) =>
-                updateConduta({ encaminhamento_medico: checked })
-              }
-              label="Encaminhamento Médico Necessário"
-              disabled={disabled}
-            />
+                {/* Se Alta Parcial: mostra Frequência e Reavaliação */}
+                {conduta.alta_parcial && (
+                  <div className="space-y-4 pl-4 border-l-2 border-yellow-200">
+                    <Field label="Frequência Sugerida para Acompanhamento">
+                      <RadioButtonGroup
+                        value={conduta.frequencia_sugerida}
+                        onChange={(v) =>
+                          updateConduta({
+                            frequencia_sugerida: v as
+                              | 'diaria'
+                              | '2x_semana'
+                              | '3x_semana'
+                              | 'semanal'
+                              | 'quinzenal'
+                              | 'mensal',
+                          })
+                        }
+                        options={[
+                          { valor: 'diaria', label: 'Diária' },
+                          { valor: '3x_semana', label: '3x/semana' },
+                          { valor: '2x_semana', label: '2x/semana' },
+                          { valor: 'semanal', label: 'Semanal' },
+                          { valor: 'quinzenal', label: 'Quinzenal' },
+                          { valor: 'mensal', label: 'Mensal' },
+                        ]}
+                        disabled={disabled}
+                      />
+                    </Field>
 
-            {conduta.encaminhamento_medico && (
-              <Field label="Motivo do Encaminhamento">
-                <Textarea
-                  value={conduta.motivo_encaminhamento || ''}
-                  onChange={(e) =>
-                    updateConduta({ motivo_encaminhamento: e.target.value })
-                  }
-                  placeholder="Descreva o motivo do encaminhamento..."
-                  disabled={disabled}
-                  rows={2}
-                />
-              </Field>
+                    <Field label="Reavaliação em (dias)">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={conduta.reavaliacao_dias || ''}
+                        onChange={(e) =>
+                          updateConduta({
+                            reavaliacao_dias: e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                          })
+                        }
+                        placeholder="Ex: 7"
+                        disabled={disabled}
+                        className="w-32"
+                      />
+                    </Field>
+                  </div>
+                )}
+              </div>
             )}
 
-            <BooleanField
-              value={conduta.alta_parcial}
-              onChange={(checked) => updateConduta({ alta_parcial: checked })}
-              label="Alta Parcial / Acompanhamento"
-              disabled={disabled}
-            />
+            {/* Encaminhamento Médico - se manter fisioterapia OU alta parcial */}
+            {(conduta.manter_fisioterapia || conduta.alta_parcial) && (
+              <>
+                <BooleanField
+                  value={conduta.encaminhamento_medico}
+                  onChange={(checked) =>
+                    updateConduta({ encaminhamento_medico: checked })
+                  }
+                  label="Encaminhamento Médico Necessário"
+                  disabled={disabled}
+                />
+
+                {conduta.encaminhamento_medico && (
+                  <div className="space-y-4 pl-4 border-l-2 border-blue-200">
+                    <Field label="Especialista">
+                      <Input
+                        value={conduta.especialista_encaminhamento || ''}
+                        onChange={(e) =>
+                          updateConduta({
+                            especialista_encaminhamento: e.target.value,
+                          })
+                        }
+                        placeholder="Ex: Pneumologista, Otorrinolaringologista..."
+                        disabled={disabled}
+                      />
+                    </Field>
+                    <Field label="Motivo do Encaminhamento">
+                      <Textarea
+                        value={conduta.motivo_encaminhamento || ''}
+                        onChange={(e) =>
+                          updateConduta({
+                            motivo_encaminhamento: e.target.value,
+                          })
+                        }
+                        placeholder="Descreva o motivo do encaminhamento..."
+                        disabled={disabled}
+                        rows={2}
+                      />
+                    </Field>
+                  </div>
+                )}
+              </>
+            )}
 
             <Field label="Observações da Conduta">
               <Textarea

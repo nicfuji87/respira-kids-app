@@ -19,27 +19,35 @@ export interface EvolucaoSecao {
 // EVOLUÇÃO RESPIRATÓRIA
 // =========================================================================
 
-export interface QueixaPrincipalRespiratoria {
-  tosse?: 'seca' | 'produtiva' | null;
-  chiado?: boolean;
-  cansaco_respiratorio?: boolean;
-  secrecao_cor?: 'clara' | 'amarelada' | 'esverdeada' | null;
-  secrecao_quantidade?: 'pouca' | 'moderada' | 'abundante' | null;
-  dificuldade_alimentar?: boolean;
-  piora_noturna?: boolean;
-  infeccao_recente?: boolean;
-  episodios_recentes?: string;
-  observacoes?: string;
-}
+// AI dev note: QueixaPrincipalRespiratoria foi integrada em EstadoGeralAntes
+// para consolidar as informações iniciais em uma única seção
+
+// Ritmo respiratório baseado na frequência
+export type RitmoRespiratorio =
+  | 'eupneico'
+  | 'bradipneico'
+  | 'taquipneico'
+  | null;
+
+// Classificação clínica derivada automaticamente
+export type ClassificacaoClinicaRespiratoria =
+  | 'normal' // Eupneico sem dispneia
+  | 'taquipneico_sem_dispneia' // FR alta sem sinais de esforço
+  | 'dispneico_sem_taquipneia' // Sinais de esforço com FR normal
+  | 'taquidispneico' // FR alta + sinais de esforço
+  | null;
 
 export interface PadraoRespiratorio {
   tipo: 'nasal' | 'oral' | 'misto' | null;
-  ritmo: 'regular' | 'irregular' | null;
-  taquipneia: boolean;
-  uso_musculatura_acessoria: boolean;
+  ritmo_respiratorio: RitmoRespiratorio; // Eupneico, Bradipneico, Taquipneico
+  dispneia: boolean; // Presença de dispneia (sinais de esforço)
+  // Classificação automática derivada
+  classificacao_clinica?: ClassificacaoClinicaRespiratoria;
 }
 
-export interface SinaisDesconforto {
+export interface SinaisDispneia {
+  // Só são preenchidos se dispneia = true
+  uso_musculatura_acessoria: boolean;
   batimento_asa_nasal: boolean;
   tiragem_intercostal: boolean;
   tiragem_subcostal: boolean;
@@ -64,45 +72,77 @@ export interface SecrecaoRespiratoria {
   mobilizavel?: boolean;
 }
 
+// AI dev note: temperatura_aferida e saturacao_o2 movidos para EstadoGeralAntes
 export interface AvaliacaoRespiratoriaAntes {
   padrao_respiratorio: PadraoRespiratorio;
-  sinais_desconforto: SinaisDesconforto;
+  sinais_dispneia: SinaisDispneia; // Sinais de esforço respiratório (só se dispneia = true)
   ausculta: AuscultaPulmonar;
   secrecao: SecrecaoRespiratoria;
-  saturacao_o2?: number; // percentual em ar ambiente
-  saturacao_com_suporte?: number; // percentual com suporte O2
 }
 
-export interface EstadoGeralCrianca {
+// Estado Geral (Antes) - Consolidado com Queixa Principal, Sinais Vitais e Saturação
+export interface EstadoGeralAntes {
+  // Queixa Principal (integrado)
+  tosse?: 'seca' | 'produtiva' | null;
+  chiado?: boolean;
+  cansaco_respiratorio?: boolean;
+  secrecao_cor?: 'clara' | 'amarelada' | 'esverdeada' | null;
+  secrecao_quantidade?: 'pouca' | 'moderada' | 'abundante' | null;
+  dificuldade_alimentar?: boolean;
+  piora_noturna?: boolean;
+  infeccao_recente?: boolean;
+  episodios_recentes?: string;
+  observacoes_queixa?: string;
+
+  // Sinais Vitais
+  temperatura_aferida?: number; // em graus Celsius
+
+  // Estado Geral da Criança
   nivel_alerta: 'ativo' | 'sonolento' | 'irritado' | null;
   tolerancia_manuseio: 'boa' | 'regular' | 'ruim' | null;
   choro_durante_atendimento: boolean;
-  interferencia_sono?: boolean;
-  interferencia_alimentacao?: boolean;
+
+  // Saturação de O₂
+  saturacao_o2?: number; // percentual em ar ambiente
+  saturacao_com_suporte?: number; // percentual com suporte O2
+
   observacoes?: string;
 }
 
 export interface IntervencaoRespiratoria {
   // Técnicas de desobstrução brônquica
   afe: boolean; // Aumento do Fluxo Expiratório
-  drr: boolean; // Drenagem Rítmica Respiratória
   vibrocompressao: boolean;
   expiração_lenta_prolongada: boolean;
-  // Outras técnicas
+  rta: boolean; // Reequilíbrio Toracoabdominal
+  epap: boolean; // EPAP
+  epap_selo_dagua: boolean; // EPAP selo d'água
+  redirecionamento_fluxo: boolean;
+  peep_valor?: number; // Valor da PEEP quando usa EPAP
   posicionamentos_terapeuticos: boolean;
   estimulo_tosse: boolean;
-  aspiracao: boolean;
   nebulizacao: boolean;
-  // Descrição livre
-  outras_tecnicas?: string;
+
+  // Aspiração
+  aspiracao: boolean;
+  aspiracao_tipo?: 'invasiva' | 'nao_invasiva' | 'ambas' | null;
+  aspiracao_quantidade?: 'pouca' | 'moderada' | 'abundante' | null;
+  aspiracao_consistencia?: 'fluida' | 'espessa' | null;
+  aspiracao_aspecto?: 'clara' | 'amarelada' | 'esverdeada' | 'purulenta' | null;
+  aspiracao_sangramento?: 'nao' | 'rajas_sangue' | 'sangramento_ativo' | null;
+
   observacoes?: string;
 }
 
 export interface AvaliacaoRespiratoriaDepois {
   melhora_padrao_respiratorio: boolean;
-  mudanca_ausculta?: string;
+  // Mudança na Ausculta - opções selecionáveis
+  ausculta_melhorou: boolean;
+  ausculta_reducao_roncos: boolean;
+  ausculta_reducao_sibilos: boolean;
+  ausculta_reducao_estertores: boolean;
+  ausculta_melhora_mv: boolean; // Melhora do Murmúrio Vesicular
   eliminacao_secrecao: boolean;
-  quantidade_secrecao_eliminada?: 'pouca' | 'moderada' | 'abundante' | null;
   reducao_desconforto: boolean;
   saturacao_o2?: number;
   comportamento_crianca?:
@@ -115,28 +155,49 @@ export interface AvaliacaoRespiratoriaDepois {
 }
 
 export interface OrientacoesRespiratoria {
+  // Higiene Nasal
   higiene_nasal: boolean;
+  higiene_nasal_tecnica_demonstrada?: boolean;
+  higiene_nasal_frequencia_orientada?: boolean;
+
+  // Posicionamento para Dormir e Repouso
   posicionamento_dormir: boolean;
+  posicionamento_cabeca_elevada?: boolean;
+  posicionamento_alternancia_decubitos?: boolean;
+  posicionamento_evitar_cadeirinhas?: boolean;
+
+  // Sinais de Alerta
   sinais_alerta: boolean;
-  frequencia_sessoes?: string;
-  cuidados_domiciliares?: string;
+  sinais_alerta_esforco_respiratorio?: boolean;
+  sinais_alerta_piora_tosse_chiado?: boolean;
+  sinais_alerta_queda_saturacao?: boolean;
+  sinais_alerta_alteracao_alimentar_sono?: boolean;
+
   outras?: string;
 }
 
 export interface CondutaRespiratoria {
   manter_fisioterapia: boolean;
-  frequencia_sugerida?: 'diaria' | '2x_semana' | '3x_semana' | 'semanal' | null;
+  frequencia_sugerida?:
+    | 'diaria'
+    | '2x_semana'
+    | '3x_semana'
+    | 'semanal'
+    | 'quinzenal'
+    | 'mensal'
+    | null;
   reavaliacao_dias?: number;
   encaminhamento_medico: boolean;
+  especialista_encaminhamento?: string;
   motivo_encaminhamento?: string;
   alta_parcial: boolean;
+  alta: boolean; // Alta completa do tratamento
   observacoes?: string;
 }
 
 export interface EvolucaoRespiratoria {
-  queixa_principal: QueixaPrincipalRespiratoria;
+  estado_geral_antes: EstadoGeralAntes; // Consolidado: Queixa Principal + Sinais Vitais + Estado Geral + Saturação
   avaliacao_antes: AvaliacaoRespiratoriaAntes;
-  estado_geral: EstadoGeralCrianca;
   intervencao: IntervencaoRespiratoria;
   avaliacao_depois: AvaliacaoRespiratoriaDepois;
   orientacoes: OrientacoesRespiratoria;
@@ -286,42 +347,23 @@ export interface EvolucaoClinica {
 
 export const EVOLUCAO_RESPIRATORIA_SECOES: EvolucaoSecao[] = [
   {
-    id: 'queixa',
-    titulo: 'Queixa Principal',
-    icone: '💬',
+    id: 'estado_geral_antes',
+    titulo: 'Estado Geral (Antes)',
+    icone: '👶',
     campos: [
-      'tosse',
-      'chiado',
-      'cansaco_respiratorio',
-      'secrecao',
-      'piora_noturna',
+      'queixa_principal', // Tosse, chiado, cansaço, secreção
+      'sinais_vitais', // Temperatura
+      'estado_crianca', // Nível de alerta, tolerância
+      'saturacao', // SpO2
     ],
     ordem: 1,
   },
   {
     id: 'avaliacao_antes',
-    titulo: 'Avaliação Respiratória (Antes)',
+    titulo: 'Avaliação Respiratória',
     icone: '🫁',
-    campos: [
-      'padrao_respiratorio',
-      'sinais_desconforto',
-      'ausculta',
-      'secrecao',
-      'saturacao',
-    ],
+    campos: ['padrao_respiratorio', 'sinais_dispneia', 'ausculta', 'secrecao'],
     ordem: 2,
-  },
-  {
-    id: 'estado_geral',
-    titulo: 'Estado Geral',
-    icone: '👶',
-    campos: [
-      'nivel_alerta',
-      'tolerancia_manuseio',
-      'choro',
-      'sono_alimentacao',
-    ],
-    ordem: 3,
   },
   {
     id: 'intervencao',
@@ -333,28 +375,28 @@ export const EVOLUCAO_RESPIRATORIA_SECOES: EvolucaoSecao[] = [
       'aspiracao',
       'nebulizacao',
     ],
-    ordem: 4,
+    ordem: 3,
   },
   {
     id: 'avaliacao_depois',
     titulo: 'Resposta ao Tratamento (Depois)',
     icone: '📈',
     campos: ['melhora_padrao', 'ausculta', 'secrecao_eliminada', 'saturacao'],
-    ordem: 5,
+    ordem: 4,
   },
   {
     id: 'orientacoes',
     titulo: 'Orientações aos Responsáveis',
     icone: '📝',
     campos: ['higiene_nasal', 'posicionamento', 'sinais_alerta', 'cuidados'],
-    ordem: 6,
+    ordem: 5,
   },
   {
     id: 'conduta',
     titulo: 'Conduta e Plano',
     icone: '✅',
     campos: ['frequencia', 'reavaliacao', 'encaminhamento', 'alta'],
-    ordem: 7,
+    ordem: 6,
   },
 ];
 
@@ -426,7 +468,8 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
  */
 export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
   return {
-    queixa_principal: {
+    estado_geral_antes: {
+      // Queixa Principal
       tosse: null,
       chiado: false,
       cansaco_respiratorio: false,
@@ -435,15 +478,25 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       dificuldade_alimentar: false,
       piora_noturna: false,
       infeccao_recente: false,
+      // Sinais Vitais
+      temperatura_aferida: undefined,
+      // Estado Geral
+      nivel_alerta: null,
+      tolerancia_manuseio: null,
+      choro_durante_atendimento: false,
+      // Saturação
+      saturacao_o2: undefined,
+      saturacao_com_suporte: undefined,
     },
     avaliacao_antes: {
       padrao_respiratorio: {
         tipo: null,
-        ritmo: null,
-        taquipneia: false,
-        uso_musculatura_acessoria: false,
+        ritmo_respiratorio: null,
+        dispneia: false,
+        classificacao_clinica: null,
       },
-      sinais_desconforto: {
+      sinais_dispneia: {
+        uso_musculatura_acessoria: false,
         batimento_asa_nasal: false,
         tiragem_intercostal: false,
         tiragem_subcostal: false,
@@ -464,23 +517,26 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
         mobilizavel: false,
       },
     },
-    estado_geral: {
-      nivel_alerta: null,
-      tolerancia_manuseio: null,
-      choro_durante_atendimento: false,
-    },
     intervencao: {
       afe: false,
-      drr: false,
       vibrocompressao: false,
       expiração_lenta_prolongada: false,
+      rta: false,
+      epap: false,
+      epap_selo_dagua: false,
+      redirecionamento_fluxo: false,
       posicionamentos_terapeuticos: false,
       estimulo_tosse: false,
-      aspiracao: false,
       nebulizacao: false,
+      aspiracao: false,
     },
     avaliacao_depois: {
       melhora_padrao_respiratorio: false,
+      ausculta_melhorou: false,
+      ausculta_reducao_roncos: false,
+      ausculta_reducao_sibilos: false,
+      ausculta_reducao_estertores: false,
+      ausculta_melhora_mv: false,
       eliminacao_secrecao: false,
       reducao_desconforto: false,
     },
@@ -494,6 +550,7 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       frequencia_sugerida: null,
       encaminhamento_medico: false,
       alta_parcial: false,
+      alta: false,
     },
   };
 }
@@ -586,6 +643,54 @@ export function calcularMetricasCraniometriaEvolucao(
 }
 
 /**
+ * Calcula a classificação clínica respiratória automaticamente
+ * Baseado no ritmo (taquipneico) e presença de dispneia (sinais de esforço)
+ *
+ * Regras:
+ * - Taquipneia = frequência elevada
+ * - Dispneia = sinais de esforço (tiragens, batimento asa nasal, etc.)
+ * - Taquidispneia = frequência + esforço
+ */
+export function calcularClassificacaoClinica(
+  ritmo: RitmoRespiratorio,
+  dispneia: boolean
+): ClassificacaoClinicaRespiratoria {
+  if (!ritmo) return null;
+
+  const isTaquipneico = ritmo === 'taquipneico';
+
+  if (isTaquipneico && dispneia) {
+    return 'taquidispneico'; // FR alta + sinais de esforço
+  } else if (isTaquipneico && !dispneia) {
+    return 'taquipneico_sem_dispneia'; // FR alta sem sinais de esforço
+  } else if (!isTaquipneico && dispneia) {
+    return 'dispneico_sem_taquipneia'; // Sinais de esforço com FR normal
+  } else {
+    return 'normal'; // Eupneico ou Bradipneico sem dispneia
+  }
+}
+
+/**
+ * Gera texto descritivo da classificação para uso em relatórios
+ */
+export function getTextoClassificacaoClinica(
+  classificacao: ClassificacaoClinicaRespiratoria
+): string {
+  switch (classificacao) {
+    case 'taquidispneico':
+      return 'Criança apresenta taquipneia associada a sinais de desconforto respiratório, caracterizando quadro de taquidispneia no momento da avaliação.';
+    case 'taquipneico_sem_dispneia':
+      return 'Criança taquipneica, sem sinais clínicos de dispneia no momento.';
+    case 'dispneico_sem_taquipneia':
+      return 'Criança apresenta sinais de esforço respiratório (dispneia), porém com frequência respiratória dentro da normalidade.';
+    case 'normal':
+      return 'Criança sem sinais de alteração respiratória no momento da avaliação.';
+    default:
+      return '';
+  }
+}
+
+/**
  * Verifica se uma seção está completa
  */
 export function verificarSecaoEvolucaoCompleta(
@@ -600,16 +705,23 @@ export function verificarSecaoEvolucaoCompleta(
     const evolucao = dados as EvolucaoRespiratoria;
 
     switch (secaoId) {
-      case 'queixa': {
-        const q = evolucao.queixa_principal;
-        const temAlgo =
-          q.tosse ||
-          q.chiado ||
-          q.cansaco_respiratorio ||
-          q.secrecao_cor ||
-          q.dificuldade_alimentar ||
-          q.piora_noturna;
-        return temAlgo ? 'completo' : 'vazio';
+      case 'estado_geral_antes': {
+        const e = evolucao.estado_geral_antes;
+        // Verificar queixa principal (tosse, chiado, etc)
+        const temQueixa =
+          e.tosse ||
+          e.chiado ||
+          e.cansaco_respiratorio ||
+          e.secrecao_cor ||
+          e.dificuldade_alimentar ||
+          e.piora_noturna;
+        // Verificar estado geral (nível de alerta, tolerância)
+        const temEstado = e.nivel_alerta && e.tolerancia_manuseio;
+
+        if (temQueixa && temEstado) return 'completo';
+        if (temQueixa || e.nivel_alerta || e.tolerancia_manuseio)
+          return 'parcial';
+        return 'vazio';
       }
       case 'avaliacao_antes': {
         const a = evolucao.avaliacao_antes;
@@ -619,21 +731,16 @@ export function verificarSecaoEvolucaoCompleta(
         if (temPadrao || temAusculta) return 'parcial';
         return 'vazio';
       }
-      case 'estado_geral': {
-        const e = evolucao.estado_geral;
-        return e.nivel_alerta && e.tolerancia_manuseio
-          ? 'completo'
-          : e.nivel_alerta || e.tolerancia_manuseio
-            ? 'parcial'
-            : 'vazio';
-      }
       case 'intervencao': {
         const i = evolucao.intervencao;
         const temTecnica =
           i.afe ||
-          i.drr ||
           i.vibrocompressao ||
           i.expiração_lenta_prolongada ||
+          i.rta ||
+          i.epap ||
+          i.epap_selo_dagua ||
+          i.redirecionamento_fluxo ||
           i.posicionamentos_terapeuticos ||
           i.estimulo_tosse ||
           i.aspiracao ||
