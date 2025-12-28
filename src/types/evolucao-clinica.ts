@@ -56,19 +56,31 @@ export interface SinaisDispneia {
   postura_antalgica: boolean;
 }
 
-export interface AuscultaPulmonar {
+// Ausculta Pulmonar por Hemitórax
+export interface AuscultaHemitorax {
+  // Murmúrio Vesicular (escolha única)
   murmurio_vesicular: 'preservado' | 'diminuido' | 'abolido' | null;
-  sibilos: boolean;
-  roncos: boolean;
-  estertores: 'ausente' | 'finos' | 'grossos' | null;
-  // Lateralidade/Localização
-  localizacao_bilateral?: boolean;
-  localizacao_direita?: boolean;
-  localizacao_esquerda?: boolean;
+
+  // Ruídos Adventícios (múltipla escolha)
+  ruidos_ausentes?: boolean;
+  sibilos?: boolean;
+  roncos?: boolean;
+  estertores_finos?: boolean;
+  estertores_grossos?: boolean;
+
+  // Localização dos Ruídos (múltipla escolha)
+  localizacao_difusos?: boolean;
   localizacao_apice?: boolean;
   localizacao_terco_medio?: boolean;
   localizacao_base?: boolean;
-  localizacao_difuso?: boolean;
+}
+
+export interface AuscultaPulmonar {
+  // Hemitórax Direito
+  hemitorax_direito: AuscultaHemitorax;
+  // Hemitórax Esquerdo
+  hemitorax_esquerdo: AuscultaHemitorax;
+  // Observações gerais
   observacoes?: string;
 }
 
@@ -87,19 +99,32 @@ export interface AvaliacaoRespiratoriaAntes {
   secrecao: SecrecaoRespiratoria;
 }
 
-// Estado Geral (Antes) - Consolidado com Queixa Principal, Sinais Vitais e Saturação
+// Estado Geral (Antes) - Consolidado com Sintomas, Sinais Vitais e Estado
 export interface EstadoGeralAntes {
-  // Queixa Principal (integrado)
-  tosse?: 'sem_tosse' | 'seca' | 'produtiva' | null;
-  chiado?: boolean;
+  // 1️⃣ Tosse (escolha única)
+  tosse?: 'ausente' | 'seca' | 'produtiva' | null;
+
+  // 2️⃣ Sinais Associados (múltipla escolha)
+  chiado_referido?: boolean; // Chiado referido pelos responsáveis (não auscultatório)
   cansaco_respiratorio?: boolean;
+  esforco_respiratorio?: boolean; // Esforço respiratório percebido
+  respiracao_ruidosa?: boolean;
+
+  // 3️⃣ Repercussões Funcionais (múltipla escolha)
+  dificuldade_alimentar?: boolean;
+  interrupcoes_sono?: boolean;
+  piora_noturna?: boolean;
+  irritabilidade_respiratoria?: boolean; // Irritabilidade associada à respiração
+
+  // 4️⃣ Contexto Clínico Recente (múltipla escolha)
+  infeccao_recente?: boolean;
+  episodios_recorrentes_sibilancia?: boolean;
+  contato_resfriados?: boolean;
+  uso_medicacao_respiratoria?: boolean;
+
+  // Secreção (quando presente)
   secrecao_cor?: 'clara' | 'amarelada' | 'esverdeada' | null;
   secrecao_quantidade?: 'pouca' | 'moderada' | 'abundante' | null;
-  dificuldade_alimentar?: boolean;
-  piora_noturna?: boolean;
-  infeccao_recente?: boolean;
-  episodios_recentes?: string;
-  observacoes_queixa?: string;
 
   // Sinais Vitais
   temperatura_aferida?: number; // em graus Celsius
@@ -108,15 +133,15 @@ export interface EstadoGeralAntes {
   saturacao_com_suporte?: number; // percentual com suporte O2
 
   // Estado Geral da Criança
-  nivel_alerta:
-    | 'ativo'
-    | 'calmo'
-    | 'sonolento'
-    | 'irritado'
-    | 'choroso'
-    | 'agitado'
-    | 'hipoativo'
-    | null;
+  // Nível de Consciência (escolha única - excludentes)
+  nivel_consciencia?: 'ativo' | 'sonolento' | 'hipoativo' | null;
+
+  // Comportamento/Reação Durante Avaliação (múltipla escolha)
+  comportamento_calmo?: boolean;
+  comportamento_irritado?: boolean;
+  comportamento_choroso?: boolean;
+  comportamento_agitado?: boolean;
+
   tolerancia_manuseio: 'boa' | 'regular' | 'ruim' | null;
   choro_durante_atendimento: 'ausente' | 'leve' | 'moderado' | 'intenso' | null;
 
@@ -487,22 +512,39 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
 export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
   return {
     estado_geral_antes: {
-      // Queixa Principal
+      // 1️⃣ Tosse
       tosse: null,
-      chiado: false,
+      // 2️⃣ Sinais Associados
+      chiado_referido: false,
       cansaco_respiratorio: false,
+      esforco_respiratorio: false,
+      respiracao_ruidosa: false,
+      // 3️⃣ Repercussões Funcionais
+      dificuldade_alimentar: false,
+      interrupcoes_sono: false,
+      piora_noturna: false,
+      irritabilidade_respiratoria: false,
+      // 4️⃣ Contexto Clínico
+      infeccao_recente: false,
+      episodios_recorrentes_sibilancia: false,
+      contato_resfriados: false,
+      uso_medicacao_respiratoria: false,
+      // Secreção
       secrecao_cor: null,
       secrecao_quantidade: null,
-      dificuldade_alimentar: false,
-      piora_noturna: false,
-      infeccao_recente: false,
       // Sinais Vitais
       temperatura_aferida: undefined,
       frequencia_cardiaca: undefined,
       saturacao_o2: undefined,
       saturacao_com_suporte: undefined,
-      // Estado Geral
-      nivel_alerta: null,
+      // Estado Geral - Nível de Consciência
+      nivel_consciencia: null,
+      // Comportamento (múltipla escolha)
+      comportamento_calmo: false,
+      comportamento_irritado: false,
+      comportamento_choroso: false,
+      comportamento_agitado: false,
+      // Outros
       tolerancia_manuseio: null,
       choro_durante_atendimento: null,
     },
@@ -523,10 +565,30 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
         postura_antalgica: false,
       },
       ausculta: {
-        murmurio_vesicular: null,
-        sibilos: false,
-        roncos: false,
-        estertores: null,
+        hemitorax_direito: {
+          murmurio_vesicular: null,
+          ruidos_ausentes: false,
+          sibilos: false,
+          roncos: false,
+          estertores_finos: false,
+          estertores_grossos: false,
+          localizacao_difusos: false,
+          localizacao_apice: false,
+          localizacao_terco_medio: false,
+          localizacao_base: false,
+        },
+        hemitorax_esquerdo: {
+          murmurio_vesicular: null,
+          ruidos_ausentes: false,
+          sibilos: false,
+          roncos: false,
+          estertores_finos: false,
+          estertores_grossos: false,
+          localizacao_difusos: false,
+          localizacao_apice: false,
+          localizacao_terco_medio: false,
+          localizacao_base: false,
+        },
       },
       secrecao: {
         presente: false,
@@ -727,26 +789,30 @@ export function verificarSecaoEvolucaoCompleta(
     switch (secaoId) {
       case 'estado_geral_antes': {
         const e = evolucao.estado_geral_antes;
-        // Verificar queixa principal (tosse, chiado, etc)
-        const temQueixa =
+        // Verificar sintomas (tosse, sinais associados, etc)
+        const temSintomas =
           e.tosse ||
-          e.chiado ||
+          e.chiado_referido ||
           e.cansaco_respiratorio ||
-          e.secrecao_cor ||
+          e.esforco_respiratorio ||
+          e.respiracao_ruidosa ||
           e.dificuldade_alimentar ||
+          e.interrupcoes_sono ||
           e.piora_noturna;
-        // Verificar estado geral (nível de alerta, tolerância)
-        const temEstado = e.nivel_alerta && e.tolerancia_manuseio;
+        // Verificar estado geral (nível de consciência, tolerância)
+        const temEstado = e.nivel_consciencia && e.tolerancia_manuseio;
 
-        if (temQueixa && temEstado) return 'completo';
-        if (temQueixa || e.nivel_alerta || e.tolerancia_manuseio)
+        if (temSintomas && temEstado) return 'completo';
+        if (temSintomas || e.nivel_consciencia || e.tolerancia_manuseio)
           return 'parcial';
         return 'vazio';
       }
       case 'avaliacao_antes': {
         const a = evolucao.avaliacao_antes;
         const temPadrao = a.padrao_respiratorio?.tipo;
-        const temAusculta = a.ausculta?.murmurio_vesicular;
+        const temAuscultaD = a.ausculta?.hemitorax_direito?.murmurio_vesicular;
+        const temAuscultaE = a.ausculta?.hemitorax_esquerdo?.murmurio_vesicular;
+        const temAusculta = temAuscultaD || temAuscultaE;
         if (temPadrao && temAusculta) return 'completo';
         if (temPadrao || temAusculta) return 'parcial';
         return 'vazio';

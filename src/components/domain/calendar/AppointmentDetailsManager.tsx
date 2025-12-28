@@ -597,8 +597,8 @@ export const AppointmentDetailsManager =
             if (ev.estado_geral_antes.tosse) {
               conteudoResumo += `• Tosse: ${ev.estado_geral_antes.tosse}\n`;
             }
-            if (ev.estado_geral_antes.chiado)
-              conteudoResumo += `• Chiado: Sim\n`;
+            if (ev.estado_geral_antes.chiado_referido)
+              conteudoResumo += `• Sibilo referido: Sim\n`;
             if (ev.estado_geral_antes.cansaco_respiratorio)
               conteudoResumo += `• Cansaço respiratório: Sim\n`;
             if (ev.estado_geral_antes.dificuldade_alimentar)
@@ -613,8 +613,21 @@ export const AppointmentDetailsManager =
             if (ev.estado_geral_antes.frequencia_cardiaca) {
               conteudoResumo += `• FC: ${ev.estado_geral_antes.frequencia_cardiaca} bpm\n`;
             }
-            if (ev.estado_geral_antes.nivel_alerta) {
-              conteudoResumo += `• Nível de alerta: ${ev.estado_geral_antes.nivel_alerta}\n`;
+            if (ev.estado_geral_antes.nivel_consciencia) {
+              conteudoResumo += `• Nível de consciência: ${ev.estado_geral_antes.nivel_consciencia}\n`;
+            }
+            // Comportamento
+            const comportamentos = [];
+            if (ev.estado_geral_antes.comportamento_calmo)
+              comportamentos.push('Calmo');
+            if (ev.estado_geral_antes.comportamento_irritado)
+              comportamentos.push('Irritado');
+            if (ev.estado_geral_antes.comportamento_choroso)
+              comportamentos.push('Choroso');
+            if (ev.estado_geral_antes.comportamento_agitado)
+              comportamentos.push('Agitado');
+            if (comportamentos.length > 0) {
+              conteudoResumo += `• Comportamento: ${comportamentos.join(', ')}\n`;
             }
             if (ev.estado_geral_antes.saturacao_o2) {
               conteudoResumo += `• SpO₂ ar ambiente: ${ev.estado_geral_antes.saturacao_o2}%\n`;
@@ -656,15 +669,35 @@ export const AppointmentDetailsManager =
               conteudoResumo += `• Classificação clínica: ${padrao.classificacao_clinica.replace(/_/g, ' ')}\n`;
             }
 
-            // Ausculta Pulmonar
+            // Ausculta Pulmonar - por hemitórax
             const ausculta = ev.avaliacao_antes.ausculta;
-            if (ausculta.murmurio_vesicular) {
-              conteudoResumo += `• Murmúrio vesicular: ${ausculta.murmurio_vesicular}\n`;
+            const hd = ausculta.hemitorax_direito;
+            const he = ausculta.hemitorax_esquerdo;
+
+            // Hemitórax Direito
+            if (hd.murmurio_vesicular) {
+              conteudoResumo += `• MV Direito: ${hd.murmurio_vesicular}\n`;
             }
-            if (ausculta.sibilos) conteudoResumo += `• Sibilos: Sim\n`;
-            if (ausculta.roncos) conteudoResumo += `• Roncos: Sim\n`;
-            if (ausculta.estertores) {
-              conteudoResumo += `• Estertores: ${ausculta.estertores}\n`;
+            const ruidosD = [];
+            if (hd.sibilos) ruidosD.push('Sibilos');
+            if (hd.roncos) ruidosD.push('Roncos');
+            if (hd.estertores_finos) ruidosD.push('Estertores finos');
+            if (hd.estertores_grossos) ruidosD.push('Estertores grossos');
+            if (ruidosD.length > 0) {
+              conteudoResumo += `• Ruídos HTD: ${ruidosD.join(', ')}\n`;
+            }
+
+            // Hemitórax Esquerdo
+            if (he.murmurio_vesicular) {
+              conteudoResumo += `• MV Esquerdo: ${he.murmurio_vesicular}\n`;
+            }
+            const ruidosE = [];
+            if (he.sibilos) ruidosE.push('Sibilos');
+            if (he.roncos) ruidosE.push('Roncos');
+            if (he.estertores_finos) ruidosE.push('Estertores finos');
+            if (he.estertores_grossos) ruidosE.push('Estertores grossos');
+            if (ruidosE.length > 0) {
+              conteudoResumo += `• Ruídos HTE: ${ruidosE.join(', ')}\n`;
             }
 
             // INTERVENÇÃO
@@ -820,14 +853,14 @@ export const AppointmentDetailsManager =
             analyticsData = {
               // Estado Geral
               tosse_tipo: ev.estado_geral_antes.tosse || null,
-              chiado: ev.estado_geral_antes.chiado || false,
+              chiado: ev.estado_geral_antes.chiado_referido || false,
               cansaco_respiratorio:
                 ev.estado_geral_antes.cansaco_respiratorio || false,
               temperatura_aferida:
                 ev.estado_geral_antes.temperatura_aferida || null,
               frequencia_cardiaca:
                 ev.estado_geral_antes.frequencia_cardiaca || null,
-              nivel_alerta: ev.estado_geral_antes.nivel_alerta || null,
+              nivel_alerta: ev.estado_geral_antes.nivel_consciencia || null,
               tolerancia_manuseio:
                 ev.estado_geral_antes.tolerancia_manuseio || null,
               choro_atendimento:
@@ -844,11 +877,32 @@ export const AppointmentDetailsManager =
               classificacao_clinica:
                 ev.avaliacao_antes.padrao_respiratorio.classificacao_clinica ||
                 null,
+              // Ausculta - combinando ambos hemitóraces para analytics
               murmurio_vesicular:
-                ev.avaliacao_antes.ausculta.murmurio_vesicular || null,
-              sibilos: ev.avaliacao_antes.ausculta.sibilos || false,
-              roncos: ev.avaliacao_antes.ausculta.roncos || false,
-              estertores: ev.avaliacao_antes.ausculta.estertores || null,
+                ev.avaliacao_antes.ausculta.hemitorax_direito
+                  .murmurio_vesicular ||
+                ev.avaliacao_antes.ausculta.hemitorax_esquerdo
+                  .murmurio_vesicular ||
+                null,
+              sibilos:
+                ev.avaliacao_antes.ausculta.hemitorax_direito.sibilos ||
+                ev.avaliacao_antes.ausculta.hemitorax_esquerdo.sibilos ||
+                false,
+              roncos:
+                ev.avaliacao_antes.ausculta.hemitorax_direito.roncos ||
+                ev.avaliacao_antes.ausculta.hemitorax_esquerdo.roncos ||
+                false,
+              estertores:
+                ev.avaliacao_antes.ausculta.hemitorax_direito
+                  .estertores_finos ||
+                ev.avaliacao_antes.ausculta.hemitorax_esquerdo.estertores_finos
+                  ? 'finos'
+                  : ev.avaliacao_antes.ausculta.hemitorax_direito
+                        .estertores_grossos ||
+                      ev.avaliacao_antes.ausculta.hemitorax_esquerdo
+                        .estertores_grossos
+                    ? 'grossos'
+                    : null,
               // Intervenção
               tecnica_afe: ev.intervencao.afe || false,
               tecnica_vibrocompressao: ev.intervencao.vibrocompressao || false,
