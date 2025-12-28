@@ -22,6 +22,10 @@ interface DatePickerProps {
   'aria-describedby'?: string;
   disableFuture?: boolean; // Bloqueia datas futuras (útil para data de nascimento)
   disablePast?: boolean; // Bloqueia datas passadas (útil para agendamentos)
+  // AI dev note: Intervalo de anos para o dropdown do calendário
+  // Por padrão permite navegação de 5 anos no passado até 2 anos no futuro
+  startYear?: number;
+  endYear?: number;
 }
 
 export const DatePicker = React.memo<DatePickerProps>(
@@ -35,8 +39,16 @@ export const DatePicker = React.memo<DatePickerProps>(
     'aria-describedby': ariaDescribedBy,
     disableFuture = false,
     disablePast = false,
+    startYear,
+    endYear,
   }) => {
     const [isOpen, setIsOpen] = useState(false);
+
+    // AI dev note: Calcular intervalo de anos para o dropdown
+    // Por padrão: 5 anos no passado até 2 anos no futuro
+    const currentYear = new Date().getFullYear();
+    const defaultStartYear = startYear ?? currentYear - 5;
+    const defaultEndYear = endYear ?? currentYear + 2;
 
     // Converter string YYYY-MM-DD para Date
     const selectedDate = value ? new Date(value + 'T00:00:00') : undefined;
@@ -82,6 +94,8 @@ export const DatePicker = React.memo<DatePickerProps>(
               mode="single"
               selected={selectedDate}
               onSelect={handleDateSelect}
+              startMonth={new Date(defaultStartYear, 0)}
+              endMonth={new Date(defaultEndYear, 11)}
               disabled={(date) => {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
