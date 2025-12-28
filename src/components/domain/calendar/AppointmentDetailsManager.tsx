@@ -594,27 +594,17 @@ export const AppointmentDetailsManager =
 
             // ESTADO GERAL (ANTES)
             conteudoResumo += `📋 ESTADO GERAL (ANTES)\n`;
-            if (ev.estado_geral_antes.tosse) {
-              conteudoResumo += `• Tosse: ${ev.estado_geral_antes.tosse}\n`;
-            }
-            if (ev.estado_geral_antes.chiado_referido)
-              conteudoResumo += `• Sibilo referido: Sim\n`;
-            if (ev.estado_geral_antes.cansaco_respiratorio)
-              conteudoResumo += `• Cansaço respiratório: Sim\n`;
-            if (ev.estado_geral_antes.dificuldade_alimentar)
-              conteudoResumo += `• Dificuldade alimentar: Sim\n`;
-            if (ev.estado_geral_antes.piora_noturna)
-              conteudoResumo += `• Piora noturna: Sim\n`;
-            if (ev.estado_geral_antes.infeccao_recente)
-              conteudoResumo += `• Infecção recente: Sim\n`;
-            if (ev.estado_geral_antes.temperatura_aferida) {
-              conteudoResumo += `• Temperatura: ${ev.estado_geral_antes.temperatura_aferida}°C\n`;
-            }
-            if (ev.estado_geral_antes.frequencia_cardiaca) {
-              conteudoResumo += `• FC: ${ev.estado_geral_antes.frequencia_cardiaca} bpm\n`;
-            }
+
+            // 1. Estado Geral da Criança
             if (ev.estado_geral_antes.nivel_consciencia) {
-              conteudoResumo += `• Nível de consciência: ${ev.estado_geral_antes.nivel_consciencia}\n`;
+              let consciencia = ev.estado_geral_antes.nivel_consciencia;
+              if (
+                consciencia === 'acordado' &&
+                ev.estado_geral_antes.estado_acordado
+              ) {
+                consciencia += ` (${ev.estado_geral_antes.estado_acordado})`;
+              }
+              conteudoResumo += `• Nível de consciência: ${consciencia}\n`;
             }
             // Comportamento
             const comportamentos = [];
@@ -629,11 +619,87 @@ export const AppointmentDetailsManager =
             if (comportamentos.length > 0) {
               conteudoResumo += `• Comportamento: ${comportamentos.join(', ')}\n`;
             }
+            if (ev.estado_geral_antes.tolerancia_manuseio) {
+              conteudoResumo += `• Tolerância ao manuseio: ${ev.estado_geral_antes.tolerancia_manuseio}\n`;
+            }
+            if (ev.estado_geral_antes.choro_durante_atendimento) {
+              conteudoResumo += `• Choro: ${ev.estado_geral_antes.choro_durante_atendimento}\n`;
+            }
+
+            // 2. Sinais Vitais
+            if (ev.estado_geral_antes.temperatura_aferida) {
+              conteudoResumo += `• Temperatura: ${ev.estado_geral_antes.temperatura_aferida}°C\n`;
+            }
+            if (ev.estado_geral_antes.frequencia_cardiaca) {
+              conteudoResumo += `• FC: ${ev.estado_geral_antes.frequencia_cardiaca} bpm\n`;
+            }
             if (ev.estado_geral_antes.saturacao_o2) {
               conteudoResumo += `• SpO₂ ar ambiente: ${ev.estado_geral_antes.saturacao_o2}%\n`;
             }
-            if (ev.estado_geral_antes.saturacao_com_suporte) {
+            if (
+              ev.estado_geral_antes.necessita_suporte_o2 &&
+              ev.estado_geral_antes.saturacao_com_suporte
+            ) {
               conteudoResumo += `• SpO₂ com suporte: ${ev.estado_geral_antes.saturacao_com_suporte}%\n`;
+            }
+
+            // 3. Contexto Clínico
+            if (ev.estado_geral_antes.infeccao_recente)
+              conteudoResumo += `• Infecção recente: Sim\n`;
+            if (ev.estado_geral_antes.episodios_recorrentes_sibilancia)
+              conteudoResumo += `• Episódios recorrentes de sibilância: Sim\n`;
+            if (ev.estado_geral_antes.contato_pessoas_sintomaticas)
+              conteudoResumo += `• Contato com pessoas sintomáticas: Sim\n`;
+            if (ev.estado_geral_antes.uso_medicacao_respiratoria)
+              conteudoResumo += `• Uso recente de medicação respiratória: Sim\n`;
+            if (ev.estado_geral_antes.inicio_sintomas_dias) {
+              conteudoResumo += `• Início dos sintomas há: ${ev.estado_geral_antes.inicio_sintomas_dias} dias\n`;
+            }
+
+            // 4. Repercussões Funcionais
+            if (ev.estado_geral_antes.dificuldade_alimentar)
+              conteudoResumo += `• Dificuldade alimentar: Sim\n`;
+            if (ev.estado_geral_antes.interrupcoes_sono)
+              conteudoResumo += `• Interrupções do sono: Sim\n`;
+            if (ev.estado_geral_antes.piora_noturna)
+              conteudoResumo += `• Piora noturna: Sim\n`;
+            if (ev.estado_geral_antes.irritabilidade_respiratoria)
+              conteudoResumo += `• Irritabilidade respiratória: Sim\n`;
+
+            // 5. Sinais Associados
+            if (ev.estado_geral_antes.chiado_referido)
+              conteudoResumo += `• Sibilo referido: Sim\n`;
+            if (ev.estado_geral_antes.cansaco_respiratorio)
+              conteudoResumo += `• Cansaço respiratório: Sim\n`;
+            if (ev.estado_geral_antes.esforco_respiratorio)
+              conteudoResumo += `• Esforço respiratório percebido: Sim\n`;
+            if (ev.estado_geral_antes.respiracao_ruidosa)
+              conteudoResumo += `• Respiração ruidosa: Sim\n`;
+
+            // 6. Sintomas Respiratórios - Tosse
+            if (ev.estado_geral_antes.tosse) {
+              let tosseInfo = `• Tosse: ${ev.estado_geral_antes.tosse}`;
+              if (
+                ev.estado_geral_antes.tosse === 'produtiva' &&
+                ev.estado_geral_antes.tosse_eficacia
+              ) {
+                tosseInfo += ` (${ev.estado_geral_antes.tosse_eficacia})`;
+                if (
+                  ev.estado_geral_antes.tosse_eficacia === 'eficaz' &&
+                  ev.estado_geral_antes.tosse_destino
+                ) {
+                  tosseInfo += ` com ${ev.estado_geral_antes.tosse_destino}`;
+                  if (ev.estado_geral_antes.tosse_destino === 'expectoracao') {
+                    if (ev.estado_geral_antes.secrecao_cor) {
+                      tosseInfo += `, secreção ${ev.estado_geral_antes.secrecao_cor}`;
+                    }
+                    if (ev.estado_geral_antes.secrecao_quantidade) {
+                      tosseInfo += ` (${ev.estado_geral_antes.secrecao_quantidade})`;
+                    }
+                  }
+                }
+              }
+              conteudoResumo += tosseInfo + '\n';
             }
 
             // AVALIAÇÃO RESPIRATÓRIA (ANTES)
@@ -853,39 +919,10 @@ export const AppointmentDetailsManager =
             const hd = ev.avaliacao_antes.ausculta.hemitorax_direito;
             const he = ev.avaliacao_antes.ausculta.hemitorax_esquerdo;
             analyticsData = {
-              // Sintomas
-              tosse_tipo: ev.estado_geral_antes.tosse || null,
-              chiado: ev.estado_geral_antes.chiado_referido || false,
-              cansaco_respiratorio:
-                ev.estado_geral_antes.cansaco_respiratorio || false,
-              esforco_respiratorio:
-                ev.estado_geral_antes.esforco_respiratorio || false,
-              respiracao_ruidosa:
-                ev.estado_geral_antes.respiracao_ruidosa || false,
-              // Repercussões Funcionais
-              interrupcoes_sono:
-                ev.estado_geral_antes.interrupcoes_sono || false,
-              irritabilidade_respiratoria:
-                ev.estado_geral_antes.irritabilidade_respiratoria || false,
-              // Contexto Clínico
-              episodios_recorrentes_sibilancia:
-                ev.estado_geral_antes.episodios_recorrentes_sibilancia || false,
-              contato_resfriados:
-                ev.estado_geral_antes.contato_resfriados || false,
-              uso_medicacao_respiratoria:
-                ev.estado_geral_antes.uso_medicacao_respiratoria || false,
-              // Sinais Vitais
-              temperatura_aferida:
-                ev.estado_geral_antes.temperatura_aferida || null,
-              frequencia_cardiaca:
-                ev.estado_geral_antes.frequencia_cardiaca || null,
-              spo2_antes: ev.estado_geral_antes.saturacao_o2 || null,
-              spo2_com_suporte:
-                ev.estado_geral_antes.saturacao_com_suporte || null,
-              // Estado Geral
-              nivel_alerta: ev.estado_geral_antes.nivel_consciencia || null,
+              // Estado Geral da Criança
               nivel_consciencia:
                 ev.estado_geral_antes.nivel_consciencia || null,
+              estado_acordado: ev.estado_geral_antes.estado_acordado || null,
               comportamento_calmo:
                 ev.estado_geral_antes.comportamento_calmo || false,
               comportamento_irritado:
@@ -898,6 +935,42 @@ export const AppointmentDetailsManager =
                 ev.estado_geral_antes.tolerancia_manuseio || null,
               choro_atendimento:
                 ev.estado_geral_antes.choro_durante_atendimento || null,
+              // Sinais Vitais
+              temperatura_aferida:
+                ev.estado_geral_antes.temperatura_aferida || null,
+              frequencia_cardiaca:
+                ev.estado_geral_antes.frequencia_cardiaca || null,
+              spo2_antes: ev.estado_geral_antes.saturacao_o2 || null,
+              necessita_suporte_o2:
+                ev.estado_geral_antes.necessita_suporte_o2 || false,
+              spo2_com_suporte:
+                ev.estado_geral_antes.saturacao_com_suporte || null,
+              // Contexto Clínico
+              episodios_recorrentes_sibilancia:
+                ev.estado_geral_antes.episodios_recorrentes_sibilancia || false,
+              contato_pessoas_sintomaticas:
+                ev.estado_geral_antes.contato_pessoas_sintomaticas || false,
+              uso_medicacao_respiratoria:
+                ev.estado_geral_antes.uso_medicacao_respiratoria || false,
+              inicio_sintomas_dias:
+                ev.estado_geral_antes.inicio_sintomas_dias || null,
+              // Repercussões Funcionais
+              interrupcoes_sono:
+                ev.estado_geral_antes.interrupcoes_sono || false,
+              irritabilidade_respiratoria:
+                ev.estado_geral_antes.irritabilidade_respiratoria || false,
+              // Sinais Associados
+              chiado: ev.estado_geral_antes.chiado_referido || false,
+              cansaco_respiratorio:
+                ev.estado_geral_antes.cansaco_respiratorio || false,
+              esforco_respiratorio:
+                ev.estado_geral_antes.esforco_respiratorio || false,
+              respiracao_ruidosa:
+                ev.estado_geral_antes.respiracao_ruidosa || false,
+              // Sintomas Respiratórios - Tosse
+              tosse_tipo: ev.estado_geral_antes.tosse || null,
+              tosse_eficacia: ev.estado_geral_antes.tosse_eficacia || null,
+              tosse_destino: ev.estado_geral_antes.tosse_destino || null,
               // Avaliação Respiratória
               ritmo_respiratorio:
                 ev.avaliacao_antes.padrao_respiratorio.ritmo_respiratorio ||

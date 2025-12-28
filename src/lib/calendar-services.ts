@@ -1236,27 +1236,32 @@ export const saveRelatorioEvolucao = async (
     if (evolucaoData.analytics) {
       const a = evolucaoData.analytics;
       Object.assign(insertData, {
-        // Sintomas
-        tosse_tipo: a.tosse_tipo,
-        chiado: a.chiado, // chiado_referido
-        cansaco_respiratorio: a.cansaco_respiratorio,
-        esforco_respiratorio: a.esforco_respiratorio,
-        respiracao_ruidosa: a.respiracao_ruidosa,
-        // Repercussões Funcionais
-        interrupcoes_sono: a.interrupcoes_sono,
-        irritabilidade_respiratoria: a.irritabilidade_respiratoria,
-        // Contexto Clínico
-        episodios_recorrentes_sibilancia: a.episodios_recorrentes_sibilancia,
-        contato_resfriados: a.contato_resfriados,
-        uso_medicacao_respiratoria: a.uso_medicacao_respiratoria,
+        // Estado Geral da Criança
+        nivel_consciencia: a.nivel_consciencia, // acordado, sonolento, dormindo
+        estado_acordado: a.estado_acordado, // ativo, hipoativo (se acordado)
         // Sinais Vitais
         temperatura_aferida: a.temperatura_aferida,
         frequencia_cardiaca: a.frequencia_cardiaca,
         spo2_antes: a.spo2_antes,
+        necessita_suporte_o2: a.necessita_suporte_o2,
         spo2_com_suporte: a.spo2_com_suporte,
-        // Estado Geral
-        nivel_alerta: a.nivel_alerta, // mantido para compatibilidade
-        nivel_consciencia: a.nivel_consciencia,
+        // Contexto Clínico
+        episodios_recorrentes_sibilancia: a.episodios_recorrentes_sibilancia,
+        contato_pessoas_sintomaticas: a.contato_pessoas_sintomaticas,
+        uso_medicacao_respiratoria: a.uso_medicacao_respiratoria,
+        inicio_sintomas_dias: a.inicio_sintomas_dias,
+        // Repercussões Funcionais
+        interrupcoes_sono: a.interrupcoes_sono,
+        irritabilidade_respiratoria: a.irritabilidade_respiratoria,
+        // Sinais Associados
+        chiado: a.chiado, // chiado_referido
+        cansaco_respiratorio: a.cansaco_respiratorio,
+        esforco_respiratorio: a.esforco_respiratorio,
+        respiracao_ruidosa: a.respiracao_ruidosa,
+        // Sintomas Respiratórios - Tosse
+        tosse_tipo: a.tosse_tipo,
+        tosse_eficacia: a.tosse_eficacia,
+        tosse_destino: a.tosse_destino,
         comportamento_calmo: a.comportamento_calmo,
         comportamento_irritado: a.comportamento_irritado,
         comportamento_choroso: a.comportamento_choroso,

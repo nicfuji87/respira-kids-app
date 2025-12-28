@@ -134,118 +134,313 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-8">
-            {/* 1️⃣ Tosse (escolha única) */}
+            {/* 1️⃣ Estado Geral da Criança */}
             <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-blue-700">
-                🫁 Sintomas Respiratórios
+              <h4 className="font-medium text-purple-700">
+                👶 Estado Geral da Criança
               </h4>
 
-              <Field label="Tosse">
+              {/* Nível de Consciência */}
+              <Field label="Nível de Consciência" required>
                 <RadioButtonGroup
-                  value={estado.tosse}
-                  onChange={(v) =>
+                  value={estado.nivel_consciencia}
+                  onChange={(v) => {
+                    const val = v as 'acordado' | 'sonolento' | 'dormindo';
                     updateEstado({
-                      tosse: v as 'ausente' | 'seca' | 'produtiva',
-                    })
-                  }
+                      nivel_consciencia: val,
+                      // Limpa estado_acordado se não está acordado
+                      estado_acordado:
+                        val === 'acordado' ? estado.estado_acordado : null,
+                    });
+                  }}
                   options={[
-                    { valor: 'ausente', label: '✅ Ausente' },
-                    { valor: 'seca', label: '🫁 Seca' },
-                    { valor: 'produtiva', label: '💧 Produtiva' },
+                    { valor: 'acordado', label: '👁️ Acordado' },
+                    { valor: 'sonolento', label: '😴 Sonolento' },
+                    { valor: 'dormindo', label: '💤 Dormindo' },
                   ]}
                   disabled={disabled}
                 />
               </Field>
 
-              {estado.tosse === 'produtiva' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-4 border-l-2 border-blue-200">
-                  <Field label="Cor da Secreção">
+              {/* Se acordado: Ativo ou Hipoativo */}
+              {estado.nivel_consciencia === 'acordado' && (
+                <div className="pl-4 border-l-2 border-purple-200">
+                  <Field label="Estado" required>
                     <RadioButtonGroup
-                      value={estado.secrecao_cor}
+                      value={estado.estado_acordado}
                       onChange={(v) =>
                         updateEstado({
-                          secrecao_cor: v as
-                            | 'clara'
-                            | 'amarelada'
-                            | 'esverdeada',
+                          estado_acordado: v as 'ativo' | 'hipoativo',
                         })
                       }
                       options={[
-                        { valor: 'clara', label: '⚪ Clara' },
-                        { valor: 'amarelada', label: '🟡 Amarelada' },
-                        { valor: 'esverdeada', label: '🟢 Esverdeada' },
-                      ]}
-                      disabled={disabled}
-                    />
-                  </Field>
-                  <Field label="Quantidade">
-                    <RadioButtonGroup
-                      value={estado.secrecao_quantidade}
-                      onChange={(v) =>
-                        updateEstado({
-                          secrecao_quantidade: v as
-                            | 'pouca'
-                            | 'moderada'
-                            | 'abundante',
-                        })
-                      }
-                      options={[
-                        { valor: 'pouca', label: 'Pouca' },
-                        { valor: 'moderada', label: 'Moderada' },
-                        { valor: 'abundante', label: 'Abundante' },
+                        { valor: 'ativo', label: '⚡ Ativo' },
+                        { valor: 'hipoativo', label: '😶 Hipoativo' },
                       ]}
                       disabled={disabled}
                     />
                   </Field>
                 </div>
               )}
+
+              {/* Comportamento / Reação (múltipla escolha) */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Comportamento / Reação
+                </label>
+                <p className="text-xs text-gray-500">
+                  Múltipla escolha - a criança pode apresentar mais de um
+                  comportamento
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <CheckboxField
+                    label="😊 Calmo"
+                    checked={estado.comportamento_calmo || false}
+                    onChange={(checked) =>
+                      updateEstado({ comportamento_calmo: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="😤 Irritado"
+                    checked={estado.comportamento_irritado || false}
+                    onChange={(checked) =>
+                      updateEstado({ comportamento_irritado: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="😢 Choroso"
+                    checked={estado.comportamento_choroso || false}
+                    onChange={(checked) =>
+                      updateEstado({ comportamento_choroso: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="🏃 Agitado"
+                    checked={estado.comportamento_agitado || false}
+                    onChange={(checked) =>
+                      updateEstado({ comportamento_agitado: checked })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Tolerância ao Manuseio" required>
+                  <RadioButtonGroup
+                    value={estado.tolerancia_manuseio}
+                    onChange={(v) =>
+                      updateEstado({
+                        tolerancia_manuseio: v as 'boa' | 'regular' | 'ruim',
+                      })
+                    }
+                    options={[
+                      { valor: 'boa', label: '✅ Boa' },
+                      { valor: 'regular', label: '⚠️ Regular' },
+                      { valor: 'ruim', label: '❌ Ruim' },
+                    ]}
+                    disabled={disabled}
+                  />
+                </Field>
+
+                <Field label="Choro Durante Atendimento">
+                  <RadioButtonGroup
+                    value={estado.choro_durante_atendimento}
+                    onChange={(v) =>
+                      updateEstado({
+                        choro_durante_atendimento: v as
+                          | 'ausente'
+                          | 'leve'
+                          | 'moderado'
+                          | 'intenso',
+                      })
+                    }
+                    options={[
+                      { valor: 'ausente', label: '✅ Ausente' },
+                      { valor: 'leve', label: 'Leve' },
+                      { valor: 'moderado', label: 'Moderado' },
+                      { valor: 'intenso', label: 'Intenso' },
+                    ]}
+                    disabled={disabled}
+                  />
+                </Field>
+              </div>
             </div>
 
-            {/* 2️⃣ Sinais Associados (múltipla escolha) */}
+            {/* 2️⃣ Sinais Vitais */}
             <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-orange-700">
-                ⚠️ Sinais Associados
+              <h4 className="font-medium text-red-700">🌡️ Sinais Vitais</h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Field label="Temperatura (°C)">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={35}
+                    max={42}
+                    step={0.1}
+                    value={estado.temperatura_aferida || ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9.]/g, '');
+                      updateEstado({
+                        temperatura_aferida: value ? Number(value) : undefined,
+                      });
+                    }}
+                    placeholder="36.5"
+                    disabled={disabled}
+                    className="w-full"
+                  />
+                </Field>
+
+                <Field label="FC (bpm)">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={40}
+                    max={220}
+                    value={estado.frequencia_cardiaca || ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      updateEstado({
+                        frequencia_cardiaca: value ? Number(value) : undefined,
+                      });
+                    }}
+                    placeholder="120"
+                    disabled={disabled}
+                    className="w-full"
+                  />
+                </Field>
+
+                <Field label="SpO₂ (%)">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={100}
+                    value={estado.saturacao_o2 || ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      updateEstado({
+                        saturacao_o2: value ? Number(value) : undefined,
+                      });
+                    }}
+                    placeholder="97"
+                    disabled={disabled}
+                    className="w-full"
+                  />
+                </Field>
+              </div>
+
+              {/* Suporte de O2 condicional */}
+              <div className="space-y-3">
+                <CheckboxField
+                  label="Necessita de suporte de O₂?"
+                  checked={estado.necessita_suporte_o2 || false}
+                  onChange={(checked) => {
+                    updateEstado({
+                      necessita_suporte_o2: checked,
+                      saturacao_com_suporte: checked
+                        ? estado.saturacao_com_suporte
+                        : undefined,
+                    });
+                  }}
+                  disabled={disabled}
+                />
+                {estado.necessita_suporte_o2 && (
+                  <div className="pl-4 border-l-2 border-red-200">
+                    <Field label="SpO₂ c/ Suporte (%)">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={100}
+                        value={estado.saturacao_com_suporte || ''}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          updateEstado({
+                            saturacao_com_suporte: value
+                              ? Number(value)
+                              : undefined,
+                          });
+                        }}
+                        placeholder="99"
+                        disabled={disabled}
+                        className="w-full sm:w-32"
+                      />
+                    </Field>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3️⃣ Contexto Clínico Recente */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-indigo-700">
+                🏥 Contexto Clínico Recente
               </h4>
               <p className="text-sm text-gray-500">
-                Podem coexistir com qualquer tipo de tosse
+                Fatores que ajudam na interpretação do quadro
               </p>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <CheckboxField
-                  label="Sibilo referido pelos responsáveis"
-                  checked={estado.chiado_referido || false}
+                  label="Infecção respiratória recente"
+                  checked={estado.infeccao_recente || false}
                   onChange={(checked) =>
-                    updateEstado({ chiado_referido: checked })
+                    updateEstado({ infeccao_recente: checked })
                   }
                   disabled={disabled}
                 />
                 <CheckboxField
-                  label="Cansaço respiratório"
-                  checked={estado.cansaco_respiratorio || false}
+                  label="Episódios recorrentes de sibilância"
+                  checked={estado.episodios_recorrentes_sibilancia || false}
                   onChange={(checked) =>
-                    updateEstado({ cansaco_respiratorio: checked })
+                    updateEstado({ episodios_recorrentes_sibilancia: checked })
                   }
                   disabled={disabled}
                 />
                 <CheckboxField
-                  label="Esforço respiratório percebido"
-                  checked={estado.esforco_respiratorio || false}
+                  label="Contato recente com pessoas sintomáticas"
+                  checked={estado.contato_pessoas_sintomaticas || false}
                   onChange={(checked) =>
-                    updateEstado({ esforco_respiratorio: checked })
+                    updateEstado({ contato_pessoas_sintomaticas: checked })
                   }
                   disabled={disabled}
                 />
                 <CheckboxField
-                  label="Respiração ruidosa"
-                  checked={estado.respiracao_ruidosa || false}
+                  label="Uso recente de medicação respiratória"
+                  checked={estado.uso_medicacao_respiratoria || false}
                   onChange={(checked) =>
-                    updateEstado({ respiracao_ruidosa: checked })
+                    updateEstado({ uso_medicacao_respiratoria: checked })
                   }
                   disabled={disabled}
                 />
               </div>
+
+              <Field label="Início dos sintomas há (dias)">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={365}
+                  value={estado.inicio_sintomas_dias || ''}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    updateEstado({
+                      inicio_sintomas_dias: value ? Number(value) : undefined,
+                    });
+                  }}
+                  placeholder="Ex: 3"
+                  disabled={disabled}
+                  className="w-full sm:w-32"
+                />
+              </Field>
             </div>
 
-            {/* 3️⃣ Repercussões Funcionais (múltipla escolha) */}
+            {/* 4️⃣ Repercussões Funcionais */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-yellow-700">
                 📋 Repercussões Funcionais
@@ -289,305 +484,192 @@ export const EvolutionSectionContent: React.FC<
               </div>
             </div>
 
-            {/* 4️⃣ Contexto Clínico Recente (múltipla escolha) */}
+            {/* 5️⃣ Sinais Associados */}
             <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-indigo-700">
-                🏥 Contexto Clínico Recente
+              <h4 className="font-medium text-orange-700">
+                ⚠️ Sinais Associados
               </h4>
               <p className="text-sm text-gray-500">
-                Fatores que ajudam na interpretação do quadro
+                Podem coexistir com qualquer tipo de tosse
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <CheckboxField
-                  label="Infecção respiratória recente"
-                  checked={estado.infeccao_recente || false}
+                  label="Sibilo referido pelos responsáveis"
+                  checked={estado.chiado_referido || false}
                   onChange={(checked) =>
-                    updateEstado({ infeccao_recente: checked })
+                    updateEstado({ chiado_referido: checked })
                   }
                   disabled={disabled}
                 />
                 <CheckboxField
-                  label="Episódios recorrentes de sibilância"
-                  checked={estado.episodios_recorrentes_sibilancia || false}
+                  label="Cansaço respiratório"
+                  checked={estado.cansaco_respiratorio || false}
                   onChange={(checked) =>
-                    updateEstado({ episodios_recorrentes_sibilancia: checked })
+                    updateEstado({ cansaco_respiratorio: checked })
                   }
                   disabled={disabled}
                 />
                 <CheckboxField
-                  label="Contato recente com resfriados"
-                  checked={estado.contato_resfriados || false}
+                  label="Esforço respiratório percebido"
+                  checked={estado.esforco_respiratorio || false}
                   onChange={(checked) =>
-                    updateEstado({ contato_resfriados: checked })
+                    updateEstado({ esforco_respiratorio: checked })
                   }
                   disabled={disabled}
                 />
                 <CheckboxField
-                  label="Uso recente de medicação respiratória"
-                  checked={estado.uso_medicacao_respiratoria || false}
+                  label="Respiração ruidosa"
+                  checked={estado.respiracao_ruidosa || false}
                   onChange={(checked) =>
-                    updateEstado({ uso_medicacao_respiratoria: checked })
+                    updateEstado({ respiracao_ruidosa: checked })
                   }
                   disabled={disabled}
                 />
               </div>
             </div>
 
-            {/* Sinais Vitais - Temperatura, FC, Saturação */}
+            {/* 6️⃣ Sintomas Respiratórios - Tosse */}
             <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-red-700">🌡️ Sinais Vitais</h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Field label="Temperatura (°C)">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={35}
-                    max={42}
-                    step={0.1}
-                    value={estado.temperatura_aferida || ''}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9.]/g, '');
-                      updateEstado({
-                        temperatura_aferida: value ? Number(value) : undefined,
-                      });
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        [
-                          'Backspace',
-                          'Delete',
-                          'Tab',
-                          'Escape',
-                          'Enter',
-                          '.',
-                          ',',
-                        ].includes(e.key) ||
-                        (e.ctrlKey &&
-                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
-                        [
-                          'ArrowLeft',
-                          'ArrowRight',
-                          'ArrowUp',
-                          'ArrowDown',
-                        ].includes(e.key)
-                      ) {
-                        return;
-                      }
-                      if (!/[0-9]/.test(e.key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="36.5"
-                    disabled={disabled}
-                    className="w-full"
-                  />
-                </Field>
-
-                <Field label="FC (bpm)">
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={40}
-                    max={220}
-                    value={estado.frequencia_cardiaca || ''}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9]/g, '');
-                      updateEstado({
-                        frequencia_cardiaca: value ? Number(value) : undefined,
-                      });
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        [
-                          'Backspace',
-                          'Delete',
-                          'Tab',
-                          'Escape',
-                          'Enter',
-                        ].includes(e.key) ||
-                        (e.ctrlKey &&
-                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
-                        [
-                          'ArrowLeft',
-                          'ArrowRight',
-                          'ArrowUp',
-                          'ArrowDown',
-                        ].includes(e.key)
-                      ) {
-                        return;
-                      }
-                      if (!/[0-9]/.test(e.key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="120"
-                    disabled={disabled}
-                    className="w-full"
-                  />
-                </Field>
-
-                <Field label="SpO₂ (%)">
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={100}
-                    value={estado.saturacao_o2 || ''}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9]/g, '');
-                      updateEstado({
-                        saturacao_o2: value ? Number(value) : undefined,
-                      });
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        [
-                          'Backspace',
-                          'Delete',
-                          'Tab',
-                          'Escape',
-                          'Enter',
-                        ].includes(e.key) ||
-                        (e.ctrlKey &&
-                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
-                        [
-                          'ArrowLeft',
-                          'ArrowRight',
-                          'ArrowUp',
-                          'ArrowDown',
-                        ].includes(e.key)
-                      ) {
-                        return;
-                      }
-                      if (!/[0-9]/.test(e.key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="97"
-                    disabled={disabled}
-                    className="w-full"
-                  />
-                </Field>
-
-                <Field label="SpO₂ c/ Suporte (%)">
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={100}
-                    value={estado.saturacao_com_suporte || ''}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9]/g, '');
-                      updateEstado({
-                        saturacao_com_suporte: value
-                          ? Number(value)
-                          : undefined,
-                      });
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        [
-                          'Backspace',
-                          'Delete',
-                          'Tab',
-                          'Escape',
-                          'Enter',
-                        ].includes(e.key) ||
-                        (e.ctrlKey &&
-                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
-                        [
-                          'ArrowLeft',
-                          'ArrowRight',
-                          'ArrowUp',
-                          'ArrowDown',
-                        ].includes(e.key)
-                      ) {
-                        return;
-                      }
-                      if (!/[0-9]/.test(e.key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="99"
-                    disabled={disabled}
-                    className="w-full"
-                  />
-                </Field>
-              </div>
-            </div>
-
-            {/* Estado Geral da Criança */}
-            <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-purple-700">
-                👶 Estado Geral da Criança
+              <h4 className="font-medium text-blue-700">
+                🫁 Sintomas Respiratórios
               </h4>
 
-              {/* Nível de Consciência (escolha única) */}
-              <Field label="Nível de Consciência" required>
+              <Field label="Tosse">
                 <RadioButtonGroup
-                  value={estado.nivel_consciencia}
-                  onChange={(v) =>
+                  value={estado.tosse}
+                  onChange={(v) => {
+                    const val = v as 'ausente' | 'seca' | 'produtiva';
                     updateEstado({
-                      nivel_consciencia: v as
-                        | 'ativo'
-                        | 'sonolento'
-                        | 'hipoativo',
-                    })
-                  }
+                      tosse: val,
+                      // Limpa campos dependentes se não for produtiva
+                      tosse_eficacia:
+                        val === 'produtiva' ? estado.tosse_eficacia : null,
+                      tosse_destino:
+                        val === 'produtiva' ? estado.tosse_destino : null,
+                      secrecao_cor:
+                        val === 'produtiva' ? estado.secrecao_cor : null,
+                      secrecao_quantidade:
+                        val === 'produtiva' ? estado.secrecao_quantidade : null,
+                    });
+                  }}
                   options={[
-                    { valor: 'ativo', label: '⚡ Ativo' },
-                    { valor: 'sonolento', label: '😴 Sonolento' },
-                    { valor: 'hipoativo', label: '😶 Hipoativo' },
+                    { valor: 'ausente', label: '✅ Ausente' },
+                    { valor: 'seca', label: '🫁 Seca' },
+                    { valor: 'produtiva', label: '💧 Produtiva' },
                   ]}
                   disabled={disabled}
                 />
               </Field>
 
-              {/* Comportamento / Reação (múltipla escolha) */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Comportamento / Reação Durante Avaliação
-                </label>
-                <p className="text-xs text-gray-500">
-                  Múltipla escolha - a criança pode estar ativa e irritada,
-                  sonolenta e chorosa, etc.
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <CheckboxField
-                    label="😊 Calmo"
-                    checked={estado.comportamento_calmo || false}
-                    onChange={(checked) =>
-                      updateEstado({ comportamento_calmo: checked })
-                    }
-                    disabled={disabled}
-                  />
-                  <CheckboxField
-                    label="😤 Irritado"
-                    checked={estado.comportamento_irritado || false}
-                    onChange={(checked) =>
-                      updateEstado({ comportamento_irritado: checked })
-                    }
-                    disabled={disabled}
-                  />
-                  <CheckboxField
-                    label="😢 Choroso"
-                    checked={estado.comportamento_choroso || false}
-                    onChange={(checked) =>
-                      updateEstado({ comportamento_choroso: checked })
-                    }
-                    disabled={disabled}
-                  />
-                  <CheckboxField
-                    label="🏃 Agitado"
-                    checked={estado.comportamento_agitado || false}
-                    onChange={(checked) =>
-                      updateEstado({ comportamento_agitado: checked })
-                    }
-                    disabled={disabled}
-                  />
+              {/* Se produtiva: eficaz ou ineficaz */}
+              {estado.tosse === 'produtiva' && (
+                <div className="pl-4 border-l-2 border-blue-200 space-y-4">
+                  <Field label="Eficácia da Tosse" required>
+                    <RadioButtonGroup
+                      value={estado.tosse_eficacia}
+                      onChange={(v) => {
+                        const val = v as 'eficaz' | 'ineficaz';
+                        updateEstado({
+                          tosse_eficacia: val,
+                          // Limpa campos dependentes se não for eficaz
+                          tosse_destino:
+                            val === 'eficaz' ? estado.tosse_destino : null,
+                          secrecao_cor:
+                            val === 'eficaz' &&
+                            estado.tosse_destino === 'expectoracao'
+                              ? estado.secrecao_cor
+                              : null,
+                          secrecao_quantidade:
+                            val === 'eficaz' &&
+                            estado.tosse_destino === 'expectoracao'
+                              ? estado.secrecao_quantidade
+                              : null,
+                        });
+                      }}
+                      options={[
+                        { valor: 'eficaz', label: '✅ Eficaz' },
+                        { valor: 'ineficaz', label: '❌ Ineficaz' },
+                      ]}
+                      disabled={disabled}
+                    />
+                  </Field>
+
+                  {/* Se eficaz: deglutição ou expectoração */}
+                  {estado.tosse_eficacia === 'eficaz' && (
+                    <div className="pl-4 border-l-2 border-blue-300 space-y-4">
+                      <Field label="Destino da Secreção" required>
+                        <RadioButtonGroup
+                          value={estado.tosse_destino}
+                          onChange={(v) => {
+                            const val = v as 'degluticao' | 'expectoracao';
+                            updateEstado({
+                              tosse_destino: val,
+                              // Limpa campos de secreção se não for expectoração
+                              secrecao_cor:
+                                val === 'expectoracao'
+                                  ? estado.secrecao_cor
+                                  : null,
+                              secrecao_quantidade:
+                                val === 'expectoracao'
+                                  ? estado.secrecao_quantidade
+                                  : null,
+                            });
+                          }}
+                          options={[
+                            { valor: 'degluticao', label: '🍴 Deglutição' },
+                            { valor: 'expectoracao', label: '💧 Expectoração' },
+                          ]}
+                          disabled={disabled}
+                        />
+                      </Field>
+
+                      {/* Se expectoração: cor e quantidade */}
+                      {estado.tosse_destino === 'expectoracao' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-4 border-l-2 border-blue-400">
+                          <Field label="Cor da Secreção">
+                            <RadioButtonGroup
+                              value={estado.secrecao_cor}
+                              onChange={(v) =>
+                                updateEstado({
+                                  secrecao_cor: v as
+                                    | 'clara'
+                                    | 'amarelada'
+                                    | 'esverdeada',
+                                })
+                              }
+                              options={[
+                                { valor: 'clara', label: '⚪ Clara' },
+                                { valor: 'amarelada', label: '🟡 Amarelada' },
+                                { valor: 'esverdeada', label: '🟢 Esverdeada' },
+                              ]}
+                              disabled={disabled}
+                            />
+                          </Field>
+                          <Field label="Quantidade">
+                            <RadioButtonGroup
+                              value={estado.secrecao_quantidade}
+                              onChange={(v) =>
+                                updateEstado({
+                                  secrecao_quantidade: v as
+                                    | 'pouca'
+                                    | 'moderada'
+                                    | 'abundante',
+                                })
+                              }
+                              options={[
+                                { valor: 'pouca', label: 'Pouca' },
+                                { valor: 'moderada', label: 'Moderada' },
+                                { valor: 'abundante', label: 'Abundante' },
+                              ]}
+                              disabled={disabled}
+                            />
+                          </Field>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Observações Gerais */}

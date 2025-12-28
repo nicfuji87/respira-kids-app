@@ -333,27 +333,32 @@ export interface SaveEvolucaoData {
 
 // Dados extraídos para colunas de analytics/dashboard
 export interface EvolucaoAnalyticsData {
-  // Estado Geral (Antes) - Sintomas
-  tosse_tipo?: string | null;
-  chiado?: boolean; // chiado_referido (sibilo referido)
-  cansaco_respiratorio?: boolean;
-  esforco_respiratorio?: boolean;
-  respiracao_ruidosa?: boolean;
-  // Repercussões Funcionais
-  interrupcoes_sono?: boolean;
-  irritabilidade_respiratoria?: boolean;
-  // Contexto Clínico
-  episodios_recorrentes_sibilancia?: boolean;
-  contato_resfriados?: boolean;
-  uso_medicacao_respiratoria?: boolean;
+  // Estado Geral da Criança
+  nivel_consciencia?: string | null; // acordado, sonolento, dormindo
+  estado_acordado?: string | null; // ativo, hipoativo (se acordado)
   // Sinais Vitais
   temperatura_aferida?: number | null;
   frequencia_cardiaca?: number | null;
   spo2_antes?: number | null;
+  necessita_suporte_o2?: boolean;
   spo2_com_suporte?: number | null;
-  // Estado Geral - Consciência e Comportamento
-  nivel_alerta?: string | null; // mantido para compatibilidade
-  nivel_consciencia?: string | null; // novo: ativo, sonolento, hipoativo
+  // Contexto Clínico
+  episodios_recorrentes_sibilancia?: boolean;
+  contato_pessoas_sintomaticas?: boolean;
+  uso_medicacao_respiratoria?: boolean;
+  inicio_sintomas_dias?: number | null;
+  // Repercussões Funcionais
+  interrupcoes_sono?: boolean;
+  irritabilidade_respiratoria?: boolean;
+  // Sinais Associados
+  chiado?: boolean; // chiado_referido (sibilo referido)
+  cansaco_respiratorio?: boolean;
+  esforco_respiratorio?: boolean;
+  respiracao_ruidosa?: boolean;
+  // Sintomas Respiratórios - Tosse
+  tosse_tipo?: string | null;
+  tosse_eficacia?: string | null;
+  tosse_destino?: string | null;
   comportamento_calmo?: boolean;
   comportamento_irritado?: boolean;
   comportamento_choroso?: boolean;

@@ -99,44 +99,15 @@ export interface AvaliacaoRespiratoriaAntes {
   secrecao: SecrecaoRespiratoria;
 }
 
-// Estado Geral (Antes) - Consolidado com Sintomas, Sinais Vitais e Estado
+// Estado Geral (Antes) - Ordem: Estado Geral > Sinais Vitais > Contexto > Repercussões > Sinais > Sintomas
 export interface EstadoGeralAntes {
-  // 1️⃣ Tosse (escolha única)
-  tosse?: 'ausente' | 'seca' | 'produtiva' | null;
+  // 1️⃣ Estado Geral da Criança
+  // Nível de Consciência: Acordado, Sonolento, Dormindo
+  nivel_consciencia?: 'acordado' | 'sonolento' | 'dormindo' | null;
+  // Se acordado: Ativo ou Hipoativo
+  estado_acordado?: 'ativo' | 'hipoativo' | null;
 
-  // 2️⃣ Sinais Associados (múltipla escolha)
-  chiado_referido?: boolean; // Chiado referido pelos responsáveis (não auscultatório)
-  cansaco_respiratorio?: boolean;
-  esforco_respiratorio?: boolean; // Esforço respiratório percebido
-  respiracao_ruidosa?: boolean;
-
-  // 3️⃣ Repercussões Funcionais (múltipla escolha)
-  dificuldade_alimentar?: boolean;
-  interrupcoes_sono?: boolean;
-  piora_noturna?: boolean;
-  irritabilidade_respiratoria?: boolean; // Irritabilidade associada à respiração
-
-  // 4️⃣ Contexto Clínico Recente (múltipla escolha)
-  infeccao_recente?: boolean;
-  episodios_recorrentes_sibilancia?: boolean;
-  contato_resfriados?: boolean;
-  uso_medicacao_respiratoria?: boolean;
-
-  // Secreção (quando presente)
-  secrecao_cor?: 'clara' | 'amarelada' | 'esverdeada' | null;
-  secrecao_quantidade?: 'pouca' | 'moderada' | 'abundante' | null;
-
-  // Sinais Vitais
-  temperatura_aferida?: number; // em graus Celsius
-  frequencia_cardiaca?: number; // bpm
-  saturacao_o2?: number; // percentual em ar ambiente
-  saturacao_com_suporte?: number; // percentual com suporte O2
-
-  // Estado Geral da Criança
-  // Nível de Consciência (escolha única - excludentes)
-  nivel_consciencia?: 'ativo' | 'sonolento' | 'hipoativo' | null;
-
-  // Comportamento/Reação Durante Avaliação (múltipla escolha)
+  // Comportamento/Reação (múltipla escolha)
   comportamento_calmo?: boolean;
   comportamento_irritado?: boolean;
   comportamento_choroso?: boolean;
@@ -144,6 +115,42 @@ export interface EstadoGeralAntes {
 
   tolerancia_manuseio: 'boa' | 'regular' | 'ruim' | null;
   choro_durante_atendimento: 'ausente' | 'leve' | 'moderado' | 'intenso' | null;
+
+  // 2️⃣ Sinais Vitais
+  temperatura_aferida?: number; // em graus Celsius
+  frequencia_cardiaca?: number; // bpm
+  saturacao_o2?: number; // percentual em ar ambiente
+  necessita_suporte_o2?: boolean; // Se necessita de suporte de O2
+  saturacao_com_suporte?: number; // percentual com suporte O2 (só se necessita_suporte_o2 = true)
+
+  // 3️⃣ Contexto Clínico Recente (múltipla escolha)
+  infeccao_recente?: boolean;
+  episodios_recorrentes_sibilancia?: boolean;
+  contato_pessoas_sintomaticas?: boolean; // Contato recente com pessoas sintomáticas
+  uso_medicacao_respiratoria?: boolean;
+  inicio_sintomas_dias?: number; // Início dos sintomas há X dias
+
+  // 4️⃣ Repercussões Funcionais (múltipla escolha)
+  dificuldade_alimentar?: boolean;
+  interrupcoes_sono?: boolean;
+  piora_noturna?: boolean;
+  irritabilidade_respiratoria?: boolean; // Irritabilidade associada à respiração
+
+  // 5️⃣ Sinais Associados (múltipla escolha)
+  chiado_referido?: boolean; // Sibilo referido pelos responsáveis (não auscultatório)
+  cansaco_respiratorio?: boolean;
+  esforco_respiratorio?: boolean; // Esforço respiratório percebido
+  respiracao_ruidosa?: boolean;
+
+  // 6️⃣ Sintomas Respiratórios - Tosse
+  tosse?: 'ausente' | 'seca' | 'produtiva' | null;
+  // Se produtiva: eficácia
+  tosse_eficacia?: 'eficaz' | 'ineficaz' | null;
+  // Se eficaz: destino da secreção
+  tosse_destino?: 'degluticao' | 'expectoracao' | null;
+  // Se expectoração: cor e quantidade
+  secrecao_cor?: 'clara' | 'amarelada' | 'esverdeada' | null;
+  secrecao_quantidade?: 'pouca' | 'moderada' | 'abundante' | null;
 
   observacoes?: string;
 }
@@ -512,41 +519,43 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
 export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
   return {
     estado_geral_antes: {
-      // 1️⃣ Tosse
-      tosse: null,
-      // 2️⃣ Sinais Associados
-      chiado_referido: false,
-      cansaco_respiratorio: false,
-      esforco_respiratorio: false,
-      respiracao_ruidosa: false,
-      // 3️⃣ Repercussões Funcionais
-      dificuldade_alimentar: false,
-      interrupcoes_sono: false,
-      piora_noturna: false,
-      irritabilidade_respiratoria: false,
-      // 4️⃣ Contexto Clínico
-      infeccao_recente: false,
-      episodios_recorrentes_sibilancia: false,
-      contato_resfriados: false,
-      uso_medicacao_respiratoria: false,
-      // Secreção
-      secrecao_cor: null,
-      secrecao_quantidade: null,
-      // Sinais Vitais
-      temperatura_aferida: undefined,
-      frequencia_cardiaca: undefined,
-      saturacao_o2: undefined,
-      saturacao_com_suporte: undefined,
-      // Estado Geral - Nível de Consciência
-      nivel_consciencia: null,
-      // Comportamento (múltipla escolha)
+      // 1️⃣ Estado Geral da Criança
+      nivel_consciencia: null, // acordado, sonolento, dormindo
+      estado_acordado: null, // ativo, hipoativo (se acordado)
       comportamento_calmo: false,
       comportamento_irritado: false,
       comportamento_choroso: false,
       comportamento_agitado: false,
-      // Outros
       tolerancia_manuseio: null,
       choro_durante_atendimento: null,
+      // 2️⃣ Sinais Vitais
+      temperatura_aferida: undefined,
+      frequencia_cardiaca: undefined,
+      saturacao_o2: undefined,
+      necessita_suporte_o2: false,
+      saturacao_com_suporte: undefined,
+      // 3️⃣ Contexto Clínico
+      infeccao_recente: false,
+      episodios_recorrentes_sibilancia: false,
+      contato_pessoas_sintomaticas: false,
+      uso_medicacao_respiratoria: false,
+      inicio_sintomas_dias: undefined,
+      // 4️⃣ Repercussões Funcionais
+      dificuldade_alimentar: false,
+      interrupcoes_sono: false,
+      piora_noturna: false,
+      irritabilidade_respiratoria: false,
+      // 5️⃣ Sinais Associados
+      chiado_referido: false,
+      cansaco_respiratorio: false,
+      esforco_respiratorio: false,
+      respiracao_ruidosa: false,
+      // 6️⃣ Sintomas Respiratórios - Tosse
+      tosse: null,
+      tosse_eficacia: null,
+      tosse_destino: null,
+      secrecao_cor: null,
+      secrecao_quantidade: null,
     },
     avaliacao_antes: {
       padrao_respiratorio: {
@@ -789,21 +798,20 @@ export function verificarSecaoEvolucaoCompleta(
     switch (secaoId) {
       case 'estado_geral_antes': {
         const e = evolucao.estado_geral_antes;
-        // Verificar sintomas (tosse, sinais associados, etc)
-        const temSintomas =
+        // 1. Estado Geral da Criança - obrigatório
+        const temEstadoGeral = e.nivel_consciencia && e.tolerancia_manuseio;
+        // 2. Sinais Vitais - SpO2 é importante
+        const temSinaisVitais = e.saturacao_o2 !== undefined;
+        // 3. Contexto ou Sintomas preenchidos
+        const temContextoOuSintomas =
           e.tosse ||
           e.chiado_referido ||
           e.cansaco_respiratorio ||
-          e.esforco_respiratorio ||
-          e.respiracao_ruidosa ||
-          e.dificuldade_alimentar ||
-          e.interrupcoes_sono ||
-          e.piora_noturna;
-        // Verificar estado geral (nível de consciência, tolerância)
-        const temEstado = e.nivel_consciencia && e.tolerancia_manuseio;
+          e.infeccao_recente ||
+          e.inicio_sintomas_dias;
 
-        if (temSintomas && temEstado) return 'completo';
-        if (temSintomas || e.nivel_consciencia || e.tolerancia_manuseio)
+        if (temEstadoGeral && temSinaisVitais) return 'completo';
+        if (temEstadoGeral || temSinaisVitais || temContextoOuSintomas)
           return 'parcial';
         return 'vazio';
       }
