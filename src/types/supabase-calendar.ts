@@ -333,25 +333,54 @@ export interface SaveEvolucaoData {
 
 // Dados extraídos para colunas de analytics/dashboard
 export interface EvolucaoAnalyticsData {
-  // Estado Geral (Antes) - Sinais Vitais
+  // Estado Geral (Antes) - Sintomas
   tosse_tipo?: string | null;
-  chiado?: boolean;
+  chiado?: boolean; // chiado_referido (sibilo referido)
   cansaco_respiratorio?: boolean;
+  esforco_respiratorio?: boolean;
+  respiracao_ruidosa?: boolean;
+  // Repercussões Funcionais
+  interrupcoes_sono?: boolean;
+  irritabilidade_respiratoria?: boolean;
+  // Contexto Clínico
+  episodios_recorrentes_sibilancia?: boolean;
+  contato_resfriados?: boolean;
+  uso_medicacao_respiratoria?: boolean;
+  // Sinais Vitais
   temperatura_aferida?: number | null;
-  frequencia_cardiaca?: number | null; // FC em bpm
-  nivel_alerta?: string | null;
-  tolerancia_manuseio?: string | null;
-  choro_atendimento?: string | null;
+  frequencia_cardiaca?: number | null;
   spo2_antes?: number | null;
   spo2_com_suporte?: number | null;
+  // Estado Geral - Consciência e Comportamento
+  nivel_alerta?: string | null; // mantido para compatibilidade
+  nivel_consciencia?: string | null; // novo: ativo, sonolento, hipoativo
+  comportamento_calmo?: boolean;
+  comportamento_irritado?: boolean;
+  comportamento_choroso?: boolean;
+  comportamento_agitado?: boolean;
+  tolerancia_manuseio?: string | null;
+  choro_atendimento?: string | null;
   // Avaliação Respiratória
   ritmo_respiratorio?: string | null;
   dispneia_presente?: boolean;
   classificacao_clinica?: string | null;
+  // Ausculta - campos consolidados (mantidos para compatibilidade)
   murmurio_vesicular?: string | null;
   sibilos?: boolean;
   roncos?: boolean;
   estertores?: string | null;
+  // Ausculta - Hemitórax Direito
+  mv_direito?: string | null;
+  sibilos_direito?: boolean;
+  roncos_direito?: boolean;
+  estertores_finos_direito?: boolean;
+  estertores_grossos_direito?: boolean;
+  // Ausculta - Hemitórax Esquerdo
+  mv_esquerdo?: string | null;
+  sibilos_esquerdo?: boolean;
+  roncos_esquerdo?: boolean;
+  estertores_finos_esquerdo?: boolean;
+  estertores_grossos_esquerdo?: boolean;
   // Intervenção
   tecnica_afe?: boolean;
   tecnica_vibrocompressao?: boolean;

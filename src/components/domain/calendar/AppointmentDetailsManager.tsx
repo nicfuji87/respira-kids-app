@@ -850,24 +850,54 @@ export const AppointmentDetailsManager =
             dados.evolucao_respiratoria
           ) {
             const ev = dados.evolucao_respiratoria;
+            const hd = ev.avaliacao_antes.ausculta.hemitorax_direito;
+            const he = ev.avaliacao_antes.ausculta.hemitorax_esquerdo;
             analyticsData = {
-              // Estado Geral
+              // Sintomas
               tosse_tipo: ev.estado_geral_antes.tosse || null,
               chiado: ev.estado_geral_antes.chiado_referido || false,
               cansaco_respiratorio:
                 ev.estado_geral_antes.cansaco_respiratorio || false,
+              esforco_respiratorio:
+                ev.estado_geral_antes.esforco_respiratorio || false,
+              respiracao_ruidosa:
+                ev.estado_geral_antes.respiracao_ruidosa || false,
+              // Repercussões Funcionais
+              interrupcoes_sono:
+                ev.estado_geral_antes.interrupcoes_sono || false,
+              irritabilidade_respiratoria:
+                ev.estado_geral_antes.irritabilidade_respiratoria || false,
+              // Contexto Clínico
+              episodios_recorrentes_sibilancia:
+                ev.estado_geral_antes.episodios_recorrentes_sibilancia || false,
+              contato_resfriados:
+                ev.estado_geral_antes.contato_resfriados || false,
+              uso_medicacao_respiratoria:
+                ev.estado_geral_antes.uso_medicacao_respiratoria || false,
+              // Sinais Vitais
               temperatura_aferida:
                 ev.estado_geral_antes.temperatura_aferida || null,
               frequencia_cardiaca:
                 ev.estado_geral_antes.frequencia_cardiaca || null,
+              spo2_antes: ev.estado_geral_antes.saturacao_o2 || null,
+              spo2_com_suporte:
+                ev.estado_geral_antes.saturacao_com_suporte || null,
+              // Estado Geral
               nivel_alerta: ev.estado_geral_antes.nivel_consciencia || null,
+              nivel_consciencia:
+                ev.estado_geral_antes.nivel_consciencia || null,
+              comportamento_calmo:
+                ev.estado_geral_antes.comportamento_calmo || false,
+              comportamento_irritado:
+                ev.estado_geral_antes.comportamento_irritado || false,
+              comportamento_choroso:
+                ev.estado_geral_antes.comportamento_choroso || false,
+              comportamento_agitado:
+                ev.estado_geral_antes.comportamento_agitado || false,
               tolerancia_manuseio:
                 ev.estado_geral_antes.tolerancia_manuseio || null,
               choro_atendimento:
                 ev.estado_geral_antes.choro_durante_atendimento || null,
-              spo2_antes: ev.estado_geral_antes.saturacao_o2 || null,
-              spo2_com_suporte:
-                ev.estado_geral_antes.saturacao_com_suporte || null,
               // Avaliação Respiratória
               ritmo_respiratorio:
                 ev.avaliacao_antes.padrao_respiratorio.ritmo_respiratorio ||
@@ -877,32 +907,29 @@ export const AppointmentDetailsManager =
               classificacao_clinica:
                 ev.avaliacao_antes.padrao_respiratorio.classificacao_clinica ||
                 null,
-              // Ausculta - combinando ambos hemitóraces para analytics
+              // Ausculta - consolidado (compatibilidade)
               murmurio_vesicular:
-                ev.avaliacao_antes.ausculta.hemitorax_direito
-                  .murmurio_vesicular ||
-                ev.avaliacao_antes.ausculta.hemitorax_esquerdo
-                  .murmurio_vesicular ||
-                null,
-              sibilos:
-                ev.avaliacao_antes.ausculta.hemitorax_direito.sibilos ||
-                ev.avaliacao_antes.ausculta.hemitorax_esquerdo.sibilos ||
-                false,
-              roncos:
-                ev.avaliacao_antes.ausculta.hemitorax_direito.roncos ||
-                ev.avaliacao_antes.ausculta.hemitorax_esquerdo.roncos ||
-                false,
+                hd.murmurio_vesicular || he.murmurio_vesicular || null,
+              sibilos: hd.sibilos || he.sibilos || false,
+              roncos: hd.roncos || he.roncos || false,
               estertores:
-                ev.avaliacao_antes.ausculta.hemitorax_direito
-                  .estertores_finos ||
-                ev.avaliacao_antes.ausculta.hemitorax_esquerdo.estertores_finos
+                hd.estertores_finos || he.estertores_finos
                   ? 'finos'
-                  : ev.avaliacao_antes.ausculta.hemitorax_direito
-                        .estertores_grossos ||
-                      ev.avaliacao_antes.ausculta.hemitorax_esquerdo
-                        .estertores_grossos
+                  : hd.estertores_grossos || he.estertores_grossos
                     ? 'grossos'
                     : null,
+              // Ausculta - Hemitórax Direito
+              mv_direito: hd.murmurio_vesicular || null,
+              sibilos_direito: hd.sibilos || false,
+              roncos_direito: hd.roncos || false,
+              estertores_finos_direito: hd.estertores_finos || false,
+              estertores_grossos_direito: hd.estertores_grossos || false,
+              // Ausculta - Hemitórax Esquerdo
+              mv_esquerdo: he.murmurio_vesicular || null,
+              sibilos_esquerdo: he.sibilos || false,
+              roncos_esquerdo: he.roncos || false,
+              estertores_finos_esquerdo: he.estertores_finos || false,
+              estertores_grossos_esquerdo: he.estertores_grossos || false,
               // Intervenção
               tecnica_afe: ev.intervencao.afe || false,
               tecnica_vibrocompressao: ev.intervencao.vibrocompressao || false,

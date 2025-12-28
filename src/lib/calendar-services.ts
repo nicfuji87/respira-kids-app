@@ -1236,23 +1236,55 @@ export const saveRelatorioEvolucao = async (
     if (evolucaoData.analytics) {
       const a = evolucaoData.analytics;
       Object.assign(insertData, {
+        // Sintomas
         tosse_tipo: a.tosse_tipo,
-        chiado: a.chiado,
+        chiado: a.chiado, // chiado_referido
         cansaco_respiratorio: a.cansaco_respiratorio,
+        esforco_respiratorio: a.esforco_respiratorio,
+        respiracao_ruidosa: a.respiracao_ruidosa,
+        // Repercussões Funcionais
+        interrupcoes_sono: a.interrupcoes_sono,
+        irritabilidade_respiratoria: a.irritabilidade_respiratoria,
+        // Contexto Clínico
+        episodios_recorrentes_sibilancia: a.episodios_recorrentes_sibilancia,
+        contato_resfriados: a.contato_resfriados,
+        uso_medicacao_respiratoria: a.uso_medicacao_respiratoria,
+        // Sinais Vitais
         temperatura_aferida: a.temperatura_aferida,
         frequencia_cardiaca: a.frequencia_cardiaca,
-        nivel_alerta: a.nivel_alerta,
-        tolerancia_manuseio: a.tolerancia_manuseio,
-        choro_atendimento: a.choro_atendimento,
         spo2_antes: a.spo2_antes,
         spo2_com_suporte: a.spo2_com_suporte,
+        // Estado Geral
+        nivel_alerta: a.nivel_alerta, // mantido para compatibilidade
+        nivel_consciencia: a.nivel_consciencia,
+        comportamento_calmo: a.comportamento_calmo,
+        comportamento_irritado: a.comportamento_irritado,
+        comportamento_choroso: a.comportamento_choroso,
+        comportamento_agitado: a.comportamento_agitado,
+        tolerancia_manuseio: a.tolerancia_manuseio,
+        choro_atendimento: a.choro_atendimento,
+        // Avaliação Respiratória
         ritmo_respiratorio: a.ritmo_respiratorio,
         dispneia_presente: a.dispneia_presente,
         classificacao_clinica: a.classificacao_clinica,
+        // Ausculta - consolidado (compatibilidade)
         murmurio_vesicular: a.murmurio_vesicular,
         sibilos: a.sibilos,
         roncos: a.roncos,
         estertores: a.estertores,
+        // Ausculta - Hemitórax Direito
+        mv_direito: a.mv_direito,
+        sibilos_direito: a.sibilos_direito,
+        roncos_direito: a.roncos_direito,
+        estertores_finos_direito: a.estertores_finos_direito,
+        estertores_grossos_direito: a.estertores_grossos_direito,
+        // Ausculta - Hemitórax Esquerdo
+        mv_esquerdo: a.mv_esquerdo,
+        sibilos_esquerdo: a.sibilos_esquerdo,
+        roncos_esquerdo: a.roncos_esquerdo,
+        estertores_finos_esquerdo: a.estertores_finos_esquerdo,
+        estertores_grossos_esquerdo: a.estertores_grossos_esquerdo,
+        // Intervenção
         tecnica_afe: a.tecnica_afe,
         tecnica_vibrocompressao: a.tecnica_vibrocompressao,
         tecnica_rta: a.tecnica_rta,
@@ -1260,6 +1292,7 @@ export const saveRelatorioEvolucao = async (
         tecnica_aspiracao: a.tecnica_aspiracao,
         aspiracao_tipo: a.aspiracao_tipo,
         peep_valor: a.peep_valor,
+        // Resposta
         spo2_depois: a.spo2_depois,
         frequencia_cardiaca_depois: a.frequencia_cardiaca_depois,
         melhora_padrao_respiratorio: a.melhora_padrao_respiratorio,
@@ -1267,6 +1300,7 @@ export const saveRelatorioEvolucao = async (
         reducao_desconforto: a.reducao_desconforto,
         ausculta_sem_alteracao: a.ausculta_sem_alteracao,
         ausculta_melhorou: a.ausculta_melhorou,
+        // Conduta
         manter_fisioterapia: a.manter_fisioterapia,
         frequencia_sugerida: a.frequencia_sugerida,
         alta_completa: a.alta_completa,
