@@ -211,18 +211,20 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   const progresso = calcularProgresso();
 
   // Obter ícone de status da seção
-  const getStatusIcon = (secaoId: string) => {
+  const getStatusIcon = (secaoId: string, className?: string) => {
     const dados =
       tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : evolucaoMotora;
     const status = verificarSecaoEvolucaoCompleta(tipoEvolucao, secaoId, dados);
 
+    const baseClass = className || 'h-4 w-4';
+
     switch (status) {
       case 'completo':
-        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        return <CheckCircle2 className={cn(baseClass, 'text-green-500')} />;
       case 'parcial':
-        return <AlertCircle className="h-4 w-4 text-yellow-500" />;
+        return <AlertCircle className={cn(baseClass, 'text-yellow-500')} />;
       default:
-        return <Circle className="h-4 w-4 text-muted-foreground" />;
+        return <Circle className={cn(baseClass, 'text-muted-foreground')} />;
     }
   };
 
@@ -234,22 +236,27 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[95vw] sm:max-w-[900px] h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col gap-1">
-              <DialogTitle className="text-lg font-semibold">
-                {getTipoLabel()}
-              </DialogTitle>
+      <DialogContent className="max-w-[95vw] sm:max-w-[900px] h-[95vh] sm:h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b flex-shrink-0 space-y-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-center justify-between sm:justify-start gap-2">
+                <DialogTitle className="text-base sm:text-lg font-semibold truncate">
+                  {getTipoLabel()}
+                </DialogTitle>
+                <Badge variant="secondary" className="sm:hidden text-xs">
+                  {progresso}%
+                </Badge>
+              </div>
               {patientName && (
-                <span className="text-sm text-muted-foreground">
+                <span className="text-xs sm:text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-none">
                   Paciente: {patientName}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {/* Seletor de tipo */}
-              <div className="flex gap-1">
+            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1 sm:pb-0">
+              {/* Seletor de tipo - Compacto em mobile */}
+              <div className="flex gap-1 shrink-0">
                 <Button
                   variant={
                     tipoEvolucao === 'respiratoria' ? 'default' : 'outline'
@@ -257,8 +264,10 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                   size="sm"
                   onClick={() => !isReadOnly && setTipoEvolucao('respiratoria')}
                   disabled={isReadOnly}
+                  className="h-7 text-xs sm:h-9 sm:text-sm px-2 sm:px-4"
                 >
-                  🫁 Respiratória
+                  <span className="sm:hidden">Resp.</span>
+                  <span className="hidden sm:inline">🫁 Respiratória</span>
                 </Button>
                 <Button
                   variant={
@@ -269,33 +278,47 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                     !isReadOnly && setTipoEvolucao('motora_assimetria')
                   }
                   disabled={isReadOnly}
+                  className="h-7 text-xs sm:h-9 sm:text-sm px-2 sm:px-4"
                 >
-                  🦴 Motora
+                  <span className="sm:hidden">Motora</span>
+                  <span className="hidden sm:inline">🦴 Motora</span>
                 </Button>
               </div>
-              <Badge variant="secondary">{progresso}% completo</Badge>
+              <Badge variant="secondary" className="hidden sm:inline-flex">
+                {progresso}% completo
+              </Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 sm:hidden ml-auto"
+                onClick={onClose}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <Progress value={progresso} className="h-1 mt-2" />
+          <Progress value={progresso} className="h-1 mt-2 hidden sm:block" />
         </DialogHeader>
 
         {/* Conteúdo principal - sem sidebar */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header da seção com indicadores de progresso */}
-          <div className="px-6 py-3 border-b bg-muted/20 flex-shrink-0">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">{currentSectionData?.icone}</span>
-                <h3 className="text-lg font-medium">
+          <div className="px-4 py-2 sm:px-6 sm:py-3 border-b bg-muted/20 flex-shrink-0">
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <span className="text-xl sm:text-2xl shrink-0">
+                  {currentSectionData?.icone}
+                </span>
+                <h3 className="text-base sm:text-lg font-medium truncate">
                   {currentSectionData?.titulo}
                 </h3>
               </div>
-              <span className="text-sm text-muted-foreground">
-                {currentSection + 1} de {secoes.length}
+              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap ml-2">
+                {currentSection + 1} / {secoes.length}
               </span>
             </div>
             {/* Indicadores de seção (bolinhas) */}
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex items-center justify-start sm:justify-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
               {secoes.map((secao, index) => (
                 <TooltipProvider key={secao.id}>
                   <Tooltip>
@@ -303,13 +326,13 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                       <button
                         onClick={() => setCurrentSection(index)}
                         className={cn(
-                          'flex items-center justify-center w-8 h-8 rounded-full transition-all',
+                          'flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all shrink-0',
                           currentSection === index
                             ? 'bg-primary text-primary-foreground scale-110'
                             : 'bg-muted hover:bg-accent'
                         )}
                       >
-                        {getStatusIcon(secao.id)}
+                        {getStatusIcon(secao.id, 'h-3 w-3 sm:h-4 sm:w-4')}
                       </button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -323,7 +346,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
           {/* Conteúdo da seção */}
           <ScrollArea className="flex-1" ref={scrollAreaRef}>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <EvolutionSectionContent
                 tipoEvolucao={tipoEvolucao}
                 secaoId={currentSectionData?.id || ''}
@@ -337,18 +360,19 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
           </ScrollArea>
 
           {/* Footer com navegação */}
-          <div className="px-6 py-4 border-t bg-background flex-shrink-0">
-            <div className="flex items-center justify-between">
+          <div className="px-4 py-3 sm:px-6 sm:py-4 border-t bg-background flex-shrink-0">
+            <div className="flex items-center justify-between gap-2">
               <Button
                 variant="outline"
                 onClick={goToPrev}
                 disabled={currentSection === 0}
+                className="flex-1 sm:flex-none"
               >
                 <ChevronLeft className="h-4 w-4 mr-1" />
-                Anterior
+                <span className="sm:inline">Anterior</span>
               </Button>
 
-              <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                 <Button variant="outline" onClick={onClose} disabled={isSaving}>
                   <X className="h-4 w-4 mr-1" />
                   Cancelar
@@ -366,10 +390,41 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                 )}
               </div>
 
+              {/* Mobile Action Button (Next or Save) */}
+              <div className="flex sm:hidden flex-1 gap-2">
+                {currentSection === secoes.length - 1 ? (
+                  !isReadOnly && (
+                    <Button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="flex-1"
+                    >
+                      {isSaving ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                      )}
+                      Salvar
+                    </Button>
+                  )
+                ) : (
+                  <Button
+                    variant="default" // Mudado para default para destacar "Próximo" em mobile
+                    onClick={goToNext}
+                    disabled={currentSection === secoes.length - 1}
+                    className="flex-1"
+                  >
+                    Próximo
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                )}
+              </div>
+
               <Button
                 variant="outline"
                 onClick={goToNext}
                 disabled={currentSection === secoes.length - 1}
+                className="hidden sm:flex"
               >
                 Próximo
                 <ChevronRight className="h-4 w-4 ml-1" />

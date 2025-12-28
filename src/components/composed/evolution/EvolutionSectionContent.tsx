@@ -149,7 +149,7 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <CheckboxField
                   label="Chiado"
                   checked={estado.chiado || false}
@@ -191,7 +191,7 @@ export const EvolutionSectionContent: React.FC<
               </div>
 
               {estado.tosse === 'produtiva' && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Cor da Secreção">
                     <RadioButtonGroup
                       value={estado.secrecao_cor}
@@ -285,7 +285,7 @@ export const EvolutionSectionContent: React.FC<
                   }}
                   placeholder="Ex: 36.5"
                   disabled={disabled}
-                  className="w-32"
+                  className="w-full sm:w-32"
                 />
               </Field>
             </div>
@@ -318,7 +318,7 @@ export const EvolutionSectionContent: React.FC<
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-green-700">🫁 Saturação de O₂</h4>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="SpO₂ em Ar Ambiente (%)">
                   <Input
                     type="number"
@@ -358,7 +358,7 @@ export const EvolutionSectionContent: React.FC<
                     }}
                     placeholder="Ex: 97"
                     disabled={disabled}
-                    className="w-32"
+                    className="w-full sm:w-32"
                   />
                 </Field>
 
@@ -403,7 +403,7 @@ export const EvolutionSectionContent: React.FC<
                     }}
                     placeholder="Ex: 99"
                     disabled={disabled}
-                    className="w-32"
+                    className="w-full sm:w-32"
                   />
                 </Field>
               </div>
@@ -767,7 +767,7 @@ export const EvolutionSectionContent: React.FC<
                     disabled={disabled}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <CheckboxField
                     label="Ápice"
                     checked={avaliacao.ausculta.localizacao_apice || false}
@@ -978,7 +978,7 @@ export const EvolutionSectionContent: React.FC<
                     }
                     placeholder="Ex: 5"
                     disabled={disabled}
-                    className="w-32"
+                    className="w-full sm:w-32"
                   />
                 </Field>
               )}
@@ -1302,7 +1302,7 @@ export const EvolutionSectionContent: React.FC<
                 }}
                 placeholder="Ex: 98"
                 disabled={disabled}
-                className="w-32"
+                className="w-full sm:w-32"
               />
             </Field>
 
@@ -1674,7 +1674,7 @@ export const EvolutionSectionContent: React.FC<
                         }
                         placeholder="Ex: 7"
                         disabled={disabled}
-                        className="w-32"
+                        className="w-full sm:w-32"
                       />
                     </Field>
                   </div>
@@ -2418,7 +2418,7 @@ export const EvolutionSectionContent: React.FC<
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-blue-700">Técnicas Realizadas</h4>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <CheckboxField
                   label="Alongamentos"
                   checked={intervencao.alongamentos}
@@ -2715,7 +2715,7 @@ export const EvolutionSectionContent: React.FC<
                 }
                 placeholder="Ex: 30"
                 disabled={disabled}
-                className="w-32"
+                className="w-full sm:w-32"
               />
             </Field>
 
