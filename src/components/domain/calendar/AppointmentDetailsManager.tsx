@@ -592,19 +592,29 @@ export const AppointmentDetailsManager =
           ) {
             const ev = dados.evolucao_respiratoria;
 
-            // ESTADO GERAL (ANTES)
-            conteudoResumo += `📋 ESTADO GERAL (ANTES)\n`;
+            // AVALIAÇÃO INICIAL (ANTES)
+            conteudoResumo += `═══════════════════════════════════════════\n`;
+            conteudoResumo += `📋 AVALIAÇÃO INICIAL (ANTES)\n`;
+            conteudoResumo += `═══════════════════════════════════════════\n\n`;
 
             // 1. Estado Geral da Criança
+            conteudoResumo += `👶 Estado Geral da Criança\n`;
             if (ev.estado_geral_antes.nivel_consciencia) {
-              let consciencia = ev.estado_geral_antes.nivel_consciencia;
+              const nivelMap: Record<string, string> = {
+                acordado: 'Acordado',
+                sonolento: 'Sonolento',
+                dormindo: 'Dormindo',
+              };
+              let consciencia =
+                nivelMap[ev.estado_geral_antes.nivel_consciencia] ||
+                ev.estado_geral_antes.nivel_consciencia;
               if (
-                consciencia === 'acordado' &&
+                ev.estado_geral_antes.nivel_consciencia === 'acordado' &&
                 ev.estado_geral_antes.estado_acordado
               ) {
-                consciencia += ` (${ev.estado_geral_antes.estado_acordado})`;
+                consciencia += ` → ${ev.estado_geral_antes.estado_acordado === 'ativo' ? 'Ativo' : 'Hipoativo'}`;
               }
-              conteudoResumo += `• Nível de consciência: ${consciencia}\n`;
+              conteudoResumo += `   • Nível de consciência: ${consciencia}\n`;
             }
             // Comportamento
             const comportamentos = [];
@@ -617,78 +627,121 @@ export const AppointmentDetailsManager =
             if (ev.estado_geral_antes.comportamento_agitado)
               comportamentos.push('Agitado');
             if (comportamentos.length > 0) {
-              conteudoResumo += `• Comportamento: ${comportamentos.join(', ')}\n`;
+              conteudoResumo += `   • Comportamento: ${comportamentos.join(', ')}\n`;
             }
 
             // 2. Sinais Vitais
-            if (ev.estado_geral_antes.temperatura_aferida) {
-              conteudoResumo += `• Temperatura: ${ev.estado_geral_antes.temperatura_aferida}°C\n`;
-            }
-            if (ev.estado_geral_antes.frequencia_cardiaca) {
-              conteudoResumo += `• FC: ${ev.estado_geral_antes.frequencia_cardiaca} bpm\n`;
-            }
-            if (ev.estado_geral_antes.saturacao_o2) {
-              conteudoResumo += `• SpO₂ ar ambiente: ${ev.estado_geral_antes.saturacao_o2}%\n`;
-            }
-            if (
-              ev.estado_geral_antes.necessita_suporte_o2 &&
-              ev.estado_geral_antes.saturacao_com_suporte
-            ) {
-              conteudoResumo += `• SpO₂ com suporte: ${ev.estado_geral_antes.saturacao_com_suporte}%\n`;
+            const temSinaisVitais =
+              ev.estado_geral_antes.temperatura_aferida ||
+              ev.estado_geral_antes.frequencia_cardiaca ||
+              ev.estado_geral_antes.saturacao_o2;
+            if (temSinaisVitais) {
+              conteudoResumo += `\n🌡️ Sinais Vitais\n`;
+              if (ev.estado_geral_antes.temperatura_aferida) {
+                conteudoResumo += `   • Temperatura: ${ev.estado_geral_antes.temperatura_aferida}°C\n`;
+              }
+              if (ev.estado_geral_antes.frequencia_cardiaca) {
+                conteudoResumo += `   • FC: ${ev.estado_geral_antes.frequencia_cardiaca} bpm\n`;
+              }
+              if (ev.estado_geral_antes.saturacao_o2) {
+                conteudoResumo += `   • SpO₂ (inicial): ${ev.estado_geral_antes.saturacao_o2}%\n`;
+              }
+              if (
+                ev.estado_geral_antes.necessita_suporte_o2 &&
+                ev.estado_geral_antes.saturacao_com_suporte
+              ) {
+                conteudoResumo += `   • SpO₂ c/ suporte: ${ev.estado_geral_antes.saturacao_com_suporte}%\n`;
+              }
             }
 
             // 3. Contexto Clínico
-            if (ev.estado_geral_antes.infeccao_recente)
-              conteudoResumo += `• Infecção recente: Sim\n`;
-            if (ev.estado_geral_antes.episodios_recorrentes_sibilancia)
-              conteudoResumo += `• Episódios recorrentes de sibilância: Sim\n`;
-            if (ev.estado_geral_antes.contato_pessoas_sintomaticas)
-              conteudoResumo += `• Contato com pessoas sintomáticas: Sim\n`;
-            if (ev.estado_geral_antes.uso_medicacao_respiratoria)
-              conteudoResumo += `• Uso recente de medicação respiratória: Sim\n`;
-            if (ev.estado_geral_antes.inicio_sintomas_dias) {
-              conteudoResumo += `• Início dos sintomas há: ${ev.estado_geral_antes.inicio_sintomas_dias} dias\n`;
+            const temContextoClinico =
+              ev.estado_geral_antes.infeccao_recente ||
+              ev.estado_geral_antes.episodios_recorrentes_sibilancia ||
+              ev.estado_geral_antes.contato_pessoas_sintomaticas ||
+              ev.estado_geral_antes.uso_medicacao_respiratoria ||
+              ev.estado_geral_antes.inicio_sintomas_dias;
+            if (temContextoClinico) {
+              conteudoResumo += `\n📋 Contexto Clínico Recente\n`;
+              if (ev.estado_geral_antes.inicio_sintomas_dias) {
+                conteudoResumo += `   • Início dos sintomas: há ${ev.estado_geral_antes.inicio_sintomas_dias} dias\n`;
+              }
+              if (ev.estado_geral_antes.infeccao_recente)
+                conteudoResumo += `   • Infecção respiratória recente\n`;
+              if (ev.estado_geral_antes.episodios_recorrentes_sibilancia)
+                conteudoResumo += `   • Episódios recorrentes de sibilância\n`;
+              if (ev.estado_geral_antes.contato_pessoas_sintomaticas)
+                conteudoResumo += `   • Contato recente com pessoas sintomáticas\n`;
+              if (ev.estado_geral_antes.uso_medicacao_respiratoria)
+                conteudoResumo += `   • Uso recente de medicação respiratória\n`;
             }
 
             // 4. Repercussões Funcionais
+            const repercussoes = [];
             if (ev.estado_geral_antes.dificuldade_alimentar)
-              conteudoResumo += `• Dificuldade alimentar: Sim\n`;
+              repercussoes.push('Dificuldade alimentar');
             if (ev.estado_geral_antes.interrupcoes_sono)
-              conteudoResumo += `• Interrupções do sono: Sim\n`;
+              repercussoes.push('Interrupções do sono');
             if (ev.estado_geral_antes.piora_noturna)
-              conteudoResumo += `• Piora noturna: Sim\n`;
+              repercussoes.push('Piora noturna dos sintomas');
             if (ev.estado_geral_antes.irritabilidade_respiratoria)
-              conteudoResumo += `• Irritabilidade respiratória: Sim\n`;
+              repercussoes.push('Irritabilidade associada à respiração');
+            if (repercussoes.length > 0) {
+              conteudoResumo += `\n⚠️ Repercussões Funcionais\n`;
+              conteudoResumo += `   • ${repercussoes.join(', ')}\n`;
+            }
 
             // 5. Sinais Associados
+            const sinaisAssociados = [];
             if (ev.estado_geral_antes.chiado_referido)
-              conteudoResumo += `• Sibilo referido: Sim\n`;
+              sinaisAssociados.push('Sibilo referido pelos responsáveis');
             if (ev.estado_geral_antes.cansaco_respiratorio)
-              conteudoResumo += `• Cansaço respiratório: Sim\n`;
+              sinaisAssociados.push('Cansaço respiratório');
             if (ev.estado_geral_antes.esforco_respiratorio)
-              conteudoResumo += `• Esforço respiratório percebido: Sim\n`;
+              sinaisAssociados.push('Esforço respiratório percebido');
             if (ev.estado_geral_antes.respiracao_ruidosa)
-              conteudoResumo += `• Respiração ruidosa: Sim\n`;
+              sinaisAssociados.push('Respiração ruidosa');
+            if (sinaisAssociados.length > 0) {
+              conteudoResumo += `\n🔍 Sinais Associados\n`;
+              conteudoResumo += `   • ${sinaisAssociados.join(', ')}\n`;
+            }
 
             // 6. Sintomas Respiratórios - Tosse
             if (ev.estado_geral_antes.tosse) {
-              let tosseInfo = `• Tosse: ${ev.estado_geral_antes.tosse}`;
+              conteudoResumo += `\n😷 Sintomas Respiratórios\n`;
+              const tosseMap: Record<string, string> = {
+                ausente: 'Ausente',
+                seca: 'Seca',
+                produtiva: 'Produtiva',
+              };
+              let tosseInfo = `   • Tosse: ${tosseMap[ev.estado_geral_antes.tosse] || ev.estado_geral_antes.tosse}`;
               if (
                 ev.estado_geral_antes.tosse === 'produtiva' &&
                 ev.estado_geral_antes.tosse_eficacia
               ) {
-                tosseInfo += ` (${ev.estado_geral_antes.tosse_eficacia})`;
+                tosseInfo += ` → ${ev.estado_geral_antes.tosse_eficacia === 'eficaz' ? 'Eficaz' : 'Ineficaz'}`;
                 if (
                   ev.estado_geral_antes.tosse_eficacia === 'eficaz' &&
                   ev.estado_geral_antes.tosse_destino
                 ) {
-                  tosseInfo += ` com ${ev.estado_geral_antes.tosse_destino}`;
+                  tosseInfo += ` → ${ev.estado_geral_antes.tosse_destino === 'degluticao' ? '😮‍💨 Deglutição' : 'Expectoração'}`;
                   if (ev.estado_geral_antes.tosse_destino === 'expectoracao') {
                     if (ev.estado_geral_antes.secrecao_cor) {
-                      tosseInfo += `, secreção ${ev.estado_geral_antes.secrecao_cor}`;
+                      const corMap: Record<string, string> = {
+                        clara: 'Clara/Hialina',
+                        amarelada: 'Amarelada',
+                        esverdeada: 'Esverdeada',
+                        sanguinolenta: 'Sanguinolenta',
+                      };
+                      tosseInfo += ` | Cor: ${corMap[ev.estado_geral_antes.secrecao_cor] || ev.estado_geral_antes.secrecao_cor}`;
                     }
                     if (ev.estado_geral_antes.secrecao_quantidade) {
-                      tosseInfo += ` (${ev.estado_geral_antes.secrecao_quantidade})`;
+                      const qtdMap: Record<string, string> = {
+                        pouca: 'Pouca',
+                        moderada: 'Moderada',
+                        abundante: 'Abundante',
+                      };
+                      tosseInfo += ` | Qtd: ${qtdMap[ev.estado_geral_antes.secrecao_quantidade] || ev.estado_geral_antes.secrecao_quantidade}`;
                     }
                   }
                 }
@@ -696,14 +749,29 @@ export const AppointmentDetailsManager =
               conteudoResumo += tosseInfo + '\n';
             }
 
+            // Observações do Estado Geral
+            if (ev.estado_geral_antes.observacoes) {
+              conteudoResumo += `\n📝 Observações (Estado Geral)\n`;
+              conteudoResumo += `   ${ev.estado_geral_antes.observacoes}\n`;
+            }
+
             // AVALIAÇÃO RESPIRATÓRIA (ANTES)
-            conteudoResumo += `\n🩺 AVALIAÇÃO RESPIRATÓRIA (ANTES)\n`;
+            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `🩺 AVALIAÇÃO RESPIRATÓRIA (ANTES)\n`;
+            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+
             const padrao = ev.avaliacao_antes.padrao_respiratorio;
+            conteudoResumo += `🫁 Padrão Respiratório\n`;
             if (padrao.ritmo_respiratorio) {
-              conteudoResumo += `• Ritmo: ${padrao.ritmo_respiratorio}\n`;
+              const ritmoMap: Record<string, string> = {
+                eupneico: 'Eupneico',
+                bradipneico: 'Bradipneico',
+                taquipneico: 'Taquipneico',
+              };
+              conteudoResumo += `   • Ritmo: ${ritmoMap[padrao.ritmo_respiratorio] || padrao.ritmo_respiratorio}\n`;
             }
             if (padrao.dispneia !== null) {
-              conteudoResumo += `• Dispneia: ${padrao.dispneia ? 'Sim' : 'Não'}\n`;
+              conteudoResumo += `   • Dispneia: ${padrao.dispneia ? '✓ Presente' : '✗ Ausente'}\n`;
             }
             if (padrao.dispneia) {
               const sinaisDispneia = ev.avaliacao_antes.sinais_dispneia;
@@ -726,11 +794,16 @@ export const AppointmentDetailsManager =
               if (sinaisDispneia.tempo_expiratorio_prolongado)
                 sinais.push('Tempo expiratório prolongado');
               if (sinais.length > 0) {
-                conteudoResumo += `• Sinais de dispneia: ${sinais.join(', ')}\n`;
+                conteudoResumo += `   • Sinais de dispneia: ${sinais.join(', ')}\n`;
               }
             }
             if (padrao.classificacao_clinica) {
-              conteudoResumo += `• Classificação clínica: ${padrao.classificacao_clinica.replace(/_/g, ' ')}\n`;
+              const classMap: Record<string, string> = {
+                taquipneico_sem_dispneia: 'Taquipneico sem dispneia',
+                dispneico_sem_taquipneia: 'Dispneico sem taquipneia',
+                taquidispneico: 'Taquidispneico',
+              };
+              conteudoResumo += `   • Classificação: ${classMap[padrao.classificacao_clinica] || padrao.classificacao_clinica}\n`;
             }
 
             // Ausculta Pulmonar - por hemitórax
@@ -738,34 +811,71 @@ export const AppointmentDetailsManager =
             const hd = ausculta.hemitorax_direito;
             const he = ausculta.hemitorax_esquerdo;
 
+            const mvMap: Record<string, string> = {
+              preservado: 'Preservado',
+              diminuido: 'Diminuído',
+              abolido: 'Abolido',
+            };
+
+            conteudoResumo += `\n👂 Ausculta Pulmonar\n`;
+
             // Hemitórax Direito
+            conteudoResumo += `   ▸ Hemitórax Direito:\n`;
             if (hd.murmurio_vesicular) {
-              conteudoResumo += `• MV Direito: ${hd.murmurio_vesicular}\n`;
+              conteudoResumo += `     • MV: ${mvMap[hd.murmurio_vesicular] || hd.murmurio_vesicular}\n`;
             }
             const ruidosD = [];
+            if (hd.ruidos_ausentes) ruidosD.push('Sem ruídos adventícios');
             if (hd.sibilos) ruidosD.push('Sibilos');
             if (hd.roncos) ruidosD.push('Roncos');
             if (hd.estertores_finos) ruidosD.push('Estertores finos');
             if (hd.estertores_grossos) ruidosD.push('Estertores grossos');
             if (ruidosD.length > 0) {
-              conteudoResumo += `• Ruídos HTD: ${ruidosD.join(', ')}\n`;
+              conteudoResumo += `     • Ruídos: ${ruidosD.join(', ')}\n`;
+            }
+            const locD = [];
+            if (hd.localizacao_difusos) locD.push('Difusos');
+            if (hd.localizacao_apice) locD.push('Ápice');
+            if (hd.localizacao_terco_medio) locD.push('Terço médio');
+            if (hd.localizacao_base) locD.push('Base');
+            if (locD.length > 0) {
+              conteudoResumo += `     • Localização: ${locD.join(', ')}\n`;
             }
 
             // Hemitórax Esquerdo
+            conteudoResumo += `   ▸ Hemitórax Esquerdo:\n`;
             if (he.murmurio_vesicular) {
-              conteudoResumo += `• MV Esquerdo: ${he.murmurio_vesicular}\n`;
+              conteudoResumo += `     • MV: ${mvMap[he.murmurio_vesicular] || he.murmurio_vesicular}\n`;
             }
             const ruidosE = [];
+            if (he.ruidos_ausentes) ruidosE.push('Sem ruídos adventícios');
             if (he.sibilos) ruidosE.push('Sibilos');
             if (he.roncos) ruidosE.push('Roncos');
             if (he.estertores_finos) ruidosE.push('Estertores finos');
             if (he.estertores_grossos) ruidosE.push('Estertores grossos');
             if (ruidosE.length > 0) {
-              conteudoResumo += `• Ruídos HTE: ${ruidosE.join(', ')}\n`;
+              conteudoResumo += `     • Ruídos: ${ruidosE.join(', ')}\n`;
+            }
+            const locE = [];
+            if (he.localizacao_difusos) locE.push('Difusos');
+            if (he.localizacao_apice) locE.push('Ápice');
+            if (he.localizacao_terco_medio) locE.push('Terço médio');
+            if (he.localizacao_base) locE.push('Base');
+            if (locE.length > 0) {
+              conteudoResumo += `     • Localização: ${locE.join(', ')}\n`;
+            }
+
+            // Observações da Ausculta
+            if (ausculta.observacoes) {
+              conteudoResumo += `\n📝 Observações (Ausculta)\n`;
+              conteudoResumo += `   ${ausculta.observacoes}\n`;
             }
 
             // INTERVENÇÃO
-            conteudoResumo += `\n💪 INTERVENÇÃO\n`;
+            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `💪 INTERVENÇÃO REALIZADA\n`;
+            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+
             const tecnicas = [];
             if (ev.intervencao.afe) tecnicas.push('AFE');
             if (ev.intervencao.vibrocompressao)
@@ -779,109 +889,257 @@ export const AppointmentDetailsManager =
             if (ev.intervencao.redirecionamento_fluxo)
               tecnicas.push('Redirecionamento de Fluxo');
             if (ev.intervencao.posicionamentos_terapeuticos)
-              tecnicas.push('Posicionamentos');
+              tecnicas.push('Posicionamentos Terapêuticos');
             if (ev.intervencao.estimulo_tosse)
               tecnicas.push('Estímulo à Tosse');
             if (ev.intervencao.nebulizacao) tecnicas.push('Nebulização');
             if (tecnicas.length > 0) {
-              conteudoResumo += `• Técnicas: ${tecnicas.join(', ')}\n`;
+              conteudoResumo += `🔧 Técnicas Utilizadas\n`;
+              conteudoResumo += `   • ${tecnicas.join(', ')}\n`;
             }
             if (ev.intervencao.peep_valor) {
-              conteudoResumo += `• PEEP: ${ev.intervencao.peep_valor} cmH₂O\n`;
+              conteudoResumo += `   • PEEP utilizado: ${ev.intervencao.peep_valor} cmH₂O\n`;
             }
             if (ev.intervencao.aspiracao) {
-              let aspText = `• Aspiração: ${ev.intervencao.aspiracao_tipo === 'nao_invasiva' ? 'Não Invasiva' : ev.intervencao.aspiracao_tipo === 'invasiva' ? 'Invasiva' : ev.intervencao.aspiracao_tipo === 'ambas' ? 'Ambas' : 'Sim'}`;
+              conteudoResumo += `\n🔴 Aspiração Realizada\n`;
+              const tipoMap: Record<string, string> = {
+                nao_invasiva: 'Não Invasiva (VAS)',
+                invasiva: 'Invasiva',
+                ambas: 'Ambas',
+              };
+              conteudoResumo += `   • Tipo: ${tipoMap[ev.intervencao.aspiracao_tipo || ''] || 'Realizada'}\n`;
               if (ev.intervencao.aspiracao_quantidade) {
-                aspText += ` | Qtd: ${ev.intervencao.aspiracao_quantidade}`;
+                const qtdMap: Record<string, string> = {
+                  pequena: 'Pequena',
+                  moderada: 'Moderada',
+                  grande: 'Grande',
+                };
+                conteudoResumo += `   • Quantidade: ${qtdMap[ev.intervencao.aspiracao_quantidade] || ev.intervencao.aspiracao_quantidade}\n`;
               }
               if (ev.intervencao.aspiracao_aspecto) {
-                aspText += ` | Aspecto: ${ev.intervencao.aspiracao_aspecto}`;
+                const aspectoMap: Record<string, string> = {
+                  clara: 'Clara/Hialina',
+                  amarelada: 'Amarelada',
+                  esverdeada: 'Esverdeada',
+                  sanguinolenta: 'Sanguinolenta',
+                  espessa: 'Espessa',
+                  fluida: 'Fluida',
+                };
+                conteudoResumo += `   • Aspecto: ${aspectoMap[ev.intervencao.aspiracao_aspecto] || ev.intervencao.aspiracao_aspecto}\n`;
               }
               if (ev.intervencao.aspiracao_sangramento) {
-                aspText += ` | Sangramento: ${ev.intervencao.aspiracao_sangramento === 'nao' ? 'Não' : ev.intervencao.aspiracao_sangramento === 'rajas_sangue' ? 'Rajas de sangue' : 'Ativo'}`;
+                const sangMap: Record<string, string> = {
+                  nao: 'Não',
+                  rajas_sangue: 'Rajas de sangue',
+                  sangramento_ativo: 'Sangramento ativo',
+                };
+                conteudoResumo += `   • Sangramento: ${sangMap[ev.intervencao.aspiracao_sangramento] || ev.intervencao.aspiracao_sangramento}\n`;
               }
-              conteudoResumo += aspText + '\n';
+            }
+
+            // Observações da Intervenção
+            if (ev.intervencao.observacoes) {
+              conteudoResumo += `\n📝 Observações (Intervenção)\n`;
+              conteudoResumo += `   ${ev.intervencao.observacoes}\n`;
             }
 
             // RESPOSTA AO TRATAMENTO (DEPOIS)
-            conteudoResumo += `\n✅ RESPOSTA AO TRATAMENTO (DEPOIS)\n`;
-            if (ev.avaliacao_depois.melhora_padrao_respiratorio) {
-              conteudoResumo += `• Melhora do padrão respiratório: Sim\n`;
+            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `✅ RESPOSTA AO TRATAMENTO (DEPOIS)\n`;
+            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+
+            // Sinais Vitais Após
+            const temSinaisVitaisApos =
+              ev.avaliacao_depois.saturacao_o2 ||
+              ev.avaliacao_depois.frequencia_cardiaca;
+            if (temSinaisVitaisApos) {
+              conteudoResumo += `🌡️ Sinais Vitais Após Intervenção\n`;
+              if (ev.avaliacao_depois.saturacao_o2) {
+                conteudoResumo += `   • SpO₂: ${ev.avaliacao_depois.saturacao_o2}%\n`;
+              }
+              if (ev.avaliacao_depois.frequencia_cardiaca) {
+                conteudoResumo += `   • FC: ${ev.avaliacao_depois.frequencia_cardiaca} bpm\n`;
+              }
             }
-            if (ev.avaliacao_depois.eliminacao_secrecao) {
-              conteudoResumo += `• Eliminação de secreção: Sim\n`;
+
+            // Resposta Clínica
+            const temRespostaClinica =
+              ev.avaliacao_depois.melhora_padrao_respiratorio ||
+              ev.avaliacao_depois.eliminacao_secrecao ||
+              ev.avaliacao_depois.reducao_desconforto;
+            if (temRespostaClinica) {
+              conteudoResumo += `\n📈 Resposta Clínica\n`;
+              if (ev.avaliacao_depois.melhora_padrao_respiratorio) {
+                conteudoResumo += `   ✓ Melhora do padrão respiratório\n`;
+              }
+              if (ev.avaliacao_depois.eliminacao_secrecao) {
+                conteudoResumo += `   ✓ Eliminação de secreção\n`;
+              }
+              if (ev.avaliacao_depois.reducao_desconforto) {
+                conteudoResumo += `   ✓ Redução do desconforto\n`;
+              }
             }
-            if (ev.avaliacao_depois.reducao_desconforto) {
-              conteudoResumo += `• Redução do desconforto: Sim\n`;
-            }
-            if (ev.avaliacao_depois.saturacao_o2) {
-              conteudoResumo += `• SpO₂ após: ${ev.avaliacao_depois.saturacao_o2}%\n`;
-            }
-            if (ev.avaliacao_depois.frequencia_cardiaca) {
-              conteudoResumo += `• FC após: ${ev.avaliacao_depois.frequencia_cardiaca} bpm\n`;
-            }
-            if (ev.avaliacao_depois.tolerancia_manuseio) {
-              conteudoResumo += `• Tolerância ao manuseio: ${ev.avaliacao_depois.tolerancia_manuseio}\n`;
-            }
-            if (ev.avaliacao_depois.choro_durante_atendimento) {
-              conteudoResumo += `• Choro durante atendimento: ${ev.avaliacao_depois.choro_durante_atendimento}\n`;
+
+            // Tolerância e Comportamento
+            if (
+              ev.avaliacao_depois.tolerancia_manuseio ||
+              ev.avaliacao_depois.choro_durante_atendimento
+            ) {
+              conteudoResumo += `\n👶 Tolerância ao Atendimento\n`;
+              if (ev.avaliacao_depois.tolerancia_manuseio) {
+                const tolMap: Record<string, string> = {
+                  boa: '✓ Boa',
+                  regular: '⚠ Regular',
+                  ruim: '✗ Ruim',
+                };
+                conteudoResumo += `   • Tolerância ao manuseio: ${tolMap[ev.avaliacao_depois.tolerancia_manuseio] || ev.avaliacao_depois.tolerancia_manuseio}\n`;
+              }
+              if (ev.avaliacao_depois.choro_durante_atendimento) {
+                const choroMap: Record<string, string> = {
+                  ausente: 'Ausente',
+                  leve: 'Leve',
+                  moderado: 'Moderado',
+                  intenso: 'Intenso',
+                };
+                conteudoResumo += `   • Choro durante atendimento: ${choroMap[ev.avaliacao_depois.choro_durante_atendimento] || ev.avaliacao_depois.choro_durante_atendimento}\n`;
+              }
             }
 
             // Mudanças na ausculta
+            conteudoResumo += `\n👂 Mudança na Ausculta Pulmonar\n`;
             if (ev.avaliacao_depois.ausculta_sem_alteracao) {
-              conteudoResumo += `• Ausculta: Sem alteração\n`;
+              conteudoResumo += `   • Sem alteração (manteve-se igual)\n`;
             } else {
               const mudancasAusculta = [];
               if (ev.avaliacao_depois.ausculta_melhorou)
                 mudancasAusculta.push('Melhora geral');
               if (ev.avaliacao_depois.ausculta_reducao_roncos)
-                mudancasAusculta.push('↓ Roncos');
+                mudancasAusculta.push('↓ Redução de roncos');
               if (ev.avaliacao_depois.ausculta_reducao_sibilos)
-                mudancasAusculta.push('↓ Sibilos');
+                mudancasAusculta.push('↓ Redução de sibilos');
               if (ev.avaliacao_depois.ausculta_reducao_estertores)
-                mudancasAusculta.push('↓ Estertores');
+                mudancasAusculta.push('↓ Redução de estertores');
               if (ev.avaliacao_depois.ausculta_melhora_mv)
-                mudancasAusculta.push('↑ MV');
+                mudancasAusculta.push('↑ Melhora do MV');
               if (mudancasAusculta.length > 0) {
-                conteudoResumo += `• Mudanças na ausculta: ${mudancasAusculta.join(', ')}\n`;
+                conteudoResumo += `   • ${mudancasAusculta.join(', ')}\n`;
               }
+            }
+
+            // Observações da Resposta
+            if (ev.avaliacao_depois.observacoes) {
+              conteudoResumo += `\n📝 Observações (Resposta ao Tratamento)\n`;
+              conteudoResumo += `   ${ev.avaliacao_depois.observacoes}\n`;
             }
 
             // ORIENTAÇÕES
-            if (
+            const temOrientacoes =
               ev.orientacoes.higiene_nasal ||
               ev.orientacoes.posicionamento_dormir ||
-              ev.orientacoes.sinais_alerta
-            ) {
-              conteudoResumo += `\n📝 ORIENTAÇÕES\n`;
-              if (ev.orientacoes.higiene_nasal)
-                conteudoResumo += `• Higiene nasal orientada\n`;
-              if (ev.orientacoes.posicionamento_dormir)
-                conteudoResumo += `• Posicionamento orientado\n`;
-              if (ev.orientacoes.sinais_alerta)
-                conteudoResumo += `• Sinais de alerta orientados\n`;
+              ev.orientacoes.sinais_alerta;
+            if (temOrientacoes) {
+              conteudoResumo += `\n═══════════════════════════════════════════\n`;
+              conteudoResumo += `📚 ORIENTAÇÕES FORNECIDAS AOS RESPONSÁVEIS\n`;
+              conteudoResumo += `═══════════════════════════════════════════\n\n`;
+
+              if (ev.orientacoes.higiene_nasal) {
+                conteudoResumo += `🧴 Higiene Nasal\n`;
+                if (ev.orientacoes.higiene_nasal_tecnica_demonstrada)
+                  conteudoResumo += `   ✓ Técnica demonstrada\n`;
+                if (ev.orientacoes.higiene_nasal_frequencia_orientada)
+                  conteudoResumo += `   ✓ Frequência orientada conforme idade\n`;
+              }
+              if (ev.orientacoes.posicionamento_dormir) {
+                conteudoResumo += `\n🛏️ Posicionamento para Dormir e Repouso\n`;
+                if (ev.orientacoes.posicionamento_cabeca_elevada)
+                  conteudoResumo += `   ✓ Cabeça elevada\n`;
+                if (ev.orientacoes.posicionamento_alternancia_decubitos)
+                  conteudoResumo += `   ✓ Alternância de decúbitos\n`;
+                if (ev.orientacoes.posicionamento_prono)
+                  conteudoResumo += `   ✓ Prono\n`;
+                if (ev.orientacoes.posicionamento_decubito_lateral_direito)
+                  conteudoResumo += `   ✓ Decúbito lateral direito\n`;
+                if (ev.orientacoes.posicionamento_decubito_lateral_esquerdo)
+                  conteudoResumo += `   ✓ Decúbito lateral esquerdo\n`;
+              }
+              if (ev.orientacoes.sinais_alerta) {
+                conteudoResumo += `\n⚠️ Sinais de Alerta Orientados\n`;
+                if (ev.orientacoes.sinais_alerta_esforco_respiratorio)
+                  conteudoResumo += `   ✓ Aumento do esforço respiratório\n`;
+                if (ev.orientacoes.sinais_alerta_piora_tosse_chiado)
+                  conteudoResumo += `   ✓ Piora da tosse ou chiado\n`;
+                if (ev.orientacoes.sinais_alerta_queda_saturacao)
+                  conteudoResumo += `   ✓ Queda de saturação (quando monitorada)\n`;
+                if (ev.orientacoes.sinais_alerta_piora_diurese)
+                  conteudoResumo += `   ✓ Piora da diurese\n`;
+                if (ev.orientacoes.sinais_alerta_febre)
+                  conteudoResumo += `   ✓ Febre\n`;
+                if (ev.orientacoes.sinais_alerta_prostracao)
+                  conteudoResumo += `   ✓ Prostração\n`;
+              }
+              if (ev.orientacoes.outras) {
+                conteudoResumo += `\n📝 Outras Orientações\n`;
+                conteudoResumo += `   ${ev.orientacoes.outras}\n`;
+              }
             }
 
             // CONDUTA
-            conteudoResumo += `\n🎯 CONDUTA\n`;
+            conteudoResumo += `\n═══════════════════════════════════════════\n`;
+            conteudoResumo += `🎯 CONDUTA E PLANO\n`;
+            conteudoResumo += `═══════════════════════════════════════════\n\n`;
+
             if (ev.conduta.manter_fisioterapia) {
-              conteudoResumo += `• Manter fisioterapia\n`;
+              conteudoResumo += `   ✓ Manter Fisioterapia Respiratória\n`;
               if (ev.conduta.frequencia_sugerida) {
-                conteudoResumo += `• Frequência: ${ev.conduta.frequencia_sugerida.replace(/_/g, ' ')}\n`;
+                const freqMap: Record<string, string> = {
+                  diaria: 'Diária',
+                  '2x_semana': '2x por semana',
+                  '3x_semana': '3x por semana',
+                  semanal: 'Semanal',
+                  quinzenal: 'Quinzenal',
+                  mensal: 'Mensal',
+                };
+                conteudoResumo += `   • Frequência sugerida: ${freqMap[ev.conduta.frequencia_sugerida] || ev.conduta.frequencia_sugerida}\n`;
               }
             }
             if (ev.conduta.alta) {
-              conteudoResumo += `• Alta completa\n`;
+              conteudoResumo += `   ✓ Alta Completa do tratamento\n`;
             }
             if (ev.conduta.alta_parcial) {
-              conteudoResumo += `• Alta parcial / acompanhamento\n`;
+              conteudoResumo += `   ⚠ Alta Parcial / Acompanhamento\n`;
+              if (ev.conduta.frequencia_sugerida) {
+                const freqMap: Record<string, string> = {
+                  diaria: 'Diária',
+                  '2x_semana': '2x por semana',
+                  '3x_semana': '3x por semana',
+                  semanal: 'Semanal',
+                  quinzenal: 'Quinzenal',
+                  mensal: 'Mensal',
+                };
+                conteudoResumo += `   • Frequência: ${freqMap[ev.conduta.frequencia_sugerida] || ev.conduta.frequencia_sugerida}\n`;
+              }
             }
             if (ev.conduta.reavaliacao_dias) {
-              conteudoResumo += `• Reavaliação em ${ev.conduta.reavaliacao_dias} dias\n`;
+              conteudoResumo += `   • Reavaliação em: ${ev.conduta.reavaliacao_dias} dias\n`;
             }
             if (ev.conduta.encaminhamento_medico) {
-              conteudoResumo += `• Encaminhamento médico: ${ev.conduta.motivo_encaminhamento || 'Sim'}\n`;
+              conteudoResumo += `   ⚠ Encaminhamento Médico Necessário\n`;
+              if (ev.conduta.motivo_encaminhamento) {
+                conteudoResumo += `   • Motivo: ${ev.conduta.motivo_encaminhamento}\n`;
+              }
+              if (ev.conduta.especialista_encaminhamento) {
+                conteudoResumo += `   • Especialista: ${ev.conduta.especialista_encaminhamento}\n`;
+              }
             }
+
+            // Observações da Conduta
+            if (ev.conduta.observacoes) {
+              conteudoResumo += `\n📝 Observações (Conduta)\n`;
+              conteudoResumo += `   ${ev.conduta.observacoes}\n`;
+            }
+
+            // Fechamento
+            conteudoResumo += `\n═══════════════════════════════════════════\n`;
           }
 
           if (
@@ -1029,6 +1287,12 @@ export const AppointmentDetailsManager =
               alta_completa: ev.conduta.alta || false,
               alta_parcial: ev.conduta.alta_parcial || false,
               encaminhamento_medico: ev.conduta.encaminhamento_medico || false,
+              // Observações (campos de texto)
+              obs_estado_geral: ev.estado_geral_antes.observacoes || null,
+              obs_ausculta: ev.avaliacao_antes.ausculta.observacoes || null,
+              obs_intervencao: ev.intervencao.observacoes || null,
+              obs_resposta_tratamento: ev.avaliacao_depois.observacoes || null,
+              obs_conduta: ev.conduta.observacoes || null,
             };
           }
 

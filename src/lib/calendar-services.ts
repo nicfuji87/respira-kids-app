@@ -1311,6 +1311,12 @@ export const saveRelatorioEvolucao = async (
         alta_completa: a.alta_completa,
         alta_parcial: a.alta_parcial,
         encaminhamento_medico: a.encaminhamento_medico,
+        // Observações (campos de texto)
+        obs_estado_geral: a.obs_estado_geral,
+        obs_ausculta: a.obs_ausculta,
+        obs_intervencao: a.obs_intervencao,
+        obs_resposta_tratamento: a.obs_resposta_tratamento,
+        obs_conduta: a.obs_conduta,
       });
     }
 

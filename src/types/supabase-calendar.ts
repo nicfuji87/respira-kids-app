@@ -408,6 +408,12 @@ export interface EvolucaoAnalyticsData {
   alta_completa?: boolean;
   alta_parcial?: boolean;
   encaminhamento_medico?: boolean;
+  // Observações (campos de texto)
+  obs_estado_geral?: string | null;
+  obs_ausculta?: string | null;
+  obs_intervencao?: string | null;
+  obs_resposta_tratamento?: string | null;
+  obs_conduta?: string | null;
 }
 
 export interface UpdateEvolucaoData {
