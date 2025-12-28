@@ -1219,7 +1219,7 @@ export const saveRelatorioEvolucao = async (
       tipoEvolucaoId
     );
 
-    // Inserir nova evolução
+    // Inserir nova evolução com dados estruturados JSONB
     const { data, error } = await supabase
       .from('relatorio_evolucao')
       .insert({
@@ -1227,6 +1227,11 @@ export const saveRelatorioEvolucao = async (
         tipo_relatorio_id: tipoEvolucaoId,
         conteudo: evolucaoData.conteudo,
         criado_por: evolucaoData.criado_por,
+        // AI dev note: Campos JSONB para evolução estruturada
+        tipo_evolucao: evolucaoData.tipo_evolucao || null,
+        evolucao_respiratoria: evolucaoData.evolucao_respiratoria || null,
+        evolucao_motora_assimetria:
+          evolucaoData.evolucao_motora_assimetria || null,
       })
       .select()
       .single();

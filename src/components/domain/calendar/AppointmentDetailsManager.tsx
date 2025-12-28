@@ -591,20 +591,81 @@ export const AppointmentDetailsManager =
             dados.evolucao_respiratoria
           ) {
             const ev = dados.evolucao_respiratoria;
-            // AI dev note: Usando estado_geral_antes que agora contém queixa principal, sinais vitais e saturação
+
+            // ESTADO GERAL (ANTES)
+            conteudoResumo += `📋 ESTADO GERAL (ANTES)\n`;
             if (ev.estado_geral_antes.tosse) {
               conteudoResumo += `• Tosse: ${ev.estado_geral_antes.tosse}\n`;
             }
+            if (ev.estado_geral_antes.chiado)
+              conteudoResumo += `• Chiado: Sim\n`;
+            if (ev.estado_geral_antes.cansaco_respiratorio)
+              conteudoResumo += `• Cansaço respiratório: Sim\n`;
+            if (ev.estado_geral_antes.dificuldade_alimentar)
+              conteudoResumo += `• Dificuldade alimentar: Sim\n`;
+            if (ev.estado_geral_antes.piora_noturna)
+              conteudoResumo += `• Piora noturna: Sim\n`;
+            if (ev.estado_geral_antes.infeccao_recente)
+              conteudoResumo += `• Infecção recente: Sim\n`;
             if (ev.estado_geral_antes.temperatura_aferida) {
               conteudoResumo += `• Temperatura: ${ev.estado_geral_antes.temperatura_aferida}°C\n`;
             }
+            if (ev.estado_geral_antes.nivel_alerta) {
+              conteudoResumo += `• Nível de alerta: ${ev.estado_geral_antes.nivel_alerta}\n`;
+            }
             if (ev.estado_geral_antes.saturacao_o2) {
-              conteudoResumo += `• SpO₂: ${ev.estado_geral_antes.saturacao_o2}%\n`;
+              conteudoResumo += `• SpO₂ ar ambiente: ${ev.estado_geral_antes.saturacao_o2}%\n`;
             }
-            if (ev.avaliacao_antes.padrao_respiratorio.classificacao_clinica) {
-              conteudoResumo += `• Classificação: ${ev.avaliacao_antes.padrao_respiratorio.classificacao_clinica.replace(/_/g, ' ')}\n`;
+            if (ev.estado_geral_antes.saturacao_com_suporte) {
+              conteudoResumo += `• SpO₂ com suporte: ${ev.estado_geral_antes.saturacao_com_suporte}%\n`;
             }
-            // Técnicas de desobstrução brônquica
+
+            // AVALIAÇÃO RESPIRATÓRIA (ANTES)
+            conteudoResumo += `\n🩺 AVALIAÇÃO RESPIRATÓRIA (ANTES)\n`;
+            const padrao = ev.avaliacao_antes.padrao_respiratorio;
+            if (padrao.ritmo_respiratorio) {
+              conteudoResumo += `• Ritmo: ${padrao.ritmo_respiratorio}\n`;
+            }
+            if (padrao.dispneia !== null) {
+              conteudoResumo += `• Dispneia: ${padrao.dispneia ? 'Sim' : 'Não'}\n`;
+            }
+            if (padrao.dispneia) {
+              const sinaisDispneia = ev.avaliacao_antes.sinais_dispneia;
+              const sinais = [];
+              if (sinaisDispneia.uso_musculatura_acessoria)
+                sinais.push('Uso musculatura acessória');
+              if (sinaisDispneia.batimento_asa_nasal)
+                sinais.push('Batimento asa nasal');
+              if (sinaisDispneia.tiragem_intercostal)
+                sinais.push('Tiragem intercostal');
+              if (sinaisDispneia.tiragem_subcostal)
+                sinais.push('Tiragem subcostal');
+              if (sinaisDispneia.tiragem_supraclavicular)
+                sinais.push('Tiragem supraclavicular');
+              if (sinaisDispneia.gemencia) sinais.push('Gemência');
+              if (sinaisDispneia.postura_antalgica)
+                sinais.push('Postura antálgica');
+              if (sinais.length > 0) {
+                conteudoResumo += `• Sinais de dispneia: ${sinais.join(', ')}\n`;
+              }
+            }
+            if (padrao.classificacao_clinica) {
+              conteudoResumo += `• Classificação clínica: ${padrao.classificacao_clinica.replace(/_/g, ' ')}\n`;
+            }
+
+            // Ausculta Pulmonar
+            const ausculta = ev.avaliacao_antes.ausculta;
+            if (ausculta.murmurio_vesicular) {
+              conteudoResumo += `• Murmúrio vesicular: ${ausculta.murmurio_vesicular}\n`;
+            }
+            if (ausculta.sibilos) conteudoResumo += `• Sibilos: Sim\n`;
+            if (ausculta.roncos) conteudoResumo += `• Roncos: Sim\n`;
+            if (ausculta.estertores) {
+              conteudoResumo += `• Estertores: ${ausculta.estertores}\n`;
+            }
+
+            // INTERVENÇÃO
+            conteudoResumo += `\n💪 INTERVENÇÃO\n`;
             const tecnicas = [];
             if (ev.intervencao.afe) tecnicas.push('AFE');
             if (ev.intervencao.vibrocompressao)
@@ -622,21 +683,97 @@ export const AppointmentDetailsManager =
             if (ev.intervencao.estimulo_tosse)
               tecnicas.push('Estímulo à Tosse');
             if (ev.intervencao.nebulizacao) tecnicas.push('Nebulização');
-            if (ev.intervencao.aspiracao) {
-              let aspText = 'Aspiração';
-              if (ev.intervencao.aspiracao_tipo) {
-                aspText += ` (${ev.intervencao.aspiracao_tipo === 'nao_invasiva' ? 'Não Invasiva' : ev.intervencao.aspiracao_tipo === 'invasiva' ? 'Invasiva' : 'Ambas'})`;
-              }
-              tecnicas.push(aspText);
-            }
             if (tecnicas.length > 0) {
-              conteudoResumo += `• Intervenção: ${tecnicas.join(', ')}\n`;
+              conteudoResumo += `• Técnicas: ${tecnicas.join(', ')}\n`;
             }
             if (ev.intervencao.peep_valor) {
               conteudoResumo += `• PEEP: ${ev.intervencao.peep_valor} cmH₂O\n`;
             }
+            if (ev.intervencao.aspiracao) {
+              let aspText = `• Aspiração: ${ev.intervencao.aspiracao_tipo === 'nao_invasiva' ? 'Não Invasiva' : ev.intervencao.aspiracao_tipo === 'invasiva' ? 'Invasiva' : ev.intervencao.aspiracao_tipo === 'ambas' ? 'Ambas' : 'Sim'}`;
+              if (ev.intervencao.aspiracao_quantidade) {
+                aspText += ` | Qtd: ${ev.intervencao.aspiracao_quantidade}`;
+              }
+              if (ev.intervencao.aspiracao_aspecto) {
+                aspText += ` | Aspecto: ${ev.intervencao.aspiracao_aspecto}`;
+              }
+              if (ev.intervencao.aspiracao_sangramento) {
+                aspText += ` | Sangramento: ${ev.intervencao.aspiracao_sangramento === 'nao' ? 'Não' : ev.intervencao.aspiracao_sangramento === 'rajas_sangue' ? 'Rajas de sangue' : 'Ativo'}`;
+              }
+              conteudoResumo += aspText + '\n';
+            }
+
+            // RESPOSTA AO TRATAMENTO (DEPOIS)
+            conteudoResumo += `\n✅ RESPOSTA AO TRATAMENTO (DEPOIS)\n`;
             if (ev.avaliacao_depois.melhora_padrao_respiratorio) {
-              conteudoResumo += `• Resposta: Melhora do padrão respiratório\n`;
+              conteudoResumo += `• Melhora do padrão respiratório: Sim\n`;
+            }
+            if (ev.avaliacao_depois.eliminacao_secrecao) {
+              conteudoResumo += `• Eliminação de secreção: Sim\n`;
+            }
+            if (ev.avaliacao_depois.reducao_desconforto) {
+              conteudoResumo += `• Redução do desconforto: Sim\n`;
+            }
+            if (ev.avaliacao_depois.saturacao_o2) {
+              conteudoResumo += `• SpO₂ após: ${ev.avaliacao_depois.saturacao_o2}%\n`;
+            }
+            if (ev.estado_geral_antes.tolerancia_manuseio) {
+              conteudoResumo += `• Tolerância ao manuseio: ${ev.estado_geral_antes.tolerancia_manuseio}\n`;
+            }
+            if (ev.estado_geral_antes.choro_durante_atendimento) {
+              conteudoResumo += `• Choro durante atendimento: ${ev.estado_geral_antes.choro_durante_atendimento}\n`;
+            }
+
+            // Mudanças na ausculta
+            const mudancasAusculta = [];
+            if (ev.avaliacao_depois.ausculta_melhorou)
+              mudancasAusculta.push('Melhora geral');
+            if (ev.avaliacao_depois.ausculta_reducao_roncos)
+              mudancasAusculta.push('↓ Roncos');
+            if (ev.avaliacao_depois.ausculta_reducao_sibilos)
+              mudancasAusculta.push('↓ Sibilos');
+            if (ev.avaliacao_depois.ausculta_reducao_estertores)
+              mudancasAusculta.push('↓ Estertores');
+            if (ev.avaliacao_depois.ausculta_melhora_mv)
+              mudancasAusculta.push('↑ MV');
+            if (mudancasAusculta.length > 0) {
+              conteudoResumo += `• Mudanças na ausculta: ${mudancasAusculta.join(', ')}\n`;
+            }
+
+            // ORIENTAÇÕES
+            if (
+              ev.orientacoes.higiene_nasal ||
+              ev.orientacoes.posicionamento_dormir ||
+              ev.orientacoes.sinais_alerta
+            ) {
+              conteudoResumo += `\n📝 ORIENTAÇÕES\n`;
+              if (ev.orientacoes.higiene_nasal)
+                conteudoResumo += `• Higiene nasal orientada\n`;
+              if (ev.orientacoes.posicionamento_dormir)
+                conteudoResumo += `• Posicionamento orientado\n`;
+              if (ev.orientacoes.sinais_alerta)
+                conteudoResumo += `• Sinais de alerta orientados\n`;
+            }
+
+            // CONDUTA
+            conteudoResumo += `\n🎯 CONDUTA\n`;
+            if (ev.conduta.manter_fisioterapia) {
+              conteudoResumo += `• Manter fisioterapia\n`;
+              if (ev.conduta.frequencia_sugerida) {
+                conteudoResumo += `• Frequência: ${ev.conduta.frequencia_sugerida.replace(/_/g, ' ')}\n`;
+              }
+            }
+            if (ev.conduta.alta) {
+              conteudoResumo += `• Alta completa\n`;
+            }
+            if (ev.conduta.alta_parcial) {
+              conteudoResumo += `• Alta parcial / acompanhamento\n`;
+            }
+            if (ev.conduta.reavaliacao_dias) {
+              conteudoResumo += `• Reavaliação em ${ev.conduta.reavaliacao_dias} dias\n`;
+            }
+            if (ev.conduta.encaminhamento_medico) {
+              conteudoResumo += `• Encaminhamento médico: ${ev.conduta.motivo_encaminhamento || 'Sim'}\n`;
             }
           }
 
@@ -669,7 +806,14 @@ export const AppointmentDetailsManager =
             id_agendamento: appointment.id,
             conteudo: conteudoResumo,
             criado_por: user.pessoa.id,
-            // Os campos JSONB serão passados via extensão futura
+            // Campos JSONB para evolução estruturada
+            tipo_evolucao: dados.tipo_evolucao,
+            evolucao_respiratoria: dados.evolucao_respiratoria as
+              | Record<string, unknown>
+              | undefined,
+            evolucao_motora_assimetria: dados.evolucao_motora_assimetria as
+              | Record<string, unknown>
+              | undefined,
           });
 
           // Recarregar evoluções

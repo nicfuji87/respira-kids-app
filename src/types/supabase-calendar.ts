@@ -304,6 +304,10 @@ export interface SupabaseRelatorioEvolucao {
   atualizado_por: string | null;
   created_at: string;
   updated_at: string;
+  // AI dev note: Campos JSONB para evolução estruturada
+  tipo_evolucao?: 'respiratoria' | 'motora_assimetria' | null;
+  evolucao_respiratoria?: Record<string, unknown> | null;
+  evolucao_motora_assimetria?: Record<string, unknown> | null;
 }
 
 // AI dev note: Interface completa de evolução com dados de usuário para histórico
@@ -319,6 +323,10 @@ export interface SaveEvolucaoData {
   id_agendamento: string;
   conteudo: string;
   criado_por: string;
+  // AI dev note: Campos JSONB para evolução estruturada
+  tipo_evolucao?: 'respiratoria' | 'motora_assimetria';
+  evolucao_respiratoria?: Record<string, unknown>;
+  evolucao_motora_assimetria?: Record<string, unknown>;
 }
 
 export interface UpdateEvolucaoData {
