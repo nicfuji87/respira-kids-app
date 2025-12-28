@@ -333,11 +333,12 @@ export interface SaveEvolucaoData {
 
 // Dados extraídos para colunas de analytics/dashboard
 export interface EvolucaoAnalyticsData {
-  // Estado Geral (Antes)
+  // Estado Geral (Antes) - Sinais Vitais
   tosse_tipo?: string | null;
   chiado?: boolean;
   cansaco_respiratorio?: boolean;
   temperatura_aferida?: number | null;
+  frequencia_cardiaca?: number | null; // FC em bpm
   nivel_alerta?: string | null;
   tolerancia_manuseio?: string | null;
   choro_atendimento?: string | null;

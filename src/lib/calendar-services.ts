@@ -1240,6 +1240,7 @@ export const saveRelatorioEvolucao = async (
         chiado: a.chiado,
         cansaco_respiratorio: a.cansaco_respiratorio,
         temperatura_aferida: a.temperatura_aferida,
+        frequencia_cardiaca: a.frequencia_cardiaca,
         nivel_alerta: a.nivel_alerta,
         tolerancia_manuseio: a.tolerancia_manuseio,
         choro_atendimento: a.choro_atendimento,

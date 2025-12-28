@@ -235,91 +235,101 @@ export const EvolutionSectionContent: React.FC<
               )}
             </div>
 
-            {/* Sinais Vitais */}
+            {/* Sinais Vitais - Temperatura, FC, Saturação */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-red-700">🌡️ Sinais Vitais</h4>
 
-              <Field label="Temperatura Aferida (°C)">
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min={35}
-                  max={42}
-                  step={0.1}
-                  value={estado.temperatura_aferida || ''}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9.]/g, '');
-                    updateEstado({
-                      temperatura_aferida: value ? Number(value) : undefined,
-                    });
-                  }}
-                  onKeyDown={(e) => {
-                    // Permite: backspace, delete, tab, escape, enter, decimal
-                    if (
-                      [
-                        'Backspace',
-                        'Delete',
-                        'Tab',
-                        'Escape',
-                        'Enter',
-                        '.',
-                        ',',
-                      ].includes(e.key) ||
-                      // Permite: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
-                      (e.ctrlKey &&
-                        ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
-                      // Permite: setas
-                      [
-                        'ArrowLeft',
-                        'ArrowRight',
-                        'ArrowUp',
-                        'ArrowDown',
-                      ].includes(e.key)
-                    ) {
-                      return;
-                    }
-                    // Bloqueia se não for número
-                    if (!/[0-9]/.test(e.key)) {
-                      e.preventDefault();
-                    }
-                  }}
-                  placeholder="Ex: 36.5"
-                  disabled={disabled}
-                  className="w-full sm:w-32"
-                />
-              </Field>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Field label="Temperatura (°C)">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={35}
+                    max={42}
+                    step={0.1}
+                    value={estado.temperatura_aferida || ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9.]/g, '');
+                      updateEstado({
+                        temperatura_aferida: value ? Number(value) : undefined,
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        [
+                          'Backspace',
+                          'Delete',
+                          'Tab',
+                          'Escape',
+                          'Enter',
+                          '.',
+                          ',',
+                        ].includes(e.key) ||
+                        (e.ctrlKey &&
+                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
+                        [
+                          'ArrowLeft',
+                          'ArrowRight',
+                          'ArrowUp',
+                          'ArrowDown',
+                        ].includes(e.key)
+                      ) {
+                        return;
+                      }
+                      if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    placeholder="36.5"
+                    disabled={disabled}
+                    className="w-full"
+                  />
+                </Field>
 
-            {/* Estado Geral da Criança */}
-            <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-purple-700">
-                👶 Estado Geral da Criança
-              </h4>
+                <Field label="FC (bpm)">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={40}
+                    max={220}
+                    value={estado.frequencia_cardiaca || ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      updateEstado({
+                        frequencia_cardiaca: value ? Number(value) : undefined,
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        [
+                          'Backspace',
+                          'Delete',
+                          'Tab',
+                          'Escape',
+                          'Enter',
+                        ].includes(e.key) ||
+                        (e.ctrlKey &&
+                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
+                        [
+                          'ArrowLeft',
+                          'ArrowRight',
+                          'ArrowUp',
+                          'ArrowDown',
+                        ].includes(e.key)
+                      ) {
+                        return;
+                      }
+                      if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    placeholder="120"
+                    disabled={disabled}
+                    className="w-full"
+                  />
+                </Field>
 
-              <Field label="Nível de Alerta" required>
-                <RadioButtonGroup
-                  value={estado.nivel_alerta}
-                  onChange={(v) =>
-                    updateEstado({
-                      nivel_alerta: v as 'ativo' | 'sonolento' | 'irritado',
-                    })
-                  }
-                  options={[
-                    { valor: 'ativo', label: '😊 Ativo' },
-                    { valor: 'sonolento', label: '😴 Sonolento' },
-                    { valor: 'irritado', label: '😤 Irritado' },
-                  ]}
-                  disabled={disabled}
-                />
-              </Field>
-            </div>
-
-            {/* Saturação de O₂ */}
-            <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-green-700">🫁 Saturação de O₂</h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="SpO₂ em Ar Ambiente (%)">
+                <Field label="SpO₂ (%)">
                   <Input
                     type="number"
                     inputMode="numeric"
@@ -356,13 +366,13 @@ export const EvolutionSectionContent: React.FC<
                         e.preventDefault();
                       }
                     }}
-                    placeholder="Ex: 97"
+                    placeholder="97"
                     disabled={disabled}
-                    className="w-full sm:w-32"
+                    className="w-full"
                   />
                 </Field>
 
-                <Field label="SpO₂ com Suporte (%)">
+                <Field label="SpO₂ c/ Suporte (%)">
                   <Input
                     type="number"
                     inputMode="numeric"
@@ -401,12 +411,36 @@ export const EvolutionSectionContent: React.FC<
                         e.preventDefault();
                       }
                     }}
-                    placeholder="Ex: 99"
+                    placeholder="99"
                     disabled={disabled}
-                    className="w-full sm:w-32"
+                    className="w-full"
                   />
                 </Field>
               </div>
+            </div>
+
+            {/* Estado Geral da Criança */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-purple-700">
+                👶 Estado Geral da Criança
+              </h4>
+
+              <Field label="Nível de Alerta" required>
+                <RadioButtonGroup
+                  value={estado.nivel_alerta}
+                  onChange={(v) =>
+                    updateEstado({
+                      nivel_alerta: v as 'ativo' | 'sonolento' | 'irritado',
+                    })
+                  }
+                  options={[
+                    { valor: 'ativo', label: '😊 Ativo' },
+                    { valor: 'sonolento', label: '😴 Sonolento' },
+                    { valor: 'irritado', label: '😤 Irritado' },
+                  ]}
+                  disabled={disabled}
+                />
+              </Field>
             </div>
 
             {/* Observações Gerais */}

@@ -610,6 +610,9 @@ export const AppointmentDetailsManager =
             if (ev.estado_geral_antes.temperatura_aferida) {
               conteudoResumo += `• Temperatura: ${ev.estado_geral_antes.temperatura_aferida}°C\n`;
             }
+            if (ev.estado_geral_antes.frequencia_cardiaca) {
+              conteudoResumo += `• FC: ${ev.estado_geral_antes.frequencia_cardiaca} bpm\n`;
+            }
             if (ev.estado_geral_antes.nivel_alerta) {
               conteudoResumo += `• Nível de alerta: ${ev.estado_geral_antes.nivel_alerta}\n`;
             }
@@ -815,6 +818,8 @@ export const AppointmentDetailsManager =
                 ev.estado_geral_antes.cansaco_respiratorio || false,
               temperatura_aferida:
                 ev.estado_geral_antes.temperatura_aferida || null,
+              frequencia_cardiaca:
+                ev.estado_geral_antes.frequencia_cardiaca || null,
               nivel_alerta: ev.estado_geral_antes.nivel_alerta || null,
               tolerancia_manuseio:
                 ev.estado_geral_antes.tolerancia_manuseio || null,

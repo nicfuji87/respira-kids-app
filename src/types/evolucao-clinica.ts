@@ -103,15 +103,14 @@ export interface EstadoGeralAntes {
 
   // Sinais Vitais
   temperatura_aferida?: number; // em graus Celsius
+  frequencia_cardiaca?: number; // bpm
+  saturacao_o2?: number; // percentual em ar ambiente
+  saturacao_com_suporte?: number; // percentual com suporte O2
 
   // Estado Geral da Criança
   nivel_alerta: 'ativo' | 'sonolento' | 'irritado' | null;
   tolerancia_manuseio: 'boa' | 'regular' | 'ruim' | null;
   choro_durante_atendimento: 'ausente' | 'leve' | 'moderado' | 'intenso' | null;
-
-  // Saturação de O₂
-  saturacao_o2?: number; // percentual em ar ambiente
-  saturacao_com_suporte?: number; // percentual com suporte O2
 
   observacoes?: string;
 }
@@ -487,13 +486,13 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       infeccao_recente: false,
       // Sinais Vitais
       temperatura_aferida: undefined,
+      frequencia_cardiaca: undefined,
+      saturacao_o2: undefined,
+      saturacao_com_suporte: undefined,
       // Estado Geral
       nivel_alerta: null,
       tolerancia_manuseio: null,
       choro_durante_atendimento: null,
-      // Saturação
-      saturacao_o2: undefined,
-      saturacao_com_suporte: undefined,
     },
     avaliacao_antes: {
       padrao_respiratorio: {
