@@ -1585,8 +1585,8 @@ export const AppointmentDetailsManager =
                 </div>
               </DialogHeader>
 
-              <ScrollArea className="flex-1 h-full w-full">
-                <div className="space-y-6 p-4 sm:p-6 w-full">
+              <ScrollArea className="max-h-[calc(100vh-200px)] sm:max-h-[600px]">
+                <div className="space-y-6 px-4 py-4 sm:px-6">
                   {/* Paciente */}
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
@@ -1914,7 +1914,7 @@ export const AppointmentDetailsManager =
                         <div className="text-sm font-medium text-muted-foreground">
                           Histórico de Evoluções
                         </div>
-                        <div className="space-y-3 max-h-48 overflow-y-auto">
+                        <div className="space-y-3">
                           {evolucoes.map((evolucao) => (
                             <div
                               key={evolucao.id}
@@ -1988,7 +1988,7 @@ export const AppointmentDetailsManager =
                                 </div>
                               ) : (
                                 <div
-                                  className="text-sm whitespace-pre-wrap"
+                                  className="text-sm whitespace-pre-wrap max-h-32 overflow-y-auto"
                                   dangerouslySetInnerHTML={{
                                     __html: evolucao.conteudo || '',
                                   }}
