@@ -16,7 +16,6 @@ import type {
   RitmoRespiratorio,
   AuscultaPulmonar,
   AuscultaHemitorax,
-  SecrecaoRespiratoria,
   IntervencaoRespiratoria,
   AvaliacaoRespiratoriaDepois,
   OrientacoesRespiratoria,
@@ -226,47 +225,6 @@ export const EvolutionSectionContent: React.FC<
                     disabled={disabled}
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Tolerância ao Manuseio" required>
-                  <RadioButtonGroup
-                    value={estado.tolerancia_manuseio}
-                    onChange={(v) =>
-                      updateEstado({
-                        tolerancia_manuseio: v as 'boa' | 'regular' | 'ruim',
-                      })
-                    }
-                    options={[
-                      { valor: 'boa', label: '✅ Boa' },
-                      { valor: 'regular', label: '⚠️ Regular' },
-                      { valor: 'ruim', label: '❌ Ruim' },
-                    ]}
-                    disabled={disabled}
-                  />
-                </Field>
-
-                <Field label="Choro Durante Atendimento">
-                  <RadioButtonGroup
-                    value={estado.choro_durante_atendimento}
-                    onChange={(v) =>
-                      updateEstado({
-                        choro_durante_atendimento: v as
-                          | 'ausente'
-                          | 'leve'
-                          | 'moderado'
-                          | 'intenso',
-                      })
-                    }
-                    options={[
-                      { valor: 'ausente', label: '✅ Ausente' },
-                      { valor: 'leve', label: 'Leve' },
-                      { valor: 'moderado', label: 'Moderado' },
-                      { valor: 'intenso', label: 'Intenso' },
-                    ]}
-                    disabled={disabled}
-                  />
-                </Field>
               </div>
             </div>
 
@@ -616,7 +574,7 @@ export const EvolutionSectionContent: React.FC<
                             });
                           }}
                           options={[
-                            { valor: 'degluticao', label: '🍴 Deglutição' },
+                            { valor: 'degluticao', label: '😮‍💨 Deglutição' },
                             { valor: 'expectoracao', label: '💧 Expectoração' },
                           ]}
                           disabled={disabled}
@@ -768,15 +726,6 @@ export const EvolutionSectionContent: React.FC<
           });
         };
 
-        const updateSecrecao = (updates: Partial<SecrecaoRespiratoria>) => {
-          onRespiratoriaChange({
-            avaliacao_antes: {
-              ...avaliacao,
-              secrecao: { ...avaliacao.secrecao, ...updates },
-            },
-          });
-        };
-
         // Texto descritivo da classificação
         const classificacaoTexto = avaliacao.padrao_respiratorio
           .classificacao_clinica
@@ -888,6 +837,14 @@ export const EvolutionSectionContent: React.FC<
                     disabled={disabled}
                   />
                   <CheckboxField
+                    label="Retração de Fúrcula"
+                    checked={avaliacao.sinais_dispneia.retracao_furcula}
+                    onChange={(checked) =>
+                      updateSinais({ retracao_furcula: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
                     label="Gemência"
                     checked={avaliacao.sinais_dispneia.gemencia}
                     onChange={(checked) => updateSinais({ gemencia: checked })}
@@ -898,6 +855,16 @@ export const EvolutionSectionContent: React.FC<
                     checked={avaliacao.sinais_dispneia.postura_antalgica}
                     onChange={(checked) =>
                       updateSinais({ postura_antalgica: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Tempo Expiratório Prolongado"
+                    checked={
+                      avaliacao.sinais_dispneia.tempo_expiratorio_prolongado
+                    }
+                    onChange={(checked) =>
+                      updateSinais({ tempo_expiratorio_prolongado: checked })
                     }
                     disabled={disabled}
                   />
@@ -1351,64 +1318,6 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
             </div>
-
-            {/* Secreção */}
-            <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-green-700">🔹 Secreção</h4>
-
-              <BooleanField
-                value={avaliacao.secrecao.presente}
-                onChange={(checked) => updateSecrecao({ presente: checked })}
-                label="Secreção Presente"
-                disabled={disabled}
-              />
-
-              {avaliacao.secrecao.presente && (
-                <>
-                  <Field label="Característica">
-                    <RadioButtonGroup
-                      value={avaliacao.secrecao.caracteristica}
-                      onChange={(v) =>
-                        updateSecrecao({
-                          caracteristica: v as 'fluida' | 'espessa',
-                        })
-                      }
-                      options={[
-                        { valor: 'fluida', label: 'Fluida' },
-                        { valor: 'espessa', label: 'Espessa' },
-                      ]}
-                      disabled={disabled}
-                    />
-                  </Field>
-
-                  <Field label="Cor">
-                    <RadioButtonGroup
-                      value={avaliacao.secrecao.cor}
-                      onChange={(v) =>
-                        updateSecrecao({
-                          cor: v as 'clara' | 'amarelada' | 'esverdeada',
-                        })
-                      }
-                      options={[
-                        { valor: 'clara', label: '⚪ Clara' },
-                        { valor: 'amarelada', label: '🟡 Amarelada' },
-                        { valor: 'esverdeada', label: '🟢 Esverdeada' },
-                      ]}
-                      disabled={disabled}
-                    />
-                  </Field>
-
-                  <CheckboxField
-                    label="Mobilizável"
-                    checked={avaliacao.secrecao.mobilizavel || false}
-                    onChange={(checked) =>
-                      updateSecrecao({ mobilizavel: checked })
-                    }
-                    disabled={disabled}
-                  />
-                </>
-              )}
-            </div>
           </div>
         );
       }
@@ -1677,19 +1586,12 @@ export const EvolutionSectionContent: React.FC<
       // -----------------------------------------------------------------
       case 'avaliacao_depois': {
         const depois = evolucao.avaliacao_depois;
-        const estado = evolucao.estado_geral_antes;
 
         const updateDepois = (
           updates: Partial<AvaliacaoRespiratoriaDepois>
         ) => {
           onRespiratoriaChange({
             avaliacao_depois: { ...depois, ...updates },
-          });
-        };
-
-        const updateEstado = (updates: Partial<EstadoGeralAntes>) => {
-          onRespiratoriaChange({
-            estado_geral_antes: { ...estado, ...updates },
           });
         };
 
@@ -1730,9 +1632,9 @@ export const EvolutionSectionContent: React.FC<
 
               <Field label="Tolerância ao Manuseio" required>
                 <RadioButtonGroup
-                  value={estado.tolerancia_manuseio}
+                  value={depois.tolerancia_manuseio}
                   onChange={(v) =>
-                    updateEstado({
+                    updateDepois({
                       tolerancia_manuseio: v as 'boa' | 'regular' | 'ruim',
                     })
                   }
@@ -1747,9 +1649,9 @@ export const EvolutionSectionContent: React.FC<
 
               <Field label="Choro Durante Atendimento">
                 <RadioButtonGroup
-                  value={estado.choro_durante_atendimento}
+                  value={depois.choro_durante_atendimento}
                   onChange={(v) =>
-                    updateEstado({
+                    updateDepois({
                       choro_durante_atendimento: v as
                         | 'ausente'
                         | 'leve'

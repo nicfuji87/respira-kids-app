@@ -52,8 +52,10 @@ export interface SinaisDispneia {
   tiragem_intercostal: boolean;
   tiragem_subcostal: boolean;
   tiragem_supraclavicular: boolean;
+  retracao_furcula: boolean; // Retração de fúrcula
   gemencia: boolean;
   postura_antalgica: boolean;
+  tempo_expiratorio_prolongado: boolean; // Tempo expiratório prolongado
 }
 
 // Ausculta Pulmonar por Hemitórax
@@ -92,14 +94,14 @@ export interface SecrecaoRespiratoria {
 }
 
 // AI dev note: temperatura_aferida e saturacao_o2 movidos para EstadoGeralAntes
+// AI dev note: secrecao removida - agora está em EstadoGeralAntes (via tosse produtiva)
 export interface AvaliacaoRespiratoriaAntes {
   padrao_respiratorio: PadraoRespiratorio;
   sinais_dispneia: SinaisDispneia; // Sinais de esforço respiratório (só se dispneia = true)
   ausculta: AuscultaPulmonar;
-  secrecao: SecrecaoRespiratoria;
 }
 
-// Estado Geral (Antes) - Ordem: Estado Geral > Sinais Vitais > Contexto > Repercussões > Sinais > Sintomas
+// Avaliação Inicial (Antes) - Ordem: Estado Geral > Sinais Vitais > Contexto > Repercussões > Sinais > Sintomas
 export interface EstadoGeralAntes {
   // 1️⃣ Estado Geral da Criança
   // Nível de Consciência: Acordado, Sonolento, Dormindo
@@ -112,9 +114,6 @@ export interface EstadoGeralAntes {
   comportamento_irritado?: boolean;
   comportamento_choroso?: boolean;
   comportamento_agitado?: boolean;
-
-  tolerancia_manuseio: 'boa' | 'regular' | 'ruim' | null;
-  choro_durante_atendimento: 'ausente' | 'leve' | 'moderado' | 'intenso' | null;
 
   // 2️⃣ Sinais Vitais
   temperatura_aferida?: number; // em graus Celsius
@@ -181,6 +180,10 @@ export interface IntervencaoRespiratoria {
 }
 
 export interface AvaliacaoRespiratoriaDepois {
+  // Tolerância e Choro (movidos para após sessão)
+  tolerancia_manuseio: 'boa' | 'regular' | 'ruim' | null;
+  choro_durante_atendimento: 'ausente' | 'leve' | 'moderado' | 'intenso' | null;
+
   melhora_padrao_respiratorio: boolean;
   // Mudança na Ausculta - opções selecionáveis
   ausculta_sem_alteracao: boolean; // Ausculta igual, sem melhora nem piora
@@ -398,7 +401,7 @@ export interface EvolucaoClinica {
 export const EVOLUCAO_RESPIRATORIA_SECOES: EvolucaoSecao[] = [
   {
     id: 'estado_geral_antes',
-    titulo: 'Estado Geral (Antes)',
+    titulo: 'Avaliação Inicial (Antes)',
     icone: '👶',
     campos: [
       'queixa_principal', // Tosse, chiado, cansaço, secreção
@@ -526,8 +529,6 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       comportamento_irritado: false,
       comportamento_choroso: false,
       comportamento_agitado: false,
-      tolerancia_manuseio: null,
-      choro_durante_atendimento: null,
       // 2️⃣ Sinais Vitais
       temperatura_aferida: undefined,
       frequencia_cardiaca: undefined,
@@ -570,8 +571,10 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
         tiragem_intercostal: false,
         tiragem_subcostal: false,
         tiragem_supraclavicular: false,
+        retracao_furcula: false,
         gemencia: false,
         postura_antalgica: false,
+        tempo_expiratorio_prolongado: false,
       },
       ausculta: {
         hemitorax_direito: {
@@ -599,12 +602,6 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
           localizacao_base: false,
         },
       },
-      secrecao: {
-        presente: false,
-        caracteristica: null,
-        cor: null,
-        mobilizavel: false,
-      },
     },
     intervencao: {
       afe: false,
@@ -620,6 +617,8 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       aspiracao: false,
     },
     avaliacao_depois: {
+      tolerancia_manuseio: null,
+      choro_durante_atendimento: null,
       melhora_padrao_respiratorio: false,
       ausculta_sem_alteracao: false,
       ausculta_melhorou: false,
@@ -798,8 +797,8 @@ export function verificarSecaoEvolucaoCompleta(
     switch (secaoId) {
       case 'estado_geral_antes': {
         const e = evolucao.estado_geral_antes;
-        // 1. Estado Geral da Criança - obrigatório
-        const temEstadoGeral = e.nivel_consciencia && e.tolerancia_manuseio;
+        // 1. Estado Geral da Criança - obrigatório (nível de consciência)
+        const temEstadoGeral = !!e.nivel_consciencia;
         // 2. Sinais Vitais - SpO2 é importante
         const temSinaisVitais = e.saturacao_o2 !== undefined;
         // 3. Contexto ou Sintomas preenchidos

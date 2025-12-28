@@ -619,12 +619,6 @@ export const AppointmentDetailsManager =
             if (comportamentos.length > 0) {
               conteudoResumo += `• Comportamento: ${comportamentos.join(', ')}\n`;
             }
-            if (ev.estado_geral_antes.tolerancia_manuseio) {
-              conteudoResumo += `• Tolerância ao manuseio: ${ev.estado_geral_antes.tolerancia_manuseio}\n`;
-            }
-            if (ev.estado_geral_antes.choro_durante_atendimento) {
-              conteudoResumo += `• Choro: ${ev.estado_geral_antes.choro_durante_atendimento}\n`;
-            }
 
             // 2. Sinais Vitais
             if (ev.estado_geral_antes.temperatura_aferida) {
@@ -724,9 +718,13 @@ export const AppointmentDetailsManager =
                 sinais.push('Tiragem subcostal');
               if (sinaisDispneia.tiragem_supraclavicular)
                 sinais.push('Tiragem supraclavicular');
+              if (sinaisDispneia.retracao_furcula)
+                sinais.push('Retração de fúrcula');
               if (sinaisDispneia.gemencia) sinais.push('Gemência');
               if (sinaisDispneia.postura_antalgica)
                 sinais.push('Postura antálgica');
+              if (sinaisDispneia.tempo_expiratorio_prolongado)
+                sinais.push('Tempo expiratório prolongado');
               if (sinais.length > 0) {
                 conteudoResumo += `• Sinais de dispneia: ${sinais.join(', ')}\n`;
               }
@@ -822,11 +820,11 @@ export const AppointmentDetailsManager =
             if (ev.avaliacao_depois.frequencia_cardiaca) {
               conteudoResumo += `• FC após: ${ev.avaliacao_depois.frequencia_cardiaca} bpm\n`;
             }
-            if (ev.estado_geral_antes.tolerancia_manuseio) {
-              conteudoResumo += `• Tolerância ao manuseio: ${ev.estado_geral_antes.tolerancia_manuseio}\n`;
+            if (ev.avaliacao_depois.tolerancia_manuseio) {
+              conteudoResumo += `• Tolerância ao manuseio: ${ev.avaliacao_depois.tolerancia_manuseio}\n`;
             }
-            if (ev.estado_geral_antes.choro_durante_atendimento) {
-              conteudoResumo += `• Choro durante atendimento: ${ev.estado_geral_antes.choro_durante_atendimento}\n`;
+            if (ev.avaliacao_depois.choro_durante_atendimento) {
+              conteudoResumo += `• Choro durante atendimento: ${ev.avaliacao_depois.choro_durante_atendimento}\n`;
             }
 
             // Mudanças na ausculta
@@ -932,9 +930,9 @@ export const AppointmentDetailsManager =
               comportamento_agitado:
                 ev.estado_geral_antes.comportamento_agitado || false,
               tolerancia_manuseio:
-                ev.estado_geral_antes.tolerancia_manuseio || null,
+                ev.avaliacao_depois.tolerancia_manuseio || null,
               choro_atendimento:
-                ev.estado_geral_antes.choro_durante_atendimento || null,
+                ev.avaliacao_depois.choro_durante_atendimento || null,
               // Sinais Vitais
               temperatura_aferida:
                 ev.estado_geral_antes.temperatura_aferida || null,
