@@ -541,7 +541,6 @@ export const AppointmentDetailsManager =
           return evolucao.criado_por === user.pessoa.id;
         }
 
-        // Secretaria não pode editar nenhuma
         return false;
       };
 
@@ -1590,8 +1589,10 @@ export const AppointmentDetailsManager =
                 <div className="space-y-6 py-4 overflow-x-auto">
                   {/* Paciente */}
                   <div className="space-y-3">
-                    <div className="flex items-start gap-2">
-                      <Label className="text-sm font-medium">Paciente:</Label>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                      <Label className="text-sm font-medium whitespace-nowrap">
+                        Paciente:
+                      </Label>
                       <Button
                         variant="link"
                         size="sm"
@@ -1601,15 +1602,15 @@ export const AppointmentDetailsManager =
                           e.stopPropagation();
                           onPatientClick?.(appointment.paciente_id);
                         }}
-                        className="h-auto p-0 text-left justify-start font-bold cursor-pointer text-sm"
+                        className="h-auto p-0 text-left justify-start font-bold cursor-pointer text-sm whitespace-normal"
                       >
                         {appointment.paciente_nome}
                       </Button>
                     </div>
                     {appointment.responsavel_legal_nome &&
                       appointment.responsavel_legal_id && (
-                        <div className="flex items-start gap-2">
-                          <Label className="text-sm font-medium">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                          <Label className="text-sm font-medium whitespace-nowrap">
                             Responsável Legal:
                           </Label>
                           <Button
@@ -1625,7 +1626,7 @@ export const AppointmentDetailsManager =
                                 );
                               }
                             }}
-                            className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm"
+                            className="h-auto p-0 text-left justify-start font-normal cursor-pointer text-sm whitespace-normal"
                           >
                             {appointment.responsavel_legal_nome}
                           </Button>
@@ -1635,8 +1636,8 @@ export const AppointmentDetailsManager =
 
                   <Separator />
 
-                  {/* Data e Hora - Layout Inline */}
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Data e Hora - Layout Responsivo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="data">Data</Label>
                       <DatePicker
@@ -1939,9 +1940,10 @@ export const AppointmentDetailsManager =
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleStartEdit(evolucao)}
-                                      className="h-6 w-6 p-0"
+                                      className="h-8 w-8 p-0"
+                                      title="Editar evolução"
                                     >
-                                      <Edit className="h-3 w-3" />
+                                      <Edit className="h-4 w-4" />
                                     </Button>
                                   )}
                               </div>
