@@ -1283,12 +1283,14 @@ export const saveRelatorioEvolucao = async (
         mv_direito: a.mv_direito,
         sibilos_direito: a.sibilos_direito,
         roncos_direito: a.roncos_direito,
+        roncos_transmissao_direito: a.roncos_transmissao_direito,
         estertores_finos_direito: a.estertores_finos_direito,
         estertores_grossos_direito: a.estertores_grossos_direito,
         // Ausculta - Hemitórax Esquerdo
         mv_esquerdo: a.mv_esquerdo,
         sibilos_esquerdo: a.sibilos_esquerdo,
         roncos_esquerdo: a.roncos_esquerdo,
+        roncos_transmissao_esquerdo: a.roncos_transmissao_esquerdo,
         estertores_finos_esquerdo: a.estertores_finos_esquerdo,
         estertores_grossos_esquerdo: a.estertores_grossos_esquerdo,
         // Intervenção

@@ -832,6 +832,7 @@ export const AppointmentDetailsManager =
             if (hd.ruidos_ausentes) ruidosD.push('Sem ruídos adventícios');
             if (hd.sibilos) ruidosD.push('Sibilos');
             if (hd.roncos) ruidosD.push('Roncos');
+            if (hd.roncos_transmissao) ruidosD.push('Roncos de Transmissão');
             if (hd.estertores_finos) ruidosD.push('Estertores finos');
             if (hd.estertores_grossos) ruidosD.push('Estertores grossos');
             if (ruidosD.length > 0) {
@@ -855,6 +856,7 @@ export const AppointmentDetailsManager =
             if (he.ruidos_ausentes) ruidosE.push('Sem ruídos adventícios');
             if (he.sibilos) ruidosE.push('Sibilos');
             if (he.roncos) ruidosE.push('Roncos');
+            if (he.roncos_transmissao) ruidosE.push('Roncos de Transmissão');
             if (he.estertores_finos) ruidosE.push('Estertores finos');
             if (he.estertores_grossos) ruidosE.push('Estertores grossos');
             if (ruidosE.length > 0) {
@@ -1259,12 +1261,14 @@ export const AppointmentDetailsManager =
               mv_direito: hd.murmurio_vesicular || null,
               sibilos_direito: hd.sibilos || false,
               roncos_direito: hd.roncos || false,
+              roncos_transmissao_direito: hd.roncos_transmissao || false,
               estertores_finos_direito: hd.estertores_finos || false,
               estertores_grossos_direito: hd.estertores_grossos || false,
               // Ausculta - Hemitórax Esquerdo
               mv_esquerdo: he.murmurio_vesicular || null,
               sibilos_esquerdo: he.sibilos || false,
               roncos_esquerdo: he.roncos || false,
+              roncos_transmissao_esquerdo: he.roncos_transmissao || false,
               estertores_finos_esquerdo: he.estertores_finos || false,
               estertores_grossos_esquerdo: he.estertores_grossos || false,
               // Intervenção

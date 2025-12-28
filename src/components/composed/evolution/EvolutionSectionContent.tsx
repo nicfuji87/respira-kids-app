@@ -1065,6 +1065,20 @@ export const EvolutionSectionContent: React.FC<
                         disabled={disabled}
                       />
                       <CheckboxField
+                        label="Roncos de Transmissão"
+                        checked={
+                          avaliacao.ausculta.hemitorax_direito
+                            .roncos_transmissao || false
+                        }
+                        onChange={(checked) =>
+                          updateHemitoraxDireito({
+                            roncos_transmissao: checked,
+                            ruidos_ausentes: false,
+                          })
+                        }
+                        disabled={disabled}
+                      />
+                      <CheckboxField
                         label="Estertores finos"
                         checked={
                           avaliacao.ausculta.hemitorax_direito
@@ -1239,6 +1253,20 @@ export const EvolutionSectionContent: React.FC<
                         onChange={(checked) =>
                           updateHemitoraxEsquerdo({
                             roncos: checked,
+                            ruidos_ausentes: false,
+                          })
+                        }
+                        disabled={disabled}
+                      />
+                      <CheckboxField
+                        label="Roncos de Transmissão"
+                        checked={
+                          avaliacao.ausculta.hemitorax_esquerdo
+                            .roncos_transmissao || false
+                        }
+                        onChange={(checked) =>
+                          updateHemitoraxEsquerdo({
+                            roncos_transmissao: checked,
                             ruidos_ausentes: false,
                           })
                         }

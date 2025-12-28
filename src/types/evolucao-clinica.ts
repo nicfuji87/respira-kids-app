@@ -67,6 +67,7 @@ export interface AuscultaHemitorax {
   ruidos_ausentes?: boolean;
   sibilos?: boolean;
   roncos?: boolean;
+  roncos_transmissao?: boolean; // Roncos de Transmissão
   estertores_finos?: boolean;
   estertores_grossos?: boolean;
 

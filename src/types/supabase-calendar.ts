@@ -380,12 +380,14 @@ export interface EvolucaoAnalyticsData {
   mv_direito?: string | null;
   sibilos_direito?: boolean;
   roncos_direito?: boolean;
+  roncos_transmissao_direito?: boolean;
   estertores_finos_direito?: boolean;
   estertores_grossos_direito?: boolean;
   // Ausculta - Hemitórax Esquerdo
   mv_esquerdo?: string | null;
   sibilos_esquerdo?: boolean;
   roncos_esquerdo?: boolean;
+  roncos_transmissao_esquerdo?: boolean;
   estertores_finos_esquerdo?: boolean;
   estertores_grossos_esquerdo?: boolean;
   // Intervenção
