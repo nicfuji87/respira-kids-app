@@ -800,8 +800,72 @@ export const AppointmentDetailsManager =
             }
           }
 
+          // Extrair dados de analytics para colunas de dashboard
+          let analyticsData = undefined;
+          if (
+            dados.tipo_evolucao === 'respiratoria' &&
+            dados.evolucao_respiratoria
+          ) {
+            const ev = dados.evolucao_respiratoria;
+            analyticsData = {
+              // Estado Geral
+              tosse_tipo: ev.estado_geral_antes.tosse || null,
+              chiado: ev.estado_geral_antes.chiado || false,
+              cansaco_respiratorio:
+                ev.estado_geral_antes.cansaco_respiratorio || false,
+              temperatura_aferida:
+                ev.estado_geral_antes.temperatura_aferida || null,
+              nivel_alerta: ev.estado_geral_antes.nivel_alerta || null,
+              tolerancia_manuseio:
+                ev.estado_geral_antes.tolerancia_manuseio || null,
+              choro_atendimento:
+                ev.estado_geral_antes.choro_durante_atendimento || null,
+              spo2_antes: ev.estado_geral_antes.saturacao_o2 || null,
+              spo2_com_suporte:
+                ev.estado_geral_antes.saturacao_com_suporte || null,
+              // Avaliação Respiratória
+              ritmo_respiratorio:
+                ev.avaliacao_antes.padrao_respiratorio.ritmo_respiratorio ||
+                null,
+              dispneia_presente:
+                ev.avaliacao_antes.padrao_respiratorio.dispneia || false,
+              classificacao_clinica:
+                ev.avaliacao_antes.padrao_respiratorio.classificacao_clinica ||
+                null,
+              murmurio_vesicular:
+                ev.avaliacao_antes.ausculta.murmurio_vesicular || null,
+              sibilos: ev.avaliacao_antes.ausculta.sibilos || false,
+              roncos: ev.avaliacao_antes.ausculta.roncos || false,
+              estertores: ev.avaliacao_antes.ausculta.estertores || null,
+              // Intervenção
+              tecnica_afe: ev.intervencao.afe || false,
+              tecnica_vibrocompressao: ev.intervencao.vibrocompressao || false,
+              tecnica_rta: ev.intervencao.rta || false,
+              tecnica_epap:
+                ev.intervencao.epap || ev.intervencao.epap_selo_dagua || false,
+              tecnica_aspiracao: ev.intervencao.aspiracao || false,
+              aspiracao_tipo: ev.intervencao.aspiracao_tipo || null,
+              peep_valor: ev.intervencao.peep_valor || null,
+              // Resposta ao Tratamento
+              spo2_depois: ev.avaliacao_depois.saturacao_o2 || null,
+              melhora_padrao_respiratorio:
+                ev.avaliacao_depois.melhora_padrao_respiratorio || false,
+              eliminacao_secrecao:
+                ev.avaliacao_depois.eliminacao_secrecao || false,
+              reducao_desconforto:
+                ev.avaliacao_depois.reducao_desconforto || false,
+              ausculta_melhorou: ev.avaliacao_depois.ausculta_melhorou || false,
+              // Conduta
+              manter_fisioterapia: ev.conduta.manter_fisioterapia || false,
+              frequencia_sugerida: ev.conduta.frequencia_sugerida || null,
+              alta_completa: ev.conduta.alta || false,
+              alta_parcial: ev.conduta.alta_parcial || false,
+              encaminhamento_medico: ev.conduta.encaminhamento_medico || false,
+            };
+          }
+
           // Salvar evolução com dados estruturados
-          // AI dev note: Salvamos os dados JSONB junto com o resumo em texto
+          // AI dev note: Salvamos os dados JSONB junto com o resumo em texto e colunas de analytics
           await saveRelatorioEvolucao({
             id_agendamento: appointment.id,
             conteudo: conteudoResumo,
@@ -814,6 +878,8 @@ export const AppointmentDetailsManager =
             evolucao_motora_assimetria: dados.evolucao_motora_assimetria as
               | Record<string, unknown>
               | undefined,
+            // Colunas de analytics para dashboard
+            analytics: analyticsData,
           });
 
           // Recarregar evoluções

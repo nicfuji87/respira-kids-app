@@ -327,6 +327,50 @@ export interface SaveEvolucaoData {
   tipo_evolucao?: 'respiratoria' | 'motora_assimetria';
   evolucao_respiratoria?: Record<string, unknown>;
   evolucao_motora_assimetria?: Record<string, unknown>;
+  // AI dev note: Campos de analytics para dashboard (colunas separadas)
+  analytics?: EvolucaoAnalyticsData;
+}
+
+// Dados extraídos para colunas de analytics/dashboard
+export interface EvolucaoAnalyticsData {
+  // Estado Geral (Antes)
+  tosse_tipo?: string | null;
+  chiado?: boolean;
+  cansaco_respiratorio?: boolean;
+  temperatura_aferida?: number | null;
+  nivel_alerta?: string | null;
+  tolerancia_manuseio?: string | null;
+  choro_atendimento?: string | null;
+  spo2_antes?: number | null;
+  spo2_com_suporte?: number | null;
+  // Avaliação Respiratória
+  ritmo_respiratorio?: string | null;
+  dispneia_presente?: boolean;
+  classificacao_clinica?: string | null;
+  murmurio_vesicular?: string | null;
+  sibilos?: boolean;
+  roncos?: boolean;
+  estertores?: string | null;
+  // Intervenção
+  tecnica_afe?: boolean;
+  tecnica_vibrocompressao?: boolean;
+  tecnica_rta?: boolean;
+  tecnica_epap?: boolean;
+  tecnica_aspiracao?: boolean;
+  aspiracao_tipo?: string | null;
+  peep_valor?: number | null;
+  // Resposta ao Tratamento
+  spo2_depois?: number | null;
+  melhora_padrao_respiratorio?: boolean;
+  eliminacao_secrecao?: boolean;
+  reducao_desconforto?: boolean;
+  ausculta_melhorou?: boolean;
+  // Conduta
+  manter_fisioterapia?: boolean;
+  frequencia_sugerida?: string | null;
+  alta_completa?: boolean;
+  alta_parcial?: boolean;
+  encaminhamento_medico?: boolean;
 }
 
 export interface UpdateEvolucaoData {

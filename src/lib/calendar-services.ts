@@ -1219,20 +1219,62 @@ export const saveRelatorioEvolucao = async (
       tipoEvolucaoId
     );
 
-    // Inserir nova evolução com dados estruturados JSONB
+    // Inserir nova evolução com dados estruturados JSONB e colunas de analytics
+    const insertData: Record<string, unknown> = {
+      id_agendamento: evolucaoData.id_agendamento,
+      tipo_relatorio_id: tipoEvolucaoId,
+      conteudo: evolucaoData.conteudo,
+      criado_por: evolucaoData.criado_por,
+      // AI dev note: Campos JSONB para evolução estruturada
+      tipo_evolucao: evolucaoData.tipo_evolucao || null,
+      evolucao_respiratoria: evolucaoData.evolucao_respiratoria || null,
+      evolucao_motora_assimetria:
+        evolucaoData.evolucao_motora_assimetria || null,
+    };
+
+    // AI dev note: Adiciona colunas de analytics para dashboard se fornecidas
+    if (evolucaoData.analytics) {
+      const a = evolucaoData.analytics;
+      Object.assign(insertData, {
+        tosse_tipo: a.tosse_tipo,
+        chiado: a.chiado,
+        cansaco_respiratorio: a.cansaco_respiratorio,
+        temperatura_aferida: a.temperatura_aferida,
+        nivel_alerta: a.nivel_alerta,
+        tolerancia_manuseio: a.tolerancia_manuseio,
+        choro_atendimento: a.choro_atendimento,
+        spo2_antes: a.spo2_antes,
+        spo2_com_suporte: a.spo2_com_suporte,
+        ritmo_respiratorio: a.ritmo_respiratorio,
+        dispneia_presente: a.dispneia_presente,
+        classificacao_clinica: a.classificacao_clinica,
+        murmurio_vesicular: a.murmurio_vesicular,
+        sibilos: a.sibilos,
+        roncos: a.roncos,
+        estertores: a.estertores,
+        tecnica_afe: a.tecnica_afe,
+        tecnica_vibrocompressao: a.tecnica_vibrocompressao,
+        tecnica_rta: a.tecnica_rta,
+        tecnica_epap: a.tecnica_epap,
+        tecnica_aspiracao: a.tecnica_aspiracao,
+        aspiracao_tipo: a.aspiracao_tipo,
+        peep_valor: a.peep_valor,
+        spo2_depois: a.spo2_depois,
+        melhora_padrao_respiratorio: a.melhora_padrao_respiratorio,
+        eliminacao_secrecao: a.eliminacao_secrecao,
+        reducao_desconforto: a.reducao_desconforto,
+        ausculta_melhorou: a.ausculta_melhorou,
+        manter_fisioterapia: a.manter_fisioterapia,
+        frequencia_sugerida: a.frequencia_sugerida,
+        alta_completa: a.alta_completa,
+        alta_parcial: a.alta_parcial,
+        encaminhamento_medico: a.encaminhamento_medico,
+      });
+    }
+
     const { data, error } = await supabase
       .from('relatorio_evolucao')
-      .insert({
-        id_agendamento: evolucaoData.id_agendamento,
-        tipo_relatorio_id: tipoEvolucaoId,
-        conteudo: evolucaoData.conteudo,
-        criado_por: evolucaoData.criado_por,
-        // AI dev note: Campos JSONB para evolução estruturada
-        tipo_evolucao: evolucaoData.tipo_evolucao || null,
-        evolucao_respiratoria: evolucaoData.evolucao_respiratoria || null,
-        evolucao_motora_assimetria:
-          evolucaoData.evolucao_motora_assimetria || null,
-      })
+      .insert(insertData)
       .select()
       .single();
 
