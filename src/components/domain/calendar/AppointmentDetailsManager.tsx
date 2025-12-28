@@ -44,6 +44,7 @@ import {
   fetchRelatoriosEvolucao,
   saveRelatorioEvolucao,
   updateRelatorioEvolucao,
+  updateRelatorioEvolucaoCompleta,
   fetchProfissionais,
 } from '@/lib/calendar-services';
 // AI dev note: generatePatientHistoryAI e checkAIHistoryStatus removidos -
@@ -187,6 +188,12 @@ export const AppointmentDetailsManager =
 
       // Estado para modal de evolução estruturada
       const [showEvolutionModal, setShowEvolutionModal] = useState(false);
+      const [editingEvolucaoData, setEditingEvolucaoData] = useState<{
+        id: string;
+        tipo_evolucao?: TipoEvolucao;
+        evolucao_respiratoria?: EvolucaoRespiratoria;
+        evolucao_motora_assimetria?: EvolucaoMotoraAssimetria;
+      } | null>(null);
 
       // Estados para dados da fatura associada
       const [faturaData, setFaturaData] = useState<{
@@ -539,8 +546,29 @@ export const AppointmentDetailsManager =
       };
 
       const handleStartEdit = (evolucao: SupabaseRelatorioEvolucaoCompleto) => {
-        setEditingEvolucaoId(evolucao.id);
-        setEditingContent(evolucao.conteudo || '');
+        // AI dev note: Se a evolução tem dados estruturados (JSONB), abrir modal de edição
+        // Caso contrário, usar edição de texto simples (legado)
+        if (
+          evolucao.evolucao_respiratoria ||
+          evolucao.evolucao_motora_assimetria
+        ) {
+          // Abrir modal com dados existentes para edição
+          setEditingEvolucaoData({
+            id: evolucao.id,
+            tipo_evolucao: evolucao.tipo_evolucao as TipoEvolucao | undefined,
+            evolucao_respiratoria: evolucao.evolucao_respiratoria as
+              | EvolucaoRespiratoria
+              | undefined,
+            evolucao_motora_assimetria: evolucao.evolucao_motora_assimetria as
+              | EvolucaoMotoraAssimetria
+              | undefined,
+          });
+          setShowEvolutionModal(true);
+        } else {
+          // Edição de texto simples (evoluções legadas)
+          setEditingEvolucaoId(evolucao.id);
+          setEditingContent(evolucao.conteudo || '');
+        }
       };
 
       const handleCancelEdit = () => {
@@ -573,13 +601,15 @@ export const AppointmentDetailsManager =
         }
       };
 
-      // Handler para salvar evolução estruturada
+      // Handler para salvar evolução estruturada (criar ou editar)
       const handleSaveStructuredEvolution = async (dados: {
         tipo_evolucao: TipoEvolucao;
         evolucao_respiratoria?: EvolucaoRespiratoria;
         evolucao_motora_assimetria?: EvolucaoMotoraAssimetria;
       }) => {
         if (!appointment || !user?.pessoa?.id) return;
+
+        const isEditing = !!editingEvolucaoData;
 
         setIsSavingEvolucao(true);
         try {
@@ -710,9 +740,9 @@ export const AppointmentDetailsManager =
               conteudoResumo += `   • ${sinaisAssociados.join(', ')}\n`;
             }
 
-            // 6. Sintomas Respiratórios - Tosse
+            // 6. Sintomas Respiratórios - Tosse (avaliação do profissional)
             if (ev.estado_geral_antes.tosse) {
-              conteudoResumo += `\n😷 Sintomas Respiratórios\n`;
+              conteudoResumo += `\n😷 Sintomas Respiratórios (avaliação do profissional)\n`;
               const tosseMap: Record<string, string> = {
                 ausente: 'Ausente',
                 seca: 'Seca',
@@ -1308,28 +1338,50 @@ export const AppointmentDetailsManager =
             };
           }
 
-          // Salvar evolução com dados estruturados
+          // Salvar ou atualizar evolução com dados estruturados
           // AI dev note: Salvamos os dados JSONB junto com o resumo em texto e colunas de analytics
-          await saveRelatorioEvolucao({
-            id_agendamento: appointment.id,
-            conteudo: conteudoResumo,
-            criado_por: user.pessoa.id,
-            // Campos JSONB para evolução estruturada
-            tipo_evolucao: dados.tipo_evolucao,
-            evolucao_respiratoria: dados.evolucao_respiratoria as
-              | Record<string, unknown>
-              | undefined,
-            evolucao_motora_assimetria: dados.evolucao_motora_assimetria as
-              | Record<string, unknown>
-              | undefined,
-            // Colunas de analytics para dashboard
-            analytics: analyticsData,
-          });
+          if (isEditing && editingEvolucaoData) {
+            // MODO EDIÇÃO - Atualizar evolução existente
+            await updateRelatorioEvolucaoCompleta({
+              id: editingEvolucaoData.id,
+              conteudo: conteudoResumo,
+              atualizado_por: user.pessoa.id,
+              // Campos JSONB para evolução estruturada
+              tipo_evolucao: dados.tipo_evolucao,
+              evolucao_respiratoria: dados.evolucao_respiratoria as
+                | Record<string, unknown>
+                | undefined,
+              evolucao_motora_assimetria: dados.evolucao_motora_assimetria as
+                | Record<string, unknown>
+                | undefined,
+              // Colunas de analytics para dashboard
+              analytics: analyticsData,
+            });
+          } else {
+            // MODO CRIAÇÃO - Criar nova evolução
+            await saveRelatorioEvolucao({
+              id_agendamento: appointment.id,
+              conteudo: conteudoResumo,
+              criado_por: user.pessoa.id,
+              // Campos JSONB para evolução estruturada
+              tipo_evolucao: dados.tipo_evolucao,
+              evolucao_respiratoria: dados.evolucao_respiratoria as
+                | Record<string, unknown>
+                | undefined,
+              evolucao_motora_assimetria: dados.evolucao_motora_assimetria as
+                | Record<string, unknown>
+                | undefined,
+              // Colunas de analytics para dashboard
+              analytics: analyticsData,
+            });
+          }
 
           // Recarregar evoluções
           const evolucoesList = await fetchRelatoriosEvolucao(appointment.id);
           setEvolucoes(evolucoesList);
 
+          // Limpar estado de edição
+          setEditingEvolucaoData(null);
           setShowEvolutionModal(false);
         } catch (error) {
           console.error('Erro ao salvar evolução estruturada:', error);
@@ -2085,11 +2137,25 @@ export const AppointmentDetailsManager =
           {/* Modal de Evolução Estruturada */}
           <EvolutionFormModal
             isOpen={showEvolutionModal}
-            onClose={() => setShowEvolutionModal(false)}
+            onClose={() => {
+              setShowEvolutionModal(false);
+              setEditingEvolucaoData(null);
+            }}
             onSave={handleSaveStructuredEvolution}
             tipoServico={appointment.servico_nome}
             patientName={appointment.paciente_nome}
-            mode="create"
+            existingData={
+              editingEvolucaoData
+                ? {
+                    tipo_evolucao: editingEvolucaoData.tipo_evolucao,
+                    evolucao_respiratoria:
+                      editingEvolucaoData.evolucao_respiratoria,
+                    evolucao_motora_assimetria:
+                      editingEvolucaoData.evolucao_motora_assimetria,
+                  }
+                : undefined
+            }
+            mode={editingEvolucaoData ? 'edit' : 'create'}
           />
         </>
       );

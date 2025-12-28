@@ -523,7 +523,10 @@ export const EvolutionSectionContent: React.FC<
             {/* 6️⃣ Sintomas Respiratórios - Tosse */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-blue-700">
-                🫁 Sintomas Respiratórios
+                🫁 Sintomas Respiratórios{' '}
+                <span className="text-sm font-normal text-gray-500">
+                  (avaliação do profissional)
+                </span>
               </h4>
 
               <Field label="Tosse">

@@ -426,8 +426,13 @@ export interface UpdateEvolucaoData {
   atualizado_por: string;
 }
 
-export interface UpdateEvolucaoData {
+// AI dev note: Interface completa para atualização de evolução estruturada
+export interface UpdateEvolucaoDataCompleta {
   id: string;
   conteudo: string;
   atualizado_por: string;
+  tipo_evolucao?: 'respiratoria' | 'motora_assimetria';
+  evolucao_respiratoria?: Record<string, unknown>;
+  evolucao_motora_assimetria?: Record<string, unknown>;
+  analytics?: EvolucaoAnalyticsData;
 }

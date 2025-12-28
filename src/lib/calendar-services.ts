@@ -18,6 +18,7 @@ import type {
   SupabaseRelatorioEvolucao,
   SaveEvolucaoData,
   UpdateEvolucaoData,
+  UpdateEvolucaoDataCompleta,
 } from '@/types/supabase-calendar';
 import {
   mapAgendamentoToCalendarEvent,
@@ -1370,6 +1371,139 @@ export const updateRelatorioEvolucao = async (
     return data;
   } catch (error) {
     console.error('Erro ao atualizar evolução:', error);
+    throw error;
+  }
+};
+
+// AI dev note: Atualização completa de evolução estruturada (JSONB + analytics)
+export const updateRelatorioEvolucaoCompleta = async (
+  evolucaoData: UpdateEvolucaoDataCompleta
+): Promise<SupabaseRelatorioEvolucao> => {
+  try {
+    console.log(
+      '[DEBUG] updateRelatorioEvolucaoCompleta - dados:',
+      evolucaoData
+    );
+
+    // Construir objeto de atualização
+    const updateData: Record<string, unknown> = {
+      conteudo: evolucaoData.conteudo,
+      atualizado_por: evolucaoData.atualizado_por,
+      updated_at: new Date().toISOString(),
+      tipo_evolucao: evolucaoData.tipo_evolucao || null,
+      evolucao_respiratoria: evolucaoData.evolucao_respiratoria || null,
+      evolucao_motora_assimetria:
+        evolucaoData.evolucao_motora_assimetria || null,
+    };
+
+    // Adicionar campos de analytics se fornecidos
+    if (evolucaoData.analytics) {
+      const a = evolucaoData.analytics;
+      Object.assign(updateData, {
+        // Estado Geral da Criança
+        nivel_consciencia: a.nivel_consciencia,
+        estado_acordado: a.estado_acordado,
+        // Sinais Vitais
+        temperatura_aferida: a.temperatura_aferida,
+        frequencia_cardiaca: a.frequencia_cardiaca,
+        spo2_antes: a.spo2_antes,
+        necessita_suporte_o2: a.necessita_suporte_o2,
+        spo2_com_suporte: a.spo2_com_suporte,
+        // Contexto Clínico
+        episodios_recorrentes_sibilancia: a.episodios_recorrentes_sibilancia,
+        contato_pessoas_sintomaticas: a.contato_pessoas_sintomaticas,
+        uso_medicacao_respiratoria: a.uso_medicacao_respiratoria,
+        inicio_sintomas_dias: a.inicio_sintomas_dias,
+        // Repercussões Funcionais
+        interrupcoes_sono: a.interrupcoes_sono,
+        irritabilidade_respiratoria: a.irritabilidade_respiratoria,
+        // Sinais Associados (relato do responsável)
+        tosse_seca_referida: a.tosse_seca_referida,
+        tosse_produtiva_referida: a.tosse_produtiva_referida,
+        chiado: a.chiado,
+        cansaco_respiratorio: a.cansaco_respiratorio,
+        esforco_respiratorio: a.esforco_respiratorio,
+        respiracao_ruidosa: a.respiracao_ruidosa,
+        // Sintomas Respiratórios - Tosse
+        tosse_tipo: a.tosse_tipo,
+        tosse_eficacia: a.tosse_eficacia,
+        tosse_destino: a.tosse_destino,
+        comportamento_calmo: a.comportamento_calmo,
+        comportamento_irritado: a.comportamento_irritado,
+        comportamento_choroso: a.comportamento_choroso,
+        comportamento_agitado: a.comportamento_agitado,
+        tolerancia_manuseio: a.tolerancia_manuseio,
+        choro_atendimento: a.choro_atendimento,
+        // Avaliação Respiratória
+        ritmo_respiratorio: a.ritmo_respiratorio,
+        dispneia_presente: a.dispneia_presente,
+        classificacao_clinica: a.classificacao_clinica,
+        // Ausculta - consolidado (compatibilidade)
+        murmurio_vesicular: a.murmurio_vesicular,
+        sibilos: a.sibilos,
+        roncos: a.roncos,
+        estertores: a.estertores,
+        // Ausculta - Hemitórax Direito
+        mv_direito: a.mv_direito,
+        sibilos_direito: a.sibilos_direito,
+        roncos_direito: a.roncos_direito,
+        roncos_transmissao_direito: a.roncos_transmissao_direito,
+        estertores_finos_direito: a.estertores_finos_direito,
+        estertores_grossos_direito: a.estertores_grossos_direito,
+        // Ausculta - Hemitórax Esquerdo
+        mv_esquerdo: a.mv_esquerdo,
+        sibilos_esquerdo: a.sibilos_esquerdo,
+        roncos_esquerdo: a.roncos_esquerdo,
+        roncos_transmissao_esquerdo: a.roncos_transmissao_esquerdo,
+        estertores_finos_esquerdo: a.estertores_finos_esquerdo,
+        estertores_grossos_esquerdo: a.estertores_grossos_esquerdo,
+        // Intervenção
+        tecnica_afe: a.tecnica_afe,
+        tecnica_vibrocompressao: a.tecnica_vibrocompressao,
+        tecnica_rta: a.tecnica_rta,
+        tecnica_epap: a.tecnica_epap,
+        tecnica_aspiracao: a.tecnica_aspiracao,
+        aspiracao_tipo: a.aspiracao_tipo,
+        peep_valor: a.peep_valor,
+        // Resposta
+        spo2_depois: a.spo2_depois,
+        frequencia_cardiaca_depois: a.frequencia_cardiaca_depois,
+        melhora_padrao_respiratorio: a.melhora_padrao_respiratorio,
+        eliminacao_secrecao: a.eliminacao_secrecao,
+        reducao_desconforto: a.reducao_desconforto,
+        ausculta_sem_alteracao: a.ausculta_sem_alteracao,
+        ausculta_melhorou: a.ausculta_melhorou,
+        // Conduta
+        manter_fisioterapia: a.manter_fisioterapia,
+        frequencia_sugerida: a.frequencia_sugerida,
+        alta_completa: a.alta_completa,
+        alta_parcial: a.alta_parcial,
+        encaminhamento_medico: a.encaminhamento_medico,
+        // Observações (campos de texto)
+        obs_estado_geral: a.obs_estado_geral,
+        obs_ausculta: a.obs_ausculta,
+        obs_intervencao: a.obs_intervencao,
+        obs_resposta_tratamento: a.obs_resposta_tratamento,
+        obs_conduta: a.obs_conduta,
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('relatorio_evolucao')
+      .update(updateData)
+      .eq('id', evolucaoData.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Erro ao atualizar relatório de evolução:', error);
+      throw error;
+    }
+
+    console.log('[DEBUG] updateRelatorioEvolucaoCompleta - sucesso:', data);
+    return data;
+  } catch (error) {
+    console.error('Erro ao atualizar evolução completa:', error);
     throw error;
   }
 };
