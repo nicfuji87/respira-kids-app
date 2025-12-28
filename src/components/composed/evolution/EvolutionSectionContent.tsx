@@ -242,17 +242,47 @@ export const EvolutionSectionContent: React.FC<
               <Field label="Temperatura Aferida (°C)">
                 <Input
                   type="number"
+                  inputMode="decimal"
                   min={35}
                   max={42}
                   step={0.1}
                   value={estado.temperatura_aferida || ''}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9.]/g, '');
                     updateEstado({
-                      temperatura_aferida: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
+                      temperatura_aferida: value ? Number(value) : undefined,
+                    });
+                  }}
+                  onKeyDown={(e) => {
+                    // Permite: backspace, delete, tab, escape, enter, decimal
+                    if (
+                      [
+                        'Backspace',
+                        'Delete',
+                        'Tab',
+                        'Escape',
+                        'Enter',
+                        '.',
+                        ',',
+                      ].includes(e.key) ||
+                      // Permite: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+                      (e.ctrlKey &&
+                        ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
+                      // Permite: setas
+                      [
+                        'ArrowLeft',
+                        'ArrowRight',
+                        'ArrowUp',
+                        'ArrowDown',
+                      ].includes(e.key)
+                    ) {
+                      return;
+                    }
+                    // Bloqueia se não for número
+                    if (!/[0-9]/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
                   placeholder="Ex: 36.5"
                   disabled={disabled}
                   className="w-32"
@@ -292,16 +322,40 @@ export const EvolutionSectionContent: React.FC<
                 <Field label="SpO₂ em Ar Ambiente (%)">
                   <Input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     max={100}
                     value={estado.saturacao_o2 || ''}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
                       updateEstado({
-                        saturacao_o2: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
+                        saturacao_o2: value ? Number(value) : undefined,
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        [
+                          'Backspace',
+                          'Delete',
+                          'Tab',
+                          'Escape',
+                          'Enter',
+                        ].includes(e.key) ||
+                        (e.ctrlKey &&
+                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
+                        [
+                          'ArrowLeft',
+                          'ArrowRight',
+                          'ArrowUp',
+                          'ArrowDown',
+                        ].includes(e.key)
+                      ) {
+                        return;
+                      }
+                      if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
                     placeholder="Ex: 97"
                     disabled={disabled}
                     className="w-32"
@@ -311,16 +365,42 @@ export const EvolutionSectionContent: React.FC<
                 <Field label="SpO₂ com Suporte (%)">
                   <Input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     max={100}
                     value={estado.saturacao_com_suporte || ''}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
                       updateEstado({
-                        saturacao_com_suporte: e.target.value
-                          ? Number(e.target.value)
+                        saturacao_com_suporte: value
+                          ? Number(value)
                           : undefined,
-                      })
-                    }
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        [
+                          'Backspace',
+                          'Delete',
+                          'Tab',
+                          'Escape',
+                          'Enter',
+                        ].includes(e.key) ||
+                        (e.ctrlKey &&
+                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
+                        [
+                          'ArrowLeft',
+                          'ArrowRight',
+                          'ArrowUp',
+                          'ArrowDown',
+                        ].includes(e.key)
+                      ) {
+                        return;
+                      }
+                      if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
                     placeholder="Ex: 99"
                     disabled={disabled}
                     className="w-32"
@@ -648,16 +728,74 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
 
-              <Field label="Lateralidade/Localização">
-                <Input
-                  value={avaliacao.ausculta.lateralidade || ''}
-                  onChange={(e) =>
-                    updateAusculta({ lateralidade: e.target.value })
-                  }
-                  placeholder="Ex: base direita, ápice esquerdo"
-                  disabled={disabled}
-                />
-              </Field>
+              {/* Lateralidade/Localização */}
+              <div className="space-y-3">
+                <span className="text-sm font-medium">
+                  Lateralidade/Localização
+                </span>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <CheckboxField
+                    label="Bilateral"
+                    checked={avaliacao.ausculta.localizacao_bilateral || false}
+                    onChange={(checked) =>
+                      updateAusculta({ localizacao_bilateral: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Direita"
+                    checked={avaliacao.ausculta.localizacao_direita || false}
+                    onChange={(checked) =>
+                      updateAusculta({ localizacao_direita: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Esquerda"
+                    checked={avaliacao.ausculta.localizacao_esquerda || false}
+                    onChange={(checked) =>
+                      updateAusculta({ localizacao_esquerda: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Difuso"
+                    checked={avaliacao.ausculta.localizacao_difuso || false}
+                    onChange={(checked) =>
+                      updateAusculta({ localizacao_difuso: checked })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <CheckboxField
+                    label="Ápice"
+                    checked={avaliacao.ausculta.localizacao_apice || false}
+                    onChange={(checked) =>
+                      updateAusculta({ localizacao_apice: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Terço Médio"
+                    checked={
+                      avaliacao.ausculta.localizacao_terco_medio || false
+                    }
+                    onChange={(checked) =>
+                      updateAusculta({ localizacao_terco_medio: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Base"
+                    checked={avaliacao.ausculta.localizacao_base || false}
+                    onChange={(checked) =>
+                      updateAusculta({ localizacao_base: checked })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Secreção */}
@@ -1053,14 +1191,27 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
 
-              <CheckboxField
-                label="Choro Durante Atendimento"
-                checked={estado.choro_durante_atendimento}
-                onChange={(checked) =>
-                  updateEstado({ choro_durante_atendimento: checked })
-                }
-                disabled={disabled}
-              />
+              <Field label="Choro Durante Atendimento">
+                <RadioButtonGroup
+                  value={estado.choro_durante_atendimento}
+                  onChange={(v) =>
+                    updateEstado({
+                      choro_durante_atendimento: v as
+                        | 'ausente'
+                        | 'leve'
+                        | 'moderado'
+                        | 'intenso',
+                    })
+                  }
+                  options={[
+                    { valor: 'ausente', label: '😊 Ausente' },
+                    { valor: 'leve', label: '😢 Leve' },
+                    { valor: 'moderado', label: '😭 Moderado' },
+                    { valor: 'intenso', label: '😱 Intenso' },
+                  ]}
+                  disabled={disabled}
+                />
+              </Field>
             </div>
 
             {/* Mudança na Ausculta Pulmonar - Checkboxes */}
@@ -1119,16 +1270,36 @@ export const EvolutionSectionContent: React.FC<
             <Field label="Saturação de O₂ (%) - Após Intervenção">
               <Input
                 type="number"
+                inputMode="numeric"
                 min={0}
                 max={100}
                 value={depois.saturacao_o2 || ''}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
                   updateDepois({
-                    saturacao_o2: e.target.value
-                      ? Number(e.target.value)
-                      : undefined,
-                  })
-                }
+                    saturacao_o2: value ? Number(value) : undefined,
+                  });
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter'].includes(
+                      e.key
+                    ) ||
+                    (e.ctrlKey &&
+                      ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
+                    [
+                      'ArrowLeft',
+                      'ArrowRight',
+                      'ArrowUp',
+                      'ArrowDown',
+                    ].includes(e.key)
+                  ) {
+                    return;
+                  }
+                  if (!/[0-9]/.test(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
                 placeholder="Ex: 98"
                 disabled={disabled}
                 className="w-32"

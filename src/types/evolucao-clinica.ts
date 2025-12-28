@@ -61,7 +61,14 @@ export interface AuscultaPulmonar {
   sibilos: boolean;
   roncos: boolean;
   estertores: 'ausente' | 'finos' | 'grossos' | null;
-  lateralidade?: string; // ex: "base direita", "ápice esquerdo"
+  // Lateralidade/Localização
+  localizacao_bilateral?: boolean;
+  localizacao_direita?: boolean;
+  localizacao_esquerda?: boolean;
+  localizacao_apice?: boolean;
+  localizacao_terco_medio?: boolean;
+  localizacao_base?: boolean;
+  localizacao_difuso?: boolean;
   observacoes?: string;
 }
 
@@ -100,7 +107,7 @@ export interface EstadoGeralAntes {
   // Estado Geral da Criança
   nivel_alerta: 'ativo' | 'sonolento' | 'irritado' | null;
   tolerancia_manuseio: 'boa' | 'regular' | 'ruim' | null;
-  choro_durante_atendimento: boolean;
+  choro_durante_atendimento: 'ausente' | 'leve' | 'moderado' | 'intenso' | null;
 
   // Saturação de O₂
   saturacao_o2?: number; // percentual em ar ambiente
@@ -360,7 +367,7 @@ export const EVOLUCAO_RESPIRATORIA_SECOES: EvolucaoSecao[] = [
   },
   {
     id: 'avaliacao_antes',
-    titulo: 'Avaliação Respiratória',
+    titulo: 'Avaliação Respiratória (Antes)',
     icone: '🫁',
     campos: ['padrao_respiratorio', 'sinais_dispneia', 'ausculta', 'secrecao'],
     ordem: 2,
@@ -483,7 +490,7 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       // Estado Geral
       nivel_alerta: null,
       tolerancia_manuseio: null,
-      choro_durante_atendimento: false,
+      choro_durante_atendimento: null,
       // Saturação
       saturacao_o2: undefined,
       saturacao_com_suporte: undefined,
