@@ -662,7 +662,7 @@ export const AppointmentDetailsManager =
               ev.estado_geral_antes.uso_medicacao_respiratoria ||
               ev.estado_geral_antes.inicio_sintomas_dias;
             if (temContextoClinico) {
-              conteudoResumo += `\n📋 Contexto Clínico Recente\n`;
+              conteudoResumo += `\n📋 Contexto Clínico Recente (relato do responsável)\n`;
               if (ev.estado_geral_antes.inicio_sintomas_dias) {
                 conteudoResumo += `   • Início dos sintomas: há ${ev.estado_geral_antes.inicio_sintomas_dias} dias\n`;
               }
@@ -687,14 +687,18 @@ export const AppointmentDetailsManager =
             if (ev.estado_geral_antes.irritabilidade_respiratoria)
               repercussoes.push('Irritabilidade associada à respiração');
             if (repercussoes.length > 0) {
-              conteudoResumo += `\n⚠️ Repercussões Funcionais\n`;
+              conteudoResumo += `\n⚠️ Repercussões Funcionais (relato do responsável)\n`;
               conteudoResumo += `   • ${repercussoes.join(', ')}\n`;
             }
 
-            // 5. Sinais Associados
+            // 5. Sinais Associados (relato do responsável)
             const sinaisAssociados = [];
+            if (ev.estado_geral_antes.tosse_seca_referida)
+              sinaisAssociados.push('Tosse seca');
+            if (ev.estado_geral_antes.tosse_produtiva_referida)
+              sinaisAssociados.push('Tosse produtiva');
             if (ev.estado_geral_antes.chiado_referido)
-              sinaisAssociados.push('Sibilo referido pelos responsáveis');
+              sinaisAssociados.push('Sibilo referido');
             if (ev.estado_geral_antes.cansaco_respiratorio)
               sinaisAssociados.push('Cansaço respiratório');
             if (ev.estado_geral_antes.esforco_respiratorio)
@@ -702,7 +706,7 @@ export const AppointmentDetailsManager =
             if (ev.estado_geral_antes.respiracao_ruidosa)
               sinaisAssociados.push('Respiração ruidosa');
             if (sinaisAssociados.length > 0) {
-              conteudoResumo += `\n🔍 Sinais Associados\n`;
+              conteudoResumo += `\n🔍 Sinais Associados (relato do responsável)\n`;
               conteudoResumo += `   • ${sinaisAssociados.join(', ')}\n`;
             }
 
@@ -1215,7 +1219,11 @@ export const AppointmentDetailsManager =
                 ev.estado_geral_antes.interrupcoes_sono || false,
               irritabilidade_respiratoria:
                 ev.estado_geral_antes.irritabilidade_respiratoria || false,
-              // Sinais Associados
+              // Sinais Associados (relato do responsável)
+              tosse_seca_referida:
+                ev.estado_geral_antes.tosse_seca_referida || false,
+              tosse_produtiva_referida:
+                ev.estado_geral_antes.tosse_produtiva_referida || false,
               chiado: ev.estado_geral_antes.chiado_referido || false,
               cansaco_respiratorio:
                 ev.estado_geral_antes.cansaco_respiratorio || false,

@@ -1253,7 +1253,9 @@ export const saveRelatorioEvolucao = async (
         // Repercussões Funcionais
         interrupcoes_sono: a.interrupcoes_sono,
         irritabilidade_respiratoria: a.irritabilidade_respiratoria,
-        // Sinais Associados
+        // Sinais Associados (relato do responsável)
+        tosse_seca_referida: a.tosse_seca_referida,
+        tosse_produtiva_referida: a.tosse_produtiva_referida,
         chiado: a.chiado, // chiado_referido
         cansaco_respiratorio: a.cansaco_respiratorio,
         esforco_respiratorio: a.esforco_respiratorio,

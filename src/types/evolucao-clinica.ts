@@ -135,11 +135,13 @@ export interface EstadoGeralAntes {
   piora_noturna?: boolean;
   irritabilidade_respiratoria?: boolean; // Irritabilidade associada à respiração
 
-  // 5️⃣ Sinais Associados (múltipla escolha)
+  // 5️⃣ Sinais Associados - Relato do Responsável (múltipla escolha)
   chiado_referido?: boolean; // Sibilo referido pelos responsáveis (não auscultatório)
   cansaco_respiratorio?: boolean;
   esforco_respiratorio?: boolean; // Esforço respiratório percebido
   respiracao_ruidosa?: boolean;
+  tosse_seca_referida?: boolean; // Tosse seca referida pelo responsável
+  tosse_produtiva_referida?: boolean; // Tosse produtiva referida pelo responsável
 
   // 6️⃣ Sintomas Respiratórios - Tosse
   tosse?: 'ausente' | 'seca' | 'produtiva' | null;

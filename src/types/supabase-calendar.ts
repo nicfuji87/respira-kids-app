@@ -350,7 +350,9 @@ export interface EvolucaoAnalyticsData {
   // Repercussões Funcionais
   interrupcoes_sono?: boolean;
   irritabilidade_respiratoria?: boolean;
-  // Sinais Associados
+  // Sinais Associados (relato do responsável)
+  tosse_seca_referida?: boolean;
+  tosse_produtiva_referida?: boolean;
   chiado?: boolean; // chiado_referido (sibilo referido)
   cansaco_respiratorio?: boolean;
   esforco_respiratorio?: boolean;

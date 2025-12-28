@@ -133,6 +133,15 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-8">
+            {/* Explicação da seção */}
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <p className="text-sm text-purple-800">
+                <strong>📋 Sobre esta seção:</strong> Registre aqui a avaliação
+                inicial do profissional junto com os relatos do responsável
+                sobre o estado da criança antes do atendimento.
+              </p>
+            </div>
+
             {/* 1️⃣ Estado Geral da Criança */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-purple-700">
@@ -337,7 +346,10 @@ export const EvolutionSectionContent: React.FC<
             {/* 3️⃣ Contexto Clínico Recente */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-indigo-700">
-                🏥 Contexto Clínico Recente
+                🏥 Contexto Clínico Recente{' '}
+                <span className="text-sm font-normal text-gray-500">
+                  (relato do responsável)
+                </span>
               </h4>
               <p className="text-sm text-gray-500">
                 Fatores que ajudam na interpretação do quadro
@@ -401,7 +413,10 @@ export const EvolutionSectionContent: React.FC<
             {/* 4️⃣ Repercussões Funcionais */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-yellow-700">
-                📋 Repercussões Funcionais
+                📋 Repercussões Funcionais{' '}
+                <span className="text-sm font-normal text-gray-500">
+                  (relato do responsável)
+                </span>
               </h4>
               <p className="text-sm text-gray-500">
                 Impacto dos sintomas no dia a dia
@@ -445,12 +460,31 @@ export const EvolutionSectionContent: React.FC<
             {/* 5️⃣ Sinais Associados */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-orange-700">
-                ⚠️ Sinais Associados
+                ⚠️ Sinais Associados{' '}
+                <span className="text-sm font-normal text-gray-500">
+                  (relato do responsável)
+                </span>
               </h4>
               <p className="text-sm text-gray-500">
                 Podem coexistir com qualquer tipo de tosse
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <CheckboxField
+                  label="Tosse seca"
+                  checked={estado.tosse_seca_referida || false}
+                  onChange={(checked) =>
+                    updateEstado({ tosse_seca_referida: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Tosse produtiva"
+                  checked={estado.tosse_produtiva_referida || false}
+                  onChange={(checked) =>
+                    updateEstado({ tosse_produtiva_referida: checked })
+                  }
+                  disabled={disabled}
+                />
                 <CheckboxField
                   label="Sibilo referido pelos responsáveis"
                   checked={estado.chiado_referido || false}
