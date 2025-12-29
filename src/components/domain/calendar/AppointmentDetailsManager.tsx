@@ -2166,6 +2166,7 @@ export const AppointmentDetailsManager =
             onSave={handleSaveStructuredEvolution}
             tipoServico={appointment.servico_nome}
             patientName={appointment.paciente_nome}
+            appointmentId={appointment.id}
             existingData={
               editingEvolucaoData
                 ? {

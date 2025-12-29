@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from 'react';
 import {
   Save,
   CheckCircle2,
@@ -8,6 +14,7 @@ import {
   ChevronRight,
   Loader2,
   X,
+  Cloud,
 } from 'lucide-react';
 import {
   Dialog,
@@ -51,6 +58,7 @@ export interface EvolutionFormModalProps {
   }) => Promise<void>;
   tipoServico?: string;
   patientName?: string;
+  appointmentId?: string; // ID do agendamento para autosave
   existingData?: {
     tipo_evolucao?: TipoEvolucao;
     evolucao_respiratoria?: EvolucaoRespiratoria;
@@ -59,15 +67,35 @@ export interface EvolutionFormModalProps {
   mode?: 'create' | 'edit' | 'view';
 }
 
+// Chave para localStorage
+const AUTOSAVE_PREFIX = 'evolucao_draft_';
+
+interface AutosaveData {
+  tipo_evolucao: TipoEvolucao;
+  evolucao_respiratoria?: EvolucaoRespiratoria;
+  evolucao_motora_assimetria?: EvolucaoMotoraAssimetria;
+  savedAt: string;
+}
+
 export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   isOpen,
   onClose,
   onSave,
   tipoServico,
   patientName,
+  appointmentId,
   existingData,
   mode = 'create',
 }) => {
+  // Chave única para autosave baseada no agendamento
+  const autosaveKey = useMemo(
+    () => (appointmentId ? `${AUTOSAVE_PREFIX}${appointmentId}` : null),
+    [appointmentId]
+  );
+
+  // Estado do autosave
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Determinar tipo de evolução baseado no serviço
   const determinarTipoEvolucao = useCallback((): TipoEvolucao => {
     if (existingData?.tipo_evolucao) return existingData.tipo_evolucao;
@@ -125,10 +153,130 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
   const currentSectionData = secoes[currentSection];
 
-  // Reset quando modal abre
+  // Função para carregar rascunho do localStorage
+  const loadDraft = useCallback((): AutosaveData | null => {
+    if (!autosaveKey) return null;
+    try {
+      const saved = localStorage.getItem(autosaveKey);
+      if (saved) {
+        return JSON.parse(saved) as AutosaveData;
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar rascunho:', e);
+    }
+    return null;
+  }, [autosaveKey]);
+
+  // Função para salvar rascunho no localStorage
+  const saveDraft = useCallback(() => {
+    if (!autosaveKey || isReadOnly) return;
+
+    try {
+      const data: AutosaveData = {
+        tipo_evolucao: tipoEvolucao,
+        evolucao_respiratoria:
+          tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : undefined,
+        evolucao_motora_assimetria:
+          tipoEvolucao === 'motora_assimetria' ? evolucaoMotora : undefined,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(autosaveKey, JSON.stringify(data));
+      setLastSaved(new Date());
+    } catch (e) {
+      console.warn('Erro ao salvar rascunho:', e);
+    }
+  }, [
+    autosaveKey,
+    tipoEvolucao,
+    evolucaoRespiratoria,
+    evolucaoMotora,
+    isReadOnly,
+  ]);
+
+  // Função para limpar rascunho
+  const clearDraft = useCallback(() => {
+    if (!autosaveKey) return;
+    try {
+      localStorage.removeItem(autosaveKey);
+      setLastSaved(null);
+    } catch (e) {
+      console.warn('Erro ao limpar rascunho:', e);
+    }
+  }, [autosaveKey]);
+
+  // Autosave com debounce quando dados mudam
+  useEffect(() => {
+    if (!isOpen || isReadOnly) return;
+
+    // Limpar timer anterior
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+
+    // Salvar após 2 segundos de inatividade
+    autosaveTimerRef.current = setTimeout(() => {
+      saveDraft();
+    }, 2000);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [
+    isOpen,
+    isReadOnly,
+    mode,
+    tipoEvolucao,
+    evolucaoRespiratoria,
+    evolucaoMotora,
+    saveDraft,
+  ]);
+
+  // Reset quando modal abre - verificar se há rascunho salvo
   useEffect(() => {
     if (isOpen) {
-      setTipoEvolucao(determinarTipoEvolucao());
+      const tipoInicial = determinarTipoEvolucao();
+      setLastSaved(null);
+
+      // Se estamos criando (não editando), verificar rascunho
+      if (mode === 'create' && autosaveKey) {
+        const draft = loadDraft();
+        if (draft) {
+          // Há um rascunho salvo - perguntar ao usuário
+          const savedDate = new Date(draft.savedAt);
+          const timeAgo = Math.round(
+            (Date.now() - savedDate.getTime()) / 1000 / 60
+          );
+          const timeLabel =
+            timeAgo < 60
+              ? `${timeAgo} minuto${timeAgo !== 1 ? 's' : ''}`
+              : `${Math.round(timeAgo / 60)} hora${Math.round(timeAgo / 60) !== 1 ? 's' : ''}`;
+
+          const shouldRecover = window.confirm(
+            `Encontramos um rascunho salvo há ${timeLabel}. Deseja recuperá-lo?`
+          );
+
+          if (shouldRecover) {
+            setTipoEvolucao(draft.tipo_evolucao);
+            if (draft.evolucao_respiratoria) {
+              setEvolucaoRespiratoria(draft.evolucao_respiratoria);
+            }
+            if (draft.evolucao_motora_assimetria) {
+              setEvolucaoMotora(draft.evolucao_motora_assimetria);
+            }
+            setLastSaved(savedDate);
+            setCurrentSection(0);
+            return;
+          } else {
+            // Usuário não quer recuperar - limpar rascunho
+            clearDraft();
+          }
+        }
+      }
+
+      // Inicializar normalmente
+      setTipoEvolucao(tipoInicial);
       setEvolucaoRespiratoria(
         existingData?.evolucao_respiratoria || criarEvolucaoRespiratoriaVazia()
       );
@@ -138,7 +286,15 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       );
       setCurrentSection(0);
     }
-  }, [isOpen, existingData, determinarTipoEvolucao]);
+  }, [
+    isOpen,
+    existingData,
+    determinarTipoEvolucao,
+    mode,
+    autosaveKey,
+    loadDraft,
+    clearDraft,
+  ]);
 
   // Handler para atualização de campos respiratórios
   const handleRespiratoriaChange = useCallback(
@@ -169,6 +325,8 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
         evolucao_motora_assimetria:
           tipoEvolucao === 'motora_assimetria' ? evolucaoMotora : undefined,
       });
+      // Limpar rascunho após salvar com sucesso
+      clearDraft();
       onClose();
     } catch (error) {
       console.error('Erro ao salvar evolução:', error);
@@ -234,8 +392,19 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       : '🦴 Evolução Motora/Assimetria';
   };
 
+  // Handler para fechar com confirmação se houver alterações
+  const handleClose = useCallback(() => {
+    if (lastSaved && !isReadOnly) {
+      const shouldClose = window.confirm(
+        'Você tem alterações não salvas. O rascunho foi salvo automaticamente e poderá ser recuperado ao reabrir. Deseja sair?'
+      );
+      if (!shouldClose) return;
+    }
+    onClose();
+  }, [lastSaved, isReadOnly, onClose]);
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-[95vw] sm:max-w-[900px] h-[95vh] sm:h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b flex-shrink-0 space-y-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -287,11 +456,21 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
               <Badge variant="secondary" className="hidden sm:inline-flex">
                 {progresso}% completo
               </Badge>
+              {/* Indicador de autosave */}
+              {lastSaved && !isReadOnly && (
+                <Badge
+                  variant="outline"
+                  className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground"
+                >
+                  <Cloud className="h-3 w-3 text-green-500" />
+                  Rascunho salvo
+                </Badge>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 sm:hidden ml-auto"
-                onClick={onClose}
+                onClick={handleClose}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -373,7 +552,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
               </Button>
 
               <div className="hidden sm:flex items-center gap-2">
-                <Button variant="outline" onClick={onClose} disabled={isSaving}>
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  disabled={isSaving}
+                >
                   <X className="h-4 w-4 mr-1" />
                   Cancelar
                 </Button>
