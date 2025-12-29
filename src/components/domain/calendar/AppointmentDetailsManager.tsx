@@ -684,14 +684,30 @@ export const AppointmentDetailsManager =
             }
 
             // 3. Contexto Clínico
+            const temQuadroCompativel =
+              ev.estado_geral_antes.quadro_compativel_com &&
+              ev.estado_geral_antes.quadro_compativel_com.length > 0;
+            const temOrigemInfo =
+              ev.estado_geral_antes.origem_informacao_quadro &&
+              ev.estado_geral_antes.origem_informacao_quadro.length > 0;
             const temContextoClinico =
               ev.estado_geral_antes.infeccao_recente ||
               ev.estado_geral_antes.episodios_recorrentes_sibilancia ||
               ev.estado_geral_antes.contato_pessoas_sintomaticas ||
               ev.estado_geral_antes.uso_medicacao_respiratoria ||
-              ev.estado_geral_antes.inicio_sintomas_dias;
+              ev.estado_geral_antes.inicio_sintomas_dias ||
+              temQuadroCompativel ||
+              temOrigemInfo;
             if (temContextoClinico) {
               conteudoResumo += `\n📋 Contexto Clínico Recente (relato do responsável)\n`;
+              // Quadro Compatível Com
+              if (temQuadroCompativel) {
+                conteudoResumo += `   • Quadro compatível com: ${ev.estado_geral_antes.quadro_compativel_com!.join(', ')}\n`;
+              }
+              // Origem da Informação
+              if (temOrigemInfo) {
+                conteudoResumo += `   • Origem da informação: ${ev.estado_geral_antes.origem_informacao_quadro!.join(', ')}\n`;
+              }
               if (ev.estado_geral_antes.inicio_sintomas_dias) {
                 conteudoResumo += `   • Início dos sintomas: há ${ev.estado_geral_antes.inicio_sintomas_dias} dias\n`;
               }
@@ -1245,6 +1261,10 @@ export const AppointmentDetailsManager =
                 ev.estado_geral_antes.uso_medicacao_respiratoria || false,
               inicio_sintomas_dias:
                 ev.estado_geral_antes.inicio_sintomas_dias || null,
+              quadro_compativel_com:
+                ev.estado_geral_antes.quadro_compativel_com || [],
+              origem_informacao_quadro:
+                ev.estado_geral_antes.origem_informacao_quadro || [],
               // Repercussões Funcionais
               interrupcoes_sono:
                 ev.estado_geral_antes.interrupcoes_sono || false,

@@ -130,6 +130,12 @@ export interface EstadoGeralAntes {
   uso_medicacao_respiratoria?: boolean;
   inicio_sintomas_dias?: number; // Início dos sintomas há X dias
 
+  // Quadro Compatível Com (múltipla escolha)
+  quadro_compativel_com?: string[];
+
+  // Origem da Informação do Quadro (múltipla escolha)
+  origem_informacao_quadro?: string[];
+
   // 4️⃣ Repercussões Funcionais (múltipla escolha)
   dificuldade_alimentar?: boolean;
   interrupcoes_sono?: boolean;
@@ -548,6 +554,8 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       contato_pessoas_sintomaticas: false,
       uso_medicacao_respiratoria: false,
       inicio_sintomas_dias: undefined,
+      quadro_compativel_com: [],
+      origem_informacao_quadro: [],
       // 4️⃣ Repercussões Funcionais
       dificuldade_alimentar: false,
       interrupcoes_sono: false,

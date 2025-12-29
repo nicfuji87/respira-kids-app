@@ -347,6 +347,8 @@ export interface EvolucaoAnalyticsData {
   contato_pessoas_sintomaticas?: boolean;
   uso_medicacao_respiratoria?: boolean;
   inicio_sintomas_dias?: number | null;
+  quadro_compativel_com?: string[];
+  origem_informacao_quadro?: string[];
   // Repercussões Funcionais
   interrupcoes_sono?: boolean;
   irritabilidade_respiratoria?: boolean;

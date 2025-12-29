@@ -38,6 +38,41 @@ import {
 // AI dev note: EvolutionSectionContent - Renderiza conteúdo de cada seção da evolução
 // Suporta evolução respiratória e motora/assimetria
 
+// Constantes para Quadro Compatível Com (em ordem alfabética)
+const QUADROS_COMPATIVEIS = [
+  'Adenovírus',
+  'Amigdalite / Faringite',
+  'Asma (ou Bronquite Asmática)',
+  'Bocavírus Humano',
+  'Bronquiolite',
+  'Coqueluche',
+  'Coronavírus Sazonais (229E, NL63, OC43, HKU1)',
+  'Gripe (Influenza)',
+  'Hipertrofia de Adenoide (Carne esponjosa)',
+  'Influenza A (H1N1, H3N2)',
+  'Influenza B',
+  'Laringite (Crupe)',
+  'Metapneumovírus Humano',
+  'Otite Média (Infecção de ouvido)',
+  'Parainfluenza (Tipos 1, 2, 3 e 4)',
+  'Pneumonia',
+  'Resfriado Comum',
+  'Rinite Alérgica',
+  'Rinovírus / Enterovírus',
+  'SARS-CoV-2 (COVID-19)',
+  'Sinusite',
+  'Vírus Sincicial Respiratório (VSR)',
+];
+
+// Constantes para Origem da Informação do Quadro
+const ORIGENS_INFORMACAO_QUADRO = [
+  'Diagnóstico médico informado',
+  'Relato dos responsáveis',
+  'Observação clínica durante avaliação',
+  'Documento/exame apresentado',
+  'Não informado',
+];
+
 interface EvolutionSectionContentProps {
   tipoEvolucao: TipoEvolucao;
   secaoId: string;
@@ -407,6 +442,53 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                   className="w-full sm:w-32"
                 />
+              </Field>
+
+              {/* Quadro Compatível Com */}
+              <Field label="Quadro Compatível com (múltipla escolha)">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto p-2 border rounded-lg bg-muted/20">
+                  {QUADROS_COMPATIVEIS.map((quadro) => (
+                    <CheckboxField
+                      key={quadro}
+                      label={quadro}
+                      checked={
+                        estado.quadro_compativel_com?.includes(quadro) || false
+                      }
+                      onChange={(checked) => {
+                        const atual = estado.quadro_compativel_com || [];
+                        const novos = checked
+                          ? [...atual, quadro]
+                          : atual.filter((q) => q !== quadro);
+                        updateEstado({ quadro_compativel_com: novos });
+                      }}
+                      disabled={disabled}
+                    />
+                  ))}
+                </div>
+              </Field>
+
+              {/* Origem da Informação do Quadro */}
+              <Field label="Origem da Informação do Quadro">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {ORIGENS_INFORMACAO_QUADRO.map((origem) => (
+                    <CheckboxField
+                      key={origem}
+                      label={origem}
+                      checked={
+                        estado.origem_informacao_quadro?.includes(origem) ||
+                        false
+                      }
+                      onChange={(checked) => {
+                        const atual = estado.origem_informacao_quadro || [];
+                        const novos = checked
+                          ? [...atual, origem]
+                          : atual.filter((o) => o !== origem);
+                        updateEstado({ origem_informacao_quadro: novos });
+                      }}
+                      disabled={disabled}
+                    />
+                  ))}
+                </div>
               </Field>
             </div>
 
