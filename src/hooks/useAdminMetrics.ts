@@ -5,11 +5,13 @@ import {
   fetchAllConsultationsToEvolve,
   fetchAllMaterialRequests,
   fetchAdminFaturamentoComparativo,
+  fetchCurrentWindowAppointments,
   type AdminMetrics,
   type UpcomingAppointment,
   type ConsultationToEvolve,
   type MaterialRequest,
   type FaturamentoComparativo,
+  type CurrentWindowAppointment,
 } from '@/lib/professional-dashboard-api';
 
 // AI dev note: Hook personalizado para métricas do dashboard administrativo
@@ -27,6 +29,7 @@ interface UseAdminMetricsReturn {
   // Dados
   metrics: AdminMetrics | null;
   upcomingAppointments: UpcomingAppointment[];
+  currentWindowAppointments: CurrentWindowAppointment[];
   consultationsToEvolve: ConsultationToEvolve[];
   materialRequests: MaterialRequest[];
   faturamentoComparativo: FaturamentoComparativo | null;
@@ -58,6 +61,7 @@ interface UseAdminMetricsReturn {
   // Ações
   refreshMetrics: () => Promise<void>;
   refreshUpcoming: () => Promise<void>;
+  refreshCurrentWindow: () => Promise<void>;
   refreshConsultations: () => Promise<void>;
   refreshMaterial: () => Promise<void>;
   refreshFaturamento: () => Promise<void>;
@@ -74,6 +78,9 @@ export const useAdminMetrics = ({
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [upcomingAppointments, setUpcomingAppointments] = useState<
     UpcomingAppointment[]
+  >([]);
+  const [currentWindowAppointments, setCurrentWindowAppointments] = useState<
+    CurrentWindowAppointment[]
   >([]);
   const [consultationsToEvolve, setConsultationsToEvolve] = useState<
     ConsultationToEvolve[]
@@ -146,6 +153,23 @@ export const useAdminMetrics = ({
     }
   }, [professionalFilters.agendamentos, appointmentsLimit]);
 
+  // Função para buscar atendimentos da janela atual (anterior, atual, próximo)
+  const refreshCurrentWindow = useCallback(async () => {
+    try {
+      setError(null);
+      const data = await fetchCurrentWindowAppointments(
+        undefined,
+        professionalFilters.agendamentos.length > 0
+          ? professionalFilters.agendamentos
+          : undefined
+      );
+      setCurrentWindowAppointments(data);
+    } catch (err) {
+      console.error('Erro ao buscar atendimentos atuais:', err);
+      // Não definir erro para não bloquear o dashboard se este componente falhar
+    }
+  }, [professionalFilters.agendamentos]);
+
   // Função para buscar consultas a evoluir (com filtros)
   const refreshConsultations = useCallback(async () => {
     try {
@@ -199,6 +223,7 @@ export const useAdminMetrics = ({
       await Promise.all([
         refreshMetrics(),
         refreshUpcoming(),
+        refreshCurrentWindow(),
         refreshConsultations(),
         refreshMaterial(),
         refreshFaturamento(),
@@ -213,6 +238,7 @@ export const useAdminMetrics = ({
   }, [
     refreshMetrics,
     refreshUpcoming,
+    refreshCurrentWindow,
     refreshConsultations,
     refreshMaterial,
     refreshFaturamento,
@@ -228,6 +254,7 @@ export const useAdminMetrics = ({
       Promise.all([
         refreshMetrics(),
         refreshUpcoming(),
+        refreshCurrentWindow(),
         refreshConsultations(),
         refreshMaterial(),
         refreshFaturamento(),
@@ -246,8 +273,14 @@ export const useAdminMetrics = ({
   useEffect(() => {
     if (professionalFilters.agendamentos.length > 0) {
       refreshUpcoming();
+      refreshCurrentWindow();
     }
-  }, [professionalFilters.agendamentos, appointmentsLimit, refreshUpcoming]); // Apenas quando filtros ou limite mudam
+  }, [
+    professionalFilters.agendamentos,
+    appointmentsLimit,
+    refreshUpcoming,
+    refreshCurrentWindow,
+  ]); // Apenas quando filtros ou limite mudam
 
   // Efeito para atualizar quando filtros de consultas mudam
   useEffect(() => {
@@ -279,6 +312,7 @@ export const useAdminMetrics = ({
     // Dados
     metrics,
     upcomingAppointments,
+    currentWindowAppointments,
     consultationsToEvolve,
     materialRequests,
     faturamentoComparativo,
@@ -302,6 +336,7 @@ export const useAdminMetrics = ({
     // Ações
     refreshMetrics,
     refreshUpcoming,
+    refreshCurrentWindow,
     refreshConsultations,
     refreshMaterial,
     refreshFaturamento,

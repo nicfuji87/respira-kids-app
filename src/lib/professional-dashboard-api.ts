@@ -286,6 +286,228 @@ export const fetchProfessionalMetrics = async (
   }
 };
 
+// AI dev note: Interface para uma evolução individual
+export interface EvolucaoHistorico {
+  id: string;
+  data: string; // Data formatada para exibição
+  dataCompleta: string; // Data ISO para ordenação
+  conteudo: string; // Conteúdo completo da evolução
+  profissionalNome?: string | null;
+}
+
+// AI dev note: Interface para atendimentos da janela atual (anterior, atual, próximo)
+export interface CurrentWindowAppointment extends UpcomingAppointment {
+  position: 'previous' | 'current' | 'next';
+  isInProgress?: boolean; // true se o atendimento está acontecendo agora
+  servicoDuracao?: number; // duração em minutos
+  pacienteId?: string; // ID do paciente para buscar histórico
+  responsavelLegalNome?: string | null; // Nome do responsável legal
+  evolucoes?: EvolucaoHistorico[]; // Lista de evoluções do paciente
+}
+
+/**
+ * Busca os 3 atendimentos da janela atual: anterior, atual e próximo
+ * Baseado no horário atual, retorna o contexto imediato de atendimentos
+ */
+export const fetchCurrentWindowAppointments = async (
+  professionalId?: string,
+  professionalIds?: string[]
+): Promise<CurrentWindowAppointment[]> => {
+  try {
+    const agora = new Date();
+
+    // Buscar atendimentos do dia atual (para ter contexto completo)
+    const inicioDia = new Date(agora);
+    inicioDia.setHours(0, 0, 0, 0);
+
+    const fimDia = new Date(agora);
+    fimDia.setHours(23, 59, 59, 999);
+
+    let query = supabase
+      .from('vw_agendamentos_completos')
+      .select('*')
+      .gte('data_hora', inicioDia.toISOString())
+      .lte('data_hora', fimDia.toISOString())
+      .eq('ativo', true)
+      .order('data_hora', { ascending: true });
+
+    // Filtrar por profissional específico ou lista de profissionais
+    if (professionalId) {
+      query = query.eq('profissional_id', professionalId);
+    } else if (professionalIds && professionalIds.length > 0) {
+      query = query.in('profissional_id', professionalIds);
+    }
+
+    const { data: agendamentos, error } = await query;
+
+    if (error) throw error;
+
+    if (!agendamentos || agendamentos.length === 0) {
+      return [];
+    }
+
+    // Mapear para o formato UpcomingAppointment com dados extras
+    const appointments = agendamentos.map((a) => ({
+      id: a.id,
+      dataHora: a.data_hora,
+      pacienteNome: a.paciente_nome,
+      tipoServico: a.servico_nome || 'Serviço não definido',
+      local: a.local_nome || 'Local não definido',
+      valor: parseFloat(a.valor_servico || '0'),
+      statusConsulta: a.status_consulta_nome || 'Status não definido',
+      statusPagamento: a.status_pagamento_nome || 'Pagamento não definido',
+      profissionalNome: a.profissional_nome,
+      servicoDuracao: a.servico_duracao || 60,
+      // Dados extras para CurrentWindowAppointment
+      pacienteId: a.paciente_id,
+      responsavelLegalNome: a.responsavel_legal_nome || null,
+    }));
+
+    // Encontrar o atendimento atual, anterior e próximo baseado no horário
+    const result: CurrentWindowAppointment[] = [];
+
+    let currentIndex = -1;
+
+    // Encontrar o índice do atendimento "atual" ou mais próximo
+    for (let i = 0; i < appointments.length; i++) {
+      const appointmentTime = parseSupabaseDatetime(appointments[i].dataHora);
+      const endTime = new Date(
+        appointmentTime.getTime() +
+          (appointments[i].servicoDuracao || 60) * 60000
+      );
+
+      // Se o atendimento está em andamento (agora está entre início e fim)
+      if (agora >= appointmentTime && agora <= endTime) {
+        currentIndex = i;
+        break;
+      }
+
+      // Se o atendimento ainda não começou, o anterior é o atual
+      if (appointmentTime > agora) {
+        currentIndex = i;
+        break;
+      }
+    }
+
+    // Se não encontrou nenhum (todos já passaram), o último é o "atual"
+    if (currentIndex === -1) {
+      currentIndex = appointments.length - 1;
+    }
+
+    // Coletar IDs de pacientes para buscar histórico
+    const pacienteIds = new Set<string>();
+
+    // Adicionar atendimento anterior (se existir)
+    if (currentIndex > 0) {
+      const prev = appointments[currentIndex - 1];
+      pacienteIds.add(prev.pacienteId);
+      result.push({
+        ...prev,
+        position: 'previous',
+        isInProgress: false,
+      });
+    }
+
+    // Adicionar atendimento atual
+    if (currentIndex >= 0 && currentIndex < appointments.length) {
+      const current = appointments[currentIndex];
+      const appointmentTime = parseSupabaseDatetime(current.dataHora);
+      const endTime = new Date(
+        appointmentTime.getTime() + (current.servicoDuracao || 60) * 60000
+      );
+      const isInProgress = agora >= appointmentTime && agora <= endTime;
+
+      pacienteIds.add(current.pacienteId);
+      result.push({
+        ...current,
+        position: 'current',
+        isInProgress,
+      });
+    }
+
+    // Adicionar próximo atendimento (se existir)
+    if (currentIndex + 1 < appointments.length) {
+      const next = appointments[currentIndex + 1];
+      pacienteIds.add(next.pacienteId);
+      result.push({
+        ...next,
+        position: 'next',
+        isInProgress: false,
+      });
+    }
+
+    // Buscar todas as evoluções para cada paciente
+    const evolucoesMap = new Map<string, EvolucaoHistorico[]>();
+
+    for (const pacienteId of pacienteIds) {
+      try {
+        // Buscar agendamentos do paciente com dados do profissional
+        const { data: agendamentosPaciente } = await supabase
+          .from('vw_agendamentos_completos')
+          .select('id, data_hora, profissional_nome')
+          .eq('paciente_id', pacienteId)
+          .eq('ativo', true);
+
+        if (agendamentosPaciente && agendamentosPaciente.length > 0) {
+          const agendamentoIds = agendamentosPaciente.map((a) => a.id);
+          const agendamentoMap = new Map(
+            agendamentosPaciente.map((a) => [a.id, a])
+          );
+
+          // Buscar TODAS as evoluções do paciente
+          const { data: evolucoes } = await supabase
+            .from('relatorio_evolucao')
+            .select('id, conteudo, created_at, id_agendamento')
+            .in('id_agendamento', agendamentoIds)
+            .not('conteudo', 'is', null)
+            .order('created_at', { ascending: false });
+
+          if (evolucoes && evolucoes.length > 0) {
+            // Mapear evoluções com dados completos
+            const evolucoesFormatadas: EvolucaoHistorico[] = evolucoes.map(
+              (e) => {
+                const agendamento = agendamentoMap.get(e.id_agendamento);
+                const dataEvolucao = new Date(e.created_at);
+
+                return {
+                  id: e.id,
+                  data: dataEvolucao.toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  }),
+                  dataCompleta: e.created_at,
+                  conteudo: e.conteudo,
+                  profissionalNome: agendamento?.profissional_nome || null,
+                };
+              }
+            );
+
+            evolucoesMap.set(pacienteId, evolucoesFormatadas);
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `Erro ao buscar evoluções do paciente ${pacienteId}:`,
+          err
+        );
+        // Continua sem evoluções para este paciente
+      }
+    }
+
+    // Adicionar evoluções aos resultados
+    const resultWithEvolutions = result.map((appointment) => ({
+      ...appointment,
+      evolucoes: evolucoesMap.get(appointment.pacienteId || '') || [],
+    }));
+
+    return resultWithEvolutions;
+  } catch (error) {
+    console.error('Erro ao buscar atendimentos da janela atual:', error);
+    throw error;
+  }
+};
+
 /**
  * Busca próximos agendamentos do profissional
  */

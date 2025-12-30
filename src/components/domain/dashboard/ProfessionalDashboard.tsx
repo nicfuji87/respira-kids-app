@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/primitives/button';
 import {
   ProfessionalMetrics,
-  AppointmentsList,
+  CurrentAppointments,
   ConsultationsToEvolve,
   MaterialRequestCard,
   WeekBirthdays,
@@ -14,6 +14,7 @@ import type {
   UpcomingAppointment,
   ConsultationToEvolve,
   MaterialRequest,
+  CurrentWindowAppointment,
 } from '@/lib/professional-dashboard-api';
 
 // AI dev note: ProfessionalDashboard - Componente Domain que combina Composed
@@ -24,6 +25,7 @@ interface ProfessionalDashboardProps {
   professionalId: string;
   professionalName: string;
   onAppointmentClick?: (appointment: UpcomingAppointment) => void;
+  onCurrentAppointmentClick?: (appointment: CurrentWindowAppointment) => void;
   onConsultationClick?: (consultation: ConsultationToEvolve) => void;
   onCreateEvolutionClick?: (consultationId: string) => void;
   onMaterialRequestClick?: (request: MaterialRequest) => void;
@@ -37,6 +39,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
     professionalId,
     professionalName,
     onAppointmentClick,
+    onCurrentAppointmentClick,
     onConsultationClick,
     onCreateEvolutionClick,
     onMaterialRequestClick,
@@ -63,6 +66,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
     const {
       metrics,
       upcomingAppointments,
+      currentWindowAppointments,
       consultationsToEvolve,
       materialRequests,
       loading,
@@ -106,6 +110,17 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
           </div>
         </div>
 
+        {/* AI dev note: Atendimentos Atuais - janela de 3 atendimentos (anterior, atual, próximo) */}
+        {/* Inclui "Ver mais atendimentos" para expandir os próximos */}
+        <CurrentAppointments
+          appointments={currentWindowAppointments}
+          upcomingAppointments={upcomingAppointments}
+          loading={loading}
+          error={error}
+          onAppointmentClick={onCurrentAppointmentClick || onAppointmentClick}
+          userRole={userRole}
+        />
+
         {/* Métricas principais */}
         <ProfessionalMetrics
           metrics={metrics}
@@ -116,28 +131,14 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
         {/* Aniversários da semana */}
         <WeekBirthdays maxItems={20} />
 
-        {/* Grid principal */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Próximos agendamentos */}
-          <AppointmentsList
-            appointments={upcomingAppointments}
-            loading={loading}
-            error={error}
-            onAppointmentClick={onAppointmentClick}
-            userRole={userRole}
-            maxItems={5}
-            showValues={false}
-          />
-
-          {/* Solicitação de material */}
-          <MaterialRequestCard
-            requests={materialRequests}
-            loading={loading}
-            error={error}
-            onRequestClick={onMaterialRequestClick}
-            onCreateRequest={onCreateMaterialRequest}
-          />
-        </div>
+        {/* Solicitação de material */}
+        <MaterialRequestCard
+          requests={materialRequests}
+          loading={loading}
+          error={error}
+          onRequestClick={onMaterialRequestClick}
+          onCreateRequest={onCreateMaterialRequest}
+        />
 
         {/* Consultas a evoluir */}
         <div id="consultations-to-evolve">

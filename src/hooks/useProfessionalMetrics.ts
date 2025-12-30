@@ -5,11 +5,13 @@ import {
   fetchConsultationsToEvolve,
   fetchMaterialRequests,
   fetchFaturamentoComparativo,
+  fetchCurrentWindowAppointments,
   type ProfessionalMetrics,
   type UpcomingAppointment,
   type ConsultationToEvolve,
   type MaterialRequest,
   type FaturamentoComparativo,
+  type CurrentWindowAppointment,
 } from '@/lib/professional-dashboard-api';
 
 // AI dev note: Hook personalizado para métricas do dashboard profissional
@@ -27,6 +29,7 @@ interface UseProfessionalMetricsReturn {
   // Dados
   metrics: ProfessionalMetrics | null;
   upcomingAppointments: UpcomingAppointment[];
+  currentWindowAppointments: CurrentWindowAppointment[];
   consultationsToEvolve: ConsultationToEvolve[];
   materialRequests: MaterialRequest[];
   faturamentoComparativo: FaturamentoComparativo | null;
@@ -39,6 +42,7 @@ interface UseProfessionalMetricsReturn {
   // Ações
   refreshMetrics: () => Promise<void>;
   refreshUpcoming: () => Promise<void>;
+  refreshCurrentWindow: () => Promise<void>;
   refreshConsultations: () => Promise<void>;
   refreshMaterial: () => Promise<void>;
   refreshFaturamento: () => Promise<void>;
@@ -56,6 +60,9 @@ export const useProfessionalMetrics = ({
   const [metrics, setMetrics] = useState<ProfessionalMetrics | null>(null);
   const [upcomingAppointments, setUpcomingAppointments] = useState<
     UpcomingAppointment[]
+  >([]);
+  const [currentWindowAppointments, setCurrentWindowAppointments] = useState<
+    CurrentWindowAppointment[]
   >([]);
   const [consultationsToEvolve, setConsultationsToEvolve] = useState<
     ConsultationToEvolve[]
@@ -100,6 +107,20 @@ export const useProfessionalMetrics = ({
     } catch (err) {
       console.error('Erro ao buscar agendamentos:', err);
       setError('Erro ao carregar agendamentos');
+    }
+  }, [professionalId]);
+
+  // Função para buscar atendimentos da janela atual (anterior, atual, próximo)
+  const refreshCurrentWindow = useCallback(async () => {
+    if (!professionalId) return;
+
+    try {
+      setError(null);
+      const data = await fetchCurrentWindowAppointments(professionalId);
+      setCurrentWindowAppointments(data);
+    } catch (err) {
+      console.error('Erro ao buscar atendimentos atuais:', err);
+      // Não definir erro para não bloquear o dashboard se este componente falhar
     }
   }, [professionalId]);
 
@@ -156,6 +177,7 @@ export const useProfessionalMetrics = ({
       await Promise.all([
         refreshMetrics(),
         refreshUpcoming(),
+        refreshCurrentWindow(),
         refreshConsultations(),
         refreshMaterial(),
         refreshFaturamento(),
@@ -170,6 +192,7 @@ export const useProfessionalMetrics = ({
   }, [
     refreshMetrics,
     refreshUpcoming,
+    refreshCurrentWindow,
     refreshConsultations,
     refreshMaterial,
     refreshFaturamento,
@@ -201,6 +224,7 @@ export const useProfessionalMetrics = ({
     // Dados
     metrics,
     upcomingAppointments,
+    currentWindowAppointments,
     consultationsToEvolve,
     materialRequests,
     faturamentoComparativo,
@@ -213,6 +237,7 @@ export const useProfessionalMetrics = ({
     // Ações
     refreshMetrics,
     refreshUpcoming,
+    refreshCurrentWindow,
     refreshConsultations,
     refreshMaterial,
     refreshFaturamento,

@@ -72,6 +72,7 @@ export { PagamentoStatusSelect } from './PagamentoStatusSelect';
 // Professional Dashboard Components
 export { ProfessionalMetrics } from './ProfessionalMetrics';
 export { AppointmentsList } from './AppointmentsList';
+export { CurrentAppointments } from './CurrentAppointments';
 export { ConsultationsToEvolve } from './ConsultationsToEvolve';
 export { MaterialRequestCard } from './MaterialRequestCard';
 export { FaturamentoChart } from './FaturamentoChart';

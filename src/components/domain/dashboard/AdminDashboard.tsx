@@ -16,18 +16,13 @@ import {
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
-import {
-  Clock,
-  AlertTriangle,
-  RefreshCw,
-  Filter,
-  Stethoscope,
-} from 'lucide-react';
+import { AlertTriangle, RefreshCw, Filter, Stethoscope } from 'lucide-react';
 import { useAdminMetrics } from '@/hooks/useAdminMetrics';
+import { useCalendarFormData } from '@/hooks/useCalendarData';
 import { UserMetrics } from '@/components/composed/UserMetrics';
 import { ProfessionalMetrics } from '@/components/composed/ProfessionalMetrics';
 import { ConsultationsToEvolve } from '@/components/composed/ConsultationsToEvolve';
-import { AppointmentsList } from '@/components/composed/AppointmentsList';
+import { CurrentAppointments } from '@/components/composed/CurrentAppointments';
 import { ProfessionalFilter } from '@/components/composed/ProfessionalFilter';
 import { WeekBirthdays } from '@/components/composed/WeekBirthdays';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
@@ -58,11 +53,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
 
   const { user } = useAuth();
 
+  // Hook para dados do calendário (locais de atendimento)
+  const { formData } = useCalendarFormData();
+
   const {
     loading,
     error,
     refreshAll,
     upcomingAppointments,
+    currentWindowAppointments,
     consultationsToEvolve,
     setProfessionalFilters,
   } = useAdminMetrics({
@@ -146,7 +145,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   );
 
   // AI dev note: Preparar dados das métricas principais
-  const upcomingCount = upcomingAppointments?.length || 0;
   const evolutionCount = consultationsToEvolve?.length || 0;
 
   // AI dev note: Skeleton loading para o estado inicial
@@ -249,6 +247,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         />
       </div>
 
+      {/* AI dev note: Atendimentos Atuais - janela de 3 atendimentos (anterior, atual, próximo) */}
+      {/* Inclui "Ver mais atendimentos" para expandir os próximos */}
+      <CurrentAppointments
+        appointments={currentWindowAppointments}
+        upcomingAppointments={upcomingAppointments || []}
+        loading={loading}
+        error={error}
+        onAppointmentClick={handleAppointmentClick}
+        userRole="admin"
+      />
+
       {/* AI dev note: Seção de métricas detalhadas */}
       <div className="grid gap-6 lg:grid-cols-2">
         <UserMetrics metrics={null} loading={loading} />
@@ -258,60 +267,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
       {/* AI dev note: Aniversários da semana */}
       <WeekBirthdays maxItems={20} />
 
-      {/* AI dev note: Seção de listas e agendamentos */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-6">
-          {/* Lista de Próximas Consultas */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Próximas Consultas
-                {upcomingCount > 0 && (
-                  <Badge variant="secondary">{upcomingCount}</Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[500px]">
-                <AppointmentsList
-                  appointments={upcomingAppointments || []}
-                  loading={loading}
-                  onAppointmentClick={handleAppointmentClick}
-                  maxItems={10}
-                  userRole="admin"
-                />
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          {/* Consultas para Evolução */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Stethoscope className="h-5 w-5" />
-                Consultas para Evolução
-                {evolutionCount > 0 && (
-                  <Badge variant="destructive">{evolutionCount}</Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[600px]">
-                <ConsultationsToEvolve
-                  consultations={consultationsToEvolve || []}
-                  loading={loading}
-                  onConsultationClick={handleAppointmentClick}
-                  onCreateEvolutionClick={handleEvolutionClick}
-                  maxItems={10} // Mostrar 10 consultas inicialmente, com botão "Ver mais"
-                />
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      {/* AI dev note: Seção de consultas para evolução */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Stethoscope className="h-5 w-5" />
+            Consultas para Evolução
+            {evolutionCount > 0 && (
+              <Badge variant="destructive">{evolutionCount}</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[600px]">
+            <ConsultationsToEvolve
+              consultations={consultationsToEvolve || []}
+              loading={loading}
+              onConsultationClick={handleAppointmentClick}
+              onCreateEvolutionClick={handleEvolutionClick}
+              maxItems={10}
+            />
+          </ScrollArea>
+        </CardContent>
+      </Card>
 
       {/* AI dev note: Modal de detalhes do agendamento */}
       <Dialog
@@ -330,7 +308,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                 onClose={handleAppointmentDetailsClose}
                 onSave={handleAppointmentDetailsSave}
                 userRole="admin"
-                locaisAtendimento={[]}
+                locaisAtendimento={formData.locaisAtendimento || []}
               />
             )}
           </div>
