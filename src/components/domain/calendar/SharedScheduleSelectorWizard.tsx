@@ -8,8 +8,10 @@ import {
   MapPin,
   Building2,
   AlertCircle,
+  Clock,
+  Phone,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/primitives/button';
@@ -59,6 +61,24 @@ import type { ExistingUserFullData } from '@/components/composed/WhatsAppValidat
 // Wizard público para responsáveis selecionarem horários
 // Inclui validação WhatsApp obrigatória + steps dinâmicos (skip se apenas 1 opção)
 // SEM exibir valor e duração dos serviços conforme solicitado
+
+// AI dev note: REGRAS DE ANTECEDÊNCIA
+// - Agendamento: mínimo 8 horas de antecedência
+// - Alteração/Cancelamento: mínimo 24 horas de antecedência
+const HORAS_MINIMAS_AGENDAMENTO = 8;
+const HORAS_MINIMAS_ALTERACAO = 24;
+
+// AI dev note: Função utilitária para verificar se slot está dentro do prazo mínimo
+const isSlotWithinMinimumHours = (
+  slotDataHora: string,
+  horasMinimas: number
+): boolean => {
+  const now = new Date();
+  // Parse do horário do slot (formato: 2025-01-02T14:00:00+00:00 ou similar)
+  const slotDate = new Date(slotDataHora);
+  const horasAteSlot = differenceInHours(slotDate, now);
+  return horasAteSlot < horasMinimas;
+};
 
 export interface SharedScheduleSelectorWizardProps {
   agenda: AgendaCompartilhadaCompleta;
@@ -714,10 +734,19 @@ export const SharedScheduleSelectorWizard =
             );
 
           case 'select-slot': {
+            // AI dev note: REGRA DE 8 HORAS - Filtrar slots que estão muito próximos
+            const slotsDisponiveis = agenda.slots.filter(
+              (slot) =>
+                !isSlotWithinMinimumHours(
+                  slot.data_hora,
+                  HORAS_MINIMAS_AGENDAMENTO
+                )
+            );
+
             // Agrupar slots por data
             // AI dev note: Usar parseSupabaseDatetime para manter horário exato (sem conversão de timezone)
             const grupos: Record<string, typeof agenda.slots> = {};
-            agenda.slots.forEach((slot) => {
+            slotsDisponiveis.forEach((slot) => {
               const date = parseSupabaseDatetime(slot.data_hora);
               const key = format(date, 'yyyy-MM-dd');
               if (!grupos[key]) grupos[key] = [];
@@ -725,14 +754,44 @@ export const SharedScheduleSelectorWizard =
             });
             const slotsPorData = grupos;
 
+            // AI dev note: Mensagem quando não há slots disponíveis após filtro de 8h
+            if (slotsDisponiveis.length === 0) {
+              return (
+                <div className="space-y-6 text-center py-8">
+                  <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <Clock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold">
+                      Nenhum horário disponível
+                    </h3>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                      Todos os horários estão com menos de{' '}
+                      {HORAS_MINIMAS_AGENDAMENTO} horas de antecedência.
+                      <br />
+                      <br />
+                      <span className="font-medium">
+                        Para agendar com menos de {HORAS_MINIMAS_AGENDAMENTO}h
+                        de antecedência, entre em contato com a recepção.
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 text-primary">
+                    <Phone className="w-4 h-4" />
+                    <span className="font-medium">Contate a recepção</span>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div className="space-y-4">
                 <div className="text-center space-y-2">
                   <h3 className="text-lg font-semibold">Escolha o Horário</h3>
                   <p className="text-sm text-muted-foreground">
-                    {agenda.slots_disponiveis} horário
-                    {agenda.slots_disponiveis !== 1 ? 's' : ''} disponíve
-                    {agenda.slots_disponiveis !== 1 ? 'is' : 'l'}
+                    {slotsDisponiveis.length} horário
+                    {slotsDisponiveis.length !== 1 ? 's' : ''} disponíve
+                    {slotsDisponiveis.length !== 1 ? 'is' : 'l'}
                   </p>
                 </div>
 
@@ -1059,31 +1118,74 @@ export const SharedScheduleSelectorWizard =
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="sm:flex-col gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowRescheduleDialog(false);
-                    // Reseta paciente para escolher outro
-                    setWizardData((prev) => ({
-                      ...prev,
-                      paciente_id: undefined,
-                      paciente_nome: undefined,
-                    }));
-                  }}
-                  className="w-full"
-                >
-                  Manter Este Horário
-                </Button>
-                <Button
-                  onClick={() => {
-                    setIsRescheduling(true);
-                    setShowRescheduleDialog(false);
-                    setCurrentStep(getNextStep('select-patient'));
-                  }}
-                  className="w-full"
-                >
-                  Trocar de Horário
-                </Button>
+                {/* AI dev note: REGRA DE 24 HORAS - Verificar se pode alterar */}
+                {existingAppointmentData &&
+                isSlotWithinMinimumHours(
+                  existingAppointmentData.data_hora,
+                  HORAS_MINIMAS_ALTERACAO
+                ) ? (
+                  <div className="w-full space-y-4">
+                    <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-center">
+                      <Clock className="w-6 h-6 text-destructive mx-auto mb-2" />
+                      <p className="text-sm font-medium text-destructive">
+                        Alterações só podem ser realizadas com pelo menos{' '}
+                        {HORAS_MINIMAS_ALTERACAO}h de antecedência
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Entre em contato com a recepção para alterar ou cancelar
+                        este agendamento.
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-2 text-primary">
+                      <Phone className="w-4 h-4" />
+                      <span className="font-medium text-sm">
+                        Contate a recepção
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowRescheduleDialog(false);
+                        setWizardData((prev) => ({
+                          ...prev,
+                          paciente_id: undefined,
+                          paciente_nome: undefined,
+                        }));
+                      }}
+                      className="w-full"
+                    >
+                      Entendi
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowRescheduleDialog(false);
+                        // Reseta paciente para escolher outro
+                        setWizardData((prev) => ({
+                          ...prev,
+                          paciente_id: undefined,
+                          paciente_nome: undefined,
+                        }));
+                      }}
+                      className="w-full"
+                    >
+                      Manter Este Horário
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setIsRescheduling(true);
+                        setShowRescheduleDialog(false);
+                        setCurrentStep(getNextStep('select-patient'));
+                      }}
+                      className="w-full"
+                    >
+                      Trocar de Horário
+                    </Button>
+                  </>
+                )}
               </DialogFooter>
             </DialogContent>
           </Dialog>
