@@ -15,6 +15,7 @@ import {
   ChevronUp,
   List,
   Users,
+  Check,
 } from 'lucide-react';
 import {
   Card,
@@ -36,6 +37,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/primitives/popover';
 import { DatePicker } from './DatePicker';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -87,13 +93,6 @@ type PeriodFilter =
   | 'personalizado'
   | 'todos';
 
-type PaymentStatusFilter =
-  | 'todos'
-  | 'pago'
-  | 'pendente'
-  | 'aberto'
-  | 'cancelado';
-
 type SortOption =
   | 'data_desc'
   | 'data_asc'
@@ -106,6 +105,114 @@ interface FinancialConsultationsListProps {
   onConsultationClick?: (consultation: ConsultationWithPatient) => void;
   className?: string;
 }
+
+// AI dev note: Componente auxiliar para filtro multi-seleção (profissionais e status)
+interface MultiSelectFilterProps {
+  items: Array<{ id: string; label: string }>;
+  selectedIds: string[];
+  onSelectionChange: (ids: string[]) => void;
+  allLabel?: string;
+  placeholder?: string;
+}
+
+const MultiSelectFilter = React.memo<MultiSelectFilterProps>(
+  ({
+    items,
+    selectedIds,
+    onSelectionChange,
+    allLabel = 'Todos',
+    placeholder,
+  }) => {
+    const [open, setOpen] = React.useState(false);
+
+    const toggleItem = (itemId: string) => {
+      const newSelection = selectedIds.includes(itemId)
+        ? selectedIds.filter((id) => id !== itemId)
+        : [...selectedIds, itemId];
+      onSelectionChange(newSelection);
+    };
+
+    const selectAll = () => {
+      onSelectionChange([]);
+    };
+
+    const isAllSelected = selectedIds.length === 0;
+
+    const getButtonText = () => {
+      if (isAllSelected) return placeholder || allLabel;
+      if (selectedIds.length === 1) {
+        const item = items.find((i) => i.id === selectedIds[0]);
+        return item?.label || allLabel;
+      }
+      return `${selectedIds.length} selecionados`;
+    };
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              'w-full justify-between font-normal h-10',
+              !isAllSelected && 'border-primary'
+            )}
+          >
+            <span className="truncate text-sm">{getButtonText()}</span>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[250px] p-0" align="start">
+          <div className="max-h-[300px] overflow-y-auto">
+            {/* Opção "Todos" */}
+            <div
+              className={cn(
+                'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer',
+                isAllSelected && 'bg-accent'
+              )}
+              onClick={selectAll}
+            >
+              <div
+                className={cn(
+                  'flex h-4 w-4 items-center justify-center rounded border',
+                  isAllSelected
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-input'
+                )}
+              >
+                {isAllSelected && <Check className="h-3 w-3" />}
+              </div>
+              <span className="text-sm font-medium">{allLabel}</span>
+            </div>
+
+            {/* Lista de itens */}
+            {items.map((item) => {
+              const isSelected = selectedIds.includes(item.id);
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer',
+                    isSelected && 'bg-accent/50'
+                  )}
+                  onClick={() => toggleItem(item.id)}
+                >
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleItem(item.id)}
+                    className="pointer-events-none"
+                  />
+                  <span className="text-sm">{item.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
+  }
+);
+
+MultiSelectFilter.displayName = 'MultiSelectFilter';
 
 export const FinancialConsultationsList: React.FC<
   FinancialConsultationsListProps
@@ -125,11 +232,13 @@ export const FinancialConsultationsList: React.FC<
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('mes_atual');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [professionalFilter, setProfessionalFilter] = useState<string>('todos');
-  const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('todos');
+  // AI dev note: Agora suporta múltiplos profissionais (array vazio = todos)
+  const [professionalFilter, setProfessionalFilter] = useState<string[]>([]);
+  // AI dev note: Agora suporta múltiplos tipos de serviço (array vazio = todos)
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<string[]>([]);
   const [empresaFilter, setEmpresaFilter] = useState<string>('todos');
-  const [paymentStatusFilter, setPaymentStatusFilter] =
-    useState<PaymentStatusFilter>('todos');
+  // AI dev note: Agora suporta múltiplos status (array vazio = todos)
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('data_desc');
 
@@ -146,15 +255,9 @@ export const FinancialConsultationsList: React.FC<
     new Set()
   );
 
-  // Estados de contagem
-  const [totalCount, setTotalCount] = useState(0);
-
-  // Estados de totais (todos os registros do filtro, não apenas da página)
-  const [totalSummary, setTotalSummary] = useState({
-    totalValue: 0,
-    unpaidCount: 0,
-    paidCount: 0,
-  });
+  // AI dev note: Totais calculados a partir de filteredConsultations
+  // BUGFIX: Antes usava query separada que ignorava filtros locais (empresa, profissional, etc)
+  // Agora calcula dinamicamente baseado nas consultas já filtradas
 
   // Listas para filtros
   const [professionals, setProfessionals] = useState<
@@ -165,6 +268,10 @@ export const FinancialConsultationsList: React.FC<
   >([]);
   const [companies, setCompanies] = useState<
     Array<{ id: string; nome: string }>
+  >([]);
+  // AI dev note: Status de pagamento vindos do Supabase (não mais hardcoded)
+  const [paymentStatusOptions, setPaymentStatusOptions] = useState<
+    Array<{ id: string; codigo: string; descricao: string }>
   >([]);
 
   // Função para buscar consultas
@@ -242,89 +349,10 @@ export const FinancialConsultationsList: React.FC<
           break;
       }
 
-      // AI dev note: Buscar count COM OS MESMOS FILTROS aplicados
-      let countQuery = supabase
-        .from('vw_agendamentos_completos')
-        .select('*', { count: 'exact', head: true })
-        .not('status_consulta_codigo', 'eq', 'cancelado');
+      // AI dev note: Totais agora são calculados via useMemo baseado em filteredConsultations
+      // Isso garante que os totais respeitem todos os filtros locais (empresa, profissional, etc)
 
-      // Aplicar mesmos filtros de período no count
-      if (startDateFilter && periodFilter !== 'todos') {
-        countQuery = countQuery.gte('data_hora', startDateFilter);
-      }
-      if (endDateFilter && periodFilter !== 'todos') {
-        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
-        countQuery = countQuery.lte('data_hora', endDateFilter + 'T23:59:59');
-      }
-
-      const { count } = await countQuery;
-      setTotalCount(count || 0);
-
-      // AI dev note: Buscar totais usando agregação em lotes (sem limite de 1000)
-      let allConsultasQuery = supabase
-        .from('vw_agendamentos_completos')
-        .select('valor_servico, status_pagamento_codigo')
-        .not('status_consulta_codigo', 'eq', 'cancelado');
-
-      // Aplicar mesmos filtros de período
-      if (startDateFilter && periodFilter !== 'todos') {
-        allConsultasQuery = allConsultasQuery.gte('data_hora', startDateFilter);
-      }
-      if (endDateFilter && periodFilter !== 'todos') {
-        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
-        allConsultasQuery = allConsultasQuery.lte(
-          'data_hora',
-          endDateFilter + 'T23:59:59'
-        );
-      }
-
-      // Buscar TODAS as consultas em lotes para evitar limite de 1000
-      const allConsultas: Array<{
-        valor_servico: string;
-        status_pagamento_codigo: string;
-      }> = [];
-      let currentOffset = 0;
-      const batchSize = 1000;
-      let hasMoreRecords = true;
-
-      while (hasMoreRecords) {
-        const { data: batchData, error: batchError } =
-          await allConsultasQuery.range(
-            currentOffset,
-            currentOffset + batchSize - 1
-          );
-
-        if (batchError) {
-          console.error('❌ Erro ao buscar lote de consultas:', batchError);
-          break;
-        }
-
-        if (batchData && batchData.length > 0) {
-          allConsultas.push(...batchData);
-          currentOffset += batchSize;
-          hasMoreRecords = batchData.length === batchSize;
-        } else {
-          hasMoreRecords = false;
-        }
-      }
-
-      // Calcular totais com TODOS os registros
-      const totalValue = allConsultas.reduce(
-        (sum, item) => sum + (parseFloat(item.valor_servico) || 0),
-        0
-      );
-      const unpaidCount = allConsultas.filter(
-        (item) =>
-          item.status_pagamento_codigo !== 'pago' &&
-          item.status_pagamento_codigo !== 'cancelado'
-      ).length;
-      const paidCount = allConsultas.filter(
-        (item) => item.status_pagamento_codigo === 'pago'
-      ).length;
-
-      setTotalSummary({ totalValue, unpaidCount, paidCount });
-
-      // Query de dados com mesmos filtros
+      // Query de dados com filtros de período
       let query = supabase
         .from('vw_agendamentos_completos')
         .select(selectFields)
@@ -484,17 +512,17 @@ export const FinancialConsultationsList: React.FC<
   useEffect(() => {
     let filtered = [...consultations];
 
-    // Filtro de profissional
-    if (professionalFilter !== 'todos') {
-      filtered = filtered.filter(
-        (c) => c.profissional_id === professionalFilter
+    // AI dev note: Filtro de profissional (agora suporta múltiplos - array vazio = todos)
+    if (professionalFilter.length > 0) {
+      filtered = filtered.filter((c) =>
+        professionalFilter.includes(c.profissional_id)
       );
     }
 
-    // Filtro de tipo de serviço
-    if (serviceTypeFilter !== 'todos') {
-      filtered = filtered.filter(
-        (c) => c.tipo_servico_id === serviceTypeFilter
+    // AI dev note: Filtro de tipo de serviço (agora suporta múltiplos - array vazio = todos)
+    if (serviceTypeFilter.length > 0) {
+      filtered = filtered.filter((c) =>
+        serviceTypeFilter.includes(c.tipo_servico_id || '')
       );
     }
 
@@ -503,10 +531,10 @@ export const FinancialConsultationsList: React.FC<
       filtered = filtered.filter((c) => c.empresa_fatura_id === empresaFilter);
     }
 
-    // Filtro de status de pagamento
-    if (paymentStatusFilter !== 'todos') {
-      filtered = filtered.filter(
-        (c) => c.status_pagamento_codigo === paymentStatusFilter
+    // AI dev note: Filtro de status de pagamento (agora suporta múltiplos - array vazio = todos)
+    if (paymentStatusFilter.length > 0) {
+      filtered = filtered.filter((c) =>
+        paymentStatusFilter.includes(c.status_pagamento_codigo)
       );
     }
 
@@ -576,10 +604,51 @@ export const FinancialConsultationsList: React.FC<
     paymentStatusFilter,
   ]);
 
+  // AI dev note: Calcular totais a partir das consultas FILTRADAS
+  // BUGFIX: Antes usava query separada no banco que ignorava filtros locais
+  const totalCount = filteredConsultations.length;
+
+  const totalSummary = React.useMemo(() => {
+    const totalValue = filteredConsultations.reduce(
+      (sum, item) => sum + (item.valor_servico || 0),
+      0
+    );
+    const unpaidCount = filteredConsultations.filter(
+      (item) =>
+        item.status_pagamento_codigo !== 'pago' &&
+        item.status_pagamento_codigo !== 'cancelado'
+    ).length;
+    const paidCount = filteredConsultations.filter(
+      (item) => item.status_pagamento_codigo === 'pago'
+    ).length;
+
+    return { totalValue, unpaidCount, paidCount };
+  }, [filteredConsultations]);
+
   // Carregar consultas ao montar
   useEffect(() => {
     fetchConsultations();
   }, [fetchConsultations]);
+
+  // AI dev note: Buscar status de pagamento do Supabase (não mais hardcoded)
+  useEffect(() => {
+    const fetchPaymentStatusOptions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pagamento_status')
+          .select('id, codigo, descricao')
+          .order('descricao');
+
+        if (error) throw error;
+
+        setPaymentStatusOptions(data || []);
+      } catch (err) {
+        console.error('Erro ao buscar status de pagamento:', err);
+      }
+    };
+
+    fetchPaymentStatusOptions();
+  }, []);
 
   // AI dev note: Toggle selecionar/desselecionar todos da PÁGINA ATUAL
   // Mantém seleções de outras páginas intactas
@@ -614,105 +683,38 @@ export const FinancialConsultationsList: React.FC<
     }
   };
 
-  // AI dev note: Selecionar TODAS as consultas não pagas de TODAS as páginas
-  // Query otimizada que busca apenas IDs
-  const selectAllUnpaid = async () => {
-    setIsLoading(true);
-    try {
-      // Buscar apenas IDs de consultas não pagas (query leve)
-      let query = supabase
-        .from('vw_agendamentos_completos')
-        .select('id, status_pagamento_codigo, fatura_id')
-        .not('status_consulta_codigo', 'eq', 'cancelado')
-        .in('status_pagamento_codigo', ['aberto', 'pendente'])
-        .is('fatura_id', null);
+  // AI dev note: Selecionar TODAS as consultas não pagas que estão FILTRADAS na tela
+  // BUGFIX: Antes fazia query no banco ignorando filtros locais (empresa, profissional, etc)
+  // Agora usa filteredConsultations que já tem todos os filtros aplicados
+  const selectAllUnpaid = () => {
+    // AI dev note: Usar consultas já filtradas localmente (inclui filtro de empresa, profissional, etc)
+    const eligibleConsultations = filteredConsultations.filter(
+      (c) =>
+        c.status_pagamento_codigo !== 'pago' &&
+        c.status_pagamento_codigo !== 'cancelado' &&
+        !c.fatura_id
+    );
 
-      // Aplicar mesmos filtros de período
-      const today = new Date();
-      let startDateFilter = '';
-      let endDateFilter = today.toISOString().split('T')[0];
+    const allUnpaidIds = eligibleConsultations.map((item) => item.id);
 
-      switch (periodFilter) {
-        case 'mes_atual':
-          startDateFilter = new Date(today.getFullYear(), today.getMonth(), 1)
-            .toISOString()
-            .split('T')[0];
-          endDateFilter = today.toISOString().split('T')[0];
-          break;
-        case 'mes_anterior':
-          startDateFilter = new Date(
-            today.getFullYear(),
-            today.getMonth() - 1,
-            1
-          )
-            .toISOString()
-            .split('T')[0];
-          endDateFilter = new Date(today.getFullYear(), today.getMonth(), 0)
-            .toISOString()
-            .split('T')[0];
-          break;
-        case 'ultimos_30':
-          // AI dev note: Criar nova instância para evitar mutação do objeto today
-          startDateFilter = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0];
-          break;
-        case 'ultimos_60':
-          // AI dev note: Criar nova instância para evitar mutação do objeto today
-          startDateFilter = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0];
-          break;
-        case 'ultimos_90':
-          // AI dev note: Criar nova instância para evitar mutação do objeto today
-          startDateFilter = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0];
-          break;
-        case 'ultimo_ano':
-          // AI dev note: Criar nova instância para evitar mutação do objeto today
-          startDateFilter = new Date(
-            today.getTime() - 365 * 24 * 60 * 60 * 1000
-          )
-            .toISOString()
-            .split('T')[0];
-          break;
-        case 'personalizado':
-          if (startDate) startDateFilter = startDate;
-          if (endDate) endDateFilter = endDate;
-          break;
-      }
+    setSelectedConsultations(allUnpaidIds);
 
-      if (startDateFilter && periodFilter !== 'todos') {
-        query = query.gte('data_hora', startDateFilter);
-      }
-      if (endDateFilter && periodFilter !== 'todos') {
-        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
-        query = query.lte('data_hora', endDateFilter + 'T23:59:59');
-      }
+    // Construir mensagem indicando filtros aplicados
+    const filtersApplied: string[] = [];
+    if (empresaFilter !== 'todos') filtersApplied.push('empresa');
+    if (professionalFilter.length > 0) filtersApplied.push('profissional');
+    if (serviceTypeFilter.length > 0) filtersApplied.push('serviço');
+    if (paymentStatusFilter.length > 0) filtersApplied.push('status');
 
-      const { data, error: fetchError } = await query;
+    const filterInfo =
+      filtersApplied.length > 0
+        ? ` (filtros aplicados: ${filtersApplied.join(', ')})`
+        : '';
 
-      if (fetchError) throw fetchError;
-
-      const allUnpaidIds = (data || []).map((item) => item.id);
-
-      setSelectedConsultations(allUnpaidIds);
-
-      toast({
-        title: 'Todas selecionadas',
-        description: `${allUnpaidIds.length} consultas não pagas foram selecionadas.`,
-      });
-    } catch (err) {
-      console.error('Erro ao selecionar todas:', err);
-      toast({
-        title: 'Erro ao selecionar',
-        description: 'Não foi possível selecionar todas as consultas.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    toast({
+      title: 'Todas selecionadas',
+      description: `${allUnpaidIds.length} consultas não pagas foram selecionadas${filterInfo}.`,
+    });
   };
 
   // AI dev note: Agrupar consultas por paciente + empresa (chave composta)
@@ -1236,41 +1238,29 @@ export const FinancialConsultationsList: React.FC<
               </SelectContent>
             </Select>
 
-            {/* Profissional */}
-            <Select
-              value={professionalFilter}
-              onValueChange={setProfessionalFilter}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Profissional" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os profissionais</SelectItem>
-                {professionals.map((prof) => (
-                  <SelectItem key={prof.id} value={prof.id}>
-                    {prof.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Profissional - Multi-seleção */}
+            <MultiSelectFilter
+              items={professionals.map((prof) => ({
+                id: prof.id,
+                label: prof.nome,
+              }))}
+              selectedIds={professionalFilter}
+              onSelectionChange={setProfessionalFilter}
+              allLabel="Todos os profissionais"
+              placeholder="Profissional"
+            />
 
-            {/* Tipo de Serviço */}
-            <Select
-              value={serviceTypeFilter}
-              onValueChange={setServiceTypeFilter}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Tipo de Serviço" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os serviços</SelectItem>
-                {serviceTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Tipo de Serviço - Multi-seleção */}
+            <MultiSelectFilter
+              items={serviceTypes.map((type) => ({
+                id: type.id,
+                label: type.nome,
+              }))}
+              selectedIds={serviceTypeFilter}
+              onSelectionChange={setServiceTypeFilter}
+              allLabel="Todos os serviços"
+              placeholder="Tipo de Serviço"
+            />
 
             {/* Empresa */}
             <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
@@ -1287,24 +1277,17 @@ export const FinancialConsultationsList: React.FC<
               </SelectContent>
             </Select>
 
-            {/* Status de Pagamento */}
-            <Select
-              value={paymentStatusFilter}
-              onValueChange={(value: PaymentStatusFilter) =>
-                setPaymentStatusFilter(value)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Status de Pagamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os status</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="aberto">Em aberto</SelectItem>
-                <SelectItem value="cancelado">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Status de Pagamento - Multi-seleção com dados do Supabase */}
+            <MultiSelectFilter
+              items={paymentStatusOptions.map((status) => ({
+                id: status.codigo,
+                label: status.descricao,
+              }))}
+              selectedIds={paymentStatusFilter}
+              onSelectionChange={setPaymentStatusFilter}
+              allLabel="Todos os status"
+              placeholder="Status de Pagamento"
+            />
 
             {/* Botão de limpar filtros */}
             <Button
@@ -1312,10 +1295,10 @@ export const FinancialConsultationsList: React.FC<
               size="sm"
               onClick={() => {
                 setPeriodFilter('mes_atual');
-                setProfessionalFilter('todos');
-                setServiceTypeFilter('todos');
+                setProfessionalFilter([]);
+                setServiceTypeFilter([]);
                 setEmpresaFilter('todos');
-                setPaymentStatusFilter('todos');
+                setPaymentStatusFilter([]);
                 setSearchQuery('');
                 setStartDate('');
                 setEndDate('');
