@@ -259,12 +259,12 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     
     .page {
       width: 210mm;
-      min-height: 297mm;
+      height: 297mm;
       margin: 0 auto;
       position: relative;
       background-image: url('${BACKGROUND_IMAGE_URL}');
-      background-size: cover;
-      background-position: center;
+      background-size: 100% 100%;
+      background-position: top left;
       background-repeat: no-repeat;
     }
     
@@ -383,17 +383,24 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     }
     
     @media print {
+      @page {
+        size: A4;
+        margin: 0;
+      }
+      
       body {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+        margin: 0;
+        padding: 0;
       }
       
       .page {
         width: 100%;
-        min-height: 100vh;
+        height: 100vh;
         background-image: url('${BACKGROUND_IMAGE_URL}');
-        background-size: cover;
-        background-position: center;
+        background-size: 100% 100%;
+        background-position: top left;
         background-repeat: no-repeat;
       }
     }
