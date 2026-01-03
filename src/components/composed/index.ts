@@ -45,6 +45,10 @@ export { ConfigurationTabs } from './ConfigurationTabs';
 export { PatientContractSection } from './PatientContractSection';
 export { ContractViewModal } from './ContractViewModal';
 
+// Quote Generation
+export { PatientQuoteGenerator } from './PatientQuoteGenerator';
+export type { PatientQuoteGeneratorProps } from './PatientQuoteGenerator';
+
 // Admin Patient Registration
 export { AdminPatientRegistrationDialog } from './AdminPatientRegistrationDialog';
 export { AdminWhatsAppValidationStep } from './AdminWhatsAppValidationStep';

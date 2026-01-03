@@ -465,14 +465,18 @@ export const CurrentAppointments = React.memo<CurrentAppointmentsProps>(
                   {/* Lista expandida de atendimentos */}
                   {showMore && (
                     <div className="mt-3 space-y-2">
-                      {additionalAppointments.map((appointment) => (
-                        <UpcomingAppointmentRow
-                          key={appointment.id}
-                          appointment={appointment}
-                          onClick={onAppointmentClick}
-                          userRole={userRole}
-                        />
-                      ))}
+                      <ScrollArea className="max-h-[300px]">
+                        <div className="space-y-2 pr-2">
+                          {additionalAppointments.map((appointment) => (
+                            <UpcomingAppointmentRow
+                              key={appointment.id}
+                              appointment={appointment}
+                              onClick={onAppointmentClick}
+                              userRole={userRole}
+                            />
+                          ))}
+                        </div>
+                      </ScrollArea>
                     </div>
                   )}
                 </div>

@@ -382,17 +382,16 @@ export const fetchCurrentWindowAppointments = async (
         break;
       }
 
-      // Se o atendimento ainda não começou, este é o próximo
+      // Se o atendimento ainda não começou, o anterior é o atual
       if (appointmentTime > agora) {
         currentIndex = i;
         break;
       }
     }
 
-    // Se não encontrou nenhum atendimento atual ou futuro (todos já passaram),
-    // NÃO mostrar nenhum como "atual" - retorna lista vazia
+    // Se não encontrou nenhum (todos já passaram), o último é o "atual"
     if (currentIndex === -1) {
-      return [];
+      currentIndex = appointments.length - 1;
     }
 
     // Coletar IDs de pacientes para buscar histórico
