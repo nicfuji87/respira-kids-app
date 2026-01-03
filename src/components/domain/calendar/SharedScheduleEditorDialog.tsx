@@ -264,6 +264,7 @@ export const SharedScheduleEditorDialog =
         titulo,
         dataInicio,
         dataFim,
+        ativo, // AI dev note: CRÍTICO - incluir 'ativo' para que o toggle funcione corretamente
         servicosSelecionados,
         locaisSelecionados,
         empresasSelecionadas,
