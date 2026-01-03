@@ -222,16 +222,23 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     const hoje = formatDateBR(new Date());
 
     // Gerar linhas de serviços
+    // AI dev note: Usar apenas a descrição se disponível, senão o nome do serviço
     const servicosHTML = itensCalc
-      .map(
-        (item) => `
+      .map((item) => {
+        // Usar descrição se disponível, senão o nome
+        const servicoTexto = item.descricao || item.nome;
+        // Primeira letra minúscula para fluir melhor na frase
+        const servicoFormatado =
+          servicoTexto.charAt(0).toLowerCase() + servicoTexto.slice(1);
+
+        return `
         <div class="service-item">
-          <p><span class="service-label">Serviço:</span> ${item.quantidade} ${item.quantidade === 1 ? 'sessão' : 'sessões'} de ${item.nome}${item.descricao ? ` com auxílio da técnica de ${item.descricao}` : ''}.</p>
+          <p><span class="service-label">Serviço:</span> ${item.quantidade} ${item.quantidade === 1 ? 'sessão' : 'sessões'} de ${servicoFormatado}.</p>
           <p class="service-detail"><span class="service-label">Valor unitário:</span> ${formatCurrency(item.valorUnitario)}</p>
           <p class="service-detail"><span class="service-label">Subtotal:</span> ${formatCurrency(item.subtotal)}</p>
         </div>
-      `
-      )
+      `;
+      })
       .join('');
 
     // AI dev note: Template HTML do orçamento usando imagem de fundo do Supabase Storage
@@ -546,22 +553,25 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       // 2. Fazer upload do HTML para o storage
       const timestamp = Date.now();
       const fileName = `orcamento_${patientId}_${timestamp}.html`;
-      const filePath = `orcamentos/${fileName}`;
+      // AI dev note: Usar path com user ID para compatibilidade com RLS policies
+      const filePath = `orcamentos/${patientId}/${fileName}`;
 
-      const htmlBlob = new Blob([generatedQuoteData.htmlContent], {
+      // Criar File object a partir do HTML string
+      const htmlFile = new File([generatedQuoteData.htmlContent], fileName, {
         type: 'text/html',
       });
 
       const { error: uploadError } = await supabase.storage
         .from('respira-documents')
-        .upload(filePath, htmlBlob, {
-          cacheControl: '3600',
-          contentType: 'text/html',
+        .upload(filePath, htmlFile, {
+          upsert: true,
         });
 
       if (uploadError) {
         console.error('Erro no upload:', uploadError);
-        throw new Error('Erro ao fazer upload do orçamento');
+        throw new Error(
+          `Erro ao fazer upload do orçamento: ${uploadError.message}`
+        );
       }
 
       // 3. Obter URL pública do arquivo
