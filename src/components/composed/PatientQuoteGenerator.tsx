@@ -210,6 +210,10 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     );
   };
 
+  // AI dev note: URL da imagem de fundo do orçamento no Supabase Storage
+  const BACKGROUND_IMAGE_URL =
+    'https://jqegoentcusnbcykgtxg.supabase.co/storage/v1/object/public/respira-documents/orcamento_fisio_capa.png';
+
   // Gerar HTML do orçamento
   const generateQuoteHTML = (
     itensCalc: QuoteItem[],
@@ -230,7 +234,7 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       )
       .join('');
 
-    // AI dev note: Template HTML do orçamento seguindo o design da imagem de referência
+    // AI dev note: Template HTML do orçamento usando imagem de fundo do Supabase Storage
     return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -258,117 +262,51 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       min-height: 297mm;
       margin: 0 auto;
       position: relative;
-      background: white;
+      background-image: url('${BACKGROUND_IMAGE_URL}');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
     }
     
-    /* Header com gradiente coral */
-    .header-bar {
-      height: 20px;
-      background: linear-gradient(90deg, #F4A261 0%, #E76F51 50%, #F4A261 100%);
-    }
-    
-    /* Logo container */
-    .logo-container {
-      text-align: center;
-      padding: 30px 0 20px;
-    }
-    
-    .logo-text {
-      font-size: 48px;
-      font-weight: 700;
-      background: linear-gradient(135deg, #40C4AA 0%, #2DD4BF 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-family: 'Poppins', cursive;
-      letter-spacing: -1px;
-    }
-    
-    .logo-kids {
-      font-size: 28px;
-      font-weight: 700;
-      color: #F4A261;
-      letter-spacing: 8px;
-      margin-top: -10px;
-    }
-    
-    /* Conteúdo principal */
+    /* Conteúdo principal - posicionado sobre a imagem de fundo */
     .content {
-      padding: 20px 60px;
-      position: relative;
-    }
-    
-    /* Decoração lateral */
-    .side-decoration {
       position: absolute;
-      left: 30px;
-      top: 100px;
-      width: 150px;
-      height: 300px;
-      opacity: 0.15;
-    }
-    
-    .side-decoration .leaf {
-      width: 100px;
-      height: 100px;
-      background: linear-gradient(135deg, #F4A261 0%, #FBBF24 100%);
-      border-radius: 0 70% 0 70%;
-      position: absolute;
-    }
-    
-    .side-decoration .leaf:nth-child(1) {
-      top: 0;
-      left: 0;
-      transform: rotate(-30deg);
-    }
-    
-    .side-decoration .leaf:nth-child(2) {
-      top: 80px;
-      left: 30px;
-      transform: rotate(-15deg);
-      opacity: 0.7;
-    }
-    
-    .side-decoration .leaf:nth-child(3) {
-      top: 160px;
-      left: 10px;
-      transform: rotate(-45deg);
-      opacity: 0.5;
+      top: 180px;
+      left: 60px;
+      right: 60px;
+      padding: 20px;
     }
     
     /* Título */
     .title {
       text-align: center;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
       color: #333;
-      margin-bottom: 40px;
+      margin-bottom: 30px;
       letter-spacing: 1px;
     }
     
     /* Seção de texto */
     .greeting {
-      margin-bottom: 20px;
+      margin-bottom: 15px;
+      font-size: 14px;
     }
     
     .intro-text {
-      margin-bottom: 30px;
+      margin-bottom: 20px;
       color: #444;
+      font-size: 14px;
     }
     
     /* Detalhes do serviço */
     .services-container {
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
     
     .service-item {
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 1px dashed #ddd;
-    }
-    
-    .service-item:last-child {
-      border-bottom: none;
+      margin-bottom: 15px;
+      font-size: 14px;
     }
     
     .service-label {
@@ -378,8 +316,8 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     
     .service-detail {
       margin-left: 15px;
-      margin-top: 4px;
-      font-size: 14px;
+      margin-top: 2px;
+      font-size: 13px;
     }
     
     .service-detail::before {
@@ -391,49 +329,48 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     
     /* Total */
     .total-container {
-      margin: 25px 0;
-      padding: 15px;
-      background: linear-gradient(135deg, rgba(64, 196, 170, 0.1) 0%, rgba(45, 212, 191, 0.1) 100%);
-      border-radius: 8px;
-      border-left: 4px solid #40C4AA;
+      margin: 15px 0;
+      font-size: 14px;
     }
     
     .total-label {
-      font-size: 16px;
       font-weight: 600;
       color: #333;
     }
     
     .total-value {
-      font-size: 24px;
       font-weight: 700;
-      color: #40C4AA;
+      color: #333;
     }
     
     /* Informações do paciente */
     .patient-info {
-      margin: 30px 0;
+      margin: 20px 0;
+      font-size: 14px;
     }
     
     /* Informações de pagamento */
     .payment-info {
-      margin: 30px 0;
+      margin: 15px 0;
       color: #444;
+      font-size: 14px;
     }
     
     /* Validade */
     .validity {
       font-style: italic;
       color: #666;
-      margin: 30px 0;
+      margin: 20px 0;
+      font-size: 13px;
     }
     
     /* Assinatura */
     .signature {
-      margin-top: 50px;
+      margin-top: 40px;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
+      font-size: 14px;
     }
     
     .signature-text {
@@ -445,57 +382,6 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       color: #333;
     }
     
-    /* Footer */
-    .footer {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-    }
-    
-    .footer-content {
-      display: flex;
-      justify-content: space-between;
-      padding: 20px 40px;
-      background: linear-gradient(90deg, rgba(244,162,97,0.1) 0%, rgba(231,111,81,0.1) 100%);
-    }
-    
-    .footer-company {
-      font-size: 11px;
-      color: #666;
-    }
-    
-    .footer-company strong {
-      color: #333;
-      font-size: 12px;
-    }
-    
-    .footer-contacts {
-      text-align: right;
-      font-size: 11px;
-      color: #666;
-    }
-    
-    .footer-contacts .contact-item {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      margin-bottom: 4px;
-    }
-    
-    .contact-icon {
-      width: 16px;
-      height: 16px;
-      background: #40C4AA;
-      border-radius: 50%;
-      margin-left: 8px;
-    }
-    
-    .footer-bar {
-      height: 20px;
-      background: linear-gradient(90deg, #E76F51 0%, #90BE6D 50%, #40C4AA 100%);
-    }
-    
     @media print {
       body {
         -webkit-print-color-adjust: exact !important;
@@ -505,26 +391,17 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       .page {
         width: 100%;
         min-height: 100vh;
+        background-image: url('${BACKGROUND_IMAGE_URL}');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
       }
     }
   </style>
 </head>
 <body>
   <div class="page">
-    <div class="header-bar"></div>
-    
-    <div class="logo-container">
-      <div class="logo-text">Respira</div>
-      <div class="logo-kids">KIDS</div>
-    </div>
-    
     <div class="content">
-      <div class="side-decoration">
-        <div class="leaf"></div>
-        <div class="leaf"></div>
-        <div class="leaf"></div>
-      </div>
-      
       <h1 class="title">ORÇAMENTO DE SERVIÇOS DE FISIOTERAPIA</h1>
       
       <p class="greeting">Prezados,</p>
@@ -561,26 +438,6 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
         </div>
         <div class="signature-date">${hoje}</div>
       </div>
-    </div>
-    
-    <div class="footer">
-      <div class="footer-content">
-        <div class="footer-company">
-          <strong>BC FISIO KIDS LTDA</strong><br>
-          <em>CNPJ: 51.869.785/0001-74</em><br>
-          <em>SEPS 709/909 Centro Medico Julio<br>
-          Adnet Bloco A Sala 311 - Asa Sul,<br>
-          Brasília - DF, 70390-095<br>
-          61 99131.0529</em>
-        </div>
-        <div class="footer-contacts">
-          <div class="contact-item">(61) 98186-0081 • Bruna Cury<span class="contact-icon"></span></div>
-          <div class="contact-item">(61) 99214-1943 • Flavia Pacheco<span class="contact-icon"></span></div>
-          <div class="contact-item">(62) 98261-2424 • Jeniffer Marjory<span class="contact-icon"></span></div>
-          <div class="contact-item">@respira.kids<span class="contact-icon"></span></div>
-        </div>
-      </div>
-      <div class="footer-bar"></div>
     </div>
   </div>
 </body>
