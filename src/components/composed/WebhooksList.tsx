@@ -33,6 +33,7 @@ const eventLabels: Record<string, string> = {
   patient_created: 'Paciente Criado',
   appointment_created: 'Agendamento Criado',
   evolution_created: 'Evolução Criada',
+  orcamento_gerado: 'Orçamento Gerado',
   webhook_failed: 'Webhook Falhou',
   registration_error: 'Erro no Cadastro',
 };
