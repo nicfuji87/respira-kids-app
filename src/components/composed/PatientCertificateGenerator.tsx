@@ -127,11 +127,11 @@ export const PatientCertificateGenerator: React.FC<
     /* Nome do paciente - posicionado sobre a faixa rosa do fundo */
     .patient-name {
       position: absolute;
-      top: 18%;
+      top: 23%;
       left: 50%;
       transform: translateX(-50%);
       font-family: 'Caveat', cursive;
-      font-size: 38px;
+      font-size: 46px;
       font-weight: 600;
       color: #1a365d;
       text-align: center;
@@ -141,7 +141,7 @@ export const PatientCertificateGenerator: React.FC<
     /* Assinatura - posicionada no centro inferior */
     .signature-section {
       position: absolute;
-      bottom: 18%;
+      bottom: 12%;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
@@ -151,18 +151,19 @@ export const PatientCertificateGenerator: React.FC<
     }
     
     .signature-image {
-      max-width: 140px;
-      max-height: 60px;
+      max-width: 200px;
+      max-height: 90px;
       object-fit: contain;
     }
     
-    /* Data - posicionada abaixo da assinatura */
+    /* Data - posicionada abaixo do carimbo */
     .date-section {
       position: absolute;
-      bottom: 8%;
-      right: 12%;
+      bottom: 5%;
+      left: 50%;
+      transform: translateX(-50%);
       font-family: 'Caveat', cursive;
-      font-size: 16px;
+      font-size: 18px;
       color: #40C4AA;
     }
     
