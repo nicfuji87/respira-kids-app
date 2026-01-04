@@ -70,8 +70,7 @@ export const PatientCertificateGenerator: React.FC<
   const [isSending, setIsSending] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState<string>('');
 
-  // Estado para rastrear se certificado foi gerado
-  const [certificateGenerated, setCertificateGenerated] = useState(false);
+  // Estado para armazenar dados do certificado gerado (para reutilização)
   const [generatedCertificateData, setGeneratedCertificateData] = useState<{
     htmlContent: string;
     professionalName: string;
@@ -81,7 +80,6 @@ export const PatientCertificateGenerator: React.FC<
   useEffect(() => {
     if (!isOpen) {
       setSelectedProfessional('');
-      setCertificateGenerated(false);
       setGeneratedCertificateData(null);
     }
   }, [isOpen]);
@@ -339,7 +337,6 @@ export const PatientCertificateGenerator: React.FC<
         htmlContent,
         professionalName: professional.name,
       });
-      setCertificateGenerated(true);
 
       // Abrir nova janela para impressão/PDF
       const printWindow = window.open('', '_blank');
@@ -378,10 +375,10 @@ export const PatientCertificateGenerator: React.FC<
 
   // Handler para enviar certificado ao responsável via webhook
   const handleSendToResponsible = async () => {
-    if (!generatedCertificateData) {
+    if (!selectedProfessional) {
       toast({
         title: 'Atenção',
-        description: 'Gere o certificado primeiro antes de enviar',
+        description: 'Selecione o profissional que irá assinar o certificado',
         variant: 'destructive',
       });
       return;
@@ -390,6 +387,18 @@ export const PatientCertificateGenerator: React.FC<
     setIsSending(true);
 
     try {
+      // Gerar HTML do certificado (usa dados já gerados ou gera novamente)
+      const professional = PROFESSIONALS.find(
+        (p) => p.id === selectedProfessional
+      );
+      if (!professional) {
+        throw new Error('Profissional não encontrado');
+      }
+
+      const htmlContent =
+        generatedCertificateData?.htmlContent ||
+        generateCertificateHTML(selectedProfessional);
+
       // 1. Buscar dados do responsável do paciente
       const { data: patientData, error: patientError } = await supabase
         .from('pacientes_com_responsaveis_view')
@@ -409,13 +418,9 @@ export const PatientCertificateGenerator: React.FC<
       const filePath = `certificados/${patientId}/${fileName}`;
 
       // Criar File object a partir do HTML string
-      const htmlFile = new File(
-        [generatedCertificateData.htmlContent],
-        fileName,
-        {
-          type: 'text/html',
-        }
-      );
+      const htmlFile = new File([htmlContent], fileName, {
+        type: 'text/html',
+      });
 
       const { error: uploadError } = await supabase.storage
         .from('respira-documents')
@@ -459,7 +464,7 @@ export const PatientCertificateGenerator: React.FC<
             },
             certificado: {
               url: certificateUrl,
-              profissional_assinante: generatedCertificateData.professionalName,
+              profissional_assinante: professional.name,
               tipo: 'conquista',
             },
           },
@@ -528,10 +533,7 @@ export const PatientCertificateGenerator: React.FC<
             <Label htmlFor="professional">Profissional que irá assinar *</Label>
             <Select
               value={selectedProfessional}
-              onValueChange={(value) => {
-                setSelectedProfessional(value);
-                setCertificateGenerated(false);
-              }}
+              onValueChange={setSelectedProfessional}
             >
               <SelectTrigger id="professional">
                 <SelectValue placeholder="Selecione o profissional..." />
@@ -601,12 +603,12 @@ export const PatientCertificateGenerator: React.FC<
             </Button>
           </div>
 
-          {/* Botão de enviar ao responsável - aparece após gerar */}
-          {certificateGenerated && generatedCertificateData && (
+          {/* Botão de enviar ao responsável - sempre disponível quando profissional selecionado */}
+          {selectedProfessional && (
             <div className="flex justify-end pt-2 border-t border-dashed">
               <Button
                 onClick={handleSendToResponsible}
-                disabled={isSending}
+                disabled={isSending || isLoading}
                 variant="secondary"
                 className="gap-2"
               >

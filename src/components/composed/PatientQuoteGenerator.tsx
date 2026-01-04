@@ -89,8 +89,7 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
   const [tiposServico, setTiposServico] = useState<SupabaseTipoServico[]>([]);
   const [isLoadingServicos, setIsLoadingServicos] = useState(true);
 
-  // Estado para rastrear se orçamento foi gerado
-  const [quoteGenerated, setQuoteGenerated] = useState(false);
+  // Estado para armazenar dados do orçamento gerado (para reutilização)
   const [generatedQuoteData, setGeneratedQuoteData] = useState<{
     itens: QuoteItem[];
     valorTotal: number;
@@ -163,7 +162,6 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       setServicosSelecionados([
         { id: generateId(), servicoId: '', quantidade: 8 },
       ]);
-      setQuoteGenerated(false);
       setGeneratedQuoteData(null);
     }
   }, [isOpen]);
@@ -174,14 +172,12 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       ...prev,
       { id: generateId(), servicoId: '', quantidade: 8 },
     ]);
-    setQuoteGenerated(false);
   };
 
   // Remover serviço
   const handleRemoveServico = (id: string) => {
     if (servicosSelecionados.length > 1) {
       setServicosSelecionados((prev) => prev.filter((item) => item.id !== id));
-      setQuoteGenerated(false);
     }
   };
 
@@ -190,7 +186,6 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     setServicosSelecionados((prev) =>
       prev.map((item) => (item.id === id ? { ...item, servicoId } : item))
     );
-    setQuoteGenerated(false);
   };
 
   // Atualizar quantidade
@@ -200,7 +195,6 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
         item.id === id ? { ...item, quantidade: Math.max(1, quantidade) } : item
       )
     );
-    setQuoteGenerated(false);
   };
 
   // Verificar se um serviço já foi selecionado
@@ -486,7 +480,6 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
         valorTotal: valorTotalCalc,
         htmlContent,
       });
-      setQuoteGenerated(true);
 
       // Abrir nova janela para impressão/PDF
       const printWindow = window.open('', '_blank');
@@ -525,10 +518,15 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
 
   // Handler para enviar orçamento ao responsável via webhook
   const handleSendToResponsible = async () => {
-    if (!generatedQuoteData) {
+    // Validar se há itens selecionados
+    const servicosValidos = servicosSelecionados.filter(
+      (s) => s.servicoId && s.quantidade > 0
+    );
+
+    if (servicosValidos.length === 0) {
       toast({
         title: 'Atenção',
-        description: 'Gere o orçamento primeiro antes de enviar',
+        description: 'Adicione pelo menos um serviço com quantidade válida',
         variant: 'destructive',
       });
       return;
@@ -537,6 +535,12 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     setIsSending(true);
 
     try {
+      // Gerar HTML do orçamento (usa dados já gerados ou gera novamente)
+      const { itens: itensCalc, valorTotal: valorTotalCalc } = calcularTotais();
+      const htmlContent =
+        generatedQuoteData?.htmlContent ||
+        generateQuoteHTML(itensCalc, valorTotalCalc);
+
       // 1. Buscar dados do responsável do paciente
       const { data: patientData, error: patientError } = await supabase
         .from('pacientes_com_responsaveis_view')
@@ -557,7 +561,7 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       const filePath = `orcamentos/${patientId}/${fileName}`;
 
       // Criar File object a partir do HTML string
-      const htmlFile = new File([generatedQuoteData.htmlContent], fileName, {
+      const htmlFile = new File([htmlContent], fileName, {
         type: 'text/html',
       });
 
@@ -582,7 +586,7 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       const pdfUrl = urlData.publicUrl;
 
       // 4. Preparar descrição dos serviços para o webhook
-      const servicosDescricao = generatedQuoteData.itens
+      const servicosDescricao = itensCalc
         .map(
           (item) =>
             `${item.quantidade}x ${item.nome} (${formatCurrency(item.subtotal)})`
@@ -612,9 +616,9 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
             },
             orcamento: {
               url: pdfUrl,
-              valor_total: generatedQuoteData.valorTotal,
+              valor_total: valorTotalCalc,
               servicos_resumo: servicosDescricao,
-              itens: generatedQuoteData.itens.map((item) => ({
+              itens: itensCalc.map((item) => ({
                 servico: item.nome,
                 descricao: item.descricao || null,
                 quantidade: item.quantidade,
@@ -850,12 +854,12 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
             </Button>
           </div>
 
-          {/* Botão de enviar ao responsável - aparece após gerar */}
-          {quoteGenerated && generatedQuoteData && (
+          {/* Botão de enviar ao responsável - sempre disponível quando há itens */}
+          {itens.length > 0 && (
             <div className="flex justify-end pt-2 border-t border-dashed">
               <Button
                 onClick={handleSendToResponsible}
-                disabled={isSending}
+                disabled={isSending || isLoading}
                 variant="secondary"
                 className="gap-2"
               >
