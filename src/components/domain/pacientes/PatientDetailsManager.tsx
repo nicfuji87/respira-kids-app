@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Calendar, FileText } from 'lucide-react';
+import { ArrowLeft, Calendar, FileText, Award } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
@@ -13,6 +13,7 @@ import {
   PatientContractSection,
   PatientClinicalEvaluations,
   PatientQuoteGenerator,
+  PatientCertificateGenerator,
   type LocationOption,
 } from '@/components/composed';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
@@ -85,6 +86,9 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
 
     // Estado para o modal de geração de orçamento
     const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+
+    // Estado para o modal de geração de certificado
+    const [isCertificateModalOpen, setIsCertificateModalOpen] = useState(false);
 
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -338,6 +342,21 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
                 </Button>
               )}
 
+              {/* Botão Gerar Certificado - discreto, apenas admin/secretaria */}
+              {(user?.pessoa?.role === 'admin' ||
+                user?.pessoa?.role === 'secretaria') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsCertificateModalOpen(true)}
+                  className="gap-1 text-muted-foreground hover:text-amber-600"
+                  title="Gerar Certificado de Alta"
+                >
+                  <Award className="h-4 w-4" />
+                  <span className="hidden lg:inline text-xs">Certificado</span>
+                </Button>
+              )}
+
               {/* Botão Agendar */}
               <Button
                 onClick={handleNewAppointmentClick}
@@ -469,6 +488,19 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
               patientId={actualId}
               patientName={patient.nome}
               patientCpf={patient.cpf_cnpj}
+            />
+          )}
+
+        {/* Modal de Geração de Certificado - apenas para pacientes e admin/secretaria */}
+        {(!personId ||
+          (patient as PersonDetails)?.tipo_pessoa === 'paciente') &&
+          (user?.pessoa?.role === 'admin' ||
+            user?.pessoa?.role === 'secretaria') && (
+            <PatientCertificateGenerator
+              isOpen={isCertificateModalOpen}
+              onClose={() => setIsCertificateModalOpen(false)}
+              patientId={actualId}
+              patientName={patient.nome}
             />
           )}
       </div>

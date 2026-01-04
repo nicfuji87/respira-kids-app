@@ -49,6 +49,10 @@ export { ContractViewModal } from './ContractViewModal';
 export { PatientQuoteGenerator } from './PatientQuoteGenerator';
 export type { PatientQuoteGeneratorProps } from './PatientQuoteGenerator';
 
+// Certificate Generation
+export { PatientCertificateGenerator } from './PatientCertificateGenerator';
+export type { PatientCertificateGeneratorProps } from './PatientCertificateGenerator';
+
 // Admin Patient Registration
 export { AdminPatientRegistrationDialog } from './AdminPatientRegistrationDialog';
 export { AdminWhatsAppValidationStep } from './AdminWhatsAppValidationStep';
