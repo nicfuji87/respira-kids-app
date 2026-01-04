@@ -589,29 +589,40 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
         )
         .join('; ');
 
-      // 5. Inserir na fila de webhooks (seguindo o padrão existente)
-      // AI dev note: Seguir o mesmo formato do PatientContractSection e AdminContractGenerationStep
+      // 5. Inserir na fila de webhooks (seguindo o padrão de appointment_created)
+      // AI dev note: Formato padronizado com tipo, timestamp, webhook_id e data
       const webhookPayload = {
         evento: 'orcamento_gerado',
         payload: {
-          paciente_id: patientId,
-          paciente_nome: patientName,
-          paciente_cpf: patientCpf || null,
-          responsavel_nome:
-            patientData.responsavel_legal_nome ||
-            patientData.responsavel_cobranca_nome,
-          responsavel_telefone: patientData.responsavel_legal_telefone,
-          responsavel_email: patientData.responsavel_legal_email || null,
-          orcamento_url: pdfUrl,
-          valor_total: generatedQuoteData.valorTotal,
-          servicos: servicosDescricao,
-          itens: generatedQuoteData.itens.map((item) => ({
-            servico: item.nome,
-            quantidade: item.quantidade,
-            valor_unitario: item.valorUnitario,
-            subtotal: item.subtotal,
-          })),
-          data_geracao: new Date().toISOString(),
+          tipo: 'orcamento_gerado',
+          timestamp: new Date().toISOString(),
+          webhook_id: crypto.randomUUID(),
+          data: {
+            paciente: {
+              id: patientId,
+              nome: patientName,
+              cpf: patientCpf || null,
+            },
+            responsavel_legal: {
+              nome:
+                patientData.responsavel_legal_nome ||
+                patientData.responsavel_cobranca_nome,
+              telefone: patientData.responsavel_legal_telefone,
+              email: patientData.responsavel_legal_email || null,
+            },
+            orcamento: {
+              url: pdfUrl,
+              valor_total: generatedQuoteData.valorTotal,
+              servicos_resumo: servicosDescricao,
+              itens: generatedQuoteData.itens.map((item) => ({
+                servico: item.nome,
+                descricao: item.descricao || null,
+                quantidade: item.quantidade,
+                valor_unitario: item.valorUnitario,
+                subtotal: item.subtotal,
+              })),
+            },
+          },
         },
       };
 
