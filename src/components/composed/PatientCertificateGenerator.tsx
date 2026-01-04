@@ -92,9 +92,8 @@ export const PatientCertificateGenerator: React.FC<
     const signatureUrl = `${SUPABASE_STORAGE_URL}/${encodeURIComponent(professional.signatureFile)}`;
     const hoje = formatDateBR(new Date());
 
-    // AI dev note: Template HTML do certificado usando imagem de fundo do Supabase Storage
-    // O design segue o modelo fornecido com fundo xadrez verde claro, título em destaque,
-    // nome do paciente com fundo rosa/salmon, e assinatura do profissional
+    // AI dev note: Template HTML do certificado - apenas posiciona nome, assinatura e data
+    // O fundo (certificado.png) já contém todo o texto estático
     return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -102,7 +101,6 @@ export const PatientCertificateGenerator: React.FC<
   <meta charset="utf-8">
   <title>Certificado de Conquista - ${patientName}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');
     
     * {
@@ -112,14 +110,11 @@ export const PatientCertificateGenerator: React.FC<
     }
     
     body {
-      font-family: 'Poppins', sans-serif;
       background: white;
-      color: #333;
-      line-height: 1.6;
     }
     
     .page {
-      width: 297mm; /* A4 paisagem */
+      width: 297mm;
       height: 210mm;
       margin: 0 auto;
       position: relative;
@@ -129,117 +124,46 @@ export const PatientCertificateGenerator: React.FC<
       background-repeat: no-repeat;
     }
     
-    /* Conteúdo principal - posicionado sobre a imagem de fundo */
-    .content {
+    /* Nome do paciente - posicionado sobre a faixa rosa do fundo */
+    .patient-name {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top: 18%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Caveat', cursive;
+      font-size: 38px;
+      font-weight: 600;
+      color: #1a365d;
+      text-align: center;
+      white-space: nowrap;
+    }
+    
+    /* Assinatura - posicionada no centro inferior */
+    .signature-section {
+      position: absolute;
+      bottom: 18%;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 40px 80px;
       text-align: center;
     }
     
-    /* Título */
-    .title {
-      font-size: 36px;
-      font-weight: 700;
-      color: #1a365d;
-      margin-bottom: 30px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-    }
-    
-    /* Nome do paciente com fundo rosa */
-    .patient-name-container {
-      position: relative;
-      margin-bottom: 40px;
-    }
-    
-    .patient-name-bg {
-      background-color: #F8B4B4;
-      padding: 8px 40px;
-      border-radius: 8px;
-      display: inline-block;
-      transform: rotate(-1deg);
-    }
-    
-    .patient-name {
-      font-family: 'Caveat', cursive;
-      font-size: 42px;
-      font-weight: 600;
-      color: #1a365d;
-      transform: rotate(1deg);
-    }
-    
-    /* Texto do certificado */
-    .certificate-text {
-      max-width: 700px;
-      margin-bottom: 20px;
-    }
-    
-    .certificate-text p {
-      font-size: 15px;
-      color: #4a5568;
-      margin-bottom: 15px;
-      line-height: 1.7;
-    }
-    
-    .highlight-text {
-      font-weight: 600;
-      color: #1a365d;
-    }
-    
-    .closing-text {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1a365d;
-      margin-top: 10px;
-    }
-    
-    /* Assinatura */
-    .signature-section {
-      margin-top: 30px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    
     .signature-image {
-      max-width: 180px;
-      max-height: 80px;
+      max-width: 140px;
+      max-height: 60px;
       object-fit: contain;
-      margin-bottom: 5px;
     }
     
-    .signature-name {
-      font-family: 'Caveat', cursive;
-      font-size: 22px;
-      color: #1a365d;
-      font-weight: 600;
-    }
-    
-    .signature-title {
-      font-size: 12px;
-      color: #4a5568;
-    }
-    
-    .signature-crefito {
-      font-size: 11px;
-      color: #718096;
-    }
-    
-    /* Data */
+    /* Data - posicionada abaixo da assinatura */
     .date-section {
       position: absolute;
-      bottom: 30px;
-      right: 60px;
-      font-size: 12px;
-      color: #718096;
+      bottom: 8%;
+      right: 12%;
+      font-family: 'Caveat', cursive;
+      font-size: 16px;
+      color: #40C4AA;
     }
     
     @media print {
@@ -268,41 +192,16 @@ export const PatientCertificateGenerator: React.FC<
 </head>
 <body>
   <div class="page">
-    <div class="content">
-      <h1 class="title">Certificado de Conquista</h1>
-      
-      <div class="patient-name-container">
-        <div class="patient-name-bg">
-          <span class="patient-name">${patientName}</span>
-        </div>
-      </div>
-      
-      <div class="certificate-text">
-        <p>
-          Com muita <span class="highlight-text">coragem, sorrisos e determinação</span>, você superou todos os 
-          desafios da sua jornada de fisioterapia. Cada movimento foi uma grande 
-          vitória, e você mostrou a todos o quão forte e especial você é.
-        </p>
-        
-        <p>
-          Hoje, celebramos suas incríveis conquistas e seu progresso admirável.
-          Estamos orgulhosos de cada passinho dado em direção ao sucesso.
-        </p>
-        
-        <p class="closing-text">Continue brilhando e crescendo!</p>
-      </div>
-      
-      <div class="signature-section">
-        <img src="${signatureUrl}" alt="Assinatura ${professional.name}" class="signature-image" />
-        <p class="signature-name">${professional.name}</p>
-        <p class="signature-title">${professional.title}</p>
-        ${professional.crefito ? `<p class="signature-crefito">${professional.crefito}</p>` : ''}
-      </div>
-      
-      <div class="date-section">
-        ${hoje}
-      </div>
+    <!-- Nome do paciente -->
+    <div class="patient-name">${patientName}</div>
+    
+    <!-- Assinatura/Carimbo -->
+    <div class="signature-section">
+      <img src="${signatureUrl}" alt="Assinatura ${professional.name}" class="signature-image" />
     </div>
+    
+    <!-- Data -->
+    <div class="date-section">${hoje}</div>
   </div>
 </body>
 </html>
