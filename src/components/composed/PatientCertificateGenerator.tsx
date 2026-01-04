@@ -127,7 +127,7 @@ export const PatientCertificateGenerator: React.FC<
     /* Nome do paciente - posicionado sobre a faixa rosa do fundo */
     .patient-name {
       position: absolute;
-      top: 23%;
+      top: 28%;
       left: 50%;
       transform: translateX(-50%);
       font-family: 'Caveat', cursive;
@@ -151,8 +151,8 @@ export const PatientCertificateGenerator: React.FC<
     }
     
     .signature-image {
-      max-width: 200px;
-      max-height: 90px;
+      max-width: 280px;
+      max-height: 120px;
       object-fit: contain;
     }
     
