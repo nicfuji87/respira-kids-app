@@ -53,6 +53,10 @@ export type { PatientQuoteGeneratorProps } from './PatientQuoteGenerator';
 export { PatientCertificateGenerator } from './PatientCertificateGenerator';
 export type { PatientCertificateGeneratorProps } from './PatientCertificateGenerator';
 
+// Attendance Statement Generation
+export { AttendanceStatementGenerator } from './AttendanceStatementGenerator';
+export type { AttendanceStatementGeneratorProps } from './AttendanceStatementGenerator';
+
 // Admin Patient Registration
 export { AdminPatientRegistrationDialog } from './AdminPatientRegistrationDialog';
 export { AdminWhatsAppValidationStep } from './AdminWhatsAppValidationStep';

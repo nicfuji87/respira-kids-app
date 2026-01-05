@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Edit, Save, XCircle, FileText } from 'lucide-react';
+import {
+  MapPin,
+  Edit,
+  Save,
+  XCircle,
+  FileText,
+  ClipboardList,
+} from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 import { ToastAction } from '@/components/primitives/toast';
 import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
@@ -29,6 +36,7 @@ import {
   LocationSelect,
   SessionMediaManager,
   EvolutionFormModal,
+  AttendanceStatementGenerator,
   type LocationOption,
 } from '@/components/composed';
 import type {
@@ -194,6 +202,10 @@ export const AppointmentDetailsManager =
         evolucao_respiratoria?: EvolucaoRespiratoria;
         evolucao_motora_assimetria?: EvolucaoMotoraAssimetria;
       } | null>(null);
+
+      // Estado para modal de atestado de comparecimento
+      const [showAttendanceStatementModal, setShowAttendanceStatementModal] =
+        useState(false);
 
       // Estados para dados da fatura associada
       const [faturaData, setFaturaData] = useState<{
@@ -1593,15 +1605,32 @@ export const AppointmentDetailsManager =
                       </Badge>
                     )}
                   </div>
-                  {/* Badge de Evolução Pendente - o X de fechar é do Dialog */}
-                  {!isLoadingEvolucoes && evolucoes.length === 0 && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs px-2 py-1 bg-yellow-50 text-yellow-800 border-yellow-200"
-                    >
-                      Evolução Pendente
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {/* Botão Atestado - apenas admin/secretaria */}
+                    {(userRole === 'admin' || userRole === 'secretaria') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowAttendanceStatementModal(true)}
+                        className="gap-1 text-muted-foreground hover:text-blue-600"
+                        title="Gerar Atestado de Comparecimento"
+                      >
+                        <ClipboardList className="h-4 w-4" />
+                        <span className="hidden sm:inline text-xs">
+                          Atestado
+                        </span>
+                      </Button>
+                    )}
+                    {/* Badge de Evolução Pendente */}
+                    {!isLoadingEvolucoes && evolucoes.length === 0 && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs px-2 py-1 bg-yellow-50 text-yellow-800 border-yellow-200"
+                      >
+                        Evolução Pendente
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </DialogHeader>
 
@@ -2180,6 +2209,24 @@ export const AppointmentDetailsManager =
             }
             mode={editingEvolucaoData ? 'edit' : 'create'}
           />
+
+          {/* Modal de Atestado de Comparecimento */}
+          {(userRole === 'admin' || userRole === 'secretaria') && (
+            <AttendanceStatementGenerator
+              isOpen={showAttendanceStatementModal}
+              onClose={() => setShowAttendanceStatementModal(false)}
+              appointmentId={appointment.id}
+              appointmentDate={appointment.data_hora}
+              patientId={appointment.paciente_id}
+              patientName={appointment.paciente_nome}
+              responsavelLegalId={appointment.responsavel_legal_id}
+              responsavelLegalNome={appointment.responsavel_legal_nome}
+              responsavelFinanceiroId={appointment.responsavel_financeiro_id}
+              responsavelFinanceiroNome={
+                appointment.responsavel_financeiro_nome
+              }
+            />
+          )}
         </>
       );
     }

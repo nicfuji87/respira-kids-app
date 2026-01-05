@@ -35,6 +35,7 @@ const eventLabels: Record<string, string> = {
   evolution_created: 'Evolução Criada',
   orcamento_gerado: 'Orçamento Gerado',
   certificado_gerado: 'Certificado Gerado',
+  atestado_gerado: 'Atestado Gerado',
   webhook_failed: 'Webhook Falhou',
   registration_error: 'Erro no Cadastro',
 };
