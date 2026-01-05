@@ -169,8 +169,8 @@ export const AttendanceStatementGenerator: React.FC<
     }
     
     .page {
-      width: 210mm;
-      height: 297mm;
+      width: 297mm;
+      height: 210mm;
       margin: 0 auto;
       position: relative;
       background-image: url('${BACKGROUND_IMAGE_URL}');
@@ -182,9 +182,9 @@ export const AttendanceStatementGenerator: React.FC<
     /* Conteúdo principal */
     .content {
       position: absolute;
-      top: 80px;
-      left: 60px;
-      right: 60px;
+      top: 60px;
+      left: 80px;
+      right: 80px;
       padding: 20px;
     }
     
@@ -194,8 +194,8 @@ export const AttendanceStatementGenerator: React.FC<
       font-size: 28px;
       font-weight: 700;
       color: #1a365d;
-      margin-bottom: 60px;
-      margin-top: 40px;
+      margin-bottom: 40px;
+      margin-top: 20px;
     }
     
     /* Texto do atestado */
@@ -244,7 +244,7 @@ export const AttendanceStatementGenerator: React.FC<
     
     @media print {
       @page {
-        size: A4 portrait;
+        size: A4 landscape;
         margin: 0;
       }
       
