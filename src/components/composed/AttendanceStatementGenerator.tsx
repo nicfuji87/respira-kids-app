@@ -216,12 +216,13 @@ export const AttendanceStatementGenerator: React.FC<
       font-weight: 600;
     }
     
-    /* Seção de assinatura */
+    /* Seção de assinatura - centralizada */
     .signature-section {
-      margin-top: 80px;
+      margin-top: 60px;
       display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
     
     .signature-container {
@@ -231,15 +232,16 @@ export const AttendanceStatementGenerator: React.FC<
     }
     
     .signature-image {
-      max-width: 200px;
-      max-height: 100px;
+      max-width: 220px;
+      max-height: 110px;
       object-fit: contain;
     }
     
     .location-date {
       font-size: 16px;
       color: #333;
-      text-align: right;
+      text-align: center;
+      margin-top: 15px;
     }
     
     @media print {
@@ -287,7 +289,6 @@ export const AttendanceStatementGenerator: React.FC<
         <div class="signature-container">
           <img src="${signatureUrl}" alt="Assinatura ${professional.name}" class="signature-image" />
         </div>
-        
         <div class="location-date">
           Brasília, ${hoje}
         </div>
