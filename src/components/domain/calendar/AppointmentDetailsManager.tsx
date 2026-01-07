@@ -2219,12 +2219,6 @@ export const AppointmentDetailsManager =
               appointmentDate={appointment.data_hora}
               patientId={appointment.paciente_id}
               patientName={appointment.paciente_nome}
-              responsavelLegalId={appointment.responsavel_legal_id}
-              responsavelLegalNome={appointment.responsavel_legal_nome}
-              responsavelFinanceiroId={appointment.responsavel_financeiro_id}
-              responsavelFinanceiroNome={
-                appointment.responsavel_financeiro_nome
-              }
             />
           )}
         </>

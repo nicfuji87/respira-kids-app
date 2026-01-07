@@ -30,10 +30,15 @@ export interface AttendanceStatementGeneratorProps {
   appointmentDate: string; // ISO date string
   patientId: string;
   patientName: string;
-  responsavelLegalId: string | null;
-  responsavelLegalNome: string | null;
-  responsavelFinanceiroId: string | null;
-  responsavelFinanceiroNome: string | null;
+}
+
+// AI dev note: Interface para responsáveis carregados do banco
+interface ResponsibleOption {
+  id: string;
+  name: string;
+  type: string;
+  telefone?: number | null;
+  email?: string | null;
 }
 
 // AI dev note: URLs das imagens no Supabase Storage (bucket público)
@@ -85,14 +90,11 @@ export const AttendanceStatementGenerator: React.FC<
   appointmentDate,
   patientId,
   patientName,
-  responsavelLegalId,
-  responsavelLegalNome,
-  responsavelFinanceiroId,
-  responsavelFinanceiroNome,
 }) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingResponsibles, setIsLoadingResponsibles] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState<string>('');
   const [selectedResponsible, setSelectedResponsible] = useState<string>('');
 
@@ -103,21 +105,76 @@ export const AttendanceStatementGenerator: React.FC<
     responsibleName: string;
   } | null>(null);
 
-  // Opções de responsável disponíveis
-  const responsibleOptions = [
-    ...(responsavelLegalId && responsavelLegalNome
-      ? [{ id: 'legal', name: responsavelLegalNome, type: 'Responsável Legal' }]
-      : []),
-    ...(responsavelFinanceiroId && responsavelFinanceiroNome
-      ? [
-          {
-            id: 'financeiro',
-            name: responsavelFinanceiroNome,
-            type: 'Responsável Financeiro',
-          },
-        ]
-      : []),
-  ];
+  // AI dev note: Estado para armazenar todos os responsáveis do paciente
+  const [responsibleOptions, setResponsibleOptions] = useState<
+    ResponsibleOption[]
+  >([]);
+
+  // Buscar todos os responsáveis do paciente quando o modal abre
+  useEffect(() => {
+    const fetchResponsibles = async () => {
+      if (!isOpen || !patientId) return;
+
+      setIsLoadingResponsibles(true);
+      try {
+        // Buscar todos os responsáveis ativos do paciente
+        const { data: responsaveisData, error } = await supabase
+          .from('pessoa_responsaveis')
+          .select(
+            `
+            id_responsavel,
+            tipo_responsabilidade,
+            pessoas!pessoa_responsaveis_id_responsavel_fkey(id, nome, telefone, email)
+          `
+          )
+          .eq('id_pessoa', patientId)
+          .eq('ativo', true);
+
+        if (error) {
+          console.error('Erro ao buscar responsáveis:', error);
+          return;
+        }
+
+        if (responsaveisData && responsaveisData.length > 0) {
+          const options: ResponsibleOption[] = [];
+
+          responsaveisData.forEach((r) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pessoa = r.pessoas as any;
+            if (pessoa?.nome) {
+              // Mapear tipo de responsabilidade para label amigável
+              let typeLabel = 'Responsável';
+              if (r.tipo_responsabilidade === 'legal') {
+                typeLabel = 'Responsável Legal';
+              } else if (r.tipo_responsabilidade === 'financeiro') {
+                typeLabel = 'Responsável Financeiro';
+              } else if (r.tipo_responsabilidade === 'ambos') {
+                typeLabel = 'Responsável Legal e Financeiro';
+              }
+
+              options.push({
+                id: pessoa.id,
+                name: pessoa.nome,
+                type: typeLabel,
+                telefone: pessoa.telefone,
+                email: pessoa.email,
+              });
+            }
+          });
+
+          setResponsibleOptions(options);
+        } else {
+          setResponsibleOptions([]);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar responsáveis:', err);
+      } finally {
+        setIsLoadingResponsibles(false);
+      }
+    };
+
+    fetchResponsibles();
+  }, [isOpen, patientId]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -125,6 +182,7 @@ export const AttendanceStatementGenerator: React.FC<
       setSelectedProfessional('');
       setSelectedResponsible('');
       setGeneratedStatementData(null);
+      setResponsibleOptions([]);
     }
   }, [isOpen]);
 
@@ -411,32 +469,13 @@ export const AttendanceStatementGenerator: React.FC<
         generatedStatementData?.htmlContent ||
         generateStatementHTML(selectedProfessional, selectedResponsible);
 
-      // 1. Buscar dados do responsável do paciente
-      const { data: patientData, error: patientError } = await supabase
-        .from('pacientes_com_responsaveis_view')
-        .select(
-          'responsavel_legal_nome, responsavel_legal_telefone, responsavel_legal_email, responsavel_financeiro_nome, responsavel_financeiro_telefone, responsavel_financeiro_email'
-        )
-        .eq('id', patientId)
-        .single();
-
-      if (patientError || !patientData) {
-        throw new Error('Não foi possível buscar dados do responsável');
-      }
-
-      // Determinar qual responsável foi selecionado para envio
-      const responsibleData =
-        selectedResponsible === 'legal'
-          ? {
-              nome: patientData.responsavel_legal_nome,
-              telefone: patientData.responsavel_legal_telefone,
-              email: patientData.responsavel_legal_email,
-            }
-          : {
-              nome: patientData.responsavel_financeiro_nome,
-              telefone: patientData.responsavel_financeiro_telefone,
-              email: patientData.responsavel_financeiro_email,
-            };
+      // AI dev note: Usar dados do responsável diretamente do estado (já carregado)
+      const responsibleData = {
+        nome: responsible.name,
+        telefone: responsible.telefone,
+        email: responsible.email,
+        tipo: responsible.type,
+      };
 
       // 2. Fazer upload do HTML para o storage
       const timestamp = Date.now();
@@ -484,7 +523,7 @@ export const AttendanceStatementGenerator: React.FC<
               nome: responsibleData.nome,
               telefone: responsibleData.telefone,
               email: responsibleData.email || null,
-              tipo: selectedResponsible === 'legal' ? 'legal' : 'financeiro',
+              tipo: responsible.type,
             },
             atestado: {
               url: statementUrl,
@@ -560,7 +599,12 @@ export const AttendanceStatementGenerator: React.FC<
           {/* Seleção de Responsável */}
           <div className="space-y-2">
             <Label htmlFor="responsible">Responsável que compareceu *</Label>
-            {responsibleOptions.length > 0 ? (
+            {isLoadingResponsibles ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Carregando responsáveis...
+              </div>
+            ) : responsibleOptions.length > 0 ? (
               <Select
                 value={selectedResponsible}
                 onValueChange={setSelectedResponsible}
