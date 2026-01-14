@@ -2,8 +2,9 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { OpenAI } from 'https://deno.land/x/openai@v4.24.0/mod.ts';
 
-// AI dev note: Edge Function FINAL para histórico do paciente com IA
-// Query simplificada + OpenAI + salvamento no banco
+// AI dev note: Edge Function para histórico do paciente com IA
+// Suporta contexto completo do paciente (anamnese, observações, pediatra)
+// para gerar relatórios clínicos narrativos profissionais
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,10 +13,22 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// AI dev note: Contexto adicional do paciente para enriquecer o relatório
+interface PatientContext {
+  nome?: string;
+  dataNascimento?: string;
+  responsavel?: string;
+  pediatra?: string;
+  anamnese?: string;
+  observacoes?: string;
+}
+
 interface PatientHistoryRequest {
   patientId: string;
   userId: string;
   maxCharacters: number;
+  patientContext?: PatientContext;
+  evolutionIds?: string[]; // IDs específicos de evoluções para incluir
 }
 
 interface PatientHistoryResponse {
@@ -64,8 +77,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     // Parse request
-    const { patientId, userId, maxCharacters }: PatientHistoryRequest =
-      await req.json();
+    const {
+      patientId,
+      userId,
+      maxCharacters,
+      patientContext,
+      evolutionIds,
+    }: PatientHistoryRequest = await req.json();
 
     if (!patientId || !userId) {
       return new Response(
@@ -80,7 +98,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const limitedMaxChars = Math.min(maxCharacters || 1500, 1500);
+    // AI dev note: Permitir limite maior para relatórios clínicos completos
+    const limitedMaxChars = Math.min(maxCharacters || 1500, 6000);
 
     // Rate limiting
     if (!checkRateLimit(userId)) {
@@ -171,42 +190,50 @@ Deno.serve(async (req: Request) => {
     if (evolucaoError) {
       console.log('[INFO] RPC failed, using manual query');
 
-      // Query manual simplificada
+      // Query manual com JOIN para pegar data da consulta
       const { data: manualEvolutions, error: manualError } = await supabase
         .from('relatorio_evolucao')
         .select(
           `
+          id,
           conteudo,
           created_at,
-          id_agendamento
+          tipo_evolucao,
+          id_agendamento,
+          agendamentos!inner(
+            paciente_id,
+            data_hora
+          )
         `
         )
+        .eq('agendamentos.paciente_id', patientId)
         .order('created_at', { ascending: true });
 
       if (manualError) {
         throw new Error(`Failed to fetch evolutions: ${manualError.message}`);
       }
 
-      // Filtrar evoluções pelo paciente (verificar via agendamento)
       if (manualEvolutions) {
-        for (const evo of manualEvolutions) {
-          const { data: agendamento } = await supabase
-            .from('agendamentos')
-            .select('paciente_id')
-            .eq('id', evo.id_agendamento)
-            .eq('paciente_id', patientId)
-            .single();
-
-          if (agendamento) {
-            evolutions.push({
-              conteudo: evo.conteudo,
-              created_at: evo.created_at,
-            });
-          }
-        }
+        evolutions = manualEvolutions.map((evo) => ({
+          id: evo.id,
+          conteudo: evo.conteudo,
+          created_at: evo.created_at,
+          tipo_evolucao: evo.tipo_evolucao,
+          consulta_data: evo.agendamentos?.data_hora || evo.created_at,
+        }));
       }
     } else {
       evolutions = evolucoes;
+    }
+
+    // AI dev note: Filtrar por IDs específicos se fornecidos
+    if (evolutionIds && evolutionIds.length > 0) {
+      console.log(
+        `[INFO] Filtering ${evolutions.length} evolutions to ${evolutionIds.length} selected`
+      );
+      evolutions = evolutions.filter((evo: { id: string }) =>
+        evolutionIds.includes(evo.id)
+      );
     }
 
     if (!evolutions || evolutions.length === 0) {
@@ -222,20 +249,70 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Preparar texto das evoluções
+    // Preparar texto das evoluções com data e tipo
     const evolutionsText = evolutions
-      .map((evo, index) => {
-        const date = new Date(evo.created_at).toLocaleDateString('pt-BR');
-        return `=== EVOLUÇÃO ${index + 1} (${date}) ===\n${evo.conteudo}`;
-      })
+      .map(
+        (
+          evo: {
+            conteudo: string;
+            created_at: string;
+            consulta_data?: string;
+            tipo_evolucao?: string;
+          },
+          index: number
+        ) => {
+          const date = new Date(
+            evo.consulta_data || evo.created_at
+          ).toLocaleDateString('pt-BR');
+          const tipo =
+            evo.tipo_evolucao === 'respiratoria'
+              ? 'Fisioterapia Respiratória'
+              : evo.tipo_evolucao === 'motora_assimetria'
+                ? 'Fisioterapia Motora'
+                : 'Atendimento';
+          return `=== EVOLUÇÃO ${index + 1} - ${date} (${tipo}) ===\n${evo.conteudo}`;
+        }
+      )
       .join('\n\n');
 
-    // Limitar tamanho
+    // Limitar tamanho (aumentado para relatórios completos)
     const finalEvolutionsText =
-      evolutionsText.length > 12000
-        ? evolutionsText.substring(0, 12000) +
+      evolutionsText.length > 20000
+        ? evolutionsText.substring(0, 20000) +
           '\n\n[... evoluções truncadas...]'
         : evolutionsText;
+
+    // AI dev note: Construir contexto adicional do paciente para enriquecer o relatório
+    let contextSection = '';
+    if (patientContext) {
+      const contextParts = [];
+
+      if (patientContext.dataNascimento) {
+        contextParts.push(
+          `Data de Nascimento: ${patientContext.dataNascimento}`
+        );
+      }
+      if (patientContext.responsavel) {
+        contextParts.push(`Responsável: ${patientContext.responsavel}`);
+      }
+      if (patientContext.pediatra) {
+        contextParts.push(`Pediatra acompanhante: ${patientContext.pediatra}`);
+      }
+      if (patientContext.anamnese) {
+        contextParts.push(
+          `\n=== ANAMNESE/HISTÓRICO INICIAL ===\n${patientContext.anamnese}`
+        );
+      }
+      if (patientContext.observacoes) {
+        contextParts.push(
+          `\n=== OBSERVAÇÕES GERAIS ===\n${patientContext.observacoes}`
+        );
+      }
+
+      if (contextParts.length > 0) {
+        contextSection = `\n\nINFORMAÇÕES DO PACIENTE:\n${contextParts.join('\n')}`;
+      }
+    }
 
     // OpenAI
     const openai = new OpenAI({
@@ -244,7 +321,7 @@ Deno.serve(async (req: Request) => {
     });
 
     console.log(
-      `[INFO] Compiling history for: ${patient.nome} (${evolutions.length} evolutions)`
+      `[INFO] Compiling history for: ${patient.nome} (${evolutions.length} evolutions, context: ${contextSection ? 'yes' : 'no'})`
     );
 
     const startTime = Date.now();
@@ -254,15 +331,15 @@ Deno.serve(async (req: Request) => {
         {
           role: 'system',
           content:
-            'Você é um fisioterapeuta respiratório pediátrico especializado com vasta experiência em análise de evolução de pacientes.',
+            'Você é um fisioterapeuta respiratório e motor pediátrico especializado com vasta experiência em análise e documentação de evolução de pacientes. Você gera relatórios clínicos profissionais e detalhados para fins de documentação médica e convênios.',
         },
         {
           role: 'user',
-          content: `${historyPrompt.replace('{maxCharacters}', limitedMaxChars.toString())}\n\nPACIENTE: ${patient.nome}\n\n${finalEvolutionsText}`,
+          content: `${historyPrompt.replace('{maxCharacters}', limitedMaxChars.toString())}\n\nPACIENTE: ${patient.nome}${contextSection}\n\n=== EVOLUÇÕES CLÍNICAS ===\n${finalEvolutionsText}`,
         },
       ],
-      max_tokens: Math.min(Math.ceil(limitedMaxChars * 1.3), 2000),
-      temperature: 0.2,
+      max_tokens: Math.min(Math.ceil(limitedMaxChars * 1.5), 4000),
+      temperature: 0.3, // Um pouco mais criativo para narrativa
     });
 
     const compiledHistory = response.choices[0]?.message?.content?.trim();

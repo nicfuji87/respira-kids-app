@@ -11,7 +11,6 @@ import {
   Send,
   User,
   Sparkles,
-  List,
   AlertCircle,
   Download,
   Eye,
@@ -138,7 +137,15 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     const [reportDate, setReportDate] = useState<string>(
       new Date().toISOString().split('T')[0]
     );
-    const [generationMode, setGenerationMode] = useState<'list' | 'ai'>('list');
+    // AI dev note: Estado para contexto completo do paciente (anamnese, pediatra, etc.)
+    const [patientContext, setPatientContext] = useState<{
+      dataNascimento?: string;
+      responsavelNome?: string;
+      pediatraNome?: string;
+      pediatraCRM?: string;
+      anamnese?: string;
+      observacoes?: string;
+    }>({});
 
     // Estados para relatórios salvos
     const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
@@ -163,19 +170,62 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       loadSavedReports();
     }, [patientId]);
 
-    // Carregar evoluções quando o modal abre
+    // Carregar evoluções e contexto do paciente quando o modal abre
     useEffect(() => {
       if (isModalOpen) {
         loadEvolutions();
+        loadPatientContext();
       } else {
         // Reset state when modal closes
         setSelectedEvolutions(new Set());
         setSelectedProfessional('');
         setReportDate(new Date().toISOString().split('T')[0]);
-        setGenerationMode('list');
         setGeneratedReportData(null);
+        setPatientContext({});
       }
     }, [isModalOpen, patientId]);
+
+    // Carregar contexto completo do paciente (anamnese, pediatra, observações)
+    const loadPatientContext = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pacientes_com_responsaveis_view')
+          .select(
+            `
+            data_nascimento,
+            responsavel_legal_nome,
+            responsavel_financeiro_nome,
+            pediatras_nomes,
+            pediatras_crms,
+            anamnese,
+            observacoes
+          `
+          )
+          .eq('id', patientId)
+          .single();
+
+        if (error) {
+          console.warn('Erro ao buscar contexto do paciente:', error);
+          return;
+        }
+
+        if (data) {
+          setPatientContext({
+            dataNascimento: data.data_nascimento || undefined,
+            responsavelNome:
+              data.responsavel_legal_nome ||
+              data.responsavel_financeiro_nome ||
+              undefined,
+            pediatraNome: data.pediatras_nomes || undefined,
+            pediatraCRM: data.pediatras_crms || undefined,
+            anamnese: data.anamnese || undefined,
+            observacoes: data.observacoes || undefined,
+          });
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar contexto:', err);
+      }
+    };
 
     const loadSavedReports = async () => {
       try {
@@ -323,16 +373,18 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       }
     };
 
+    // AI dev note: Gera HTML do relatório clínico com conteúdo da IA
     const generateReportHTML = (
       selectedEvols: PatientEvolution[],
       professional: (typeof PROFESSIONALS)[0],
       reportDateStr: string,
-      mode: 'list' | 'ai',
-      aiSummary?: string,
+      aiSummary: string,
       generatedBy?: string,
       patientData?: {
         dataNascimento?: string;
         responsavelNome?: string;
+        pediatraNome?: string;
+        pediatraCRM?: string;
       }
     ): string => {
       const signatureUrl = `${SUPABASE_STORAGE_URL}/${encodeURIComponent(professional.signatureFile)}`;
@@ -369,65 +421,20 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         )
         .join('<br>');
 
-      // Gerar conteúdo baseado no modo
-      let contentHTML = '';
-
-      if (mode === 'ai' && aiSummary) {
-        // Modo IA: resumo narrativo formatado
-        // Processar quebras de linha e parágrafos
-        const paragraphs = aiSummary
-          .split(/\n\n+/)
-          .filter((p) => p.trim())
-          .map((p) => {
-            // Detectar se é um título/subtítulo
-            if (
-              p.match(
-                /^(Histórico|Evolução|Proposta|Datas|Observações|Conclusão|Importância)/i
-              )
-            ) {
-              return `<h3 class="section-subtitle">${p.replace(/\n/g, '<br>')}</h3>`;
-            }
-            // Detectar listas
-            if (p.includes('\n-') || p.includes('\n•')) {
-              const items = p
-                .split(/\n[-•]/)
-                .filter((item) => item.trim())
-                .map((item) => `<li>${item.trim()}</li>`)
-                .join('');
-              return `<ul class="report-list">${items}</ul>`;
-            }
-            return `<p>${p.replace(/\n/g, '<br>')}</p>`;
-          })
-          .join('');
-        contentHTML = `<div class="ai-summary">${paragraphs}</div>`;
-      } else {
-        // Modo lista: resumo simples das evoluções
-        contentHTML = `
-          <div class="list-summary">
-            <p>Este relatório apresenta o acompanhamento fisioterapêutico do paciente <strong>${patientName}</strong>, 
-            com base em <strong>${sortedEvols.length}</strong> atendimento(s) realizado(s).</p>
-            
-            <h3 class="section-subtitle">Resumo dos Atendimentos</h3>
-            ${sortedEvols
-              .map((evol) => {
-                const evolDate = new Date(evol.consulta_data);
-                const dateStr = formatDateBR(evolDate);
-                const tipoLabel =
-                  evol.tipo_evolucao === 'respiratoria'
-                    ? 'Fisioterapia Respiratória'
-                    : evol.tipo_evolucao === 'motora_assimetria'
-                      ? 'Fisioterapia Motora'
-                      : 'Atendimento';
-                return `
-                  <div class="evolution-item">
-                    <strong>${dateStr}</strong> - ${tipoLabel} (${evol.profissional_nome})
-                  </div>
-                `;
-              })
-              .join('')}
-          </div>
-        `;
-      }
+      // Formatar conteúdo da IA com melhor estrutura HTML
+      // Processar markdown-like para HTML
+      const contentHTML = aiSummary
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // **bold**
+        .replace(
+          /^(Histórico e Encaminhamento|Evolução e Importância|Proposta [Tt]erapêutica|Observações|Conclusão)$/gm,
+          '<h3 class="section-subtitle">$1</h3>'
+        )
+        .replace(/\n\n+/g, '</p><p>') // Parágrafos
+        .replace(/\n- /g, '</p><ul><li>') // Início de lista
+        .replace(/\n• /g, '</p><ul><li>') // Início de lista com bullet
+        .replace(/<\/li>\n/g, '</li><li>') // Itens de lista
+        .replace(/<li>([^<]+)(?=<\/p>|$)/g, '<li>$1</li></ul>') // Fechar lista
+        .replace(/\n/g, '<br>'); // Quebras simples
 
       // Período do relatório
       const firstDate =
@@ -678,6 +685,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       <p><strong>Paciente:</strong> ${patientName}</p>
       ${patientDOB ? `<p><strong>Data de Nascimento:</strong> ${patientDOB}</p>` : ''}
       ${responsavelNome ? `<p><strong>Responsável:</strong> ${responsavelNome}</p>` : ''}
+      ${patientData?.pediatraNome ? `<p><strong>Pediatra:</strong> ${patientData.pediatraNome}${patientData.pediatraCRM ? ` (CRM: ${patientData.pediatraCRM})` : ''}</p>` : ''}
       <p><strong>Período do Relatório:</strong> ${periodoStr}</p>
     </div>
     
@@ -747,96 +755,68 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           selectedEvolutions.has(e.id)
         );
 
-        // Buscar dados adicionais do paciente para o relatório
-        let patientExtraData: {
-          dataNascimento?: string;
-          responsavelNome?: string;
-        } = {};
+        // AI dev note: Usar contexto já carregado + pediatra
+        const patientExtraData = {
+          dataNascimento: patientContext.dataNascimento,
+          responsavelNome: patientContext.responsavelNome,
+          pediatraNome: patientContext.pediatraNome,
+          pediatraCRM: patientContext.pediatraCRM,
+        };
 
-        try {
-          const { data: patientInfo } = await supabase
-            .from('pacientes_com_responsaveis_view')
-            .select(
-              'data_nascimento, responsavel_legal_nome, responsavel_financeiro_nome'
-            )
-            .eq('id', patientId)
-            .single();
+        // AI dev note: SEMPRE usar IA para gerar relatório narrativo
+        toast({
+          title: 'Gerando relatório com IA...',
+          description: 'Isso pode levar alguns segundos',
+        });
 
-          if (patientInfo) {
-            patientExtraData = {
-              dataNascimento: patientInfo.data_nascimento || undefined,
-              responsavelNome:
-                patientInfo.responsavel_legal_nome ||
-                patientInfo.responsavel_financeiro_nome ||
-                undefined,
-            };
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        // AI dev note: Passar contexto completo para a IA (anamnese, observações, etc.)
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/patient-history-ai`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              patientId,
+              userId: user?.pessoa?.id,
+              maxCharacters: 5000, // Limite maior para relatório completo
+              // Passar contexto adicional para enriquecer o relatório
+              patientContext: {
+                nome: patientName,
+                dataNascimento: patientContext.dataNascimento,
+                responsavel: patientContext.responsavelNome,
+                pediatra: patientContext.pediatraNome,
+                anamnese: patientContext.anamnese,
+                observacoes: patientContext.observacoes,
+              },
+              // IDs das evoluções selecionadas para filtrar
+              evolutionIds: Array.from(selectedEvolutions),
+            }),
           }
-        } catch (patientErr) {
-          console.warn('Erro ao buscar dados do paciente:', patientErr);
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Erro na resposta da IA');
         }
 
-        let aiSummary: string | undefined;
-
-        // Se modo IA, gerar resumo narrativo usando Edge Function
-        if (generationMode === 'ai') {
-          toast({
-            title: 'Gerando relatório com IA...',
-            description: 'Isso pode levar alguns segundos',
-          });
-
-          try {
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-            // AI dev note: A Edge Function patient-history-ai busca as evoluções do banco
-            // e gera um resumo narrativo usando o prompt configurado
-            const response = await fetch(
-              `${supabaseUrl}/functions/v1/patient-history-ai`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${supabaseAnonKey}`,
-                },
-                body: JSON.stringify({
-                  patientId,
-                  userId: user?.pessoa?.id,
-                  maxCharacters: 4000, // Limite maior para relatório completo
-                }),
-              }
-            );
-
-            if (response.ok) {
-              const result = await response.json();
-              if (result.success && result.history) {
-                aiSummary = result.history;
-              } else {
-                throw new Error(result.error || 'Erro na geração do relatório');
-              }
-            } else {
-              const errorData = await response.json().catch(() => ({}));
-              throw new Error(errorData.error || 'Erro na resposta da IA');
-            }
-          } catch (aiError) {
-            console.error('Erro ao gerar resumo com IA:', aiError);
-            toast({
-              title: 'Erro na geração com IA',
-              description:
-                aiError instanceof Error
-                  ? aiError.message
-                  : 'Não foi possível gerar relatório com IA. Usando listagem individual.',
-              variant: 'destructive',
-            });
-            // Fallback para modo lista
-          }
+        const result = await response.json();
+        if (!result.success || !result.history) {
+          throw new Error(result.error || 'Erro na geração do relatório');
         }
 
-        // Gerar HTML do relatório
+        const aiSummary = result.history;
+
+        // Gerar HTML do relatório com resumo da IA
         const htmlContent = generateReportHTML(
           selectedEvols,
           professional,
           reportDate,
-          aiSummary ? 'ai' : 'list',
           aiSummary,
           user?.pessoa?.nome || 'Sistema',
           patientExtraData
@@ -1290,47 +1270,14 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                 )}
               </div>
 
-              {/* Modo de Geração */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Tipo de Relatório</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div
-                    className={cn(
-                      'border rounded-lg p-3 cursor-pointer transition-all',
-                      generationMode === 'list'
-                        ? 'border-primary bg-primary/5'
-                        : 'hover:border-muted-foreground'
-                    )}
-                    onClick={() => setGenerationMode('list')}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <List className="h-4 w-4 text-primary" />
-                      <span className="font-medium text-sm">
-                        Listagem Individual
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Cada evolução listada separadamente
-                    </p>
-                  </div>
-                  <div
-                    className={cn(
-                      'border rounded-lg p-3 cursor-pointer transition-all',
-                      generationMode === 'ai'
-                        ? 'border-primary bg-primary/5'
-                        : 'hover:border-muted-foreground'
-                    )}
-                    onClick={() => setGenerationMode('ai')}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      <span className="font-medium text-sm">Resumo com IA</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Síntese inteligente das evoluções
-                    </p>
-                  </div>
-                </div>
+              {/* Info: Relatório gerado por IA */}
+              <div className="p-3 bg-violet-50 dark:bg-violet-950/30 rounded-md border border-violet-200 dark:border-violet-800 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-violet-600" />
+                <p className="text-sm text-violet-700 dark:text-violet-300">
+                  O relatório será gerado automaticamente por{' '}
+                  <strong>Inteligência Artificial</strong>, criando um resumo
+                  narrativo profissional das evoluções selecionadas.
+                </p>
               </div>
 
               {/* Data do Relatório */}
