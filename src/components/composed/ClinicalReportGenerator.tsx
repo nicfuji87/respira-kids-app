@@ -70,7 +70,6 @@ interface SavedReport {
   pdf_url: string | null;
   created_at: string;
   criado_por_nome: string | null;
-  data_emissao: string | null;
 }
 
 export interface ClinicalReportGeneratorProps {
@@ -167,11 +166,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     const [editorMode, setEditorMode] = useState<
       'configure' | 'editing' | 'saved'
     >('configure');
-    const [editableContent, setEditableContent] = useState({
-      historico: '',
-      evolucao: '',
-      proposta: '',
-    });
+    // AI dev note: Agora usa um único campo de texto em vez de 3 seções separadas
+    const [editableContent, setEditableContent] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
     const userRole = user?.pessoa?.role as
@@ -200,7 +196,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         setGeneratedReportData(null);
         setPatientContext({});
         setEditorMode('configure');
-        setEditableContent({ historico: '', evolucao: '', proposta: '' });
+        setEditableContent('');
       }
     }, [isModalOpen, patientId]);
 
@@ -287,7 +283,6 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
             conteudo,
             pdf_url,
             created_at,
-            data_emissao,
             criado_por_pessoa:pessoas!relatorios_medicos_criado_por_fkey(nome)
           `
           )
@@ -307,7 +302,6 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           conteudo: item.conteudo,
           pdf_url: item.pdf_url,
           created_at: item.created_at,
-          data_emissao: item.data_emissao,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           criado_por_nome: (item.criado_por_pessoa as any)?.nome || null,
         }));
@@ -866,70 +860,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
 
         const aiSummary = result.history;
 
-        // AI dev note: Parsear o conteúdo da IA em seções editáveis
-        // O prompt gera texto com títulos específicos
-        let historico = '';
-        let evolucao = '';
-        let proposta = '';
-
-        // Tentar identificar seções pelos títulos exatos ou padrões
-        const lines = aiSummary.split('\n');
-        let currentSection = 'historico';
-
-        for (const line of lines) {
-          const lowerLine = line.toLowerCase().trim();
-          const trimmedLine = line.trim();
-
-          // Detectar mudança de seção pelos títulos
-          if (
-            lowerLine === 'histórico e encaminhamento' ||
-            lowerLine.startsWith('histórico e encaminhamento')
-          ) {
-            currentSection = 'historico';
-            continue; // Pular a linha do título
-          } else if (
-            lowerLine.includes('evolução e importância') ||
-            lowerLine === 'evolução e importância da fisioterapia respiratória'
-          ) {
-            currentSection = 'evolucao';
-            continue; // Pular a linha do título
-          } else if (
-            lowerLine.startsWith('proposta terapêutica') ||
-            lowerLine === 'proposta terapêutica:' ||
-            lowerLine === 'proposta terapêutica'
-          ) {
-            currentSection = 'proposta';
-            continue; // Pular a linha do título
-          }
-
-          // Pular linhas vazias no início de cada seção
-          if (!trimmedLine) {
-            if (currentSection === 'historico' && !historico.trim()) continue;
-            if (currentSection === 'evolucao' && !evolucao.trim()) continue;
-            if (currentSection === 'proposta' && !proposta.trim()) continue;
-          }
-
-          // Adicionar linha à seção atual
-          if (currentSection === 'historico') {
-            historico += line + '\n';
-          } else if (currentSection === 'evolucao') {
-            evolucao += line + '\n';
-          } else {
-            proposta += line + '\n';
-          }
-        }
-
-        // Se não conseguiu separar, coloca tudo em histórico
-        if (!evolucao.trim() && !proposta.trim()) {
-          historico = aiSummary;
-        }
-
-        // Setar o conteúdo editável e mudar para modo de edição
-        setEditableContent({
-          historico: historico.trim(),
-          evolucao: evolucao.trim(),
-          proposta: proposta.trim(),
-        });
+        // AI dev note: Setar o conteúdo editável diretamente (um único campo)
+        setEditableContent(aiSummary.trim());
         setEditorMode('editing');
 
         toast({
@@ -973,25 +905,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           selectedEvolutions.has(e.id)
         );
 
-        // Combinar o conteúdo editado com títulos das seções
-        const sections = [];
-        if (editableContent.historico.trim()) {
-          sections.push(
-            'Histórico e Encaminhamento\n\n' + editableContent.historico.trim()
-          );
-        }
-        if (editableContent.evolucao.trim()) {
-          sections.push(
-            'Evolução e Importância da Fisioterapia Respiratória\n\n' +
-              editableContent.evolucao.trim()
-          );
-        }
-        if (editableContent.proposta.trim()) {
-          sections.push(
-            'Proposta terapêutica\n\n' + editableContent.proposta.trim()
-          );
-        }
-        const combinedContent = sections.join('\n\n');
+        // AI dev note: Usar o conteúdo editado diretamente (único campo)
+        const combinedContent = editableContent.trim();
 
         // Gerar HTML final com o conteúdo editado
         const htmlContent = generateReportHTML(
@@ -1051,10 +966,9 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           .insert({
             id_pessoa: patientId,
             tipo_relatorio_id: tipoData.id,
-            conteudo: `Relatório clínico com ${selectedEvols.length} evolução(ões). Período: ${periodoStr}. Assinado por: ${professional.name}`,
+            conteudo: `Relatório clínico com ${selectedEvols.length} evolução(ões). Período: ${periodoStr}. Assinado por: ${professional.name}. Data de emissão: ${formatDateBR(new Date(reportDate + 'T12:00:00'))}`,
             pdf_url: publicUrl,
             criado_por: user?.pessoa?.id,
-            data_emissao: reportDate,
             transcricao: false,
             ativo: true,
           });
@@ -1279,11 +1193,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                         </span>
                       </div>
                       <Badge variant="secondary" className="text-xs">
-                        {report.data_emissao
-                          ? formatDateBR(
-                              new Date(report.data_emissao + 'T12:00:00')
-                            )
-                          : formatDateBR(new Date(report.created_at))}
+                        {formatDateBR(new Date(report.created_at))}
                       </Badge>
                     </div>
 
@@ -1546,60 +1456,22 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                     </Badge>
                   </div>
 
-                  {/* Editor de Histórico */}
+                  {/* AI dev note: Editor único para todo o conteúdo do relatório */}
                   <div className="space-y-2">
                     <Label className="text-sm font-medium flex items-center gap-2">
-                      <span className="w-2 h-2 bg-blue-500 rounded-full" />
-                      Histórico e Encaminhamento
+                      <PenLine className="h-4 w-4 text-primary" />
+                      Conteúdo do Relatório
                     </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Edite o texto abaixo conforme necessário. Mantenha os
+                      títulos das seções (Histórico, Evolução, Proposta) para
+                      melhor formatação.
+                    </p>
                     <Textarea
-                      value={editableContent.historico}
-                      onChange={(e) =>
-                        setEditableContent((prev) => ({
-                          ...prev,
-                          historico: e.target.value,
-                        }))
-                      }
-                      placeholder="Descreva o histórico do paciente, motivo do encaminhamento, diagnósticos..."
-                      className="min-h-[140px] resize-y"
-                    />
-                  </div>
-
-                  {/* Editor de Evolução */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-2">
-                      <span className="w-2 h-2 bg-green-500 rounded-full" />
-                      Evolução e Importância da Fisioterapia
-                    </Label>
-                    <Textarea
-                      value={editableContent.evolucao}
-                      onChange={(e) =>
-                        setEditableContent((prev) => ({
-                          ...prev,
-                          evolucao: e.target.value,
-                        }))
-                      }
-                      placeholder="Descreva a evolução do paciente, melhorias observadas, importância do tratamento..."
-                      className="min-h-[140px] resize-y"
-                    />
-                  </div>
-
-                  {/* Editor de Proposta */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-2">
-                      <span className="w-2 h-2 bg-amber-500 rounded-full" />
-                      Proposta Terapêutica
-                    </Label>
-                    <Textarea
-                      value={editableContent.proposta}
-                      onChange={(e) =>
-                        setEditableContent((prev) => ({
-                          ...prev,
-                          proposta: e.target.value,
-                        }))
-                      }
-                      placeholder="Descreva a proposta de acompanhamento, frequência sugerida, objetivos..."
-                      className="min-h-[100px] resize-y"
+                      value={editableContent}
+                      onChange={(e) => setEditableContent(e.target.value)}
+                      placeholder="Conteúdo do relatório clínico..."
+                      className="min-h-[400px] resize-y font-mono text-sm"
                     />
                   </div>
                 </>
@@ -1692,12 +1564,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                   </Button>
                   <Button
                     onClick={handleSaveReport}
-                    disabled={
-                      isSaving ||
-                      (!editableContent.historico &&
-                        !editableContent.evolucao &&
-                        !editableContent.proposta)
-                    }
+                    disabled={isSaving || !editableContent.trim()}
                     className="flex-1"
                   >
                     {isSaving ? (
