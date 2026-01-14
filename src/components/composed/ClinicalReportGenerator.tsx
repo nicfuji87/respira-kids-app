@@ -207,38 +207,53 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     // Carregar contexto completo do paciente (anamnese, pediatra, observações)
     const loadPatientContext = async () => {
       try {
-        const { data, error } = await supabase
-          .from('pacientes_com_responsaveis_view')
-          .select(
+        // Buscar dados da view e da tabela pessoas (para anamnese/observações)
+        const [viewResult, pessoaResult] = await Promise.all([
+          supabase
+            .from('pacientes_com_responsaveis_view')
+            .select(
+              `
+              data_nascimento,
+              responsavel_legal_nome,
+              responsavel_financeiro_nome,
+              nomes_responsaveis,
+              pediatras_nomes,
+              pediatras_crms
             `
-            data_nascimento,
-            responsavel_legal_nome,
-            responsavel_financeiro_nome,
-            pediatras_nomes,
-            pediatras_crms,
-            anamnese,
-            observacoes
-          `
-          )
-          .eq('id', patientId)
-          .single();
+            )
+            .eq('id', patientId)
+            .single(),
+          supabase
+            .from('pessoas')
+            .select('anamnese, observacoes')
+            .eq('id', patientId)
+            .single(),
+        ]);
 
-        if (error) {
-          console.warn('Erro ao buscar contexto do paciente:', error);
+        if (viewResult.error) {
+          console.warn(
+            'Erro ao buscar contexto do paciente:',
+            viewResult.error
+          );
           return;
         }
+
+        const data = viewResult.data;
+        const pessoaData = pessoaResult.data;
 
         if (data) {
           setPatientContext({
             dataNascimento: data.data_nascimento || undefined,
+            // Priorizar nomes_responsaveis (todos), senão usar legal ou financeiro
             responsavelNome:
+              data.nomes_responsaveis ||
               data.responsavel_legal_nome ||
               data.responsavel_financeiro_nome ||
               undefined,
             pediatraNome: data.pediatras_nomes || undefined,
             pediatraCRM: data.pediatras_crms || undefined,
-            anamnese: data.anamnese || undefined,
-            observacoes: data.observacoes || undefined,
+            anamnese: pessoaData?.anamnese || undefined,
+            observacoes: pessoaData?.observacoes || undefined,
           });
         }
       } catch (err) {
@@ -442,18 +457,31 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
 
       // Formatar conteúdo da IA com melhor estrutura HTML
       // Processar markdown-like para HTML
-      const contentHTML = aiSummary
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // **bold**
+      let contentHTML = aiSummary
+        // Remover ** (bold markdown) se existir
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        // Títulos das seções (reconhecer variações)
         .replace(
-          /^(Histórico e Encaminhamento|Evolução e Importância|Proposta [Tt]erapêutica|Observações|Conclusão)$/gm,
-          '<h3 class="section-subtitle">$1</h3>'
+          /^(Histórico e Encaminhamento|Evolução e Importância da Fisioterapia Respiratória|Evolução e Importância|Proposta [Tt]erapêutica:?|Proposta [Tt]erapêutica)[\s:]*$/gm,
+          '\n<h3 class="section-subtitle">$1</h3>\n'
         )
-        .replace(/\n\n+/g, '</p><p>') // Parágrafos
-        .replace(/\n- /g, '</p><ul><li>') // Início de lista
-        .replace(/\n• /g, '</p><ul><li>') // Início de lista com bullet
-        .replace(/<\/li>\n/g, '</li><li>') // Itens de lista
-        .replace(/<li>([^<]+)(?=<\/p>|$)/g, '<li>$1</li></ul>') // Fechar lista
-        .replace(/\n/g, '<br>'); // Quebras simples
+        // Listas com "-"
+        .replace(/\n- ([^\n]+)/g, '\n<li>$1</li>')
+        // Agrupar <li> consecutivos em <ul>
+        .replace(/(<li>.*<\/li>\n?)+/gs, '<ul>$&</ul>')
+        // Parágrafos (duas quebras de linha)
+        .replace(/\n\n+/g, '</p>\n<p>')
+        // Quebras simples
+        .replace(/\n(?!<)/g, '<br>\n');
+
+      // Limpar tags vazias e ajustar estrutura
+      contentHTML = '<p>' + contentHTML + '</p>';
+      contentHTML = contentHTML
+        .replace(/<p>\s*<\/p>/g, '') // Remover parágrafos vazios
+        .replace(/<p>\s*<h3/g, '<h3') // Não envolver títulos em <p>
+        .replace(/<\/h3>\s*<\/p>/g, '</h3>') // Fechar corretamente
+        .replace(/<p>\s*<ul>/g, '<ul>') // Não envolver listas em <p>
+        .replace(/<\/ul>\s*<\/p>/g, '</ul>'); // Fechar corretamente
 
       // Período do relatório
       const firstDate =
@@ -556,15 +584,34 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     
     .content-section {
       margin-bottom: 20px;
+      text-align: justify;
+    }
+    
+    .content-section p {
+      margin-bottom: 10px;
+      text-indent: 20px;
     }
     
     .section-subtitle {
-      font-size: 11pt;
+      font-size: 12pt;
       font-weight: 600;
       color: #1a365d;
-      margin: 15px 0 8px 0;
-      padding-bottom: 3px;
-      border-bottom: 1px solid #40C4AA;
+      margin: 20px 0 10px 0;
+      padding-bottom: 4px;
+      border-bottom: 2px solid #40C4AA;
+      text-indent: 0 !important;
+    }
+    
+    .content-section ul {
+      margin: 10px 0 15px 30px;
+      padding-left: 0;
+      list-style-type: disc;
+    }
+    
+    .content-section li {
+      margin-bottom: 6px;
+      text-indent: 0;
+      line-height: 1.5;
     }
     
     .ai-summary {
@@ -820,32 +867,46 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         const aiSummary = result.history;
 
         // AI dev note: Parsear o conteúdo da IA em seções editáveis
-        // O prompt gera texto sem títulos, então dividimos por padrões esperados
+        // O prompt gera texto com títulos específicos
         let historico = '';
         let evolucao = '';
         let proposta = '';
 
-        // Tentar identificar seções pelo conteúdo
+        // Tentar identificar seções pelos títulos exatos ou padrões
         const lines = aiSummary.split('\n');
         let currentSection = 'historico';
 
         for (const line of lines) {
-          const lowerLine = line.toLowerCase();
+          const lowerLine = line.toLowerCase().trim();
+          const trimmedLine = line.trim();
 
-          // Detectar mudança de seção
+          // Detectar mudança de seção pelos títulos
           if (
+            lowerLine === 'histórico e encaminhamento' ||
+            lowerLine.startsWith('histórico e encaminhamento')
+          ) {
+            currentSection = 'historico';
+            continue; // Pular a linha do título
+          } else if (
             lowerLine.includes('evolução e importância') ||
-            lowerLine.includes('durante o acompanhamento')
+            lowerLine === 'evolução e importância da fisioterapia respiratória'
           ) {
             currentSection = 'evolucao';
+            continue; // Pular a linha do título
           } else if (
-            lowerLine.includes('proposta terapêutica') ||
-            lowerLine.includes('proposta terape') ||
-            lowerLine.includes('atualmente, o paciente') ||
-            lowerLine.includes('atualmente, a paciente') ||
-            lowerLine.includes('sugere-se')
+            lowerLine.startsWith('proposta terapêutica') ||
+            lowerLine === 'proposta terapêutica:' ||
+            lowerLine === 'proposta terapêutica'
           ) {
             currentSection = 'proposta';
+            continue; // Pular a linha do título
+          }
+
+          // Pular linhas vazias no início de cada seção
+          if (!trimmedLine) {
+            if (currentSection === 'historico' && !historico.trim()) continue;
+            if (currentSection === 'evolucao' && !evolucao.trim()) continue;
+            if (currentSection === 'proposta' && !proposta.trim()) continue;
           }
 
           // Adicionar linha à seção atual
@@ -859,7 +920,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         }
 
         // Se não conseguiu separar, coloca tudo em histórico
-        if (!evolucao && !proposta) {
+        if (!evolucao.trim() && !proposta.trim()) {
           historico = aiSummary;
         }
 
@@ -912,14 +973,25 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           selectedEvolutions.has(e.id)
         );
 
-        // Combinar o conteúdo editado
-        const combinedContent = [
-          editableContent.historico,
-          editableContent.evolucao,
-          editableContent.proposta,
-        ]
-          .filter((s) => s.trim())
-          .join('\n\n');
+        // Combinar o conteúdo editado com títulos das seções
+        const sections = [];
+        if (editableContent.historico.trim()) {
+          sections.push(
+            'Histórico e Encaminhamento\n\n' + editableContent.historico.trim()
+          );
+        }
+        if (editableContent.evolucao.trim()) {
+          sections.push(
+            'Evolução e Importância da Fisioterapia Respiratória\n\n' +
+              editableContent.evolucao.trim()
+          );
+        }
+        if (editableContent.proposta.trim()) {
+          sections.push(
+            'Proposta terapêutica\n\n' + editableContent.proposta.trim()
+          );
+        }
+        const combinedContent = sections.join('\n\n');
 
         // Gerar HTML final com o conteúdo editado
         const htmlContent = generateReportHTML(
