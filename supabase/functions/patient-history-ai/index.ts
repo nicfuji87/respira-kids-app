@@ -325,6 +325,13 @@ Deno.serve(async (req: Request) => {
     );
 
     const startTime = Date.now();
+
+    // AI dev note: GPT-5.2 usa max_completion_tokens em vez de max_tokens
+    const maxCompletionTokens = Math.min(
+      Math.ceil(limitedMaxChars * 1.5),
+      4000
+    );
+
     const response = await openai.chat.completions.create({
       model: openaiModel,
       messages: [
@@ -338,8 +345,11 @@ Deno.serve(async (req: Request) => {
           content: `${historyPrompt.replace('{maxCharacters}', limitedMaxChars.toString())}\n\nPACIENTE: ${patient.nome}${contextSection}\n\n=== EVOLUÇÕES CLÍNICAS ===\n${finalEvolutionsText}`,
         },
       ],
-      max_tokens: Math.min(Math.ceil(limitedMaxChars * 1.5), 4000),
-      temperature: 0.3, // Um pouco mais criativo para narrativa
+      // Usar max_completion_tokens para GPT-5.x (max_tokens para modelos mais antigos)
+      ...(openaiModel.startsWith('gpt-5')
+        ? { max_completion_tokens: maxCompletionTokens }
+        : { max_tokens: maxCompletionTokens }),
+      temperature: 0.3,
     });
 
     const compiledHistory = response.choices[0]?.message?.content?.trim();
