@@ -7,7 +7,7 @@ import {
   PatientCompleteInfo,
   PatientMetricsWithConsultations,
   PatientAnamnesisWithObservations,
-  PatientMedicalReports,
+  ClinicalReportGenerator,
   PatientHistory,
   MediaGallery,
   PatientContractSection,
@@ -441,8 +441,11 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
               currentUserId={user?.pessoa?.id}
             />
 
-            {/* Relatórios Médicos do Paciente */}
-            <PatientMedicalReports patientId={actualId} />
+            {/* Relatórios Clínicos do Paciente */}
+            <ClinicalReportGenerator
+              patientId={actualId}
+              patientName={patient.nome}
+            />
 
             {/* Histórico Compilado com IA */}
             <PatientHistory patientId={actualId} />

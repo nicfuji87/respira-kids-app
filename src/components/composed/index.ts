@@ -100,6 +100,7 @@ export { PatientAnamnesis } from './PatientAnamnesis';
 export { PatientObservations } from './PatientObservations';
 export { PatientAnamnesisWithObservations } from './PatientAnamnesisWithObservations';
 export { PatientMedicalReports } from './PatientMedicalReports';
+export { ClinicalReportGenerator } from './ClinicalReportGenerator';
 export { PatientHistory } from './PatientHistory';
 export { MediaGallery } from './MediaGallery';
 export { BillingResponsibleSelect } from './BillingResponsibleSelect';

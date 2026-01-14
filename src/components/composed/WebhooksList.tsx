@@ -36,6 +36,7 @@ const eventLabels: Record<string, string> = {
   orcamento_gerado: 'Orçamento Gerado',
   certificado_gerado: 'Certificado Gerado',
   atestado_gerado: 'Atestado Gerado',
+  relatorio_clinico_gerado: 'Relatório Clínico Gerado',
   webhook_failed: 'Webhook Falhou',
   registration_error: 'Erro no Cadastro',
 };

@@ -29,6 +29,7 @@ const eventOptions = [
   { value: 'orcamento_gerado', label: 'Orçamento Gerado' },
   { value: 'certificado_gerado', label: 'Certificado Gerado' },
   { value: 'atestado_gerado', label: 'Atestado Gerado' },
+  { value: 'relatorio_clinico_gerado', label: 'Relatório Clínico Gerado' },
   { value: 'webhook_failed', label: 'Webhook Falhou' },
   { value: 'registration_error', label: 'Erro no Cadastro' },
 ];
