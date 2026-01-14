@@ -1078,14 +1078,10 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           },
         };
 
-        // Enfileirar webhook
+        // Enfileirar webhook (seguindo mesmo padrão do orçamento)
         const { error: webhookError } = await supabase
           .from('webhook_queue')
-          .insert({
-            event_type: 'relatorio_clinico_gerado',
-            payload: webhookPayload,
-            status: 'pending',
-          });
+          .insert(webhookPayload);
 
         if (webhookError) {
           console.error('Erro ao enfileirar webhook:', webhookError);
