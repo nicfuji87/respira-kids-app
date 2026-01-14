@@ -12,7 +12,6 @@ import {
   User,
   Sparkles,
   AlertCircle,
-  Download,
   Eye,
   Save,
   PenLine,
@@ -1129,6 +1128,99 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       }
     };
 
+    // AI dev note: Função para imprimir/gerar PDF de um relatório salvo
+    const handlePrintSavedReport = async (url: string) => {
+      try {
+        const response = await fetch(url);
+        const htmlContent = await response.text();
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(htmlContent);
+          printWindow.document.close();
+          setTimeout(() => {
+            printWindow.print();
+          }, 1000);
+        }
+      } catch (err) {
+        console.error('Erro ao imprimir relatório:', err);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível imprimir o relatório',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    // AI dev note: Função para enviar relatório salvo ao responsável via webhook
+    const handleSendSavedReport = async (reportUrl: string) => {
+      setIsSending(true);
+
+      try {
+        // Buscar dados do responsável
+        const { data: patientData, error: patientError } = await supabase
+          .from('pacientes_com_responsaveis_view')
+          .select(
+            'responsavel_legal_nome, responsavel_legal_telefone, responsavel_legal_email'
+          )
+          .eq('id', patientId)
+          .single();
+
+        if (patientError || !patientData) {
+          throw new Error('Não foi possível buscar dados do responsável');
+        }
+
+        // Montar payload do webhook
+        const webhookPayload = {
+          evento: 'relatorio_clinico_gerado',
+          payload: {
+            tipo: 'relatorio_clinico_gerado',
+            timestamp: new Date().toISOString(),
+            webhook_id: crypto.randomUUID(),
+            data: {
+              paciente: {
+                id: patientId,
+                nome: patientName,
+              },
+              responsavel_legal: {
+                nome: patientData.responsavel_legal_nome,
+                telefone: patientData.responsavel_legal_telefone,
+                email: patientData.responsavel_legal_email || null,
+              },
+              relatorio: {
+                url: reportUrl,
+              },
+            },
+          },
+        };
+
+        // Enfileirar webhook
+        const { error: webhookError } = await supabase
+          .from('webhook_queue')
+          .insert(webhookPayload);
+
+        if (webhookError) {
+          console.error('Erro ao enfileirar webhook:', webhookError);
+          throw new Error('Erro ao enviar para o responsável');
+        }
+
+        toast({
+          title: 'Enviado!',
+          description: `Relatório enviado para ${patientData.responsavel_legal_nome || 'o responsável'}`,
+        });
+      } catch (err) {
+        console.error('Erro ao enviar relatório:', err);
+        toast({
+          title: 'Erro',
+          description:
+            err instanceof Error ? err.message : 'Erro ao enviar relatório',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsSending(false);
+      }
+    };
+
     return (
       <>
         <Card className={cn('w-full', className)}>
@@ -1226,29 +1318,37 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                       </>
                     )}
 
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex gap-2 pt-2 flex-wrap">
                       {report.pdf_url && (
                         <>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex-1"
                             onClick={() => handleViewReport(report.pdf_url!)}
                           >
                             <Eye className="h-4 w-4 mr-1" />
-                            Ver Relatório
+                            Ver
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              const link = document.createElement('a');
-                              link.href = report.pdf_url!;
-                              link.download = `relatorio_${patientName.replace(/\s/g, '_')}.html`;
-                              link.click();
-                            }}
+                            onClick={() =>
+                              handlePrintSavedReport(report.pdf_url!)
+                            }
                           >
-                            <Download className="h-4 w-4" />
+                            <Printer className="h-4 w-4 mr-1" />
+                            PDF
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() =>
+                              handleSendSavedReport(report.pdf_url!)
+                            }
+                            disabled={isSending}
+                          >
+                            <Send className="h-4 w-4 mr-1" />
+                            Enviar
                           </Button>
                         </>
                       )}
