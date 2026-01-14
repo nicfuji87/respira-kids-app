@@ -14,6 +14,10 @@ import {
   AlertCircle,
   Download,
   Eye,
+  Save,
+  PenLine,
+  ArrowLeft,
+  CheckCircle,
 } from 'lucide-react';
 import {
   Card,
@@ -30,6 +34,7 @@ import {
 import { Button } from '@/components/primitives/button';
 import { Label } from '@/components/primitives/label';
 import { Input } from '@/components/primitives/input';
+import { Textarea } from '@/components/primitives/textarea';
 import {
   Select,
   SelectContent,
@@ -157,6 +162,18 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       reportUrl: string | null;
     } | null>(null);
 
+    // AI dev note: Estados para editor de relatório
+    // Permite que o usuário edite o conteúdo gerado pela IA antes de salvar
+    const [editorMode, setEditorMode] = useState<
+      'configure' | 'editing' | 'saved'
+    >('configure');
+    const [editableContent, setEditableContent] = useState({
+      historico: '',
+      evolucao: '',
+      proposta: '',
+    });
+    const [isSaving, setIsSaving] = useState(false);
+
     const userRole = user?.pessoa?.role as
       | 'admin'
       | 'profissional'
@@ -182,6 +199,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         setReportDate(new Date().toISOString().split('T')[0]);
         setGeneratedReportData(null);
         setPatientContext({});
+        setEditorMode('configure');
+        setEditableContent({ historico: '', evolucao: '', proposta: '' });
       }
     }, [isModalOpen, patientId]);
 
@@ -751,18 +770,6 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         );
         if (!professional) throw new Error('Profissional não encontrado');
 
-        const selectedEvols = evolutions.filter((e) =>
-          selectedEvolutions.has(e.id)
-        );
-
-        // AI dev note: Usar contexto já carregado + pediatra
-        const patientExtraData = {
-          dataNascimento: patientContext.dataNascimento,
-          responsavelNome: patientContext.responsavelNome,
-          pediatraNome: patientContext.pediatraNome,
-          pediatraCRM: patientContext.pediatraCRM,
-        };
-
         // AI dev note: SEMPRE usar IA para gerar relatório narrativo
         toast({
           title: 'Gerando relatório com IA...',
@@ -812,14 +819,121 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
 
         const aiSummary = result.history;
 
-        // Gerar HTML do relatório com resumo da IA
+        // AI dev note: Parsear o conteúdo da IA em seções editáveis
+        // O prompt gera texto sem títulos, então dividimos por padrões esperados
+        let historico = '';
+        let evolucao = '';
+        let proposta = '';
+
+        // Tentar identificar seções pelo conteúdo
+        const lines = aiSummary.split('\n');
+        let currentSection = 'historico';
+
+        for (const line of lines) {
+          const lowerLine = line.toLowerCase();
+
+          // Detectar mudança de seção
+          if (
+            lowerLine.includes('evolução e importância') ||
+            lowerLine.includes('durante o acompanhamento')
+          ) {
+            currentSection = 'evolucao';
+          } else if (
+            lowerLine.includes('proposta terapêutica') ||
+            lowerLine.includes('proposta terape') ||
+            lowerLine.includes('atualmente, o paciente') ||
+            lowerLine.includes('atualmente, a paciente') ||
+            lowerLine.includes('sugere-se')
+          ) {
+            currentSection = 'proposta';
+          }
+
+          // Adicionar linha à seção atual
+          if (currentSection === 'historico') {
+            historico += line + '\n';
+          } else if (currentSection === 'evolucao') {
+            evolucao += line + '\n';
+          } else {
+            proposta += line + '\n';
+          }
+        }
+
+        // Se não conseguiu separar, coloca tudo em histórico
+        if (!evolucao && !proposta) {
+          historico = aiSummary;
+        }
+
+        // Setar o conteúdo editável e mudar para modo de edição
+        setEditableContent({
+          historico: historico.trim(),
+          evolucao: evolucao.trim(),
+          proposta: proposta.trim(),
+        });
+        setEditorMode('editing');
+
+        toast({
+          title: 'Relatório gerado!',
+          description:
+            'Revise e edite o conteúdo conforme necessário antes de salvar.',
+        });
+      } catch (err) {
+        console.error('Erro ao gerar relatório:', err);
+        toast({
+          title: 'Erro',
+          description:
+            err instanceof Error ? err.message : 'Erro ao gerar relatório',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    };
+
+    // AI dev note: Função para salvar o relatório editado
+    const handleSaveReport = async () => {
+      if (!selectedProfessional) {
+        toast({
+          title: 'Atenção',
+          description: 'Selecione o profissional que assinará o relatório',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setIsSaving(true);
+
+      try {
+        const professional = PROFESSIONALS.find(
+          (p) => p.id === selectedProfessional
+        );
+        if (!professional) throw new Error('Profissional não encontrado');
+
+        const selectedEvols = evolutions.filter((e) =>
+          selectedEvolutions.has(e.id)
+        );
+
+        // Combinar o conteúdo editado
+        const combinedContent = [
+          editableContent.historico,
+          editableContent.evolucao,
+          editableContent.proposta,
+        ]
+          .filter((s) => s.trim())
+          .join('\n\n');
+
+        // Gerar HTML final com o conteúdo editado
         const htmlContent = generateReportHTML(
           selectedEvols,
           professional,
           reportDate,
-          aiSummary,
+          combinedContent,
           user?.pessoa?.nome || 'Sistema',
-          patientExtraData
+          {
+            dataNascimento: patientContext.dataNascimento,
+            responsavelNome: patientContext.responsavelNome,
+            pediatraNome: patientContext.pediatraNome,
+            pediatraCRM: patientContext.pediatraCRM,
+          }
         );
 
         // Upload do HTML para o storage
@@ -855,12 +969,17 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
 
         if (tipoError) throw new Error('Tipo de relatório não encontrado');
 
+        const periodoStr =
+          selectedEvols.length > 0
+            ? `${formatDateBR(new Date(selectedEvols[0]?.consulta_data || new Date()))} a ${formatDateBR(new Date(selectedEvols[selectedEvols.length - 1]?.consulta_data || new Date()))}`
+            : formatDateBR(new Date());
+
         const { error: saveError } = await supabase
           .from('relatorios_medicos')
           .insert({
             id_pessoa: patientId,
             tipo_relatorio_id: tipoData.id,
-            conteudo: `Relatório clínico com ${selectedEvols.length} evolução(ões). Período: ${formatDateBR(new Date(selectedEvols[0]?.consulta_data || new Date()))} a ${formatDateBR(new Date(selectedEvols[selectedEvols.length - 1]?.consulta_data || new Date()))}. Assinado por: ${professional.name}`,
+            conteudo: `Relatório clínico com ${selectedEvols.length} evolução(ões). Período: ${periodoStr}. Assinado por: ${professional.name}`,
             pdf_url: publicUrl,
             criado_por: user?.pessoa?.id,
             data_emissao: reportDate,
@@ -870,7 +989,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
 
         if (saveError) {
           console.error('Erro ao salvar relatório:', saveError);
-          // Continua mesmo com erro no salvamento
+          throw new Error('Erro ao salvar no banco de dados');
         }
 
         setGeneratedReportData({
@@ -878,23 +997,26 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           reportUrl: publicUrl,
         });
 
+        setEditorMode('saved');
+
         toast({
           title: 'Sucesso!',
-          description: 'Relatório gerado com sucesso',
+          description:
+            'Relatório salvo com sucesso. Agora você pode exportar em PDF ou enviar.',
         });
 
         // Recarregar lista de relatórios
         await loadSavedReports();
       } catch (err) {
-        console.error('Erro ao gerar relatório:', err);
+        console.error('Erro ao salvar relatório:', err);
         toast({
           title: 'Erro',
           description:
-            err instanceof Error ? err.message : 'Erro ao gerar relatório',
+            err instanceof Error ? err.message : 'Erro ao salvar relatório',
           variant: 'destructive',
         });
       } finally {
-        setIsGenerating(false);
+        setIsSaving(false);
       }
     };
 
@@ -1162,178 +1284,298 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
 
         {/* Modal de Geração de Relatório */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                Gerar Relatório Clínico
+                {editorMode === 'configure' && (
+                  <>
+                    <FileText className="h-5 w-5 text-primary" />
+                    Gerar Relatório Clínico
+                  </>
+                )}
+                {editorMode === 'editing' && (
+                  <>
+                    <PenLine className="h-5 w-5 text-primary" />
+                    Editar Relatório
+                  </>
+                )}
+                {editorMode === 'saved' && (
+                  <>
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    Relatório Salvo
+                  </>
+                )}
               </DialogTitle>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto space-y-6 py-4">
-              {/* Info do Paciente */}
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800">
-                <p className="font-medium text-blue-800 dark:text-blue-200">
-                  {patientName}
-                </p>
-              </div>
-
-              {/* Seleção de Evoluções */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">
-                    Evoluções a incluir *
-                  </Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={selectAllEvolutions}
-                    disabled={evolutions.length === 0}
-                  >
-                    {selectedEvolutions.size === evolutions.length
-                      ? 'Desmarcar todas'
-                      : 'Selecionar todas'}
-                  </Button>
-                </div>
-
-                {isLoadingEvolutions ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Carregando evoluções...
+            <div className="flex-1 overflow-y-auto space-y-4 py-4">
+              {/* MODO: CONFIGURAÇÃO */}
+              {editorMode === 'configure' && (
+                <>
+                  {/* Info do Paciente */}
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800">
+                    <p className="font-medium text-blue-800 dark:text-blue-200">
+                      {patientName}
+                    </p>
                   </div>
-                ) : evolutions.length === 0 ? (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Este paciente não possui evoluções clínicas registradas.
+
+                  {/* Seleção de Evoluções */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">
+                        Evoluções a incluir *
+                      </Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={selectAllEvolutions}
+                        disabled={evolutions.length === 0}
+                      >
+                        {selectedEvolutions.size === evolutions.length
+                          ? 'Desmarcar todas'
+                          : 'Selecionar todas'}
+                      </Button>
+                    </div>
+
+                    {isLoadingEvolutions ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Carregando evoluções...
+                      </div>
+                    ) : evolutions.length === 0 ? (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Este paciente não possui evoluções clínicas
+                          registradas.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <ScrollArea className="h-40 border rounded-md p-2">
+                        <div className="space-y-2">
+                          {evolutions.map((evol) => {
+                            const evolDate = new Date(evol.consulta_data);
+                            const isSelected = selectedEvolutions.has(evol.id);
+
+                            return (
+                              <div
+                                key={evol.id}
+                                className={cn(
+                                  'flex items-start gap-3 p-2 rounded-md cursor-pointer transition-colors',
+                                  isSelected
+                                    ? 'bg-primary/10'
+                                    : 'hover:bg-accent/50'
+                                )}
+                                onClick={() =>
+                                  toggleEvolutionSelection(evol.id)
+                                }
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() =>
+                                    toggleEvolutionSelection(evol.id)
+                                  }
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {formatDateBR(evolDate)}
+                                    </Badge>
+                                    <Badge
+                                      variant={
+                                        evol.tipo_evolucao === 'respiratoria'
+                                          ? 'default'
+                                          : 'secondary'
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {evol.tipo_evolucao === 'respiratoria'
+                                        ? 'Respiratória'
+                                        : evol.tipo_evolucao ===
+                                            'motora_assimetria'
+                                          ? 'Motora'
+                                          : 'Geral'}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1 truncate">
+                                    {evol.profissional_nome} •{' '}
+                                    {evol.servico_nome}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
+                    )}
+
+                    {selectedEvolutions.size > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {selectedEvolutions.size} evolução(ões) selecionada(s)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Info: Relatório editável */}
+                  <div className="p-3 bg-violet-50 dark:bg-violet-950/30 rounded-md border border-violet-200 dark:border-violet-800 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-violet-600 flex-shrink-0" />
+                    <p className="text-sm text-violet-700 dark:text-violet-300">
+                      A IA irá gerar o conteúdo e você poderá{' '}
+                      <strong>editar antes de salvar</strong>.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Data do Relatório */}
+                    <div className="space-y-2">
+                      <Label htmlFor="reportDate">Data de Emissão *</Label>
+                      <Input
+                        id="reportDate"
+                        type="date"
+                        value={reportDate}
+                        onChange={(e) => setReportDate(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Seleção de Profissional */}
+                    <div className="space-y-2">
+                      <Label htmlFor="professional">Assinatura *</Label>
+                      <Select
+                        value={selectedProfessional}
+                        onValueChange={setSelectedProfessional}
+                      >
+                        <SelectTrigger id="professional">
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PROFESSIONALS.map((prof) => (
+                            <SelectItem key={prof.id} value={prof.id}>
+                              <span>{prof.name}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* MODO: EDIÇÃO */}
+              {editorMode === 'editing' && (
+                <>
+                  {/* Info do paciente compacta */}
+                  <div className="p-2 bg-muted rounded-md flex items-center justify-between">
+                    <span className="text-sm font-medium">{patientName}</span>
+                    <Badge variant="outline">
+                      {selectedEvolutions.size} evoluções
+                    </Badge>
+                  </div>
+
+                  {/* Editor de Histórico */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full" />
+                      Histórico e Encaminhamento
+                    </Label>
+                    <Textarea
+                      value={editableContent.historico}
+                      onChange={(e) =>
+                        setEditableContent((prev) => ({
+                          ...prev,
+                          historico: e.target.value,
+                        }))
+                      }
+                      placeholder="Descreva o histórico do paciente, motivo do encaminhamento, diagnósticos..."
+                      className="min-h-[140px] resize-y"
+                    />
+                  </div>
+
+                  {/* Editor de Evolução */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-500 rounded-full" />
+                      Evolução e Importância da Fisioterapia
+                    </Label>
+                    <Textarea
+                      value={editableContent.evolucao}
+                      onChange={(e) =>
+                        setEditableContent((prev) => ({
+                          ...prev,
+                          evolucao: e.target.value,
+                        }))
+                      }
+                      placeholder="Descreva a evolução do paciente, melhorias observadas, importância do tratamento..."
+                      className="min-h-[140px] resize-y"
+                    />
+                  </div>
+
+                  {/* Editor de Proposta */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <span className="w-2 h-2 bg-amber-500 rounded-full" />
+                      Proposta Terapêutica
+                    </Label>
+                    <Textarea
+                      value={editableContent.proposta}
+                      onChange={(e) =>
+                        setEditableContent((prev) => ({
+                          ...prev,
+                          proposta: e.target.value,
+                        }))
+                      }
+                      placeholder="Descreva a proposta de acompanhamento, frequência sugerida, objetivos..."
+                      className="min-h-[100px] resize-y"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* MODO: SALVO */}
+              {editorMode === 'saved' && (
+                <div className="space-y-4">
+                  <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800 dark:text-green-200">
+                      Relatório de <strong>{patientName}</strong> salvo com
+                      sucesso! Agora você pode exportar em PDF ou enviar ao
+                      responsável.
                     </AlertDescription>
                   </Alert>
-                ) : (
-                  <ScrollArea className="h-48 border rounded-md p-2">
-                    <div className="space-y-2">
-                      {evolutions.map((evol) => {
-                        const evolDate = new Date(evol.consulta_data);
-                        const isSelected = selectedEvolutions.has(evol.id);
 
-                        return (
-                          <div
-                            key={evol.id}
-                            className={cn(
-                              'flex items-start gap-3 p-2 rounded-md cursor-pointer transition-colors',
-                              isSelected
-                                ? 'bg-primary/10'
-                                : 'hover:bg-accent/50'
-                            )}
-                            onClick={() => toggleEvolutionSelection(evol.id)}
-                          >
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() =>
-                                toggleEvolutionSelection(evol.id)
-                              }
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge variant="outline" className="text-xs">
-                                  {formatDateBR(evolDate)}
-                                </Badge>
-                                <Badge
-                                  variant={
-                                    evol.tipo_evolucao === 'respiratoria'
-                                      ? 'default'
-                                      : 'secondary'
-                                  }
-                                  className="text-xs"
-                                >
-                                  {evol.tipo_evolucao === 'respiratoria'
-                                    ? 'Respiratória'
-                                    : evol.tipo_evolucao === 'motora_assimetria'
-                                      ? 'Motora'
-                                      : 'Geral'}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-1 truncate">
-                                {evol.profissional_nome} • {evol.servico_nome}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {/* Preview resumido */}
+                  <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <User className="h-4 w-4" />
+                      <span className="font-medium">Paciente:</span>
+                      <span>{patientName}</span>
                     </div>
-                  </ScrollArea>
-                )}
-
-                {selectedEvolutions.size > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {selectedEvolutions.size} evolução(ões) selecionada(s)
-                  </p>
-                )}
-              </div>
-
-              {/* Info: Relatório gerado por IA */}
-              <div className="p-3 bg-violet-50 dark:bg-violet-950/30 rounded-md border border-violet-200 dark:border-violet-800 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-violet-600" />
-                <p className="text-sm text-violet-700 dark:text-violet-300">
-                  O relatório será gerado automaticamente por{' '}
-                  <strong>Inteligência Artificial</strong>, criando um resumo
-                  narrativo profissional das evoluções selecionadas.
-                </p>
-              </div>
-
-              {/* Data do Relatório */}
-              <div className="space-y-2">
-                <Label htmlFor="reportDate">Data de Emissão *</Label>
-                <Input
-                  id="reportDate"
-                  type="date"
-                  value={reportDate}
-                  onChange={(e) => setReportDate(e.target.value)}
-                />
-              </div>
-
-              {/* Seleção de Profissional */}
-              <div className="space-y-2">
-                <Label htmlFor="professional">
-                  Profissional que assinará *
-                </Label>
-                <Select
-                  value={selectedProfessional}
-                  onValueChange={setSelectedProfessional}
-                >
-                  <SelectTrigger id="professional">
-                    <SelectValue placeholder="Selecione o profissional..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROFESSIONALS.map((prof) => (
-                      <SelectItem key={prof.id} value={prof.id}>
-                        <div className="flex flex-col">
-                          <span>{prof.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {prof.title}
-                            {prof.crefito && ` - ${prof.crefito}`}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Botões de Ação após geração */}
-              {generatedReportData && (
-                <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
-                  <FileText className="h-4 w-4 text-green-600" />
-                  <AlertDescription className="text-green-800 dark:text-green-200">
-                    Relatório gerado com sucesso! Você pode imprimir ou enviar
-                    ao responsável.
-                  </AlertDescription>
-                </Alert>
+                    <div className="flex items-center gap-2 text-sm">
+                      <FileText className="h-4 w-4" />
+                      <span className="font-medium">Evoluções:</span>
+                      <span>{selectedEvolutions.size} incluídas</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <PenLine className="h-4 w-4" />
+                      <span className="font-medium">Assinatura:</span>
+                      <span>
+                        {
+                          PROFESSIONALS.find(
+                            (p) => p.id === selectedProfessional
+                          )?.name
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
             {/* Footer com botões */}
             <div className="flex gap-3 pt-4 border-t">
-              {!generatedReportData ? (
+              {editorMode === 'configure' && (
                 <>
                   <Button
                     variant="outline"
@@ -1354,17 +1596,54 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                     {isGenerating ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Gerando...
+                        Gerando com IA...
                       </>
                     ) : (
                       <>
-                        <FileText className="h-4 w-4 mr-2" />
-                        Gerar Relatório
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Gerar com IA
                       </>
                     )}
                   </Button>
                 </>
-              ) : (
+              )}
+
+              {editorMode === 'editing' && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => setEditorMode('configure')}
+                    className="flex-1"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Voltar
+                  </Button>
+                  <Button
+                    onClick={handleSaveReport}
+                    disabled={
+                      isSaving ||
+                      (!editableContent.historico &&
+                        !editableContent.evolucao &&
+                        !editableContent.proposta)
+                    }
+                    className="flex-1"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Salvar Relatório
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+
+              {editorMode === 'saved' && (
                 <>
                   <Button
                     variant="outline"
@@ -1372,7 +1651,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                     className="flex-1"
                   >
                     <Printer className="h-4 w-4 mr-2" />
-                    Imprimir/PDF
+                    Exportar PDF
                   </Button>
                   <Button
                     onClick={handleSendToResponsible}
