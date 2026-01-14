@@ -329,7 +329,11 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       reportDateStr: string,
       mode: 'list' | 'ai',
       aiSummary?: string,
-      generatedBy?: string
+      generatedBy?: string,
+      patientData?: {
+        dataNascimento?: string;
+        responsavelNome?: string;
+      }
     ): string => {
       const signatureUrl = `${SUPABASE_STORAGE_URL}/${encodeURIComponent(professional.signatureFile)}`;
       const reportDateObj = new Date(reportDateStr + 'T12:00:00');
@@ -344,43 +348,85 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           new Date(b.consulta_data).getTime()
       );
 
+      // Gerar lista de datas dos atendimentos agrupadas por ano
+      const datesByYear: Record<string, string[]> = {};
+      sortedEvols.forEach((evol) => {
+        const date = new Date(evol.consulta_data);
+        const year = date.getFullYear().toString();
+        const dateStr = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+        if (!datesByYear[year]) {
+          datesByYear[year] = [];
+        }
+        if (!datesByYear[year].includes(dateStr)) {
+          datesByYear[year].push(dateStr);
+        }
+      });
+
+      const datesHTML = Object.entries(datesByYear)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(
+          ([year, dates]) => `<strong>${year}:</strong> ${dates.join(', ')}.`
+        )
+        .join('<br>');
+
       // Gerar conteúdo baseado no modo
       let contentHTML = '';
 
       if (mode === 'ai' && aiSummary) {
-        // Modo IA: resumo sintetizado
-        contentHTML = `
-          <div class="ai-summary">
-            <p>${aiSummary.replace(/\n/g, '</p><p>')}</p>
-          </div>
-        `;
-      } else {
-        // Modo lista: cada evolução individualmente
-        contentHTML = sortedEvols
-          .map((evol) => {
-            const evolDate = new Date(evol.consulta_data);
-            const dateStr = formatDateBR(evolDate);
-            const tipoLabel =
-              evol.tipo_evolucao === 'respiratoria'
-                ? 'Respiratória'
-                : evol.tipo_evolucao === 'motora_assimetria'
-                  ? 'Motora/Assimetria'
-                  : 'Geral';
-
-            return `
-              <div class="evolution-item">
-                <div class="evolution-header">
-                  <span class="evolution-date">${dateStr}</span>
-                  <span class="evolution-type">${tipoLabel}</span>
-                  <span class="evolution-professional">${evol.profissional_nome}</span>
-                </div>
-                <div class="evolution-content">
-                  <pre>${evol.conteudo}</pre>
-                </div>
-              </div>
-            `;
+        // Modo IA: resumo narrativo formatado
+        // Processar quebras de linha e parágrafos
+        const paragraphs = aiSummary
+          .split(/\n\n+/)
+          .filter((p) => p.trim())
+          .map((p) => {
+            // Detectar se é um título/subtítulo
+            if (
+              p.match(
+                /^(Histórico|Evolução|Proposta|Datas|Observações|Conclusão|Importância)/i
+              )
+            ) {
+              return `<h3 class="section-subtitle">${p.replace(/\n/g, '<br>')}</h3>`;
+            }
+            // Detectar listas
+            if (p.includes('\n-') || p.includes('\n•')) {
+              const items = p
+                .split(/\n[-•]/)
+                .filter((item) => item.trim())
+                .map((item) => `<li>${item.trim()}</li>`)
+                .join('');
+              return `<ul class="report-list">${items}</ul>`;
+            }
+            return `<p>${p.replace(/\n/g, '<br>')}</p>`;
           })
           .join('');
+        contentHTML = `<div class="ai-summary">${paragraphs}</div>`;
+      } else {
+        // Modo lista: resumo simples das evoluções
+        contentHTML = `
+          <div class="list-summary">
+            <p>Este relatório apresenta o acompanhamento fisioterapêutico do paciente <strong>${patientName}</strong>, 
+            com base em <strong>${sortedEvols.length}</strong> atendimento(s) realizado(s).</p>
+            
+            <h3 class="section-subtitle">Resumo dos Atendimentos</h3>
+            ${sortedEvols
+              .map((evol) => {
+                const evolDate = new Date(evol.consulta_data);
+                const dateStr = formatDateBR(evolDate);
+                const tipoLabel =
+                  evol.tipo_evolucao === 'respiratoria'
+                    ? 'Fisioterapia Respiratória'
+                    : evol.tipo_evolucao === 'motora_assimetria'
+                      ? 'Fisioterapia Motora'
+                      : 'Atendimento';
+                return `
+                  <div class="evolution-item">
+                    <strong>${dateStr}</strong> - ${tipoLabel} (${evol.profissional_nome})
+                  </div>
+                `;
+              })
+              .join('')}
+          </div>
+        `;
       }
 
       // Período do relatório
@@ -393,6 +439,12 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           ? new Date(sortedEvols[sortedEvols.length - 1].consulta_data)
           : new Date();
       const periodoStr = `${formatDateBR(firstDate)} a ${formatDateBR(lastDate)}`;
+
+      // Info do paciente formatada
+      const patientDOB = patientData?.dataNascimento
+        ? formatDateBR(new Date(patientData.dataNascimento + 'T12:00:00'))
+        : null;
+      const responsavelNome = patientData?.responsavelNome;
 
       return `
 <!DOCTYPE html>
@@ -413,7 +465,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       font-family: 'Poppins', sans-serif;
       background: white;
       color: #333;
-      line-height: 1.6;
+      line-height: 1.7;
+      font-size: 11pt;
     }
     
     .page {
@@ -421,141 +474,144 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       min-height: 297mm;
       margin: 0 auto;
       position: relative;
+      padding: 15mm 20mm 25mm 20mm;
+    }
+    
+    /* Cabeçalho com imagem de fundo apenas no topo */
+    .header-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 45mm;
       background-image: url('${BACKGROUND_IMAGE_URL}');
-      background-size: 100% 100%;
-      background-position: top left;
+      background-size: cover;
+      background-position: top center;
       background-repeat: no-repeat;
-      padding: 50mm 20mm 40mm 20mm;
     }
     
     .header {
+      position: relative;
+      z-index: 1;
       text-align: center;
-      margin-bottom: 20px;
+      padding-top: 25mm;
+      margin-bottom: 15px;
     }
     
     .title {
-      font-size: 22px;
+      font-size: 20pt;
       font-weight: 700;
       color: #1a365d;
-      margin-bottom: 5px;
+      margin-bottom: 3px;
     }
     
     .subtitle {
-      font-size: 14px;
+      font-size: 11pt;
       color: #40C4AA;
       font-weight: 500;
     }
     
     .patient-info {
-      background: rgba(64, 196, 170, 0.1);
+      background: #f0fdf4;
       border-left: 4px solid #40C4AA;
-      padding: 15px;
+      padding: 12px 15px;
       margin-bottom: 20px;
-      border-radius: 0 8px 8px 0;
+      border-radius: 0 6px 6px 0;
     }
     
-    .patient-name {
-      font-size: 16px;
-      font-weight: 600;
+    .patient-info p {
+      margin: 3px 0;
+      font-size: 10pt;
+    }
+    
+    .patient-info strong {
       color: #1a365d;
-    }
-    
-    .patient-period {
-      font-size: 12px;
-      color: #666;
-      margin-top: 5px;
     }
     
     .content-section {
       margin-bottom: 20px;
     }
     
-    .section-title {
-      font-size: 14px;
+    .section-subtitle {
+      font-size: 11pt;
       font-weight: 600;
       color: #1a365d;
-      margin-bottom: 10px;
-      padding-bottom: 5px;
-      border-bottom: 2px solid #40C4AA;
-    }
-    
-    .evolution-item {
-      background: #f8fafc;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 15px;
-      page-break-inside: avoid;
-    }
-    
-    .evolution-header {
-      display: flex;
-      gap: 15px;
-      margin-bottom: 10px;
-      font-size: 11px;
-      flex-wrap: wrap;
-    }
-    
-    .evolution-date {
-      background: #40C4AA;
-      color: white;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-weight: 500;
-    }
-    
-    .evolution-type {
-      background: #e2e8f0;
-      color: #475569;
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-    
-    .evolution-professional {
-      color: #64748b;
-      font-style: italic;
-    }
-    
-    .evolution-content {
-      font-size: 11px;
-      color: #334155;
-    }
-    
-    .evolution-content pre {
-      font-family: 'Poppins', sans-serif;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      font-size: 10px;
-      line-height: 1.5;
+      margin: 15px 0 8px 0;
+      padding-bottom: 3px;
+      border-bottom: 1px solid #40C4AA;
     }
     
     .ai-summary {
-      font-size: 12px;
       text-align: justify;
-      line-height: 1.8;
     }
     
     .ai-summary p {
       margin-bottom: 10px;
-      text-indent: 20px;
+      text-indent: 25px;
+    }
+    
+    .ai-summary h3.section-subtitle {
+      text-indent: 0;
+    }
+    
+    .report-list {
+      margin: 10px 0 15px 25px;
+      padding-left: 0;
+    }
+    
+    .report-list li {
+      margin-bottom: 5px;
+      list-style-type: disc;
+    }
+    
+    .list-summary {
+      font-size: 10pt;
+    }
+    
+    .list-summary p {
+      margin-bottom: 10px;
+    }
+    
+    .evolution-item {
+      padding: 5px 0;
+      border-bottom: 1px dotted #e2e8f0;
+      font-size: 10pt;
+    }
+    
+    .dates-section {
+      margin-top: 20px;
+      padding: 12px 15px;
+      background: #f8fafc;
+      border-radius: 6px;
+      font-size: 9pt;
+      line-height: 1.6;
+    }
+    
+    .dates-section h3 {
+      font-size: 10pt;
+      font-weight: 600;
+      color: #1a365d;
+      margin-bottom: 8px;
     }
     
     .signature-section {
-      margin-top: 40px;
+      margin-top: 30px;
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
+      page-break-inside: avoid;
     }
     
     .signature-image {
-      max-width: 200px;
-      max-height: 100px;
+      max-width: 180px;
+      max-height: 90px;
       object-fit: contain;
     }
     
     .signature-info {
-      margin-top: 10px;
-      font-size: 12px;
+      margin-top: 8px;
+      font-size: 10pt;
       color: #1a365d;
     }
     
@@ -564,24 +620,24 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     }
     
     .signature-title {
-      font-size: 11px;
+      font-size: 9pt;
       color: #64748b;
     }
     
     .location-date {
-      margin-top: 15px;
-      font-size: 12px;
+      margin-top: 12px;
+      font-size: 10pt;
       color: #666;
     }
     
     .audit-section {
-      position: absolute;
-      bottom: 10mm;
-      right: 15mm;
+      margin-top: 20px;
       text-align: right;
-      font-size: 8px;
+      font-size: 7pt;
       color: #999;
       font-style: italic;
+      border-top: 1px solid #eee;
+      padding-top: 8px;
     }
     
     @media print {
@@ -600,32 +656,45 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       .page {
         width: 100%;
         min-height: 100vh;
-        background-image: url('${BACKGROUND_IMAGE_URL}');
-        background-size: 100% 100%;
-        background-position: top left;
-        background-repeat: no-repeat;
+      }
+      
+      .header-bg {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
     }
   </style>
 </head>
 <body>
   <div class="page">
+    <div class="header-bg"></div>
+    
     <div class="header">
       <h1 class="title">Relatório Clínico</h1>
       <p class="subtitle">Fisioterapia Pediátrica</p>
     </div>
     
     <div class="patient-info">
-      <div class="patient-name">Paciente: ${patientName}</div>
-      <div class="patient-period">Período: ${periodoStr} | Total de ${sortedEvols.length} evolução(ões)</div>
+      <p><strong>Paciente:</strong> ${patientName}</p>
+      ${patientDOB ? `<p><strong>Data de Nascimento:</strong> ${patientDOB}</p>` : ''}
+      ${responsavelNome ? `<p><strong>Responsável:</strong> ${responsavelNome}</p>` : ''}
+      <p><strong>Período do Relatório:</strong> ${periodoStr}</p>
     </div>
     
     <div class="content-section">
-      <h2 class="section-title">
-        ${mode === 'ai' ? 'Resumo do Tratamento' : 'Evoluções Clínicas'}
-      </h2>
       ${contentHTML}
     </div>
+    
+    ${
+      sortedEvols.length > 0
+        ? `
+    <div class="dates-section">
+      <h3>Datas dos Atendimentos Realizados</h3>
+      ${datesHTML}
+    </div>
+    `
+        : ''
+    }
     
     <div class="signature-section">
       <img src="${signatureUrl}" alt="Assinatura ${professional.name}" class="signature-image" />
@@ -678,22 +747,49 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           selectedEvolutions.has(e.id)
         );
 
+        // Buscar dados adicionais do paciente para o relatório
+        let patientExtraData: {
+          dataNascimento?: string;
+          responsavelNome?: string;
+        } = {};
+
+        try {
+          const { data: patientInfo } = await supabase
+            .from('pacientes_com_responsaveis_view')
+            .select(
+              'data_nascimento, responsavel_legal_nome, responsavel_financeiro_nome'
+            )
+            .eq('id', patientId)
+            .single();
+
+          if (patientInfo) {
+            patientExtraData = {
+              dataNascimento: patientInfo.data_nascimento || undefined,
+              responsavelNome:
+                patientInfo.responsavel_legal_nome ||
+                patientInfo.responsavel_financeiro_nome ||
+                undefined,
+            };
+          }
+        } catch (patientErr) {
+          console.warn('Erro ao buscar dados do paciente:', patientErr);
+        }
+
         let aiSummary: string | undefined;
 
-        // Se modo IA, gerar resumo
+        // Se modo IA, gerar resumo narrativo usando Edge Function
         if (generationMode === 'ai') {
           toast({
-            title: 'Gerando resumo com IA...',
+            title: 'Gerando relatório com IA...',
             description: 'Isso pode levar alguns segundos',
           });
-
-          // Preparar conteúdos para a IA
-          const evolutionTexts = selectedEvols.map((e) => e.conteudo);
 
           try {
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
             const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+            // AI dev note: A Edge Function patient-history-ai busca as evoluções do banco
+            // e gera um resumo narrativo usando o prompt configurado
             const response = await fetch(
               `${supabaseUrl}/functions/v1/patient-history-ai`,
               {
@@ -704,24 +800,31 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                 },
                 body: JSON.stringify({
                   patientId,
-                  patientName,
-                  evolutions: evolutionTexts,
+                  userId: user?.pessoa?.id,
+                  maxCharacters: 4000, // Limite maior para relatório completo
                 }),
               }
             );
 
             if (response.ok) {
               const result = await response.json();
-              aiSummary = result.history || result.summary;
+              if (result.success && result.history) {
+                aiSummary = result.history;
+              } else {
+                throw new Error(result.error || 'Erro na geração do relatório');
+              }
             } else {
-              throw new Error('Erro na resposta da IA');
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.error || 'Erro na resposta da IA');
             }
           } catch (aiError) {
             console.error('Erro ao gerar resumo com IA:', aiError);
             toast({
-              title: 'Aviso',
+              title: 'Erro na geração com IA',
               description:
-                'Não foi possível gerar resumo com IA. Usando listagem individual.',
+                aiError instanceof Error
+                  ? aiError.message
+                  : 'Não foi possível gerar relatório com IA. Usando listagem individual.',
               variant: 'destructive',
             });
             // Fallback para modo lista
@@ -735,7 +838,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           reportDate,
           aiSummary ? 'ai' : 'list',
           aiSummary,
-          user?.pessoa?.nome || 'Sistema'
+          user?.pessoa?.nome || 'Sistema',
+          patientExtraData
         );
 
         // Upload do HTML para o storage
