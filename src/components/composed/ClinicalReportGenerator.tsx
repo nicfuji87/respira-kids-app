@@ -328,11 +328,14 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       professional: (typeof PROFESSIONALS)[0],
       reportDateStr: string,
       mode: 'list' | 'ai',
-      aiSummary?: string
+      aiSummary?: string,
+      generatedBy?: string
     ): string => {
       const signatureUrl = `${SUPABASE_STORAGE_URL}/${encodeURIComponent(professional.signatureFile)}`;
       const reportDateObj = new Date(reportDateStr + 'T12:00:00');
       const hoje = formatDateExtended(reportDateObj);
+      const agora = new Date();
+      const geradoEm = `${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
       // Ordenar evoluções por data
       const sortedEvols = [...selectedEvols].sort(
@@ -571,6 +574,16 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       color: #666;
     }
     
+    .audit-section {
+      position: absolute;
+      bottom: 10mm;
+      right: 15mm;
+      text-align: right;
+      font-size: 8px;
+      color: #999;
+      font-style: italic;
+    }
+    
     @media print {
       @page {
         size: A4;
@@ -623,6 +636,10 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       <div class="location-date">
         Brasília, ${hoje}
       </div>
+    </div>
+    
+    <div class="audit-section">
+      Documento gerado por ${generatedBy || 'Sistema'} em ${geradoEm}
     </div>
   </div>
 </body>
@@ -717,7 +734,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           professional,
           reportDate,
           aiSummary ? 'ai' : 'list',
-          aiSummary
+          aiSummary,
+          user?.pessoa?.nome || 'Sistema'
         );
 
         // Upload do HTML para o storage
@@ -797,14 +815,17 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     };
 
     const handlePrint = () => {
-      if (!generatedReportData?.reportUrl) return;
+      if (!generatedReportData?.htmlContent) return;
 
-      // Abrir em nova janela para impressão
-      const printWindow = window.open(generatedReportData.reportUrl, '_blank');
+      // Abrir nova janela e escrever o HTML diretamente para renderização correta
+      const printWindow = window.open('', '_blank');
       if (printWindow) {
-        printWindow.onload = () => {
+        printWindow.document.write(generatedReportData.htmlContent);
+        printWindow.document.close();
+        // Aguardar carregamento das imagens antes de imprimir
+        setTimeout(() => {
           printWindow.print();
-        };
+        }, 1000);
       }
     };
 
@@ -898,8 +919,26 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       }
     };
 
-    const handleViewReport = (url: string) => {
-      window.open(url, '_blank');
+    const handleViewReport = async (url: string) => {
+      try {
+        // Buscar o conteúdo HTML do relatório
+        const response = await fetch(url);
+        const htmlContent = await response.text();
+
+        // Abrir nova janela e escrever o HTML diretamente
+        const viewWindow = window.open('', '_blank');
+        if (viewWindow) {
+          viewWindow.document.write(htmlContent);
+          viewWindow.document.close();
+        }
+      } catch (err) {
+        console.error('Erro ao abrir relatório:', err);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível abrir o relatório',
+          variant: 'destructive',
+        });
+      }
     };
 
     return (
@@ -974,10 +1013,22 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                       <div className="flex items-center gap-1">
                         <User className="h-3 w-3" />
                         <span>
-                          Criado por:{' '}
+                          Gerado por:{' '}
                           <strong className="text-foreground">
                             {report.criado_por_nome || 'Sistema'}
                           </strong>
+                          {' em '}
+                          {new Date(report.created_at).toLocaleDateString(
+                            'pt-BR'
+                          )}{' '}
+                          às{' '}
+                          {new Date(report.created_at).toLocaleTimeString(
+                            'pt-BR',
+                            {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }
+                          )}
                         </span>
                       </div>
                     </div>
