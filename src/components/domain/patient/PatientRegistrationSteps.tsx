@@ -236,11 +236,18 @@ export const PatientRegistrationSteps =
         // Log de conclusão da etapa WhatsApp (pessoa existente)
         log('step_completed', 'whatsapp', { existingPersonId: personId });
 
+        // AI dev note: Para usuários existentes, extrair phoneNumber do telefone cadastrado
+        // Isso garante que o contrato terá o telefone preenchido corretamente
+        const phoneFromExisting = existingUserData?.telefone
+          ? existingUserData.telefone.toString().replace(/^55/, '') // Remover código do país
+          : '';
+
         setRegistrationData((prev) => ({
           ...prev,
           existingPersonId: personId,
           existingUserData,
           whatsappValidated: true,
+          phoneNumber: phoneFromExisting, // AI dev note: Definir phoneNumber para contrato
         }));
 
         console.log(

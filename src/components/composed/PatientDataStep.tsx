@@ -91,12 +91,14 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
         return;
       }
 
+      // AI dev note: Incluir CPF sempre que preenchido, independente da opção de nota fiscal
+      // O CPF do paciente é um dado importante para o cadastro, não apenas para NF
       const patientData: PatientData = {
         nome: nome.trim(),
         dataNascimento,
         sexo: sexo as 'M' | 'F',
         emitirNotaNomePaciente,
-        ...(emitirNotaNomePaciente && cpf && { cpf }),
+        ...(cpf && cpf.trim() && { cpf: cpf.trim() }),
       };
 
       console.log('✅ [PatientDataStep] Dados válidos:', patientData);

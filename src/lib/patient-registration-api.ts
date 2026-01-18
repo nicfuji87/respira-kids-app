@@ -167,6 +167,77 @@ export async function validateWhatsAppAndCheckRegistration(
         })
       ) || [];
 
+    // AI dev note: Buscar dados completos do usuário na vw_usuarios_admin para incluir endereço
+    // Isso é necessário para que o cadastro de segundo filho tenha os dados de endereço preenchidos
+    const { data: usuarioCompleto, error: usuarioError } = await supabase
+      .from('vw_usuarios_admin')
+      .select('*')
+      .eq('id', pessoa.id)
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (usuarioError) {
+      console.error('Erro ao buscar dados completos do usuário:', usuarioError);
+      // Não bloquear fluxo por erro aqui, mas logar o problema
+    }
+
+    // Buscar tipo de responsabilidade
+    let tipoResponsabilidade: string | null = null;
+    if (relatedPatients && relatedPatients.length > 0) {
+      const { data: responsabilidades } = await supabase
+        .from('pessoa_responsaveis')
+        .select('tipo_responsabilidade')
+        .eq('id_responsavel', pessoa.id)
+        .eq('ativo', true);
+
+      if (responsabilidades && responsabilidades.length > 0) {
+        const tipos = [
+          ...new Set(responsabilidades.map((r) => r.tipo_responsabilidade)),
+        ];
+        if (tipos.includes('ambos')) {
+          tipoResponsabilidade = 'ambos';
+        } else if (tipos.length > 1) {
+          tipoResponsabilidade = 'ambos';
+        } else {
+          tipoResponsabilidade = tipos[0];
+        }
+      }
+    }
+
+    // Montar userData com dados completos incluindo endereço
+    const userData: ExistingUser | undefined = usuarioCompleto
+      ? {
+          id: usuarioCompleto.id,
+          nome: usuarioCompleto.nome,
+          cpf_cnpj: usuarioCompleto.cpf_cnpj,
+          email: usuarioCompleto.email,
+          telefone: usuarioCompleto.telefone,
+          data_nascimento: usuarioCompleto.data_nascimento,
+          sexo: usuarioCompleto.sexo,
+          is_pediatra: usuarioCompleto.is_pediatra,
+          tipo_pessoa_codigo: usuarioCompleto.tipo_pessoa_codigo,
+          tipo_pessoa_id: usuarioCompleto.tipo_pessoa_id,
+          pediatras_nomes: usuarioCompleto.pediatras_nomes,
+          total_pediatras: usuarioCompleto.total_pediatras,
+          cep: usuarioCompleto.cep,
+          logradouro: usuarioCompleto.logradouro,
+          numero_endereco: usuarioCompleto.numero_endereco,
+          complemento_endereco: usuarioCompleto.complemento_endereco,
+          bairro: usuarioCompleto.bairro,
+          cidade: usuarioCompleto.cidade,
+          estado: usuarioCompleto.estado,
+          tipo_responsabilidade: tipoResponsabilidade,
+        }
+      : undefined;
+
+    console.log('✅ [validateWhatsApp] Usuário existente encontrado:', {
+      id: pessoa.id,
+      nome: pessoa.nome,
+      hasUserData: !!userData,
+      estado: userData?.estado,
+      cidade: userData?.cidade,
+    });
+
     return {
       isValid: true,
       personExists: true,
@@ -175,6 +246,7 @@ export async function validateWhatsAppAndCheckRegistration(
       relatedPatients: patients,
       phoneNumber: phoneNumberForDB, // Com código país (556181446666)
       whatsappJid: jidNumber, // Com código país (556181446666)
+      userData, // AI dev note: Incluir dados completos do usuário com endereço
     };
   } catch (error) {
     console.error('Erro na validação de WhatsApp:', error);
