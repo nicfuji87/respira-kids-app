@@ -927,17 +927,18 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         const fileName = `relatorio_clinico_${patientId}_${timestamp}.html`;
         const filePath = `relatorios/${patientId}/${fileName}`;
 
-        const htmlFile = new File([htmlContent], fileName, {
-          type: 'text/html',
-        });
+        // AI dev note: Usar Blob em vez de File para melhor compatibilidade com mobile
+        const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
 
         const { error: uploadError } = await supabase.storage
           .from('respira-documents')
-          .upload(filePath, htmlFile, {
+          .upload(filePath, htmlBlob, {
             upsert: true,
+            contentType: 'text/html',
           });
 
         if (uploadError) {
+          console.error('Erro no upload:', uploadError);
           throw new Error(`Erro ao fazer upload: ${uploadError.message}`);
         }
 
@@ -953,28 +954,36 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           .eq('codigo', 'relatorio_medico')
           .single();
 
-        if (tipoError) throw new Error('Tipo de relatório não encontrado');
+        if (tipoError) {
+          console.error('Erro ao buscar tipo de relatório:', tipoError);
+          throw new Error('Tipo de relatório não encontrado');
+        }
 
         const periodoStr =
           selectedEvols.length > 0
             ? `${formatDateBR(new Date(selectedEvols[0]?.consulta_data || new Date()))} a ${formatDateBR(new Date(selectedEvols[selectedEvols.length - 1]?.consulta_data || new Date()))}`
             : formatDateBR(new Date());
 
+        // AI dev note: Preparar dados para inserção, tratando criado_por como opcional
+        const insertData = {
+          id_pessoa: patientId,
+          tipo_relatorio_id: tipoData.id,
+          conteudo: `Relatório clínico com ${selectedEvols.length} evolução(ões). Período: ${periodoStr}. Assinado por: ${professional.name}. Data de emissão: ${formatDateBR(new Date(reportDate + 'T12:00:00'))}`,
+          pdf_url: publicUrl,
+          transcricao: false,
+          ativo: true,
+          ...(user?.pessoa?.id && { criado_por: user.pessoa.id }),
+        };
+
         const { error: saveError } = await supabase
           .from('relatorios_medicos')
-          .insert({
-            id_pessoa: patientId,
-            tipo_relatorio_id: tipoData.id,
-            conteudo: `Relatório clínico com ${selectedEvols.length} evolução(ões). Período: ${periodoStr}. Assinado por: ${professional.name}. Data de emissão: ${formatDateBR(new Date(reportDate + 'T12:00:00'))}`,
-            pdf_url: publicUrl,
-            criado_por: user?.pessoa?.id,
-            transcricao: false,
-            ativo: true,
-          });
+          .insert(insertData);
 
         if (saveError) {
-          console.error('Erro ao salvar relatório:', saveError);
-          throw new Error('Erro ao salvar no banco de dados');
+          console.error('Erro ao salvar relatório no banco:', saveError);
+          throw new Error(
+            `Erro ao salvar no banco de dados: ${saveError.message}`
+          );
         }
 
         setGeneratedReportData({
