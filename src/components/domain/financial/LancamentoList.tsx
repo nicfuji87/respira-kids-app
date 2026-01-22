@@ -1,5 +1,14 @@
 import React from 'react';
-import { format } from 'date-fns';
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+  startOfYear,
+  endOfYear,
+  subYears,
+} from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
   Search,
   Download,
@@ -14,6 +23,13 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  Calendar,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Filter,
+  X,
+  Building2,
 } from 'lucide-react';
 import {
   Card,
@@ -55,7 +71,12 @@ import {
   TabsList,
   TabsTrigger,
   Separator,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Label,
 } from '@/components/primitives';
+import { DatePicker } from '@/components/composed/DatePicker';
 import { LancamentoForm } from './LancamentoForm';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
@@ -110,6 +131,23 @@ interface Lancamento {
   } | null;
 }
 
+interface Fornecedor {
+  id: string;
+  nome_razao_social: string;
+  nome_fantasia?: string | null;
+}
+
+type PeriodoFiltro =
+  | 'todos'
+  | 'mes_atual'
+  | 'mes_anterior'
+  | 'ultimos_3_meses'
+  | 'ano_atual'
+  | 'ano_anterior'
+  | 'personalizado';
+type SortField = 'data_emissao' | 'valor_total' | 'descricao' | 'fornecedor';
+type SortOrder = 'asc' | 'desc';
+
 interface LancamentoListProps {
   tipo?: 'todos' | 'despesa' | 'receita';
   showFilters?: boolean;
@@ -129,7 +167,22 @@ export const LancamentoList = React.memo<LancamentoListProps>(
     const [selectedCategoria, setSelectedCategoria] =
       React.useState<string>('todas');
     const [selectedOrigem, setSelectedOrigem] = React.useState<string>('todas');
-    const [dateRange] = React.useState<{ from: Date; to?: Date } | undefined>();
+
+    // Novos filtros
+    const [selectedPeriodo, setSelectedPeriodo] =
+      React.useState<PeriodoFiltro>('todos');
+    const [dateFrom, setDateFrom] = React.useState<string>('');
+    const [dateTo, setDateTo] = React.useState<string>('');
+    const [selectedFornecedor, setSelectedFornecedor] =
+      React.useState<string>('todos');
+
+    // Ordenação
+    const [sortField, setSortField] = React.useState<SortField>('data_emissao');
+    const [sortOrder, setSortOrder] = React.useState<SortOrder>('desc');
+
+    // Controle de filtros avançados visíveis
+    const [showAdvancedFilters, setShowAdvancedFilters] = React.useState(false);
+
     const [showForm, setShowForm] = React.useState(false);
     const [selectedLancamento, setSelectedLancamento] =
       React.useState<Lancamento | null>(null);
@@ -137,9 +190,10 @@ export const LancamentoList = React.memo<LancamentoListProps>(
     const [categorias, setCategorias] = React.useState<
       { id: string; nome: string }[]
     >([]);
+    const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([]);
     const { toast } = useToast();
 
-    // Carregar categorias
+    // Carregar categorias e fornecedores
     React.useEffect(() => {
       const loadCategorias = async () => {
         try {
@@ -156,18 +210,81 @@ export const LancamentoList = React.memo<LancamentoListProps>(
         }
       };
 
+      const loadFornecedores = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('fornecedores')
+            .select('id, nome_razao_social, nome_fantasia')
+            .eq('ativo', true)
+            .order('nome_razao_social');
+
+          if (error) throw error;
+          setFornecedores(data || []);
+        } catch (error) {
+          console.error('Erro ao carregar fornecedores:', error);
+        }
+      };
+
       loadCategorias();
+      loadFornecedores();
     }, []);
+
+    // Função para calcular datas do período selecionado
+    const getDateRangeForPeriod = React.useCallback(
+      (periodo: PeriodoFiltro): { from: string | null; to: string | null } => {
+        const today = new Date();
+
+        switch (periodo) {
+          case 'mes_atual':
+            return {
+              from: format(startOfMonth(today), 'yyyy-MM-dd'),
+              to: format(endOfMonth(today), 'yyyy-MM-dd'),
+            };
+          case 'mes_anterior': {
+            const lastMonth = subMonths(today, 1);
+            return {
+              from: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
+              to: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
+            };
+          }
+          case 'ultimos_3_meses': {
+            const threeMonthsAgo = subMonths(today, 3);
+            return {
+              from: format(startOfMonth(threeMonthsAgo), 'yyyy-MM-dd'),
+              to: format(endOfMonth(today), 'yyyy-MM-dd'),
+            };
+          }
+          case 'ano_atual':
+            return {
+              from: format(startOfYear(today), 'yyyy-MM-dd'),
+              to: format(endOfYear(today), 'yyyy-MM-dd'),
+            };
+          case 'ano_anterior': {
+            const lastYear = subYears(today, 1);
+            return {
+              from: format(startOfYear(lastYear), 'yyyy-MM-dd'),
+              to: format(endOfYear(lastYear), 'yyyy-MM-dd'),
+            };
+          }
+          case 'personalizado':
+            return {
+              from: dateFrom || null,
+              to: dateTo || null,
+            };
+          default:
+            return { from: null, to: null };
+        }
+      },
+      [dateFrom, dateTo]
+    );
 
     // Carregar lançamentos
     const loadLancamentos = React.useCallback(async () => {
       try {
         setIsLoading(true);
 
-        let query = supabase
-          .from('lancamentos_financeiros')
-          .select(
-            `
+        let query = supabase.from('lancamentos_financeiros').select(
+          `
             *,
             fornecedor:fornecedor_id (
               nome_razao_social,
@@ -194,9 +311,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
               nome
             )
           `
-          )
-          .order('data_emissao', { ascending: false })
-          .order('created_at', { ascending: false });
+        );
 
         // Filtro por tipo
         if (tipoAtivo !== 'todos') {
@@ -218,15 +333,18 @@ export const LancamentoList = React.memo<LancamentoListProps>(
           query = query.eq('origem_lancamento', selectedOrigem);
         }
 
-        // Filtro por período
-        if (dateRange?.from) {
-          query = query.gte(
-            'data_emissao',
-            format(dateRange.from, 'yyyy-MM-dd')
-          );
+        // Filtro por fornecedor
+        if (selectedFornecedor !== 'todos') {
+          query = query.eq('fornecedor_id', selectedFornecedor);
         }
-        if (dateRange?.to) {
-          query = query.lte('data_emissao', format(dateRange.to, 'yyyy-MM-dd'));
+
+        // Filtro por período
+        const dateRange = getDateRangeForPeriod(selectedPeriodo);
+        if (dateRange.from) {
+          query = query.gte('data_emissao', dateRange.from);
+        }
+        if (dateRange.to) {
+          query = query.lte('data_emissao', dateRange.to);
         }
 
         // Filtro por termo de busca
@@ -236,10 +354,42 @@ export const LancamentoList = React.memo<LancamentoListProps>(
           );
         }
 
+        // Ordenação - para fornecedor, fazemos client-side após a query
+        if (sortField === 'fornecedor') {
+          query = query.order('data_emissao', {
+            ascending: sortOrder === 'asc',
+          });
+        } else {
+          query = query.order(sortField, { ascending: sortOrder === 'asc' });
+        }
+
+        // Ordenação secundária
+        if (sortField !== 'data_emissao') {
+          query = query.order('data_emissao', { ascending: false });
+        }
+
         const { data, error } = await query;
 
         if (error) throw error;
-        setLancamentos(data || []);
+
+        // Ordenação por fornecedor (client-side)
+        let sortedData = data || [];
+        if (sortField === 'fornecedor') {
+          sortedData = [...sortedData].sort((a, b) => {
+            const nomeA =
+              a.fornecedor?.nome_fantasia ||
+              a.fornecedor?.nome_razao_social ||
+              '';
+            const nomeB =
+              b.fornecedor?.nome_fantasia ||
+              b.fornecedor?.nome_razao_social ||
+              '';
+            const comparison = nomeA.localeCompare(nomeB, 'pt-BR');
+            return sortOrder === 'asc' ? comparison : -comparison;
+          });
+        }
+
+        setLancamentos(sortedData);
       } catch (error) {
         console.error('Erro ao carregar lançamentos:', error);
         toast({
@@ -256,8 +406,12 @@ export const LancamentoList = React.memo<LancamentoListProps>(
       selectedStatus,
       selectedCategoria,
       selectedOrigem,
-      dateRange,
+      selectedFornecedor,
+      selectedPeriodo,
+      getDateRangeForPeriod,
       searchTerm,
+      sortField,
+      sortOrder,
       toast,
     ]);
 
@@ -329,6 +483,97 @@ export const LancamentoList = React.memo<LancamentoListProps>(
         <Receipt className="h-4 w-4 text-green-500" />
       );
     };
+
+    // Contar filtros ativos
+    const countActiveFilters = () => {
+      let count = 0;
+      if (tipoAtivo !== 'todos') count++;
+      if (selectedStatus !== 'todos') count++;
+      if (selectedCategoria !== 'todas') count++;
+      if (selectedOrigem !== 'todas') count++;
+      if (selectedFornecedor !== 'todos') count++;
+      if (selectedPeriodo !== 'todos') count++;
+      if (searchTerm) count++;
+      return count;
+    };
+
+    // Limpar todos os filtros
+    const clearAllFilters = () => {
+      setTipoAtivo('todos');
+      setSelectedStatus('todos');
+      setSelectedCategoria('todas');
+      setSelectedOrigem('todas');
+      setSelectedFornecedor('todos');
+      setSelectedPeriodo('todos');
+      setDateFrom('');
+      setDateTo('');
+      setSearchTerm('');
+      setSortField('data_emissao');
+      setSortOrder('desc');
+    };
+
+    // Label do período para exibição
+    const getPeriodoLabel = (periodo: PeriodoFiltro) => {
+      switch (periodo) {
+        case 'mes_atual':
+          return 'Mês Atual';
+        case 'mes_anterior':
+          return 'Mês Anterior';
+        case 'ultimos_3_meses':
+          return 'Últimos 3 Meses';
+        case 'ano_atual':
+          return 'Ano Atual';
+        case 'ano_anterior':
+          return 'Ano Anterior';
+        case 'personalizado':
+          return 'Personalizado';
+        default:
+          return 'Todos os períodos';
+      }
+    };
+
+    // Label do campo de ordenação
+    const getSortFieldLabel = (field: SortField) => {
+      switch (field) {
+        case 'data_emissao':
+          return 'Data';
+        case 'valor_total':
+          return 'Valor';
+        case 'descricao':
+          return 'Descrição';
+        case 'fornecedor':
+          return 'Fornecedor';
+        default:
+          return 'Data';
+      }
+    };
+
+    // Toggle ordenação
+    const toggleSort = (field: SortField) => {
+      if (sortField === field) {
+        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortField(field);
+        setSortOrder(
+          field === 'descricao' || field === 'fornecedor' ? 'asc' : 'desc'
+        );
+      }
+    };
+
+    // Ícone de ordenação
+    const getSortIcon = (field: SortField) => {
+      if (sortField !== field) {
+        return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
+      }
+      return sortOrder === 'asc' ? (
+        <ArrowUp className="h-4 w-4 text-primary" />
+      ) : (
+        <ArrowDown className="h-4 w-4 text-primary" />
+      );
+    };
+
+    // Calcular resumo dos filtros
+    const activeFilters = countActiveFilters();
 
     const getPaymentStatus = (contas: Lancamento['contas_pagar']) => {
       if (!contas || contas.length === 0) return null;
@@ -504,7 +749,8 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                   </TabsList>
                 </Tabs>
 
-                <div className="grid gap-4 md:grid-cols-4">
+                {/* Linha principal de filtros */}
+                <div className="grid gap-4 md:grid-cols-5">
                   {/* Busca */}
                   <div className="md:col-span-2">
                     <div className="relative">
@@ -518,67 +764,382 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                     </div>
                   </div>
 
-                  {/* Status */}
+                  {/* Período */}
                   <Select
-                    value={selectedStatus}
-                    onValueChange={setSelectedStatus}
+                    value={selectedPeriodo}
+                    onValueChange={(value) =>
+                      setSelectedPeriodo(value as PeriodoFiltro)
+                    }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Status" />
+                      <Calendar className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Período" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todos os status</SelectItem>
-                      <SelectItem value="pre_lancamento">
-                        Pré-lançamento
+                      <SelectItem value="todos">Todos os períodos</SelectItem>
+                      <SelectItem value="mes_atual">Mês Atual</SelectItem>
+                      <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
+                      <SelectItem value="ultimos_3_meses">
+                        Últimos 3 Meses
                       </SelectItem>
-                      <SelectItem value="validado">Validado</SelectItem>
-                      <SelectItem value="cancelado">Cancelado</SelectItem>
+                      <SelectItem value="ano_atual">Ano Atual</SelectItem>
+                      <SelectItem value="ano_anterior">Ano Anterior</SelectItem>
+                      <SelectItem value="personalizado">
+                        Personalizado
+                      </SelectItem>
                     </SelectContent>
                   </Select>
 
-                  {/* Categoria */}
-                  <Select
-                    value={selectedCategoria}
-                    onValueChange={setSelectedCategoria}
+                  {/* Ordenação */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="justify-start">
+                        <ArrowUpDown className="mr-2 h-4 w-4" />
+                        {getSortFieldLabel(sortField)}
+                        {sortOrder === 'asc' ? (
+                          <ArrowUp className="ml-1 h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="ml-1 h-3 w-3" />
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56" align="start">
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-sm">Ordenar por</h4>
+                        <div className="space-y-1">
+                          <Button
+                            variant={
+                              sortField === 'data_emissao'
+                                ? 'secondary'
+                                : 'ghost'
+                            }
+                            size="sm"
+                            className="w-full justify-between"
+                            onClick={() => toggleSort('data_emissao')}
+                          >
+                            Data
+                            {getSortIcon('data_emissao')}
+                          </Button>
+                          <Button
+                            variant={
+                              sortField === 'valor_total'
+                                ? 'secondary'
+                                : 'ghost'
+                            }
+                            size="sm"
+                            className="w-full justify-between"
+                            onClick={() => toggleSort('valor_total')}
+                          >
+                            Valor
+                            {getSortIcon('valor_total')}
+                          </Button>
+                          <Button
+                            variant={
+                              sortField === 'descricao' ? 'secondary' : 'ghost'
+                            }
+                            size="sm"
+                            className="w-full justify-between"
+                            onClick={() => toggleSort('descricao')}
+                          >
+                            Descrição (A-Z)
+                            {getSortIcon('descricao')}
+                          </Button>
+                          <Button
+                            variant={
+                              sortField === 'fornecedor' ? 'secondary' : 'ghost'
+                            }
+                            size="sm"
+                            className="w-full justify-between"
+                            onClick={() => toggleSort('fornecedor')}
+                          >
+                            Fornecedor (A-Z)
+                            {getSortIcon('fornecedor')}
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* Botão Filtros Avançados */}
+                  <Button
+                    variant={showAdvancedFilters ? 'secondary' : 'outline'}
+                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                    className="relative"
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas as categorias</SelectItem>
-                      {categorias.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filtros
+                    {activeFilters > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs"
+                      >
+                        {activeFilters}
+                      </Badge>
+                    )}
+                  </Button>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  {/* Origem */}
-                  <Select
-                    value={selectedOrigem}
-                    onValueChange={setSelectedOrigem}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Origem" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas as origens</SelectItem>
-                      <SelectItem value="manual">Manual</SelectItem>
-                      <SelectItem value="api">API</SelectItem>
-                      <SelectItem value="recorrente">Recorrente</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Datas personalizadas - aparece quando selecionado "personalizado" */}
+                {selectedPeriodo === 'personalizado' && (
+                  <div className="grid gap-4 md:grid-cols-4 items-end p-4 bg-muted/50 rounded-lg border">
+                    <div className="space-y-2">
+                      <Label className="text-sm">Data Inicial</Label>
+                      <DatePicker
+                        value={dateFrom}
+                        onChange={setDateFrom}
+                        placeholder="De..."
+                        disableFuture
+                        startYear={2020}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm">Data Final</Label>
+                      <DatePicker
+                        value={dateTo}
+                        onChange={setDateTo}
+                        placeholder="Até..."
+                        disableFuture
+                        startYear={2020}
+                      />
+                    </div>
+                    <div className="md:col-span-2 text-sm text-muted-foreground flex items-center">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {dateFrom && dateTo ? (
+                        <>
+                          Exibindo de{' '}
+                          {format(
+                            new Date(dateFrom + 'T00:00:00'),
+                            "dd 'de' MMMM 'de' yyyy",
+                            { locale: ptBR }
+                          )}{' '}
+                          até{' '}
+                          {format(
+                            new Date(dateTo + 'T00:00:00'),
+                            "dd 'de' MMMM 'de' yyyy",
+                            { locale: ptBR }
+                          )}
+                        </>
+                      ) : (
+                        'Selecione o período desejado'
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                  {/* Período - Seria necessário implementar um DateRangePicker */}
-                  {/* Por hora, vamos deixar comentado */}
-                  {/* <DateRangePicker
-                    value={dateRange}
-                    onChange={setDateRange}
-                    placeholder="Selecione o período"
-                  /> */}
+                {/* Filtros avançados */}
+                {showAdvancedFilters && (
+                  <div className="p-4 bg-muted/50 rounded-lg border space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm flex items-center gap-2">
+                        <Filter className="h-4 w-4" />
+                        Filtros Avançados
+                      </h4>
+                      {activeFilters > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearAllFilters}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="mr-1 h-3 w-3" />
+                          Limpar filtros
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-4">
+                      {/* Status */}
+                      <div className="space-y-2">
+                        <Label className="text-sm">Status</Label>
+                        <Select
+                          value={selectedStatus}
+                          onValueChange={setSelectedStatus}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todos">
+                              Todos os status
+                            </SelectItem>
+                            <SelectItem value="pre_lancamento">
+                              Pré-lançamento
+                            </SelectItem>
+                            <SelectItem value="validado">Validado</SelectItem>
+                            <SelectItem value="cancelado">Cancelado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Categoria */}
+                      <div className="space-y-2">
+                        <Label className="text-sm">Categoria</Label>
+                        <Select
+                          value={selectedCategoria}
+                          onValueChange={setSelectedCategoria}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Categoria" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todas">
+                              Todas as categorias
+                            </SelectItem>
+                            {categorias.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
+                                {cat.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Fornecedor */}
+                      <div className="space-y-2">
+                        <Label className="text-sm">Fornecedor</Label>
+                        <Select
+                          value={selectedFornecedor}
+                          onValueChange={setSelectedFornecedor}
+                        >
+                          <SelectTrigger>
+                            <Building2 className="mr-2 h-4 w-4" />
+                            <SelectValue placeholder="Fornecedor" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todos">
+                              Todos os fornecedores
+                            </SelectItem>
+                            {fornecedores.map((fornecedor) => (
+                              <SelectItem
+                                key={fornecedor.id}
+                                value={fornecedor.id}
+                              >
+                                {fornecedor.nome_fantasia ||
+                                  fornecedor.nome_razao_social}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Origem */}
+                      <div className="space-y-2">
+                        <Label className="text-sm">Origem</Label>
+                        <Select
+                          value={selectedOrigem}
+                          onValueChange={setSelectedOrigem}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Origem" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todas">
+                              Todas as origens
+                            </SelectItem>
+                            <SelectItem value="manual">Manual</SelectItem>
+                            <SelectItem value="api">API</SelectItem>
+                            <SelectItem value="api_ia">API IA</SelectItem>
+                            <SelectItem value="recorrente">
+                              Recorrente
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Resumo dos resultados e filtros ativos */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">
+                      {isLoading ? (
+                        'Carregando...'
+                      ) : (
+                        <>
+                          <strong>{lancamentos.length}</strong> lançamento
+                          {lancamentos.length !== 1 ? 's' : ''} encontrado
+                          {lancamentos.length !== 1 ? 's' : ''}
+                        </>
+                      )}
+                    </span>
+                    {selectedPeriodo !== 'todos' && (
+                      <Badge variant="secondary" className="font-normal">
+                        <Calendar className="mr-1 h-3 w-3" />
+                        {getPeriodoLabel(selectedPeriodo)}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Chips de filtros ativos */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {searchTerm && (
+                      <Badge variant="outline" className="gap-1">
+                        <Search className="h-3 w-3" />"{searchTerm}"
+                        <button
+                          onClick={() => setSearchTerm('')}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedCategoria !== 'todas' && (
+                      <Badge variant="outline" className="gap-1">
+                        {
+                          categorias.find((c) => c.id === selectedCategoria)
+                            ?.nome
+                        }
+                        <button
+                          onClick={() => setSelectedCategoria('todas')}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedFornecedor !== 'todos' && (
+                      <Badge variant="outline" className="gap-1">
+                        <Building2 className="h-3 w-3" />
+                        {fornecedores.find((f) => f.id === selectedFornecedor)
+                          ?.nome_fantasia ||
+                          fornecedores.find((f) => f.id === selectedFornecedor)
+                            ?.nome_razao_social}
+                        <button
+                          onClick={() => setSelectedFornecedor('todos')}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedStatus !== 'todos' && (
+                      <Badge variant="outline" className="gap-1">
+                        {selectedStatus === 'pre_lancamento'
+                          ? 'Pré-lançamento'
+                          : selectedStatus === 'validado'
+                            ? 'Validado'
+                            : 'Cancelado'}
+                        <button
+                          onClick={() => setSelectedStatus('todos')}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedOrigem !== 'todas' && (
+                      <Badge variant="outline" className="gap-1">
+                        Origem: {selectedOrigem}
+                        <button
+                          onClick={() => setSelectedOrigem('todas')}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -623,13 +1184,45 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[50px]">Tipo</TableHead>
-                      <TableHead>Data</TableHead>
+                      <TableHead
+                        className="cursor-pointer hover:bg-muted/50 select-none"
+                        onClick={() => toggleSort('data_emissao')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Data
+                          {getSortIcon('data_emissao')}
+                        </div>
+                      </TableHead>
                       <TableHead>Documento</TableHead>
-                      <TableHead>Descrição</TableHead>
+                      <TableHead
+                        className="cursor-pointer hover:bg-muted/50 select-none"
+                        onClick={() => toggleSort('descricao')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Descrição
+                          {getSortIcon('descricao')}
+                        </div>
+                      </TableHead>
                       <TableHead>Observações</TableHead>
-                      <TableHead>Fornecedor/Cliente</TableHead>
+                      <TableHead
+                        className="cursor-pointer hover:bg-muted/50 select-none"
+                        onClick={() => toggleSort('fornecedor')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Fornecedor/Cliente
+                          {getSortIcon('fornecedor')}
+                        </div>
+                      </TableHead>
                       <TableHead>Categoria</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead
+                        className="text-right cursor-pointer hover:bg-muted/50 select-none"
+                        onClick={() => toggleSort('valor_total')}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          Valor
+                          {getSortIcon('valor_total')}
+                        </div>
+                      </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Pagamento</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
