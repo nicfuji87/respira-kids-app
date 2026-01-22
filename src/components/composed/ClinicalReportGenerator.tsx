@@ -343,11 +343,26 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         const agendamentoIds = data.map((a) => a.id);
         const agendamentoMap = new Map(data.map((a) => [a.id, a]));
 
-        // Buscar evoluções
+        // AI dev note: Buscar ID do tipo 'evolucao' para filtrar APENAS evoluções clínicas
+        // NÃO incluir historico_evolucao ou relatorio_compilado_evolucoes
+        const { data: tipoData, error: tipoError } = await supabase
+          .from('relatorios_tipo')
+          .select('id')
+          .eq('codigo', 'evolucao')
+          .single();
+
+        if (tipoError || !tipoData) {
+          console.error('Erro ao buscar tipo evolucao:', tipoError);
+          setEvolutions([]);
+          return;
+        }
+
+        // Buscar APENAS evoluções clínicas (tipo='evolucao'), não históricos
         const { data: evolData, error: evolError } = await supabase
           .from('relatorio_evolucao')
           .select('id, id_agendamento, tipo_evolucao, conteudo, created_at')
           .in('id_agendamento', agendamentoIds)
+          .eq('tipo_relatorio_id', tipoData.id) // AI dev note: Filtrar apenas tipo 'evolucao'
           .not('conteudo', 'is', null)
           .order('created_at', { ascending: false });
 
