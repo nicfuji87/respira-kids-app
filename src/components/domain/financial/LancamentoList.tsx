@@ -204,6 +204,9 @@ export const LancamentoList = React.memo<LancamentoListProps>(
       { id: string; nome: string; codigo: string; categoria_pai_id: string }[]
     >([]);
     const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([]);
+    // Receitas de agendamentos (igual ao Dashboard)
+    const [receitasAgendamentos, setReceitasAgendamentos] = React.useState(0);
+    const [isLoadingReceitas, setIsLoadingReceitas] = React.useState(false);
     const { toast } = useToast();
 
     // Carregar categorias (separadas por nível) e fornecedores
@@ -268,6 +271,61 @@ export const LancamentoList = React.memo<LancamentoListProps>(
       loadCategorias();
       loadFornecedores();
     }, []);
+
+    // Buscar receitas de agendamentos (igual ao Dashboard)
+    const loadReceitasAgendamentos = React.useCallback(
+      async (dataInicio: string | null, dataFim: string | null) => {
+        if (!dataInicio || !dataFim) {
+          setReceitasAgendamentos(0);
+          return;
+        }
+
+        try {
+          setIsLoadingReceitas(true);
+
+          // Buscar status "pago"
+          const { data: statusPago } = await supabase
+            .from('pagamento_status')
+            .select('id')
+            .eq('codigo', 'pago')
+            .single();
+
+          if (!statusPago) {
+            setReceitasAgendamentos(0);
+            return;
+          }
+
+          // Query para agendamentos pagos no período
+          const { data, error } = await supabase
+            .from('agendamentos')
+            .select('valor_servico')
+            .gte('data_hora', dataInicio)
+            .lte('data_hora', dataFim + 'T23:59:59')
+            .eq('ativo', true)
+            .eq('status_pagamento_id', statusPago.id);
+
+          if (error) {
+            console.error('Erro ao buscar receitas:', error);
+            setReceitasAgendamentos(0);
+            return;
+          }
+
+          const total =
+            data?.reduce(
+              (sum, a) => sum + (parseFloat(a.valor_servico) || 0),
+              0
+            ) || 0;
+
+          setReceitasAgendamentos(total);
+        } catch (error) {
+          console.error('Erro ao buscar receitas:', error);
+          setReceitasAgendamentos(0);
+        } finally {
+          setIsLoadingReceitas(false);
+        }
+      },
+      []
+    );
 
     // Função para calcular datas do período selecionado
     const getDateRangeForPeriod = React.useCallback(
@@ -483,6 +541,12 @@ export const LancamentoList = React.memo<LancamentoListProps>(
       loadLancamentos();
     }, [loadLancamentos]);
 
+    // Carregar receitas de agendamentos quando o período mudar
+    React.useEffect(() => {
+      const dateRange = getDateRangeForPeriod(selectedPeriodo);
+      loadReceitasAgendamentos(dateRange.from, dateRange.to);
+    }, [selectedPeriodo, getDateRangeForPeriod, loadReceitasAgendamentos]);
+
     const handleEdit = (lancamento: Lancamento) => {
       setSelectedLancamento(lancamento);
       setShowForm(true);
@@ -644,14 +708,14 @@ export const LancamentoList = React.memo<LancamentoListProps>(
     const activeFilters = countActiveFilters();
 
     // Calcular totais e estatísticas
+    // AI dev note: Receitas vêm de agendamentos (igual Dashboard), Despesas de lançamentos
     const resumoFinanceiro = React.useMemo(() => {
       const totalDespesas = lancamentos
         .filter((l) => l.tipo_lancamento === 'despesa')
         .reduce((sum, l) => sum + l.valor_total, 0);
 
-      const totalReceitas = lancamentos
-        .filter((l) => l.tipo_lancamento === 'receita')
-        .reduce((sum, l) => sum + l.valor_total, 0);
+      // Receitas vêm de agendamentos pagos (igual ao Dashboard)
+      const totalReceitas = receitasAgendamentos;
 
       const saldo = totalReceitas - totalDespesas;
 
@@ -692,7 +756,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
         saldo,
         porCategoriaPrincipal: categoriasOrdenadas,
       };
-    }, [lancamentos]);
+    }, [lancamentos, receitasAgendamentos]);
 
     // Formatar moeda
     const formatCurrency = (value: number) => {
@@ -1240,10 +1304,14 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                       </div>
                       <div className="text-center p-3 bg-background rounded-lg border">
                         <div className="text-xs text-green-600 uppercase tracking-wide">
-                          Total Receitas
+                          Receitas (Consultas)
                         </div>
                         <div className="text-xl font-bold text-green-600">
-                          {formatCurrency(resumoFinanceiro.totalReceitas)}
+                          {isLoadingReceitas ? (
+                            <span className="text-muted-foreground">...</span>
+                          ) : (
+                            formatCurrency(resumoFinanceiro.totalReceitas)
+                          )}
                         </div>
                       </div>
                       <div className="text-center p-3 bg-background rounded-lg border">
