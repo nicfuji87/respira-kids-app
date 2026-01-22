@@ -11,6 +11,8 @@ import {
   Loader2,
   RefreshCw,
   Save,
+  LinkIcon,
+  Plus,
 } from 'lucide-react';
 import { Switch } from '@/components/primitives';
 import {
@@ -43,11 +45,14 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Badge,
 } from '@/components/primitives';
 import { CurrencyInput } from '@/components/primitives';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { ProdutoSugestaoModal } from './ProdutoSugestaoModal';
+import { buscarProdutosSimilares, type Produto } from '@/lib/produto-matching';
 
 // AI dev note: Interface para validação de pré-lançamentos enviados pela API
 // ATUALIZADO: Campos editáveis inline diretamente na tabela
@@ -84,6 +89,15 @@ interface PreLancamento {
   } | null;
 }
 
+// AI dev note: Interface para sugestão de produto vinculada ao pré-lançamento
+interface ProdutoSugestao {
+  lancamento_id: string;
+  produto_id: string | null;
+  produto_nome: string | null;
+  match_score: number;
+  criar_novo: boolean;
+}
+
 interface Fornecedor {
   id: string;
   nome_razao_social: string;
@@ -117,6 +131,14 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
     const [selectedPeriod, setSelectedPeriod] = React.useState<string>('todos');
     const { user } = useAuth();
     const { toast } = useToast();
+
+    // AI dev note: Estados para sugestão de produtos
+    const [produtoSugestoes, setProdutoSugestoes] = React.useState<
+      Record<string, ProdutoSugestao>
+    >({});
+    const [produtoModalOpen, setProdutoModalOpen] = React.useState(false);
+    const [produtoModalLancamento, setProdutoModalLancamento] =
+      React.useState<PreLancamento | null>(null);
 
     // Carregar fornecedores e categorias
     React.useEffect(() => {
@@ -211,6 +233,93 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
     React.useEffect(() => {
       loadPreLancamentos();
     }, [loadPreLancamentos]);
+
+    // AI dev note: Buscar sugestões de produtos para cada pré-lançamento
+    const loadProdutoSugestoes = React.useCallback(
+      async (lancamentos: PreLancamento[]) => {
+        const sugestoes: Record<string, ProdutoSugestao> = {};
+
+        await Promise.all(
+          lancamentos.map(async (lancamento) => {
+            try {
+              const matches = await buscarProdutosSimilares(
+                lancamento.descricao,
+                1
+              );
+              const melhorMatch = matches.length > 0 ? matches[0] : null;
+
+              sugestoes[lancamento.id] = {
+                lancamento_id: lancamento.id,
+                produto_id:
+                  melhorMatch?.score && melhorMatch.score >= 70
+                    ? melhorMatch.produto.id
+                    : null,
+                produto_nome: melhorMatch?.produto.nome || null,
+                match_score: melhorMatch?.score || 0,
+                criar_novo: !melhorMatch || melhorMatch.score < 50,
+              };
+            } catch {
+              sugestoes[lancamento.id] = {
+                lancamento_id: lancamento.id,
+                produto_id: null,
+                produto_nome: null,
+                match_score: 0,
+                criar_novo: true,
+              };
+            }
+          })
+        );
+
+        setProdutoSugestoes(sugestoes);
+      },
+      []
+    );
+
+    // Carregar sugestões quando pré-lançamentos mudam
+    React.useEffect(() => {
+      if (preLancamentos.length > 0) {
+        loadProdutoSugestoes(preLancamentos);
+      }
+    }, [preLancamentos, loadProdutoSugestoes]);
+
+    // Abrir modal de sugestão de produto
+    const handleAbrirProdutoModal = (lancamento: PreLancamento) => {
+      setProdutoModalLancamento(lancamento);
+      setProdutoModalOpen(true);
+    };
+
+    // Callback quando produto é selecionado/criado no modal
+    const handleProdutoSelecionado = (
+      produto: Produto | null,
+      criadoNovo: boolean
+    ) => {
+      if (!produtoModalLancamento) return;
+
+      setProdutoSugestoes((prev) => ({
+        ...prev,
+        [produtoModalLancamento.id]: {
+          lancamento_id: produtoModalLancamento.id,
+          produto_id: produto?.id || null,
+          produto_nome: produto?.nome || null,
+          match_score: produto ? 100 : 0,
+          criar_novo: false,
+        },
+      }));
+
+      // Se criou novo produto e tem categoria, atualizar categoria do lançamento
+      if (criadoNovo && produto?.categoria_contabil_id) {
+        setEditedData((prev) => ({
+          ...prev,
+          [produtoModalLancamento.id]: {
+            ...prev[produtoModalLancamento.id],
+            categoria_contabil_id: produto.categoria_contabil_id as string,
+          },
+        }));
+      }
+
+      setProdutoModalOpen(false);
+      setProdutoModalLancamento(null);
+    };
 
     // Handlers para edição inline
     const handleFieldChange = (id: string, field: string, value: unknown) => {
@@ -312,6 +421,44 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
 
         if (statusError) throw statusError;
 
+        // AI dev note: Criar item do lançamento com produto vinculado (se houver)
+        const sugestao = produtoSugestoes[id];
+        const descricaoItem =
+          (editedData[id]?.descricao as string) ?? lancamento.descricao;
+        const categoriaItem =
+          (editedData[id]?.categoria_contabil_id as string) ??
+          lancamento.categoria_contabil_id;
+        const valorItem =
+          (editedData[id]?.valor_total as number) ?? lancamento.valor_total;
+
+        // Verificar se já existe item para este lançamento
+        const { data: existingItem } = await supabase
+          .from('lancamento_itens')
+          .select('id')
+          .eq('lancamento_id', id)
+          .single();
+
+        if (!existingItem) {
+          // Criar item do lançamento
+          const { error: itemError } = await supabase
+            .from('lancamento_itens')
+            .insert({
+              lancamento_id: id,
+              item_numero: 1,
+              descricao: descricaoItem,
+              quantidade: 1,
+              valor_unitario: valorItem,
+              valor_total: valorItem,
+              categoria_contabil_id: categoriaItem,
+              produto_id: sugestao?.produto_id || null,
+            });
+
+          if (itemError) {
+            console.warn('Erro ao criar item do lançamento:', itemError);
+            // Não interrompe o fluxo, item é opcional
+          }
+        }
+
         // AI dev note: Criar contas a pagar (uma parcela por documento)
         // Se já estiver marcado como pago, criar com status "pago"
         const estaPago =
@@ -357,9 +504,13 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
 
         if (contasError) throw contasError;
 
+        const produtoMsg = sugestao?.produto_nome
+          ? ` Produto vinculado: ${sugestao.produto_nome}.`
+          : '';
+
         toast({
           title: 'Lançamento aprovado',
-          description: `O lançamento foi aprovado e ${quantidadeParcelas} parcela(s) ${estaPago ? 'marcada(s) como paga(s)' : 'criada(s)'} com sucesso.`,
+          description: `O lançamento foi aprovado e ${quantidadeParcelas} parcela(s) ${estaPago ? 'marcada(s) como paga(s)' : 'criada(s)'} com sucesso.${produtoMsg}`,
         });
 
         loadPreLancamentos();
@@ -379,14 +530,14 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
       try {
         setIsProcessing(id);
 
-        // Atualizar status para cancelado
+        // AI dev note: Atualizar status para cancelado
+        // A tabela não tem colunas cancelado_por/cancelado_em, usar apenas campos existentes
         const { error } = await supabase
           .from('lancamentos_financeiros')
           .update({
             status_lancamento: 'cancelado',
-            cancelado_por: user?.pessoa?.id || null,
-            cancelado_em: new Date().toISOString(),
             atualizado_por: user?.pessoa?.id || null,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', id);
 
@@ -607,6 +758,7 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                       <TableHead>Tipo</TableHead>
                       <TableHead>Documento</TableHead>
                       <TableHead className="min-w-[200px]">Descrição</TableHead>
+                      <TableHead className="min-w-[160px]">Produto</TableHead>
                       <TableHead className="min-w-[180px]">
                         Fornecedor
                       </TableHead>
@@ -686,6 +838,79 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
                               placeholder="Descrição"
                               className="h-8 text-sm"
                             />
+                          </TableCell>
+
+                          {/* AI dev note: Coluna de Produto com sugestão automática */}
+                          <TableCell>
+                            {(() => {
+                              const sugestao = produtoSugestoes[lancamento.id];
+                              if (!sugestao) {
+                                return (
+                                  <div className="text-xs text-muted-foreground animate-pulse">
+                                    Buscando...
+                                  </div>
+                                );
+                              }
+                              if (
+                                sugestao.produto_id &&
+                                sugestao.produto_nome
+                              ) {
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-full justify-start text-left text-xs"
+                                          onClick={() =>
+                                            handleAbrirProdutoModal(lancamento)
+                                          }
+                                        >
+                                          <LinkIcon className="h-3 w-3 mr-1 text-green-600" />
+                                          <span className="truncate max-w-[100px]">
+                                            {sugestao.produto_nome}
+                                          </span>
+                                          {sugestao.match_score < 100 && (
+                                            <Badge
+                                              variant="secondary"
+                                              className="ml-1 text-[10px] px-1"
+                                            >
+                                              {sugestao.match_score}%
+                                            </Badge>
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Clique para alterar produto
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              }
+                              return (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 w-full text-xs"
+                                        onClick={() =>
+                                          handleAbrirProdutoModal(lancamento)
+                                        }
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Vincular
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Vincular a produto existente ou criar novo
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              );
+                            })()}
                           </TableCell>
 
                           <TableCell>
@@ -938,6 +1163,23 @@ export const PreLancamentoValidation = React.memo<PreLancamentoValidationProps>(
             )}
           </CardContent>
         </Card>
+
+        {/* Modal de Sugestão/Criação de Produto */}
+        {produtoModalLancamento && (
+          <ProdutoSugestaoModal
+            isOpen={produtoModalOpen}
+            onClose={() => {
+              setProdutoModalOpen(false);
+              setProdutoModalLancamento(null);
+            }}
+            descricao={produtoModalLancamento.descricao}
+            valorUnitario={produtoModalLancamento.valor_total}
+            categoriaId={produtoModalLancamento.categoria_contabil_id}
+            categorias={categorias}
+            userId={user?.pessoa?.id || null}
+            onProdutoSelecionado={handleProdutoSelecionado}
+          />
+        )}
       </>
     );
   }

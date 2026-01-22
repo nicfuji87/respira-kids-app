@@ -128,7 +128,7 @@ interface LancamentoFormProps {
     eh_divisao_socios: boolean;
     pessoa_responsavel_id?: string | null;
     arquivo_url?: string;
-    empresa_fatura?: string | null;
+    empresa_fatura_id?: string | null;
   };
   onSuccess?: () => void;
   onCancel?: () => void;
@@ -168,7 +168,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
         quantidade_parcelas: lancamento?.quantidade_parcelas || 1,
         eh_divisao_socios: lancamento?.eh_divisao_socios || false,
         pessoa_responsavel_id: lancamento?.pessoa_responsavel_id || null,
-        empresa_fatura: lancamento?.empresa_fatura || null,
+        empresa_fatura: lancamento?.empresa_fatura_id || null,
         itens: [
           {
             produto_id: null,
@@ -190,7 +190,6 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
 
     const tipoLancamento = form.watch('tipo_lancamento');
     const ehDivisaoSocios = form.watch('eh_divisao_socios');
-    const itens = form.watch('itens');
 
     // Carregar dados auxiliares
     React.useEffect(() => {
@@ -252,14 +251,19 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
     }, [toast]);
 
     // Carregar itens se editando
+    const lancamentoId = lancamento?.id;
+    const lancamentoDescricao = lancamento?.descricao;
+    const lancamentoValorTotal = lancamento?.valor_total;
+    const lancamentoCategoriaId = lancamento?.categoria_contabil_id;
+
     React.useEffect(() => {
-      if (lancamento?.id) {
+      if (lancamentoId) {
         const loadItens = async () => {
           try {
             const { data, error } = await supabase
               .from('lancamento_itens')
               .select('*')
-              .eq('lancamento_id', lancamento.id)
+              .eq('lancamento_id', lancamentoId)
               .order('item_numero');
 
             if (error) throw error;
@@ -268,6 +272,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
               form.setValue(
                 'itens',
                 data.map((item) => ({
+                  produto_id: item.produto_id || null,
                   descricao: item.descricao,
                   quantidade: Number(item.quantidade),
                   valor_unitario: Number(item.valor_unitario),
@@ -277,6 +282,20 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                   observacoes: item.observacoes || '',
                 }))
               );
+            } else {
+              // Se não há itens salvos, criar um item com os dados do lançamento
+              // Isso preserva o valor total de lançamentos antigos
+              form.setValue('itens', [
+                {
+                  produto_id: null,
+                  descricao: lancamentoDescricao || '',
+                  quantidade: 1,
+                  valor_unitario: lancamentoValorTotal || 0,
+                  valor_total: lancamentoValorTotal || 0,
+                  categoria_contabil_id: lancamentoCategoriaId || undefined,
+                  observacoes: '',
+                },
+              ]);
             }
           } catch (error) {
             console.error('Erro ao carregar itens:', error);
@@ -285,23 +304,42 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
 
         loadItens();
       }
-    }, [lancamento?.id, form]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lancamentoId]);
 
-    // Calcular total geral
-    React.useEffect(() => {
-      const total = itens.reduce(
-        (sum, item) => sum + (item.valor_total || 0),
+    // Recalcular total geral a partir dos itens
+    const recalcularTotalGeral = React.useCallback(() => {
+      const todosItens = form.getValues('itens') || [];
+      const total = todosItens.reduce(
+        (sum, item) => sum + (item?.valor_total || 0),
         0
       );
-      form.setValue('valor_total', total);
-    }, [itens, form]);
+      form.setValue('valor_total', total, { shouldDirty: true });
+    }, [form]);
 
     // Atualizar valor total do item quando quantidade ou valor unitário mudar
-    const updateItemTotal = (index: number) => {
-      const item = form.getValues(`itens.${index}`);
-      const total = item.quantidade * item.valor_unitario;
-      form.setValue(`itens.${index}.valor_total`, total);
-    };
+    const updateItemTotal = React.useCallback(
+      (index: number, newQuantidade?: number, newValorUnitario?: number) => {
+        const item = form.getValues(`itens.${index}`);
+        const quantidade =
+          newQuantidade !== undefined ? newQuantidade : item.quantidade;
+        const valorUnitario =
+          newValorUnitario !== undefined
+            ? newValorUnitario
+            : item.valor_unitario;
+        const total = quantidade * valorUnitario;
+        form.setValue(`itens.${index}.valor_total`, total, {
+          shouldDirty: true,
+        });
+
+        // Recalcular total geral imediatamente após atualizar o item
+        // Usamos setTimeout para garantir que o setValue anterior foi processado
+        setTimeout(() => {
+          recalcularTotalGeral();
+        }, 0);
+      },
+      [form, recalcularTotalGeral]
+    );
 
     // Organizar categorias hierarquicamente
     const categoriasHierarquicas = React.useMemo(() => {
@@ -350,7 +388,8 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
       try {
         setIsLoading(true);
 
-        const lancamentoData = {
+        // Dados base do lançamento
+        const lancamentoBase = {
           tipo_lancamento: data.tipo_lancamento,
           numero_documento: data.numero_documento || null,
           data_emissao: format(data.data_emissao, 'yyyy-MM-dd'),
@@ -365,13 +404,20 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
           pessoa_responsavel_id: data.eh_divisao_socios
             ? null
             : data.pessoa_responsavel_id || null,
-          status_lancamento: 'validado',
-          origem_lancamento: 'manual',
           arquivo_url: uploadedFileUrl,
-          empresa_fatura: data.empresa_fatura || null,
-          criado_por: user?.pessoa?.id || null,
+          empresa_fatura_id: data.empresa_fatura || null,
           atualizado_por: user?.pessoa?.id || null,
         };
+
+        // Dados diferentes para criação vs atualização
+        const lancamentoData = lancamento?.id
+          ? lancamentoBase // Atualização: não muda status nem origem
+          : {
+              ...lancamentoBase,
+              status_lancamento: 'validado',
+              origem_lancamento: 'manual',
+              criado_por: user?.pessoa?.id || null,
+            };
 
         if (lancamento?.id) {
           // Atualizar
@@ -844,7 +890,12 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                                   produtoData.categoria_contabil_id
                                 );
                               }
-                              updateItemTotal(index);
+                              // Calcula e atualiza o valor total com os valores do produto
+                              updateItemTotal(
+                                index,
+                                produtoData.quantidade,
+                                produtoData.valor_unitario
+                              );
                             }}
                             placeholder="Buscar produto ou digitar descrição livre..."
                           />
@@ -878,10 +929,14 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                                   type="number"
                                   {...field}
                                   onChange={(e) => {
-                                    field.onChange(
-                                      parseFloat(e.target.value) || 0
+                                    const newQuantidade =
+                                      parseFloat(e.target.value) || 0;
+                                    field.onChange(newQuantidade);
+                                    updateItemTotal(
+                                      index,
+                                      newQuantidade,
+                                      undefined
                                     );
-                                    updateItemTotal(index);
                                   }}
                                   min="0.001"
                                   step="0.001"
@@ -902,8 +957,9 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                                 <CurrencyInput
                                   value={field.value}
                                   onChange={(value) => {
-                                    field.onChange(value || 0);
-                                    updateItemTotal(index);
+                                    const newValor = value || 0;
+                                    field.onChange(newValor);
+                                    updateItemTotal(index, undefined, newValor);
                                   }}
                                 />
                               </FormControl>

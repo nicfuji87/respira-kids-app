@@ -316,8 +316,18 @@ export const LancamentoRecorrenteList =
         );
       };
 
-      const getProximaData = (data: string) => {
+      const getProximaData = (data: string | null | undefined) => {
+        if (!data) {
+          return <Badge variant="outline">Não definido</Badge>;
+        }
+
         const proxima = new Date(data);
+
+        // Verificar se a data é válida
+        if (isNaN(proxima.getTime())) {
+          return <Badge variant="outline">Data inválida</Badge>;
+        }
+
         const hoje = new Date();
         const diffDays = Math.ceil(
           (proxima.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)

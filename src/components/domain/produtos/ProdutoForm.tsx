@@ -35,6 +35,8 @@ import { useAuth } from '@/hooks/useAuth';
 // Integrado com categorias contábeis e fornecedores
 // Preço de referência é sugestão (pode variar no lançamento)
 
+// AI dev note: Schema de produto SEM fornecedor_padrao_id
+// Fornecedor agora é vinculado via tabela produto_fornecedor (N:N)
 const produtoSchema = z.object({
   codigo: z
     .string()
@@ -46,7 +48,6 @@ const produtoSchema = z.object({
   unidade_medida: z.string().min(1, 'Unidade de medida é obrigatória'),
   categoria_contabil_id: z.string().uuid().optional().nullable(),
   preco_referencia: z.number().min(0, 'Preço deve ser maior ou igual a zero'),
-  fornecedor_padrao_id: z.string().uuid().optional().nullable(),
   ativo: z.boolean().default(true),
 });
 
@@ -73,12 +74,6 @@ interface Categoria {
   nome: string;
 }
 
-interface Fornecedor {
-  id: string;
-  nome_razao_social: string;
-  nome_fantasia: string | null;
-}
-
 interface ProdutoFormProps {
   produto?: {
     id: string;
@@ -88,7 +83,6 @@ interface ProdutoFormProps {
     unidade_medida: string;
     categoria_contabil_id: string | null;
     preco_referencia: number;
-    fornecedor_padrao_id: string | null;
     ativo: boolean;
   };
   onSuccess?: () => void;
@@ -99,7 +93,6 @@ export const ProdutoForm = React.memo<ProdutoFormProps>(
   ({ produto, onSuccess, onCancel }) => {
     const [isLoading, setIsLoading] = React.useState(false);
     const [categorias, setCategorias] = React.useState<Categoria[]>([]);
-    const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([]);
     const { user } = useAuth();
     const { toast } = useToast();
 
@@ -112,30 +105,23 @@ export const ProdutoForm = React.memo<ProdutoFormProps>(
         unidade_medida: produto?.unidade_medida || 'unidade',
         categoria_contabil_id: produto?.categoria_contabil_id || null,
         preco_referencia: produto?.preco_referencia || 0,
-        fornecedor_padrao_id: produto?.fornecedor_padrao_id || null,
         ativo: produto?.ativo ?? true,
       },
     });
 
-    // Carregar categorias e fornecedores
+    // Carregar categorias
+    // AI dev note: Fornecedor não é mais vinculado ao produto
+    // Agora é gerenciado via tabela produto_fornecedor (N:N)
     React.useEffect(() => {
       const loadData = async () => {
         try {
-          const [categoriasRes, fornecedoresRes] = await Promise.all([
-            supabase
-              .from('categorias_contabeis')
-              .select('id, codigo, nome')
-              .eq('ativo', true)
-              .order('codigo'),
-            supabase
-              .from('fornecedores')
-              .select('id, nome_razao_social, nome_fantasia')
-              .eq('ativo', true)
-              .order('nome_fantasia'),
-          ]);
+          const { data } = await supabase
+            .from('categorias_contabeis')
+            .select('id, codigo, nome')
+            .eq('ativo', true)
+            .order('codigo');
 
-          if (categoriasRes.data) setCategorias(categoriasRes.data);
-          if (fornecedoresRes.data) setFornecedores(fornecedoresRes.data);
+          if (data) setCategorias(data);
         } catch (error) {
           console.error('Erro ao carregar dados:', error);
         }
@@ -155,7 +141,6 @@ export const ProdutoForm = React.memo<ProdutoFormProps>(
           unidade_medida: data.unidade_medida,
           categoria_contabil_id: data.categoria_contabil_id || null,
           preco_referencia: data.preco_referencia,
-          fornecedor_padrao_id: data.fornecedor_padrao_id || null,
           ativo: data.ativo,
           atualizado_por: user?.pessoa?.id || null,
         };
@@ -372,35 +357,7 @@ export const ProdutoForm = React.memo<ProdutoFormProps>(
                 />
               </div>
 
-              {/* Fornecedor Padrão */}
-              <FormField
-                control={form.control}
-                name="fornecedor_padrao_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fornecedor Padrão (Opcional)</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value || ''}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="">Nenhum</SelectItem>
-                        {fornecedores.map((forn) => (
-                          <SelectItem key={forn.id} value={forn.id}>
-                            {forn.nome_fantasia || forn.nome_razao_social}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* AI dev note: Fornecedor removido - agora via tabela produto_fornecedor */}
             </CardContent>
 
             <CardFooter className="flex gap-2">

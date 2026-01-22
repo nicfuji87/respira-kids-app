@@ -81,6 +81,7 @@ interface Lancamento {
   status_lancamento: string;
   origem_lancamento: string;
   arquivo_url?: string | null;
+  empresa_fatura_id?: string | null;
   created_at: string;
   fornecedor?: {
     nome_razao_social: string;
@@ -743,11 +744,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                         </TableCell>
                         <TableCell>
                           {lancamento.categoria ? (
-                            <Badge
-                              variant="outline"
-                              className="font-mono text-xs"
-                            >
-                              {lancamento.categoria.codigo} -{' '}
+                            <Badge variant="outline" className="text-xs">
                               {lancamento.categoria.nome}
                             </Badge>
                           ) : (
@@ -881,7 +878,8 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                         '',
                       fornecedor_id:
                         selectedLancamento.fornecedor_id || undefined,
-                      empresa_fatura: undefined,
+                      empresa_fatura_id:
+                        selectedLancamento.empresa_fatura_id || undefined,
                       arquivo_url: selectedLancamento.arquivo_url || undefined,
                     }
                   : undefined

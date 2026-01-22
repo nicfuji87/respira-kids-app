@@ -11,3 +11,4 @@ export { RelatorioMensal } from './RelatorioMensal';
 export { RecorrenciaLogViewer } from './RecorrenciaLogViewer';
 export { ConfiguracaoDivisaoSocios } from './ConfiguracaoDivisaoSocios';
 export { RelatorioProfissionais } from './RelatorioProfissionais';
+export { LancamentoResponsavelManager } from './LancamentoResponsavelManager';

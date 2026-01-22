@@ -20,6 +20,7 @@ import {
   FileText,
   Users,
   Package,
+  UserCog,
 } from 'lucide-react';
 import { DevelopmentPlaceholder } from '@/components/composed';
 import { FornecedorList } from '@/components/domain/fornecedores';
@@ -34,6 +35,7 @@ import {
   RelatorioMensal,
   RecorrenciaLogViewer,
   ConfiguracaoDivisaoSocios,
+  LancamentoResponsavelManager,
 } from '@/components/domain/financial';
 import { ProdutoList } from '@/components/domain/produtos';
 import { useSearchParams } from 'react-router-dom';
@@ -138,7 +140,7 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           content: (
             <div className="space-y-6">
               <Tabs defaultValue="fornecedores" className="w-full">
-                <TabsList className="flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid md:grid-cols-5 md:overflow-visible no-scrollbar">
+                <TabsList className="flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid md:grid-cols-6 md:overflow-visible no-scrollbar">
                   <TabsTrigger
                     value="fornecedores"
                     className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
@@ -181,7 +183,16 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
                   >
                     <Users className="h-4 w-4 flex-shrink-0" />
                     <span className="whitespace-nowrap md:whitespace-normal">
-                      Divisão de Sócios
+                      Divisão Sócios
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="responsaveis"
+                    className="flex items-center gap-2 h-10 text-xs md:text-sm px-3 min-w-fit md:min-w-0 flex-1 md:flex-auto justify-center"
+                  >
+                    <UserCog className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap md:whitespace-normal">
+                      Responsáveis
                     </span>
                   </TabsTrigger>
                 </TabsList>
@@ -204,6 +215,10 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
 
                 <TabsContent value="divisao" className="mt-6">
                   <ConfiguracaoDivisaoSocios />
+                </TabsContent>
+
+                <TabsContent value="responsaveis" className="mt-6">
+                  <LancamentoResponsavelManager />
                 </TabsContent>
               </Tabs>
             </div>
@@ -258,6 +273,14 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
       );
     }
 
+    // AI dev note: Grid cols dinâmico baseado no número de tabs permitidas
+    const gridColsClass =
+      allowedTabs.length === 7
+        ? 'md:grid-cols-7'
+        : allowedTabs.length === 6
+          ? 'md:grid-cols-6'
+          : 'md:grid-cols-5';
+
     return (
       <div className={className}>
         <Tabs
@@ -265,7 +288,9 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           onValueChange={handleTabChange}
           className="w-full"
         >
-          <TabsList className="flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid md:overflow-visible no-scrollbar">
+          <TabsList
+            className={`flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid ${gridColsClass} md:overflow-visible no-scrollbar`}
+          >
             {allowedTabs.map((tab) => {
               const IconComponent = tab.icon;
               return (

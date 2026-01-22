@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   CheckCircle,
   XCircle,
+  Store,
 } from 'lucide-react';
 import {
   Card,
@@ -37,14 +38,17 @@ import {
   DropdownMenuTrigger,
   Dialog,
   DialogContent,
+  Sheet,
+  SheetContent,
 } from '@/components/primitives';
 import { ProdutoForm } from './ProdutoForm';
+import { ProdutoFornecedoresPanel } from './ProdutoFornecedoresPanel';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
 
 // AI dev note: Lista de produtos e serviços cadastrados
 // Permite busca, edição e gerenciamento do catálogo
-// Filtros por categoria, fornecedor e status
+// Agora com painel de fornecedores (N:N via produto_fornecedor)
 
 interface Produto {
   id: string;
@@ -58,10 +62,8 @@ interface Produto {
     codigo: string;
     nome: string;
   } | null;
-  fornecedor?: {
-    nome_razao_social: string;
-    nome_fantasia: string | null;
-  } | null;
+  // AI dev note: Fornecedor removido - agora via tabela produto_fornecedor (N:N)
+  fornecedores_count?: number;
 }
 
 interface ProdutoListProps {
@@ -82,12 +84,19 @@ export const ProdutoList = React.memo<ProdutoListProps>(({ className }) => {
     unidade_medida: string;
     categoria_contabil_id: string | null;
     preco_referencia: number;
-    fornecedor_padrao_id: string | null;
     ativo: boolean;
+  } | null>(null);
+  // AI dev note: Estado para o sheet de fornecedores
+  const [produtoFornecedores, setProdutoFornecedores] = React.useState<{
+    id: string;
+    nome: string;
+    codigo: string;
   } | null>(null);
   const { toast } = useToast();
 
   // Carregar produtos
+  // AI dev note: Query atualizada - não busca mais fornecedor_padrao_id
+  // Agora conta fornecedores via produto_fornecedor
   const loadProdutos = React.useCallback(async () => {
     try {
       setIsLoading(true);
@@ -100,10 +109,6 @@ export const ProdutoList = React.memo<ProdutoListProps>(({ className }) => {
           categoria:categoria_contabil_id (
             codigo,
             nome
-          ),
-          fornecedor:fornecedor_padrao_id (
-            nome_razao_social,
-            nome_fantasia
           )
         `
         )
@@ -126,7 +131,32 @@ export const ProdutoList = React.memo<ProdutoListProps>(({ className }) => {
       const { data, error } = await query;
 
       if (error) throw error;
-      setProdutos(data || []);
+
+      // Buscar contagem de fornecedores para cada produto
+      if (data && data.length > 0) {
+        const produtoIds = data.map((p) => p.id);
+        const { data: fornecedorCounts } = await supabase
+          .from('produto_fornecedor')
+          .select('produto_id')
+          .in('produto_id', produtoIds)
+          .eq('ativo', true);
+
+        // Contar fornecedores por produto
+        const countMap = new Map<string, number>();
+        fornecedorCounts?.forEach((fc) => {
+          countMap.set(fc.produto_id, (countMap.get(fc.produto_id) || 0) + 1);
+        });
+
+        // Adicionar contagem aos produtos
+        const produtosComContagem = data.map((p) => ({
+          ...p,
+          fornecedores_count: countMap.get(p.id) || 0,
+        }));
+
+        setProdutos(produtosComContagem);
+      } else {
+        setProdutos(data || []);
+      }
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
       toast({
@@ -290,7 +320,7 @@ export const ProdutoList = React.memo<ProdutoListProps>(({ className }) => {
                     <TableHead>Unidade</TableHead>
                     <TableHead>Preço Ref.</TableHead>
                     <TableHead>Categoria</TableHead>
-                    <TableHead>Fornecedor</TableHead>
+                    <TableHead>Fornecedores</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -333,16 +363,31 @@ export const ProdutoList = React.memo<ProdutoListProps>(({ className }) => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {produto.fornecedor ? (
-                          <span className="text-sm">
-                            {produto.fornecedor.nome_fantasia ||
-                              produto.fornecedor.nome_razao_social}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            -
-                          </span>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-1"
+                          onClick={() =>
+                            setProdutoFornecedores({
+                              id: produto.id,
+                              nome: produto.nome,
+                              codigo: produto.codigo,
+                            })
+                          }
+                        >
+                          <Badge
+                            variant={
+                              produto.fornecedores_count &&
+                              produto.fornecedores_count > 0
+                                ? 'default'
+                                : 'secondary'
+                            }
+                            className="cursor-pointer"
+                          >
+                            <Store className="mr-1 h-3 w-3" />
+                            {produto.fornecedores_count || 0}
+                          </Badge>
+                        </Button>
                       </TableCell>
                       <TableCell>
                         {produto.ativo ? (
@@ -377,6 +422,19 @@ export const ProdutoList = React.memo<ProdutoListProps>(({ className }) => {
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setProdutoFornecedores({
+                                    id: produto.id,
+                                    nome: produto.nome,
+                                    codigo: produto.codigo,
+                                  })
+                                }
+                              >
+                                <Store className="mr-2 h-4 w-4" />
+                                Fornecedores ({produto.fornecedores_count || 0})
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => handleToggleStatus(produto)}
                               >
@@ -418,6 +476,29 @@ export const ProdutoList = React.memo<ProdutoListProps>(({ className }) => {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Sheet de Fornecedores */}
+      <Sheet
+        open={!!produtoFornecedores}
+        onOpenChange={(open) => !open && setProdutoFornecedores(null)}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-2xl overflow-y-auto"
+        >
+          {produtoFornecedores && (
+            <ProdutoFornecedoresPanel
+              produtoId={produtoFornecedores.id}
+              produtoNome={produtoFornecedores.nome}
+              produtoCodigo={produtoFornecedores.codigo}
+              onClose={() => {
+                setProdutoFornecedores(null);
+                loadProdutos(); // Recarregar para atualizar contagem
+              }}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 });
