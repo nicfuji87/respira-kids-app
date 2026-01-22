@@ -657,18 +657,29 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
               sum,
               c: {
                 valor_parcela: number;
-                lancamento?: { eh_divisao_socios?: boolean };
+                lancamento?:
+                  | {
+                      eh_divisao_socios?: boolean;
+                      pessoa_responsavel_id?: string | null;
+                    }
+                  | {
+                      eh_divisao_socios?: boolean;
+                      pessoa_responsavel_id?: string | null;
+                    }[];
               }
             ) => {
-              const lancamento = c.lancamento;
+              // Handle array or object from Supabase join
+              const lancamentoData = Array.isArray(c.lancamento)
+                ? c.lancamento[0]
+                : c.lancamento;
               if (selectedConta === 'consolidado') {
                 return sum + c.valor_parcela;
               }
               const socio = socios.find((s) => s.pessoa_id === selectedConta);
-              if (lancamento?.eh_divisao_socios && socio) {
+              if (lancamentoData?.eh_divisao_socios && socio) {
                 return sum + c.valor_parcela * (socio.percentual_divisao / 100);
               }
-              if (lancamento?.pessoa_responsavel_id === selectedConta) {
+              if (lancamentoData?.pessoa_responsavel_id === selectedConta) {
                 return sum + c.valor_parcela;
               }
               return sum;
@@ -744,12 +755,36 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
 
         // Agrupar por categoria com valores ajustados
         const categoriasMap = new Map<string, { valor: number; cor: string }>();
-        (despesasCategoria as LancamentoFinanceiro[] | null)?.forEach((d) => {
-          const valorAjustado = calcularValorPorConta(d, selectedConta, socios);
+        (
+          despesasCategoria as
+            | {
+                id: string;
+                valor_total: number;
+                eh_divisao_socios: boolean;
+                pessoa_responsavel_id: string | null;
+                categoria: { nome: string; cor: string } | null;
+              }[]
+            | null
+        )?.forEach((d) => {
+          // Create a LancamentoFinanceiro-like object for calcularValorPorConta
+          const lancamentoLike = {
+            valor_total: d.valor_total,
+            eh_divisao_socios: d.eh_divisao_socios,
+            pessoa_responsavel_id: d.pessoa_responsavel_id,
+          };
+          const valorAjustado = calcularValorPorConta(
+            lancamentoLike as LancamentoFinanceiro,
+            selectedConta,
+            socios
+          );
           if (valorAjustado === 0) return; // Não conta se valor é 0
 
-          const catNome = d.categoria?.nome || 'Sem categoria';
-          const catCor = d.categoria?.cor || '';
+          // Handle categoria as potentially array from Supabase join
+          const catData = Array.isArray(d.categoria)
+            ? d.categoria[0]
+            : d.categoria;
+          const catNome = catData?.nome || 'Sem categoria';
+          const catCor = catData?.cor || '';
           const atual = categoriasMap.get(catNome) || { valor: 0, cor: catCor };
           categoriasMap.set(catNome, {
             valor: atual.valor + valorAjustado,
@@ -809,11 +844,18 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
               id: string;
               data_vencimento: string;
               valor_parcela: number;
-              lancamento?: {
-                descricao?: string;
-                eh_divisao_socios?: boolean;
-                pessoa_responsavel_id?: string;
-              } | null;
+              lancamento?:
+                | {
+                    descricao?: string;
+                    eh_divisao_socios?: boolean;
+                    pessoa_responsavel_id?: string;
+                  }
+                | {
+                    descricao?: string;
+                    eh_divisao_socios?: boolean;
+                    pessoa_responsavel_id?: string;
+                  }[]
+                | null;
             }> | null
           )
             ?.filter((c) => {
@@ -821,17 +863,22 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
               return vencimento >= hoje && vencimento <= addDays(hoje, 7);
             })
             .map((c) => {
+              // Handle lancamento as potentially array from Supabase join
+              const lancamentoData = Array.isArray(c.lancamento)
+                ? c.lancamento[0]
+                : c.lancamento;
+
               let valorAjustado = c.valor_parcela;
               if (selectedConta !== 'consolidado') {
                 const socio = socios.find((s) => s.pessoa_id === selectedConta);
-                if (c.lancamento?.eh_divisao_socios && socio) {
+                if (lancamentoData?.eh_divisao_socios && socio) {
                   valorAjustado =
                     c.valor_parcela * (socio.percentual_divisao / 100);
                 }
               }
               return {
                 id: c.id,
-                descricao: c.lancamento?.descricao || 'Sem descrição',
+                descricao: lancamentoData?.descricao || 'Sem descrição',
                 vencimento: c.data_vencimento,
                 valor: valorAjustado,
                 diasParaVencer: Math.ceil(

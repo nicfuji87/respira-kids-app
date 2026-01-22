@@ -206,16 +206,16 @@ export const ProdutoFornecedoresPanel =
         try {
           setIsAdding(true);
 
+          const preco = precoInicial ?? 0;
           const { error } = await supabase.from('produto_fornecedor').insert({
             produto_id: produtoId,
             fornecedor_id: selectedFornecedor,
-            preco_ultima_compra: precoInicial > 0 ? precoInicial : null,
-            preco_medio: precoInicial > 0 ? precoInicial : null,
-            preco_minimo: precoInicial > 0 ? precoInicial : null,
-            preco_maximo: precoInicial > 0 ? precoInicial : null,
-            quantidade_compras: precoInicial > 0 ? 1 : 0,
-            ultima_compra_em:
-              precoInicial > 0 ? new Date().toISOString() : null,
+            preco_ultima_compra: preco > 0 ? preco : null,
+            preco_medio: preco > 0 ? preco : null,
+            preco_minimo: preco > 0 ? preco : null,
+            preco_maximo: preco > 0 ? preco : null,
+            quantidade_compras: preco > 0 ? 1 : 0,
+            ultima_compra_em: preco > 0 ? new Date().toISOString() : null,
           });
 
           if (error) {

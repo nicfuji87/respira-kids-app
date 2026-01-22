@@ -136,7 +136,7 @@ export const ProdutoSugestaoModal = React.memo<ProdutoSugestaoModalProps>(
           novoCodigo,
           novoNome,
           novaCategoria,
-          novoPreco,
+          novoPreco ?? undefined,
           userId
         );
 
