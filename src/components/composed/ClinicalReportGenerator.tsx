@@ -535,32 +535,32 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       font-size: 11pt;
     }
     
+    /* AI dev note: Container principal com margens laterais maiores */
     .page {
       width: 210mm;
       min-height: 297mm;
       margin: 0 auto;
       position: relative;
-      padding: 15mm 20mm 25mm 20mm;
+      padding: 0;
     }
     
-    /* Cabeçalho com imagem de fundo apenas no topo */
+    /* AI dev note: Imagem de fundo do cabeçalho - apenas primeira página */
     .header-bg {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 45mm;
+      width: 100%;
+      height: 38mm;
       background-image: url('${BACKGROUND_IMAGE_URL}');
       background-size: cover;
       background-position: top center;
       background-repeat: no-repeat;
     }
     
+    /* AI dev note: Conteúdo principal com margens laterais aumentadas */
+    .main-content {
+      padding: 8mm 25mm 20mm 25mm;
+    }
+    
     .header {
-      position: relative;
-      z-index: 1;
       text-align: center;
-      padding-top: 25mm;
       margin-bottom: 15px;
     }
     
@@ -626,43 +626,6 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       line-height: 1.5;
     }
     
-    .ai-summary {
-      text-align: justify;
-    }
-    
-    .ai-summary p {
-      margin-bottom: 10px;
-      text-indent: 25px;
-    }
-    
-    .ai-summary h3.section-subtitle {
-      text-indent: 0;
-    }
-    
-    .report-list {
-      margin: 10px 0 15px 25px;
-      padding-left: 0;
-    }
-    
-    .report-list li {
-      margin-bottom: 5px;
-      list-style-type: disc;
-    }
-    
-    .list-summary {
-      font-size: 10pt;
-    }
-    
-    .list-summary p {
-      margin-bottom: 10px;
-    }
-    
-    .evolution-item {
-      padding: 5px 0;
-      border-bottom: 1px dotted #e2e8f0;
-      font-size: 10pt;
-    }
-    
     .dates-section {
       margin-top: 20px;
       padding: 12px 15px;
@@ -677,6 +640,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       font-weight: 600;
       color: #1a365d;
       margin-bottom: 8px;
+      text-decoration: underline;
     }
     
     .signature-section {
@@ -685,7 +649,6 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       flex-direction: column;
       align-items: center;
       text-align: center;
-      page-break-inside: avoid;
     }
     
     .signature-image {
@@ -716,22 +679,30 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     }
     
     .audit-section {
-      margin-top: 20px;
+      margin-top: 25px;
       text-align: right;
       font-size: 7pt;
-      color: #999;
+      color: #aaa;
       font-style: italic;
-      border-top: 1px solid #eee;
-      padding-top: 8px;
     }
     
-    /* AI dev note: Cabeçalho fixo que aparece em TODAS as páginas na impressão */
+    /* Rodapé da primeira página */
+    .page-footer {
+      text-align: center;
+      font-size: 8pt;
+      color: #40C4AA;
+      margin-top: 20px;
+      padding-top: 10px;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    /* Elementos para impressão - escondidos na tela */
     .print-header {
-      display: none; /* Escondido na tela */
+      display: none;
     }
     
     .print-footer {
-      display: none; /* Escondido na tela */
+      display: none;
     }
     
     /* Estilos para visualização em tela */
@@ -742,15 +713,11 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       }
     }
     
-    /* AI dev note: CSS para impressão com branding Respira Kids em TODAS as páginas */
+    /* AI dev note: CSS para impressão - layout otimizado */
     @media print {
       @page {
         size: A4;
-        margin: 25mm 15mm 20mm 15mm; /* Margem superior maior para o cabeçalho fixo */
-      }
-      
-      @page:first {
-        margin-top: 0; /* Primeira página sem margem superior extra (tem o header grande) */
+        margin: 0;
       }
       
       html, body {
@@ -763,47 +730,42 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       .page {
         width: 100%;
         min-height: auto;
-        padding: 0 5mm;
         margin: 0;
+        padding: 0;
       }
       
-      /* Header grande só na primeira página */
+      /* Imagem de fundo visível na impressão */
       .header-bg {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        position: absolute;
-        height: 40mm;
       }
       
-      /* Cabeçalho fixo - aparece em TODAS as páginas */
+      /* Barra verde fixa no topo - aparece em TODAS as páginas */
       .print-header {
         display: block;
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
-        height: 20mm;
+        height: 10mm;
         background: linear-gradient(135deg, #40C4AA 0%, #2d9a87 100%);
-        padding: 5mm 15mm;
         z-index: 1000;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
       
       .print-header-content {
+        height: 100%;
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-end;
         align-items: center;
+        padding: 0 20mm;
+      }
+      
+      .print-header-text {
         color: white;
-      }
-      
-      .print-header-logo {
-        font-size: 14pt;
-        font-weight: 700;
-        letter-spacing: 1px;
-      }
-      
-      .print-header-subtitle {
-        font-size: 9pt;
-        opacity: 0.9;
+        font-size: 10pt;
+        font-weight: 500;
       }
       
       /* Rodapé fixo - aparece em TODAS as páginas */
@@ -813,18 +775,23 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         bottom: 0;
         left: 0;
         right: 0;
-        height: 10mm;
+        height: 8mm;
         text-align: center;
         font-size: 8pt;
         color: #40C4AA;
-        padding: 2mm 15mm;
-        border-top: 2px solid #40C4AA;
+        padding: 2mm 20mm;
         background: white;
       }
       
-      /* Ajustar conteúdo para não sobrepor o header fixo (exceto primeira página) */
+      /* Ajustes de conteúdo para impressão */
       .main-content {
+        padding: 8mm 20mm 15mm 20mm;
         margin-top: 0;
+      }
+      
+      /* Esconder o footer HTML da primeira página na impressão */
+      .page-footer {
+        display: none;
       }
       
       /* Evitar quebras ruins */
@@ -851,76 +818,75 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       .audit-section {
         break-inside: avoid;
         page-break-inside: avoid;
-      }
-      
-      /* Esconder header grande nas páginas após a primeira */
-      .header-bg {
-        page-break-after: avoid;
+        margin-bottom: 15mm; /* Espaço para não sobrepor o rodapé */
       }
     }
   </style>
 </head>
 <body>
-  <!-- AI dev note: Cabeçalho fixo para impressão - aparece em TODAS as páginas -->
+  <!-- AI dev note: Barra verde fixa para impressão - só "Relatório Clínico" no canto direito -->
   <div class="print-header">
     <div class="print-header-content">
-      <div>
-        <div class="print-header-logo">RESPIRA KIDS</div>
-        <div class="print-header-subtitle">Fisioterapia Pediátrica</div>
-      </div>
-      <div class="print-header-subtitle">Relatório Clínico</div>
+      <span class="print-header-text">Relatório Clínico</span>
     </div>
   </div>
   
-  <!-- Rodapé fixo para impressão -->
+  <!-- Rodapé fixo para impressão - apenas o site -->
   <div class="print-footer">
-    Respira Kids - Fisioterapia Respiratória e Motora Pediátrica | www.respirakids.com.br
+    www.respirakids.com.br
   </div>
 
   <div class="page">
+    <!-- Imagem de fundo do cabeçalho (logo Respira Kids) -->
     <div class="header-bg"></div>
     
-    <div class="header">
-      <h1 class="title">Relatório Clínico</h1>
-      <p class="subtitle">Fisioterapia Pediátrica</p>
-    </div>
-    
-    <div class="patient-info">
-      <p><strong>Paciente:</strong> ${patientName}</p>
-      ${patientDOB ? `<p><strong>Data de Nascimento:</strong> ${patientDOB}</p>` : ''}
-      ${responsavelNome ? `<p><strong>Responsável:</strong> ${responsavelNome}</p>` : ''}
-      ${patientData?.pediatraNome ? `<p><strong>Pediatra:</strong> ${patientData.pediatraNome}${patientData.pediatraCRM ? ` (CRM: ${patientData.pediatraCRM})` : ''}</p>` : ''}
-      <p><strong>Período do Relatório:</strong> ${periodoStr}</p>
-    </div>
-    
-    <div class="content-section">
-      ${contentHTML}
-    </div>
-    
-    ${
-      sortedEvols.length > 0
-        ? `
-    <div class="dates-section">
-      <h3>Datas dos Atendimentos Realizados</h3>
-      ${datesHTML}
-    </div>
-    `
-        : ''
-    }
-    
-    <div class="signature-section">
-      <img src="${signatureUrl}" alt="Assinatura ${professional.name}" class="signature-image" />
-      <div class="signature-info">
-        <div class="signature-name">${professional.name}</div>
-        <div class="signature-title">${professional.title}${professional.crefito ? ` - ${professional.crefito}` : ''}</div>
+    <div class="main-content">
+      <div class="header">
+        <h1 class="title">Relatório Clínico</h1>
+        <p class="subtitle">Fisioterapia Pediátrica</p>
       </div>
-      <div class="location-date">
-        Brasília, ${hoje}
+      
+      <div class="patient-info">
+        <p><strong>Paciente:</strong> ${patientName}</p>
+        ${patientDOB ? `<p><strong>Data de Nascimento:</strong> ${patientDOB}</p>` : ''}
+        ${responsavelNome ? `<p><strong>Responsável:</strong> ${responsavelNome}</p>` : ''}
+        ${patientData?.pediatraNome ? `<p><strong>Pediatra:</strong> ${patientData.pediatraNome}${patientData.pediatraCRM ? ` (CRM: ${patientData.pediatraCRM})` : ''}</p>` : ''}
+        <p><strong>Período do Relatório:</strong> ${periodoStr}</p>
       </div>
-    </div>
-    
-    <div class="audit-section">
-      Documento gerado por ${generatedBy || 'Sistema'} em ${geradoEm}
+      
+      <div class="content-section">
+        ${contentHTML}
+      </div>
+      
+      ${
+        sortedEvols.length > 0
+          ? `
+      <div class="dates-section">
+        <h3>Datas dos Atendimentos Realizados</h3>
+        ${datesHTML}
+      </div>
+      `
+          : ''
+      }
+      
+      <div class="signature-section">
+        <img src="${signatureUrl}" alt="Assinatura ${professional.name}" class="signature-image" />
+        <div class="signature-info">
+          <div class="signature-name">${professional.name}</div>
+          <div class="signature-title">${professional.title}${professional.crefito ? ` - ${professional.crefito}` : ''}</div>
+        </div>
+        <div class="location-date">
+          Brasília, ${hoje}
+        </div>
+      </div>
+      
+      <div class="audit-section">
+        Documento gerado por ${generatedBy || 'Sistema'} em ${geradoEm}
+      </div>
+      
+      <div class="page-footer">
+        www.respirakids.com.br
+      </div>
     </div>
   </div>
 </body>
