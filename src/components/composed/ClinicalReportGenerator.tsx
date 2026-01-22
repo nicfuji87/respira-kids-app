@@ -17,6 +17,7 @@ import {
   PenLine,
   ArrowLeft,
   CheckCircle,
+  Trash2,
 } from 'lucide-react';
 import {
   Card,
@@ -174,6 +175,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       | 'profissional'
       | 'secretaria'
       | null;
+    const isAdmin = userRole === 'admin';
     const canGenerateReports =
       userRole === 'admin' || userRole === 'secretaria';
 
@@ -1358,6 +1360,50 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       }
     };
 
+    // AI dev note: Função para excluir relatório - APENAS ADMIN pode executar
+    const handleDeleteReport = async (reportId: string) => {
+      if (!isAdmin) {
+        toast({
+          title: 'Acesso negado',
+          description: 'Apenas administradores podem excluir relatórios',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!window.confirm('Tem certeza que deseja excluir este relatório?')) {
+        return;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('relatorios_medicos')
+          .update({ ativo: false }) // Soft delete
+          .eq('id', reportId);
+
+        if (error) {
+          console.error('Erro ao excluir relatório:', error);
+          throw new Error('Erro ao excluir relatório');
+        }
+
+        toast({
+          title: 'Relatório excluído',
+          description: 'O relatório foi removido com sucesso',
+        });
+
+        // Recarregar lista
+        await loadSavedReports();
+      } catch (err) {
+        console.error('Erro ao excluir relatório:', err);
+        toast({
+          title: 'Erro',
+          description:
+            err instanceof Error ? err.message : 'Erro ao excluir relatório',
+          variant: 'destructive',
+        });
+      }
+    };
+
     return (
       <>
         <Card className={cn('w-full', className)}>
@@ -1487,6 +1533,16 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                             <Send className="h-4 w-4 mr-1" />
                             Enviar
                           </Button>
+                          {/* AI dev note: Botão de excluir - APENAS para admins */}
+                          {isAdmin && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteReport(report.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>
