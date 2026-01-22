@@ -123,12 +123,18 @@ export const LancamentoResponsavelManager =
             (s: {
               id: string;
               pessoa_id: string;
-              pessoa: { nome: string };
+              percentual_divisao: number | string;
+              pessoa: { nome: string } | { nome: string }[];
             }) => ({
               id: s.id,
               pessoa_id: s.pessoa_id,
-              percentual_divisao: parseFloat(s.percentual_divisao),
-              nome: s.pessoa?.nome || 'Sócio',
+              percentual_divisao:
+                typeof s.percentual_divisao === 'string'
+                  ? parseFloat(s.percentual_divisao)
+                  : s.percentual_divisao,
+              nome: Array.isArray(s.pessoa)
+                ? s.pessoa[0]?.nome || 'Sócio'
+                : s.pessoa?.nome || 'Sócio',
             })
           );
           setSocios(sociosList);
@@ -222,7 +228,33 @@ export const LancamentoResponsavelManager =
         const { data, error } = await query;
 
         if (error) throw error;
-        setLancamentos(data || []);
+
+        // Transform data to match Lancamento interface
+        const transformedData: Lancamento[] = (data || []).map(
+          (item: {
+            id: string;
+            tipo_lancamento: 'despesa' | 'receita';
+            data_emissao: string;
+            data_competencia: string;
+            descricao: string;
+            valor_total: number;
+            eh_divisao_socios: boolean;
+            pessoa_responsavel_id: string | null;
+            status_lancamento: string;
+            categoria: { nome: string } | { nome: string }[] | null;
+            pessoa_responsavel: { nome: string } | { nome: string }[] | null;
+          }) => ({
+            ...item,
+            categoria: Array.isArray(item.categoria)
+              ? item.categoria[0] || null
+              : item.categoria,
+            pessoa_responsavel: Array.isArray(item.pessoa_responsavel)
+              ? item.pessoa_responsavel[0] || null
+              : item.pessoa_responsavel,
+          })
+        );
+
+        setLancamentos(transformedData);
         setSelectedIds(new Set()); // Limpa seleção ao recarregar
       } catch (error) {
         console.error('Erro ao carregar lançamentos:', error);

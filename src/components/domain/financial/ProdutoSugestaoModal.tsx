@@ -78,7 +78,7 @@ export const ProdutoSugestaoModal = React.memo<ProdutoSugestaoModalProps>(
     const [novaCategoria, setNovaCategoria] = React.useState<string | null>(
       null
     );
-    const [novoPreco, setNovoPreco] = React.useState(0);
+    const [novoPreco, setNovoPreco] = React.useState<number | null>(0);
     const [isCreating, setIsCreating] = React.useState(false);
 
     // Buscar sugestões ao abrir

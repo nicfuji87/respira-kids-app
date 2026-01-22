@@ -106,7 +106,7 @@ export const ProdutoFornecedoresPanel =
       const [showAddModal, setShowAddModal] = React.useState(false);
       const [selectedFornecedor, setSelectedFornecedor] =
         React.useState<string>('');
-      const [precoInicial, setPrecoInicial] = React.useState<number>(0);
+      const [precoInicial, setPrecoInicial] = React.useState<number | null>(0);
       const [isAdding, setIsAdding] = React.useState(false);
 
       // Dialog de confirmar exclusão
