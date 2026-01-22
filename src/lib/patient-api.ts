@@ -757,6 +757,9 @@ export async function fetchPatientCompiledHistory(patientId: string): Promise<{
  * Buscar histórico do paciente por ID
  * Retorna o histórico mais recente gerado automaticamente ou manualmente
  */
+// AI dev note: Busca histórico do paciente da tabela relatorios_medicos (NÃO relatorio_evolucao)
+// relatorio_evolucao é para evoluções de consultas individuais
+// relatorios_medicos é para relatórios/históricos compilados do paciente
 export async function fetchPatientHistory(patientId: string): Promise<{
   history: string | null;
   lastGenerated: string | null;
@@ -775,46 +778,16 @@ export async function fetchPatientHistory(patientId: string): Promise<{
       return { history: null, lastGenerated: null, isAiGenerated: null };
     }
 
-    // Buscar histórico mais recente por paciente
-    // AI dev note: Abordagem robusta com duas queries para evitar erro 406 de join mal formado
-
-    // Primeiro, buscar agendamentos do paciente
-    const { data: agendamentos, error: agendamentosError } = await supabase
-      .from('agendamentos')
-      .select('id')
-      .eq('paciente_id', patientId);
-
-    if (agendamentosError) {
-      console.error('Erro ao buscar agendamentos:', agendamentosError);
-      return { history: null, lastGenerated: null, isAiGenerated: null };
-    }
-
-    if (!agendamentos || agendamentos.length === 0) {
-      return { history: null, lastGenerated: null, isAiGenerated: null };
-    }
-
-    const agendamentoIds = agendamentos.map((a) => a.id);
-
-    // Segundo, buscar histórico usando os IDs dos agendamentos
-    // AI dev note: Fallback robusto para tratar erro 406 de RLS complexa
-    let data, error;
-
-    try {
-      const result = await supabase
-        .from('relatorio_evolucao')
-        .select('conteudo, created_at, transcricao')
-        .eq('tipo_relatorio_id', tipoData.id)
-        .in('id_agendamento', agendamentoIds)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(); // Use maybeSingle para evitar erro quando vazio
-
-      data = result.data;
-      error = result.error;
-    } catch (fetchError) {
-      console.warn('⚠️ Erro ao buscar histórico (não crítico):', fetchError);
-      return { history: null, lastGenerated: null, isAiGenerated: null };
-    }
+    // AI dev note: Buscar histórico diretamente da tabela relatorios_medicos pelo id_pessoa
+    const { data, error } = await supabase
+      .from('relatorios_medicos')
+      .select('conteudo, created_at, transcricao')
+      .eq('id_pessoa', patientId)
+      .eq('tipo_relatorio_id', tipoData.id)
+      .eq('ativo', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
       console.warn(
@@ -827,7 +800,7 @@ export async function fetchPatientHistory(patientId: string): Promise<{
     return {
       history: data?.conteudo || null,
       lastGenerated: data?.created_at || null,
-      isAiGenerated: data?.transcricao || false, // transcricao indica se foi gerado por IA
+      isAiGenerated: data?.transcricao || false,
     };
   } catch (err) {
     console.error('Erro ao buscar histórico do paciente:', err);
@@ -838,6 +811,7 @@ export async function fetchPatientHistory(patientId: string): Promise<{
 /**
  * Salvar histórico do paciente manualmente
  * Usado quando o admin edita o histórico com IA desligada
+ * AI dev note: Salva na tabela relatorios_medicos (NÃO relatorio_evolucao)
  */
 export async function savePatientHistory(
   patientId: string,
@@ -871,63 +845,29 @@ export async function savePatientHistory(
       return { success: false, error: 'Erro ao identificar tipo de relatório' };
     }
 
-    // Buscar agendamentos do paciente
-    const { data: agendamentos, error: agendamentosError } = await supabase
-      .from('agendamentos')
+    // AI dev note: Buscar histórico existente diretamente em relatorios_medicos
+    const { data: existingHistory, error: existingError } = await supabase
+      .from('relatorios_medicos')
       .select('id')
-      .eq('paciente_id', patientId)
-      .order('created_at', { ascending: false });
+      .eq('id_pessoa', patientId)
+      .eq('tipo_relatorio_id', tipoData.id)
+      .eq('ativo', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (agendamentosError || !agendamentos || agendamentos.length === 0) {
-      console.error(
-        'Erro ao buscar agendamentos do paciente:',
-        agendamentosError
-      );
-      return {
-        success: false,
-        error: 'Paciente deve ter pelo menos um agendamento',
-      };
-    }
-
-    const agendamentoIds = agendamentos.map((a) => a.id);
-
-    // Buscar histórico existente de forma simplificada
-    // AI dev note: Fallback robusto para tratar erro 406 de RLS complexa
-    let existingHistory = null;
-
-    try {
-      const result = await supabase
-        .from('relatorio_evolucao')
-        .select('id, id_agendamento')
-        .eq('tipo_relatorio_id', tipoData.id)
-        .in('id_agendamento', agendamentoIds)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(); // Usar maybeSingle ao invés de single para evitar erro se não existe
-
-      existingHistory = result.data;
-
-      if (result.error) {
-        console.warn(
-          '⚠️ Erro não crítico ao buscar histórico existente:',
-          result.error
-        );
-      }
-    } catch (fetchError) {
-      console.warn(
-        '⚠️ Erro ao buscar histórico existente (não crítico):',
-        fetchError
-      );
+    if (existingError) {
+      console.warn('⚠️ Erro ao buscar histórico existente:', existingError);
     }
 
     if (existingHistory) {
-      // SEMPRE atualizar o histórico existente
+      // Atualizar o histórico existente
       const { error } = await supabase
-        .from('relatorio_evolucao')
+        .from('relatorios_medicos')
         .update({
-          conteudo: content.substring(0, 1500), // Limitar a 1500 caracteres
+          conteudo: content,
           transcricao: false, // Manual = false
-          atualizado_por: pessoaId, // Usar pessoa_id ao invés de auth_user_id
+          atualizado_por: pessoaId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingHistory.id);
@@ -937,14 +877,15 @@ export async function savePatientHistory(
         return { success: false, error: 'Erro ao atualizar histórico' };
       }
     } else {
-      // Criar novo histórico apenas se não existe nenhum
-      const { error } = await supabase.from('relatorio_evolucao').insert({
-        id_agendamento: agendamentos[0].id, // Usar o agendamento mais recente
+      // Criar novo histórico em relatorios_medicos
+      const { error } = await supabase.from('relatorios_medicos').insert({
+        id_pessoa: patientId,
         tipo_relatorio_id: tipoData.id,
-        conteudo: content.substring(0, 1500), // Limitar a 1500 caracteres
+        conteudo: content,
         transcricao: false, // Manual = false
-        criado_por: pessoaId, // Usar pessoa_id ao invés de auth_user_id
-        atualizado_por: pessoaId, // Usar pessoa_id ao invés de auth_user_id
+        criado_por: pessoaId,
+        atualizado_por: pessoaId,
+        ativo: true,
       });
 
       if (error) {

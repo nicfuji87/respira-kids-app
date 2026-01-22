@@ -1178,9 +1178,14 @@ export const fetchTipoEvolucaoId = async (): Promise<string> => {
   return data.id;
 };
 
+// AI dev note: Busca APENAS evoluções clínicas (tipo='evolucao') para um agendamento
+// NÃO retorna históricos ou relatórios compilados (esses ficam em relatorios_medicos)
 export const fetchRelatoriosEvolucao = async (
   agendamentoId: string
 ): Promise<SupabaseRelatorioEvolucaoCompleto[]> => {
+  // Buscar ID do tipo "evolucao" para filtrar corretamente
+  const tipoEvolucaoId = await fetchTipoEvolucaoId();
+
   const { data, error } = await supabase
     .from('relatorio_evolucao')
     .select(
@@ -1192,6 +1197,7 @@ export const fetchRelatoriosEvolucao = async (
     `
     )
     .eq('id_agendamento', agendamentoId)
+    .eq('tipo_relatorio_id', tipoEvolucaoId) // AI dev note: Filtrar apenas evoluções clínicas
     .order('created_at', { ascending: false });
 
   if (error) {
