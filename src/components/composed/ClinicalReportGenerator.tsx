@@ -470,15 +470,17 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       // Formatar conteúdo da IA com melhor estrutura HTML
       // Processar markdown-like para HTML
       let contentHTML = aiSummary
-        // Remover ** (bold markdown) se existir
-        .replace(/\*\*([^*]+)\*\*/g, '$1')
-        // Títulos das seções (reconhecer variações)
+        // Converter **texto** para <strong>texto</strong> (negrito markdown)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        // Converter ## Título para h3 (markdown headers)
+        .replace(/^##\s*(.+)$/gm, '\n<h3 class="section-subtitle">$1</h3>\n')
+        // Títulos das seções sem ## (reconhecer variações por nome)
         .replace(
           /^(Histórico e Encaminhamento|Evolução e Importância da Fisioterapia Respiratória|Evolução e Importância|Proposta [Tt]erapêutica:?|Proposta [Tt]erapêutica)[\s:]*$/gm,
           '\n<h3 class="section-subtitle">$1</h3>\n'
         )
-        // Listas com "-"
-        .replace(/\n- ([^\n]+)/g, '\n<li>$1</li>')
+        // Listas com "-" ou "•"
+        .replace(/\n[-•]\s*([^\n]+)/g, '\n<li>$1</li>')
         // Agrupar <li> consecutivos em <ul>
         .replace(/(<li>.*<\/li>\n?)+/gs, '<ul>$&</ul>')
         // Parágrafos (duas quebras de linha)
@@ -606,7 +608,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     
     .section-subtitle {
       font-size: 12pt;
-      font-weight: 600;
+      font-weight: 700;
       color: #1a365d;
       margin: 20px 0 10px 0;
       padding-bottom: 4px;
@@ -718,13 +720,13 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       /* Primeira página: sem margem superior (tem o header grande) */
       @page:first {
         size: A4;
-        margin: 0 20mm 18mm 20mm;
+        margin: 0 25mm 20mm 25mm;
       }
       
-      /* Demais páginas: margem superior para a barra verde + espaço */
+      /* Demais páginas: margem superior maior para barra verde + espaço do conteúdo */
       @page {
         size: A4;
-        margin: 18mm 20mm 18mm 20mm;
+        margin: 25mm 25mm 20mm 25mm;
       }
       
       html, body {
@@ -766,7 +768,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         display: flex;
         justify-content: flex-end;
         align-items: center;
-        padding: 0 20mm;
+        padding: 0 25mm;
       }
       
       .print-header-text {
@@ -786,13 +788,13 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         text-align: center;
         font-size: 8pt;
         color: #40C4AA;
-        padding: 3mm 20mm;
+        padding: 3mm 25mm;
         background: white;
       }
       
-      /* Ajustes de conteúdo para impressão */
+      /* Ajustes de conteúdo para impressão - sem padding extra pois @page já define margens */
       .main-content {
-        padding: 8mm 5mm 20mm 5mm;
+        padding: 8mm 0 15mm 0;
         margin-top: 0;
       }
       
