@@ -715,18 +715,11 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       }
     }
     
-    /* AI dev note: CSS para impressão - layout otimizado */
+    /* AI dev note: CSS para impressão - SEM header/footer fixo, apenas margens adequadas */
     @media print {
-      /* Primeira página: sem margem superior (tem o header grande) */
-      @page:first {
-        size: A4;
-        margin: 0 25mm 20mm 25mm;
-      }
-      
-      /* Demais páginas: margem superior maior para barra verde + espaço do conteúdo */
       @page {
         size: A4;
-        margin: 25mm 25mm 20mm 25mm;
+        margin: 15mm 20mm 15mm 20mm;
       }
       
       html, body {
@@ -749,52 +742,18 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         print-color-adjust: exact !important;
       }
       
-      /* Barra verde fixa no topo - aparece em TODAS as páginas */
+      /* AI dev note: DESABILITAR header/footer fixo - causa sobreposição */
       .print-header {
-        display: block;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 10mm;
-        background: linear-gradient(135deg, #40C4AA 0%, #2d9a87 100%);
-        z-index: 1000;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
+        display: none !important;
       }
       
-      .print-header-content {
-        height: 100%;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        padding: 0 25mm;
-      }
-      
-      .print-header-text {
-        color: white;
-        font-size: 10pt;
-        font-weight: 500;
-      }
-      
-      /* Rodapé fixo - aparece em TODAS as páginas */
       .print-footer {
-        display: block;
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 10mm;
-        text-align: center;
-        font-size: 8pt;
-        color: #40C4AA;
-        padding: 3mm 25mm;
-        background: white;
+        display: none !important;
       }
       
-      /* Ajustes de conteúdo para impressão - sem padding extra pois @page já define margens */
+      /* Conteúdo com padding lateral adequado */
       .main-content {
-        padding: 8mm 0 15mm 0;
+        padding: 5mm 15mm 20mm 15mm;
         margin-top: 0;
       }
       
