@@ -1464,6 +1464,16 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                         <div className="text-xl font-bold text-red-600">
                           {formatCurrency(resumoFinanceiro.totalDespesas)}
                         </div>
+                        {resumoFinanceiro.totalReceitas > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {(
+                              (resumoFinanceiro.totalDespesas /
+                                resumoFinanceiro.totalReceitas) *
+                              100
+                            ).toFixed(1)}
+                            % das receitas
+                          </div>
+                        )}
                       </div>
                       <div className="text-center p-3 bg-background rounded-lg border">
                         <div className="text-xs text-green-600 uppercase tracking-wide">
@@ -1505,6 +1515,11 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                             const temComparativo = cat.valorAnterior > 0;
                             const isAumento = cat.variacao > 0;
                             const isReducao = cat.variacao < 0;
+                            const percentualSobreReceita =
+                              resumoFinanceiro.totalReceitas > 0
+                                ? (cat.total / resumoFinanceiro.totalReceitas) *
+                                  100
+                                : 0;
 
                             return (
                               <div
@@ -1523,6 +1538,12 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                                       {formatCurrency(cat.total)}
                                     </span>
                                   </div>
+                                  {resumoFinanceiro.totalReceitas > 0 && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {percentualSobreReceita.toFixed(1)}% das
+                                      receitas
+                                    </div>
+                                  )}
                                   {temComparativo && (
                                     <div className="pt-1 border-t border-muted">
                                       <div className="flex justify-between items-center text-xs">
