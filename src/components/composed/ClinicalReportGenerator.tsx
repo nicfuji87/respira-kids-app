@@ -318,11 +318,13 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       try {
         setIsLoadingEvolutions(true);
 
-        // Buscar todas as evoluções do paciente via view
+        // AI dev note: Buscar apenas consultas FINALIZADAS do paciente
+        // Não incluir canceladas, faltou, reagendado, etc.
         const { data, error: fetchError } = await supabase
           .from('vw_agendamentos_completos')
           .select('id, data_hora, profissional_nome, servico_nome')
           .eq('paciente_id', patientId)
+          .eq('status_consulta_codigo', 'finalizado')
           .order('data_hora', { ascending: false });
 
         if (fetchError) {
