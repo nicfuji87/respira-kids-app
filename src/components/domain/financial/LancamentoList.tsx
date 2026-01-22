@@ -207,6 +207,11 @@ export const LancamentoList = React.memo<LancamentoListProps>(
     // Receitas de agendamentos (igual ao Dashboard)
     const [receitasAgendamentos, setReceitasAgendamentos] = React.useState(0);
     const [isLoadingReceitas, setIsLoadingReceitas] = React.useState(false);
+    // Dados do período anterior para comparação
+    const [categoriasPeriodoAnterior, setCategoriasPeriodoAnterior] =
+      React.useState<Record<string, number>>({});
+    const [isLoadingComparativo, setIsLoadingComparativo] =
+      React.useState(false);
     const { toast } = useToast();
 
     // Carregar categorias (separadas por nível) e fornecedores
@@ -325,6 +330,143 @@ export const LancamentoList = React.memo<LancamentoListProps>(
         }
       },
       []
+    );
+
+    // Calcular período anterior para comparação
+    const getPeriodoAnterior = React.useCallback(
+      (
+        periodo: PeriodoFiltro,
+        dateFrom: string,
+        dateTo: string
+      ): { from: string | null; to: string | null } | null => {
+        const today = new Date();
+
+        switch (periodo) {
+          case 'mes_atual': {
+            const lastMonth = subMonths(today, 1);
+            return {
+              from: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
+              to: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
+            };
+          }
+          case 'mes_anterior': {
+            const twoMonthsAgo = subMonths(today, 2);
+            return {
+              from: format(startOfMonth(twoMonthsAgo), 'yyyy-MM-dd'),
+              to: format(endOfMonth(twoMonthsAgo), 'yyyy-MM-dd'),
+            };
+          }
+          case 'ultimos_3_meses': {
+            const sixMonthsAgo = subMonths(today, 6);
+            const threeMonthsAgo = subMonths(today, 3);
+            return {
+              from: format(startOfMonth(sixMonthsAgo), 'yyyy-MM-dd'),
+              to: format(endOfMonth(threeMonthsAgo), 'yyyy-MM-dd'),
+            };
+          }
+          case 'ano_atual': {
+            const lastYear = subYears(today, 1);
+            return {
+              from: format(startOfYear(lastYear), 'yyyy-MM-dd'),
+              to: format(endOfYear(lastYear), 'yyyy-MM-dd'),
+            };
+          }
+          case 'ano_anterior': {
+            const twoYearsAgo = subYears(today, 2);
+            return {
+              from: format(startOfYear(twoYearsAgo), 'yyyy-MM-dd'),
+              to: format(endOfYear(twoYearsAgo), 'yyyy-MM-dd'),
+            };
+          }
+          case 'personalizado': {
+            if (!dateFrom || !dateTo) return null;
+            const fromDate = new Date(dateFrom);
+            const toDate = new Date(dateTo);
+            const diffDays =
+              Math.ceil(
+                (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)
+              ) + 1;
+            const prevFrom = new Date(fromDate);
+            prevFrom.setDate(prevFrom.getDate() - diffDays);
+            const prevTo = new Date(fromDate);
+            prevTo.setDate(prevTo.getDate() - 1);
+            return {
+              from: format(prevFrom, 'yyyy-MM-dd'),
+              to: format(prevTo, 'yyyy-MM-dd'),
+            };
+          }
+          default:
+            return null;
+        }
+      },
+      []
+    );
+
+    // Buscar dados do período anterior para comparação
+    const loadComparativoPeriodoAnterior = React.useCallback(
+      async (periodo: PeriodoFiltro, dateFrom: string, dateTo: string) => {
+        const periodoAnterior = getPeriodoAnterior(periodo, dateFrom, dateTo);
+        if (!periodoAnterior || !periodoAnterior.from || !periodoAnterior.to) {
+          setCategoriasPeriodoAnterior({});
+          return;
+        }
+
+        try {
+          setIsLoadingComparativo(true);
+
+          const { data, error } = await supabase
+            .from('lancamentos_financeiros')
+            .select(
+              `
+              valor_total,
+              categoria:categoria_contabil_id (
+                id,
+                categoria_pai:categoria_pai_id (
+                  id,
+                  nome
+                )
+              )
+            `
+            )
+            .eq('tipo_lancamento', 'despesa')
+            .gte('data_competencia', periodoAnterior.from)
+            .lte('data_competencia', periodoAnterior.to)
+            .in('status_lancamento', ['validado', 'pago']);
+
+          if (error) {
+            console.error('Erro ao buscar período anterior:', error);
+            setCategoriasPeriodoAnterior({});
+            return;
+          }
+
+          // Agrupar por categoria principal
+          const porCategoria: Record<string, number> = {};
+
+          data?.forEach((l) => {
+            if (l.categoria) {
+              // Handle array or object from Supabase join
+              const catData = Array.isArray(l.categoria)
+                ? l.categoria[0]
+                : l.categoria;
+              const catPai = catData?.categoria_pai || catData;
+              const catId = Array.isArray(catPai) ? catPai[0]?.id : catPai?.id;
+
+              if (catId) {
+                porCategoria[catId] =
+                  (porCategoria[catId] || 0) + (l.valor_total || 0);
+              }
+            }
+          });
+
+          setCategoriasPeriodoAnterior(porCategoria);
+        } catch (error) {
+          console.error('Erro ao buscar período anterior:', error);
+          setCategoriasPeriodoAnterior({});
+        } finally {
+          setIsLoadingComparativo(false);
+        }
+      },
+      [getPeriodoAnterior]
     );
 
     // Função para calcular datas do período selecionado
@@ -545,7 +687,15 @@ export const LancamentoList = React.memo<LancamentoListProps>(
     React.useEffect(() => {
       const dateRange = getDateRangeForPeriod(selectedPeriodo);
       loadReceitasAgendamentos(dateRange.from, dateRange.to);
-    }, [selectedPeriodo, getDateRangeForPeriod, loadReceitasAgendamentos]);
+      loadComparativoPeriodoAnterior(selectedPeriodo, dateFrom, dateTo);
+    }, [
+      selectedPeriodo,
+      dateFrom,
+      dateTo,
+      getDateRangeForPeriod,
+      loadReceitasAgendamentos,
+      loadComparativoPeriodoAnterior,
+    ]);
 
     const handleEdit = (lancamento: Lancamento) => {
       setSelectedLancamento(lancamento);
@@ -745,9 +895,22 @@ export const LancamentoList = React.memo<LancamentoListProps>(
         }
       });
 
-      // Ordenar por valor total
+      // Ordenar por valor total e adicionar comparativo
       const categoriasOrdenadas = Object.entries(porCategoriaPrincipal)
-        .map(([id, data]) => ({ id, ...data }))
+        .map(([id, data]) => {
+          const valorAnterior = categoriasPeriodoAnterior[id] || 0;
+          const variacao = data.total - valorAnterior;
+          const percentualVariacao =
+            valorAnterior > 0 ? (variacao / valorAnterior) * 100 : 0;
+
+          return {
+            id,
+            ...data,
+            valorAnterior,
+            variacao,
+            percentualVariacao,
+          };
+        })
         .sort((a, b) => b.total - a.total);
 
       return {
@@ -756,7 +919,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
         saldo,
         porCategoriaPrincipal: categoriasOrdenadas,
       };
-    }, [lancamentos, receitasAgendamentos]);
+    }, [lancamentos, receitasAgendamentos, categoriasPeriodoAnterior]);
 
     // Formatar moeda
     const formatCurrency = (value: number) => {
@@ -1331,24 +1494,68 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                       <div>
                         <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                           Por Categoria Principal
+                          {isLoadingComparativo && (
+                            <span className="ml-2 text-xs">
+                              (carregando comparativo...)
+                            </span>
+                          )}
                         </h4>
                         <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-6">
-                          {resumoFinanceiro.porCategoriaPrincipal.map((cat) => (
-                            <div
-                              key={cat.id}
-                              className="p-2 bg-background rounded border text-sm"
-                            >
-                              <div className="font-medium truncate">
-                                {cat.nome}
+                          {resumoFinanceiro.porCategoriaPrincipal.map((cat) => {
+                            const temComparativo = cat.valorAnterior > 0;
+                            const isAumento = cat.variacao > 0;
+                            const isReducao = cat.variacao < 0;
+
+                            return (
+                              <div
+                                key={cat.id}
+                                className="p-2 bg-background rounded border text-sm"
+                              >
+                                <div className="font-medium truncate mb-1">
+                                  {cat.nome}
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-muted-foreground">
+                                      {cat.count}x
+                                    </span>
+                                    <span className="font-medium text-foreground">
+                                      {formatCurrency(cat.total)}
+                                    </span>
+                                  </div>
+                                  {temComparativo && (
+                                    <div className="pt-1 border-t border-muted">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <span className="text-muted-foreground">
+                                          Período anterior:
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                          {formatCurrency(cat.valorAnterior)}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-xs mt-0.5">
+                                        <span className="text-muted-foreground">
+                                          Variação:
+                                        </span>
+                                        <span
+                                          className={`font-medium ${
+                                            isAumento
+                                              ? 'text-red-600'
+                                              : isReducao
+                                                ? 'text-green-600'
+                                                : 'text-muted-foreground'
+                                          }`}
+                                        >
+                                          {isAumento ? '+' : ''}
+                                          {cat.percentualVariacao.toFixed(1)}%
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>{cat.count}x</span>
-                                <span className="font-medium text-foreground">
-                                  {formatCurrency(cat.total)}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
