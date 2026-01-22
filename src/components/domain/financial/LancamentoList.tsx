@@ -112,6 +112,12 @@ interface Lancamento {
     id: string;
     nome: string;
     codigo: string;
+    categoria_pai_id?: string | null;
+    categoria_pai?: {
+      id: string;
+      nome: string;
+      codigo: string;
+    } | null;
   } | null;
   contas_pagar?: {
     status_pagamento: string;
@@ -168,9 +174,9 @@ export const LancamentoList = React.memo<LancamentoListProps>(
       React.useState<string>('todas');
     const [selectedOrigem, setSelectedOrigem] = React.useState<string>('todas');
 
-    // Novos filtros
+    // Novos filtros - Padrão: mês atual ordenado por data mais recente
     const [selectedPeriodo, setSelectedPeriodo] =
-      React.useState<PeriodoFiltro>('todos');
+      React.useState<PeriodoFiltro>('mes_atual');
     const [dateFrom, setDateFrom] = React.useState<string>('');
     const [dateTo, setDateTo] = React.useState<string>('');
     const [selectedFornecedor, setSelectedFornecedor] =
@@ -183,28 +189,62 @@ export const LancamentoList = React.memo<LancamentoListProps>(
     // Controle de filtros avançados visíveis
     const [showAdvancedFilters, setShowAdvancedFilters] = React.useState(false);
 
+    // Filtro por categoria principal (nível 1) e grupo/subcategoria (nível 2)
+    const [selectedCategoriaPrincipal, setSelectedCategoriaPrincipal] =
+      React.useState<string>('todas');
+
     const [showForm, setShowForm] = React.useState(false);
     const [selectedLancamento, setSelectedLancamento] =
       React.useState<Lancamento | null>(null);
     const [showDetails, setShowDetails] = React.useState(false);
-    const [categorias, setCategorias] = React.useState<
-      { id: string; nome: string }[]
+    const [categoriasPrincipais, setCategoriasPrincipais] = React.useState<
+      { id: string; nome: string; codigo: string }[]
+    >([]);
+    const [subcategorias, setSubcategorias] = React.useState<
+      { id: string; nome: string; codigo: string; categoria_pai_id: string }[]
     >([]);
     const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([]);
     const { toast } = useToast();
 
-    // Carregar categorias e fornecedores
+    // Carregar categorias (separadas por nível) e fornecedores
     React.useEffect(() => {
       const loadCategorias = async () => {
         try {
           const { data, error } = await supabase
             .from('categorias_contabeis')
-            .select('id, nome')
+            .select('id, nome, codigo, nivel, categoria_pai_id')
             .eq('ativo', true)
             .order('nome');
 
           if (error) throw error;
-          setCategorias(data || []);
+
+          // Separar categorias principais (nível 1) e subcategorias/grupos (nível 2)
+          const principais = (data || [])
+            .filter((c: { nivel: number }) => c.nivel === 1)
+            .map((c: { id: string; nome: string; codigo: string }) => ({
+              id: c.id,
+              nome: c.nome,
+              codigo: c.codigo,
+            }));
+
+          const subs = (data || [])
+            .filter((c: { nivel: number }) => c.nivel === 2)
+            .map(
+              (c: {
+                id: string;
+                nome: string;
+                codigo: string;
+                categoria_pai_id: string;
+              }) => ({
+                id: c.id,
+                nome: c.nome,
+                codigo: c.codigo,
+                categoria_pai_id: c.categoria_pai_id,
+              })
+            );
+
+          setCategoriasPrincipais(principais);
+          setSubcategorias(subs);
         } catch (error) {
           console.error('Erro ao carregar categorias:', error);
         }
@@ -291,8 +331,15 @@ export const LancamentoList = React.memo<LancamentoListProps>(
               nome_fantasia
             ),
             categoria:categoria_contabil_id (
+              id,
               nome,
-              codigo
+              codigo,
+              categoria_pai_id,
+              categoria_pai:categoria_pai_id (
+                id,
+                nome,
+                codigo
+              )
             ),
             contas_pagar (
               status_pagamento,
@@ -323,9 +370,24 @@ export const LancamentoList = React.memo<LancamentoListProps>(
           query = query.eq('status_lancamento', selectedStatus);
         }
 
-        // Filtro por categoria
+        // Filtro por categoria (subcategoria/grupo)
         if (selectedCategoria !== 'todas') {
           query = query.eq('categoria_contabil_id', selectedCategoria);
+        }
+
+        // Filtro por categoria principal - filtra subcategorias que pertencem a ela
+        if (
+          selectedCategoriaPrincipal !== 'todas' &&
+          selectedCategoria === 'todas'
+        ) {
+          // Buscar todas as subcategorias desta categoria principal
+          const subcatsIds = subcategorias
+            .filter((s) => s.categoria_pai_id === selectedCategoriaPrincipal)
+            .map((s) => s.id);
+
+          if (subcatsIds.length > 0) {
+            query = query.in('categoria_contabil_id', subcatsIds);
+          }
         }
 
         // Filtro por origem
@@ -405,6 +467,8 @@ export const LancamentoList = React.memo<LancamentoListProps>(
       tipoAtivo,
       selectedStatus,
       selectedCategoria,
+      selectedCategoriaPrincipal,
+      subcategorias,
       selectedOrigem,
       selectedFornecedor,
       selectedPeriodo,
@@ -484,27 +548,31 @@ export const LancamentoList = React.memo<LancamentoListProps>(
       );
     };
 
-    // Contar filtros ativos
+    // Contar filtros ativos (excluindo período padrão)
     const countActiveFilters = () => {
       let count = 0;
       if (tipoAtivo !== 'todos') count++;
       if (selectedStatus !== 'todos') count++;
       if (selectedCategoria !== 'todas') count++;
+      if (selectedCategoriaPrincipal !== 'todas') count++;
       if (selectedOrigem !== 'todas') count++;
       if (selectedFornecedor !== 'todos') count++;
-      if (selectedPeriodo !== 'todos') count++;
+      // Não contar período padrão (mes_atual) como filtro ativo
+      if (selectedPeriodo !== 'todos' && selectedPeriodo !== 'mes_atual')
+        count++;
       if (searchTerm) count++;
       return count;
     };
 
-    // Limpar todos os filtros
+    // Limpar todos os filtros (volta para padrão: mês atual)
     const clearAllFilters = () => {
       setTipoAtivo('todos');
       setSelectedStatus('todos');
       setSelectedCategoria('todas');
+      setSelectedCategoriaPrincipal('todas');
       setSelectedOrigem('todas');
       setSelectedFornecedor('todos');
-      setSelectedPeriodo('todos');
+      setSelectedPeriodo('mes_atual'); // Padrão é mês atual
       setDateFrom('');
       setDateTo('');
       setSearchTerm('');
@@ -574,6 +642,75 @@ export const LancamentoList = React.memo<LancamentoListProps>(
 
     // Calcular resumo dos filtros
     const activeFilters = countActiveFilters();
+
+    // Calcular totais e estatísticas
+    const resumoFinanceiro = React.useMemo(() => {
+      const totalDespesas = lancamentos
+        .filter((l) => l.tipo_lancamento === 'despesa')
+        .reduce((sum, l) => sum + l.valor_total, 0);
+
+      const totalReceitas = lancamentos
+        .filter((l) => l.tipo_lancamento === 'receita')
+        .reduce((sum, l) => sum + l.valor_total, 0);
+
+      const saldo = totalReceitas - totalDespesas;
+
+      // Agrupar por categoria principal
+      const porCategoriaPrincipal: Record<
+        string,
+        { nome: string; total: number; count: number }
+      > = {};
+
+      lancamentos.forEach((l) => {
+        if (l.categoria) {
+          // Se tem categoria pai (é subcategoria), usar a pai
+          // Se não tem pai (é categoria principal), usar ela mesma
+          const catPai = l.categoria.categoria_pai || l.categoria;
+          const catId = catPai.id;
+          const catNome = catPai.nome;
+
+          if (!porCategoriaPrincipal[catId]) {
+            porCategoriaPrincipal[catId] = {
+              nome: catNome,
+              total: 0,
+              count: 0,
+            };
+          }
+          porCategoriaPrincipal[catId].total += l.valor_total;
+          porCategoriaPrincipal[catId].count += 1;
+        }
+      });
+
+      // Ordenar por valor total
+      const categoriasOrdenadas = Object.entries(porCategoriaPrincipal)
+        .map(([id, data]) => ({ id, ...data }))
+        .sort((a, b) => b.total - a.total);
+
+      return {
+        totalDespesas,
+        totalReceitas,
+        saldo,
+        porCategoriaPrincipal: categoriasOrdenadas,
+      };
+    }, [lancamentos]);
+
+    // Formatar moeda
+    const formatCurrency = (value: number) => {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(value);
+    };
+
+    // Subcategorias filtradas pela categoria principal selecionada
+    const subcategoriasFiltradas = React.useMemo(() => {
+      if (selectedCategoriaPrincipal === 'todas') {
+        return subcategorias;
+      }
+      return subcategorias.filter(
+        (s) => s.categoria_pai_id === selectedCategoriaPrincipal
+      );
+    }, [subcategorias, selectedCategoriaPrincipal]);
 
     const getPaymentStatus = (contas: Lancamento['contas_pagar']) => {
       if (!contas || contas.length === 0) return null;
@@ -947,7 +1084,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                       )}
                     </div>
 
-                    <div className="grid gap-4 md:grid-cols-4">
+                    <div className="grid gap-4 md:grid-cols-3">
                       {/* Status */}
                       <div className="space-y-2">
                         <Label className="text-sm">Status</Label>
@@ -971,12 +1108,18 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                         </Select>
                       </div>
 
-                      {/* Categoria */}
+                      {/* Categoria Principal (Nível 1) */}
                       <div className="space-y-2">
                         <Label className="text-sm">Categoria</Label>
                         <Select
-                          value={selectedCategoria}
-                          onValueChange={setSelectedCategoria}
+                          value={selectedCategoriaPrincipal}
+                          onValueChange={(value) => {
+                            setSelectedCategoriaPrincipal(value);
+                            // Limpar subcategoria ao mudar categoria principal
+                            if (value !== 'todas') {
+                              setSelectedCategoria('todas');
+                            }
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Categoria" />
@@ -985,7 +1128,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                             <SelectItem value="todas">
                               Todas as categorias
                             </SelectItem>
-                            {categorias.map((cat) => (
+                            {categoriasPrincipais.map((cat) => (
                               <SelectItem key={cat.id} value={cat.id}>
                                 {cat.nome}
                               </SelectItem>
@@ -994,6 +1137,31 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                         </Select>
                       </div>
 
+                      {/* Grupo/Subcategoria (Nível 2) */}
+                      <div className="space-y-2">
+                        <Label className="text-sm">Grupo</Label>
+                        <Select
+                          value={selectedCategoria}
+                          onValueChange={setSelectedCategoria}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Grupo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todas">
+                              Todos os grupos
+                            </SelectItem>
+                            {subcategoriasFiltradas.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
+                                {cat.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
                       {/* Fornecedor */}
                       <div className="space-y-2">
                         <Label className="text-sm">Fornecedor</Label>
@@ -1049,6 +1217,76 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                   </div>
                 )}
 
+                {/* Resumo Financeiro */}
+                {!isLoading && lancamentos.length > 0 && (
+                  <div className="p-4 bg-muted/30 rounded-lg border space-y-4">
+                    {/* Linha de totais */}
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div className="text-center p-3 bg-background rounded-lg border">
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                          Lançamentos
+                        </div>
+                        <div className="text-2xl font-bold">
+                          {lancamentos.length}
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-background rounded-lg border">
+                        <div className="text-xs text-red-600 uppercase tracking-wide">
+                          Total Despesas
+                        </div>
+                        <div className="text-xl font-bold text-red-600">
+                          {formatCurrency(resumoFinanceiro.totalDespesas)}
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-background rounded-lg border">
+                        <div className="text-xs text-green-600 uppercase tracking-wide">
+                          Total Receitas
+                        </div>
+                        <div className="text-xl font-bold text-green-600">
+                          {formatCurrency(resumoFinanceiro.totalReceitas)}
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-background rounded-lg border">
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                          Saldo
+                        </div>
+                        <div
+                          className={`text-xl font-bold ${resumoFinanceiro.saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                        >
+                          {formatCurrency(resumoFinanceiro.saldo)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Valores por Categoria Principal */}
+                    {resumoFinanceiro.porCategoriaPrincipal.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                          Por Categoria Principal
+                        </h4>
+                        <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-6">
+                          {resumoFinanceiro.porCategoriaPrincipal.map((cat) => (
+                            <div
+                              key={cat.id}
+                              className="p-2 bg-background rounded border text-sm"
+                            >
+                              <div className="font-medium truncate">
+                                {cat.nome}
+                              </div>
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>{cat.count}x</span>
+                                <span className="font-medium text-foreground">
+                                  {formatCurrency(cat.total)}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Resumo dos resultados e filtros ativos */}
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <div className="flex items-center gap-2">
@@ -1084,12 +1322,30 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                         </button>
                       </Badge>
                     )}
+                    {selectedCategoriaPrincipal !== 'todas' && (
+                      <Badge variant="outline" className="gap-1">
+                        Categoria:{' '}
+                        {
+                          categoriasPrincipais.find(
+                            (c) => c.id === selectedCategoriaPrincipal
+                          )?.nome
+                        }
+                        <button
+                          onClick={() => setSelectedCategoriaPrincipal('todas')}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )}
                     {selectedCategoria !== 'todas' && (
                       <Badge variant="outline" className="gap-1">
-                        {
-                          categorias.find((c) => c.id === selectedCategoria)
-                            ?.nome
-                        }
+                        Grupo:{' '}
+                        {subcategorias.find((c) => c.id === selectedCategoria)
+                          ?.nome ||
+                          categoriasPrincipais.find(
+                            (c) => c.id === selectedCategoria
+                          )?.nome}
                         <button
                           onClick={() => setSelectedCategoria('todas')}
                           className="ml-1 hover:text-destructive"
@@ -1213,7 +1469,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                           {getSortIcon('fornecedor')}
                         </div>
                       </TableHead>
-                      <TableHead>Categoria</TableHead>
+                      <TableHead>Categoria / Grupo</TableHead>
                       <TableHead
                         className="text-right cursor-pointer hover:bg-muted/50 select-none"
                         onClick={() => toggleSort('valor_total')}
@@ -1337,9 +1593,29 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                         </TableCell>
                         <TableCell>
                           {lancamento.categoria ? (
-                            <Badge variant="outline" className="text-xs">
-                              {lancamento.categoria.nome}
-                            </Badge>
+                            <div className="flex flex-col gap-1">
+                              {/* Categoria Principal */}
+                              {lancamento.categoria.categoria_pai ? (
+                                <>
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs w-fit"
+                                  >
+                                    {lancamento.categoria.categoria_pai.nome}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground">
+                                    {lancamento.categoria.nome}
+                                  </span>
+                                </>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs w-fit"
+                                >
+                                  {lancamento.categoria.nome}
+                                </Badge>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-sm text-muted-foreground">
                               -
@@ -1645,12 +1921,27 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                           </div>
                         )}
                         {selectedLancamento.categoria && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                              Categoria:
-                            </span>
-                            <span>{selectedLancamento.categoria.nome}</span>
-                          </div>
+                          <>
+                            {selectedLancamento.categoria.categoria_pai && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Categoria:
+                                </span>
+                                <span>
+                                  {
+                                    selectedLancamento.categoria.categoria_pai
+                                      .nome
+                                  }
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Grupo:
+                              </span>
+                              <span>{selectedLancamento.categoria.nome}</span>
+                            </div>
+                          </>
                         )}
                         {selectedLancamento.observacoes && (
                           <div>
