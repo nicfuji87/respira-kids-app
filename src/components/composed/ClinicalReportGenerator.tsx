@@ -706,10 +706,15 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       padding-top: 8px;
     }
     
+    /* AI dev note: CSS para impressão com margens adequadas e branding em todas as páginas */
     @media print {
       @page {
         size: A4;
-        margin: 0;
+        margin: 15mm 15mm 20mm 15mm;
+      }
+      
+      @page:first {
+        margin-top: 0;
       }
       
       body {
@@ -721,12 +726,78 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       
       .page {
         width: 100%;
-        min-height: 100vh;
+        min-height: auto;
+        padding: 0;
+        margin: 0;
       }
       
+      /* Primeira página mantém o header com imagem */
       .header-bg {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+        position: absolute;
+        height: 40mm;
+      }
+      
+      /* Borda superior em todas as páginas para branding */
+      .page::before {
+        content: '';
+        display: block;
+        height: 3px;
+        background: linear-gradient(90deg, #40C4AA 0%, #1a365d 100%);
+        margin-bottom: 10mm;
+        break-after: avoid;
+      }
+      
+      /* Rodapé com nome da clínica em todas as páginas */
+      .page::after {
+        content: 'Respira Kids - Fisioterapia Pediátrica';
+        display: block;
+        text-align: center;
+        font-size: 8pt;
+        color: #40C4AA;
+        padding-top: 10mm;
+        margin-top: auto;
+        break-before: avoid;
+      }
+      
+      /* Evitar quebras ruins */
+      .patient-info {
+        break-inside: avoid;
+      }
+      
+      .section-subtitle {
+        break-after: avoid;
+      }
+      
+      .signature-section {
+        break-inside: avoid;
+      }
+      
+      .dates-section {
+        break-inside: avoid;
+      }
+      
+      .audit-section {
+        break-inside: avoid;
+      }
+      
+      /* Ajustar conteúdo para não colar nas bordas */
+      .content-section {
+        padding-right: 5mm;
+      }
+      
+      /* Esconder a borda decorativa na primeira página (já tem o header) */
+      .page:first-of-type::before {
+        display: none;
+      }
+    }
+    
+    /* Estilos para visualização em tela também */
+    @media screen {
+      .page {
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
       }
     }
   </style>
