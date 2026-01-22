@@ -715,9 +715,16 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     
     /* AI dev note: CSS para impressão - layout otimizado */
     @media print {
+      /* Primeira página: sem margem superior (tem o header grande) */
+      @page:first {
+        size: A4;
+        margin: 0 20mm 18mm 20mm;
+      }
+      
+      /* Demais páginas: margem superior para a barra verde + espaço */
       @page {
         size: A4;
-        margin: 0;
+        margin: 18mm 20mm 18mm 20mm;
       }
       
       html, body {
@@ -775,17 +782,17 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         bottom: 0;
         left: 0;
         right: 0;
-        height: 8mm;
+        height: 10mm;
         text-align: center;
         font-size: 8pt;
         color: #40C4AA;
-        padding: 2mm 20mm;
+        padding: 3mm 20mm;
         background: white;
       }
       
       /* Ajustes de conteúdo para impressão */
       .main-content {
-        padding: 8mm 20mm 15mm 20mm;
+        padding: 8mm 5mm 20mm 5mm;
         margin-top: 0;
       }
       
@@ -808,6 +815,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       .signature-section {
         break-inside: avoid;
         page-break-inside: avoid;
+        margin-bottom: 10mm;
       }
       
       .dates-section {
@@ -818,7 +826,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       .audit-section {
         break-inside: avoid;
         page-break-inside: avoid;
-        margin-bottom: 15mm; /* Espaço para não sobrepor o rodapé */
+        margin-bottom: 5mm;
       }
     }
   </style>
@@ -850,7 +858,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
         <p><strong>Paciente:</strong> ${patientName}</p>
         ${patientDOB ? `<p><strong>Data de Nascimento:</strong> ${patientDOB}</p>` : ''}
         ${responsavelNome ? `<p><strong>Responsável:</strong> ${responsavelNome}</p>` : ''}
-        ${patientData?.pediatraNome ? `<p><strong>Pediatra:</strong> ${patientData.pediatraNome}${patientData.pediatraCRM ? ` (CRM: ${patientData.pediatraCRM})` : ''}</p>` : ''}
+        ${patientData?.pediatraNome ? `<p><strong>Pediatra:</strong> ${patientData.pediatraNome}${patientData.pediatraCRM && patientData.pediatraCRM !== 'Não informado' ? ` (CRM: ${patientData.pediatraCRM})` : ''}</p>` : ''}
         <p><strong>Período do Relatório:</strong> ${periodoStr}</p>
       </div>
       
