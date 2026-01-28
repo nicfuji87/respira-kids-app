@@ -242,18 +242,16 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
           .eq('ativo', true);
 
         if (sociosData) {
-          const sociosList = sociosData.map(
-            (s: {
-              id: string;
-              pessoa_id: string;
-              pessoa: { nome: string };
-            }) => ({
+          const sociosList = sociosData.map((s) => {
+            // Handle pessoa as potentially array from Supabase join
+            const pessoaData = Array.isArray(s.pessoa) ? s.pessoa[0] : s.pessoa;
+            return {
               id: s.id,
               pessoa_id: s.pessoa_id,
               percentual_divisao: parseFloat(s.percentual_divisao),
-              nome: s.pessoa?.nome || 'Sócio',
-            })
-          );
+              nome: pessoaData?.nome || 'Sócio',
+            };
+          });
           setSocios(sociosList);
         }
 
@@ -619,19 +617,16 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
         const contasPendentesFiltradas =
           selectedConta === 'consolidado'
             ? contasPendentes
-            : contasPendentes?.filter(
-                (c: {
-                  lancamento?: {
-                    eh_divisao_socios?: boolean;
-                    pessoa_responsavel_id?: string | null;
-                  };
-                }) => {
-                  const lancamento = c.lancamento;
-                  if (!lancamento) return false;
-                  if (lancamento.eh_divisao_socios) return true; // Conta para todos se é dividido
-                  return lancamento.pessoa_responsavel_id === selectedConta;
-                }
-              );
+            : contasPendentes?.filter((c) => {
+                // Handle lancamento as potentially array from Supabase join
+                const lancamentoRaw = c.lancamento;
+                const lancamento = Array.isArray(lancamentoRaw)
+                  ? lancamentoRaw[0]
+                  : lancamentoRaw;
+                if (!lancamento) return false;
+                if (lancamento.eh_divisao_socios) return true; // Conta para todos se é dividido
+                return lancamento.pessoa_responsavel_id === selectedConta;
+              });
 
         // Calcular contas vencidas e a vencer
         const contasVencidas =
@@ -755,17 +750,7 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
 
         // Agrupar por categoria com valores ajustados
         const categoriasMap = new Map<string, { valor: number; cor: string }>();
-        (
-          despesasCategoria as
-            | {
-                id: string;
-                valor_total: number;
-                eh_divisao_socios: boolean;
-                pessoa_responsavel_id: string | null;
-                categoria: { nome: string; cor: string } | null;
-              }[]
-            | null
-        )?.forEach((d) => {
+        despesasCategoria?.forEach((d) => {
           // Create a LancamentoFinanceiro-like object for calcularValorPorConta
           const lancamentoLike = {
             valor_total: d.valor_total,

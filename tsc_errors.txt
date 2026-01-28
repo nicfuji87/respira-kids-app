@@ -1,0 +1,7 @@
+﻿src/components/domain/financial/FinancialDashboard.tsx(246,13): error TS2345: Argument of type '(s: { id: string; pessoa_id: string; pessoa: { nome: string; }; }) => { id: string; pessoa_id: string; percentual_divisao: number; nome: string; }' is not assignable to parameter of type '(value: { id: any; pessoa_id: any; percentual_divisao: any; pessoa: { nome: any; }[]; }, index: number, array: { id: any; pessoa_id: any; percentual_divisao: any; pessoa: { nome: any; }[]; }[]) => { id: string; pessoa_id: string; percentual_divisao: number; nome: string; }'.
+  Types of parameters 's' and 'value' are incompatible.
+    Type '{ id: any; pessoa_id: any; percentual_divisao: any; pessoa: { nome: any; }[]; }' is not assignable to type '{ id: string; pessoa_id: string; pessoa: { nome: string; }; }'.
+      Types of property 'pessoa' are incompatible.
+        Property 'nome' is missing in type '{ nome: any; }[]' but required in type '{ nome: string; }'.
+src/components/domain/financial/FinancialDashboard.tsx(253,48): error TS2339: Property 'percentual_divisao' does not exist on type '{ id: string; pessoa_id: string; pessoa: { nome: string; }; }'.
+src/components/domain/financial/LancamentoList.tsx(452,77): error TS2339: Property 'id' does not exist on type 'never'.
