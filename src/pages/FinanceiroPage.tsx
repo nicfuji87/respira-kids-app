@@ -57,6 +57,7 @@ export const FinanceiroPage: React.FC = () => {
   const { toast } = useToast();
   const [isPinValidated, setIsPinValidated] = useState(false);
   const [isCheckingPin, setIsCheckingPin] = useState(true);
+  const [showPinDialog, setShowPinDialog] = useState(true);
 
   // AI dev note: Tabs diferentes para admin e profissional
   const [activeTabAdmin, setActiveTabAdmin] = useState<
@@ -138,12 +139,16 @@ export const FinanceiroPage: React.FC = () => {
   const handlePinSuccess = React.useCallback(() => {
     console.log('[FinanceiroPage] handlePinSuccess chamado');
 
-    // Salvar na sessão ANTES de setar o estado
+    // Fechar o dialog PRIMEIRO para evitar problemas de sincronização
+    setShowPinDialog(false);
+    console.log('[FinanceiroPage] showPinDialog setado para false');
+
+    // Salvar na sessão
     const sessionKey = `pin_validated_${user?.id}_financeiro`;
     sessionStorage.setItem(sessionKey, Date.now().toString());
     console.log('[FinanceiroPage] Sessão salva:', sessionKey);
 
-    // Fechar dialog e mostrar página
+    // Setar o estado de validação
     setIsPinValidated(true);
     console.log('[FinanceiroPage] isPinValidated setado para true');
 
@@ -395,13 +400,15 @@ export const FinanceiroPage: React.FC = () => {
       </div>
 
       {/* Dialog de validação de PIN - para admin e secretaria */}
-      {/* AI dev note: Só renderiza o dialog quando PIN NÃO está validado para evitar 
-          problemas de sincronização de estado entre pai e filho */}
-      {isAdminOrSecretaria && !isPinValidated && (
+      {/* AI dev note: Só renderiza o dialog quando PIN NÃO está validado E showPinDialog é true */}
+      {isAdminOrSecretaria && !isPinValidated && showPinDialog && (
         <PinValidationDialog
-          isOpen={true}
+          isOpen={showPinDialog}
           onClose={() => {
-            navigate('/dashboard');
+            // Só redireciona para dashboard se o PIN ainda não foi validado
+            if (!isPinValidated) {
+              navigate('/dashboard');
+            }
           }}
           onSuccess={handlePinSuccess}
           title="Acesso ao Financeiro"
