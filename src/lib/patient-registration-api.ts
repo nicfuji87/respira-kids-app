@@ -97,19 +97,37 @@ export async function validateWhatsAppAndCheckRegistration(
       ? jidNumber // Mantém com "55"
       : `55${jidNumber}`; // Adiciona "55" se não tiver
 
-    // 8. Converter para BigInt para comparação com banco
-    const phoneNumberBigInt = BigInt(phoneNumberForDB);
+    // 8. Gerar variações de telefone (com e sem 9º dígito) para busca no banco
+    // O sistema antigo salvava sem o 9º dígito, o novo salva com.
+    // Ex: 5561981446666 (novo) vs 556181446666 (antigo)
+    const phoneVariations: string[] = [phoneNumberForDB];
+
+    // Se tem 13 dígitos (55 + 2 DDD + 9 numero), tentar versão de 12 (sem 9)
+    if (phoneNumberForDB.length === 13) {
+      // Remove o nono dígito (índice 4, considerando 55+DD+9...)
+      // 55 61 9 8144-6666 -> 55 61 8144-6666
+      const without9 = phoneNumberForDB.slice(0, 4) + phoneNumberForDB.slice(5);
+      phoneVariations.push(without9);
+    }
+    // Se tem 12 dígitos (55 + 2 DDD + 8 numero), tentar versão de 13 (com 9)
+    else if (phoneNumberForDB.length === 12) {
+      // Adiciona o nono dígito
+      // 55 61 8144-6666 -> 55 61 9 8144-6666
+      const with9 =
+        phoneNumberForDB.slice(0, 4) + '9' + phoneNumberForDB.slice(4);
+      phoneVariations.push(with9);
+    }
 
     console.log(
-      '🔍 [validateWhatsApp] Buscando telefone no banco:',
-      phoneNumberForDB
+      '🔍 [validateWhatsApp] Buscando telefone no banco (variações):',
+      phoneVariations
     );
 
     // 9. Verificar se pessoa já está cadastrada
     const { data: pessoa, error: pessoaError } = await supabase
       .from('pessoas')
       .select('id, nome')
-      .eq('telefone', phoneNumberBigInt.toString())
+      .in('telefone', phoneVariations) // Busca qualquer variação
       .eq('ativo', true)
       .maybeSingle(); // Usar maybeSingle para evitar erro se não encontrar
 
@@ -327,13 +345,31 @@ export async function findExistingUserByPhone(phoneNumber: string): Promise<{
   pacientes?: Array<{ id: string; nome: string; pediatras: string | null }>;
 }> {
   try {
-    const phoneNumberBigInt = BigInt(phoneNumber);
-
     // AI dev note: Buscar apenas RESPONSÁVEIS LEGAIS/AMBOS com DEPENDENTES ATIVOS
     // Isso evita conflito quando há múltiplos cadastros com mesmo telefone:
     // - Ignora pacientes com telefone duplicado
     // - Ignora responsáveis financeiros
     // - Garante que é um responsável legal ativo com dependentes
+
+    // Gerar variações de telefone (com e sem 9º dígito)
+    // O sistema antigo salvava sem o 9º dígito, o novo salva com.
+    const phoneVariations: string[] = [phoneNumber];
+
+    // Se tem 13 dígitos (55 + 2 DDD + 9 numero), tentar versão de 12 (sem 9)
+    if (phoneNumber.length === 13) {
+      const without9 = phoneNumber.slice(0, 4) + phoneNumber.slice(5);
+      phoneVariations.push(without9);
+    }
+    // Se tem 12 dígitos (55 + 2 DDD + 8 numero), tentar versão de 13 (com 9)
+    else if (phoneNumber.length === 12) {
+      const with9 = phoneNumber.slice(0, 4) + '9' + phoneNumber.slice(4);
+      phoneVariations.push(with9);
+    }
+
+    console.log(
+      '🔍 [findExistingUserByPhone] Buscando variações:',
+      phoneVariations
+    );
 
     // PASSO 1: Buscar responsáveis legais/ambos que têm dependentes ativos
     const { data: responsaveis, error: respError } = await supabase
@@ -348,7 +384,7 @@ export async function findExistingUserByPhone(phoneNumber: string): Promise<{
         )
       `
       )
-      .eq('telefone', phoneNumberBigInt)
+      .in('telefone', phoneVariations)
       .eq('ativo', true)
       .not('pessoa_responsaveis', 'is', null);
 
