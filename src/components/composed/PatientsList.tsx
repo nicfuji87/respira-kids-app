@@ -17,6 +17,7 @@ import {
   Shield,
   Clock,
   SortAsc,
+  Filter,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -31,6 +32,7 @@ import {
 } from '@/components/primitives/avatar';
 import { cn } from '@/lib/utils';
 import { fetchPatients } from '@/lib/patient-api';
+import { fetchPediatras, type Pediatra } from '@/lib/pediatra-api';
 import type { Usuario } from '@/types/usuarios';
 
 export interface PatientsListProps {
@@ -55,11 +57,33 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('nome');
 
+  // AI dev note: Filtro de pediatras
+  const [pediatras, setPediatras] = useState<Pediatra[]>([]);
+  const [selectedPediatras, setSelectedPediatras] = useState<string[]>([]);
+  const [pediatrasLoading, setPediatrasLoading] = useState(true);
+  const [showPediatraFilter, setShowPediatraFilter] = useState(false);
+
   const navigate = useNavigate();
   const ITEMS_PER_PAGE = 20;
 
   // AI dev note: Alfabeto para navegação
   const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+  // AI dev note: Carregar lista de pediatras para o filtro
+  useEffect(() => {
+    const loadPediatras = async () => {
+      try {
+        setPediatrasLoading(true);
+        const data = await fetchPediatras();
+        setPediatras(data);
+      } catch (error) {
+        console.error('Erro ao carregar pediatras:', error);
+      } finally {
+        setPediatrasLoading(false);
+      }
+    };
+    loadPediatras();
+  }, []);
 
   // AI dev note: Função para carregar pacientes com debounce
   const loadPatients = useCallback(
@@ -67,7 +91,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
       search: string,
       page: number,
       letter?: string | null,
-      sort?: SortOption
+      sort?: SortOption,
+      pediatraIds?: string[]
     ) => {
       try {
         if (page === 1) {
@@ -84,7 +109,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
           page,
           ITEMS_PER_PAGE,
           letter || undefined,
-          sort || 'nome'
+          sort || 'nome',
+          pediatraIds
         );
 
         if (response.success && response.data) {
@@ -109,25 +135,53 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
   // AI dev note: Carregar inicial
   useEffect(() => {
-    loadPatients('', 1, selectedLetter, sortBy);
-  }, [loadPatients, selectedLetter, sortBy]);
+    loadPatients('', 1, selectedLetter, sortBy, selectedPediatras);
+  }, [loadPatients, selectedLetter, sortBy, selectedPediatras]);
 
   // AI dev note: Debounce para busca - removido currentPage da dependência
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setCurrentPage(1); // Sempre resetar para página 1 ao buscar
-      loadPatients(searchTerm, 1, selectedLetter, sortBy);
+      loadPatients(searchTerm, 1, selectedLetter, sortBy, selectedPediatras);
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, selectedLetter, sortBy, loadPatients]);
+  }, [searchTerm, selectedLetter, sortBy, selectedPediatras, loadPatients]);
 
   // AI dev note: Carregar pacientes quando a página muda
   useEffect(() => {
     if (currentPage > 1) {
-      loadPatients(searchTerm, currentPage, selectedLetter, sortBy);
+      loadPatients(
+        searchTerm,
+        currentPage,
+        selectedLetter,
+        sortBy,
+        selectedPediatras
+      );
     }
-  }, [currentPage, loadPatients, searchTerm, selectedLetter, sortBy]);
+  }, [
+    currentPage,
+    loadPatients,
+    searchTerm,
+    selectedLetter,
+    sortBy,
+    selectedPediatras,
+  ]);
+
+  // AI dev note: Funções para filtro de pediatras
+  const handlePediatraToggle = (pediatraId: string) => {
+    setSelectedPediatras((prev) =>
+      prev.includes(pediatraId)
+        ? prev.filter((id) => id !== pediatraId)
+        : [...prev, pediatraId]
+    );
+    setCurrentPage(1);
+  };
+
+  const clearPediatraFilter = () => {
+    setSelectedPediatras([]);
+    setCurrentPage(1);
+  };
 
   // AI dev note: Função para navegar para detalhes do paciente
   const handlePatientClick = (patientId: string) => {
@@ -278,7 +332,81 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             <span className="hidden sm:inline">Últimos atualizados</span>
           </Button>
         </div>
+
+        {/* Botão de filtro de pediatras */}
+        <Button
+          variant={selectedPediatras.length > 0 ? 'default' : 'outline'}
+          size="default"
+          onClick={() => setShowPediatraFilter(!showPediatraFilter)}
+          className="flex items-center gap-2"
+        >
+          <Filter className="h-4 w-4" />
+          <span className="hidden sm:inline">Pediatras</span>
+          {selectedPediatras.length > 0 && (
+            <Badge variant="secondary" className="ml-1">
+              {selectedPediatras.length}
+            </Badge>
+          )}
+        </Button>
       </div>
+
+      {/* Filtro de pediatras expandido */}
+      {showPediatraFilter && (
+        <div className="p-4 bg-muted/50 rounded-lg space-y-3 border">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium flex items-center gap-2">
+              <Stethoscope className="h-4 w-4" />
+              Filtrar por Pediatra
+            </span>
+            {selectedPediatras.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearPediatraFilter}
+                className="text-xs"
+              >
+                Limpar filtro
+              </Button>
+            )}
+          </div>
+
+          {pediatrasLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Carregando pediatras...
+            </div>
+          ) : pediatras.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              Nenhum pediatra cadastrado
+            </div>
+          ) : (
+            <div className="max-h-48 overflow-y-auto space-y-1 pr-2">
+              {pediatras.map((pediatra) => (
+                <label
+                  key={pediatra.id}
+                  className="flex items-center gap-3 p-2 rounded-md hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedPediatras.includes(pediatra.id)}
+                    onChange={() => handlePediatraToggle(pediatra.id)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <span className="text-sm">{pediatra.nome}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {/* Pediatras selecionados */}
+          {selectedPediatras.length > 0 && (
+            <div className="text-sm text-muted-foreground pt-2 border-t">
+              <strong>{selectedPediatras.length}</strong> pediatra(s)
+              selecionado(s)
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Navegação alfabética - apenas quando ordenado alfabeticamente */}
       {sortBy === 'nome' && (

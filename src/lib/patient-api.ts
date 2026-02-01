@@ -1308,7 +1308,8 @@ export async function fetchPatients(
   page: number = 1,
   limit: number = 20,
   startWithLetter?: string,
-  sortBy: 'nome' | 'updated_at' = 'nome'
+  sortBy: 'nome' | 'updated_at' = 'nome',
+  pediatraIds?: string[]
 ): Promise<ApiResponse<PaginatedUsuarios>> {
   try {
     // AI dev note: Verificação de autenticação
@@ -1336,6 +1337,8 @@ export async function fetchPatients(
       limite: limit,
       filtro_letra: startWithLetter || null,
       ordenar_por: sortBy,
+      filtro_pediatras_ids:
+        pediatraIds && pediatraIds.length > 0 ? pediatraIds : null,
     });
 
     if (error) {
