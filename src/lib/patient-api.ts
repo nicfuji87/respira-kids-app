@@ -1309,7 +1309,8 @@ export async function fetchPatients(
   limit: number = 20,
   startWithLetter?: string,
   sortBy: 'nome' | 'updated_at' = 'nome',
-  pediatraIds?: string[]
+  pediatraIds?: string[],
+  lastAppointmentDays?: number
 ): Promise<ApiResponse<PaginatedUsuarios>> {
   try {
     // AI dev note: Verificação de autenticação
@@ -1339,6 +1340,7 @@ export async function fetchPatients(
       ordenar_por: sortBy,
       filtro_pediatras_ids:
         pediatraIds && pediatraIds.length > 0 ? pediatraIds : null,
+      filtro_ultimo_atendimento_dias: lastAppointmentDays || null,
     });
 
     if (error) {

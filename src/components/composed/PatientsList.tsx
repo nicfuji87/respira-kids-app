@@ -18,6 +18,7 @@ import {
   Clock,
   SortAsc,
   Filter,
+  CalendarDays,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -63,6 +64,13 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   const [pediatrasLoading, setPediatrasLoading] = useState(true);
   const [showPediatraFilter, setShowPediatraFilter] = useState(false);
 
+  // AI dev note: Filtro de último atendimento
+  const [lastAppointmentDays, setLastAppointmentDays] = useState<number | null>(
+    null
+  );
+  const [customDays, setCustomDays] = useState<string>('');
+  const [showAppointmentFilter, setShowAppointmentFilter] = useState(false);
+
   const navigate = useNavigate();
   const ITEMS_PER_PAGE = 20;
 
@@ -92,7 +100,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
       page: number,
       letter?: string | null,
       sort?: SortOption,
-      pediatraIds?: string[]
+      pediatraIds?: string[],
+      appointmentDays?: number | null
     ) => {
       try {
         if (page === 1) {
@@ -110,7 +119,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
           ITEMS_PER_PAGE,
           letter || undefined,
           sort || 'nome',
-          pediatraIds
+          pediatraIds,
+          appointmentDays || undefined
         );
 
         if (response.success && response.data) {
@@ -135,18 +145,45 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
   // AI dev note: Carregar inicial
   useEffect(() => {
-    loadPatients('', 1, selectedLetter, sortBy, selectedPediatras);
-  }, [loadPatients, selectedLetter, sortBy, selectedPediatras]);
+    loadPatients(
+      '',
+      1,
+      selectedLetter,
+      sortBy,
+      selectedPediatras,
+      lastAppointmentDays
+    );
+  }, [
+    loadPatients,
+    selectedLetter,
+    sortBy,
+    selectedPediatras,
+    lastAppointmentDays,
+  ]);
 
   // AI dev note: Debounce para busca - removido currentPage da dependência
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setCurrentPage(1); // Sempre resetar para página 1 ao buscar
-      loadPatients(searchTerm, 1, selectedLetter, sortBy, selectedPediatras);
+      loadPatients(
+        searchTerm,
+        1,
+        selectedLetter,
+        sortBy,
+        selectedPediatras,
+        lastAppointmentDays
+      );
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, selectedLetter, sortBy, selectedPediatras, loadPatients]);
+  }, [
+    searchTerm,
+    selectedLetter,
+    sortBy,
+    selectedPediatras,
+    lastAppointmentDays,
+    loadPatients,
+  ]);
 
   // AI dev note: Carregar pacientes quando a página muda
   useEffect(() => {
@@ -156,7 +193,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
         currentPage,
         selectedLetter,
         sortBy,
-        selectedPediatras
+        selectedPediatras,
+        lastAppointmentDays
       );
     }
   }, [
@@ -166,6 +204,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     selectedLetter,
     sortBy,
     selectedPediatras,
+    lastAppointmentDays,
   ]);
 
   // AI dev note: Funções para filtro de pediatras
@@ -180,6 +219,35 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
   const clearPediatraFilter = () => {
     setSelectedPediatras([]);
+    setCurrentPage(1);
+  };
+
+  // AI dev note: Funções para filtro de último atendimento
+  const appointmentFilterOptions = [
+    { label: '7 dias', value: 7 },
+    { label: '14 dias', value: 14 },
+    { label: '30 dias', value: 30 },
+    { label: '60 dias', value: 60 },
+    { label: '90 dias', value: 90 },
+  ];
+
+  const handleAppointmentFilterChange = (days: number | null) => {
+    setLastAppointmentDays(days);
+    setCustomDays('');
+    setCurrentPage(1);
+  };
+
+  const handleCustomDaysApply = () => {
+    const days = parseInt(customDays, 10);
+    if (!isNaN(days) && days > 0) {
+      setLastAppointmentDays(days);
+      setCurrentPage(1);
+    }
+  };
+
+  const clearAppointmentFilter = () => {
+    setLastAppointmentDays(null);
+    setCustomDays('');
     setCurrentPage(1);
   };
 
@@ -348,6 +416,22 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             </Badge>
           )}
         </Button>
+
+        {/* Botão de filtro de último atendimento */}
+        <Button
+          variant={lastAppointmentDays !== null ? 'default' : 'outline'}
+          size="default"
+          onClick={() => setShowAppointmentFilter(!showAppointmentFilter)}
+          className="flex items-center gap-2"
+        >
+          <CalendarDays className="h-4 w-4" />
+          <span className="hidden sm:inline">Último Atend.</span>
+          {lastAppointmentDays !== null && (
+            <Badge variant="secondary" className="ml-1">
+              {lastAppointmentDays}d
+            </Badge>
+          )}
+        </Button>
       </div>
 
       {/* Filtro de pediatras expandido */}
@@ -403,6 +487,71 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             <div className="text-sm text-muted-foreground pt-2 border-t">
               <strong>{selectedPediatras.length}</strong> pediatra(s)
               selecionado(s)
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro de último atendimento expandido */}
+      {showAppointmentFilter && (
+        <div className="p-4 bg-muted/50 rounded-lg space-y-3 border">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Filtrar por Último Atendimento
+            </span>
+            {lastAppointmentDays !== null && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAppointmentFilter}
+                className="text-xs"
+              >
+                Limpar filtro
+              </Button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {appointmentFilterOptions.map((option) => (
+              <Button
+                key={option.value}
+                variant={
+                  lastAppointmentDays === option.value ? 'default' : 'outline'
+                }
+                size="sm"
+                onClick={() => handleAppointmentFilterChange(option.value)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Input personalizado */}
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              placeholder="Dias personalizados"
+              value={customDays}
+              onChange={(e) => setCustomDays(e.target.value)}
+              className="w-40"
+              min="1"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCustomDaysApply}
+              disabled={!customDays || parseInt(customDays, 10) <= 0}
+            >
+              Aplicar
+            </Button>
+          </div>
+
+          {/* Info do filtro ativo */}
+          {lastAppointmentDays !== null && (
+            <div className="text-sm text-muted-foreground pt-2 border-t">
+              Mostrando pacientes com atendimentos nos últimos{' '}
+              <strong>{lastAppointmentDays}</strong> dias
             </div>
           )}
         </div>
