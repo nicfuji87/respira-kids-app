@@ -125,31 +125,105 @@ export const ResponsibleSelect: React.FC<ResponsibleSelectProps> = ({
     fetchData();
   }, [personId, fetchResponsabilidades]);
 
+  // AI dev note: Antes de inserir, verificar se já existe registro (ativo ou inativo)
+  // para evitar 409 Conflict na constraint UNIQUE (id_pessoa, id_responsavel).
+  // Se inativo → reativar com novo tipo. Se ativo → atualizar tipo ou avisar.
   const handleAddResponsible = async () => {
     if (!personId || !selectedPersonId || !selectedTipo) return;
 
     setSaving(true);
     try {
-      const { error } = await supabase.from('pessoa_responsaveis').insert({
-        id_pessoa: personId,
-        id_responsavel: selectedPersonId,
-        tipo_responsabilidade: selectedTipo,
-        ativo: true,
-      });
+      // Verificar se já existe registro (ativo ou inativo)
+      const { data: existing } = await supabase
+        .from('pessoa_responsaveis')
+        .select('id, ativo, tipo_responsabilidade')
+        .eq('id_pessoa', personId)
+        .eq('id_responsavel', selectedPersonId)
+        .maybeSingle();
 
-      if (error) {
-        console.error('Erro ao adicionar responsável:', error);
-        toast({
-          title: 'Erro ao adicionar responsável',
-          description: error.message,
-          variant: 'destructive',
+      if (existing) {
+        if (existing.ativo) {
+          // Já existe e está ativo - atualizar o tipo se diferente
+          if (existing.tipo_responsabilidade !== selectedTipo) {
+            const { error } = await supabase
+              .from('pessoa_responsaveis')
+              .update({
+                tipo_responsabilidade: selectedTipo,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existing.id);
+
+            if (error) {
+              console.error('Erro ao atualizar responsável:', error);
+              toast({
+                title: 'Erro ao atualizar responsável',
+                description: error.message,
+                variant: 'destructive',
+              });
+              return;
+            }
+
+            toast({
+              title: 'Tipo de responsabilidade atualizado com sucesso',
+            });
+          } else {
+            toast({
+              title: 'Responsável já cadastrado',
+              description: 'Esta pessoa já é responsável com este mesmo tipo.',
+              variant: 'destructive',
+            });
+            return;
+          }
+        } else {
+          // Existe mas está inativo - reativar com o novo tipo
+          const { error } = await supabase
+            .from('pessoa_responsaveis')
+            .update({
+              ativo: true,
+              tipo_responsabilidade: selectedTipo,
+              data_inicio: new Date().toISOString().split('T')[0],
+              data_fim: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id);
+
+          if (error) {
+            console.error('Erro ao reativar responsável:', error);
+            toast({
+              title: 'Erro ao adicionar responsável',
+              description: error.message,
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          toast({
+            title: 'Responsável adicionado com sucesso',
+          });
+        }
+      } else {
+        // Não existe - inserir normalmente
+        const { error } = await supabase.from('pessoa_responsaveis').insert({
+          id_pessoa: personId,
+          id_responsavel: selectedPersonId,
+          tipo_responsabilidade: selectedTipo,
+          ativo: true,
         });
-        return;
-      }
 
-      toast({
-        title: 'Responsável adicionado com sucesso',
-      });
+        if (error) {
+          console.error('Erro ao adicionar responsável:', error);
+          toast({
+            title: 'Erro ao adicionar responsável',
+            description: error.message,
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        toast({
+          title: 'Responsável adicionado com sucesso',
+        });
+      }
 
       // Recarregar responsabilidades
       await fetchResponsabilidades();

@@ -300,30 +300,52 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // Verificar se já existe vínculo
+      // AI dev note: Verificar se já existe vínculo (ativo ou inativo)
+      // para evitar 409 Conflict na constraint UNIQUE (id_pessoa, id_responsavel)
       const { data: existingLink } = await supabase
         .from('pessoa_responsaveis')
-        .select('id, tipo_responsabilidade')
+        .select('id, tipo_responsabilidade, ativo')
         .eq('id_pessoa', patientId)
         .eq('id_responsavel', financialResponsibleId)
-        .eq('ativo', true)
-        .is('data_fim', null)
         .maybeSingle();
 
       if (existingLink) {
-        // Atualizar tipo de responsabilidade
-        if (existingLink.tipo_responsabilidade === 'legal') {
+        if (existingLink.ativo) {
+          // Ativo - atualizar tipo de responsabilidade se necessário
+          if (existingLink.tipo_responsabilidade === 'legal') {
+            console.log(
+              '📝 [add-financial-responsible] Atualizando vínculo existente para "ambos"'
+            );
+            await supabase
+              .from('pessoa_responsaveis')
+              .update({
+                tipo_responsabilidade: 'ambos',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingLink.id);
+          } else {
+            console.log(
+              'ℹ️ [add-financial-responsible] Vínculo já existe como financeiro/ambos'
+            );
+          }
+        } else {
+          // Inativo - reativar como financeiro (ou ambos se era legal)
           console.log(
-            '📝 [add-financial-responsible] Atualizando vínculo existente para "ambos"'
+            '📝 [add-financial-responsible] Reativando vínculo inativo'
           );
           await supabase
             .from('pessoa_responsaveis')
-            .update({ tipo_responsabilidade: 'ambos' })
+            .update({
+              ativo: true,
+              tipo_responsabilidade:
+                existingLink.tipo_responsabilidade === 'legal'
+                  ? 'ambos'
+                  : 'financeiro',
+              data_inicio: new Date().toISOString().split('T')[0],
+              data_fim: null,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', existingLink.id);
-        } else {
-          console.log(
-            'ℹ️ [add-financial-responsible] Vínculo já existe como financeiro/ambos'
-          );
         }
       } else {
         // Criar novo vínculo

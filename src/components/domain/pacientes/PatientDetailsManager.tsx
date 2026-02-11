@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Calendar, FileText, Award } from 'lucide-react';
+import { ArrowLeft, Calendar, FileText, Award, Users } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/primitives/card';
 import {
   PatientCompleteInfo,
   PatientMetricsWithConsultations,
@@ -14,6 +20,7 @@ import {
   PatientClinicalEvaluations,
   PatientQuoteGenerator,
   PatientCertificateGenerator,
+  ResponsibleSelect,
   type LocationOption,
 } from '@/components/composed';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
@@ -388,6 +395,25 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
             handlePersonClick(responsibleId);
           }}
         />
+
+        {/* AI dev note: Gerenciamento de Responsáveis - apenas admin/secretaria para pacientes
+            Permite adicionar, editar tipo e remover responsáveis com seleção de tipo (legal, financeiro, ambos) */}
+        {(!personId ||
+          (patient as PersonDetails)?.tipo_pessoa === 'paciente') &&
+          (user?.pessoa?.role === 'admin' ||
+            user?.pessoa?.role === 'secretaria') && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Users className="h-5 w-5" />
+                  Gerenciar Responsáveis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsibleSelect personId={actualId} />
+              </CardContent>
+            </Card>
+          )}
 
         {/* Contrato do Paciente - apenas para pacientes */}
         {(!personId ||

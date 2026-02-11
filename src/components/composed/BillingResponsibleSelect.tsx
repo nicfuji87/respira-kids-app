@@ -541,17 +541,44 @@ export const BillingResponsibleSelect: React.FC<
 
     setSaving(true);
     try {
-      // Primeiro, verificar se já existe associação
+      // AI dev note: Verificar se já existe registro (ativo ou inativo) para evitar 409 Conflict
+      // na constraint UNIQUE (id_pessoa, id_responsavel)
       const { data: existingAssoc } = await supabase
         .from('pessoa_responsaveis')
-        .select('id')
+        .select('id, ativo, tipo_responsabilidade')
         .eq('id_pessoa', effectivePatientId)
         .eq('id_responsavel', pessoa.id)
-        .eq('ativo', true)
         .maybeSingle();
 
-      // Se não existir, criar associação como financeiro
-      if (!existingAssoc) {
+      if (existingAssoc) {
+        if (!existingAssoc.ativo) {
+          // Inativo - reativar como financeiro (ou ambos se era legal)
+          await supabase
+            .from('pessoa_responsaveis')
+            .update({
+              ativo: true,
+              tipo_responsabilidade:
+                existingAssoc.tipo_responsabilidade === 'legal'
+                  ? 'ambos'
+                  : 'financeiro',
+              data_inicio: new Date().toISOString().split('T')[0],
+              data_fim: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingAssoc.id);
+        } else if (existingAssoc.tipo_responsabilidade === 'legal') {
+          // Ativo como legal - atualizar para ambos
+          await supabase
+            .from('pessoa_responsaveis')
+            .update({
+              tipo_responsabilidade: 'ambos',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingAssoc.id);
+        }
+        // Se já é financeiro ou ambos, nada a fazer
+      } else {
+        // Não existe - criar associação como financeiro
         await supabase.from('pessoa_responsaveis').insert({
           id_pessoa: effectivePatientId,
           id_responsavel: pessoa.id,

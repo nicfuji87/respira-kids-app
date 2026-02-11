@@ -591,23 +591,60 @@ export const PatientRegistrationSection: React.FC<
     [responsaveis]
   );
 
-  // Vincular responsável existente do sistema ao paciente
+  // AI dev note: Vincular responsável existente do sistema ao paciente.
+  // Verifica se já existe registro (ativo ou inativo) para evitar 409 Conflict
+  // na constraint UNIQUE (id_pessoa, id_responsavel).
   const handleVincularResponsavel = async (
     responsavel: ResponsavelCompleto
   ) => {
     setIsSaving(true);
     try {
-      // Criar vínculo como responsável legal
-      const { error: vinculoError } = await supabase
+      // Verificar se já existe registro (ativo ou inativo)
+      const { data: existing } = await supabase
         .from('pessoa_responsaveis')
-        .insert({
-          id_pessoa: patientId,
-          id_responsavel: responsavel.id,
-          tipo_responsabilidade: 'legal',
-          ativo: true,
-        });
+        .select('id, ativo, tipo_responsabilidade')
+        .eq('id_pessoa', patientId)
+        .eq('id_responsavel', responsavel.id)
+        .maybeSingle();
 
-      if (vinculoError) throw vinculoError;
+      if (existing) {
+        if (existing.ativo) {
+          // Já está ativo - nada a fazer no vínculo
+          toast({
+            title: 'Responsável já vinculado',
+            description: 'Esta pessoa já é responsável ativa deste paciente.',
+          });
+        } else {
+          // Inativo - reativar com tipo legal
+          const { error: reativarError } = await supabase
+            .from('pessoa_responsaveis')
+            .update({
+              ativo: true,
+              tipo_responsabilidade:
+                existing.tipo_responsabilidade === 'financeiro'
+                  ? 'ambos'
+                  : 'legal',
+              data_inicio: new Date().toISOString().split('T')[0],
+              data_fim: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id);
+
+          if (reativarError) throw reativarError;
+        }
+      } else {
+        // Não existe - inserir normalmente
+        const { error: vinculoError } = await supabase
+          .from('pessoa_responsaveis')
+          .insert({
+            id_pessoa: patientId,
+            id_responsavel: responsavel.id,
+            tipo_responsabilidade: 'legal',
+            ativo: true,
+          });
+
+        if (vinculoError) throw vinculoError;
+      }
 
       toast({
         title: 'Sucesso',
