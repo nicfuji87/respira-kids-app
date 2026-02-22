@@ -324,11 +324,11 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
 
     // AI dev note: Lógica de prioridade: paciente -> responsável legal (fallback)
     const displayEmail = patient.email || patient.responsavel_legal_email;
-    const displayPhone = patient.telefone
-      ? formatPhone(patient.telefone)
-      : patient.responsavel_legal_telefone
-        ? formatPhone(patient.responsavel_legal_telefone)
-        : null;
+    const rawPhone = patient.telefone || patient.responsavel_legal_telefone;
+    const displayPhone = rawPhone ? formatPhone(rawPhone) : null;
+    const whatsappUrl = rawPhone
+      ? `https://wa.me/55${rawPhone.toString()}`
+      : null;
 
     // Verificar se responsável legal e financeiro são a mesma pessoa
     const sameResponsible =
@@ -590,9 +590,14 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                 <Phone className="h-4 w-4 text-muted-foreground mt-1" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">Telefone</p>
-                  <p className="text-sm text-muted-foreground">
+                  <a
+                    href={whatsappUrl!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground hover:text-green-600 hover:underline transition-colors"
+                  >
                     {displayPhone}
-                  </p>
+                  </a>
                 </div>
               </div>
             )}
@@ -835,11 +840,11 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
             </div>
           </div>
 
-          {/* Seção: Responsável pela Cobrança - apenas admin/secretaria */}
+          {/* AI dev note: Seção unificada de Responsáveis - gerencia tipos, cobrança, busca e cadastro */}
           {(userRole === 'admin' || userRole === 'secretaria') && (
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Responsável pela Cobrança
+                Gerenciar Responsáveis
               </h4>
               <BillingResponsibleSelect
                 patientId={patient.id}
