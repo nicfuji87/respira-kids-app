@@ -178,10 +178,10 @@ export const PatientPersonalInfo = React.memo<PatientPersonalInfoProps>(
                   <div className="flex-1">
                     <p className="text-sm font-medium">Telefone</p>
                     <a
-                      href={`https://wa.me/55${displayPhone.toString()}`}
+                      href={`https://wa.me/${displayPhone.toString()}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground hover:text-green-600 hover:underline transition-colors"
+                      className="text-sm text-muted-foreground underline hover:text-green-600 transition-colors"
                     >
                       {formatPhone(displayPhone)}
                     </a>

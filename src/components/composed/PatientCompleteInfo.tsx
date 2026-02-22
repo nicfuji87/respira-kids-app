@@ -327,7 +327,7 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
     const rawPhone = patient.telefone || patient.responsavel_legal_telefone;
     const displayPhone = rawPhone ? formatPhone(rawPhone) : null;
     const whatsappUrl = rawPhone
-      ? `https://wa.me/55${rawPhone.toString()}`
+      ? `https://wa.me/${rawPhone.toString()}`
       : null;
 
     // Verificar se responsável legal e financeiro são a mesma pessoa
@@ -594,7 +594,7 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                     href={whatsappUrl!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-muted-foreground hover:text-green-600 hover:underline transition-colors"
+                    className="text-sm text-muted-foreground underline hover:text-green-600 transition-colors"
                   >
                     {displayPhone}
                   </a>
