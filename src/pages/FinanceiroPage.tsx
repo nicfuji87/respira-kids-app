@@ -400,16 +400,13 @@ export const FinanceiroPage: React.FC = () => {
       </div>
 
       {/* Dialog de validação de PIN - para admin e secretaria */}
-      {/* AI dev note: Só renderiza o dialog quando PIN NÃO está validado E showPinDialog é true */}
-      {isAdminOrSecretaria && !isPinValidated && showPinDialog && (
+      {/* AI dev note: Componente sempre montado para evitar race condition entre
+          desmontagem do React e fechamento do portal do Radix Dialog.
+          Visibilidade controlada EXCLUSIVAMENTE pela prop isOpen. */}
+      {isAdminOrSecretaria && (
         <PinValidationDialog
-          isOpen={showPinDialog}
-          onClose={() => {
-            // Só redireciona para dashboard se o PIN ainda não foi validado
-            if (!isPinValidated) {
-              navigate('/dashboard');
-            }
-          }}
+          isOpen={!isPinValidated && showPinDialog}
+          onClose={() => navigate('/dashboard')}
           onSuccess={handlePinSuccess}
           title="Acesso ao Financeiro"
           description="Esta área contém informações sensíveis. Digite seu PIN para continuar."
