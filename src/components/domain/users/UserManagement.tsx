@@ -58,7 +58,6 @@ import {
   GenericTable,
   TypePersonSelect,
   AddressSelect,
-  ResponsibleSelect,
   BillingResponsibleSelect,
   StatusBadge,
 } from '@/components/composed';
@@ -769,25 +768,11 @@ export const UserManagement = React.memo<UserManagementProps>(
                   </CardContent>
                 </Card>
 
-                {/* Responsáveis (só para pacientes) */}
+                {/* AI dev note: Seção unificada de Responsáveis - gerencia tipos, cobrança, busca e cadastro */}
                 {editingUser?.tipo_pessoa_codigo === 'paciente' && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg">Responsáveis</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsibleSelect personId={editingUser?.id} />
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Responsável pela Cobrança (só para pacientes) */}
-                {editingUser?.tipo_pessoa_codigo === 'paciente' && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">
-                        Responsável pela Cobrança
-                      </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <BillingResponsibleSelect

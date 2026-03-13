@@ -44,10 +44,10 @@ import {
   type EnderecoViaCepDataExtended,
 } from '@/lib/enderecos-api';
 
-// AI dev note: BillingResponsibleSelect - Componente para gerenciar responsável pela cobrança (responsavel_cobranca_id)
-// Mostra apenas responsáveis já associados ao paciente no dropdown
-// Permite buscar outro responsável já cadastrado via modal de busca
-// Permite cadastrar nova pessoa como responsável financeiro
+// AI dev note: BillingResponsibleSelect - Componente UNIFICADO para gerenciar todos os responsáveis de um paciente
+// Funcionalidades: listar responsáveis, alterar tipo (legal/financeiro/ambos), definir responsável de cobrança,
+// buscar pessoa existente no sistema, cadastrar nova pessoa, remover responsáveis
+// Este componente substitui o antigo ResponsibleSelect para evitar duplicação
 
 export interface BillingResponsibleSelectProps {
   personId?: string; // ID do paciente (alias para patientId)
@@ -166,6 +166,10 @@ export const BillingResponsibleSelect: React.FC<
   const [removingResponsibleId, setRemovingResponsibleId] = useState<
     string | null
   >(null);
+
+  // AI dev note: Estado para tipo de responsabilidade selecionado nos modais de busca/criação
+  const [selectedTipoResponsabilidade, setSelectedTipoResponsabilidade] =
+    useState<'legal' | 'financeiro' | 'ambos'>('ambos');
 
   // Buscar responsáveis associados ao paciente
   const fetchResponsaveisAssociados = useCallback(async () => {
@@ -550,53 +554,95 @@ export const BillingResponsibleSelect: React.FC<
         .eq('id_responsavel', pessoa.id)
         .maybeSingle();
 
+      // AI dev note: Usar o tipo selecionado pelo usuário no modal de busca
       if (existingAssoc) {
         if (!existingAssoc.ativo) {
-          // Inativo - reativar como financeiro (ou ambos se era legal)
+          // Inativo - reativar com o tipo selecionado
           await supabase
             .from('pessoa_responsaveis')
             .update({
               ativo: true,
-              tipo_responsabilidade:
-                existingAssoc.tipo_responsabilidade === 'legal'
-                  ? 'ambos'
-                  : 'financeiro',
+              tipo_responsabilidade: selectedTipoResponsabilidade,
               data_inicio: new Date().toISOString().split('T')[0],
               data_fim: null,
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingAssoc.id);
-        } else if (existingAssoc.tipo_responsabilidade === 'legal') {
-          // Ativo como legal - atualizar para ambos
+        } else if (
+          existingAssoc.tipo_responsabilidade !== selectedTipoResponsabilidade
+        ) {
+          // Ativo mas tipo diferente - atualizar
           await supabase
             .from('pessoa_responsaveis')
             .update({
-              tipo_responsabilidade: 'ambos',
+              tipo_responsabilidade: selectedTipoResponsabilidade,
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingAssoc.id);
         }
-        // Se já é financeiro ou ambos, nada a fazer
       } else {
-        // Não existe - criar associação como financeiro
+        // Não existe - criar associação com o tipo selecionado
         await supabase.from('pessoa_responsaveis').insert({
           id_pessoa: effectivePatientId,
           id_responsavel: pessoa.id,
-          tipo_responsabilidade: 'financeiro',
+          tipo_responsabilidade: selectedTipoResponsabilidade,
           ativo: true,
         });
       }
 
-      // Atualizar responsável de cobrança
+      // Se o tipo inclui financeiro, definir como responsável de cobrança
+      const tipoInclui =
+        selectedTipoResponsabilidade === 'financeiro' ||
+        selectedTipoResponsabilidade === 'ambos';
+      if (tipoInclui) {
+        const { error } = await supabase
+          .from('pessoas')
+          .update({ responsavel_cobranca_id: pessoa.id })
+          .eq('id', effectivePatientId);
+
+        if (error) {
+          console.error('Erro ao atualizar responsável de cobrança:', error);
+        } else {
+          setSelectedResponsibleId(pessoa.id);
+          triggerCallback(pessoa.id);
+        }
+      }
+
+      toast({
+        title: 'Responsável adicionado',
+        description: `${pessoa.nome} foi vinculado ao paciente`,
+      });
+
+      setShowSearchModal(false);
+      setSearchTerm('');
+      setSearchResults([]);
+      setSelectedTipoResponsabilidade('ambos');
+
+      // Recarregar responsáveis associados
+      await fetchResponsaveisAssociados();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // AI dev note: Handler para alterar o tipo de responsabilidade de um responsável já associado
+  const handleChangeTipo = async (
+    responsavelAssocId: string,
+    novoTipo: 'legal' | 'financeiro' | 'ambos'
+  ) => {
+    try {
       const { error } = await supabase
-        .from('pessoas')
-        .update({ responsavel_cobranca_id: pessoa.id })
-        .eq('id', effectivePatientId);
+        .from('pessoa_responsaveis')
+        .update({
+          tipo_responsabilidade: novoTipo,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', responsavelAssocId);
 
       if (error) {
-        console.error('Erro ao atualizar responsável:', error);
+        console.error('Erro ao alterar tipo:', error);
         toast({
-          title: 'Erro ao atualizar responsável',
+          title: 'Erro ao alterar tipo de responsabilidade',
           description: error.message,
           variant: 'destructive',
         });
@@ -604,21 +650,12 @@ export const BillingResponsibleSelect: React.FC<
       }
 
       toast({
-        title: 'Responsável pela cobrança atualizado',
-        description: `${pessoa.nome} foi definido como responsável pela cobrança`,
+        title: 'Tipo de responsabilidade atualizado',
       });
 
-      setSelectedResponsibleId(pessoa.id);
-      setShowSearchModal(false);
-      setSearchTerm('');
-      setSearchResults([]);
-
-      // Recarregar responsáveis associados
       await fetchResponsaveisAssociados();
-
-      triggerCallback(pessoa.id);
-    } finally {
-      setSaving(false);
+    } catch (error) {
+      console.error('Erro ao alterar tipo:', error);
     }
   };
 
@@ -775,27 +812,42 @@ export const BillingResponsibleSelect: React.FC<
         throw new Error(`Erro ao criar pessoa: ${pessoaError.message}`);
       }
 
-      // 4. Atualizar o paciente com o novo responsável de cobrança
-      const { error: updateError } = await supabase
-        .from('pessoas')
-        .update({ responsavel_cobranca_id: novaPessoa.id })
-        .eq('id', effectivePatientId);
-
-      if (updateError) {
-        throw new Error(`Erro ao vincular responsável: ${updateError.message}`);
-      }
-
-      // 5. Também adicionar como responsável financeiro na tabela pessoa_responsaveis
+      // 4. Adicionar como responsável na tabela pessoa_responsaveis com o tipo selecionado
       await supabase.from('pessoa_responsaveis').insert({
         id_pessoa: effectivePatientId,
         id_responsavel: novaPessoa.id,
-        tipo_responsabilidade: 'financeiro',
+        tipo_responsabilidade: selectedTipoResponsabilidade,
         ativo: true,
       });
 
+      // 5. Se inclui financeiro, definir como responsável de cobrança
+      const tipoInclui =
+        selectedTipoResponsabilidade === 'financeiro' ||
+        selectedTipoResponsabilidade === 'ambos';
+      if (tipoInclui) {
+        const { error: updateError } = await supabase
+          .from('pessoas')
+          .update({ responsavel_cobranca_id: novaPessoa.id })
+          .eq('id', effectivePatientId);
+
+        if (updateError) {
+          console.error(
+            'Erro ao definir responsável de cobrança:',
+            updateError
+          );
+        }
+      }
+
+      const tipoLabel =
+        selectedTipoResponsabilidade === 'legal'
+          ? 'legal'
+          : selectedTipoResponsabilidade === 'financeiro'
+            ? 'financeiro'
+            : 'legal e financeiro';
+
       toast({
-        title: 'Responsável pela cobrança criado e vinculado',
-        description: `${nome.trim()} foi cadastrado como responsável financeiro`,
+        title: 'Responsável criado e vinculado',
+        description: `${nome.trim()} foi cadastrado como responsável ${tipoLabel}`,
       });
 
       // Atualizar lista e estado
@@ -837,6 +889,7 @@ export const BillingResponsibleSelect: React.FC<
     setExistingPersonId(undefined);
     setErrors({});
     setUseExistingAddress(null);
+    setSelectedTipoResponsabilidade('ambos');
   };
 
   if (!effectivePatientId) {
@@ -855,120 +908,124 @@ export const BillingResponsibleSelect: React.FC<
         <p className="text-sm text-muted-foreground">Carregando...</p>
       ) : (
         <div className="space-y-3">
-          {/* Lista de responsáveis associados com botão de excluir */}
-          {responsaveisAssociados.length > 0 && (
+          {/* AI dev note: Lista unificada de responsáveis com: tipo editável, indicador de cobrança, e ações */}
+          {responsaveisAssociados.length > 0 ? (
             <div className="space-y-2">
               {responsaveisAssociados.map((resp) => (
                 <div
                   key={resp.id_responsavel}
                   className={cn(
-                    'flex items-center justify-between p-3 border rounded-lg',
+                    'flex items-center justify-between p-3 border rounded-lg gap-2',
                     selectedResponsibleId === resp.id_responsavel
                       ? 'bg-primary/5 border-primary/30'
                       : 'bg-muted/30'
                   )}
                 >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{resp.nome}</p>
+                      <p className="font-medium truncate text-sm">
+                        {resp.nome}
+                      </p>
                       {resp.email && (
                         <p className="text-xs text-muted-foreground truncate">
                           {resp.email}
                         </p>
                       )}
                     </div>
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {resp.tipo_responsabilidade === 'legal'
-                        ? 'Legal'
-                        : resp.tipo_responsabilidade === 'financeiro'
-                          ? 'Financeiro'
-                          : 'Legal e Financeiro'}
-                    </Badge>
-                    {selectedResponsibleId === resp.id_responsavel && (
-                      <Badge variant="default" className="text-xs shrink-0">
-                        <DollarSign className="h-3 w-3 mr-1" />
-                        Cobrança
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Select inline para alterar tipo de responsabilidade */}
+                      <Select
+                        value={resp.tipo_responsabilidade}
+                        onValueChange={(
+                          value: 'legal' | 'financeiro' | 'ambos'
+                        ) => handleChangeTipo(resp.id, value)}
+                      >
+                        <SelectTrigger className="h-7 w-auto min-w-[120px] text-xs px-2">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="legal">Legal</SelectItem>
+                          <SelectItem value="financeiro">Financeiro</SelectItem>
+                          <SelectItem value="ambos">
+                            Legal e Financeiro
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {selectedResponsibleId === resp.id_responsavel && (
+                        <Badge variant="default" className="text-xs shrink-0">
+                          <DollarSign className="h-3 w-3 mr-1" />
+                          Cobrança
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleRemoveResponsible(resp.id_responsavel)}
-                    disabled={removingResponsibleId === resp.id_responsavel}
-                    title="Desassociar responsável"
-                  >
-                    {removingResponsibleId === resp.id_responsavel ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Botão para definir como responsável de cobrança */}
+                    {selectedResponsibleId !== resp.id_responsavel && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() =>
+                          handleSelectResponsible(resp.id_responsavel)
+                        }
+                        disabled={saving}
+                        title="Definir como responsável de cobrança"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                      </Button>
                     )}
-                  </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() =>
+                        handleRemoveResponsible(resp.id_responsavel)
+                      }
+                      disabled={removingResponsibleId === resp.id_responsavel}
+                      title="Desassociar responsável"
+                    >
+                      {removingResponsibleId === resp.id_responsavel ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Nenhum responsável cadastrado
+            </p>
           )}
 
-          {/* Select unificado com todas as opções */}
-          <Select
-            value={selectedResponsibleId || ''}
-            onValueChange={handleSelectResponsible}
-            disabled={saving}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione ou adicione um responsável" />
-            </SelectTrigger>
-            <SelectContent>
-              {/* Responsáveis já associados */}
-              {responsaveisAssociados
-                .filter((resp) => resp.id_responsavel) // AI dev note: Filtrar responsáveis sem ID válido para evitar erro do Radix Select
-                .map((resp) => (
-                  <SelectItem
-                    key={resp.id_responsavel}
-                    value={resp.id_responsavel}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>{resp.nome}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {resp.tipo_responsabilidade === 'legal'
-                          ? 'Legal'
-                          : resp.tipo_responsabilidade === 'financeiro'
-                            ? 'Financeiro'
-                            : 'Legal e Financeiro'}
-                      </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
-
-              {/* Separador - usando div em vez de SelectItem para evitar problemas */}
-              {responsaveisAssociados.filter((r) => r.id_responsavel).length >
-                0 && (
-                <div className="border-t my-1 px-2 py-1">
-                  <span className="text-muted-foreground text-xs">
-                    Outras opções
-                  </span>
-                </div>
-              )}
-
-              {/* Opção de buscar outro já cadastrado */}
-              <SelectItem value="__SEARCH_OTHER__">
-                <div className="flex items-center gap-2 text-primary">
-                  <Search className="h-4 w-4" />
-                  <span>Buscar outro já cadastrado</span>
-                </div>
-              </SelectItem>
-
-              {/* Opção de cadastrar novo */}
-              <SelectItem value="__ADD_NEW__">
-                <div className="flex items-center gap-2 text-primary">
-                  <UserPlus className="h-4 w-4" />
-                  <span>Cadastrar novo responsável</span>
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Botões para adicionar responsáveis */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSearchModal(true)}
+              disabled={saving}
+            >
+              <Search className="h-4 w-4 mr-2" />
+              Buscar existente
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddModal(true)}
+              disabled={saving}
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Cadastrar novo
+            </Button>
+          </div>
         </div>
       )}
 
@@ -986,6 +1043,26 @@ export const BillingResponsibleSelect: React.FC<
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Tipo de responsabilidade para o novo vínculo */}
+            <div className="space-y-2">
+              <Label>Tipo de Responsabilidade</Label>
+              <Select
+                value={selectedTipoResponsabilidade}
+                onValueChange={(value: 'legal' | 'financeiro' | 'ambos') =>
+                  setSelectedTipoResponsabilidade(value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="legal">Legal</SelectItem>
+                  <SelectItem value="financeiro">Financeiro</SelectItem>
+                  <SelectItem value="ambos">Legal e Financeiro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Campo de busca */}
             <div className="space-y-2">
               <Label htmlFor="search">Nome do responsável</Label>
@@ -1070,15 +1147,34 @@ export const BillingResponsibleSelect: React.FC<
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
-              Cadastrar Novo Responsável pela Cobrança
+              Cadastrar Novo Responsável
             </DialogTitle>
             <DialogDescription>
-              Cadastre uma nova pessoa para ser responsável pela cobrança
-              (faturamento e NFe)
+              Cadastre uma nova pessoa como responsável do paciente
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Tipo de responsabilidade */}
+            <div className="space-y-2">
+              <Label>Tipo de Responsabilidade *</Label>
+              <Select
+                value={selectedTipoResponsabilidade}
+                onValueChange={(value: 'legal' | 'financeiro' | 'ambos') =>
+                  setSelectedTipoResponsabilidade(value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="legal">Legal</SelectItem>
+                  <SelectItem value="financeiro">Financeiro</SelectItem>
+                  <SelectItem value="ambos">Legal e Financeiro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Alerta se pessoa existe */}
             {existingPersonId && (
               <div className="p-3 bg-green-50 border border-green-200 rounded-lg">

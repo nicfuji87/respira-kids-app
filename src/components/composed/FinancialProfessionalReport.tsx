@@ -63,6 +63,10 @@ interface ResumoComissaoProfissional {
   total_consultas: number;
   total_comissao: number;
   total_faturamento_clinica: number;
+  // AI dev note: Líquido = bruto menos itens com status_pagamento_codigo 'cancelado'
+  // Pendente e atrasado continuam no bruto pois ainda podem ser recebidos
+  total_comissao_liquida: number;
+  total_faturamento_liquido: number;
   consultas_por_local: Record<
     string,
     { count: number; comissao: number; faturamento: number }
@@ -272,6 +276,8 @@ export const FinancialProfessionalReport: React.FC<
           total_consultas: 0,
           total_comissao: 0,
           total_faturamento_clinica: 0,
+          total_comissao_liquida: 0,
+          total_faturamento_liquido: 0,
           consultas_por_local: {},
           consultas_por_servico: {},
           consultas_por_status: {},
@@ -279,11 +285,21 @@ export const FinancialProfessionalReport: React.FC<
       }
 
       const resumo = resumosPorProfissional.get(profId)!;
+      const comissaoValor = consulta.comissao_valor_calculado || 0;
+      const faturamentoValor = consulta.valor_servico || 0;
+      const isPagamentoCancelado =
+        consulta.status_pagamento_codigo === 'cancelado';
 
-      // Contadores gerais
+      // Contadores gerais (bruto = tudo)
       resumo.total_consultas += 1;
-      resumo.total_comissao += consulta.comissao_valor_calculado || 0;
-      resumo.total_faturamento_clinica += consulta.valor_servico || 0;
+      resumo.total_comissao += comissaoValor;
+      resumo.total_faturamento_clinica += faturamentoValor;
+
+      // Líquido = exclui pagamentos cancelados
+      if (!isPagamentoCancelado) {
+        resumo.total_comissao_liquida += comissaoValor;
+        resumo.total_faturamento_liquido += faturamentoValor;
+      }
 
       // Por local
       const localKey =
@@ -391,9 +407,19 @@ export const FinancialProfessionalReport: React.FC<
         totalComissoes: acc.totalComissoes + resumo.total_comissao,
         totalFaturamento:
           acc.totalFaturamento + resumo.total_faturamento_clinica,
+        totalComissoesLiquidas:
+          acc.totalComissoesLiquidas + resumo.total_comissao_liquida,
+        totalFaturamentoLiquido:
+          acc.totalFaturamentoLiquido + resumo.total_faturamento_liquido,
         totalConsultas: acc.totalConsultas + resumo.total_consultas,
       }),
-      { totalComissoes: 0, totalFaturamento: 0, totalConsultas: 0 }
+      {
+        totalComissoes: 0,
+        totalFaturamento: 0,
+        totalComissoesLiquidas: 0,
+        totalFaturamentoLiquido: 0,
+        totalConsultas: 0,
+      }
     );
   }, [resumos]);
 
@@ -554,40 +580,86 @@ export const FinancialProfessionalReport: React.FC<
 
           {/* Resumo Geral */}
           {!isLoading && !error && resumos.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Total de Consultas
-                  </p>
-                  <p className="text-lg font-semibold">
-                    {totaisGerais.totalConsultas}
-                  </p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Total de Consultas
+                    </p>
+                    <p className="text-lg font-semibold">
+                      {totaisGerais.totalConsultas}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <DollarSign className="h-5 w-5 text-verde-pipa" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Comissão Bruta
+                    </p>
+                    <p className="text-lg font-semibold text-verde-pipa">
+                      {formatCurrency(totaisGerais.totalComissoes)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="h-5 w-5 text-blue-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Faturamento Bruto
+                    </p>
+                    <p className="text-lg font-semibold text-blue-500">
+                      {formatCurrency(totaisGerais.totalFaturamento)}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <DollarSign className="h-5 w-5 text-verde-pipa" />
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Total Comissões
-                  </p>
-                  <p className="text-lg font-semibold text-verde-pipa">
-                    {formatCurrency(totaisGerais.totalComissoes)}
-                  </p>
+
+              {/* AI dev note: Líquido = bruto descontando pagamentos cancelados */}
+              {totaisGerais.totalComissoes !==
+                totaisGerais.totalComissoesLiquidas && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Cancelados (desc.)
+                      </p>
+                      <p className="text-lg font-semibold text-destructive">
+                        -
+                        {formatCurrency(
+                          totaisGerais.totalComissoes -
+                            totaisGerais.totalComissoesLiquidas
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <DollarSign className="h-5 w-5 text-verde-pipa" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Comissão Líquida
+                      </p>
+                      <p className="text-lg font-bold text-verde-pipa">
+                        {formatCurrency(totaisGerais.totalComissoesLiquidas)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <TrendingUp className="h-5 w-5 text-blue-500" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Faturamento Líquido
+                      </p>
+                      <p className="text-lg font-bold text-blue-500">
+                        {formatCurrency(totaisGerais.totalFaturamentoLiquido)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-5 w-5 text-blue-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Faturamento Clínica
-                  </p>
-                  <p className="text-lg font-semibold text-blue-500">
-                    {formatCurrency(totaisGerais.totalFaturamento)}
-                  </p>
-                </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -646,20 +718,50 @@ export const FinancialProfessionalReport: React.FC<
                               <span className="text-muted-foreground">
                                 Comissão:
                               </span>
-                              <span className="font-semibold text-verde-pipa">
-                                {formatCurrency(resumo.total_comissao)}
-                              </span>
+                              {resumo.total_comissao !==
+                              resumo.total_comissao_liquida ? (
+                                <span className="flex items-center gap-1">
+                                  <span className="text-muted-foreground line-through text-xs">
+                                    {formatCurrency(resumo.total_comissao)}
+                                  </span>
+                                  <span className="font-semibold text-verde-pipa">
+                                    {formatCurrency(
+                                      resumo.total_comissao_liquida
+                                    )}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-verde-pipa">
+                                  {formatCurrency(resumo.total_comissao)}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <TrendingUp className="h-4 w-4 text-blue-500" />
                               <span className="text-muted-foreground">
                                 Faturamento:
                               </span>
-                              <span className="font-semibold text-blue-500">
-                                {formatCurrency(
-                                  resumo.total_faturamento_clinica
-                                )}
-                              </span>
+                              {resumo.total_faturamento_clinica !==
+                              resumo.total_faturamento_liquido ? (
+                                <span className="flex items-center gap-1">
+                                  <span className="text-muted-foreground line-through text-xs">
+                                    {formatCurrency(
+                                      resumo.total_faturamento_clinica
+                                    )}
+                                  </span>
+                                  <span className="font-semibold text-blue-500">
+                                    {formatCurrency(
+                                      resumo.total_faturamento_liquido
+                                    )}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-blue-500">
+                                  {formatCurrency(
+                                    resumo.total_faturamento_clinica
+                                  )}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
