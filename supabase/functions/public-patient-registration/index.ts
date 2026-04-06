@@ -1,8 +1,8 @@
 // AI dev note: Edge Function para finalizar cadastro público de paciente
 // Cria todas as entidades no banco de dados seguindo a ordem correta
 // Logs detalhados em cada etapa para rastreamento
-// Versão 40: Fix timezone bug - data de nascimento formatada no webhook para evitar
-//            que sistemas externos (n8n) exibam data errada por problema de fuso horário
+// Versão 41: Fix CPF duplicado - (1) STEP 3 reutiliza pessoa existente com
+//            mesmo CPF em retries, (2) mensagens de erro mais detalhadas
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -406,61 +406,112 @@ Deno.serve(async (req: Request) => {
         ? extractPhoneFromJid(data.whatsappJid)
         : data.phoneNumber;
 
+      const cpfResponsavelLegal = cleanCPF(data.responsavelLegal.cpf);
+
       console.log('📋 [STEP 3] Dados:', {
         nome: data.responsavelLegal?.nome,
-        cpf: data.responsavelLegal?.cpf,
+        cpf: cpfResponsavelLegal,
         email: data.responsavelLegal?.email,
         telefone: telefoneResponsavelLegal,
       });
 
-      // AI dev note: Usar UUID temporário para criar autoreferência
-      const tempId = crypto.randomUUID();
+      // AI dev note: Verificar se já existe pessoa ativa com o mesmo CPF
+      // Isso acontece em cenários de retry: a 1a tentativa criou o responsável
+      // mas falhou em etapa posterior (ex: paciente). Na 2a tentativa, o responsável
+      // já existe e deve ser reutilizado em vez de tentar inserir novamente.
+      if (cpfResponsavelLegal) {
+        const { data: pessoaExistenteCpf, error: errorBuscaCpf } =
+          await supabase
+            .from('pessoas')
+            .select('id')
+            .eq('cpf_cnpj', cpfResponsavelLegal)
+            .eq('ativo', true)
+            .maybeSingle();
 
-      const { data: novoResponsavelLegal, error: errorResponsavelLegal } =
-        await supabase
+        if (!errorBuscaCpf && pessoaExistenteCpf) {
+          responsavelLegalId = pessoaExistenteCpf.id;
+          console.log(
+            '✅ [STEP 3] Pessoa com mesmo CPF já existe (reutilizando):',
+            responsavelLegalId
+          );
+
+          // Atualizar dados que podem ter mudado
+          const { error: errorUpdateExistente } = await supabase
+            .from('pessoas')
+            .update({
+              nome: data.responsavelLegal.nome,
+              telefone: telefoneResponsavelLegal,
+              email: data.responsavelLegal.email,
+              id_endereco: enderecoId,
+              numero_endereco: data.endereco.numero,
+              complemento_endereco: data.endereco.complemento || null,
+            })
+            .eq('id', responsavelLegalId);
+
+          if (errorUpdateExistente) {
+            console.warn(
+              '⚠️ [STEP 3] Falha ao atualizar dados da pessoa existente (continuando):',
+              errorUpdateExistente
+            );
+          }
+        }
+      }
+
+      // Só criar se não encontrou pessoa existente
+      if (!responsavelLegalId) {
+        const tempId = crypto.randomUUID();
+
+        const { data: novoResponsavelLegal, error: errorResponsavelLegal } =
+          await supabase
+            .from('pessoas')
+            .insert({
+              id: tempId,
+              nome: data.responsavelLegal.nome,
+              cpf_cnpj: cpfResponsavelLegal,
+              telefone: telefoneResponsavelLegal,
+              email: data.responsavelLegal.email,
+              id_tipo_pessoa: tipoResponsavel.id,
+              id_endereco: enderecoId,
+              numero_endereco: data.endereco.numero,
+              complemento_endereco: data.endereco.complemento || null,
+              responsavel_cobranca_id: tempId,
+              ativo: true,
+            })
+            .select('id')
+            .single();
+
+        if (errorResponsavelLegal || !novoResponsavelLegal) {
+          console.error(
+            '❌ [STEP 3] Erro ao criar responsável legal:',
+            errorResponsavelLegal
+          );
+          const detalhes =
+            errorResponsavelLegal?.message || 'Erro desconhecido';
+          throw new Error(`Erro ao criar responsável legal: ${detalhes}`);
+        }
+
+        responsavelLegalId = novoResponsavelLegal.id;
+        console.log(
+          '✅ [STEP 3] Responsável legal criado:',
+          responsavelLegalId
+        );
+
+        // Atualizar auto-referência
+        console.log('📋 [STEP 3.1] Atualizando auto-referência...');
+        const { error: errorAutoReferencia } = await supabase
           .from('pessoas')
-          .insert({
-            id: tempId, // ID temporário para auto-referência
-            nome: data.responsavelLegal.nome,
-            cpf_cnpj: cleanCPF(data.responsavelLegal.cpf), // AI dev note: Limpar CPF antes de salvar
-            telefone: telefoneResponsavelLegal,
-            email: data.responsavelLegal.email,
-            id_tipo_pessoa: tipoResponsavel.id,
-            id_endereco: enderecoId,
-            numero_endereco: data.endereco.numero,
-            complemento_endereco: data.endereco.complemento || null,
-            responsavel_cobranca_id: tempId, // Auto-referência
-            ativo: true,
-          })
-          .select('id')
-          .single();
+          .update({ responsavel_cobranca_id: responsavelLegalId })
+          .eq('id', responsavelLegalId);
 
-      if (errorResponsavelLegal || !novoResponsavelLegal) {
-        console.error(
-          '❌ [STEP 3] Erro ao criar responsável legal:',
-          errorResponsavelLegal
-        );
-        throw new Error('Erro ao criar responsável legal');
+        if (errorAutoReferencia) {
+          console.error(
+            '❌ [STEP 3.1] Erro ao atualizar auto-referência:',
+            errorAutoReferencia
+          );
+          throw new Error('Erro ao atualizar auto-referência do responsável');
+        }
+        console.log('✅ [STEP 3.1] Auto-referência atualizada');
       }
-
-      responsavelLegalId = novoResponsavelLegal.id;
-      console.log('✅ [STEP 3] Responsável legal criado:', responsavelLegalId);
-
-      // Atualizar auto-referência
-      console.log('📋 [STEP 3.1] Atualizando auto-referência...');
-      const { error: errorAutoReferencia } = await supabase
-        .from('pessoas')
-        .update({ responsavel_cobranca_id: responsavelLegalId })
-        .eq('id', responsavelLegalId);
-
-      if (errorAutoReferencia) {
-        console.error(
-          '❌ [STEP 3.1] Erro ao atualizar auto-referência:',
-          errorAutoReferencia
-        );
-        throw new Error('Erro ao atualizar auto-referência do responsável');
-      }
-      console.log('✅ [STEP 3.1] Auto-referência atualizada');
     }
 
     // ============================================
@@ -691,15 +742,17 @@ Deno.serve(async (req: Request) => {
     // STEP 6: Criar PACIENTE
     // ============================================
     console.log('📋 [STEP 6] Criando paciente...');
+
+    // AI dev note: Data já vem no formato ISO do frontend
+    const dataNascimentoISO = data.paciente.dataNascimento;
+    const cpfPaciente = cleanCPF(data.paciente.cpf);
+
     console.log('📋 [STEP 6] Dados:', {
       nome: data.paciente.nome,
       dataNascimento: data.paciente.dataNascimento,
       sexo: data.paciente.sexo,
-      cpf: data.paciente.cpf || 'não fornecido',
+      cpf: cpfPaciente || 'não fornecido',
     });
-
-    // AI dev note: Data já vem no formato ISO do frontend
-    const dataNascimentoISO = data.paciente.dataNascimento;
 
     const { data: novoPaciente, error: errorPaciente } = await supabase
       .from('pessoas')
@@ -707,12 +760,12 @@ Deno.serve(async (req: Request) => {
         nome: data.paciente.nome,
         data_nascimento: dataNascimentoISO,
         sexo: data.paciente.sexo,
-        cpf_cnpj: cleanCPF(data.paciente.cpf), // AI dev note: Limpar CPF antes de salvar
+        cpf_cnpj: cpfPaciente,
         id_tipo_pessoa: tipoPaciente.id,
         id_endereco: enderecoId,
         numero_endereco: data.endereco.numero,
         complemento_endereco: data.endereco.complemento || null,
-        responsavel_cobranca_id: responsavelFinanceiroId, // Responsável financeiro paga as contas
+        responsavel_cobranca_id: responsavelFinanceiroId,
         autorizacao_uso_cientifico: data.autorizacoes.usoCientifico,
         autorizacao_uso_redes_sociais: data.autorizacoes.usoRedesSociais,
         autorizacao_uso_do_nome: data.autorizacoes.usoNome,
@@ -723,7 +776,8 @@ Deno.serve(async (req: Request) => {
 
     if (errorPaciente || !novoPaciente) {
       console.error('❌ [STEP 6] Erro ao criar paciente:', errorPaciente);
-      throw new Error('Erro ao criar paciente');
+      const detalhes = errorPaciente?.message || 'Erro desconhecido';
+      throw new Error(`Erro ao criar paciente: ${detalhes}`);
     }
 
     const pacienteId = novoPaciente.id;
@@ -969,7 +1023,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 200,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 40, // AI dev note: Incrementar versão
+        edge_function_version: 41, // AI dev note: Incrementar versão
         paciente_id: pacienteId,
         responsavel_legal_id: responsavelLegalId,
         responsavel_financeiro_id: responsavelFinanceiroId,
@@ -1009,7 +1063,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 500,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 40, // AI dev note: Incrementar versão
+        edge_function_version: 41, // AI dev note: Incrementar versão
         error_type: 'database_error',
         error_details: {
           message: error instanceof Error ? error.message : String(error),

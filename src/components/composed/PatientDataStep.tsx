@@ -30,10 +30,11 @@ export interface PatientDataStepProps {
   onBack?: () => void;
   initialData?: Partial<PatientData>;
   className?: string;
+  responsavelCpf?: string;
 }
 
 export const PatientDataStep = React.memo<PatientDataStepProps>(
-  ({ onContinue, onBack, initialData, className }) => {
+  ({ onContinue, onBack, initialData, className, responsavelCpf }) => {
     const [nome, setNome] = useState(initialData?.nome || '');
     const [dataNascimento, setDataNascimento] = useState(
       initialData?.dataNascimento || ''
@@ -72,16 +73,30 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
         newErrors.cpf =
           'CPF é obrigatório para emissão de nota fiscal no nome do paciente';
       } else if (cpf && cpf.trim() !== '') {
-        // Se CPF foi preenchido (mesmo que opcional), validar
         const validation = validateCPF(cpf);
         if (!validation.valid) {
           newErrors.cpf = validation.error || 'CPF inválido';
+        } else if (responsavelCpf) {
+          // AI dev note: Evitar que o pai/mãe insira o próprio CPF no campo do paciente
+          const cpfLimpo = cpf.replace(/\D/g, '');
+          const responsavelCpfLimpo = responsavelCpf.replace(/\D/g, '');
+          if (cpfLimpo === responsavelCpfLimpo) {
+            const cpfFormatado = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
+            newErrors.cpf = `Este CPF (${cpfFormatado}) já está cadastrado como responsável. Insira o CPF do paciente.`;
+          }
         }
       }
 
       setErrors(newErrors);
       return Object.keys(newErrors).length === 0;
-    }, [nome, dataNascimento, sexo, emitirNotaNomePaciente, cpf]);
+    }, [
+      nome,
+      dataNascimento,
+      sexo,
+      emitirNotaNomePaciente,
+      cpf,
+      responsavelCpf,
+    ]);
 
     const handleContinue = useCallback(() => {
       console.log('➡️ [PatientDataStep] handleContinue');

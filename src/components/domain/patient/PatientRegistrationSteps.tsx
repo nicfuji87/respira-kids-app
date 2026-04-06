@@ -1217,6 +1217,7 @@ export const PatientRegistrationSteps =
               onContinue={handlePatientData}
               onBack={handleBack}
               initialData={registrationData.paciente}
+              responsavelCpf={registrationData.responsavelLegal?.cpf}
             />
           );
 
