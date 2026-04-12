@@ -215,6 +215,7 @@ export const ResponsiveCalendarTemplate =
                 {...baseProps}
                 currentUser={currentUser as SecretariaUser}
                 availableProfessionals={availableProfessionals}
+                showSharedSchedulesTab={true}
               />
             );
 

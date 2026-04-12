@@ -1,10 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { CalendarTemplate } from './CalendarTemplate';
 import { CalendarFilters } from '@/components/composed/CalendarFilters';
+import { SharedSchedulesList } from '@/components/domain/calendar/SharedSchedulesList';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '@/components/primitives/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
+import { Label } from '@/components/primitives/label';
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
 
 // AI dev note: SecretariaCalendarTemplate combina CalendarTemplate
 // Template para secretárias com permissões para visualizar profissionais autorizados
+// Secretárias autorizadas podem criar agendas compartilhadas para seus profissionais
 
 export interface SecretariaUser {
   id: string;
@@ -49,6 +65,9 @@ export interface SecretariaCalendarTemplateProps {
   canDeleteEvents?: boolean;
   canViewAllEvents?: boolean;
 
+  // AI dev note: Agendas compartilhadas - secretária cria para profissionais autorizados
+  showSharedSchedulesTab?: boolean;
+
   // Navigation handlers
   onPatientClick?: (patientId: string | null) => void;
   onProfessionalClick?: (professionalId: string) => void;
@@ -72,6 +91,7 @@ export const SecretariaCalendarTemplate =
       canEditEvents = true,
       canDeleteEvents = false, // Default for secretaria
       canViewAllEvents = false,
+      showSharedSchedulesTab = false,
       onPatientClick,
       onProfessionalClick,
     }) => {
@@ -89,6 +109,22 @@ export const SecretariaCalendarTemplate =
       const [selectedStatusPagamento, setSelectedStatusPagamento] = useState<
         string[]
       >([]);
+
+      // AI dev note: Profissional selecionado para agendas compartilhadas
+      const authorizedProfsList = useMemo(() => {
+        if (!currentUser.authorizedProfessionals) {
+          return availableProfessionals;
+        }
+        return availableProfessionals.filter((prof) =>
+          currentUser.authorizedProfessionals?.includes(prof.id)
+        );
+      }, [currentUser.authorizedProfessionals, availableProfessionals]);
+
+      const [selectedSharedProfessional, setSelectedSharedProfessional] =
+        useState<string>(authorizedProfsList[0]?.id || '');
+
+      const canShowSharedTab =
+        showSharedSchedulesTab && authorizedProfsList.length > 0;
 
       // Get authorized professionals
       const getAuthorizedProfessionals = () => {
@@ -217,9 +253,8 @@ export const SecretariaCalendarTemplate =
         name: prof.name,
       }));
 
-      return (
-        <div className="secretaria-calendar-template w-full h-full flex flex-col">
-          {/* AI dev note: Filtros completos reutilizáveis */}
+      const calendarContent = (
+        <>
           <CalendarFilters
             selectedProfessional={selectedProfessional}
             selectedPatient={selectedPatient}
@@ -246,8 +281,6 @@ export const SecretariaCalendarTemplate =
             availableProfessionals={professionalsList}
             eventCount={getFilteredEvents.length}
           />
-
-          {/* Calendário expandido para ocupar todo espaço restante */}
           <div className="flex-1 min-h-0">
             <CalendarTemplate
               events={getFilteredEvents}
@@ -269,6 +302,64 @@ export const SecretariaCalendarTemplate =
               className="w-full max-w-none"
             />
           </div>
+        </>
+      );
+
+      return (
+        <div className="secretaria-calendar-template w-full h-full flex flex-col">
+          {canShowSharedTab ? (
+            <Tabs
+              defaultValue="calendar"
+              className="w-full flex-1 flex flex-col"
+            >
+              <TabsList className="mb-4">
+                <TabsTrigger value="calendar">Agenda</TabsTrigger>
+                <TabsTrigger value="shared-schedules">
+                  Agenda Compartilhada
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent
+                value="calendar"
+                className="mt-0 flex-1 flex flex-col"
+              >
+                {calendarContent}
+              </TabsContent>
+
+              <TabsContent value="shared-schedules" className="mt-0 space-y-4">
+                {authorizedProfsList.length > 1 && (
+                  <div className="space-y-2 max-w-sm">
+                    <Label htmlFor="shared-prof-select">Profissional</Label>
+                    <Select
+                      value={selectedSharedProfessional}
+                      onValueChange={setSelectedSharedProfessional}
+                    >
+                      <SelectTrigger id="shared-prof-select">
+                        <SelectValue placeholder="Selecione o profissional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {authorizedProfsList.map((prof) => (
+                          <SelectItem key={prof.id} value={prof.id}>
+                            {prof.name}
+                            {prof.specialization && ` - ${prof.specialization}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {selectedSharedProfessional && (
+                  <SharedSchedulesList
+                    profissionalId={selectedSharedProfessional}
+                    userId={currentUser.id}
+                  />
+                )}
+              </TabsContent>
+            </Tabs>
+          ) : (
+            calendarContent
+          )}
         </div>
       );
     }

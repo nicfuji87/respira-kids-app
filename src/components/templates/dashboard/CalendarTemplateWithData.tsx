@@ -299,6 +299,7 @@ export const CalendarTemplateWithData =
                   specialization: p.especialidade || undefined,
                 }))
                 .filter((p) => permissions.allowedProfessionals.includes(p.id))}
+              showSharedSchedulesTab={true}
             />
           );
 
