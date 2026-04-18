@@ -14,6 +14,11 @@ export interface ConsultationData {
   tipo_servico_id?: string;
 }
 
+// AI dev note: PatientData representa SEMPRE os dados do PACIENTE atendido
+// (nome e CPF do próprio paciente), nunca do responsável de cobrança.
+// O trecho "Atendimentos realizados ao paciente X, CPF Y" na descrição
+// da cobrança/nota fiscal deve identificar quem recebeu o atendimento.
+// O responsável de cobrança é informado separadamente no ASAAS via responsibleId.
 export interface PatientData {
   nome: string;
   cpf_cnpj: string;

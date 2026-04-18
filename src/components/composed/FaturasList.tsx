@@ -7,7 +7,7 @@ import {
   Receipt,
   ChevronRight,
   FileText,
-  AlertCircle,
+  RefreshCw,
   DollarSign,
 } from 'lucide-react';
 import {
@@ -20,6 +20,16 @@ import { Badge } from '@/components/primitives/badge';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { useToast } from '@/components/primitives/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import { cn } from '@/lib/utils';
 import type { FaturaComDetalhes } from '@/types/faturas';
 
@@ -55,6 +65,9 @@ const FaturaItem = React.memo<{
     isReceivingPayment,
   }) => {
     const { toast } = useToast();
+    // AI dev note: Controla o diálogo de confirmação de "cancelar e reemitir NFe"
+    const [showCancelReissueDialog, setShowCancelReissueDialog] =
+      useState(false);
 
     const formatCurrency = (value: number) => {
       return new Intl.NumberFormat('pt-BR', {
@@ -178,13 +191,16 @@ const FaturaItem = React.memo<{
       const linkNfe = fatura.link_nfe;
 
       if (linkNfe === 'erro') {
-        // Mostrar toast com erro
+        // AI dev note: Mostrar toast com o erro real do ASAAS e abrir confirmação
+        // antes de cancelar+reemitir.
         toast({
-          title: 'Erro na NFe',
+          title: 'Erro na emissão da NFe',
           description:
-            fatura.status_nfe || 'Erro desconhecido na emissão da nota fiscal',
+            fatura.status_nfe ||
+            'A emissão da nota fiscal falhou. Clique em confirmar para cancelar a NFe anterior e emitir novamente.',
           variant: 'destructive',
         });
+        setShowCancelReissueDialog(true);
       } else if (linkNfe && linkNfe !== 'sincronizando' && linkNfe !== 'erro') {
         // Link válido - abrir/baixar NFe
         console.log('📄 Abrindo NFe:', linkNfe);
@@ -253,9 +269,12 @@ const FaturaItem = React.memo<{
       }
 
       if (linkNfe === 'erro') {
+        // AI dev note: Em caso de erro (ex: erro de RPS), permitir cancelar a NFe
+        // em erro no ASAAS e emitir uma nova. O clique mostra toast com o erro
+        // real vindo do ASAAS e abre diálogo de confirmação.
         return {
-          text: 'Erro NFe',
-          icon: AlertCircle,
+          text: 'Erro. Cancelar e reemitir NFe',
+          icon: RefreshCw,
           className: 'text-red-600 hover:text-red-800',
           disabled: false,
         };
@@ -276,6 +295,19 @@ const FaturaItem = React.memo<{
     if (process.env.NODE_ENV === 'development' && fatura.status === 'pago') {
       console.log('🔍 NFe Config gerado:', nfeConfig);
     }
+
+    const handleConfirmCancelReissue = () => {
+      setShowCancelReissueDialog(false);
+      if (onEmitirNfe) {
+        onEmitirNfe(fatura);
+      } else {
+        toast({
+          title: 'Ação indisponível',
+          description: 'Não foi possível iniciar a reemissão da NFe.',
+          variant: 'destructive',
+        });
+      }
+    };
 
     return (
       <div
@@ -428,6 +460,51 @@ const FaturaItem = React.memo<{
               )}
           </div>
         </div>
+
+        {/* AI dev note: Confirmação antes de cancelar a NFe em erro e reemitir.
+            Cancelar NFe tem efeito fiscal, por isso exigimos confirmação explícita. */}
+        <AlertDialog
+          open={showCancelReissueDialog}
+          onOpenChange={setShowCancelReissueDialog}
+        >
+          <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancelar e reemitir NFe?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <p>
+                    A nota fiscal anterior está com erro e será{' '}
+                    <strong>cancelada (ou excluída) no ASAAS</strong> antes de
+                    emitir uma nova.
+                  </p>
+                  {fatura.status_nfe ? (
+                    <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                      <strong>Erro anterior:</strong> {fatura.status_nfe}
+                    </p>
+                  ) : null}
+                  <p>
+                    Essa ação tem efeito fiscal caso a nota já tenha sido
+                    autorizada pela prefeitura. Deseja continuar?
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                Voltar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleConfirmCancelReissue();
+                }}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                Cancelar e reemitir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }

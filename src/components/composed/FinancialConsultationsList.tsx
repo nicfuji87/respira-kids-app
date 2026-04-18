@@ -958,10 +958,13 @@ export const FinancialConsultationsList: React.FC<
             })
           );
 
-          // AI dev note: Usar dados do paciente para descrição (nome e CPF do responsável)
+          // AI dev note: Descrição da cobrança deve conter nome E CPF do PACIENTE
+          // (não do responsável de cobrança). O responsável aparece apenas como
+          // pagador no ASAAS (responsibleId), mas o trecho "Atendimentos realizados
+          // ao paciente X, CPF Y" sempre se refere ao paciente atendido.
           const patientDataForDescription: PatientData = {
             nome: patientData.nome,
-            cpf_cnpj: responsibleData.cpf_cnpj, // CPF do responsável de cobrança
+            cpf_cnpj: patientData.cpf_cnpj || '',
           };
 
           // Gerar descrição da cobrança

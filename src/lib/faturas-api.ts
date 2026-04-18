@@ -7,6 +7,7 @@ import {
   cancelAsaasPayment,
   scheduleAsaasInvoice,
   authorizeAsaasInvoice,
+  cancelAsaasInvoicesByPayment,
   determineApiKeyFromEmpresa,
 } from './asaas-api';
 import { generateChargeDescription } from './charge-description';
@@ -1108,6 +1109,11 @@ export async function emitirNfeFatura(
       };
     }
 
+    // AI dev note: Quando a fatura está em estado de erro (ex: erro de RPS),
+    // precisamos limpar as invoices antigas no ASAAS antes de reemitir, caso
+    // contrário ficariam invoices órfãs/duplicadas no ASAAS.
+    const isRetryAfterError = fatura.link_nfe === 'erro';
+
     // 3. Marcar como sincronizando
     await supabase
       .from('faturas')
@@ -1134,6 +1140,48 @@ export async function emitirNfeFatura(
         success: false,
         error: 'Empresa não possui API key do ASAAS configurada',
       };
+    }
+
+    // 4.1. Se está reemitindo após erro, cancelar invoices antigas no ASAAS
+    if (isRetryAfterError && fatura.id_asaas) {
+      console.log(
+        '♻️ Reemissão após erro: cancelando invoices antigas no ASAAS para payment',
+        fatura.id_asaas
+      );
+      const cancelResult = await cancelAsaasInvoicesByPayment(
+        fatura.id_asaas,
+        apiConfig
+      );
+
+      if (!cancelResult.success) {
+        console.error(
+          '❌ Falha ao cancelar invoices antigas no ASAAS:',
+          cancelResult.error
+        );
+        await supabase
+          .from('faturas')
+          .update({
+            link_nfe: 'erro',
+            status_nfe: `Falha ao cancelar NFe anterior: ${cancelResult.error || 'erro desconhecido'}`,
+            atualizado_por: userId === 'system' ? null : userId,
+          })
+          .eq('id', faturaId);
+
+        return {
+          success: false,
+          error:
+            cancelResult.error ||
+            'Não foi possível cancelar a nota fiscal anterior para reemissão',
+        };
+      }
+
+      const cancelData = cancelResult.data as
+        | { results?: unknown[]; totalProcessed?: number }
+        | undefined;
+      console.log(
+        '✅ Invoices antigas tratadas no ASAAS:',
+        cancelData?.totalProcessed ?? 0
+      );
     }
 
     try {

@@ -793,6 +793,61 @@ export async function authorizeAsaasInvoice(
   }
 }
 
+// AI dev note: Cancela (ou exclui como fallback) TODAS as notas fiscais
+// associadas a um payment no Asaas. Usado quando a NFe ficou em erro
+// (ex: erro de RPS) e precisa ser reemitida do zero.
+// A Edge Function internamente tenta POST /invoices/{id}/cancel e, se falhar,
+// faz DELETE /invoices/{id} como fallback.
+export async function cancelAsaasInvoicesByPayment(
+  paymentId: string,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-cancel-invoice',
+      {
+        body: {
+          apiConfig,
+          paymentId,
+        },
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao chamar Edge Function asaas-cancel-invoice:',
+        error
+      );
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de cancelamento de NFe',
+      };
+    }
+
+    if (!data?.success) {
+      return {
+        success: false,
+        error: data?.error || 'Erro desconhecido ao cancelar nota fiscal',
+        data: data,
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        results: data.results,
+        totalProcessed: data.totalProcessed,
+      },
+    };
+  } catch (error) {
+    console.error('Erro ao cancelar nota fiscal no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao cancelar nota fiscal',
+    };
+  }
+}
+
 // AI dev note: Confirma recebimento em dinheiro no Asaas
 export async function receivePaymentInCash(
   paymentId: string,

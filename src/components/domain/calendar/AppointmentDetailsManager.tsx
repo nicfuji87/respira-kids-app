@@ -211,6 +211,7 @@ export const AppointmentDetailsManager =
       const [faturaData, setFaturaData] = useState<{
         link_nfe: string | null;
         id_asaas: string | null;
+        status_nfe: string | null;
       } | null>(null);
 
       const { user } = useAuth();
@@ -240,14 +241,18 @@ export const AppointmentDetailsManager =
         );
       }, [appointment]);
 
-      // Função wrapper para emitir NFe (apenas para casos de emissão)
+      // Função wrapper para emitir NFe (ou cancelar+reemitir quando houve erro)
+      // AI dev note: Permitimos tanto emissão inicial (linkNfe vazio) quanto
+      // reemissão após erro (linkNfe === 'erro'). O emitirNfeFatura do backend
+      // cuida de cancelar as invoices antigas no ASAAS antes de reemitir.
       const handleEmitirNfe = async () => {
         const statusLower =
           appointment?.status_pagamento_nome?.toLowerCase() || '';
         const linkNfe = faturaData?.link_nfe || appointment?.link_nfe;
 
-        // Só executar se for realmente um caso de "Emitir NFe"
-        if (statusLower.includes('pago') && !linkNfe && onNfeAction) {
+        const canEmit = !linkNfe || linkNfe === 'erro';
+
+        if (statusLower.includes('pago') && canEmit && onNfeAction) {
           setIsEmitingNfe(true);
           try {
             await onNfeAction(appointment?.id || '', linkNfe || undefined);
@@ -272,7 +277,7 @@ export const AppointmentDetailsManager =
           try {
             const { data: fatura, error } = await supabase
               .from('faturas')
-              .select('link_nfe, id_asaas')
+              .select('link_nfe, id_asaas, status_nfe')
               .eq('id', appointmentWithFatura.fatura_id)
               .single();
 
@@ -283,11 +288,13 @@ export const AppointmentDetailsManager =
               setFaturaData({
                 link_nfe: fatura.link_nfe,
                 id_asaas: fatura.id_asaas,
+                status_nfe: fatura.status_nfe,
               });
               console.log('🔍 Dados da fatura carregados:', {
                 fatura_id: appointmentWithFatura.fatura_id,
                 link_nfe: fatura.link_nfe,
                 id_asaas: fatura.id_asaas,
+                status_nfe: fatura.status_nfe,
               });
             }
           } catch (error) {
@@ -1769,6 +1776,7 @@ export const AppointmentDetailsManager =
                             linkNfe={
                               faturaData?.link_nfe || appointment.link_nfe
                             }
+                            statusNfe={faturaData?.status_nfe}
                             idAsaas={
                               faturaData?.id_asaas ||
                               appointment.id_pagamento_externo

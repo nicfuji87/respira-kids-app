@@ -9,8 +9,19 @@ import {
   ExternalLink,
   FileText,
   AlertCircle,
+  RefreshCw,
   ChevronRight,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import {
   Card,
   CardContent,
@@ -84,6 +95,10 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEmitingNfe, setIsEmitingNfe] = useState<string | null>(null);
+  // AI dev note: Armazena a fatura para a qual queremos abrir o diálogo de
+  // "cancelar e reemitir NFe". Quando null, o diálogo fica fechado.
+  const [faturaToCancelReissue, setFaturaToCancelReissue] =
+    useState<FaturaComDetalhes | null>(null);
 
   // Estados de filtro
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('mes_atual');
@@ -605,6 +620,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   };
 
   // Função para determinar estado do botão NFe
+  // AI dev note: Trata também os estados 'sincronizando' e 'erro' do link_nfe.
+  // Em 'erro' o botão permite cancelar a NFe em erro e reemitir (diálogo de confirmação).
   const getNfeButtonConfig = (fatura: FaturaComDetalhes) => {
     if (fatura.status !== 'pago') {
       return null;
@@ -630,6 +647,36 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         className: 'text-blue-600 hover:text-blue-800',
         disabled: false,
         action: () => handleEmitirNfe(fatura),
+      };
+    }
+
+    if (linkNfe === 'sincronizando') {
+      return {
+        text: 'Gerando NFe',
+        icon: FileText,
+        className: 'text-gray-500',
+        disabled: true,
+        action: null,
+      };
+    }
+
+    if (linkNfe === 'erro') {
+      return {
+        text: 'Erro. Cancelar e reemitir NFe',
+        icon: RefreshCw,
+        className: 'text-red-600 hover:text-red-800',
+        disabled: false,
+        action: () => {
+          // AI dev note: Mostrar toast com o erro real do ASAAS antes da confirmação
+          toast({
+            title: 'Erro na emissão da NFe',
+            description:
+              fatura.status_nfe ||
+              'A emissão da nota fiscal falhou. Clique em confirmar para cancelar a NFe anterior e emitir novamente.',
+            variant: 'destructive',
+          });
+          setFaturaToCancelReissue(fatura);
+        },
       };
     }
 
@@ -681,375 +728,435 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   }
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Faturas</span>
-          <Badge variant="outline" className="ml-2">
-            {filteredFaturas.length} fatura
-            {filteredFaturas.length !== 1 ? 's' : ''}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Filtros */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-          {/* Filtro de Período */}
-          <Select
-            value={periodFilter}
-            onValueChange={(value) => {
-              setPeriodFilter(value as PeriodFilter);
-              setCurrentPage(0);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Período" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="mes_atual">Mês Atual</SelectItem>
-              <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
-              <SelectItem value="ultimos_30">Últimos 30 dias</SelectItem>
-              <SelectItem value="ultimos_60">Últimos 60 dias</SelectItem>
-              <SelectItem value="ultimos_90">Últimos 90 dias</SelectItem>
-              <SelectItem value="ultimo_ano">Último ano</SelectItem>
-              <SelectItem value="personalizado">Personalizado</SelectItem>
-              <SelectItem value="todos">Todos</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Filtro de Status */}
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => setStatusFilter(value as StatusFilter)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="pago">Pago</SelectItem>
-              <SelectItem value="pendente">Pendente</SelectItem>
-              <SelectItem value="atrasado">Atrasado</SelectItem>
-              <SelectItem value="cancelado">Cancelado</SelectItem>
-              <SelectItem value="estornado">Estornado</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Filtro de Profissional */}
-          <Select
-            value={professionalFilter}
-            onValueChange={setProfessionalFilter}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Profissional" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              {professionals.map((prof) => (
-                <SelectItem key={prof.id} value={prof.nome}>
-                  {prof.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Filtro de Empresa */}
-          <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Empresa" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todas</SelectItem>
-              {empresas.map((emp) => (
-                <SelectItem key={emp.id} value={emp.id}>
-                  {emp.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Ordenação */}
-          <Select
-            value={sortOption}
-            onValueChange={(value) => setSortOption(value as SortOption)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Ordenar por" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="data_desc">Data (mais recente)</SelectItem>
-              <SelectItem value="data_asc">Data (mais antiga)</SelectItem>
-              <SelectItem value="responsavel_asc">Responsável A-Z</SelectItem>
-              <SelectItem value="responsavel_desc">Responsável Z-A</SelectItem>
-              <SelectItem value="valor_desc">Valor (maior)</SelectItem>
-              <SelectItem value="valor_asc">Valor (menor)</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Busca */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar responsável..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2"
-              >
-                <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Datas personalizadas */}
-        {periodFilter === 'personalizado' && (
-          <div className="flex gap-3 items-center">
-            <DatePicker
-              value={startDate}
-              onChange={(date) => {
-                setStartDate(date);
+    <>
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Faturas</span>
+            <Badge variant="outline" className="ml-2">
+              {filteredFaturas.length} fatura
+              {filteredFaturas.length !== 1 ? 's' : ''}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            {/* Filtro de Período */}
+            <Select
+              value={periodFilter}
+              onValueChange={(value) => {
+                setPeriodFilter(value as PeriodFilter);
                 setCurrentPage(0);
               }}
-              placeholder="Data inicial"
-            />
-            <span className="text-muted-foreground">até</span>
-            <DatePicker
-              value={endDate}
-              onChange={(date) => {
-                setEndDate(date);
-                setCurrentPage(0);
-              }}
-              placeholder="Data final"
-            />
-          </div>
-        )}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mes_atual">Mês Atual</SelectItem>
+                <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
+                <SelectItem value="ultimos_30">Últimos 30 dias</SelectItem>
+                <SelectItem value="ultimos_60">Últimos 60 dias</SelectItem>
+                <SelectItem value="ultimos_90">Últimos 90 dias</SelectItem>
+                <SelectItem value="ultimo_ano">Último ano</SelectItem>
+                <SelectItem value="personalizado">Personalizado</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
+              </SelectContent>
+            </Select>
 
-        {/* Lista de Faturas */}
-        {filteredFaturas.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Nenhuma fatura encontrada com os filtros aplicados.</p>
-          </div>
-        ) : (
-          <div className="space-y-3 max-h-[600px] overflow-y-auto">
-            {filteredFaturas.map((fatura) => {
-              const nfeConfig = getNfeButtonConfig(fatura);
-              const NfeIcon = nfeConfig?.icon;
+            {/* Filtro de Status */}
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="pago">Pago</SelectItem>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="atrasado">Atrasado</SelectItem>
+                <SelectItem value="cancelado">Cancelado</SelectItem>
+                <SelectItem value="estornado">Estornado</SelectItem>
+              </SelectContent>
+            </Select>
 
-              return (
-                <div
-                  key={fatura.id}
-                  className={cn(
-                    'group relative border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer bg-card',
-                    onFaturaClick && 'hover:border-primary'
-                  )}
-                  onClick={() => onFaturaClick?.(fatura)}
+            {/* Filtro de Profissional */}
+            <Select
+              value={professionalFilter}
+              onValueChange={setProfessionalFilter}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Profissional" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {professionals.map((prof) => (
+                  <SelectItem key={prof.id} value={prof.nome}>
+                    {prof.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Filtro de Empresa */}
+            <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Empresa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas</SelectItem>
+                {empresas.map((emp) => (
+                  <SelectItem key={emp.id} value={emp.id}>
+                    {emp.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Ordenação */}
+            <Select
+              value={sortOption}
+              onValueChange={(value) => setSortOption(value as SortOption)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Ordenar por" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="data_desc">Data (mais recente)</SelectItem>
+                <SelectItem value="data_asc">Data (mais antiga)</SelectItem>
+                <SelectItem value="responsavel_asc">Responsável A-Z</SelectItem>
+                <SelectItem value="responsavel_desc">
+                  Responsável Z-A
+                </SelectItem>
+                <SelectItem value="valor_desc">Valor (maior)</SelectItem>
+                <SelectItem value="valor_asc">Valor (menor)</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Busca */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar responsável..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2"
                 >
-                  {/* Header */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium text-sm">
-                          Fatura #{fatura.id.slice(0, 8)}
-                        </span>
-                        {getStatusBadge(fatura.status)}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        <span>
-                          {fatura.responsavel_nome || 'Sem responsável'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-primary">
-                        {formatCurrency(fatura.valor_total)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {fatura.qtd_consultas || 0} consulta
-                        {fatura.qtd_consultas !== 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  </div>
+                  <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                </button>
+              )}
+            </div>
+          </div>
 
-                  {/* Detalhes */}
-                  <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                    <div>
-                      <div className="text-muted-foreground mb-1">
-                        Vencimento
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-3 w-3" />
-                        {fatura.vencimento
-                          ? formatDate(fatura.vencimento)
-                          : 'Não definido'}
-                      </div>
-                      {fatura.pago_em && fatura.status !== 'atrasado' && (
-                        <div className="flex items-center gap-2 mt-1 text-green-600 font-medium text-xs">
-                          <Calendar className="h-3 w-3" />
-                          Pago: {formatDateTime(fatura.pago_em)}
+          {/* Datas personalizadas */}
+          {periodFilter === 'personalizado' && (
+            <div className="flex gap-3 items-center">
+              <DatePicker
+                value={startDate}
+                onChange={(date) => {
+                  setStartDate(date);
+                  setCurrentPage(0);
+                }}
+                placeholder="Data inicial"
+              />
+              <span className="text-muted-foreground">até</span>
+              <DatePicker
+                value={endDate}
+                onChange={(date) => {
+                  setEndDate(date);
+                  setCurrentPage(0);
+                }}
+                placeholder="Data final"
+              />
+            </div>
+          )}
+
+          {/* Lista de Faturas */}
+          {filteredFaturas.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Nenhuma fatura encontrada com os filtros aplicados.</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              {filteredFaturas.map((fatura) => {
+                const nfeConfig = getNfeButtonConfig(fatura);
+                const NfeIcon = nfeConfig?.icon;
+
+                return (
+                  <div
+                    key={fatura.id}
+                    className={cn(
+                      'group relative border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer bg-card',
+                      onFaturaClick && 'hover:border-primary'
+                    )}
+                    onClick={() => onFaturaClick?.(fatura)}
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <CreditCard className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium text-sm">
+                            Fatura #{fatura.id.slice(0, 8)}
+                          </span>
+                          {getStatusBadge(fatura.status)}
                         </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <User className="h-3 w-3" />
+                          <span>
+                            {fatura.responsavel_nome || 'Sem responsável'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-primary">
+                          {formatCurrency(fatura.valor_total)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {fatura.qtd_consultas || 0} consulta
+                          {fatura.qtd_consultas !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Detalhes */}
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                      <div>
+                        <div className="text-muted-foreground mb-1">
+                          Vencimento
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3 w-3" />
+                          {fatura.vencimento
+                            ? formatDate(fatura.vencimento)
+                            : 'Não definido'}
+                        </div>
+                        {fatura.pago_em && fatura.status !== 'atrasado' && (
+                          <div className="flex items-center gap-2 mt-1 text-green-600 font-medium text-xs">
+                            <Calendar className="h-3 w-3" />
+                            Pago: {formatDateTime(fatura.pago_em)}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground mb-1">
+                          Criada em
+                        </div>
+                        <div>{formatDate(fatura.created_at)}</div>
+                      </div>
+                    </div>
+
+                    {/* Empresa */}
+                    {fatura.empresa_razao_social && (
+                      <div className="text-sm mb-3">
+                        <div className="text-muted-foreground mb-1">
+                          Empresa
+                        </div>
+                        <div>{fatura.empresa_razao_social}</div>
+                      </div>
+                    )}
+
+                    {/* Ações */}
+                    <div className="flex items-center gap-2 pt-3 border-t">
+                      {fatura.url_asaas && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(fatura.url_asaas, '_blank');
+                          }}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Ver no ASAAS
+                        </Button>
+                      )}
+
+                      {nfeConfig && NfeIcon && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nfeConfig.action?.();
+                          }}
+                          disabled={nfeConfig.disabled}
+                          className={nfeConfig.className}
+                        >
+                          <NfeIcon className="h-4 w-4 mr-2" />
+                          {nfeConfig.text}
+                        </Button>
                       )}
                     </div>
-                    <div>
-                      <div className="text-muted-foreground mb-1">
-                        Criada em
-                      </div>
-                      <div>{formatDate(fatura.created_at)}</div>
-                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  {/* Empresa */}
-                  {fatura.empresa_razao_social && (
-                    <div className="text-sm mb-3">
-                      <div className="text-muted-foreground mb-1">Empresa</div>
-                      <div>{fatura.empresa_razao_social}</div>
-                    </div>
-                  )}
-
-                  {/* Ações */}
-                  <div className="flex items-center gap-2 pt-3 border-t">
-                    {fatura.url_asaas && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(fatura.url_asaas, '_blank');
-                        }}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Ver no ASAAS
-                      </Button>
-                    )}
-
-                    {nfeConfig && NfeIcon && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          nfeConfig.action?.();
-                        }}
-                        disabled={nfeConfig.disabled}
-                        className={nfeConfig.className}
-                      >
-                        <NfeIcon className="h-4 w-4 mr-2" />
-                        {nfeConfig.text}
-                      </Button>
-                    )}
-                  </div>
+          {/* Resumo - Totais de TODOS os registros do filtro */}
+          {!isLoading && !error && filteredFaturas.length > 0 && (
+            <div className="mt-4 p-4 bg-muted/30 rounded-lg">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">
+                    Total de faturas:
+                  </span>
+                  <p className="font-semibold">{totalCount}</p>
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Resumo - Totais de TODOS os registros do filtro */}
-        {!isLoading && !error && filteredFaturas.length > 0 && (
-          <div className="mt-4 p-4 bg-muted/30 rounded-lg">
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Total de faturas:</span>
-                <p className="font-semibold">{totalCount}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Valor total:</span>
-                <p className="font-semibold text-verde-pipa">
-                  {formatCurrency(totalSummary.totalValue)}
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Pagas:</span>
-                <p className="font-semibold text-green-500">
-                  {totalSummary.paidCount}
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Não pagas:</span>
-                <p className="font-semibold text-orange-500">
-                  {totalSummary.unpaidCount}
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">NFe emitidas:</span>
-                <p className="font-semibold text-blue-500">
-                  {totalSummary.nfeEmittedCount}
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">NFe não emitidas:</span>
-                <p className="font-semibold text-gray-500">
-                  {totalSummary.nfeNotEmittedCount}
-                </p>
+                <div>
+                  <span className="text-muted-foreground">Valor total:</span>
+                  <p className="font-semibold text-verde-pipa">
+                    {formatCurrency(totalSummary.totalValue)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Pagas:</span>
+                  <p className="font-semibold text-green-500">
+                    {totalSummary.paidCount}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Não pagas:</span>
+                  <p className="font-semibold text-orange-500">
+                    {totalSummary.unpaidCount}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">NFe emitidas:</span>
+                  <p className="font-semibold text-blue-500">
+                    {totalSummary.nfeEmittedCount}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">
+                    NFe não emitidas:
+                  </span>
+                  <p className="font-semibold text-gray-500">
+                    {totalSummary.nfeNotEmittedCount}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Paginação */}
-        {!isLoading && !error && totalCount > PAGE_SIZE && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              Mostrando {currentPage * PAGE_SIZE + 1} -{' '}
-              {Math.min((currentPage + 1) * PAGE_SIZE, totalCount)} de{' '}
-              {totalCount} faturas
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(0)}
-                disabled={currentPage === 0}
-                title="Primeira página"
-              >
-                <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
-                <ChevronRight className="h-4 w-4 rotate-180 -ml-3" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                disabled={currentPage === 0}
-              >
-                <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
-                Anterior
-              </Button>
-              <div className="px-3 py-1 text-sm font-medium bg-muted rounded">
-                Página {currentPage + 1} de {Math.ceil(totalCount / PAGE_SIZE)}
+          {/* Paginação */}
+          {!isLoading && !error && totalCount > PAGE_SIZE && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {currentPage * PAGE_SIZE + 1} -{' '}
+                {Math.min((currentPage + 1) * PAGE_SIZE, totalCount)} de{' '}
+                {totalCount} faturas
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(0)}
+                  disabled={currentPage === 0}
+                  title="Primeira página"
+                >
+                  <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
+                  <ChevronRight className="h-4 w-4 rotate-180 -ml-3" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                  disabled={currentPage === 0}
+                >
+                  <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
+                  Anterior
+                </Button>
+                <div className="px-3 py-1 text-sm font-medium bg-muted rounded">
+                  Página {currentPage + 1} de{' '}
+                  {Math.ceil(totalCount / PAGE_SIZE)}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  disabled={!hasMore}
+                >
+                  Próxima
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setCurrentPage(Math.ceil(totalCount / PAGE_SIZE) - 1)
+                  }
+                  disabled={!hasMore}
+                  title="Última página"
+                >
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                  <ChevronRight className="h-4 w-4 -ml-3" />
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => p + 1)}
-                disabled={!hasMore}
-              >
-                Próxima
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage(Math.ceil(totalCount / PAGE_SIZE) - 1)
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI dev note: Confirmação antes de cancelar a NFe em erro e reemitir.
+        Cancelar NFe tem efeito fiscal, por isso exigimos confirmação explícita. */}
+      <AlertDialog
+        open={!!faturaToCancelReissue}
+        onOpenChange={(open) => {
+          if (!open) setFaturaToCancelReissue(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar e reemitir NFe?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  A nota fiscal anterior está com erro e será{' '}
+                  <strong>cancelada (ou excluída) no ASAAS</strong> antes de
+                  emitir uma nova.
+                </p>
+                {faturaToCancelReissue?.status_nfe ? (
+                  <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                    <strong>Erro anterior:</strong>{' '}
+                    {faturaToCancelReissue.status_nfe}
+                  </p>
+                ) : null}
+                <p>
+                  Essa ação tem efeito fiscal caso a nota já tenha sido
+                  autorizada pela prefeitura. Deseja continuar?
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const fatura = faturaToCancelReissue;
+                setFaturaToCancelReissue(null);
+                if (fatura) {
+                  handleEmitirNfe(fatura);
                 }
-                disabled={!hasMore}
-                title="Última página"
-              >
-                <ChevronRight className="h-4 w-4 ml-1" />
-                <ChevronRight className="h-4 w-4 -ml-3" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              }}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Cancelar e reemitir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
