@@ -242,6 +242,14 @@ export const FinancialConsultationsList: React.FC<
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('data_desc');
 
+  // AI dev note: Ref para searchQuery usado dentro do useCallback fetchConsultations
+  // sem precisar recriá-lo. Isso permite que a busca ignore o filtro de período
+  // quando há texto digitado, buscando em todos os registros do banco.
+  const searchQueryRef = React.useRef('');
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
+
   // Estados de seleção
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedConsultations, setSelectedConsultations] = useState<string[]>(
@@ -352,6 +360,47 @@ export const FinancialConsultationsList: React.FC<
       // AI dev note: Totais agora são calculados via useMemo baseado em filteredConsultations
       // Isso garante que os totais respeitem todos os filtros locais (empresa, profissional, etc)
 
+      // AI dev note: Quando há busca por nome ativa, fazemos a busca direto no
+      // banco (em pessoas + pessoa_responsaveis) e ignoramos filtro de período.
+      // Isso é necessário porque:
+      //   1. O Supabase JS limita a 1000 linhas por query (havia ~9k consultas no banco),
+      //      então pacientes com consultas antigas eram cortados.
+      //   2. O período padrão (mês atual) excluia pacientes sem consultas recentes.
+      // Buscamos os IDs de pacientes que casam (direto OU via responsável) e
+      // filtramos a view por esses IDs, sem limite de período.
+      const searchTerm = searchQueryRef.current.trim();
+      const isSearchMode = !!searchTerm;
+
+      let pacienteIdsParaBusca: string[] | null = null;
+      if (isSearchMode) {
+        const { data: pessoasMatch, error: pessoasError } = await supabase
+          .from('pessoas')
+          .select('id')
+          .ilike('nome', `%${searchTerm}%`);
+        if (pessoasError) throw pessoasError;
+        const pessoasMatchIds = (pessoasMatch || []).map((p) => p.id);
+
+        const idsSet = new Set<string>(pessoasMatchIds);
+
+        if (pessoasMatchIds.length > 0) {
+          const { data: dependentes, error: dependentesError } = await supabase
+            .from('pessoa_responsaveis')
+            .select('id_pessoa')
+            .in('id_responsavel', pessoasMatchIds)
+            .eq('ativo', true);
+          if (dependentesError) throw dependentesError;
+          (dependentes || []).forEach((d) => idsSet.add(d.id_pessoa));
+        }
+
+        pacienteIdsParaBusca = Array.from(idsSet);
+
+        if (pacienteIdsParaBusca.length === 0) {
+          setConsultations([]);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Query de dados com filtros de período
       let query = supabase
         .from('vw_agendamentos_completos')
@@ -359,11 +408,15 @@ export const FinancialConsultationsList: React.FC<
         .not('status_consulta_codigo', 'eq', 'cancelado')
         .order('data_hora', { ascending: false });
 
-      // Aplicar filtros de período
-      if (startDateFilter && periodFilter !== 'todos') {
+      if (isSearchMode && pacienteIdsParaBusca) {
+        query = query.in('paciente_id', pacienteIdsParaBusca);
+      }
+
+      // Aplicar filtros de período (ignorados em modo de busca)
+      if (startDateFilter && periodFilter !== 'todos' && !isSearchMode) {
         query = query.gte('data_hora', startDateFilter);
       }
-      if (endDateFilter && periodFilter !== 'todos') {
+      if (endDateFilter && periodFilter !== 'todos' && !isSearchMode) {
         // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
         query = query.lte('data_hora', endDateFilter + 'T23:59:59');
       }
@@ -371,10 +424,9 @@ export const FinancialConsultationsList: React.FC<
       // AI dev note: BUSCAR TODAS as consultas do período sem paginação
       // Os filtros locais (nome, profissional, etc) precisam de todos os dados
       // A paginação será feita apenas na exibição (frontend)
-
-      const { data, error: fetchError } = await query;
-
-      // Sem paginação - todos os registros são buscados
+      // AI dev note: Aumentamos o range para suportar bases grandes; o limite padrão
+      // do Supabase JS é 1000 linhas, o que cortava resultados em períodos longos.
+      const { data, error: fetchError } = await query.range(0, 49999);
 
       if (fetchError) throw fetchError;
 
@@ -629,6 +681,17 @@ export const FinancialConsultationsList: React.FC<
   useEffect(() => {
     fetchConsultations();
   }, [fetchConsultations]);
+
+  // AI dev note: Re-buscar dados quando o searchQuery muda (debounce 500ms).
+  // Quando há texto de busca, fetchConsultations ignora o filtro de período
+  // para encontrar pacientes em qualquer data. Quando limpa, volta ao período normal.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchConsultations();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   // AI dev note: Buscar status de pagamento do Supabase (não mais hardcoded)
   useEffect(() => {
