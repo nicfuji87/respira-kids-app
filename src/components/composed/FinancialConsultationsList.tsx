@@ -401,34 +401,56 @@ export const FinancialConsultationsList: React.FC<
         }
       }
 
-      // Query de dados com filtros de período
-      let query = supabase
-        .from('vw_agendamentos_completos')
-        .select(selectFields)
-        .not('status_consulta_codigo', 'eq', 'cancelado')
-        .order('data_hora', { ascending: false });
+      // AI dev note: Builder reutilizavel para construir a query base com os filtros
+      // aplicados. Necessario porque cada chamada com `.range()` consome a query,
+      // entao precisamos recriar para cada pagina do loop de paginacao.
+      const buildQuery = () => {
+        let q = supabase
+          .from('vw_agendamentos_completos')
+          .select(selectFields)
+          .not('status_consulta_codigo', 'eq', 'cancelado')
+          .order('data_hora', { ascending: false });
 
-      if (isSearchMode && pacienteIdsParaBusca) {
-        query = query.in('paciente_id', pacienteIdsParaBusca);
+        if (isSearchMode && pacienteIdsParaBusca) {
+          q = q.in('paciente_id', pacienteIdsParaBusca);
+        }
+
+        // Aplicar filtros de período (ignorados em modo de busca)
+        if (startDateFilter && periodFilter !== 'todos' && !isSearchMode) {
+          q = q.gte('data_hora', startDateFilter);
+        }
+        if (endDateFilter && periodFilter !== 'todos' && !isSearchMode) {
+          // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
+          q = q.lte('data_hora', endDateFilter + 'T23:59:59');
+        }
+        return q;
+      };
+
+      // AI dev note: Paginacao explicita em batches de 1000 para contornar o
+      // limite max-rows do PostgREST (Supabase). Sem isso, periodos com mais
+      // de 1000 consultas perdem registros antigos (ordem DESC), e pacientes
+      // com consultas mais antigas nao aparecem nos filtros locais.
+      const PAGE_SIZE = 1000;
+      const MAX_PAGES = 50; // teto de seguranca = 50k registros
+      type RowType = Awaited<ReturnType<typeof buildQuery>>['data'] extends
+        | (infer R)[]
+        | null
+        ? R
+        : never;
+      const allRows: RowType[] = [];
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        const { data: pageData, error: pageError } = await buildQuery().range(
+          from,
+          to
+        );
+        if (pageError) throw pageError;
+        const rows = (pageData || []) as RowType[];
+        allRows.push(...rows);
+        if (rows.length < PAGE_SIZE) break;
       }
-
-      // Aplicar filtros de período (ignorados em modo de busca)
-      if (startDateFilter && periodFilter !== 'todos' && !isSearchMode) {
-        query = query.gte('data_hora', startDateFilter);
-      }
-      if (endDateFilter && periodFilter !== 'todos' && !isSearchMode) {
-        // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
-        query = query.lte('data_hora', endDateFilter + 'T23:59:59');
-      }
-
-      // AI dev note: BUSCAR TODAS as consultas do período sem paginação
-      // Os filtros locais (nome, profissional, etc) precisam de todos os dados
-      // A paginação será feita apenas na exibição (frontend)
-      // AI dev note: Aumentamos o range para suportar bases grandes; o limite padrão
-      // do Supabase JS é 1000 linhas, o que cortava resultados em períodos longos.
-      const { data, error: fetchError } = await query.range(0, 49999);
-
-      if (fetchError) throw fetchError;
+      const data = allRows;
 
       // Buscar responsáveis para todos os pacientes
       const pacienteIds = [
