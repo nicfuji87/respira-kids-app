@@ -57,7 +57,6 @@ export const FinanceiroPage: React.FC = () => {
   const { toast } = useToast();
   const [isPinValidated, setIsPinValidated] = useState(false);
   const [isCheckingPin, setIsCheckingPin] = useState(true);
-  const [showPinDialog, setShowPinDialog] = useState(true);
 
   // AI dev note: Tabs diferentes para admin e profissional
   const [activeTabAdmin, setActiveTabAdmin] = useState<
@@ -136,21 +135,14 @@ export const FinanceiroPage: React.FC = () => {
   }, [user?.id, user?.pessoa?.role]);
 
   // Handler para sucesso na validação do PIN
+  // AI dev note: Fonte única de verdade = isPinValidated.
+  // Ao setar isPinValidated=true, o dialog fecha (isOpen={!isPinValidated}=false)
+  // e o conteúdo da página renderiza ({isPinValidated && ...}).
   const handlePinSuccess = React.useCallback(() => {
-    console.log('[FinanceiroPage] handlePinSuccess chamado');
-
-    // Fechar o dialog PRIMEIRO para evitar problemas de sincronização
-    setShowPinDialog(false);
-    console.log('[FinanceiroPage] showPinDialog setado para false');
-
-    // Salvar na sessão
     const sessionKey = `pin_validated_${user?.id}_financeiro`;
     sessionStorage.setItem(sessionKey, Date.now().toString());
-    console.log('[FinanceiroPage] Sessão salva:', sessionKey);
 
-    // Setar o estado de validação
     setIsPinValidated(true);
-    console.log('[FinanceiroPage] isPinValidated setado para true');
 
     toast({
       title: 'Acesso autorizado',
@@ -402,11 +394,21 @@ export const FinanceiroPage: React.FC = () => {
       {/* Dialog de validação de PIN - para admin e secretaria */}
       {/* AI dev note: Componente sempre montado para evitar race condition entre
           desmontagem do React e fechamento do portal do Radix Dialog.
-          Visibilidade controlada EXCLUSIVAMENTE pela prop isOpen. */}
+          Visibilidade controlada EXCLUSIVAMENTE pela prop isOpen, derivada de
+          isPinValidated (fonte única de verdade). Quando o PIN é validado com
+          sucesso, isPinValidated=true => isOpen=false => dialog fecha e o
+          conteúdo do financeiro é renderizado na mesma rota /financeiro.
+          O onClose só navega para /dashboard se o PIN ainda NÃO foi validado,
+          evitando sair do financeiro se o usuário clicar em "Cancelar" após
+          uma validação bem-sucedida (cenário raro, mas protegido). */}
       {isAdminOrSecretaria && (
         <PinValidationDialog
-          isOpen={!isPinValidated && showPinDialog}
-          onClose={() => navigate('/dashboard')}
+          isOpen={!isPinValidated}
+          onClose={() => {
+            if (!isPinValidated) {
+              navigate('/dashboard');
+            }
+          }}
           onSuccess={handlePinSuccess}
           title="Acesso ao Financeiro"
           description="Esta área contém informações sensíveis. Digite seu PIN para continuar."
