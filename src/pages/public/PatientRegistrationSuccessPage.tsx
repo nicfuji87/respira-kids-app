@@ -77,10 +77,13 @@ export function PatientRegistrationSuccessPage() {
               'Cadastro realizado com sucesso!'
             )}
           </p>
-          <p className="text-base text-muted-foreground max-w-md mx-auto">
-            {hasValidData
-              ? 'Seu cadastro foi realizado com sucesso e o contrato foi assinado digitalmente.'
-              : 'O cadastro do paciente foi concluído e o contrato foi assinado digitalmente.'}
+          <p className="text-base text-muted-foreground max-w-xl mx-auto">
+            Cadastro realizado com sucesso. Você receberá o contrato por e-mail
+            para assinar em instantes.
+          </p>
+          <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 max-w-xl mx-auto">
+            Lembrando que os atendimentos só poderão ser realizados quando o
+            contrato estiver assinado.
           </p>
         </div>
 
@@ -91,6 +94,21 @@ export function PatientRegistrationSuccessPage() {
           </h2>
 
           <div className="space-y-4">
+            {/* Email - Assinatura Digital */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+              <Mail className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">
+                  Assinatura do Contrato por E-mail
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Em instantes, você receberá um e-mail com o contrato para
+                  assinatura digital. É necessário assiná-lo para que os
+                  atendimentos sejam agendados.
+                </p>
+              </div>
+            </div>
+
             {/* WhatsApp */}
             <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
               <MessageCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
@@ -105,20 +123,6 @@ export function PatientRegistrationSuccessPage() {
               </div>
             </div>
 
-            {/* Email */}
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800">
-              <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-foreground">
-                  Email com Detalhes
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Um email será enviado com todos os detalhes do cadastro e
-                  instruções para agendar a primeira consulta.
-                </p>
-              </div>
-            </div>
-
             {/* Agendamento */}
             <div className="flex items-start gap-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800">
               <CheckCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
@@ -127,8 +131,9 @@ export function PatientRegistrationSuccessPage() {
                   Aguarde o Contato
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Nossa equipe entrará em contato em breve para realizar o
-                  agendamento da primeira sessão de fisioterapia.
+                  Após a assinatura do contrato, nossa equipe entrará em contato
+                  para realizar o agendamento da primeira sessão de
+                  fisioterapia.
                 </p>
               </div>
             </div>

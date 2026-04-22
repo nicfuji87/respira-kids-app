@@ -1,6 +1,12 @@
 // AI dev note: Edge Function para finalizar cadastro público de paciente
 // Cria todas as entidades no banco de dados seguindo a ordem correta
 // Logs detalhados em cada etapa para rastreamento
+// Versão 42: Fluxo de assinatura digital via n8n + Assinafy
+//            - Contrato criado com status 'gerado' (não mais 'assinado')
+//            - data_assinatura NÃO é preenchida (será setada quando assinatura chegar)
+//            - Gera PDF via edge function generate-contract-pdf
+//            - Faz upload do PDF no bucket respira-contracts/{pessoa_id}/{contract_id}.pdf
+//            - Gera signed URL (24h) e enfileira webhook contrato_gerado para n8n
 // Versão 41: Fix CPF duplicado - (1) STEP 3 reutiliza pessoa existente com
 //            mesmo CPF em retries, (2) mensagens de erro mais detalhadas
 
@@ -911,7 +917,9 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ [STEP 10] Variáveis substituídas no contrato');
 
-    // Criar contrato assinado
+    // AI dev note: Contrato criado com status 'gerado' (aguardando assinatura via n8n/Assinafy)
+    // data_assinatura permanece NULL e é preenchida quando n8n confirmar a assinatura
+    // arquivo_url será atualizado abaixo com o caminho no bucket após upload do PDF
     const { data: contrato, error: errorContrato } = await supabase
       .from('user_contracts')
       .insert({
@@ -922,12 +930,9 @@ Deno.serve(async (req: Request) => {
         } - ${new Date().toLocaleDateString('pt-BR')}`,
         conteudo_final: conteudoFinal,
         variaveis_utilizadas: data.contractVariables,
-        status_contrato: 'assinado',
+        status_contrato: 'gerado',
         data_geracao: new Date().toISOString(),
-        data_assinatura: new Date().toISOString(),
-        assinatura_digital_id: `whatsapp_${
-          data.whatsappJid || data.phoneNumber
-        }_${Date.now()}`,
+        arquivo_url: 'Aguardando',
         ativo: true,
       })
       .select('id')
@@ -939,7 +944,135 @@ Deno.serve(async (req: Request) => {
     }
 
     const contratoId = contrato.id;
-    console.log('✅ [STEP 10] Contrato criado e assinado:', contratoId);
+    console.log(
+      '✅ [STEP 10] Contrato criado (aguardando assinatura):',
+      contratoId
+    );
+
+    // ============================================
+    // STEP 10.1: Gerar PDF, fazer upload no bucket e enfileirar webhook
+    // ============================================
+    // AI dev note: Chama edge function generate-contract-pdf para renderizar o PDF,
+    // faz upload em respira-contracts/{pessoa_id}/{contract_id}.pdf,
+    // gera signed URL de 24h e enfileira evento 'contrato_gerado' em webhook_queue
+    // para que o n8n processe a assinatura via Assinafy.
+    console.log('📋 [STEP 10.1] Gerando PDF do contrato...');
+
+    let pdfSignedUrl: string | null = null;
+    const PDF_URL_EXPIRES_IN = 60 * 60 * 24; // 24 horas
+    const pdfStoragePath = `${responsavelFinanceiroId}/${contratoId}.pdf`;
+
+    try {
+      const pdfResponse = await fetch(
+        `${supabaseUrl}/functions/v1/generate-contract-pdf`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${supabaseServiceKey}`,
+            apikey: supabaseServiceKey,
+          },
+          body: JSON.stringify({
+            contractId: contratoId,
+            patientName: data.paciente.nome,
+          }),
+        }
+      );
+
+      if (!pdfResponse.ok) {
+        const errText = await pdfResponse.text();
+        throw new Error(
+          `generate-contract-pdf retornou ${pdfResponse.status}: ${errText}`
+        );
+      }
+
+      const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer());
+      console.log('✅ [STEP 10.1] PDF gerado:', pdfBytes.length, 'bytes');
+
+      // Upload no bucket (usa upsert para permitir regeração/reenvio)
+      const { error: uploadError } = await supabase.storage
+        .from('respira-contracts')
+        .upload(pdfStoragePath, pdfBytes, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error(
+          '❌ [STEP 10.1] Erro ao fazer upload do PDF:',
+          uploadError
+        );
+        throw new Error(`Upload do PDF falhou: ${uploadError.message}`);
+      }
+      console.log('✅ [STEP 10.1] PDF enviado ao bucket:', pdfStoragePath);
+
+      // Gerar signed URL com 24h de validade para o n8n baixar
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('respira-contracts')
+        .createSignedUrl(pdfStoragePath, PDF_URL_EXPIRES_IN);
+
+      if (signedError || !signedData?.signedUrl) {
+        console.error('❌ [STEP 10.1] Erro ao gerar signed URL:', signedError);
+        throw new Error(
+          `Signed URL falhou: ${signedError?.message || 'sem URL'}`
+        );
+      }
+
+      pdfSignedUrl = signedData.signedUrl;
+      console.log('✅ [STEP 10.1] Signed URL gerada (24h)');
+
+      // AI dev note: NÃO sobrescrever arquivo_url aqui. Mantemos 'Aguardando'
+      // enquanto o contrato não foi assinado. Quando o n8n confirmar a assinatura,
+      // ele atualiza arquivo_url com o caminho do bucket (o mesmo usado neste upload,
+      // que será substituído pelo PDF assinado via x-upsert: true).
+
+      // Enfileirar webhook contrato_gerado para o n8n processar assinatura
+      const { error: queueError } = await supabase
+        .from('webhook_queue')
+        .insert({
+          evento: 'contrato_gerado',
+          payload: {
+            contrato_id: contratoId,
+            paciente_id: pacienteId,
+            paciente_nome: data.paciente.nome,
+            responsavel_nome:
+              data.responsavelLegal?.nome || data.existingUserData?.nome || '',
+            responsavel_telefone: data.whatsappJid
+              ? extractPhoneFromJid(data.whatsappJid)
+              : data.phoneNumber,
+            responsavel_email:
+              data.responsavelLegal?.email ||
+              data.existingUserData?.email ||
+              '',
+            pdf_signed_url: pdfSignedUrl,
+            pdf_expires_in_seconds: PDF_URL_EXPIRES_IN,
+            pdf_storage_path: pdfStoragePath,
+            reenvio: false,
+            timestamp: new Date().toISOString(),
+          },
+          status: 'pendente',
+          tentativas: 0,
+          max_tentativas: 3,
+        });
+
+      if (queueError) {
+        console.error(
+          '❌ [STEP 10.1] Erro ao enfileirar webhook contrato_gerado:',
+          queueError
+        );
+      } else {
+        console.log(
+          '✅ [STEP 10.1] Webhook contrato_gerado enfileirado para n8n'
+        );
+      }
+    } catch (pdfError) {
+      console.error(
+        '❌ [STEP 10.1] Erro ao processar PDF/webhook do contrato:',
+        pdfError
+      );
+      // AI dev note: Falha na geração de PDF não deve quebrar o cadastro.
+      // O contrato foi criado no banco e poderá ser reenviado manualmente pelo admin.
+    }
 
     // ============================================
     // STEP 11: Enviar webhook de confirmação (opcional)
@@ -1023,7 +1156,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 200,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 41, // AI dev note: Incrementar versão
+        edge_function_version: 42, // AI dev note: Incrementar versão
         paciente_id: pacienteId,
         responsavel_legal_id: responsavelLegalId,
         responsavel_financeiro_id: responsavelFinanceiroId,
@@ -1063,7 +1196,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 500,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 41, // AI dev note: Incrementar versão
+        edge_function_version: 42, // AI dev note: Incrementar versão
         error_type: 'database_error',
         error_details: {
           message: error instanceof Error ? error.message : String(error),

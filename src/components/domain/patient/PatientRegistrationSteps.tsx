@@ -999,7 +999,7 @@ export const PatientRegistrationSteps =
           result.responsavelFinanceiroId
         );
         console.log(
-          '✅ [PatientRegistrationSteps] Contrato assinado:',
+          '✅ [PatientRegistrationSteps] Contrato gerado (aguardando assinatura):',
           result.contratoId
         );
 
@@ -1035,8 +1035,10 @@ export const PatientRegistrationSteps =
         );
 
         try {
-          // Verificar se o contrato foi assinado (indicador de sucesso)
-          // Só verificar se temos um ID de contrato
+          // AI dev note: Após a migração para assinatura digital via n8n/Assinafy,
+          // o contrato agora é criado com status 'gerado' (aguardando assinatura).
+          // A verificação de fallback aceita tanto 'gerado' quanto 'assinado'
+          // como indicador de que o cadastro foi persistido no banco.
           if (!registrationData.contrato?.contractId) {
             console.log(
               '❌ [PatientRegistrationSteps] Sem ID de contrato para verificar'
@@ -1048,12 +1050,12 @@ export const PatientRegistrationSteps =
             .from('user_contracts')
             .select('id, status_contrato, pessoa_id')
             .eq('id', registrationData.contrato.contractId)
-            .eq('status_contrato', 'assinado')
+            .in('status_contrato', ['gerado', 'assinado'])
             .single();
 
           if (contratoVerificacao?.pessoa_id) {
             console.log(
-              '✅ [PatientRegistrationSteps] Contrato foi assinado - cadastro funcionou!'
+              '✅ [PatientRegistrationSteps] Contrato encontrado no banco - cadastro funcionou!'
             );
             console.log(
               '📋 [PatientRegistrationSteps] Paciente ID encontrado:',

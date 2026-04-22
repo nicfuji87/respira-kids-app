@@ -9,6 +9,7 @@ import {
   CheckCircle,
   Send,
   Loader2,
+  RotateCw,
 } from 'lucide-react';
 import {
   Card,
@@ -48,6 +49,7 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
     } | null>(null);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
+    const [resending, setResending] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -344,14 +346,13 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
             : 'não poderão',
         };
 
-        // Gerar contrato
+        // Gerar contrato (insere em user_contracts com status 'gerado')
         const newContract = await generateContract(
           patientId,
           contractVariables
         );
 
-        // AI dev note: Status válidos: 'rascunho', 'gerado', 'assinado', 'cancelado'
-        // Usar 'gerado' (contrato foi gerado e aguarda assinatura)
+        // AI dev note: Marcar como "Aguardando" até o upload do PDF no bucket ser concluído
         await supabase
           .from('user_contracts')
           .update({
@@ -360,32 +361,45 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
           })
           .eq('id', newContract.id);
 
-        // Enviar webhook para notificar sobre novo contrato
-        const webhookPayload = {
-          evento: 'contrato_gerado',
-          payload: {
-            contrato_id: newContract.id,
-            paciente_id: patientId,
-            paciente_nome: patientData.nome,
-            responsavel_nome: patientData.responsavel_legal_nome,
-            responsavel_telefone: patientData.responsavel_legal_telefone,
-            responsavel_email: patientData.responsavel_legal_email,
-          },
-        };
+        // AI dev note: Chamar edge function send-contract-webhook que:
+        // 1) Gera o PDF via generate-contract-pdf
+        // 2) Faz upload em respira-contracts/{pessoa_id}/{contract_id}.pdf
+        // 3) Gera signed URL de 24h
+        // 4) Enfileira evento contrato_gerado em webhook_queue para o n8n/Assinafy
+        const { data: webhookResult, error: webhookError } =
+          await supabase.functions.invoke('send-contract-webhook', {
+            body: {
+              contractId: newContract.id,
+              reenvio: false,
+            },
+          });
 
-        // Inserir na fila de webhooks
-        await supabase.from('webhook_queue').insert(webhookPayload);
+        if (webhookError || !webhookResult?.success) {
+          console.error(
+            'Contrato gerado, mas falha ao enviar webhook:',
+            webhookError || webhookResult
+          );
+          toast({
+            title: 'Contrato gerado com aviso',
+            description:
+              'O contrato foi criado, mas o envio automático falhou. Use "Reenviar contrato" para tentar novamente.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Contrato gerado com sucesso!',
+            description:
+              'O responsável receberá o contrato por e-mail para assinatura.',
+          });
+        }
 
-        // Atualizar estado local
+        // Atualizar estado local (arquivo_url já foi atualizado pela edge function, mas
+        // aqui mantemos o placeholder "Aguardando" para a UI exibir status "AGUARDANDO"
+        // até que a assinatura real chegue via n8n)
         setContract({
           ...newContract,
           arquivo_url: 'Aguardando',
           status_contrato: 'gerado',
-        });
-
-        toast({
-          title: 'Contrato gerado com sucesso!',
-          description: 'O responsável receberá o contrato para assinatura.',
         });
 
         onContractGenerated?.();
@@ -407,6 +421,66 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
       toast,
       onContractGenerated,
     ]);
+
+    // AI dev note: Handler para reenviar contrato pendente de assinatura.
+    // Só disponível no estado AGUARDANDO para admin/secretaria. Chama a edge
+    // function send-contract-webhook com reenvio=true, que gera o PDF novamente,
+    // faz upload (x-upsert) e enfileira novo evento contrato_gerado para o n8n.
+    const handleResendContract = useCallback(async () => {
+      if (userRole !== 'admin' && userRole !== 'secretaria') {
+        toast({
+          title: 'Sem permissão',
+          description:
+            'Apenas administradores e secretária podem reenviar contratos',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!contract || !contract.id) {
+        toast({
+          title: 'Contrato não encontrado',
+          description: 'Não foi possível identificar o contrato para reenvio.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      try {
+        setResending(true);
+
+        const { data: webhookResult, error: webhookError } =
+          await supabase.functions.invoke('send-contract-webhook', {
+            body: {
+              contractId: contract.id,
+              reenvio: true,
+            },
+          });
+
+        if (webhookError || !webhookResult?.success) {
+          throw new Error(
+            webhookResult?.error ||
+              webhookError?.message ||
+              'Falha ao reenviar contrato'
+          );
+        }
+
+        toast({
+          title: 'Contrato reenviado!',
+          description:
+            'O responsável receberá o contrato novamente por e-mail para assinatura.',
+        });
+      } catch (err) {
+        console.error('Erro ao reenviar contrato:', err);
+        toast({
+          title: 'Erro ao reenviar contrato',
+          description: err instanceof Error ? err.message : 'Erro desconhecido',
+          variant: 'destructive',
+        });
+      } finally {
+        setResending(false);
+      }
+    }, [contract, userRole, toast]);
 
     if (loading) {
       return (
@@ -539,6 +613,28 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
                   <FileText className="h-4 w-4 mr-2" />
                   Ver Contrato
                 </Button>
+
+                {/* AI dev note: Botão de reenvio só aparece para admin/secretaria */}
+                {(userRole === 'admin' || userRole === 'secretaria') && (
+                  <Button
+                    onClick={handleResendContract}
+                    disabled={resending}
+                    variant="default"
+                    className="w-full"
+                  >
+                    {resending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Reenviando...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCw className="h-4 w-4 mr-2" />
+                        Reenviar Contrato
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             )}
 

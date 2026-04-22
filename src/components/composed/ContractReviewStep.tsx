@@ -1,17 +1,17 @@
-// AI dev note: Componente para visualização e aceite de contrato
-// Exibe contrato com scroll, checkbox de aceite e botões de ação
+// AI dev note: Componente para visualização do contrato (apenas leitura)
+// Após a etapa de revisão, o usuário visualiza o contrato gerado e finaliza o cadastro.
+// A assinatura digital acontece depois, via n8n + Assinafy, por email.
+// Por isso, NÃO há mais checkbox de aceite: o botão apenas finaliza o cadastro.
 
-import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/primitives/button';
-import { Checkbox } from '@/components/primitives/checkbox';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { AlertCircle, FileDown, CheckCircle } from 'lucide-react';
 
 export interface ContractReviewStepProps {
   contractContent: string; // Conteúdo do contrato (texto formatado)
-  onAccept: () => void;
-  onReject: () => void;
+  onAccept: () => void; // Handler para "Finalizar Cadastro"
+  onReject: () => void; // Handler para voltar à etapa anterior
   onExportPDF?: () => void;
   isLoading?: boolean;
 }
@@ -23,35 +23,25 @@ export function ContractReviewStep({
   onExportPDF,
   isLoading = false,
 }: ContractReviewStepProps) {
-  const [accepted, setAccepted] = useState(false);
-
-  const handleAcceptChange = (checked: boolean) => {
-    setAccepted(checked);
-  };
-
-  const handleAccept = () => {
-    if (!accepted) return;
-    onAccept();
-  };
-
   return (
     <div className="w-full px-4 space-y-6 pb-8">
       {/* Título sem container */}
       <div className="space-y-1 text-center">
         <h2 className="text-2xl font-semibold text-foreground">
-          📄 Contrato de Prestação de Serviços
+          📄 Visualizar Contrato
         </h2>
         <p className="text-xs text-muted-foreground">
-          Revise e aceite o contrato para finalizar o cadastro
+          Revise o contrato antes de finalizar o cadastro
         </p>
       </div>
 
-      {/* Alerta de Atenção */}
+      {/* Alerta informativo sobre assinatura digital */}
       <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
         <AlertCircle className="h-5 w-5 text-amber-600" />
         <AlertDescription className="text-sm">
-          <strong>Importante:</strong> Leia todo o contrato com atenção. O
-          aceite deste contrato é obrigatório para a realização das consultas.
+          <strong>Importante:</strong> Ao finalizar o cadastro, o contrato será
+          enviado automaticamente para o seu e-mail para assinatura digital. Os
+          atendimentos só poderão ser realizados após a assinatura.
         </AlertDescription>
       </Alert>
 
@@ -75,7 +65,6 @@ export function ContractReviewStep({
       <div className="space-y-6">
         <ReactMarkdown
           components={{
-            // Customizar estilos dos elementos - TIPOGRAFIA MELHORADA
             p: ({ children }) => (
               <p className="mb-6 text-[15px] leading-[1.8] text-justify text-foreground/90">
                 {children}
@@ -118,33 +107,7 @@ export function ContractReviewStep({
         </ReactMarkdown>
       </div>
 
-      {/* Aceite */}
-      <div className="bg-muted/30 rounded-lg border border-border p-4">
-        <div className="flex items-start space-x-4">
-          <Checkbox
-            id="accept-contract"
-            checked={accepted}
-            onCheckedChange={handleAcceptChange}
-            disabled={isLoading}
-            className="mt-1 h-5 w-5"
-          />
-          <label
-            htmlFor="accept-contract"
-            className="text-sm leading-relaxed cursor-pointer flex-1"
-          >
-            <span className="font-medium text-foreground">
-              Li e compreendi todos os termos e condições do contrato acima.
-            </span>
-            <br />
-            <span className="text-muted-foreground">
-              Declaro estar ciente de que o aceite deste contrato é obrigatório
-              para a realização dos atendimentos de fisioterapia.
-            </span>
-          </label>
-        </div>
-      </div>
-
-      {/* Botões de Ação - MAIS ESPAÇOSOS */}
+      {/* Botões de Ação */}
       <div className="flex gap-3">
         <Button
           variant="outline"
@@ -155,19 +118,19 @@ export function ContractReviewStep({
           Voltar
         </Button>
         <Button
-          onClick={handleAccept}
-          disabled={!accepted || isLoading}
+          onClick={onAccept}
+          disabled={isLoading}
           className="flex-1 h-12 font-medium"
         >
           {isLoading ? (
             <>
               <span className="animate-spin mr-2">⏳</span>
-              Processando...
+              Finalizando...
             </>
           ) : (
             <>
               <CheckCircle className="w-5 h-5 mr-2" />
-              Aceitar e Assinar
+              Finalizar Cadastro
             </>
           )}
         </Button>
@@ -175,8 +138,7 @@ export function ContractReviewStep({
 
       {/* Mensagem de Ajuda */}
       <p className="text-xs text-center text-muted-foreground/70 italic">
-        Uma cópia será enviada para seu WhatsApp e Email cadastrado após a
-        confirmação.
+        Você receberá o contrato por e-mail para assinar em instantes.
       </p>
     </div>
   );
