@@ -1296,12 +1296,19 @@ async function enrichPatientsWithPaymentStatus(
   };
 }
 
+// AI dev note: Tipos aceitos no filtro de status de contrato do paciente
+// - 'assinado': possui link_contrato legado OU user_contracts ativo com status='assinado'
+// - 'pendente': sem legado e sem assinado, mas possui user_contracts ativo com status IN ('gerado','rascunho')
+// - 'sem_contrato': sem legado e sem user_contracts ativo
+export type ContractStatusFilter = 'assinado' | 'pendente' | 'sem_contrato';
+
 /**
  * Buscar pacientes com paginação e busca server-side
  * AI dev note: Usa função RPC fn_search_pacientes_paginado que:
  * - Ignora acentos (ex: "Nicolas" encontra "Nícolas")
  * - Palavras podem estar em qualquer ordem (ex: "Fujimoto Henrique" encontra "Henrique Fujimoto")
  * - Busca pelo nome do paciente OU dados dos responsáveis (nome, telefone, CPF)
+ * - Suporta filtro por status de contrato (assinado/pendente/sem_contrato)
  */
 export async function fetchPatients(
   searchTerm: string = '',
@@ -1310,7 +1317,8 @@ export async function fetchPatients(
   startWithLetter?: string,
   sortBy: 'nome' | 'updated_at' = 'nome',
   pediatraIds?: string[],
-  lastAppointmentDays?: number
+  lastAppointmentDays?: number,
+  contractStatus?: ContractStatusFilter | null
 ): Promise<ApiResponse<PaginatedUsuarios>> {
   try {
     // AI dev note: Verificação de autenticação
@@ -1341,6 +1349,7 @@ export async function fetchPatients(
       filtro_pediatras_ids:
         pediatraIds && pediatraIds.length > 0 ? pediatraIds : null,
       filtro_ultimo_atendimento_dias: lastAppointmentDays || null,
+      filtro_status_contrato: contractStatus || null,
     });
 
     if (error) {

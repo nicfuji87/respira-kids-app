@@ -19,6 +19,7 @@ import {
   SortAsc,
   Filter,
   CalendarDays,
+  FileSignature,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -32,7 +33,7 @@ import {
   AvatarImage,
 } from '@/components/primitives/avatar';
 import { cn } from '@/lib/utils';
-import { fetchPatients } from '@/lib/patient-api';
+import { fetchPatients, type ContractStatusFilter } from '@/lib/patient-api';
 import { fetchPediatras, type Pediatra } from '@/lib/pediatra-api';
 import type { Usuario } from '@/types/usuarios';
 
@@ -71,6 +72,11 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   const [customDays, setCustomDays] = useState<string>('');
   const [showAppointmentFilter, setShowAppointmentFilter] = useState(false);
 
+  // AI dev note: Filtro de status de contrato (assinado/pendente/sem_contrato)
+  const [contractStatus, setContractStatus] =
+    useState<ContractStatusFilter | null>(null);
+  const [showContractFilter, setShowContractFilter] = useState(false);
+
   const navigate = useNavigate();
   const ITEMS_PER_PAGE = 20;
 
@@ -101,7 +107,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
       letter?: string | null,
       sort?: SortOption,
       pediatraIds?: string[],
-      appointmentDays?: number | null
+      appointmentDays?: number | null,
+      contractStatusFilter?: ContractStatusFilter | null
     ) => {
       try {
         if (page === 1) {
@@ -120,7 +127,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
           letter || undefined,
           sort || 'nome',
           pediatraIds,
-          appointmentDays || undefined
+          appointmentDays || undefined,
+          contractStatusFilter || null
         );
 
         if (response.success && response.data) {
@@ -151,7 +159,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
       selectedLetter,
       sortBy,
       selectedPediatras,
-      lastAppointmentDays
+      lastAppointmentDays,
+      contractStatus
     );
   }, [
     loadPatients,
@@ -159,6 +168,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     sortBy,
     selectedPediatras,
     lastAppointmentDays,
+    contractStatus,
   ]);
 
   // AI dev note: Debounce para busca - removido currentPage da dependência
@@ -171,7 +181,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
         selectedLetter,
         sortBy,
         selectedPediatras,
-        lastAppointmentDays
+        lastAppointmentDays,
+        contractStatus
       );
     }, 300);
 
@@ -182,6 +193,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     sortBy,
     selectedPediatras,
     lastAppointmentDays,
+    contractStatus,
     loadPatients,
   ]);
 
@@ -194,7 +206,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
         selectedLetter,
         sortBy,
         selectedPediatras,
-        lastAppointmentDays
+        lastAppointmentDays,
+        contractStatus
       );
     }
   }, [
@@ -205,6 +218,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     sortBy,
     selectedPediatras,
     lastAppointmentDays,
+    contractStatus,
   ]);
 
   // AI dev note: Funções para filtro de pediatras
@@ -250,6 +264,42 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     setCustomDays('');
     setCurrentPage(1);
   };
+
+  // AI dev note: Funções para filtro de status de contrato
+  const contractStatusOptions: Array<{
+    value: ContractStatusFilter;
+    label: string;
+    description: string;
+  }> = [
+    {
+      value: 'assinado',
+      label: 'Assinado',
+      description: 'Pacientes com contrato assinado',
+    },
+    {
+      value: 'pendente',
+      label: 'Pendente de assinatura',
+      description: 'Contrato gerado aguardando assinatura',
+    },
+    {
+      value: 'sem_contrato',
+      label: 'Sem contrato',
+      description: 'Pacientes que ainda não possuem contrato',
+    },
+  ];
+
+  const handleContractStatusChange = (status: ContractStatusFilter | null) => {
+    setContractStatus(status);
+    setCurrentPage(1);
+  };
+
+  const clearContractFilter = () => {
+    setContractStatus(null);
+    setCurrentPage(1);
+  };
+
+  const contractStatusLabel = (status: ContractStatusFilter): string =>
+    contractStatusOptions.find((o) => o.value === status)?.label ?? '';
 
   // AI dev note: Função para navegar para detalhes do paciente
   const handlePatientClick = (patientId: string) => {
@@ -432,6 +482,22 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             </Badge>
           )}
         </Button>
+
+        {/* Botão de filtro de status de contrato */}
+        <Button
+          variant={contractStatus !== null ? 'default' : 'outline'}
+          size="default"
+          onClick={() => setShowContractFilter(!showContractFilter)}
+          className="flex items-center gap-2"
+        >
+          <FileSignature className="h-4 w-4" />
+          <span className="hidden sm:inline">Contrato</span>
+          {contractStatus !== null && (
+            <Badge variant="secondary" className="ml-1">
+              {contractStatusLabel(contractStatus)}
+            </Badge>
+          )}
+        </Button>
       </div>
 
       {/* Filtro de pediatras expandido */}
@@ -552,6 +618,54 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             <div className="text-sm text-muted-foreground pt-2 border-t">
               Mostrando pacientes com atendimentos nos últimos{' '}
               <strong>{lastAppointmentDays}</strong> dias
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro de status de contrato expandido */}
+      {showContractFilter && (
+        <div className="p-4 bg-muted/50 rounded-lg space-y-3 border">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium flex items-center gap-2">
+              <FileSignature className="h-4 w-4" />
+              Filtrar por Status de Contrato
+            </span>
+            {contractStatus !== null && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearContractFilter}
+                className="text-xs"
+              >
+                Limpar filtro
+              </Button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {contractStatusOptions.map((option) => (
+              <Button
+                key={option.value}
+                variant={
+                  contractStatus === option.value ? 'default' : 'outline'
+                }
+                size="sm"
+                onClick={() => handleContractStatusChange(option.value)}
+                title={option.description}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Info do filtro ativo */}
+          {contractStatus !== null && (
+            <div className="text-sm text-muted-foreground pt-2 border-t">
+              Mostrando pacientes com contrato{' '}
+              <strong>
+                {contractStatusLabel(contractStatus).toLowerCase()}
+              </strong>
             </div>
           )}
         </div>
