@@ -224,7 +224,10 @@ Deno.serve(async (req) => {
       doc.setFontSize(8);
       doc.setTextColor(110, 110, 110);
 
-      const text = `Página integrante do Contrato de Prestação de Serviços de Fisioterapia que entre si celebram ${contratante} e BC FISIO KIDS LTDA. ${hoje}`;
+      // AI dev note: o contrato tem duas CONTRATADAS (cláusulas 2 e 3 do template).
+      // O rodapé precisa citar as duas pessoas jurídicas; "Respira Kids" entra como
+      // marca de identificação, não substitui o nome civil das empresas.
+      const text = `Página integrante do Contrato de Prestação de Serviços de Fisioterapia que entre si celebram ${contratante}, BC FISIO KIDS LTDA e F.S PACHECO FISIOTERAPIA LTDA (Respira Kids). ${hoje}`;
       const lines = doc.splitTextToSize(text, contentWidth);
       const lineHeight = 3.5;
       const pageNumberY = pageHeight - 8;
