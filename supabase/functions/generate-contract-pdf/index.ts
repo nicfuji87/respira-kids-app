@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 import { jsPDF } from 'npm:jspdf@2.5.2';
 
 // AI dev note: Edge Function que gera o PDF do contrato do paciente.
@@ -14,6 +15,13 @@ import { jsPDF } from 'npm:jspdf@2.5.2';
 // - Texto do corpo é justificado (exceto última linha do parágrafo)
 //
 // IMPORTANTE: manter `verify_jwt: true` (o front chama com o anon key no Authorization).
+//
+// AI dev note (memória):
+// - As imagens são cacheadas em escopo de módulo para sobreviver entre invocações
+//   no mesmo worker (warm starts), evitando re-download e re-encode em cada requisição.
+// - A conversão para base64 usa `encodeBase64` do `@std/encoding`, que é nativo e
+//   muito mais eficiente do que loops manuais com String.fromCharCode + Array.from
+//   (esses padrões geravam pico de memória e disparavam WORKER_LIMIT / status 546).
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,6 +31,30 @@ const corsHeaders = {
 };
 
 type Segment = { text: string; bold: boolean };
+
+// AI dev note: Cache em escopo de módulo (sobrevive entre invocações no mesmo worker).
+// O Supabase Edge Functions reutiliza o mesmo isolate por alguns segundos/minutos em
+// cargas com vários pedidos seguidos; cachear as imagens evita refazer o trabalho
+// pesado de download + base64 a cada requisição.
+const imageCache = new Map<string, string>();
+
+async function loadImageAsBase64(url: string): Promise<string | null> {
+  const cached = imageCache.get(url);
+  if (cached) return cached;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    // encodeBase64 lida com Uint8Array internamente sem cópias intermediárias
+    // de strings gigantes (que era o gargalo da implementação anterior).
+    const base64 = encodeBase64(new Uint8Array(buf));
+    imageCache.set(url, base64);
+    return base64;
+  } catch (e) {
+    console.warn('⚠️ Erro ao carregar imagem:', url, e);
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -55,30 +87,9 @@ Deno.serve(async (req) => {
     const logoHeaderUrl = `${supabaseUrl}/storage/v1/object/public/public-assets/nome-logo-respira-kids.png`;
     const logoWatermarkUrl = `${supabaseUrl}/storage/v1/object/public/public-assets/respira-kids-mao.png`;
 
-    // AI dev note: converte imagem em base64 sem estourar a stack com arrays grandes
-    const imageToBase64 = async (url: string): Promise<string | null> => {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const buf = await res.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let binary = '';
-        const chunkSize = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          binary += String.fromCharCode(
-            ...Array.from(bytes.subarray(i, i + chunkSize))
-          );
-        }
-        return btoa(binary);
-      } catch (e) {
-        console.warn('⚠️ Erro ao carregar imagem:', url, e);
-        return null;
-      }
-    };
-
     const [logoHeaderData, logoWatermarkData] = await Promise.all([
-      imageToBase64(logoHeaderUrl),
-      imageToBase64(logoWatermarkUrl),
+      loadImageAsBase64(logoHeaderUrl),
+      loadImageAsBase64(logoWatermarkUrl),
     ]);
 
     const doc = new jsPDF({
