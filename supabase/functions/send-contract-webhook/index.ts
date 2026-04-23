@@ -50,7 +50,7 @@ Deno.serve(async (req: Request) => {
     const { data: contract, error: contractError } = await supabase
       .from('user_contracts')
       .select(
-        'id, pessoa_id, nome_contrato, status_contrato, variaveis_utilizadas'
+        'id, pessoa_id, nome_contrato, status_contrato, variaveis_utilizadas, data_geracao, data_assinatura, ativo'
       )
       .eq('id', contractId)
       .single();
@@ -91,16 +91,44 @@ Deno.serve(async (req: Request) => {
       contract.nome_contrato?.split(' - ')[1] ||
       'Paciente';
 
-    // 2) Buscar responsável (para preencher o payload do webhook)
+    // 2) Buscar responsável legal/financeiro (para preencher o payload do webhook)
     const { data: pessoa } = await supabase
       .from('pessoas')
       .select('id, nome, email, telefone')
       .eq('id', pessoaId)
       .maybeSingle();
 
-    // 3) Buscar paciente (para incluir no payload) - tenta pelo nome extraído do contrato
-    // Prioriza variáveis do contrato, já salvas no momento da geração
+    // 3) Buscar paciente (para incluir no payload) - prioriza variáveis do contrato
     const pacienteId = variaveis.paciente_id || variaveis.pacienteId || null;
+    let paciente: {
+      id: string | null;
+      nome: string;
+      ativo: boolean | null;
+      email: string | null;
+      telefone: number | string | null;
+    } = {
+      id: pacienteId,
+      nome: pacienteNome,
+      ativo: null,
+      email: null,
+      telefone: null,
+    };
+    if (pacienteId) {
+      const { data: pacienteRow } = await supabase
+        .from('pessoas')
+        .select('id, nome, ativo, email, telefone')
+        .eq('id', pacienteId)
+        .maybeSingle();
+      if (pacienteRow) {
+        paciente = {
+          id: pacienteRow.id,
+          nome: pacienteRow.nome,
+          ativo: pacienteRow.ativo,
+          email: pacienteRow.email ?? null,
+          telefone: pacienteRow.telefone ?? null,
+        };
+      }
+    }
 
     // 4) Gerar PDF via generate-contract-pdf
     console.log('📄 Gerando PDF...');
@@ -205,20 +233,44 @@ Deno.serve(async (req: Request) => {
     }
 
     // 8) Enfileirar webhook contrato_gerado
+    // AI dev note: payload segue o MESMO padrão do webhook `appointment_updated`
+    // (gerado por trigger no banco): tudo encapsulado em `data`, com `tipo`,
+    // `timestamp` e `webhook_id` no mesmo nível das demais entidades dentro de `data`.
+    // Não inclua nenhum campo específico de provedor de assinatura (Assinafy etc.) —
+    // o n8n é responsável por orquestrar o provedor.
+    const timestamp = new Date().toISOString();
+    const webhookId = crypto.randomUUID();
     const { error: queueError } = await supabase.from('webhook_queue').insert({
       evento: 'contrato_gerado',
       payload: {
-        contrato_id: contractId,
-        paciente_id: pacienteId,
-        paciente_nome: pacienteNome,
-        responsavel_nome: pessoa?.nome || '',
-        responsavel_telefone: pessoa?.telefone || null,
-        responsavel_email: pessoa?.email || '',
-        pdf_signed_url: signedUrl,
-        pdf_expires_in_seconds: PDF_URL_EXPIRES_IN,
-        pdf_storage_path: pdfStoragePath,
-        reenvio,
-        timestamp: new Date().toISOString(),
+        data: {
+          id: contractId,
+          ativo: contract.ativo ?? true,
+          nome_contrato: contract.nome_contrato,
+          status_contrato: 'gerado',
+          data_geracao: contract.data_geracao,
+          data_assinatura: contract.data_assinatura,
+          paciente,
+          responsavel_legal: {
+            id: pessoa?.id ?? pessoaId,
+            nome: pessoa?.nome ?? '',
+            email: pessoa?.email ?? null,
+            telefone: pessoa?.telefone ?? null,
+          },
+          responsavel_financeiro: {
+            id: pessoa?.id ?? pessoaId,
+            nome: pessoa?.nome ?? '',
+          },
+          pdf: {
+            signed_url: signedUrl,
+            expires_in_seconds: PDF_URL_EXPIRES_IN,
+            storage_path: pdfStoragePath,
+          },
+          reenvio,
+          tipo: 'contrato_gerado',
+          timestamp,
+          webhook_id: webhookId,
+        },
       },
       status: 'pendente',
       tentativas: 0,

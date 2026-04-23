@@ -1027,28 +1027,60 @@ Deno.serve(async (req: Request) => {
       // que será substituído pelo PDF assinado via x-upsert: true).
 
       // Enfileirar webhook contrato_gerado para o n8n processar assinatura
+      // AI dev note: payload segue o MESMO padrão do webhook `appointment_updated`
+      // (gerado por trigger no banco): tudo encapsulado em `data`, com `tipo`,
+      // `timestamp` e `webhook_id` no mesmo nível das demais entidades dentro de `data`.
+      // Não inclua nenhum campo específico de provedor de assinatura (Assinafy etc.).
+      const responsavelNome =
+        data.responsavelLegal?.nome || data.existingUserData?.nome || '';
+      const responsavelEmail =
+        data.responsavelLegal?.email || data.existingUserData?.email || '';
+      const responsavelTelefone = data.whatsappJid
+        ? extractPhoneFromJid(data.whatsappJid)
+        : data.phoneNumber;
+
+      const contratoTimestamp = new Date().toISOString();
+      const contratoWebhookId = crypto.randomUUID();
+
       const { error: queueError } = await supabase
         .from('webhook_queue')
         .insert({
           evento: 'contrato_gerado',
           payload: {
-            contrato_id: contratoId,
-            paciente_id: pacienteId,
-            paciente_nome: data.paciente.nome,
-            responsavel_nome:
-              data.responsavelLegal?.nome || data.existingUserData?.nome || '',
-            responsavel_telefone: data.whatsappJid
-              ? extractPhoneFromJid(data.whatsappJid)
-              : data.phoneNumber,
-            responsavel_email:
-              data.responsavelLegal?.email ||
-              data.existingUserData?.email ||
-              '',
-            pdf_signed_url: pdfSignedUrl,
-            pdf_expires_in_seconds: PDF_URL_EXPIRES_IN,
-            pdf_storage_path: pdfStoragePath,
-            reenvio: false,
-            timestamp: new Date().toISOString(),
+            data: {
+              id: contratoId,
+              ativo: true,
+              nome_contrato: `Contrato Padrão Atendimento - ${data.paciente.nome}`,
+              status_contrato: 'gerado',
+              data_geracao: contratoTimestamp,
+              data_assinatura: null,
+              paciente: {
+                id: pacienteId,
+                nome: data.paciente.nome,
+                ativo: true,
+                email: null,
+                telefone: null,
+              },
+              responsavel_legal: {
+                id: responsavelFinanceiroId,
+                nome: responsavelNome,
+                email: responsavelEmail,
+                telefone: responsavelTelefone,
+              },
+              responsavel_financeiro: {
+                id: responsavelFinanceiroId,
+                nome: responsavelNome,
+              },
+              pdf: {
+                signed_url: pdfSignedUrl,
+                expires_in_seconds: PDF_URL_EXPIRES_IN,
+                storage_path: pdfStoragePath,
+              },
+              reenvio: false,
+              tipo: 'contrato_gerado',
+              timestamp: contratoTimestamp,
+              webhook_id: contratoWebhookId,
+            },
           },
           status: 'pendente',
           tentativas: 0,
