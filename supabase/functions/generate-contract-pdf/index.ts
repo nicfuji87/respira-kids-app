@@ -13,6 +13,7 @@ import { jsPDF } from 'npm:jspdf@2.5.2';
 //     * Separador `---` -> linha horizontal fina
 //     * Bullets (•, -) e itens numerados preservam indentação
 // - Texto do corpo é justificado (exceto última linha do parágrafo)
+// - Bloco final fixo com 3 assinaturas (Responsável Legal + BC FISIO + FS PACHECO)
 //
 // IMPORTANTE: manter `verify_jwt: true` (o front chama com o anon key no Authorization).
 //
@@ -22,6 +23,12 @@ import { jsPDF } from 'npm:jspdf@2.5.2';
 // - A conversão para base64 usa `encodeBase64` do `@std/encoding`, que é nativo e
 //   muito mais eficiente do que loops manuais com String.fromCharCode + Array.from
 //   (esses padrões geravam pico de memória e disparavam WORKER_LIMIT / status 546).
+// - Proporção do logo do cabeçalho: asset real é 500x324 (ratio ~1.545). Usamos
+//   34x22mm para preservar a proporção (evita "achatar" o logo).
+// - Assinaturas da BC FISIO e FS PACHECO são sempre estampadas no PDF (conforme
+//   combinado com a clínica); a assinatura digital do responsável legal é feita
+//   fora do PDF (plataforma Assinafy), por isso aqui exibimos apenas a linha
+//   horizontal e o rótulo.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -86,10 +93,21 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const logoHeaderUrl = `${supabaseUrl}/storage/v1/object/public/public-assets/nome-logo-respira-kids.png`;
     const logoWatermarkUrl = `${supabaseUrl}/storage/v1/object/public/public-assets/respira-kids-mao.png`;
+    // AI dev note: assinaturas das contratadas ficam no bucket público `respira-documents`.
+    // Nomes com espaço precisam de URL-encode no path.
+    const signatureBrunaUrl = `${supabaseUrl}/storage/v1/object/public/respira-documents/${encodeURIComponent('Bruna Cury.png')}`;
+    const signatureFlaviaUrl = `${supabaseUrl}/storage/v1/object/public/respira-documents/${encodeURIComponent('Flavia Pacheco.png')}`;
 
-    const [logoHeaderData, logoWatermarkData] = await Promise.all([
+    const [
+      logoHeaderData,
+      logoWatermarkData,
+      signatureBrunaData,
+      signatureFlaviaData,
+    ] = await Promise.all([
       loadImageAsBase64(logoHeaderUrl),
       loadImageAsBase64(logoWatermarkUrl),
+      loadImageAsBase64(signatureBrunaUrl),
+      loadImageAsBase64(signatureFlaviaUrl),
     ]);
 
     const doc = new jsPDF({
@@ -101,7 +119,7 @@ Deno.serve(async (req) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 20;
-    const headerHeight = 28; // área reservada para o logo do cabeçalho
+    const headerHeight = 32; // área reservada para o logo do cabeçalho
     const footerHeight = 22; // área reservada para o rodapé (texto + numeração)
     const contentWidth = pageWidth - 2 * marginX;
     const contentTop = headerHeight + 4;
@@ -122,8 +140,10 @@ Deno.serve(async (req) => {
     const addHeader = () => {
       if (!logoHeaderData) return;
       try {
-        const logoW = 42;
-        const logoH = 18;
+        // Asset real é 500x324 (ratio 1.545). Mantemos a proporção para evitar
+        // o logo "achatado" que aparecia antes com 42x18 (ratio 2.33).
+        const logoW = 34;
+        const logoH = logoW / 1.543; // ≈ 22mm
         const logoX = (pageWidth - logoW) / 2;
         doc.addImage(
           `data:image/png;base64,${logoHeaderData}`,
@@ -386,7 +406,14 @@ Deno.serve(async (req) => {
     };
 
     // ======== Processa conteúdo do contrato ========
-    const content = (contract.conteudo_final || '').replace(/\r\n/g, '\n');
+    // AI dev note: contratos gerados antes da introdução do bloco de assinaturas
+    // guardaram no `conteudo_final` o trailing `Brasília, <data>\n\n**<nome>**`.
+    // Removemos esse trailing para evitar duplicação com o bloco fixo abaixo.
+    let rawContent = (contract.conteudo_final || '').replace(/\r\n/g, '\n');
+    rawContent = rawContent
+      .replace(/\s*Bras[ií]lia,[^\n]*\n+\*\*[^*\n]+\*\*\s*$/m, '')
+      .trimEnd();
+    const content = rawContent;
     const rawLines = content.split('\n');
 
     let firstNonEmptySeen = false;
@@ -494,6 +521,112 @@ Deno.serve(async (req) => {
         spacingAfter: 3,
       });
     }
+
+    // ======== Bloco fixo de assinaturas ========
+    // AI dev note: Três assinaturas empilhadas (Responsável Legal + CONTRATADAS).
+    // As assinaturas das contratadas (Bruna/BC FISIO e Flávia/FS PACHECO) são
+    // sempre estampadas como imagem. O responsável legal assina digitalmente
+    // (fora do PDF), aqui mostramos apenas a linha horizontal como placeholder.
+    const renderSignatureBlock = (
+      label: string,
+      nome: string,
+      roleLine: string,
+      imageBase64: string | null,
+      alias: string
+    ) => {
+      const blockHeight = 30; // linha + nome + rótulo (imagem sobrepõe a linha)
+      ensureSpace(blockHeight + 6);
+
+      const lineY = currentY + 14;
+      const lineX1 = marginX + 20;
+      const lineX2 = pageWidth - marginX - 20;
+      const lineW = lineX2 - lineX1;
+      const centerX = (lineX1 + lineX2) / 2;
+
+      // Imagem da assinatura centralizada sobre a linha (se houver)
+      if (imageBase64) {
+        try {
+          const imgH = 20;
+          const imgW = 52;
+          const imgX = centerX - imgW / 2;
+          const imgY = lineY - imgH + 2;
+          doc.addImage(
+            `data:image/png;base64,${imageBase64}`,
+            'PNG',
+            imgX,
+            imgY,
+            imgW,
+            imgH,
+            alias,
+            'FAST'
+          );
+        } catch (e) {
+          console.warn('⚠️ Erro ao adicionar imagem de assinatura:', e);
+        }
+      }
+
+      // Linha da assinatura
+      doc.setDrawColor(80, 80, 80);
+      doc.setLineWidth(0.3);
+      doc.line(lineX1, lineY, lineX2, lineY);
+
+      // Nome em negrito
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text(nome, centerX, lineY + 5, { align: 'center' });
+
+      // Rótulo da parte (ex.: "Responsável Legal do Paciente")
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(90, 90, 90);
+      doc.text(label, centerX, lineY + 10, { align: 'center' });
+
+      // Linha extra opcional abaixo do rótulo (ex.: "CONTRATADA 1")
+      if (roleLine) {
+        doc.setFontSize(8.5);
+        doc.setTextColor(120, 120, 120);
+        doc.text(roleLine, centerX, lineY + 14, { align: 'center' });
+      }
+
+      doc.setTextColor(0, 0, 0);
+      currentY += blockHeight + 4;
+      // usado para evitar que o linter reclame do parâmetro quando nome/contratos mudarem
+      void lineW;
+    };
+
+    // "Brasília, <data>" alinhado à esquerda
+    ensureSpace(20);
+    currentY += 6;
+    renderParagraph(`Brasília, ${hoje}`, {
+      align: 'left',
+      fontSize: 10.5,
+      spacingAfter: 10,
+    });
+
+    renderSignatureBlock(
+      'Responsável Legal do Paciente',
+      contratante || 'Responsável Legal',
+      '',
+      null,
+      'sig-responsavel'
+    );
+
+    renderSignatureBlock(
+      'BC FISIO KIDS LTDA (CONTRATADA 1)',
+      'BRUNA CURY LOURENÇO PERES',
+      'CPF 011.335.011-25',
+      signatureBrunaData,
+      'sig-bruna'
+    );
+
+    renderSignatureBlock(
+      'F.S PACHECO FISIOTERAPIA LTDA (CONTRATADA 2)',
+      'FLÁVIA DA SILVA PACHECO',
+      'CPF 585.226.701-53',
+      signatureFlaviaData,
+      'sig-flavia'
+    );
 
     // Rodapé da última página
     addFooter(pageNum);
