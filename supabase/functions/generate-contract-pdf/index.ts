@@ -38,25 +38,54 @@ const corsHeaders = {
 };
 
 type Segment = { text: string; bold: boolean };
+type LoadedImage = { base64: string; width: number; height: number };
 
 // AI dev note: Cache em escopo de módulo (sobrevive entre invocações no mesmo worker).
 // O Supabase Edge Functions reutiliza o mesmo isolate por alguns segundos/minutos em
 // cargas com vários pedidos seguidos; cachear as imagens evita refazer o trabalho
 // pesado de download + base64 a cada requisição.
-const imageCache = new Map<string, string>();
+const imageCache = new Map<string, LoadedImage>();
 
-async function loadImageAsBase64(url: string): Promise<string | null> {
+// Lê width/height de um PNG (bytes 16..23 do IHDR chunk). Retorna null se não for
+// PNG válido; nesse caso o chamador usa dimensões default (proporção 1:1).
+function readPngSize(
+  bytes: Uint8Array
+): { width: number; height: number } | null {
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    bytes.length < 24 ||
+    bytes[0] !== 0x89 ||
+    bytes[1] !== 0x50 ||
+    bytes[2] !== 0x4e ||
+    bytes[3] !== 0x47
+  ) {
+    return null;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  return { width, height };
+}
+
+async function loadImageAsBase64(url: string): Promise<LoadedImage | null> {
   const cached = imageCache.get(url);
   if (cached) return cached;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const size = readPngSize(bytes);
     // encodeBase64 lida com Uint8Array internamente sem cópias intermediárias
     // de strings gigantes (que era o gargalo da implementação anterior).
-    const base64 = encodeBase64(new Uint8Array(buf));
-    imageCache.set(url, base64);
-    return base64;
+    const base64 = encodeBase64(bytes);
+    const loaded: LoadedImage = {
+      base64,
+      width: size?.width ?? 1,
+      height: size?.height ?? 1,
+    };
+    imageCache.set(url, loaded);
+    return loaded;
   } catch (e) {
     console.warn('⚠️ Erro ao carregar imagem:', url, e);
     return null;
@@ -140,13 +169,17 @@ Deno.serve(async (req) => {
     const addHeader = () => {
       if (!logoHeaderData) return;
       try {
-        // Asset real é 500x324 (ratio 1.545). Mantemos a proporção para evitar
-        // o logo "achatado" que aparecia antes com 42x18 (ratio 2.33).
+        // Preserva a proporção real do asset (ratio width/height) para evitar
+        // o logo "achatado" que aparecia antes quando usávamos dimensões fixas.
+        const ratio =
+          logoHeaderData.width && logoHeaderData.height
+            ? logoHeaderData.width / logoHeaderData.height
+            : 1.543;
         const logoW = 34;
-        const logoH = logoW / 1.543; // ≈ 22mm
+        const logoH = logoW / ratio;
         const logoX = (pageWidth - logoW) / 2;
         doc.addImage(
-          `data:image/png;base64,${logoHeaderData}`,
+          `data:image/png;base64,${logoHeaderData.base64}`,
           'PNG',
           logoX,
           6,
@@ -171,7 +204,7 @@ Deno.serve(async (req) => {
         const wmX = (pageWidth - wmW) / 2;
         const wmY = (pageHeight - wmH) / 2;
         doc.addImage(
-          `data:image/png;base64,${logoWatermarkData}`,
+          `data:image/png;base64,${logoWatermarkData.base64}`,
           'PNG',
           wmX,
           wmY,
@@ -531,7 +564,7 @@ Deno.serve(async (req) => {
       label: string,
       nome: string,
       roleLine: string,
-      imageBase64: string | null,
+      image: LoadedImage | null,
       alias: string
     ) => {
       const blockHeight = 30; // linha + nome + rótulo (imagem sobrepõe a linha)
@@ -540,18 +573,29 @@ Deno.serve(async (req) => {
       const lineY = currentY + 14;
       const lineX1 = marginX + 20;
       const lineX2 = pageWidth - marginX - 20;
-      const lineW = lineX2 - lineX1;
       const centerX = (lineX1 + lineX2) / 2;
 
-      // Imagem da assinatura centralizada sobre a linha (se houver)
-      if (imageBase64) {
+      // Imagem da assinatura centralizada sobre a linha, preservando a
+      // proporção real do PNG (caso contrário a assinatura fica achatada).
+      if (image && image.base64) {
         try {
-          const imgH = 20;
-          const imgW = 52;
+          const ratio =
+            image.width && image.height ? image.width / image.height : 2;
+          // Caixa máxima para a assinatura: 50mm de largura x 16mm de altura.
+          // Calculamos a dimensão cabível preservando proporção (fit: contain).
+          const maxW = 50;
+          const maxH = 16;
+          let imgW = maxW;
+          let imgH = imgW / ratio;
+          if (imgH > maxH) {
+            imgH = maxH;
+            imgW = imgH * ratio;
+          }
           const imgX = centerX - imgW / 2;
-          const imgY = lineY - imgH + 2;
+          // Base da imagem encosta um pouco acima da linha (margem de 1mm)
+          const imgY = lineY - imgH - 1;
           doc.addImage(
-            `data:image/png;base64,${imageBase64}`,
+            `data:image/png;base64,${image.base64}`,
             'PNG',
             imgX,
             imgY,
@@ -591,8 +635,6 @@ Deno.serve(async (req) => {
 
       doc.setTextColor(0, 0, 0);
       currentY += blockHeight + 4;
-      // usado para evitar que o linter reclame do parâmetro quando nome/contratos mudarem
-      void lineW;
     };
 
     // "Brasília, <data>" alinhado à esquerda
