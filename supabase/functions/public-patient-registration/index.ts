@@ -925,9 +925,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         contract_template_id: template.id,
         pessoa_id: responsavelFinanceiroId,
-        nome_contrato: `Contrato Fisioterapia - ${
-          data.paciente.nome
-        } - ${new Date().toLocaleDateString('pt-BR')}`,
+        nome_contrato: `Contrato Respira Kids - ${data.paciente.nome}`,
         conteudo_final: conteudoFinal,
         variaveis_utilizadas: data.contractVariables,
         status_contrato: 'gerado',
@@ -1050,7 +1048,7 @@ Deno.serve(async (req: Request) => {
             data: {
               id: contratoId,
               ativo: true,
-              nome_contrato: `Contrato Padrão Atendimento - ${data.paciente.nome}`,
+              nome_contrato: `Contrato Respira Kids - ${data.paciente.nome}`,
               status_contrato: 'gerado',
               data_geracao: contratoTimestamp,
               data_assinatura: null,

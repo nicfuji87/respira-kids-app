@@ -164,7 +164,7 @@ export async function generateContract(
       contract_template_id: preview.templateId,
       pessoa_id: pessoaId,
       agendamento_id: agendamentoId || null,
-      nome_contrato: `Contrato Fisioterapia - ${variables.paciente} - ${variables.hoje}`,
+      nome_contrato: `Contrato Respira Kids - ${variables.paciente}`,
       conteudo_final: preview.conteudo,
       variaveis_utilizadas: variables as unknown as Record<string, string>,
       status_contrato: 'gerado' as const,

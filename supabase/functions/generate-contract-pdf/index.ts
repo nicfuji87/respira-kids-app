@@ -502,14 +502,20 @@ Deno.serve(async (req) => {
 
     console.log('✅ PDF gerado com sucesso (', pageNum, 'páginas )');
 
-    const safeName = (patientName || 'Paciente').replace(/[^\w-]+/g, '_');
-    const dateStr = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+    // AI dev note: nome do arquivo alinhado ao nome_contrato exibido no sistema
+    // ("Contrato Respira Kids - Nome do Paciente.pdf"). Remove apenas caracteres
+    // inválidos em nomes de arquivo no Windows.
+    const displayName = patientName || 'Paciente';
+    const safeFileName = `Contrato Respira Kids - ${displayName}`.replace(
+      /[<>:"/\\|?*]+/g,
+      '_'
+    );
 
     return new Response(pdfBuffer, {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Contrato_${safeName}_${dateStr}.pdf"`,
+        'Content-Disposition': `attachment; filename="${safeFileName}.pdf"`,
       },
     });
   } catch (error) {

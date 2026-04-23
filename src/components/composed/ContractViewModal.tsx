@@ -67,11 +67,12 @@ export const ContractViewModal = React.memo<ContractViewModalProps>(
           a.style.display = 'none';
           a.href = url;
 
-          // Nome do arquivo com data
-          const today = new Date()
-            .toLocaleDateString('pt-BR')
-            .replace(/\//g, '-');
-          a.download = `Contrato_${patientName.replace(/\s+/g, '_')}_${today}.pdf`;
+          // Mesmo padrão do nome_contrato / PDF gerado no backend
+          const safe = `Contrato Respira Kids - ${patientName}`.replace(
+            /[<>:"/\\|?*]+/g,
+            '_'
+          );
+          a.download = `${safe}.pdf`;
 
           document.body.appendChild(a);
           a.click();
