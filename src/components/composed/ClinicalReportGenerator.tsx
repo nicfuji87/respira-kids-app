@@ -1,6 +1,6 @@
 // AI dev note: ClinicalReportGenerator - Componente para geração de relatórios clínicos
 // Substitui PatientMedicalReports com funcionalidade completa
-// Permite selecionar evoluções, assinar com Bruna ou Flavia, e enviar ao responsável
+// Permite selecionar evoluções, assinar com Bruna, Flavia ou Beatriz, e enviar ao responsável
 // Usa fundo orcamento_fisio_capa.png do bucket Supabase
 
 import React, { useState, useEffect } from 'react';
@@ -97,6 +97,13 @@ const PROFESSIONALS = [
     id: 'flavia',
     name: 'Flavia Pacheco',
     signatureFile: 'Flavia Pacheco.png',
+    title: 'Fisioterapeuta',
+    crefito: '',
+  },
+  {
+    id: 'beatriz',
+    name: 'Beatriz Perisse',
+    signatureFile: 'Beatriz Perisse.png',
     title: 'Fisioterapeuta',
     crefito: '',
   },

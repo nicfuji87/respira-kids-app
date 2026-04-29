@@ -63,6 +63,13 @@ const PROFESSIONALS = [
     title: 'Fisioterapeuta',
     crefito: '',
   },
+  {
+    id: 'beatriz',
+    name: 'Beatriz Perisse',
+    signatureFile: 'Beatriz Perisse.png',
+    title: 'Fisioterapeuta',
+    crefito: '',
+  },
 ];
 
 // Formatar data brasileira completa
