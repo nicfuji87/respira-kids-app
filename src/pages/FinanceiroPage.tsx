@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { PinValidationDialog } from '@/components/composed/PinValidationDialog';
 import { FinancialConsultationsList } from '@/components/composed/FinancialConsultationsList';
 import { FinancialFaturasList } from '@/components/composed/FinancialFaturasList';
@@ -57,6 +58,8 @@ export const FinanceiroPage: React.FC = () => {
   const { toast } = useToast();
   const [isPinValidated, setIsPinValidated] = useState(false);
   const [isCheckingPin, setIsCheckingPin] = useState(true);
+  // Espelha o acesso apenas para proteger o onClose contra closures antigas.
+  const isPinValidatedRef = React.useRef(false);
 
   // AI dev note: Tabs diferentes para admin e profissional
   const [activeTabAdmin, setActiveTabAdmin] = useState<
@@ -99,6 +102,7 @@ export const FinanceiroPage: React.FC = () => {
     const checkPinSession = async () => {
       // Profissional não precisa de PIN
       if (user?.pessoa?.role === 'profissional') {
+        isPinValidatedRef.current = true;
         setIsPinValidated(true);
         setIsCheckingPin(false);
         return;
@@ -119,9 +123,11 @@ export const FinanceiroPage: React.FC = () => {
           const thirtyMinutes = 30 * 60 * 1000;
 
           if (now - validatedTime < thirtyMinutes) {
+            isPinValidatedRef.current = true;
             setIsPinValidated(true);
           } else {
             sessionStorage.removeItem(sessionKey);
+            isPinValidatedRef.current = false;
           }
         }
       }
@@ -140,9 +146,17 @@ export const FinanceiroPage: React.FC = () => {
   // e o conteúdo da página renderiza ({isPinValidated && ...}).
   const handlePinSuccess = React.useCallback(() => {
     const sessionKey = `pin_validated_${user?.id}_financeiro`;
-    sessionStorage.setItem(sessionKey, Date.now().toString());
 
-    setIsPinValidated(true);
+    isPinValidatedRef.current = true;
+    flushSync(() => {
+      setIsPinValidated(true);
+    });
+
+    try {
+      sessionStorage.setItem(sessionKey, Date.now().toString());
+    } catch (error) {
+      console.warn('Não foi possível salvar a sessão do PIN:', error);
+    }
 
     toast({
       title: 'Acesso autorizado',
@@ -405,7 +419,7 @@ export const FinanceiroPage: React.FC = () => {
         <PinValidationDialog
           isOpen={!isPinValidated}
           onClose={() => {
-            if (!isPinValidated) {
+            if (!isPinValidatedRef.current) {
               navigate('/dashboard');
             }
           }}
