@@ -1,6 +1,9 @@
 // AI dev note: Edge Function para finalizar cadastro público de paciente
 // Cria todas as entidades no banco de dados seguindo a ordem correta
 // Logs detalhados em cada etapa para rastreamento
+// Versão 43: Idempotência no STEP 6+ para retry de cadastro público
+//            - Reutiliza paciente ativo já existente para o mesmo responsável financeiro
+//            - Evita duplicar relacionamentos e contrato em reenvios do mesmo cadastro
 // Versão 42: Fluxo de assinatura digital via n8n + Assinafy
 //            - Contrato criado com status 'gerado' (não mais 'assinado')
 //            - data_assinatura NÃO é preenchida (será setada quando assinatura chegar)
@@ -747,47 +750,156 @@ Deno.serve(async (req: Request) => {
     // ============================================
     // STEP 6: Criar PACIENTE
     // ============================================
-    console.log('📋 [STEP 6] Criando paciente...');
+    console.log('📋 [STEP 6] Criando ou reutilizando paciente...');
 
     // AI dev note: Data já vem no formato ISO do frontend
+    const pacienteNome = data.paciente.nome.trim();
     const dataNascimentoISO = data.paciente.dataNascimento;
     const cpfPaciente = cleanCPF(data.paciente.cpf);
 
     console.log('📋 [STEP 6] Dados:', {
-      nome: data.paciente.nome,
+      nome: pacienteNome,
       dataNascimento: data.paciente.dataNascimento,
       sexo: data.paciente.sexo,
       cpf: cpfPaciente || 'não fornecido',
     });
 
-    const { data: novoPaciente, error: errorPaciente } = await supabase
-      .from('pessoas')
-      .insert({
-        nome: data.paciente.nome,
-        data_nascimento: dataNascimentoISO,
-        sexo: data.paciente.sexo,
-        cpf_cnpj: cpfPaciente,
-        id_tipo_pessoa: tipoPaciente.id,
-        id_endereco: enderecoId,
-        numero_endereco: data.endereco.numero,
-        complemento_endereco: data.endereco.complemento || null,
-        responsavel_cobranca_id: responsavelFinanceiroId,
-        autorizacao_uso_cientifico: data.autorizacoes.usoCientifico,
-        autorizacao_uso_redes_sociais: data.autorizacoes.usoRedesSociais,
-        autorizacao_uso_do_nome: data.autorizacoes.usoNome,
-        ativo: true,
-      })
-      .select('id')
-      .single();
+    // AI dev note: A validação inicial do cadastro é por WhatsApp/responsável.
+    // A constraint pessoas_nome_responsavel_unique_when_active é a garantia final
+    // no banco; por isso o backend precisa ser idempotente aqui para retries.
+    const { data: pacienteExistente, error: errorPacienteExistente } =
+      await supabase
+        .from('pessoas')
+        .select('id')
+        .eq('id_tipo_pessoa', tipoPaciente.id)
+        .eq('responsavel_cobranca_id', responsavelFinanceiroId)
+        .eq('ativo', true)
+        .eq('nome', pacienteNome)
+        .limit(1)
+        .maybeSingle();
 
-    if (errorPaciente || !novoPaciente) {
-      console.error('❌ [STEP 6] Erro ao criar paciente:', errorPaciente);
-      const detalhes = errorPaciente?.message || 'Erro desconhecido';
-      throw new Error(`Erro ao criar paciente: ${detalhes}`);
+    if (errorPacienteExistente) {
+      console.error(
+        '❌ [STEP 6] Erro ao buscar paciente existente:',
+        errorPacienteExistente
+      );
+      throw new Error('Erro ao verificar paciente existente');
     }
 
-    const pacienteId = novoPaciente.id;
-    console.log('✅ [STEP 6] Paciente criado:', pacienteId);
+    let pacienteId: string;
+
+    if (pacienteExistente) {
+      pacienteId = pacienteExistente.id;
+      console.log(
+        '✅ [STEP 6] Paciente já existe para este responsável (reutilizando):',
+        pacienteId
+      );
+    } else {
+      const { data: novoPaciente, error: errorPaciente } = await supabase
+        .from('pessoas')
+        .insert({
+          nome: pacienteNome,
+          data_nascimento: dataNascimentoISO,
+          sexo: data.paciente.sexo,
+          cpf_cnpj: cpfPaciente,
+          id_tipo_pessoa: tipoPaciente.id,
+          id_endereco: enderecoId,
+          numero_endereco: data.endereco.numero,
+          complemento_endereco: data.endereco.complemento || null,
+          responsavel_cobranca_id: responsavelFinanceiroId,
+          autorizacao_uso_cientifico: data.autorizacoes.usoCientifico,
+          autorizacao_uso_redes_sociais: data.autorizacoes.usoRedesSociais,
+          autorizacao_uso_do_nome: data.autorizacoes.usoNome,
+          ativo: true,
+        })
+        .select('id')
+        .single();
+
+      if (errorPaciente || !novoPaciente) {
+        console.error('❌ [STEP 6] Erro ao criar paciente:', errorPaciente);
+
+        if (errorPaciente?.code === '23505') {
+          const { data: pacienteCriadoEmRetry } = await supabase
+            .from('pessoas')
+            .select('id')
+            .eq('id_tipo_pessoa', tipoPaciente.id)
+            .eq('responsavel_cobranca_id', responsavelFinanceiroId)
+            .eq('ativo', true)
+            .ilike('nome', pacienteNome)
+            .limit(1)
+            .maybeSingle();
+
+          if (pacienteCriadoEmRetry) {
+            pacienteId = pacienteCriadoEmRetry.id;
+            console.log(
+              '✅ [STEP 6] Paciente encontrado após conflito de retry:',
+              pacienteId
+            );
+          } else {
+            const detalhes = errorPaciente?.message || 'Erro desconhecido';
+            throw new Error(`Erro ao criar paciente: ${detalhes}`);
+          }
+        } else {
+          const detalhes = errorPaciente?.message || 'Erro desconhecido';
+          throw new Error(`Erro ao criar paciente: ${detalhes}`);
+        }
+      } else {
+        pacienteId = novoPaciente.id;
+        console.log('✅ [STEP 6] Paciente criado:', pacienteId);
+      }
+    }
+
+    console.log('✅ [STEP 6] Paciente resolvido:', pacienteId);
+
+    const ensureResponsavelRelationship = async (
+      idResponsavel: string,
+      tipoResponsabilidade: 'ambos' | 'legal' | 'financeiro',
+      label: string
+    ) => {
+      const { data: relExistente, error: errorRelSearch } = await supabase
+        .from('pessoa_responsaveis')
+        .select('id, tipo_responsabilidade')
+        .eq('id_pessoa', pacienteId)
+        .eq('id_responsavel', idResponsavel)
+        .eq('ativo', true)
+        .limit(1)
+        .maybeSingle();
+
+      if (errorRelSearch) {
+        console.error(
+          `❌ [STEP 7/8] Erro ao verificar relacionamento ${label}:`,
+          errorRelSearch
+        );
+        throw new Error(`Erro ao verificar relacionamento ${label}`);
+      }
+
+      if (relExistente) {
+        console.log(
+          `✅ [STEP 7/8] Relacionamento ${label} já existe (reutilizando):`,
+          relExistente.id
+        );
+        return;
+      }
+
+      const { error: errorRelInsert } = await supabase
+        .from('pessoa_responsaveis')
+        .insert({
+          id_pessoa: pacienteId,
+          id_responsavel: idResponsavel,
+          tipo_responsabilidade: tipoResponsabilidade,
+          ativo: true,
+        });
+
+      if (errorRelInsert) {
+        console.error(
+          `❌ [STEP 7/8] Erro ao criar relacionamento ${label}:`,
+          errorRelInsert
+        );
+        throw new Error(`Erro ao criar relacionamento ${label}`);
+      }
+
+      console.log(`✅ [STEP 7/8] Relacionamento ${label} criado`);
+    };
 
     // ============================================
     // STEP 7/8: Criar relacionamentos paciente ↔ responsáveis
@@ -797,155 +909,175 @@ Deno.serve(async (req: Request) => {
       console.log(
         '📋 [STEP 7] Criando relacionamento paciente ↔ responsável (legal e financeiro)...'
       );
-      const { error: errorRelAmbos } = await supabase
-        .from('pessoa_responsaveis')
-        .insert({
-          id_pessoa: pacienteId,
-          id_responsavel: responsavelLegalId,
-          tipo_responsabilidade: 'ambos',
-          ativo: true,
-        });
-
-      if (errorRelAmbos) {
-        console.error(
-          '❌ [STEP 7] Erro ao criar relacionamento ambos:',
-          errorRelAmbos
-        );
-        throw new Error('Erro ao criar relacionamento com responsável');
-      }
-      console.log('✅ [STEP 7] Relacionamento criado (legal e financeiro)');
+      await ensureResponsavelRelationship(
+        responsavelLegalId,
+        'ambos',
+        'com responsável'
+      );
     } else {
       // Pessoas diferentes para responsável legal e financeiro
       console.log(
         '📋 [STEP 7] Criando relacionamento paciente ↔ responsável legal...'
       );
-      const { error: errorRelLegal } = await supabase
-        .from('pessoa_responsaveis')
-        .insert({
-          id_pessoa: pacienteId,
-          id_responsavel: responsavelLegalId,
-          tipo_responsabilidade: 'legal',
-          ativo: true,
-        });
-
-      if (errorRelLegal) {
-        console.error(
-          '❌ [STEP 7] Erro ao criar relacionamento legal:',
-          errorRelLegal
-        );
-        throw new Error('Erro ao criar relacionamento com responsável legal');
-      }
-      console.log('✅ [STEP 7] Relacionamento legal criado');
+      await ensureResponsavelRelationship(
+        responsavelLegalId,
+        'legal',
+        'com responsável legal'
+      );
 
       console.log(
         '📋 [STEP 8] Criando relacionamento paciente ↔ responsável financeiro...'
       );
-      const { error: errorRelFin } = await supabase
-        .from('pessoa_responsaveis')
-        .insert({
-          id_pessoa: pacienteId,
-          id_responsavel: responsavelFinanceiroId,
-          tipo_responsabilidade: 'financeiro',
-          ativo: true,
-        });
-
-      if (errorRelFin) {
-        console.error(
-          '❌ [STEP 8] Erro ao criar relacionamento financeiro:',
-          errorRelFin
-        );
-        throw new Error(
-          'Erro ao criar relacionamento com responsável financeiro'
-        );
-      }
-      console.log('✅ [STEP 8] Relacionamento financeiro criado');
+      await ensureResponsavelRelationship(
+        responsavelFinanceiroId,
+        'financeiro',
+        'com responsável financeiro'
+      );
     }
 
     // ============================================
     // STEP 9: Criar relacionamento paciente ↔ pediatra
     // ============================================
     console.log('📋 [STEP 9] Criando relacionamento paciente ↔ pediatra...');
-    const { error: errorRelPediatra } = await supabase
-      .from('paciente_pediatra')
-      .insert({
-        paciente_id: pacienteId,
-        pediatra_id: pediatraId,
-        ativo: true,
-      });
+    const { data: relPediatraExistente, error: errorRelPediatraSearch } =
+      await supabase
+        .from('paciente_pediatra')
+        .select('id')
+        .eq('paciente_id', pacienteId)
+        .eq('pediatra_id', pediatraId)
+        .eq('ativo', true)
+        .limit(1)
+        .maybeSingle();
 
-    if (errorRelPediatra) {
+    if (errorRelPediatraSearch) {
       console.error(
-        '❌ [STEP 9] Erro ao criar relacionamento pediatra:',
-        errorRelPediatra
+        '❌ [STEP 9] Erro ao verificar relacionamento pediatra:',
+        errorRelPediatraSearch
       );
-      throw new Error('Erro ao criar relacionamento com pediatra');
+      throw new Error('Erro ao verificar relacionamento com pediatra');
     }
-    console.log('✅ [STEP 9] Relacionamento pediatra criado');
+
+    if (relPediatraExistente) {
+      console.log(
+        '✅ [STEP 9] Relacionamento pediatra já existe (reutilizando):',
+        relPediatraExistente.id
+      );
+    } else {
+      const { error: errorRelPediatra } = await supabase
+        .from('paciente_pediatra')
+        .insert({
+          paciente_id: pacienteId,
+          pediatra_id: pediatraId,
+          ativo: true,
+        });
+
+      if (errorRelPediatra) {
+        console.error(
+          '❌ [STEP 9] Erro ao criar relacionamento pediatra:',
+          errorRelPediatra
+        );
+        throw new Error('Erro ao criar relacionamento com pediatra');
+      }
+      console.log('✅ [STEP 9] Relacionamento pediatra criado');
+    }
 
     // ============================================
-    // STEP 10: Criar contrato
+    // STEP 10: Criar ou reutilizar contrato
     // ============================================
-    console.log('📋 [STEP 10] Criando contrato...');
+    console.log('📋 [STEP 10] Criando ou reutilizando contrato...');
     console.log(
       '📋 [STEP 10] Responsável Financeiro ID:',
       responsavelFinanceiroId
     );
     console.log('📋 [STEP 10] Paciente ID:', pacienteId);
 
-    // Buscar template de contrato ativo
-    const { data: template, error: errorTemplate } = await supabase
-      .from('contract_templates')
-      .select('id, nome, conteudo_template')
-      .eq('ativo', true)
-      .order('versao', { ascending: false })
-      .limit(1)
-      .single();
+    const nomeContrato = `Contrato Respira Kids - ${pacienteNome}`;
+    let contratoId: string;
+    let contratoCriadoAgora = false;
 
-    if (errorTemplate || !template) {
-      console.error('❌ [STEP 10] Erro ao buscar template:', errorTemplate);
-      throw new Error('Template de contrato não encontrado');
+    const { data: contratoExistente, error: errorContratoExistente } =
+      await supabase
+        .from('user_contracts')
+        .select('id, status_contrato')
+        .eq('pessoa_id', responsavelFinanceiroId)
+        .eq('nome_contrato', nomeContrato)
+        .eq('ativo', true)
+        .in('status_contrato', ['gerado', 'assinado'])
+        .order('data_geracao', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (errorContratoExistente) {
+      console.error(
+        '❌ [STEP 10] Erro ao buscar contrato existente:',
+        errorContratoExistente
+      );
+      throw new Error('Erro ao verificar contrato existente');
     }
 
-    console.log('✅ [STEP 10] Template encontrado:', template.nome);
+    if (contratoExistente) {
+      contratoId = contratoExistente.id;
+      console.log(
+        '✅ [STEP 10] Contrato já existe (reutilizando):',
+        contratoId
+      );
+    } else {
+      // Buscar template de contrato ativo
+      const { data: template, error: errorTemplate } = await supabase
+        .from('contract_templates')
+        .select('id, nome, conteudo_template')
+        .eq('ativo', true)
+        .order('versao', { ascending: false })
+        .limit(1)
+        .single();
 
-    // Substituir variáveis no template
-    let conteudoFinal = template.conteudo_template;
-    Object.entries(data.contractVariables).forEach(([key, value]) => {
-      const regex = new RegExp(`{{${key}}}`, 'g');
-      conteudoFinal = conteudoFinal.replace(regex, value ?? '');
-    });
+      if (errorTemplate || !template) {
+        console.error('❌ [STEP 10] Erro ao buscar template:', errorTemplate);
+        throw new Error('Template de contrato não encontrado');
+      }
 
-    console.log('✅ [STEP 10] Variáveis substituídas no contrato');
+      console.log('✅ [STEP 10] Template encontrado:', template.nome);
 
-    // AI dev note: Contrato criado com status 'gerado' (aguardando assinatura via n8n/Assinafy)
-    // data_assinatura permanece NULL e é preenchida quando n8n confirmar a assinatura
-    // arquivo_url será atualizado abaixo com o caminho no bucket após upload do PDF
-    const { data: contrato, error: errorContrato } = await supabase
-      .from('user_contracts')
-      .insert({
-        contract_template_id: template.id,
-        pessoa_id: responsavelFinanceiroId,
-        nome_contrato: `Contrato Respira Kids - ${data.paciente.nome}`,
-        conteudo_final: conteudoFinal,
-        variaveis_utilizadas: data.contractVariables,
-        status_contrato: 'gerado',
-        data_geracao: new Date().toISOString(),
-        arquivo_url: 'Aguardando',
-        ativo: true,
-      })
-      .select('id')
-      .single();
+      // Substituir variáveis no template
+      let conteudoFinal = template.conteudo_template;
+      Object.entries(data.contractVariables).forEach(([key, value]) => {
+        const regex = new RegExp(`{{${key}}}`, 'g');
+        conteudoFinal = conteudoFinal.replace(regex, value ?? '');
+      });
 
-    if (errorContrato || !contrato) {
-      console.error('❌ [STEP 10] Erro ao criar contrato:', errorContrato);
-      throw new Error('Erro ao criar contrato');
+      console.log('✅ [STEP 10] Variáveis substituídas no contrato');
+
+      // AI dev note: Contrato criado com status 'gerado' (aguardando assinatura via n8n/Assinafy)
+      // data_assinatura permanece NULL e é preenchida quando n8n confirmar a assinatura
+      // arquivo_url será atualizado abaixo com o caminho no bucket após upload do PDF
+      const { data: contrato, error: errorContrato } = await supabase
+        .from('user_contracts')
+        .insert({
+          contract_template_id: template.id,
+          pessoa_id: responsavelFinanceiroId,
+          nome_contrato: nomeContrato,
+          conteudo_final: conteudoFinal,
+          variaveis_utilizadas: data.contractVariables,
+          status_contrato: 'gerado',
+          data_geracao: new Date().toISOString(),
+          arquivo_url: 'Aguardando',
+          ativo: true,
+        })
+        .select('id')
+        .single();
+
+      if (errorContrato || !contrato) {
+        console.error('❌ [STEP 10] Erro ao criar contrato:', errorContrato);
+        throw new Error('Erro ao criar contrato');
+      }
+
+      contratoId = contrato.id;
+      contratoCriadoAgora = true;
+      console.log(
+        '✅ [STEP 10] Contrato criado (aguardando assinatura):',
+        contratoId
+      );
     }
-
-    const contratoId = contrato.id;
-    console.log(
-      '✅ [STEP 10] Contrato criado (aguardando assinatura):',
-      contratoId
-    );
 
     // ============================================
     // STEP 10.1: Gerar PDF, fazer upload no bucket e enfileirar webhook
@@ -954,154 +1086,163 @@ Deno.serve(async (req: Request) => {
     // faz upload em respira-contracts/{pessoa_id}/{contract_id}.pdf,
     // gera signed URL de 24h e enfileira evento 'contrato_gerado' em webhook_queue
     // para que o n8n processe a assinatura via Assinafy.
-    console.log('📋 [STEP 10.1] Gerando PDF do contrato...');
+    if (contratoCriadoAgora) {
+      console.log('📋 [STEP 10.1] Gerando PDF do contrato...');
 
-    let pdfSignedUrl: string | null = null;
-    const PDF_URL_EXPIRES_IN = 60 * 60 * 24; // 24 horas
-    const pdfStoragePath = `${responsavelFinanceiroId}/${contratoId}.pdf`;
+      let pdfSignedUrl: string | null = null;
+      const PDF_URL_EXPIRES_IN = 60 * 60 * 24; // 24 horas
+      const pdfStoragePath = `${responsavelFinanceiroId}/${contratoId}.pdf`;
 
-    try {
-      const pdfResponse = await fetch(
-        `${supabaseUrl}/functions/v1/generate-contract-pdf`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${supabaseServiceKey}`,
-            apikey: supabaseServiceKey,
-          },
-          body: JSON.stringify({
-            contractId: contratoId,
-            patientName: data.paciente.nome,
-          }),
-        }
-      );
-
-      if (!pdfResponse.ok) {
-        const errText = await pdfResponse.text();
-        throw new Error(
-          `generate-contract-pdf retornou ${pdfResponse.status}: ${errText}`
-        );
-      }
-
-      const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer());
-      console.log('✅ [STEP 10.1] PDF gerado:', pdfBytes.length, 'bytes');
-
-      // Upload no bucket (usa upsert para permitir regeração/reenvio)
-      const { error: uploadError } = await supabase.storage
-        .from('respira-contracts')
-        .upload(pdfStoragePath, pdfBytes, {
-          contentType: 'application/pdf',
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error(
-          '❌ [STEP 10.1] Erro ao fazer upload do PDF:',
-          uploadError
-        );
-        throw new Error(`Upload do PDF falhou: ${uploadError.message}`);
-      }
-      console.log('✅ [STEP 10.1] PDF enviado ao bucket:', pdfStoragePath);
-
-      // Gerar signed URL com 24h de validade para o n8n baixar
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('respira-contracts')
-        .createSignedUrl(pdfStoragePath, PDF_URL_EXPIRES_IN);
-
-      if (signedError || !signedData?.signedUrl) {
-        console.error('❌ [STEP 10.1] Erro ao gerar signed URL:', signedError);
-        throw new Error(
-          `Signed URL falhou: ${signedError?.message || 'sem URL'}`
-        );
-      }
-
-      pdfSignedUrl = signedData.signedUrl;
-      console.log('✅ [STEP 10.1] Signed URL gerada (24h)');
-
-      // AI dev note: NÃO sobrescrever arquivo_url aqui. Mantemos 'Aguardando'
-      // enquanto o contrato não foi assinado. Quando o n8n confirmar a assinatura,
-      // ele atualiza arquivo_url com o caminho do bucket (o mesmo usado neste upload,
-      // que será substituído pelo PDF assinado via x-upsert: true).
-
-      // Enfileirar webhook contrato_gerado para o n8n processar assinatura
-      // AI dev note: payload segue o MESMO padrão do webhook `appointment_updated`
-      // (gerado por trigger no banco): tudo encapsulado em `data`, com `tipo`,
-      // `timestamp` e `webhook_id` no mesmo nível das demais entidades dentro de `data`.
-      // Não inclua nenhum campo específico de provedor de assinatura (Assinafy etc.).
-      const responsavelNome =
-        data.responsavelLegal?.nome || data.existingUserData?.nome || '';
-      const responsavelEmail =
-        data.responsavelLegal?.email || data.existingUserData?.email || '';
-      const responsavelTelefone = data.whatsappJid
-        ? extractPhoneFromJid(data.whatsappJid)
-        : data.phoneNumber;
-
-      const contratoTimestamp = new Date().toISOString();
-      const contratoWebhookId = crypto.randomUUID();
-
-      const { error: queueError } = await supabase
-        .from('webhook_queue')
-        .insert({
-          evento: 'contrato_gerado',
-          payload: {
-            data: {
-              id: contratoId,
-              ativo: true,
-              nome_contrato: `Contrato Respira Kids - ${data.paciente.nome}`,
-              status_contrato: 'gerado',
-              data_geracao: contratoTimestamp,
-              data_assinatura: null,
-              paciente: {
-                id: pacienteId,
-                nome: data.paciente.nome,
-                ativo: true,
-                email: null,
-                telefone: null,
-              },
-              responsavel_legal: {
-                id: responsavelFinanceiroId,
-                nome: responsavelNome,
-                email: responsavelEmail,
-                telefone: responsavelTelefone,
-              },
-              responsavel_financeiro: {
-                id: responsavelFinanceiroId,
-                nome: responsavelNome,
-              },
-              pdf: {
-                signed_url: pdfSignedUrl,
-                expires_in_seconds: PDF_URL_EXPIRES_IN,
-                storage_path: pdfStoragePath,
-              },
-              reenvio: false,
-              tipo: 'contrato_gerado',
-              timestamp: contratoTimestamp,
-              webhook_id: contratoWebhookId,
+      try {
+        const pdfResponse = await fetch(
+          `${supabaseUrl}/functions/v1/generate-contract-pdf`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${supabaseServiceKey}`,
+              apikey: supabaseServiceKey,
             },
-          },
-          status: 'pendente',
-          tentativas: 0,
-          max_tentativas: 3,
-        });
+            body: JSON.stringify({
+              contractId: contratoId,
+              patientName: pacienteNome,
+            }),
+          }
+        );
 
-      if (queueError) {
+        if (!pdfResponse.ok) {
+          const errText = await pdfResponse.text();
+          throw new Error(
+            `generate-contract-pdf retornou ${pdfResponse.status}: ${errText}`
+          );
+        }
+
+        const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer());
+        console.log('✅ [STEP 10.1] PDF gerado:', pdfBytes.length, 'bytes');
+
+        // Upload no bucket (usa upsert para permitir regeração/reenvio)
+        const { error: uploadError } = await supabase.storage
+          .from('respira-contracts')
+          .upload(pdfStoragePath, pdfBytes, {
+            contentType: 'application/pdf',
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error(
+            '❌ [STEP 10.1] Erro ao fazer upload do PDF:',
+            uploadError
+          );
+          throw new Error(`Upload do PDF falhou: ${uploadError.message}`);
+        }
+        console.log('✅ [STEP 10.1] PDF enviado ao bucket:', pdfStoragePath);
+
+        // Gerar signed URL com 24h de validade para o n8n baixar
+        const { data: signedData, error: signedError } = await supabase.storage
+          .from('respira-contracts')
+          .createSignedUrl(pdfStoragePath, PDF_URL_EXPIRES_IN);
+
+        if (signedError || !signedData?.signedUrl) {
+          console.error(
+            '❌ [STEP 10.1] Erro ao gerar signed URL:',
+            signedError
+          );
+          throw new Error(
+            `Signed URL falhou: ${signedError?.message || 'sem URL'}`
+          );
+        }
+
+        pdfSignedUrl = signedData.signedUrl;
+        console.log('✅ [STEP 10.1] Signed URL gerada (24h)');
+
+        // AI dev note: NÃO sobrescrever arquivo_url aqui. Mantemos 'Aguardando'
+        // enquanto o contrato não foi assinado. Quando o n8n confirmar a assinatura,
+        // ele atualiza arquivo_url com o caminho do bucket (o mesmo usado neste upload,
+        // que será substituído pelo PDF assinado via x-upsert: true).
+
+        // Enfileirar webhook contrato_gerado para o n8n processar assinatura
+        // AI dev note: payload segue o MESMO padrão do webhook `appointment_updated`
+        // (gerado por trigger no banco): tudo encapsulado em `data`, com `tipo`,
+        // `timestamp` e `webhook_id` no mesmo nível das demais entidades dentro de `data`.
+        // Não inclua nenhum campo específico de provedor de assinatura (Assinafy etc.).
+        const responsavelNome =
+          data.responsavelLegal?.nome || data.existingUserData?.nome || '';
+        const responsavelEmail =
+          data.responsavelLegal?.email || data.existingUserData?.email || '';
+        const responsavelTelefone = data.whatsappJid
+          ? extractPhoneFromJid(data.whatsappJid)
+          : data.phoneNumber;
+
+        const contratoTimestamp = new Date().toISOString();
+        const contratoWebhookId = crypto.randomUUID();
+
+        const { error: queueError } = await supabase
+          .from('webhook_queue')
+          .insert({
+            evento: 'contrato_gerado',
+            payload: {
+              data: {
+                id: contratoId,
+                ativo: true,
+                nome_contrato: nomeContrato,
+                status_contrato: 'gerado',
+                data_geracao: contratoTimestamp,
+                data_assinatura: null,
+                paciente: {
+                  id: pacienteId,
+                  nome: pacienteNome,
+                  ativo: true,
+                  email: null,
+                  telefone: null,
+                },
+                responsavel_legal: {
+                  id: responsavelFinanceiroId,
+                  nome: responsavelNome,
+                  email: responsavelEmail,
+                  telefone: responsavelTelefone,
+                },
+                responsavel_financeiro: {
+                  id: responsavelFinanceiroId,
+                  nome: responsavelNome,
+                },
+                pdf: {
+                  signed_url: pdfSignedUrl,
+                  expires_in_seconds: PDF_URL_EXPIRES_IN,
+                  storage_path: pdfStoragePath,
+                },
+                reenvio: false,
+                tipo: 'contrato_gerado',
+                timestamp: contratoTimestamp,
+                webhook_id: contratoWebhookId,
+              },
+            },
+            status: 'pendente',
+            tentativas: 0,
+            max_tentativas: 3,
+          });
+
+        if (queueError) {
+          console.error(
+            '❌ [STEP 10.1] Erro ao enfileirar webhook contrato_gerado:',
+            queueError
+          );
+        } else {
+          console.log(
+            '✅ [STEP 10.1] Webhook contrato_gerado enfileirado para n8n'
+          );
+        }
+      } catch (pdfError) {
         console.error(
-          '❌ [STEP 10.1] Erro ao enfileirar webhook contrato_gerado:',
-          queueError
+          '❌ [STEP 10.1] Erro ao processar PDF/webhook do contrato:',
+          pdfError
         );
-      } else {
-        console.log(
-          '✅ [STEP 10.1] Webhook contrato_gerado enfileirado para n8n'
-        );
+        // AI dev note: Falha na geração de PDF não deve quebrar o cadastro.
+        // O contrato foi criado no banco e poderá ser reenviado manualmente pelo admin.
       }
-    } catch (pdfError) {
-      console.error(
-        '❌ [STEP 10.1] Erro ao processar PDF/webhook do contrato:',
-        pdfError
+    } else {
+      console.log(
+        '⏭️ [STEP 10.1] Contrato já existia; PDF/webhook não reenfileirados'
       );
-      // AI dev note: Falha na geração de PDF não deve quebrar o cadastro.
-      // O contrato foi criado no banco e poderá ser reenviado manualmente pelo admin.
     }
 
     // ============================================
@@ -1126,7 +1267,7 @@ Deno.serve(async (req: Request) => {
             timestamp: new Date().toISOString(),
             // Dados extras já formatados para evitar problemas de timezone
             paciente: {
-              nome: data.paciente.nome,
+              nome: pacienteNome,
               dataNascimento: data.paciente.dataNascimento, // ISO: YYYY-MM-DD
               dataNascimentoFormatada: formatDateBR(
                 data.paciente.dataNascimento
@@ -1186,7 +1327,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 200,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 42, // AI dev note: Incrementar versão
+        edge_function_version: 43, // AI dev note: Incrementar versão
         paciente_id: pacienteId,
         responsavel_legal_id: responsavelLegalId,
         responsavel_financeiro_id: responsavelFinanceiroId,
@@ -1226,7 +1367,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 500,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 42, // AI dev note: Incrementar versão
+        edge_function_version: 43, // AI dev note: Incrementar versão
         error_type: 'database_error',
         error_details: {
           message: error instanceof Error ? error.message : String(error),
@@ -1255,7 +1396,7 @@ Deno.serve(async (req: Request) => {
           metadata: {
             ip_address: req.headers.get('x-forwarded-for'),
             user_agent: req.headers.get('user-agent'),
-            edge_function_version: 37,
+            edge_function_version: 43,
           },
         },
         status: 'pendente',
