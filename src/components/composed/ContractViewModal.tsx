@@ -14,6 +14,7 @@ import { Button } from '@/components/primitives/button';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { FileDown, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
+import { supabase } from '@/lib/supabase';
 
 interface ContractViewModalProps {
   isOpen: boolean;
@@ -34,8 +35,27 @@ export const ContractViewModal = React.memo<ContractViewModalProps>(
         setDownloading(true);
 
         if (pdfUrl && pdfUrl !== 'Aguardando') {
-          // Se já tem URL do PDF, abrir em nova aba
-          window.open(pdfUrl, '_blank');
+          // AI dev note: arquivo_url pode vir como URL completa (legado) ou
+          // como caminho de storage no bucket respira-contracts
+          // (formato: {pessoa_id}/{contract_id}.pdf). Precisamos gerar uma
+          // Signed URL quando for caminho, pois o bucket não é público.
+          const isFullUrl = /^https?:\/\//i.test(pdfUrl);
+
+          if (isFullUrl) {
+            window.open(pdfUrl, '_blank');
+          } else {
+            const { data, error } = await supabase.storage
+              .from('respira-contracts')
+              .createSignedUrl(pdfUrl, 300);
+
+            if (error || !data?.signedUrl) {
+              throw new Error(
+                error?.message ?? 'Não foi possível gerar URL do contrato'
+              );
+            }
+
+            window.open(data.signedUrl, '_blank');
+          }
         } else {
           // Gerar PDF via Edge Function
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;

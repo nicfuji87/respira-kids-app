@@ -33,3 +33,6 @@ dist-ssr
 # Bundle analysis
 bundle-report.html
 stats.json
+
+# Supabase CLI local cache / linked project metadata
+supabase/.temp/
