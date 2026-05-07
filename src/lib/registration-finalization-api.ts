@@ -43,6 +43,7 @@ export interface FinalizationData {
     dataNascimento: string;
     sexo: 'M' | 'F';
     cpf?: string;
+    emitirNotaNomePaciente: boolean;
   };
 
   pediatra: {
@@ -90,6 +91,7 @@ export async function finalizePatientRegistration(
     pacienteNome: data.paciente.nome,
     pacienteSexo: data.paciente.sexo,
     pacienteCpf: data.paciente.cpf || 'Não fornecido',
+    emitirNotaNomePaciente: data.paciente.emitirNotaNomePaciente,
     pediatraId: data.pediatra.id || 'Novo pediatra',
     pediatraNome: data.pediatra.nome,
     pediatraCrm: data.pediatra.crm || 'Não fornecido',

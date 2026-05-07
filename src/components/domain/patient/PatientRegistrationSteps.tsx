@@ -884,6 +884,8 @@ export const PatientRegistrationSteps =
             cpf: registrationData.paciente!.cpf
               ? cleanCPF(registrationData.paciente!.cpf)
               : undefined, // AI dev note: Limpar CPF antes de enviar
+            emitirNotaNomePaciente:
+              registrationData.paciente!.emitirNotaNomePaciente,
           },
 
           // Pediatra
@@ -1161,6 +1163,57 @@ export const PatientRegistrationSteps =
       return { stepNumber: mapping.baseStep, totalSteps: mapping.total };
     }, [currentStep]);
 
+    const fiscalResponsible = useMemo(() => {
+      const responsavelFinanceiro = registrationData.responsavelFinanceiro;
+
+      if (responsavelFinanceiro?.isSameAsLegal) {
+        return {
+          nome:
+            registrationData.existingUserData?.nome ||
+            registrationData.responsavelLegal?.nome,
+          cpf:
+            registrationData.existingUserData?.cpf_cnpj ||
+            registrationData.responsavelLegal?.cpf,
+        };
+      }
+
+      if (responsavelFinanceiro?.personData) {
+        return {
+          nome: responsavelFinanceiro.personData.nome,
+          cpf: responsavelFinanceiro.personData.cpf,
+        };
+      }
+
+      if (responsavelFinanceiro?.newPersonData) {
+        return {
+          nome: responsavelFinanceiro.newPersonData.nome,
+          cpf: responsavelFinanceiro.newPersonData.cpf,
+        };
+      }
+
+      return undefined;
+    }, [
+      registrationData.existingUserData?.cpf_cnpj,
+      registrationData.existingUserData?.nome,
+      registrationData.responsavelFinanceiro,
+      registrationData.responsavelLegal?.cpf,
+      registrationData.responsavelLegal?.nome,
+    ]);
+
+    const responsavelCpfs = useMemo(
+      () =>
+        [
+          registrationData.responsavelLegal?.cpf,
+          registrationData.existingUserData?.cpf_cnpj,
+          fiscalResponsible?.cpf,
+        ].filter((cpf): cpf is string => Boolean(cpf)),
+      [
+        fiscalResponsible?.cpf,
+        registrationData.existingUserData?.cpf_cnpj,
+        registrationData.responsavelLegal?.cpf,
+      ]
+    );
+
     // Renderizar etapa atual
     const renderCurrentStep = () => {
       switch (currentStep) {
@@ -1219,7 +1272,12 @@ export const PatientRegistrationSteps =
               onContinue={handlePatientData}
               onBack={handleBack}
               initialData={registrationData.paciente}
-              responsavelCpf={registrationData.responsavelLegal?.cpf}
+              responsavelCpf={
+                registrationData.responsavelLegal?.cpf ||
+                registrationData.existingUserData?.cpf_cnpj
+              }
+              responsavelCpfs={responsavelCpfs}
+              fiscalResponsible={fiscalResponsible}
             />
           );
 
@@ -1302,6 +1360,7 @@ export const PatientRegistrationSteps =
                   return undefined;
                 })(),
                 paciente: registrationData.paciente,
+                fiscalResponsible,
                 pediatra: registrationData.pediatra,
                 autorizacoes: registrationData.autorizacoes,
                 existingPersonId: registrationData.existingPersonId,

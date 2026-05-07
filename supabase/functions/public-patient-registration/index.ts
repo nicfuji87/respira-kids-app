@@ -1,6 +1,8 @@
 // AI dev note: Edge Function para finalizar cadastro público de paciente
 // Cria todas as entidades no banco de dados seguindo a ordem correta
 // Logs detalhados em cada etapa para rastreamento
+// Versão 44: Opção de nota fiscal no nome do paciente define o tomador fiscal
+//            via responsavel_cobranca_id = pacienteId, sem alterar vínculos de responsáveis
 // Versão 43: Idempotência no STEP 6+ para retry de cadastro público
 //            - Reutiliza paciente ativo já existente para o mesmo responsável financeiro
 //            - Evita duplicar relacionamentos e contrato em reenvios do mesmo cadastro
@@ -60,6 +62,7 @@ interface PatientRegistrationData {
     dataNascimento: string;
     sexo: string;
     cpf?: string;
+    emitirNotaNomePaciente?: boolean;
   };
   pediatra: {
     id?: string;
@@ -160,6 +163,7 @@ Deno.serve(async (req: Request) => {
         responsavelFinanceiroExistingId: data.responsavelFinanceiroExistingId,
         hasNewPersonData: !!data.newPersonData,
         pacienteNome: data.paciente?.nome || 'não fornecido',
+        emitirNotaNomePaciente: !!data.paciente?.emitirNotaNomePaciente,
         pediatraId: data.pediatra?.id || 'novo pediatra',
         pediatraNome: data.pediatra?.nome || 'não fornecido',
         hasContractVariables: !!data.contractVariables,
@@ -756,27 +760,49 @@ Deno.serve(async (req: Request) => {
     const pacienteNome = data.paciente.nome.trim();
     const dataNascimentoISO = data.paciente.dataNascimento;
     const cpfPaciente = cleanCPF(data.paciente.cpf);
+    const emitirNotaNomePaciente =
+      data.paciente.emitirNotaNomePaciente === true;
+
+    if (emitirNotaNomePaciente && !cpfPaciente) {
+      throw new Error(
+        'CPF do paciente é obrigatório para emissão de nota fiscal no nome do paciente'
+      );
+    }
 
     console.log('📋 [STEP 6] Dados:', {
       nome: pacienteNome,
       dataNascimento: data.paciente.dataNascimento,
       sexo: data.paciente.sexo,
       cpf: cpfPaciente || 'não fornecido',
+      emitirNotaNomePaciente,
     });
 
+    // AI dev note: emitirNotaNomePaciente altera apenas o tomador fiscal.
+    // Quando true, responsavel_cobranca_id aponta para o próprio paciente para
+    // que o Asaas/NFe use o CPF da criança; pessoa_responsaveis continua
+    // representando os vínculos legal/financeiro do cadastro.
     // AI dev note: A validação inicial do cadastro é por WhatsApp/responsável.
     // A constraint pessoas_nome_responsavel_unique_when_active é a garantia final
     // no banco; por isso o backend precisa ser idempotente aqui para retries.
-    const { data: pacienteExistente, error: errorPacienteExistente } =
-      await supabase
-        .from('pessoas')
-        .select('id')
-        .eq('id_tipo_pessoa', tipoPaciente.id)
+    let pacienteExistenteQuery = supabase
+      .from('pessoas')
+      .select('id')
+      .eq('id_tipo_pessoa', tipoPaciente.id)
+      .eq('ativo', true);
+
+    if (emitirNotaNomePaciente) {
+      pacienteExistenteQuery = pacienteExistenteQuery.eq(
+        'cpf_cnpj',
+        cpfPaciente
+      );
+    } else {
+      pacienteExistenteQuery = pacienteExistenteQuery
         .eq('responsavel_cobranca_id', responsavelFinanceiroId)
-        .eq('ativo', true)
-        .eq('nome', pacienteNome)
-        .limit(1)
-        .maybeSingle();
+        .eq('nome', pacienteNome);
+    }
+
+    const { data: pacienteExistente, error: errorPacienteExistente } =
+      await pacienteExistenteQuery.limit(1).maybeSingle();
 
     if (errorPacienteExistente) {
       console.error(
@@ -790,14 +816,36 @@ Deno.serve(async (req: Request) => {
 
     if (pacienteExistente) {
       pacienteId = pacienteExistente.id;
-      console.log(
-        '✅ [STEP 6] Paciente já existe para este responsável (reutilizando):',
-        pacienteId
-      );
+      console.log('✅ [STEP 6] Paciente já existe (reutilizando):', pacienteId);
+
+      if (emitirNotaNomePaciente) {
+        const { error: errorUpdateTomadorPaciente } = await supabase
+          .from('pessoas')
+          .update({
+            cpf_cnpj: cpfPaciente,
+            responsavel_cobranca_id: pacienteId,
+          })
+          .eq('id', pacienteId);
+
+        if (errorUpdateTomadorPaciente) {
+          console.error(
+            '❌ [STEP 6] Erro ao atualizar tomador fiscal do paciente:',
+            errorUpdateTomadorPaciente
+          );
+          throw new Error('Erro ao definir paciente como tomador fiscal');
+        }
+        console.log('✅ [STEP 6] Paciente definido como tomador fiscal');
+      }
     } else {
+      const novoPacienteId = crypto.randomUUID();
+      const responsavelCobrancaPacienteId = emitirNotaNomePaciente
+        ? novoPacienteId
+        : responsavelFinanceiroId;
+
       const { data: novoPaciente, error: errorPaciente } = await supabase
         .from('pessoas')
         .insert({
+          id: novoPacienteId,
           nome: pacienteNome,
           data_nascimento: dataNascimentoISO,
           sexo: data.paciente.sexo,
@@ -806,7 +854,7 @@ Deno.serve(async (req: Request) => {
           id_endereco: enderecoId,
           numero_endereco: data.endereco.numero,
           complemento_endereco: data.endereco.complemento || null,
-          responsavel_cobranca_id: responsavelFinanceiroId,
+          responsavel_cobranca_id: responsavelCobrancaPacienteId,
           autorizacao_uso_cientifico: data.autorizacoes.usoCientifico,
           autorizacao_uso_redes_sociais: data.autorizacoes.usoRedesSociais,
           autorizacao_uso_do_nome: data.autorizacoes.usoNome,
@@ -819,13 +867,21 @@ Deno.serve(async (req: Request) => {
         console.error('❌ [STEP 6] Erro ao criar paciente:', errorPaciente);
 
         if (errorPaciente?.code === '23505') {
-          const { data: pacienteCriadoEmRetry } = await supabase
+          let pacienteRetryQuery = supabase
             .from('pessoas')
             .select('id')
             .eq('id_tipo_pessoa', tipoPaciente.id)
-            .eq('responsavel_cobranca_id', responsavelFinanceiroId)
-            .eq('ativo', true)
-            .ilike('nome', pacienteNome)
+            .eq('ativo', true);
+
+          if (emitirNotaNomePaciente) {
+            pacienteRetryQuery = pacienteRetryQuery.eq('cpf_cnpj', cpfPaciente);
+          } else {
+            pacienteRetryQuery = pacienteRetryQuery
+              .eq('responsavel_cobranca_id', responsavelFinanceiroId)
+              .ilike('nome', pacienteNome);
+          }
+
+          const { data: pacienteCriadoEmRetry } = await pacienteRetryQuery
             .limit(1)
             .maybeSingle();
 
@@ -835,6 +891,21 @@ Deno.serve(async (req: Request) => {
               '✅ [STEP 6] Paciente encontrado após conflito de retry:',
               pacienteId
             );
+
+            if (emitirNotaNomePaciente) {
+              const { error: errorUpdateRetryTomador } = await supabase
+                .from('pessoas')
+                .update({ responsavel_cobranca_id: pacienteId })
+                .eq('id', pacienteId);
+
+              if (errorUpdateRetryTomador) {
+                console.error(
+                  '❌ [STEP 6] Erro ao atualizar tomador fiscal após retry:',
+                  errorUpdateRetryTomador
+                );
+                throw new Error('Erro ao definir paciente como tomador fiscal');
+              }
+            }
           } else {
             const detalhes = errorPaciente?.message || 'Erro desconhecido';
             throw new Error(`Erro ao criar paciente: ${detalhes}`);
@@ -1327,7 +1398,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 200,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 43, // AI dev note: Incrementar versão
+        edge_function_version: 44, // AI dev note: Incrementar versão
         paciente_id: pacienteId,
         responsavel_legal_id: responsavelLegalId,
         responsavel_financeiro_id: responsavelFinanceiroId,

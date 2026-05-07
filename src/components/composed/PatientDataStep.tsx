@@ -6,6 +6,16 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from '@/components/primitives/radio-group';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import { CPFInput } from '@/components/primitives/CPFInput';
 import { DateInput } from '@/components/primitives/DateInput';
 import { validateCPF } from '@/lib/cpf-validator';
@@ -21,8 +31,13 @@ export interface PatientData {
   sexo: 'M' | 'F';
   cpf?: string; // Somente se emitir nota no nome do paciente
   emitirNotaNomePaciente: boolean; // Define se NF será no nome do paciente ou responsável
-  // AI dev note: Nota fiscal será emitida com dados do responsável financeiro
-  // Dados do paciente estarão nas observações da NF-e
+  // AI dev note: Se true, o backend deve apontar responsavel_cobranca_id para o próprio paciente
+  // para que o tomador fiscal no Asaas seja a criança. Se false, usa o responsável financeiro.
+}
+
+export interface FiscalResponsibleSummary {
+  nome?: string;
+  cpf?: string;
 }
 
 export interface PatientDataStepProps {
@@ -31,10 +46,26 @@ export interface PatientDataStepProps {
   initialData?: Partial<PatientData>;
   className?: string;
   responsavelCpf?: string;
+  responsavelCpfs?: string[];
+  fiscalResponsible?: FiscalResponsibleSummary;
 }
 
+const formatCPF = (value?: string) => {
+  const cleaned = value?.replace(/\D/g, '') || '';
+  if (cleaned.length !== 11) return value || '';
+  return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9)}`;
+};
+
 export const PatientDataStep = React.memo<PatientDataStepProps>(
-  ({ onContinue, onBack, initialData, className, responsavelCpf }) => {
+  ({
+    onContinue,
+    onBack,
+    initialData,
+    className,
+    responsavelCpf,
+    responsavelCpfs = [],
+    fiscalResponsible,
+  }) => {
     const [nome, setNome] = useState(initialData?.nome || '');
     const [dataNascimento, setDataNascimento] = useState(
       initialData?.dataNascimento || ''
@@ -45,6 +76,10 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
     );
     const [cpf, setCpf] = useState(initialData?.cpf || '');
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [pendingPatientData, setPendingPatientData] =
+      useState<PatientData | null>(null);
+    const [isFiscalConfirmationOpen, setIsFiscalConfirmationOpen] =
+      useState(false);
 
     console.log('📝 [PatientDataStep] Renderizado');
 
@@ -76,12 +111,18 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
         const validation = validateCPF(cpf);
         if (!validation.valid) {
           newErrors.cpf = validation.error || 'CPF inválido';
-        } else if (responsavelCpf) {
+        } else {
           // AI dev note: Evitar que o pai/mãe insira o próprio CPF no campo do paciente
           const cpfLimpo = cpf.replace(/\D/g, '');
-          const responsavelCpfLimpo = responsavelCpf.replace(/\D/g, '');
-          if (cpfLimpo === responsavelCpfLimpo) {
-            const cpfFormatado = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
+          const cpfsResponsaveis = [
+            responsavelCpf,
+            ...responsavelCpfs,
+            fiscalResponsible?.cpf,
+          ]
+            .filter(Boolean)
+            .map((value) => value!.replace(/\D/g, ''));
+          if (cpfsResponsaveis.includes(cpfLimpo)) {
+            const cpfFormatado = formatCPF(cpfLimpo);
             newErrors.cpf = `Este CPF (${cpfFormatado}) já está cadastrado como responsável. Insira o CPF do paciente.`;
           }
         }
@@ -96,6 +137,8 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
       emitirNotaNomePaciente,
       cpf,
       responsavelCpf,
+      responsavelCpfs,
+      fiscalResponsible?.cpf,
     ]);
 
     const handleContinue = useCallback(() => {
@@ -117,7 +160,8 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
       };
 
       console.log('✅ [PatientDataStep] Dados válidos:', patientData);
-      onContinue(patientData);
+      setPendingPatientData(patientData);
+      setIsFiscalConfirmationOpen(true);
     }, [
       nome,
       dataNascimento,
@@ -125,9 +169,25 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
       emitirNotaNomePaciente,
       cpf,
       validateForm,
-      onContinue,
       errors,
     ]);
+
+    const handleConfirmFiscalResponsible = useCallback(() => {
+      if (!pendingPatientData) return;
+      onContinue(pendingPatientData);
+      setIsFiscalConfirmationOpen(false);
+      setPendingPatientData(null);
+    }, [onContinue, pendingPatientData]);
+
+    const fiscalTargetLabel = emitirNotaNomePaciente
+      ? 'paciente'
+      : 'responsável financeiro';
+    const fiscalTargetName = emitirNotaNomePaciente
+      ? nome.trim()
+      : fiscalResponsible?.nome || 'responsável financeiro selecionado';
+    const fiscalTargetCpf = emitirNotaNomePaciente
+      ? formatCPF(cpf)
+      : formatCPF(fiscalResponsible?.cpf);
 
     return (
       <div className={cn('w-full px-4 space-y-6', className)}>
@@ -296,6 +356,7 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     A nota fiscal será emitida com os dados do responsável
+                    financeiro selecionado
                   </p>
                 </Label>
               </div>
@@ -336,6 +397,52 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
             </Button>
           </div>
         </form>
+
+        <AlertDialog
+          open={isFiscalConfirmationOpen}
+          onOpenChange={setIsFiscalConfirmationOpen}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Confirmar dados da nota fiscal
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                A nota fiscal dos serviços prestados será emitida no CPF do{' '}
+                <strong>{fiscalTargetLabel}</strong>.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="rounded-lg border bg-muted/40 p-4 text-sm space-y-2">
+              <p>
+                <strong>Tomador da nota:</strong> {fiscalTargetName}
+              </p>
+              {fiscalTargetCpf && (
+                <p>
+                  <strong>CPF:</strong> {fiscalTargetCpf}
+                </p>
+              )}
+              <p className="text-muted-foreground">
+                Ao continuar, você confirma que entende que a nota fiscal será
+                emitida para essa pessoa. Para alterar, clique em voltar e
+                ajuste a opção de emissão.
+              </p>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => {
+                  setPendingPatientData(null);
+                }}
+              >
+                Voltar e revisar
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmFiscalResponsible}>
+                Entendi e confirmo
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }

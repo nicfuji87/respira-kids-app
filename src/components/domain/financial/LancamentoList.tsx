@@ -454,9 +454,8 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                     categoria_pai?: { id?: string } | { id?: string }[] | null;
                   }
                 )?.categoria_pai || catData;
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const catId = Array.isArray(catPai)
-                ? (catPai as any[])[0]?.id
+                ? (catPai as { id?: string }[])[0]?.id
                 : (catPai as { id?: string })?.id;
 
               if (catId) {

@@ -5,7 +5,7 @@ import { CheckCircle, Edit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ResponsibleData } from './ResponsibleDataStep';
 import type { AddressData } from './AddressStep';
-import type { PatientData } from './PatientDataStep';
+import type { FiscalResponsibleSummary, PatientData } from './PatientDataStep';
 import type { PediatricianData } from './PediatricianStep';
 import type { AuthorizationsData } from './AuthorizationsStep';
 
@@ -48,6 +48,7 @@ export interface ReviewStepProps {
       endereco: AddressData;
     };
     paciente?: PatientData;
+    fiscalResponsible?: FiscalResponsibleSummary;
     pediatra?: PediatricianData;
     autorizacoes?: AuthorizationsData;
     existingPersonId?: string;
@@ -81,6 +82,32 @@ export const ReviewStep = React.memo<ReviewStepProps>(
       },
       [onEdit]
     );
+
+    const formatCPF = (value?: string) => {
+      const cleaned = value?.replace(/\D/g, '') || '';
+      if (cleaned.length !== 11) return value || '';
+      return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9)}`;
+    };
+
+    const fiscalResponsible = data.paciente?.emitirNotaNomePaciente
+      ? {
+          label: 'paciente',
+          nome: data.paciente.nome,
+          cpf: data.paciente.cpf,
+        }
+      : {
+          label: 'responsável financeiro',
+          nome:
+            data.fiscalResponsible?.nome ||
+            data.responsavelFinanceiro?.nome ||
+            data.existingUserData?.nome ||
+            data.responsavel?.nome,
+          cpf:
+            data.fiscalResponsible?.cpf ||
+            data.responsavelFinanceiro?.cpf ||
+            data.existingUserData?.cpf_cnpj ||
+            data.responsavel?.cpf,
+        };
 
     return (
       <div className={cn('w-full max-w-md mx-auto space-y-6', className)}>
@@ -341,8 +368,7 @@ export const ReviewStep = React.memo<ReviewStepProps>(
           )}
 
           {/* Responsável Financeiro - Apenas se for diferente do Legal */}
-          {!data.existingPersonId &&
-            !data.responsavelFinanceiroMesmoQueLegal &&
+          {!data.responsavelFinanceiroMesmoQueLegal &&
             data.responsavelFinanceiro && (
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -433,8 +459,16 @@ export const ReviewStep = React.memo<ReviewStepProps>(
                 <div className="pt-2 mt-2 border-t border-border">
                   <p className="text-xs italic">
                     💳 <strong>Nota Fiscal:</strong> Será emitida com os dados
-                    do responsável financeiro. Os dados do paciente constarão
-                    nas observações.
+                    do {fiscalResponsible.label}
+                    {fiscalResponsible.nome
+                      ? ` (${fiscalResponsible.nome})`
+                      : ''}
+                    {fiscalResponsible.cpf
+                      ? `, CPF ${formatCPF(fiscalResponsible.cpf)}`
+                      : ''}
+                    .
+                    {!data.paciente.emitirNotaNomePaciente &&
+                      ' Os dados do paciente constarão nas observações.'}
                   </p>
                 </div>
               </div>
