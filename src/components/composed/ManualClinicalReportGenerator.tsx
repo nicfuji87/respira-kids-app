@@ -912,14 +912,15 @@ export const ManualClinicalReportGenerator =
               .eq('id', report.id)
               .single();
             if (data?.conteudo) {
+              const conteudo = data.conteudo as string;
               // Se for HTML já (contém tags), insere direto. Senão, envolve em parágrafos.
-              const looksLikeHtml = /<\w+/.test(data.conteudo);
+              const looksLikeHtml = /<\w+/.test(conteudo);
               htmlToInsert = looksLikeHtml
-                ? data.conteudo
-                : data.conteudo
+                ? conteudo
+                : conteudo
                     .split(/\n{2,}/)
                     .map(
-                      (p) =>
+                      (p: string) =>
                         `<p>${p
                           .replace(/&/g, '&amp;')
                           .replace(/</g, '&lt;')
