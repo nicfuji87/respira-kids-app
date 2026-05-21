@@ -51,6 +51,7 @@ import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { ManualClinicalReportGenerator } from './ManualClinicalReportGenerator';
 
 // AI dev note: Interface para evoluções do paciente
 interface PatientEvolution {
@@ -70,6 +71,9 @@ interface SavedReport {
   pdf_url: string | null;
   created_at: string;
   criado_por_nome: string | null;
+  // AI dev note: 'ia' = gerado a partir de evoluções via IA (tipo relatorio_medico)
+  //              'manual' = digitado pelo profissional (tipo relatorio_medico_manual)
+  origem: 'ia' | 'manual';
 }
 
 export interface ClinicalReportGeneratorProps {
@@ -134,6 +138,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
 
     // Estados do componente
     const [isModalOpen, setIsModalOpen] = useState(false);
+    // AI dev note: Modal separado para relatório manual (componente ManualClinicalReportGenerator)
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [isLoadingEvolutions, setIsLoadingEvolutions] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isSending, setIsSending] = useState(false);
@@ -183,8 +189,10 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       | 'secretaria'
       | null;
     const isAdmin = userRole === 'admin';
+    // AI dev note: Apenas admin e profissional podem gerar relatórios clínicos.
+    // Secretaria NÃO tem permissão (regra confirmada com a clínica).
     const canGenerateReports =
-      userRole === 'admin' || userRole === 'secretaria';
+      userRole === 'admin' || userRole === 'profissional';
 
     // Carregar relatórios salvos ao montar
     useEffect(() => {
@@ -269,18 +277,24 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       try {
         setIsLoadingReports(true);
 
-        // Buscar tipo de relatório 'relatorio_medico'
-        const { data: tipoData, error: tipoError } = await supabase
+        // AI dev note: Carregar AMBOS os tipos de relatório (IA + Manual) na mesma lista
+        const { data: tiposData, error: tipoError } = await supabase
           .from('relatorios_tipo')
-          .select('id')
-          .eq('codigo', 'relatorio_medico')
-          .single();
+          .select('id, codigo')
+          .in('codigo', ['relatorio_medico', 'relatorio_medico_manual']);
 
-        if (tipoError) {
-          console.error('Erro ao buscar tipo relatório:', tipoError);
+        if (tipoError || !tiposData || tiposData.length === 0) {
+          console.error('Erro ao buscar tipos de relatório:', tipoError);
           setSavedReports([]);
           return;
         }
+
+        const tipoIdToOrigin: Record<string, 'ia' | 'manual'> = {};
+        for (const t of tiposData) {
+          tipoIdToOrigin[t.id] =
+            t.codigo === 'relatorio_medico_manual' ? 'manual' : 'ia';
+        }
+        const tipoIds = tiposData.map((t) => t.id);
 
         // Buscar relatórios do paciente
         const { data, error: fetchError } = await supabase
@@ -291,11 +305,12 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
             conteudo,
             pdf_url,
             created_at,
+            tipo_relatorio_id,
             criado_por_pessoa:pessoas!relatorios_medicos_criado_por_fkey(nome)
           `
           )
           .eq('id_pessoa', patientId)
-          .eq('tipo_relatorio_id', tipoData.id)
+          .in('tipo_relatorio_id', tipoIds)
           .eq('ativo', true)
           .order('created_at', { ascending: false });
 
@@ -312,6 +327,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           created_at: item.created_at,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           criado_por_nome: (item.criado_por_pessoa as any)?.nome || null,
+          origem: tipoIdToOrigin[item.tipo_relatorio_id] || 'ia',
         }));
 
         setSavedReports(reports);
@@ -1365,20 +1381,32 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       <>
         <Card className={cn('w-full', className)}>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
                 Relatórios Clínicos
               </CardTitle>
               {canGenerateReports && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsModalOpen(true)}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Gerar Relatório
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsModalOpen(true)}
+                    title="Gerar relatório com IA a partir das evoluções"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Gerar com IA
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setIsManualModalOpen(true)}
+                    title="Digitar relatório manualmente"
+                  >
+                    <PenLine className="h-4 w-4 mr-2" />
+                    Relatório Manual
+                  </Button>
+                </div>
               )}
             </div>
           </CardHeader>
@@ -1414,11 +1442,29 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                     className="border rounded-lg p-4 space-y-2 hover:bg-accent/50 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <FileText className="h-4 w-4 text-primary flex-shrink-0" />
                         <span className="font-medium text-sm">
                           Relatório #{savedReports.length - index}
                         </span>
+                        {/* AI dev note: Badge indica a origem do relatório (IA ou Manual) */}
+                        {report.origem === 'manual' ? (
+                          <Badge
+                            variant="default"
+                            className="text-[10px] gap-1"
+                          >
+                            <PenLine className="h-2.5 w-2.5" />
+                            Manual
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] gap-1"
+                          >
+                            <Sparkles className="h-2.5 w-2.5" />
+                            IA
+                          </Badge>
+                        )}
                       </div>
                       <Badge variant="secondary" className="text-xs">
                         {formatDateBR(new Date(report.created_at))}
@@ -1860,6 +1906,18 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* AI dev note: Modal do Relatório Manual (componente separado).
+            Reaproveita a mesma lista de relatórios deste componente, recarregando após salvar. */}
+        <ManualClinicalReportGenerator
+          isOpen={isManualModalOpen}
+          onClose={() => setIsManualModalOpen(false)}
+          patientId={patientId}
+          patientName={patientName}
+          onSaved={() => {
+            loadSavedReports();
+          }}
+        />
       </>
     );
   }

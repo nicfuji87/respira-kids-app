@@ -101,6 +101,8 @@ export { PatientObservations } from './PatientObservations';
 export { PatientAnamnesisWithObservations } from './PatientAnamnesisWithObservations';
 export { PatientMedicalReports } from './PatientMedicalReports';
 export { ClinicalReportGenerator } from './ClinicalReportGenerator';
+export { ManualClinicalReportGenerator } from './ManualClinicalReportGenerator';
+export type { ManualClinicalReportGeneratorProps } from './ManualClinicalReportGenerator';
 export { PatientHistory } from './PatientHistory';
 export { MediaGallery } from './MediaGallery';
 export { BillingResponsibleSelect } from './BillingResponsibleSelect';
