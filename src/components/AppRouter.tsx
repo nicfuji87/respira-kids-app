@@ -10,6 +10,7 @@ import {
   DashboardPage,
   AgendaPage,
   PacientesPage,
+  MetasPage,
   PatientDetailsPage,
   PersonDetailsPage,
   EstoquePage,
@@ -180,6 +181,15 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute path="/pessoa/:id" currentUserRole={validUserRole}>
               <PersonDetailsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/metas"
+          element={
+            <ProtectedRoute path="/metas" currentUserRole={validUserRole}>
+              <MetasPage />
             </ProtectedRoute>
           }
         />

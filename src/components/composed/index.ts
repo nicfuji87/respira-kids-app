@@ -108,6 +108,28 @@ export { MediaGallery } from './MediaGallery';
 export { BillingResponsibleSelect } from './BillingResponsibleSelect';
 export { WeekBirthdays } from './WeekBirthdays';
 
+// Inactive Patients / Reativação Components
+export { InactivePatientsCard } from './InactivePatientsCard';
+export { ContactInactivePatientDialog } from './ContactInactivePatientDialog';
+export { ManageInactivePatientDialog } from './ManageInactivePatientDialog';
+export type { InactivePatientsCardProps } from './InactivePatientsCard';
+export type { ContactInactivePatientDialogProps } from './ContactInactivePatientDialog';
+export type { ManageInactivePatientDialogProps } from './ManageInactivePatientDialog';
+
+// Metas / Goals Components
+export { MetaCard } from './MetaCard';
+export { MetasOverview } from './MetasOverview';
+export { CreateMetaDialog } from './CreateMetaDialog';
+export type { MetaCardProps } from './MetaCard';
+export type { MetasOverviewProps } from './MetasOverview';
+export type { CreateMetaDialogProps } from './CreateMetaDialog';
+
+// Pediatra Relacionamento Components
+export { PediatraRelacionamentoCard } from './PediatraRelacionamentoCard';
+export { RegisterPediatraContactDialog } from './RegisterPediatraContactDialog';
+export type { PediatraRelacionamentoCardProps } from './PediatraRelacionamentoCard';
+export type { RegisterPediatraContactDialogProps } from './RegisterPediatraContactDialog';
+
 // Clinical Evaluation Components (TM/AC)
 export { PatientClinicalEvaluations } from './evaluation';
 export { EvaluationFormModal } from './evaluation';

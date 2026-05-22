@@ -20,6 +20,7 @@ import { useSecretariaMetrics } from '@/hooks/useSecretariaMetrics';
 import { AppointmentsList } from '@/components/composed/AppointmentsList';
 import { ConsultationsToEvolve } from '@/components/composed/ConsultationsToEvolve';
 import { WeekBirthdays } from '@/components/composed/WeekBirthdays';
+import { InactivePatientsManager } from '@/components/domain/reativacao';
 import { cn } from '@/lib/utils';
 import type {
   UpcomingAppointment,
@@ -301,6 +302,9 @@ export const SecretariaDashboard = React.memo<SecretariaDashboardProps>(
             </Card>
           </div>
         )}
+
+        {/* AI dev note: Worklist de pacientes inativos - programa de reativação */}
+        <InactivePatientsManager maxItems={25} />
 
         {/* AI dev note: Aniversários da semana */}
         <WeekBirthdays maxItems={20} />

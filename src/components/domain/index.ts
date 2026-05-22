@@ -19,7 +19,11 @@ export { MobileBottomTabs } from './dashboard/MobileBottomTabs';
 export { MobileHeader } from './dashboard/MobileHeader';
 
 // Profile domain exports
-export { EditProfileForm, MyProfileSection, GoogleCalendarSettings } from './profile';
+export {
+  EditProfileForm,
+  MyProfileSection,
+  GoogleCalendarSettings,
+} from './profile';
 
 // Calendar domain exports
 export {
@@ -33,6 +37,14 @@ export {
 
 // Pacientes domain exports
 export { PatientDetailsManager } from './pacientes/PatientDetailsManager';
+
+// Reativação domain exports
+export { InactivePatientsManager } from './reativacao';
+export type { InactivePatientsManagerProps } from './reativacao';
+
+// Relacionamento (pediatras) domain exports
+export { PediatraRelacionamentoManager } from './relacionamento';
+export type { PediatraRelacionamentoManagerProps } from './relacionamento';
 
 // Type exports
 export type { DashboardSidebarProps } from './dashboard/DashboardSidebar';

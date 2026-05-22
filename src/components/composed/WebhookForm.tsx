@@ -30,6 +30,12 @@ const eventOptions = [
   { value: 'certificado_gerado', label: 'Certificado Gerado' },
   { value: 'atestado_gerado', label: 'Atestado Gerado' },
   { value: 'relatorio_clinico_gerado', label: 'Relatório Clínico Gerado' },
+  { value: 'contato_pediatra', label: 'Contato com Pediatra' },
+  { value: 'envio_evolucao_pediatra', label: 'Envio de Evolução p/ Pediatra' },
+  {
+    value: 'daily_pediatra_summary',
+    label: 'Resumo Diário p/ Pediatras (D-1)',
+  },
   { value: 'webhook_failed', label: 'Webhook Falhou' },
   { value: 'registration_error', label: 'Erro no Cadastro' },
 ];

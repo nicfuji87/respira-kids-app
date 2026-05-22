@@ -7,6 +7,7 @@ import {
   Settings,
   FileText,
   Webhook,
+  Target,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -41,6 +42,12 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Pacientes',
     href: '/pacientes',
     roles: ['admin', 'secretaria'],
+  },
+  {
+    icon: Target,
+    label: 'Metas',
+    href: '/metas',
+    roles: ['admin', 'profissional', 'secretaria'],
   },
   // Pessoa foi removido do sidebar - função disponível em Configurações > Usuarios
   {
