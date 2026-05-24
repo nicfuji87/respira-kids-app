@@ -47,26 +47,20 @@ export const SignUpTemplate = React.memo<SignUpTemplateProps>(
         onUserEmailChange(data.email);
       }
 
-      // useAuth hook irá detectar a mudança de sessão e redirecionar automaticamente
-      // Mantendo callback para compatibilidade se necessário
+      // AI dev note: Fluxo invertido - após signup, ir direto para completar perfil
+      // (não mais aguardar aprovação primeiro). Aprovação acontece após perfil completo.
       if (onStepChange) {
         if (data.needsEmailConfirmation) {
           onStepChange('email-confirmation');
         } else {
-          onStepChange('pending-approval');
+          onStepChange('complete-profile');
         }
-      }
-    };
-
-    const handleApprovalComplete = () => {
-      // useAuth hook irá detectar a mudança de status e redirecionar automaticamente
-      if (onStepChange) {
-        onStepChange('complete-profile');
       }
     };
 
     const handleProfileComplete = async () => {
       // Forçar re-verificação do status do usuário após completar perfil
+      // useAuth detecta profile_complete=true e redireciona para pending-approval
       console.log('Perfil completado, forçando refresh do useAuth...');
 
       if (onRefreshUserStatus) {
@@ -102,7 +96,6 @@ export const SignUpTemplate = React.memo<SignUpTemplateProps>(
           {currentStep === 'pending-approval' && userEmail && (
             <PendingApprovalPage
               userEmail={userEmail}
-              onApprovalComplete={handleApprovalComplete}
               onBackToSignUp={handleBackToSignUp}
             />
           )}
@@ -122,7 +115,7 @@ export const SignUpTemplate = React.memo<SignUpTemplateProps>(
                 </p>
               </div>
               <Button
-                onClick={() => onStepChange?.('pending-approval')}
+                onClick={() => onStepChange?.('complete-profile')}
                 className="w-full"
               >
                 Já confirmei meu email

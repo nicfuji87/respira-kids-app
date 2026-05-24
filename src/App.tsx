@@ -162,20 +162,10 @@ function App() {
     );
   }
 
-  // Usuário autenticado mas precisa de aprovação
-  if (isAuthenticated && needsApproval) {
-    return (
-      <SignUpTemplate
-        currentStep="pending-approval"
-        userEmail={user?.email || userEmail}
-        onStepChange={setAuthStep}
-        onNavigateToLogin={() => setAuthMode('login')}
-        onUserEmailChange={setUserEmail}
-      />
-    );
-  }
+  // AI dev note: Fluxo invertido - completar perfil ANTES de aguardar aprovação.
+  // Usuário cadastra email/senha -> completa todos os dados -> só depois aguarda aprovação do admin.
 
-  // Usuário autenticado mas precisa completar perfil
+  // Usuário autenticado mas precisa completar perfil (1º passo após signup)
   if (isAuthenticated && needsProfileCompletion) {
     return (
       <SignUpTemplate
@@ -185,6 +175,19 @@ function App() {
         onNavigateToLogin={() => setAuthMode('login')}
         onUserEmailChange={setUserEmail}
         onRefreshUserStatus={refreshUserStatus}
+      />
+    );
+  }
+
+  // Usuário autenticado mas precisa de aprovação (2º passo, após perfil completo)
+  if (isAuthenticated && needsApproval) {
+    return (
+      <SignUpTemplate
+        currentStep="pending-approval"
+        userEmail={user?.email || userEmail}
+        onStepChange={setAuthStep}
+        onNavigateToLogin={() => setAuthMode('login')}
+        onUserEmailChange={setUserEmail}
       />
     );
   }

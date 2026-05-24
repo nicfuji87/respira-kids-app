@@ -8,8 +8,10 @@ import {
   getCurrentUser,
 } from '@/lib/auth';
 
-// AI dev note: PendingApprovalPage gerencia todo o fluxo de aprovação específico da clínica
-// Integra com UserApprovalCard + dados reais do Supabase
+// AI dev note: PendingApprovalPage gerencia o fluxo de aprovação específico da clínica
+// IMPORTANTE: usuário só chega aqui APÓS já ter completado seu perfil (profile_complete=true).
+// O fluxo é: signup -> complete-profile -> pending-approval -> dashboard.
+// Integra com UserApprovalCard + dados reais do Supabase.
 
 interface UserInfo {
   email: string;
@@ -19,13 +21,12 @@ interface UserInfo {
 
 interface PendingApprovalPageProps {
   userEmail: string;
-  onApprovalComplete?: () => void;
   onBackToSignUp?: () => void;
   className?: string;
 }
 
 export const PendingApprovalPage = React.memo<PendingApprovalPageProps>(
-  ({ userEmail, onApprovalComplete, onBackToSignUp, className }) => {
+  ({ userEmail, onBackToSignUp, className }) => {
     const [status, setStatus] = useState<ApprovalStatus>('pending');
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [adminMessage, setAdminMessage] = useState<string>();
@@ -46,21 +47,20 @@ export const PendingApprovalPage = React.memo<PendingApprovalPageProps>(
             // Buscar dados completos do usuário
             const userData = await getUserApprovalData(currentUser.id);
 
-            // Determinar status baseado nos dados reais
+            // AI dev note: Como o usuário só chega aqui após profile_complete=true,
+            // os estados possíveis são apenas 'pending' (aguardando admin) ou 'approved'
+            // (caso o useAuth ainda não tenha redirecionado para o dashboard).
             let currentStatus: ApprovalStatus = 'pending';
             let message: string | undefined;
 
-            if (userData.isApproved && userData.profileComplete) {
-              currentStatus = 'approved';
-              message = 'Sua conta foi aprovada e está pronta para uso!';
-            } else if (userData.isApproved && !userData.profileComplete) {
+            if (userData.isApproved) {
               currentStatus = 'approved';
               message =
-                'Sua conta foi aprovada! Complete seu cadastro para começar.';
+                'Sua conta foi aprovada! Você será redirecionado em instantes...';
             } else {
               currentStatus = 'pending';
               message =
-                'Sua solicitação está sendo analisada pela equipe administrativa.';
+                'Recebemos seus dados. Sua solicitação está sendo analisada pela equipe administrativa.';
             }
 
             setStatus(currentStatus);
@@ -75,7 +75,7 @@ export const PendingApprovalPage = React.memo<PendingApprovalPageProps>(
             if (userEmail) {
               setStatus('pending');
               setAdminMessage(
-                'Sua solicitação está sendo analisada pela equipe administrativa.'
+                'Recebemos seus dados. Sua solicitação está sendo analisada pela equipe administrativa.'
               );
               setUserInfo({
                 email: userEmail,
@@ -93,7 +93,7 @@ export const PendingApprovalPage = React.memo<PendingApprovalPageProps>(
           if (userEmail) {
             setStatus('pending');
             setAdminMessage(
-              'Sua solicitação está sendo analisada pela equipe administrativa.'
+              'Recebemos seus dados. Sua solicitação está sendo analisada pela equipe administrativa.'
             );
             setUserInfo({
               email: userEmail,
@@ -169,45 +169,8 @@ export const PendingApprovalPage = React.memo<PendingApprovalPageProps>(
       );
     };
 
-    const handleProceedToComplete = async () => {
-      setIsLoading(true);
-
-      try {
-        // AI dev note: Validar se realmente está aprovado no Supabase
-        if (!userId) {
-          throw new Error('Usuário não identificado');
-        }
-
-        const userData = await getUserApprovalData(userId);
-
-        if (!userData.isApproved) {
-          throw new Error('Conta ainda não foi aprovada');
-        }
-
-        toast({
-          title: 'Redirecionando...',
-          description: 'Você será direcionado para completar seu cadastro.',
-          variant: 'default',
-        });
-
-        // Callback para navegar para página de completar cadastro
-        if (onApprovalComplete) {
-          onApprovalComplete();
-        }
-      } catch (error) {
-        console.error('Erro ao prosseguir:', error);
-        toast({
-          title: 'Erro',
-          description:
-            error instanceof Error
-              ? error.message
-              : 'Não foi possível prosseguir. Tente novamente.',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // AI dev note: Não há mais "handleProceedToComplete" pois o perfil já foi completado
+    // antes de chegar nessa tela. Quando is_approved=true, o useAuth redireciona direto pro dashboard.
 
     // Loading state
     if (!userInfo) {
@@ -231,9 +194,6 @@ export const PendingApprovalPage = React.memo<PendingApprovalPageProps>(
           adminMessage={adminMessage}
           onResendEmail={handleResendEmail}
           onContactSupport={handleContactSupport}
-          onProceedToComplete={
-            status === 'approved' ? handleProceedToComplete : undefined
-          }
           isLoading={isLoading}
           className="mb-6"
         />

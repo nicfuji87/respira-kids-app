@@ -286,11 +286,12 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
 
     if (!pessoa) {
       // Pessoa não existe - deve ser criada pelo trigger
+      // Sem pessoa criada, prioridade é completar o perfil (que cria a pessoa)
       return {
         isAuthenticated: true,
         needsEmailConfirmation: false,
-        needsApproval: true,
-        needsProfileCompletion: false,
+        needsApproval: false,
+        needsProfileCompletion: true,
         canAccessDashboard: false,
         user: user as AuthUser,
       };
@@ -298,25 +299,27 @@ export async function checkUserStatus(user: User | null): Promise<UserStatus> {
 
     const authUser = { ...user, pessoa } as AuthUser;
 
-    // Verificar aprovação
-    if (!pessoa.is_approved) {
-      return {
-        isAuthenticated: true,
-        needsEmailConfirmation: false,
-        needsApproval: true,
-        needsProfileCompletion: false,
-        canAccessDashboard: false,
-        user: authUser,
-      };
-    }
-
-    // Verificar se perfil está completo
+    // AI dev note: Fluxo invertido - usuário completa o perfil ANTES da aprovação do admin.
+    // Isso evita que ele fique "preso" aguardando o admin para depois ainda ter que preencher dados.
+    // 1º) Verificar se perfil está completo
     if (!pessoa.profile_complete) {
       return {
         isAuthenticated: true,
         needsEmailConfirmation: false,
         needsApproval: false,
         needsProfileCompletion: true,
+        canAccessDashboard: false,
+        user: authUser,
+      };
+    }
+
+    // 2º) Verificar aprovação (somente após perfil completo)
+    if (!pessoa.is_approved) {
+      return {
+        isAuthenticated: true,
+        needsEmailConfirmation: false,
+        needsApproval: true,
+        needsProfileCompletion: false,
         canAccessDashboard: false,
         user: authUser,
       };

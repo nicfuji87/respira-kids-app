@@ -35,7 +35,7 @@ export const SignUpPage = React.memo<SignUpPageProps>(
           title: 'Cadastro realizado!',
           description: needsEmailConfirmation
             ? 'Verifique seu email para confirmar sua conta.'
-            : 'Sua conta foi criada e está aguardando aprovação.',
+            : 'Agora complete seus dados para finalizar o cadastro.',
           variant: 'default',
         });
 

@@ -77,18 +77,14 @@ export const CompleteProfilePage = React.memo<CompleteProfilePageProps>(
     }, []);
 
     const handleSubmit = async (data: CompleteProfileFormData) => {
-      
       setIsLoading(true);
 
       try {
-        
         const currentUser = await getCurrentUser();
 
         if (!currentUser) {
           throw new Error('Usuário não encontrado');
         }
-
-        
 
         // Preparar dados para atualização
         const profileData: CompleteProfileData = {
@@ -101,20 +97,17 @@ export const CompleteProfilePage = React.memo<CompleteProfilePageProps>(
           complemento_endereco: data.complemento_endereco,
         };
 
-        
         await updateProfile(currentUser.id, profileData);
-        
 
         toast({
-          title: 'Perfil completado com sucesso!',
+          title: 'Cadastro enviado com sucesso!',
           description:
-            'Seus dados foram salvos. Redirecionando para o sistema...',
+            'Seus dados foram registrados e estão aguardando aprovação do administrador.',
           variant: 'default',
         });
 
         // Aguardar um momento para mostrar o toast
         setTimeout(() => {
-          
           if (onProfileComplete) {
             onProfileComplete();
           }
