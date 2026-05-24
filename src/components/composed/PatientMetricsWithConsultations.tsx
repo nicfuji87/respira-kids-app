@@ -1148,9 +1148,12 @@ export const PatientMetricsWithConsultations =
             ...(end && { periodo_fim: end + 'T23:59:59' }),
           };
 
+          // AI dev note: Não aplicar limit aqui para carregar TODAS as faturas do paciente.
+          // O componente FaturasList já controla a quantidade exibida via maxItems
+          // e oferece botão "Ver todas as N faturas" para expandir a lista completa.
           const result = await fetchFaturasPorPaciente(
             patientId,
-            5,
+            undefined,
             filtrosFaturas
           );
 

@@ -74,6 +74,8 @@ export const ProfissionalCalendarTemplate =
       const [selectedStatusPagamento, setSelectedStatusPagamento] = useState<
         string[]
       >([]);
+      // AI dev note: Estado do filtro por Empresa de Faturamento (multi-seleção)
+      const [selectedEmpresa, setSelectedEmpresa] = useState<string[]>([]);
 
       // AI dev note: Filtrar eventos do profissional com todos os filtros disponíveis
       const getFilteredEvents = useMemo(() => {
@@ -155,6 +157,23 @@ export const ProfissionalCalendarTemplate =
           });
         }
 
+        // AI dev note: Filtrar por empresa de faturamento (multi-seleção).
+        // O ID da empresa vem em metadata.appointmentData.empresa_fatura_id
+        // (vw_agendamentos_completos -> mapAgendamentoFlatToCalendarEvent).
+        if (selectedEmpresa.length > 0) {
+          filteredEvents = filteredEvents.filter((event) => {
+            const metadata = event.metadata as {
+              appointmentData?: { empresa_fatura_id?: string };
+            };
+            return (
+              metadata?.appointmentData?.empresa_fatura_id &&
+              selectedEmpresa.includes(
+                metadata.appointmentData.empresa_fatura_id
+              )
+            );
+          });
+        }
+
         return filteredEvents;
       }, [
         events,
@@ -166,6 +185,7 @@ export const ProfissionalCalendarTemplate =
         selectedLocal,
         selectedStatusConsulta,
         selectedStatusPagamento,
+        selectedEmpresa,
       ]);
 
       const handleEventSave = (
@@ -192,6 +212,7 @@ export const ProfissionalCalendarTemplate =
         setSelectedLocal([]);
         setSelectedStatusConsulta([]);
         setSelectedStatusPagamento([]);
+        setSelectedEmpresa([]);
       };
 
       return (
@@ -209,6 +230,7 @@ export const ProfissionalCalendarTemplate =
             selectedLocal={selectedLocal}
             selectedStatusConsulta={selectedStatusConsulta}
             selectedStatusPagamento={selectedStatusPagamento}
+            selectedEmpresa={selectedEmpresa}
             onProfessionalChange={() => {}}
             onPatientChange={setSelectedPatient}
             onTipoServicoChange={(value) =>
@@ -222,6 +244,9 @@ export const ProfissionalCalendarTemplate =
             }
             onStatusPagamentoChange={(value) =>
               setSelectedStatusPagamento(Array.isArray(value) ? value : [])
+            }
+            onEmpresaChange={(value) =>
+              setSelectedEmpresa(Array.isArray(value) ? value : [])
             }
             onClearFilters={clearFilters}
             showProfessionalFilter={false}

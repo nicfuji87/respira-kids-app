@@ -90,6 +90,8 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     const [selectedStatusPagamento, setSelectedStatusPagamento] = useState<
       string[]
     >([]);
+    // AI dev note: Estado do filtro por Empresa de Faturamento (multi-seleção)
+    const [selectedEmpresa, setSelectedEmpresa] = useState<string[]>([]);
 
     const getFilteredEvents = useMemo(() => {
       let filteredEvents = [...events];
@@ -164,6 +166,21 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
         });
       }
 
+      // AI dev note: Filtrar por empresa de faturamento (multi-seleção).
+      // O ID da empresa vem em metadata.appointmentData.empresa_fatura_id
+      // (vw_agendamentos_completos -> mapAgendamentoFlatToCalendarEvent).
+      if (selectedEmpresa.length > 0) {
+        filteredEvents = filteredEvents.filter((event) => {
+          const metadata = event.metadata as {
+            appointmentData?: { empresa_fatura_id?: string };
+          };
+          return (
+            metadata?.appointmentData?.empresa_fatura_id &&
+            selectedEmpresa.includes(metadata.appointmentData.empresa_fatura_id)
+          );
+        });
+      }
+
       if (!showAllProfessionals) {
         // Filter to specific professionals if needed
         // Implementation would depend on specific requirements
@@ -186,6 +203,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
             selectedTipoServico,
             selectedStatusConsulta,
             selectedStatusPagamento,
+            selectedEmpresa,
           },
         });
       }
@@ -199,6 +217,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
       selectedLocal,
       selectedStatusConsulta,
       selectedStatusPagamento,
+      selectedEmpresa,
       showAllProfessionals,
       showSystemEvents,
     ]);
@@ -226,6 +245,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
       setSelectedLocal([]);
       setSelectedStatusConsulta([]);
       setSelectedStatusPagamento([]);
+      setSelectedEmpresa([]);
     };
 
     return (
@@ -238,6 +258,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
           selectedLocal={selectedLocal}
           selectedStatusConsulta={selectedStatusConsulta}
           selectedStatusPagamento={selectedStatusPagamento}
+          selectedEmpresa={selectedEmpresa}
           onProfessionalChange={setSelectedProfessional}
           onPatientChange={setSelectedPatient}
           onTipoServicoChange={(value) =>
@@ -252,6 +273,9 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
           onStatusPagamentoChange={(value) =>
             setSelectedStatusPagamento(Array.isArray(value) ? value : [])
           }
+          onEmpresaChange={(value) =>
+            setSelectedEmpresa(Array.isArray(value) ? value : [])
+          }
           onClearFilters={clearFilters}
           showProfessionalFilter={true}
           eventCount={getFilteredEvents.length}
@@ -265,7 +289,8 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
             selectedTipoServico.length > 0 ||
             selectedLocal.length > 0 ||
             selectedStatusConsulta.length > 0 ||
-            selectedStatusPagamento.length > 0) ? (
+            selectedStatusPagamento.length > 0 ||
+            selectedEmpresa.length > 0) ? (
             <Card className="flex items-center justify-center">
               <div className="text-center space-y-4 p-8">
                 <Filter className="h-12 w-12 text-muted-foreground mx-auto" />

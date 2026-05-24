@@ -35,6 +35,8 @@ export interface CalendarFiltersProps {
   selectedLocal: string | string[]; // Novo filtro de local
   selectedStatusConsulta: string | string[]; // Pode ser string (legado) ou array
   selectedStatusPagamento: string | string[]; // Pode ser string (legado) ou array
+  // AI dev note: Novo filtro multi-seleção por Empresa de Faturamento
+  selectedEmpresa?: string | string[];
 
   // Callbacks para mudança de filtros
   onProfessionalChange: (value: string) => void;
@@ -43,6 +45,8 @@ export interface CalendarFiltersProps {
   onLocalChange: (value: string | string[]) => void; // Novo callback
   onStatusConsultaChange: (value: string | string[]) => void;
   onStatusPagamentoChange: (value: string | string[]) => void;
+  // AI dev note: Callback opcional para o novo filtro de Empresa
+  onEmpresaChange?: (value: string | string[]) => void;
   onClearFilters: () => void;
 
   // Configurações
@@ -161,12 +165,14 @@ export const CalendarFilters = React.memo<CalendarFiltersProps>(
     selectedLocal,
     selectedStatusConsulta,
     selectedStatusPagamento,
+    selectedEmpresa,
     onProfessionalChange,
     onPatientChange,
     onTipoServicoChange,
     onLocalChange,
     onStatusConsultaChange,
     onStatusPagamentoChange,
+    onEmpresaChange,
     onClearFilters,
     showProfessionalFilter = true,
     availableProfessionals,
@@ -189,6 +195,10 @@ export const CalendarFilters = React.memo<CalendarFiltersProps>(
     >([]);
     const [statusPagamento, setStatusPagamento] = useState<
       Array<{ id: string; descricao: string; cor: string }>
+    >([]);
+    // AI dev note: Lista de empresas de faturamento para o novo filtro
+    const [empresas, setEmpresas] = useState<
+      Array<{ id: string; nome: string }>
     >([]);
 
     // Carregar lista de profissionais se necessário
@@ -248,6 +258,23 @@ export const CalendarFilters = React.memo<CalendarFiltersProps>(
             .select('id, descricao, cor')
             .order('descricao');
           if (statusP) setStatusPagamento(statusP);
+
+          // AI dev note: Carregar empresas de faturamento ativas.
+          // Preferimos exibir nome_fantasia (ex.: "BC FISIO", "FS PACHECO");
+          // caso não exista, caímos para razao_social.
+          const { data: empresasData } = await supabase
+            .from('pessoa_empresas')
+            .select('id, razao_social, nome_fantasia')
+            .eq('ativo', true)
+            .order('nome_fantasia');
+          if (empresasData) {
+            setEmpresas(
+              empresasData.map((e) => ({
+                id: e.id,
+                nome: e.nome_fantasia || e.razao_social || 'Empresa sem nome',
+              }))
+            );
+          }
         } catch (error) {
           console.error('Erro ao carregar dados de filtros:', error);
         }
@@ -277,7 +304,8 @@ export const CalendarFilters = React.memo<CalendarFiltersProps>(
       isFilterActive(selectedTipoServico) ||
       isFilterActive(selectedLocal) ||
       isFilterActive(selectedStatusConsulta) ||
-      isFilterActive(selectedStatusPagamento);
+      isFilterActive(selectedStatusPagamento) ||
+      isFilterActive(selectedEmpresa ?? []);
 
     // Lista de profissionais a exibir
     const professionalsList = availableProfessionals || profissionais;
@@ -287,6 +315,10 @@ export const CalendarFilters = React.memo<CalendarFiltersProps>(
     const localArray = toArray(selectedLocal);
     const statusConsultaArray = toArray(selectedStatusConsulta);
     const statusPagamentoArray = toArray(selectedStatusPagamento);
+    const empresaArray = toArray(selectedEmpresa ?? []);
+    // AI dev note: O filtro de Empresa só aparece quando o pai passa onEmpresaChange.
+    // Mantém retrocompatibilidade com qualquer consumidor existente do CalendarFilters.
+    const showEmpresaFilter = !!onEmpresaChange;
 
     return (
       <Card className={`p-3 mb-3 ${className}`}>
@@ -390,6 +422,20 @@ export const CalendarFilters = React.memo<CalendarFiltersProps>(
                 selectedIds={statusPagamentoArray}
                 onSelectionChange={onStatusPagamentoChange}
               />
+
+              {/* AI dev note: Filtro por Empresa de Faturamento - MULTI-SELECT.
+                  Só é renderizado quando o componente pai fornece onEmpresaChange. */}
+              {showEmpresaFilter && (
+                <MultiSelectFilter
+                  allLabel="Todas as empresas"
+                  items={empresas.map((empresa) => ({
+                    id: empresa.id,
+                    label: empresa.nome,
+                  }))}
+                  selectedIds={empresaArray}
+                  onSelectionChange={(ids) => onEmpresaChange?.(ids)}
+                />
+              )}
             </div>
 
             {/* Segunda linha - Busca de paciente */}
@@ -448,6 +494,12 @@ export const CalendarFilters = React.memo<CalendarFiltersProps>(
                 <span className="font-medium">
                   {statusPagamentoArray.length}
                 </span>
+              </div>
+            )}
+            {showEmpresaFilter && empresaArray.length > 0 && (
+              <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-md text-xs">
+                <span>Empresas:</span>
+                <span className="font-medium">{empresaArray.length}</span>
               </div>
             )}
           </div>
