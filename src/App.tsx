@@ -22,7 +22,8 @@ function App() {
     return (
       hash.startsWith('#/cadastro-paciente') ||
       hash.startsWith('#/adicionar-responsavel-financeiro') ||
-      hash.startsWith('#/agenda-publica/')
+      hash.startsWith('#/agenda-publica/') ||
+      hash.startsWith('#/experiencia')
     );
   });
 
@@ -33,7 +34,8 @@ function App() {
       const isPublic =
         hash.startsWith('#/cadastro-paciente') ||
         hash.startsWith('#/adicionar-responsavel-financeiro') ||
-        hash.startsWith('#/agenda-publica/');
+        hash.startsWith('#/agenda-publica/') ||
+        hash.startsWith('#/experiencia');
       console.log('🔍 [App] Verificando rota pública:', hash, '→', isPublic);
       setIsPublicRoute(isPublic);
     };

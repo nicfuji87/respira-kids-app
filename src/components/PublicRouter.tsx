@@ -4,6 +4,7 @@ import { PatientPublicRegistrationPage } from '@/pages/PatientPublicRegistration
 import { PatientRegistrationSuccessPage } from '@/pages/public/PatientRegistrationSuccessPage';
 import { AddFinancialResponsiblePage } from '@/pages/AddFinancialResponsiblePage';
 import { SharedSchedulePage } from '@/pages/SharedSchedulePage';
+import { PesquisaExperienciaPage } from '@/pages/PesquisaExperienciaPage';
 import { Toaster } from '@/components/primitives/toaster';
 
 // AI dev note: PublicRouter - Roteamento para páginas públicas (sem autenticação)
@@ -39,6 +40,9 @@ export const PublicRouter: React.FC = () => {
 
         {/* Rota de agenda compartilhada (pública via token) */}
         <Route path="/agenda-publica/:token" element={<SharedSchedulePage />} />
+
+        {/* Pesquisa de Experiência pública e anônima */}
+        <Route path="/experiencia" element={<PesquisaExperienciaPage />} />
 
         {/* Redirect padrão APENAS para root */}
         <Route

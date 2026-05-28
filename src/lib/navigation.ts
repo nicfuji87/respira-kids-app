@@ -8,6 +8,7 @@ import {
   FileText,
   Webhook,
   Target,
+  HeartHandshake,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -79,6 +80,12 @@ export const navigationConfig: NavigationConfig[] = [
     icon: Webhook,
     label: 'Webhooks',
     href: '/webhooks',
+    roles: ['admin'],
+  },
+  {
+    icon: HeartHandshake,
+    label: 'Pesquisa Experiência',
+    href: '/pesquisa-experiencia',
     roles: ['admin'],
   },
 ];

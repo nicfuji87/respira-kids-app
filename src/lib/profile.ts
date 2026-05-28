@@ -167,19 +167,25 @@ export async function updateProfile(
       ? profileData.cpf_cnpj.replace(/\D/g, '')
       : null;
 
-    const updateData = {
+    // AI dev note: id_tipo_pessoa só é enviado se explicitamente fornecido.
+    // NÃO usar um fallback fixo de "paciente" aqui, pois no fluxo de signup de profissional
+    // o trigger create_pessoa_on_auth_user_fixed já atribui um tipo. Sobrescrever com "paciente"
+    // faria todos os novos cadastros de profissional aparecerem como paciente na tela do admin.
+    const updateData: Record<string, unknown> = {
       nome: profileData.nome,
-      cpf_cnpj: cleanCpfCnpj, // Salvar CPF sem formatação
-      telefone: telefoneNumber, // Salvar como BIGINT
+      cpf_cnpj: cleanCpfCnpj,
+      telefone: telefoneNumber,
       data_nascimento: profileData.data_nascimento || null,
       numero_endereco: profileData.numero_endereco,
       complemento_endereco: profileData.complemento_endereco || null,
       id_endereco: enderecoId,
-      id_tipo_pessoa:
-        profileData.id_tipo_pessoa || '77e2969e-80a4-496a-a858-11f6ee565df8', // padrão: paciente
       profile_complete: true,
       updated_at: new Date().toISOString(),
     };
+
+    if (profileData.id_tipo_pessoa) {
+      updateData.id_tipo_pessoa = profileData.id_tipo_pessoa;
+    }
 
     const { error: updateError } = await supabase
       .from('pessoas')

@@ -19,6 +19,7 @@ import {
   UsuariosPage,
   RelatoriosPage,
   WebhooksPage,
+  PesquisaExperienciaDashboardPage,
   GoogleOAuthDebugPage,
 } from '@/pages';
 import { GoogleCalendarCallback } from '@/components/domain/auth/GoogleCalendarCallback';
@@ -248,6 +249,18 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute path="/webhooks" currentUserRole={validUserRole}>
               <WebhooksPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/pesquisa-experiencia"
+          element={
+            <ProtectedRoute
+              path="/pesquisa-experiencia"
+              currentUserRole={validUserRole}
+            >
+              <PesquisaExperienciaDashboardPage />
             </ProtectedRoute>
           }
         />

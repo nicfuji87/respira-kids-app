@@ -17,6 +17,7 @@ export { ConfiguracoesPage } from './ConfiguracoesPage';
 export { UsuariosPage } from './UsuariosPage';
 export { RelatoriosPage } from './RelatoriosPage';
 export { WebhooksPage } from './WebhooksPage';
+export { PesquisaExperienciaDashboardPage } from './PesquisaExperienciaDashboardPage';
 
 // Debug pages
 export { GoogleOAuthDebugPage } from './GoogleOAuthDebugPage';
@@ -24,3 +25,4 @@ export { GoogleOAuthDebugPage } from './GoogleOAuthDebugPage';
 // Public pages (não requer autenticação)
 export { PatientPublicRegistrationPage } from './PatientPublicRegistrationPage';
 export { AddFinancialResponsiblePage } from './AddFinancialResponsiblePage';
+export { PesquisaExperienciaPage } from './PesquisaExperienciaPage';
