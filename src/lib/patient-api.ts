@@ -1241,6 +1241,106 @@ export async function updateBillingResponsible(
   }
 }
 
+// AI dev note: Controle operacional da pesquisa de experiência.
+// Estes campos ficam no responsável legal e NÃO relacionam a pessoa às respostas
+// da pesquisa anônima. Servem apenas para a equipe saber se deve convidar a
+// família a responder novamente após 6 meses.
+export interface ExperienceSurveyTracking {
+  responsavelId: string;
+  respondidaEm: string | null;
+  proximaEm: string | null;
+  status: 'pendente' | 'em_dia' | 'vencida';
+}
+
+export function getExperienceSurveyTrackingStatus(
+  respondidaEm?: string | null,
+  proximaEm?: string | null
+): ExperienceSurveyTracking['status'] {
+  if (!respondidaEm) return 'pendente';
+  if (!proximaEm) return 'em_dia';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dueDate = new Date(`${proximaEm}T00:00:00`);
+  return dueDate <= today ? 'vencida' : 'em_dia';
+}
+
+export async function fetchResponsibleExperienceSurveyTracking(
+  responsavelId: string
+): Promise<ExperienceSurveyTracking | null> {
+  try {
+    const { data, error } = await supabase
+      .from('pessoas')
+      .select(
+        'id, pesquisa_experiencia_respondida_em, pesquisa_experiencia_proxima_em'
+      )
+      .eq('id', responsavelId)
+      .single();
+
+    if (error) {
+      console.error(
+        'Erro ao buscar controle de pesquisa do responsável:',
+        error
+      );
+      return null;
+    }
+
+    return {
+      responsavelId: data.id,
+      respondidaEm: data.pesquisa_experiencia_respondida_em,
+      proximaEm: data.pesquisa_experiencia_proxima_em,
+      status: getExperienceSurveyTrackingStatus(
+        data.pesquisa_experiencia_respondida_em,
+        data.pesquisa_experiencia_proxima_em
+      ),
+    };
+  } catch (err) {
+    console.error('Erro ao buscar controle de pesquisa:', err);
+    return null;
+  }
+}
+
+export async function markResponsibleExperienceSurveyAnswered(
+  responsavelId: string,
+  markedBy?: string | null
+): Promise<ExperienceSurveyTracking> {
+  const now = new Date();
+  const next = new Date(now);
+  next.setMonth(next.getMonth() + 6);
+
+  const payload = {
+    pesquisa_experiencia_respondida_em: now.toISOString(),
+    pesquisa_experiencia_proxima_em: next.toISOString().slice(0, 10),
+    pesquisa_experiencia_marcado_por: markedBy || null,
+    updated_at: now.toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('pessoas')
+    .update(payload)
+    .eq('id', responsavelId)
+    .select(
+      'id, pesquisa_experiencia_respondida_em, pesquisa_experiencia_proxima_em'
+    )
+    .single();
+
+  if (error) {
+    console.error('Erro ao marcar pesquisa respondida:', error);
+    throw new Error(error.message);
+  }
+
+  return {
+    responsavelId: data.id,
+    respondidaEm: data.pesquisa_experiencia_respondida_em,
+    proximaEm: data.pesquisa_experiencia_proxima_em,
+    status: getExperienceSurveyTrackingStatus(
+      data.pesquisa_experiencia_respondida_em,
+      data.pesquisa_experiencia_proxima_em
+    ),
+  };
+}
+
 // AI dev note: Função helper para enriquecer pacientes com status de pagamento
 async function enrichPatientsWithPaymentStatus(
   patients: unknown[],

@@ -6,6 +6,8 @@ import {
   XCircle,
   FileText,
   ClipboardList,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 import { ToastAction } from '@/components/primitives/toast';
@@ -45,7 +47,7 @@ import type {
   EvolucaoMotoraAssimetria,
 } from '@/types/evolucao-clinica';
 import { RichTextEditor } from '@/components/primitives/rich-text-editor';
-import { cn, formatDateTimeBR } from '@/lib/utils';
+import { cn, formatDateBR, formatDateTimeBR } from '@/lib/utils';
 import {
   fetchConsultaStatus,
   fetchTiposServico,
@@ -55,6 +57,11 @@ import {
   updateRelatorioEvolucaoCompleta,
   fetchProfissionais,
 } from '@/lib/calendar-services';
+import {
+  fetchResponsibleExperienceSurveyTracking,
+  markResponsibleExperienceSurveyAnswered,
+  type ExperienceSurveyTracking,
+} from '@/lib/patient-api';
 // AI dev note: generatePatientHistoryAI e checkAIHistoryStatus removidos -
 // agora são chamados apenas via modal de evolução estruturada
 import type {
@@ -207,6 +214,14 @@ export const AppointmentDetailsManager =
       const [showAttendanceStatementModal, setShowAttendanceStatementModal] =
         useState(false);
 
+      // Controle operacional da pesquisa anônima: status do responsável legal.
+      const [surveyTracking, setSurveyTracking] =
+        useState<ExperienceSurveyTracking | null>(null);
+      const [isLoadingSurveyTracking, setIsLoadingSurveyTracking] =
+        useState(false);
+      const [isMarkingSurveyTracking, setIsMarkingSurveyTracking] =
+        useState(false);
+
       // Estados para dados da fatura associada
       const [faturaData, setFaturaData] = useState<{
         link_nfe: string | null;
@@ -305,6 +320,41 @@ export const AppointmentDetailsManager =
 
         loadFaturaData();
       }, [appointment, isOpen]);
+
+      useEffect(() => {
+        let mounted = true;
+
+        const loadSurveyTracking = async () => {
+          if (
+            !isOpen ||
+            !appointment?.responsavel_legal_id ||
+            (userRole !== 'admin' && userRole !== 'secretaria')
+          ) {
+            setSurveyTracking(null);
+            return;
+          }
+
+          setIsLoadingSurveyTracking(true);
+          try {
+            const tracking = await fetchResponsibleExperienceSurveyTracking(
+              appointment.responsavel_legal_id
+            );
+            if (mounted) {
+              setSurveyTracking(tracking);
+            }
+          } finally {
+            if (mounted) {
+              setIsLoadingSurveyTracking(false);
+            }
+          }
+        };
+
+        void loadSurveyTracking();
+
+        return () => {
+          mounted = false;
+        };
+      }, [appointment?.responsavel_legal_id, isOpen, userRole]);
 
       // Carregar opções de status de consulta
       useEffect(() => {
@@ -1434,6 +1484,35 @@ export const AppointmentDetailsManager =
         return value && value.trim() !== '' ? value : undefined;
       };
 
+      const handleMarkSurveyAnswered = async () => {
+        if (!appointment?.responsavel_legal_id || isMarkingSurveyTracking) {
+          return;
+        }
+
+        setIsMarkingSurveyTracking(true);
+        try {
+          const updated = await markResponsibleExperienceSurveyAnswered(
+            appointment.responsavel_legal_id,
+            user?.pessoa?.id
+          );
+          setSurveyTracking(updated);
+          toast({
+            title: 'Pesquisa marcada como respondida',
+            description:
+              'O próximo lembrete ficará para daqui a 6 meses. A resposta continua anônima.',
+          });
+        } catch (error) {
+          console.error('Erro ao marcar pesquisa respondida:', error);
+          toast({
+            title: 'Não foi possível salvar',
+            description: 'Tente novamente em instantes.',
+            variant: 'destructive',
+          });
+        } finally {
+          setIsMarkingSurveyTracking(false);
+        }
+      };
+
       const handleSaveAll = async () => {
         if (!appointment || !user) return;
 
@@ -1686,6 +1765,68 @@ export const AppointmentDetailsManager =
                           >
                             {appointment.responsavel_legal_nome}
                           </Button>
+                        </div>
+                      )}
+
+                    {(userRole === 'admin' || userRole === 'secretaria') &&
+                      appointment.responsavel_legal_id &&
+                      !isLoadingSurveyTracking &&
+                      surveyTracking?.status !== 'em_dia' && (
+                        <div
+                          className={cn(
+                            'mt-3 rounded-lg border p-3 text-sm',
+                            surveyTracking?.status === 'vencida'
+                              ? 'border-amarelo-pipa/50 bg-amarelo-pipa/10'
+                              : 'border-azul-respira/30 bg-azul-respira/5'
+                          )}
+                        >
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle
+                              className={cn(
+                                'h-4 w-4 shrink-0 mt-0.5',
+                                surveyTracking?.status === 'vencida'
+                                  ? 'text-amarelo-pipa'
+                                  : 'text-azul-respira'
+                              )}
+                            />
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <p className="font-medium text-foreground">
+                                {surveyTracking?.status === 'vencida'
+                                  ? 'Pesquisa de experiência vencida'
+                                  : 'Pesquisa de experiência ainda não marcada'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {surveyTracking?.status === 'vencida' &&
+                                surveyTracking.proximaEm
+                                  ? `Já passaram 6 meses. Convide a família novamente desde ${formatDateBR(surveyTracking.proximaEm)}.`
+                                  : 'Convide a família a responder e marque quando ela informar que respondeu.'}
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleMarkSurveyAnswered()}
+                                disabled={isMarkingSurveyTracking}
+                                className="h-8 mt-1"
+                              >
+                                {isMarkingSurveyTracking
+                                  ? 'Salvando...'
+                                  : 'Marcar como respondida hoje'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                    {(userRole === 'admin' || userRole === 'secretaria') &&
+                      appointment.responsavel_legal_id &&
+                      surveyTracking?.status === 'em_dia' && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-verde-pipa" />
+                          Pesquisa em dia
+                          {surveyTracking.proximaEm
+                            ? ` · renovar em ${formatDateBR(surveyTracking.proximaEm)}`
+                            : ''}
                         </div>
                       )}
                   </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   User,
   Mail,
@@ -14,6 +14,8 @@ import {
   Camera,
   MessageCircle,
   Trash2,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   Card,
@@ -23,6 +25,7 @@ import {
 } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
 import { Button } from '@/components/primitives/button';
+import { Checkbox } from '@/components/primitives/checkbox';
 import {
   Avatar,
   AvatarFallback,
@@ -37,6 +40,12 @@ import {
 import { useToast } from '@/components/primitives/use-toast';
 import { cn, formatDateBR } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import {
+  fetchResponsibleExperienceSurveyTracking,
+  markResponsibleExperienceSurveyAnswered,
+  type ExperienceSurveyTracking,
+} from '@/lib/patient-api';
+import { useAuth } from '@/hooks/useAuth';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
 import { PatientPediatriciansSection } from './PatientPediatriciansSection';
@@ -52,8 +61,17 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
     const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(
       patient.foto_perfil || null
     );
+    const [surveyTracking, setSurveyTracking] =
+      useState<ExperienceSurveyTracking | null>(null);
+    const [isLoadingSurveyTracking, setIsLoadingSurveyTracking] =
+      useState(false);
+    const [isMarkingSurveyTracking, setIsMarkingSurveyTracking] =
+      useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
+    const { user } = useAuth();
+    const canManageSurveyTracking =
+      userRole === 'admin' || userRole === 'secretaria';
 
     // 🔍 DEBUG: Verificar dados dos responsáveis
     console.log('🔍 [DEBUG] PatientCompleteInfo dados:', {
@@ -261,6 +279,68 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
       }
     };
 
+    useEffect(() => {
+      let mounted = true;
+
+      const loadSurveyTracking = async () => {
+        if (!canManageSurveyTracking || !patient.responsavel_legal_id) {
+          setSurveyTracking(null);
+          return;
+        }
+
+        setIsLoadingSurveyTracking(true);
+        try {
+          const tracking = await fetchResponsibleExperienceSurveyTracking(
+            patient.responsavel_legal_id
+          );
+          if (mounted) {
+            setSurveyTracking(tracking);
+          }
+        } finally {
+          if (mounted) {
+            setIsLoadingSurveyTracking(false);
+          }
+        }
+      };
+
+      void loadSurveyTracking();
+
+      return () => {
+        mounted = false;
+      };
+    }, [
+      canManageSurveyTracking,
+      patient.responsavel_legal_id,
+      patient.responsavel_legal_nome,
+    ]);
+
+    const handleMarkSurveyAnswered = async () => {
+      if (!patient.responsavel_legal_id || isMarkingSurveyTracking) return;
+
+      setIsMarkingSurveyTracking(true);
+      try {
+        const updated = await markResponsibleExperienceSurveyAnswered(
+          patient.responsavel_legal_id,
+          user?.pessoa?.id
+        );
+        setSurveyTracking(updated);
+        toast({
+          title: 'Pesquisa marcada como respondida',
+          description:
+            'O próximo lembrete ficará para daqui a 6 meses. A pesquisa continua anônima.',
+        });
+      } catch (error) {
+        console.error('Erro ao marcar pesquisa respondida:', error);
+        toast({
+          title: 'Não foi possível salvar',
+          description: 'Tente novamente em instantes.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsMarkingSurveyTracking(false);
+      }
+    };
+
     // AI dev note: Extrair iniciais do nome para fallback do avatar
     const getInitials = (name: string): string => {
       return name
@@ -364,6 +444,92 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
         </div>
       </div>
     );
+
+    const SurveyTrackingControl = () => {
+      if (!canManageSurveyTracking || !patient.responsavel_legal_id) {
+        return null;
+      }
+
+      const status = surveyTracking?.status || 'pendente';
+      const isUpToDate = status === 'em_dia';
+      const isOverdue = status === 'vencida';
+      const statusLabel = isLoadingSurveyTracking
+        ? 'Carregando status da pesquisa...'
+        : isUpToDate
+          ? `Respondida em ${formatDateBR(surveyTracking.respondidaEm!.slice(0, 10))}`
+          : isOverdue
+            ? `Renovar desde ${formatDateBR(surveyTracking.proximaEm!)}`
+            : 'Ainda não marcada como respondida';
+      const nextLabel =
+        surveyTracking?.proximaEm && isUpToDate
+          ? `Próximo convite em ${formatDateBR(surveyTracking.proximaEm)}`
+          : 'Ao marcar, o próximo lembrete fica para daqui a 6 meses.';
+
+      return (
+        <div
+          className={cn(
+            'mt-3 rounded-lg border p-3',
+            isUpToDate
+              ? 'border-verde-pipa/30 bg-verde-pipa/10'
+              : isOverdue
+                ? 'border-amarelo-pipa/50 bg-amarelo-pipa/10'
+                : 'border-border bg-muted/30'
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <Checkbox
+              checked={isUpToDate}
+              disabled={isLoadingSurveyTracking || isMarkingSurveyTracking}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  void handleMarkSurveyAnswered();
+                }
+              }}
+              className="mt-0.5"
+              aria-label="Marcar pesquisa de experiência como respondida"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium">
+                  Pesquisa de experiência respondida
+                </p>
+                {isUpToDate ? (
+                  <Badge className="bg-verde-pipa/20 text-roxo-titulo border-verde-pipa/30">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Em dia
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-amarelo-pipa/50">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    {isOverdue ? 'Renovar' : 'Pendente'}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {statusLabel}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {nextLabel}
+              </p>
+              {!isUpToDate && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleMarkSurveyAnswered()}
+                  disabled={isLoadingSurveyTracking || isMarkingSurveyTracking}
+                  className="mt-2 h-8"
+                >
+                  {isMarkingSurveyTracking
+                    ? 'Salvando...'
+                    : 'Marcar como respondida hoje'}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
 
     return (
       <Card className={cn('w-full', className)}>
@@ -713,6 +879,7 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                           📱 {formatPhone(patient.responsavel_legal_telefone)}
                         </p>
                       )}
+                    <SurveyTrackingControl />
                   </div>
                 </div>
               ) : (
@@ -772,6 +939,7 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                               {formatPhone(patient.responsavel_legal_telefone)}
                             </p>
                           )}
+                        <SurveyTrackingControl />
                       </div>
                     </div>
                   )}
