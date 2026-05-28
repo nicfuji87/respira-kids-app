@@ -1,15 +1,15 @@
 // AI dev note: Perguntas da Pesquisa de Experiência Respira Kids
-// Ordem estratégica: começa fácil → emocional → reflexivo (NPS no fim)
-// As perguntas em formato single-choice e multi-choice (com max atingido)
-// avançam automaticamente. Scale-10 e short-text exigem botão "Continuar".
+// Ordem estratégica: começa fácil → emocional → percepção de valor → reflexivo (NPS no fim)
+// Auto-avanço em single-choice e pediatra-search. Multi-choice, scale-10 e short-text
+// exigem botão "Continuar".
 
 import type { SurveyQuestion } from '@/types/pesquisa-experiencia';
 
-const indicacaoMedicaValues = new Set(['pediatra', 'hospital']);
+const PEDIATRA_OUTRO_VALUE = '__outro__';
 
 export const SURVEY_QUESTIONS: SurveyQuestion[] = [
   // ============================================================
-  // INÍCIO: perguntas leves para criar conforto
+  // INÍCIO: jornada de descoberta
   // ============================================================
   {
     id: 'como_conheceu',
@@ -21,21 +21,47 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
       { value: 'google', label: 'Google', emoji: '🔎' },
       { value: 'tiktok', label: 'TikTok', emoji: '🎵' },
       { value: 'outra_mae', label: 'Outra mãe ou família', emoji: '💞' },
+      { value: 'grupo_whatsapp', label: 'Grupo de WhatsApp', emoji: '💬' },
       { value: 'hospital', label: 'Hospital', emoji: '🏥' },
       { value: 'outro', label: 'Outro', emoji: '✨' },
     ],
+  },
+  // Quando "Pediatra" foi escolhido: busca + opção "Outro"
+  {
+    id: 'pediatra_id',
+    type: 'pediatra-search',
+    title: 'Qual pediatra te indicou a Respira Kids?',
+    subtitle:
+      'Pode digitar para buscar. Se não estiver na lista, escolha "Outro".',
+    optional: true,
+    visibleWhen: (r) => r.como_conheceu === 'pediatra',
   },
   {
     id: 'profissional_indicou',
     type: 'short-text',
     title: 'Qual profissional indicou a Respira Kids?',
-    subtitle: 'Pode ser o nome do(a) pediatra ou outro profissional. 💙',
+    subtitle: 'Pode ser o nome de um especialista do hospital, por exemplo. 💙',
     helper: 'Se preferir não responder, é só seguir.',
     optional: true,
     ctaLabel: 'Continuar',
-    visibleWhen: (r) =>
-      typeof r.como_conheceu === 'string' &&
-      indicacaoMedicaValues.has(r.como_conheceu),
+    visibleWhen: (r) => r.como_conheceu === 'hospital',
+  },
+  {
+    id: 'criterio_decisao',
+    type: 'single-choice',
+    title: 'O que foi decisivo para você escolher a Respira Kids?',
+    options: [
+      { value: 'confianca_profissional', label: 'Confiança no profissional' },
+      { value: 'indicacao', label: 'Indicação de alguém' },
+      {
+        value: 'referencias_online',
+        label: 'Referências online (Instagram, Google)',
+      },
+      { value: 'conveniencia', label: 'Conveniência (local, horários)' },
+      { value: 'conteudo', label: 'Conteúdo nas redes sociais' },
+      { value: 'preco', label: 'Preço / forma de pagamento' },
+      { value: 'outro', label: 'Outro' },
+    ],
   },
   {
     id: 'tempo_acompanhamento',
@@ -116,6 +142,13 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
       { value: 'profissional_saude', label: 'Profissional da saúde' },
       { value: 'advogada', label: 'Advogada' },
       { value: 'professora', label: 'Professora' },
+      { value: 'engenheira', label: 'Engenheira' },
+      { value: 'arquiteta', label: 'Arquiteta' },
+      { value: 'administradora', label: 'Administradora' },
+      { value: 'contadora', label: 'Contadora' },
+      { value: 'designer', label: 'Designer / criativa' },
+      { value: 'jornalista', label: 'Jornalista / comunicação' },
+      { value: 'psicologa', label: 'Psicóloga / terapeuta' },
       { value: 'autonoma', label: 'Autônoma' },
       { value: 'estudante', label: 'Estudante' },
       { value: 'do_lar', label: 'Do lar' },
@@ -124,7 +157,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
   },
 
   // ============================================================
-  // MEIO: perguntas emocionais (vínculo já criado)
+  // MEIO: emocional / marca
   // ============================================================
   {
     id: 'motivos_confianca',
@@ -196,21 +229,20 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     ],
   },
   {
-    id: 'se_fosse_pessoa',
+    id: 'surpresa_positiva',
     type: 'multi-choice',
-    title: 'Se a Respira Kids fosse uma pessoa, como ela seria?',
-    subtitle: 'Pode escolher até 3.',
-    maxSelections: 3,
+    title: 'O que mais te surpreendeu positivamente na Respira Kids?',
+    subtitle: 'Pode marcar mais de uma.',
     options: [
-      { value: 'carinhosa', label: 'Carinhosa' },
-      { value: 'inteligente', label: 'Inteligente' },
-      { value: 'calma', label: 'Calma' },
-      { value: 'moderna', label: 'Moderna' },
-      { value: 'sofisticada', label: 'Sofisticada' },
-      { value: 'proxima', label: 'Próxima' },
-      { value: 'leve', label: 'Leve' },
-      { value: 'confiante', label: 'Confiante' },
-      { value: 'atenciosa', label: 'Atenciosa' },
+      { value: 'equipe', label: 'A equipe', emoji: '👥' },
+      { value: 'ambiente', label: 'O ambiente' },
+      { value: 'comunicacao', label: 'A comunicação' },
+      { value: 'resultados', label: 'Os resultados' },
+      { value: 'agilidade', label: 'Agilidade no atendimento' },
+      { value: 'conteudo', label: 'Conteúdo nas redes' },
+      { value: 'acolhimento', label: 'O acolhimento' },
+      { value: 'organizacao', label: 'Organização e processos' },
+      { value: 'outro', label: 'Outro' },
     ],
   },
   {
@@ -240,6 +272,86 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
         label: 'Um lugar realmente especial para famílias',
         emoji: '💙',
       },
+    ],
+  },
+
+  // ============================================================
+  // PERCEPÇÃO DE VALOR
+  // ============================================================
+  {
+    id: 'entrega_atendimento',
+    type: 'single-choice',
+    title: 'Hoje você sente que o atendimento da Respira Kids entrega:',
+    options: [
+      {
+        value: 'muito_mais',
+        label: 'Muito mais do que eu esperava',
+        emoji: '✨',
+      },
+      { value: 'mais', label: 'Mais do que eu esperava' },
+      { value: 'exatamente', label: 'Exatamente o que eu esperava' },
+      { value: 'menos', label: 'Menos do que eu esperava' },
+    ],
+  },
+  {
+    id: 'o_que_vale_pena',
+    type: 'multi-choice',
+    title: 'O que mais faz valer a pena o atendimento na Respira Kids?',
+    subtitle: 'Pode escolher até 2.',
+    maxSelections: 2,
+    options: [
+      { value: 'seguranca_confianca', label: 'Segurança e confiança' },
+      { value: 'especializacao_infantil', label: 'Especialização infantil' },
+      { value: 'atendimento_humanizado', label: 'Atendimento humanizado' },
+      { value: 'resultados_percebidos', label: 'Resultados percebidos' },
+      { value: 'explicacoes_orientacoes', label: 'Explicações e orientações' },
+      { value: 'ambiente_clinica', label: 'Ambiente da clínica' },
+      { value: 'disponibilidade_equipe', label: 'Disponibilidade da equipe' },
+      {
+        value: 'desenvolvimento_filho',
+        label: 'Desenvolvimento do meu filho',
+      },
+    ],
+  },
+  {
+    id: 'comparacao_outras_experiencias',
+    type: 'single-choice',
+    title:
+      'Comparando com outras experiências na área da saúde infantil, a Respira Kids parece:',
+    options: [
+      { value: 'muito_acima', label: 'Muito acima da média', emoji: '⭐' },
+      { value: 'acima', label: 'Acima da média' },
+      { value: 'dentro_esperado', label: 'Dentro do esperado' },
+      { value: 'abaixo_esperado', label: 'Abaixo do esperado' },
+    ],
+  },
+  {
+    id: 'traz_tranquilidade',
+    type: 'single-choice',
+    title:
+      'Você sente que o acompanhamento da Respira Kids traz tranquilidade para sua família?',
+    options: [
+      {
+        value: 'muita_tranquilidade',
+        label: 'Sim, muita tranquilidade',
+        emoji: '🌿',
+      },
+      { value: 'sim', label: 'Sim' },
+      { value: 'mais_ou_menos', label: 'Mais ou menos' },
+      { value: 'nao_sinto', label: 'Não sinto diferença' },
+    ],
+  },
+  {
+    id: 'custo_beneficio',
+    type: 'single-choice',
+    title:
+      'De forma geral, como você percebe o custo-benefício da Respira Kids?',
+    options: [
+      { value: 'excelente', label: 'Excelente', emoji: '⭐' },
+      { value: 'muito_bom', label: 'Muito bom' },
+      { value: 'bom', label: 'Bom' },
+      { value: 'regular', label: 'Regular' },
+      { value: 'ruim', label: 'Ruim' },
     ],
   },
 
@@ -278,6 +390,9 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     ctaLabel: 'Finalizar pesquisa',
   },
 ];
+
+/** Valor sentinela usado pelo PesquisaPediatraSearch quando a usuária escolhe "Outro". */
+export { PEDIATRA_OUTRO_VALUE };
 
 /**
  * Retorna as perguntas visíveis com base no estado atual de respostas.

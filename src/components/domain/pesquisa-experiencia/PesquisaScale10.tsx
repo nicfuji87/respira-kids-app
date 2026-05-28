@@ -1,6 +1,7 @@
 // AI dev note: Escala 1 a 10 visual com botões arredondados grandes.
-// 1-6 neutro, 7-8 positivo, 9-10 destaque visual (verde/azul).
-// Exige clique em "Continuar" (decidido pelo usuário) para evitar cliques acidentais.
+// Cores semafóricas em TODOS os números (mesmo não selecionados) para feedback visual imediato:
+//   1-2 = vermelho forte | 3-4 = vermelho | 5-6 = laranja/amarelo | 7-8 = amarelo claro | 9-10 = verde
+// Exige clique em "Continuar" para evitar cliques acidentais.
 
 import React, { useCallback } from 'react';
 import { Button } from '@/components/primitives/button';
@@ -13,26 +14,33 @@ interface PesquisaScale10Props {
   ctaLabel?: string;
 }
 
+/** Classes do botão (estado base + seleção) por nota — sempre coloridas. */
 function getBucketClass(n: number, isSelected: boolean) {
-  // Não selecionado — cores neutras com leve diferenciação por bucket
-  if (!isSelected) {
-    if (n <= 6) {
-      return 'bg-card text-foreground border-border/70 hover:border-vermelho-kids/40 hover:bg-vermelho-kids/5';
-    }
-    if (n <= 8) {
-      return 'bg-card text-foreground border-border/70 hover:border-amarelo-pipa/60 hover:bg-amarelo-pipa/10';
-    }
-    return 'bg-card text-foreground border-border/70 hover:border-verde-pipa hover:bg-verde-pipa/15';
+  // Mapeamento por intensidade emocional (todos coloridos, selecionado fica mais forte)
+  if (n <= 2) {
+    return isSelected
+      ? 'bg-vermelho-kids text-white border-vermelho-kids shadow-lg scale-110 ring-2 ring-vermelho-kids/40 ring-offset-2 ring-offset-card'
+      : 'bg-vermelho-kids/15 text-roxo-titulo border-vermelho-kids/50 hover:bg-vermelho-kids/25 hover:border-vermelho-kids';
   }
-
-  // Selecionado
+  if (n <= 4) {
+    return isSelected
+      ? 'bg-vermelho-kids/80 text-white border-vermelho-kids shadow-md scale-110'
+      : 'bg-vermelho-kids/10 text-roxo-titulo border-vermelho-kids/30 hover:bg-vermelho-kids/20 hover:border-vermelho-kids/60';
+  }
   if (n <= 6) {
-    return 'bg-vermelho-kids/15 text-roxo-titulo border-vermelho-kids shadow-md scale-110';
+    return isSelected
+      ? 'bg-amarelo-pipa text-roxo-titulo border-amarelo-pipa shadow-md scale-110 ring-2 ring-amarelo-pipa/40 ring-offset-2 ring-offset-card'
+      : 'bg-amarelo-pipa/15 text-roxo-titulo border-amarelo-pipa/40 hover:bg-amarelo-pipa/25 hover:border-amarelo-pipa';
   }
   if (n <= 8) {
-    return 'bg-amarelo-pipa/25 text-roxo-titulo border-amarelo-pipa shadow-md scale-110';
+    return isSelected
+      ? 'bg-amarelo-pipa/80 text-roxo-titulo border-amarelo-pipa shadow-md scale-110'
+      : 'bg-amarelo-pipa/10 text-roxo-titulo border-amarelo-pipa/30 hover:bg-amarelo-pipa/20 hover:border-amarelo-pipa/60';
   }
-  return 'bg-verde-pipa/30 text-roxo-titulo border-verde-pipa shadow-lg scale-110 ring-2 ring-verde-pipa/40 ring-offset-2 ring-offset-card';
+  // 9-10: verde, com 10 ainda mais destacado
+  return isSelected
+    ? 'bg-verde-pipa text-roxo-titulo border-verde-pipa shadow-xl scale-110 ring-2 ring-verde-pipa/50 ring-offset-2 ring-offset-card'
+    : 'bg-verde-pipa/25 text-roxo-titulo border-verde-pipa/50 hover:bg-verde-pipa/40 hover:border-verde-pipa';
 }
 
 export const PesquisaScale10 = React.memo<PesquisaScale10Props>(
@@ -72,11 +80,11 @@ export const PesquisaScale10 = React.memo<PesquisaScale10Props>(
           })}
         </div>
 
-        {/* Legenda visual */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-          <span>Muito baixo</span>
-          <span>Médio</span>
-          <span className="font-semibold text-roxo-titulo">Muito alto</span>
+        {/* Legenda visual com cores */}
+        <div className="flex items-center justify-between text-xs px-1">
+          <span className="text-vermelho-kids font-medium">Muito baixo</span>
+          <span className="text-amarelo-pipa font-medium">Médio</span>
+          <span className="text-verde-pipa font-semibold">Muito alto</span>
         </div>
 
         {/* CTA */}

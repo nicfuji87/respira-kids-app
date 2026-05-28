@@ -67,6 +67,28 @@ export const PesquisaExperienciaPage: React.FC = () => {
     []
   );
 
+  // Handler especial para pergunta do tipo "pediatra-search" que escreve em
+  // dois campos (pediatra_id + pediatra_nome_outro) ao mesmo tempo.
+  const handleUpdatePediatra = useCallback(
+    (next: { pediatraId?: string; pediatraNomeOutro?: string }) => {
+      setResposta((prev) => {
+        const merged: PesquisaExperienciaResposta = { ...prev };
+        if (next.pediatraId === undefined) {
+          delete merged.pediatra_id;
+        } else {
+          merged.pediatra_id = next.pediatraId;
+        }
+        if (!next.pediatraNomeOutro) {
+          delete merged.pediatra_nome_outro;
+        } else {
+          merged.pediatra_nome_outro = next.pediatraNomeOutro;
+        }
+        return merged;
+      });
+    },
+    []
+  );
+
   const submitFinal = useCallback(
     async (finalResposta: PesquisaExperienciaResposta) => {
       setStage('submitting');
@@ -145,6 +167,7 @@ export const PesquisaExperienciaPage: React.FC = () => {
               question={currentQuestion}
               resposta={resposta}
               onUpdate={handleUpdate}
+              onUpdatePediatra={handleUpdatePediatra}
               onAdvance={handleAdvance}
               onBack={handleBack}
               canGoBack={currentIndex > 0}

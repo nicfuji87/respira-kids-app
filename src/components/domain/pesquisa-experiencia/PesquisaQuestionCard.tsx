@@ -9,6 +9,7 @@ import { PesquisaSingleChoice } from './PesquisaSingleChoice';
 import { PesquisaMultiChoice } from './PesquisaMultiChoice';
 import { PesquisaScale10 } from './PesquisaScale10';
 import { PesquisaShortText } from './PesquisaShortText';
+import { PesquisaPediatraSearch } from './PesquisaPediatraSearch';
 import type {
   PesquisaExperienciaResposta,
   SurveyQuestion,
@@ -21,13 +22,26 @@ interface PesquisaQuestionCardProps {
     field: SurveyQuestion['id'],
     value: string | string[] | number | undefined
   ) => void;
+  /** Atualiza pediatra (pode escrever em pediatra_id e pediatra_nome_outro). */
+  onUpdatePediatra?: (next: {
+    pediatraId?: string;
+    pediatraNomeOutro?: string;
+  }) => void;
   onAdvance: () => void;
   onBack?: () => void;
   canGoBack: boolean;
 }
 
 export const PesquisaQuestionCard = React.memo<PesquisaQuestionCardProps>(
-  ({ question, resposta, onUpdate, onAdvance, onBack, canGoBack }) => {
+  ({
+    question,
+    resposta,
+    onUpdate,
+    onUpdatePediatra,
+    onAdvance,
+    onBack,
+    canGoBack,
+  }) => {
     const handleSingleSelect = useCallback(
       (value: string) => {
         onUpdate(question.id, value);
@@ -130,18 +144,29 @@ export const PesquisaQuestionCard = React.memo<PesquisaQuestionCardProps>(
           />
         )}
 
-        {/* Botão "Pular" para perguntas opcionais que não sejam short-text (que já tem) */}
-        {question.optional && question.type !== 'short-text' && (
-          <div className="flex justify-center">
-            <Button
-              variant="ghost"
-              onClick={onAdvance}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Prefiro não responder
-            </Button>
-          </div>
+        {question.type === 'pediatra-search' && onUpdatePediatra && (
+          <PesquisaPediatraSearch
+            pediatraId={resposta.pediatra_id}
+            pediatraNomeOutro={resposta.pediatra_nome_outro}
+            onChange={onUpdatePediatra}
+            onContinue={onAdvance}
+          />
         )}
+
+        {/* Botão "Pular" para perguntas opcionais single-choice / multi-choice / scale-10 */}
+        {question.optional &&
+          question.type !== 'short-text' &&
+          question.type !== 'pediatra-search' && (
+            <div className="flex justify-center">
+              <Button
+                variant="ghost"
+                onClick={onAdvance}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Prefiro não responder
+              </Button>
+            </div>
+          )}
       </div>
     );
   }

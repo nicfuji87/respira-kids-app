@@ -9,6 +9,8 @@
 export type PesquisaExperienciaField =
   // Jornada
   | 'como_conheceu'
+  | 'pediatra_id'
+  | 'pediatra_nome_outro'
   | 'profissional_indicou'
   | 'motivo_principal'
   | 'tempo_acompanhamento'
@@ -17,15 +19,23 @@ export type PesquisaExperienciaField =
   | 'quantidade_filhos'
   | 'faixa_etaria'
   | 'profissao'
-  // Emocional
+  // Emocional / Marca
   | 'motivos_confianca'
   | 'como_se_sente'
   | 'ambiente_transmite'
   | 'como_definiria'
-  | 'se_fosse_pessoa'
   | 'conteudo_redes'
   | 'hoje_ve_como'
-  // Reflexivo
+  // Critério decisivo + surpresa
+  | 'criterio_decisao'
+  | 'surpresa_positiva'
+  // Percepção de valor
+  | 'entrega_atendimento'
+  | 'o_que_vale_pena'
+  | 'comparacao_outras_experiencias'
+  | 'traz_tranquilidade'
+  | 'custo_beneficio'
+  // Reflexivo / NPS
   | 'nota_confianca'
   | 'nota_indicacao'
   | 'o_que_mais_ama'
@@ -38,6 +48,10 @@ export type PesquisaExperienciaField =
 export interface PesquisaExperienciaResposta {
   // Jornada
   como_conheceu?: string;
+  /** Quando como_conheceu = 'pediatra' e respondente escolheu pediatra da lista. */
+  pediatra_id?: string;
+  /** Quando como_conheceu = 'pediatra' e respondente escolheu "Outro" (nome livre). */
+  pediatra_nome_outro?: string;
   profissional_indicou?: string;
   motivo_principal?: string;
   tempo_acompanhamento?: string;
@@ -48,14 +62,24 @@ export interface PesquisaExperienciaResposta {
   faixa_etaria?: string;
   profissao?: string;
 
-  // Emocional
+  // Emocional / Marca
   motivos_confianca?: string[];
   como_se_sente?: string[];
   ambiente_transmite?: string[];
   como_definiria?: string[];
-  se_fosse_pessoa?: string[];
   conteudo_redes?: string;
   hoje_ve_como?: string;
+
+  // Critério decisivo + surpresa
+  criterio_decisao?: string;
+  surpresa_positiva?: string[];
+
+  // Percepção de valor
+  entrega_atendimento?: string;
+  o_que_vale_pena?: string[];
+  comparacao_outras_experiencias?: string;
+  traz_tranquilidade?: string;
+  custo_beneficio?: string;
 
   // Reflexivo
   nota_confianca?: number;
@@ -76,7 +100,8 @@ export type QuestionType =
   | 'single-choice'
   | 'multi-choice'
   | 'scale-10'
-  | 'short-text';
+  | 'short-text'
+  | 'pediatra-search';
 
 export interface QuestionOption {
   value: string;
@@ -100,6 +125,37 @@ export interface SurveyQuestion {
   options?: QuestionOption[];
   /** Condição para exibir esta pergunta. */
   visibleWhen?: (resposta: PesquisaExperienciaResposta) => boolean;
+}
+
+// =====================================================
+// Tipos do Dashboard
+// =====================================================
+
+/**
+ * Categoria de respondente baseada na nota NPS.
+ */
+export type NpsCategory = 'promotor' | 'neutro' | 'detrator';
+
+/**
+ * Filtros aplicáveis no dashboard.
+ */
+export interface DashboardFilters {
+  /** ISO date (YYYY-MM-DD) - inclusive. */
+  startDate?: string;
+  /** ISO date (YYYY-MM-DD) - inclusive. */
+  endDate?: string;
+  /** Lista de canais de aquisição (como_conheceu). Vazio = todos. */
+  canais?: string[];
+  /** Lista de pediatra_id. */
+  pediatras?: string[];
+  /** Lista de tempo_acompanhamento. */
+  temposAcompanhamento?: string[];
+  /** Lista de idade_filho. */
+  idadesFilho?: string[];
+  /** Lista de motivo_principal. */
+  motivos?: string[];
+  /** Categorias de NPS. */
+  npsCategorias?: NpsCategory[];
 }
 
 /**
@@ -139,12 +195,91 @@ export interface PesquisaExperienciaStats {
   distribuicaoTempoAcompanhamento: DistribuicaoItem[];
   distribuicaoIdadeFilho: DistribuicaoItem[];
   distribuicaoFaixaEtaria: DistribuicaoItem[];
+  distribuicaoProfissao: DistribuicaoItem[];
+  distribuicaoQuantidadeFilhos: DistribuicaoItem[];
   distribuicaoConteudoRedes: DistribuicaoItem[];
   distribuicaoHojeVeComo: DistribuicaoItem[];
+  distribuicaoCriterioDecisao: DistribuicaoItem[];
+  distribuicaoEntregaAtendimento: DistribuicaoItem[];
+  distribuicaoComparacaoOutras: DistribuicaoItem[];
+  distribuicaoTrazTranquilidade: DistribuicaoItem[];
+  distribuicaoCustoBeneficio: DistribuicaoItem[];
   /** Top respostas para multi-choice (cada opção marcada conta 1). */
   distribuicaoMotivosConfianca: DistribuicaoItem[];
   distribuicaoComoSeSente: DistribuicaoItem[];
   distribuicaoAmbienteTransmite: DistribuicaoItem[];
   distribuicaoComoDefiniria: DistribuicaoItem[];
-  distribuicaoSeFossePessoa: DistribuicaoItem[];
+  distribuicaoSurpresaPositiva: DistribuicaoItem[];
+  distribuicaoOQueValePena: DistribuicaoItem[];
+}
+
+/**
+ * Insight: NPS segmentado por uma dimensão (canal, tempo, etc.)
+ */
+export interface NpsSegmento {
+  key: string;
+  label: string;
+  nps: NpsBreakdown;
+  /** Média do NPS bruto (notas 1-10) — útil quando a contagem é pequena. */
+  mediaNotaIndicacao: number | null;
+  mediaNotaConfianca: number | null;
+}
+
+/**
+ * Ranking de pediatras com NPS médio (para descobrir quem indica E gera bons clientes).
+ */
+export interface RankingPediatra {
+  pediatra_id: string;
+  nome: string;
+  total_indicacoes: number;
+  nps: NpsBreakdown;
+  mediaNotaConfianca: number | null;
+  mediaNotaIndicacao: number | null;
+}
+
+/**
+ * Correlação entre uma escala 1-10 e a nota de indicação (NPS).
+ * Útil para entender: "quem confia mais, indica mais?"
+ */
+export interface CorrelacaoNotas {
+  /** Coeficiente de Pearson (-1 a 1). */
+  coeficiente: number;
+  total: number;
+  /** Pares para scatter plot. */
+  pontos: Array<{ x: number; y: number; count: number }>;
+}
+
+/**
+ * Perfil resumido de um grupo (promotores, neutros, detratores).
+ */
+export interface PerfilGrupo {
+  totalRespondentes: number;
+  mediaNotaConfianca: number | null;
+  mediaNotaIndicacao: number | null;
+  topMotivosConfianca: DistribuicaoItem[];
+  topComoSeSente: DistribuicaoItem[];
+  topMotivoPrincipal: DistribuicaoItem[];
+  topIdadeFilho: DistribuicaoItem[];
+  topTempoAcompanhamento: DistribuicaoItem[];
+  topComoConheceu: DistribuicaoItem[];
+  topProfissao: DistribuicaoItem[];
+  topFaixaEtaria: DistribuicaoItem[];
+  topCustoBeneficio: DistribuicaoItem[];
+  topOQueValePena: DistribuicaoItem[];
+  topSurpresaPositiva: DistribuicaoItem[];
+  comentariosAma: string[];
+  comentariosMelhorar: string[];
+}
+
+export interface PesquisaExperienciaInsights {
+  npsPorCanal: NpsSegmento[];
+  npsPorTempoAcompanhamento: NpsSegmento[];
+  npsPorIdadeFilho: NpsSegmento[];
+  npsPorMotivo: NpsSegmento[];
+  rankingPediatras: RankingPediatra[];
+  correlacaoConfiancaIndicacao: CorrelacaoNotas;
+  correlacaoCustoBeneficioIndicacao: CorrelacaoNotas;
+  perfilPromotores: PerfilGrupo;
+  perfilDetratores: PerfilGrupo;
+  perfilNeutros: PerfilGrupo;
 }

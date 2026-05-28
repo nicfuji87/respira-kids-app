@@ -1,6 +1,7 @@
 // AI dev note: Dashboard administrativo da Pesquisa de Experiência (apenas admin).
-// Mostra métricas-chave: total de respostas, NPS, confiança média, distribuições
-// por pergunta (single/multi choice) e comentários abertos.
+// Estrutura: filtros no topo + tabs (Visão Geral / Insights Estratégicos).
+// Insights incluem: NPS por canal/tempo/idade/motivo, ranking de pediatras,
+// correlações (confiança ↔ NPS e custo-benefício ↔ NPS) e perfis dos grupos NPS.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -12,18 +13,33 @@ import {
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/primitives/tabs';
+import {
   PesquisaStatCard,
   PesquisaNPSCard,
   PesquisaDistribuicaoBarras,
   PesquisaComentariosList,
+  PesquisaDashboardFilters,
+  PesquisaNpsSegmentado,
+  PesquisaRankingPediatras,
+  PesquisaCorrelacaoCard,
+  PesquisaPerfilGrupoCard,
 } from '@/components/domain/pesquisa-experiencia';
 import {
+  applyFilters,
+  computePesquisaInsights,
   computePesquisaStats,
+  extractPediatraIds,
+  fetchPediatrasNomes,
   fetchPesquisasExperiencia,
 } from '@/lib/pesquisa-experiencia-api';
 import type {
+  DashboardFilters,
   PesquisaExperienciaRow,
-  PesquisaExperienciaStats,
 } from '@/types/pesquisa-experiencia';
 import {
   Activity,
@@ -33,6 +49,8 @@ import {
   ExternalLink,
   Heart,
   Inbox,
+  Lightbulb,
+  LayoutDashboard,
   RefreshCw,
   ShieldCheck,
   TrendingUp,
@@ -48,22 +66,33 @@ function formatNumber(n: number | null): string {
 
 function buildPublicSurveyUrl(): string {
   const origin = window.location.origin;
-  // App usa HashRouter — rota pública: /#/experiencia
   return `${origin}/#/experiencia`;
 }
 
 export const PesquisaExperienciaDashboardPage: React.FC = () => {
   const { toast } = useToast();
-  const [rows, setRows] = useState<PesquisaExperienciaRow[]>([]);
+  const [allRows, setAllRows] = useState<PesquisaExperienciaRow[]>([]);
+  const [pediatraNomes, setPediatraNomes] = useState<Map<string, string>>(
+    new Map()
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<DashboardFilters>({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await fetchPesquisasExperiencia();
-      setRows(data);
+      setAllRows(data);
+
+      const ids = extractPediatraIds(data);
+      if (ids.length > 0) {
+        const nomes = await fetchPediatrasNomes(ids);
+        setPediatraNomes(nomes);
+      } else {
+        setPediatraNomes(new Map());
+      }
     } catch (err) {
       console.error('[PesquisaDashboard] erro ao carregar:', err);
       setError(
@@ -78,10 +107,30 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
     void loadData();
   }, [loadData]);
 
-  const stats: PesquisaExperienciaStats | null = useMemo(
-    () => (rows.length >= 0 ? computePesquisaStats(rows) : null),
-    [rows]
+  // Linhas filtradas (aplica os filtros do dashboard)
+  const filteredRows = useMemo(
+    () => applyFilters(allRows, filters),
+    [allRows, filters]
   );
+
+  // Estatísticas com base nos dados filtrados
+  const stats = useMemo(
+    () => computePesquisaStats(filteredRows),
+    [filteredRows]
+  );
+
+  // Insights com base nos dados filtrados
+  const insights = useMemo(
+    () => computePesquisaInsights(filteredRows, pediatraNomes),
+    [filteredRows, pediatraNomes]
+  );
+
+  // Lista de pediatras presentes nas respostas (para o dropdown de filtros)
+  const pediatrasDisponiveis = useMemo(() => {
+    return Array.from(pediatraNomes.entries())
+      .map(([id, nome]) => ({ pediatra_id: id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [pediatraNomes]);
 
   const surveyUrl = useMemo(() => buildPublicSurveyUrl(), []);
 
@@ -183,8 +232,15 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
         </Card>
       )}
 
+      {/* Filtros */}
+      <PesquisaDashboardFilters
+        filters={filters}
+        onChange={setFilters}
+        pediatrasDisponiveis={pediatrasDisponiveis}
+      />
+
       {/* Loading skeleton */}
-      {loading && !stats && (
+      {loading && allRows.length === 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[0, 1, 2, 3].map((i) => (
             <Card key={i}>
@@ -197,184 +253,385 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
         </div>
       )}
 
-      {stats && (
-        <>
-          {/* KPIs principais */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <PesquisaStatCard
-              icon={Inbox}
-              tone="azul"
-              label="Total de respostas"
-              value={stats.totalRespostas}
-              hint={`${stats.respostasUltimos30Dias} nos últimos 30 dias`}
-            />
-            <PesquisaStatCard
-              icon={TrendingUp}
-              tone="verde"
-              label="NPS"
-              value={stats.nps.total > 0 ? stats.nps.nps : '—'}
-              hint={`${stats.nps.total} respondentes`}
-            />
-            <PesquisaStatCard
-              icon={ShieldCheck}
-              tone="roxo"
-              label="Confiança média"
-              value={
-                stats.notaConfiancaMedia !== null
-                  ? `${formatNumber(stats.notaConfiancaMedia)}/10`
-                  : '—'
-              }
-              hint="Nota de 1 a 10"
-            />
-            <PesquisaStatCard
-              icon={Activity}
-              tone="amarelo"
-              label="Últimos 7 dias"
-              value={stats.respostasUltimos7Dias}
-              hint="novas respostas"
-            />
-          </div>
+      {!loading && filteredRows.length === 0 && allRows.length > 0 && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <p className="text-base text-muted-foreground">
+              Nenhuma resposta corresponde aos filtros aplicados.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFilters({})}
+              className="mt-2"
+            >
+              Limpar filtros
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-          {/* NPS detalhado + Confiança */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              <PesquisaNPSCard nps={stats.nps} />
+      {!loading && allRows.length === 0 && (
+        <Card className="bg-bege-fundo/30 border-azul-respira/20">
+          <CardContent className="p-8 text-center space-y-3">
+            <Inbox className="w-12 h-12 text-azul-respira mx-auto" />
+            <p className="text-base text-foreground font-medium">
+              Ainda não há respostas
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Compartilhe o link público para começar a coletar percepções.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {allRows.length > 0 && filteredRows.length > 0 && (
+        <Tabs defaultValue="visao_geral" className="space-y-4">
+          <TabsList className="grid grid-cols-2 max-w-md">
+            <TabsTrigger value="visao_geral" className="gap-2">
+              <LayoutDashboard className="w-4 h-4" />
+              Visão Geral
+            </TabsTrigger>
+            <TabsTrigger value="insights" className="gap-2">
+              <Lightbulb className="w-4 h-4" />
+              Insights
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ============================================================ */}
+          {/* VISÃO GERAL                                                  */}
+          {/* ============================================================ */}
+          <TabsContent value="visao_geral" className="space-y-6">
+            {/* KPIs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <PesquisaStatCard
+                icon={Inbox}
+                tone="azul"
+                label="Total de respostas"
+                value={stats.totalRespostas}
+                hint={`${stats.respostasUltimos30Dias} nos últimos 30 dias`}
+              />
+              <PesquisaStatCard
+                icon={TrendingUp}
+                tone="verde"
+                label="NPS"
+                value={stats.nps.total > 0 ? stats.nps.nps : '—'}
+                hint={`${stats.nps.total} respondentes`}
+              />
+              <PesquisaStatCard
+                icon={ShieldCheck}
+                tone="roxo"
+                label="Confiança média"
+                value={
+                  stats.notaConfiancaMedia !== null
+                    ? `${formatNumber(stats.notaConfiancaMedia)}/10`
+                    : '—'
+                }
+                hint="Nota de 1 a 10"
+              />
+              <PesquisaStatCard
+                icon={Activity}
+                tone="amarelo"
+                label="Últimos 7 dias"
+                value={stats.respostasUltimos7Dias}
+                hint="novas respostas"
+              />
             </div>
+
+            {/* NPS detalhado + Confiança */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                <PesquisaNPSCard nps={stats.nps} />
+              </div>
+              <DistribuicaoNotasCard
+                title="Confiança na equipe"
+                subtitle="De 1 a 10"
+                distribuicao={stats.distribuicaoConfianca}
+                total={stats.totalRespostas}
+                media={stats.notaConfiancaMedia}
+              />
+            </div>
+
+            {/* Distribuição NPS detalhada */}
             <DistribuicaoNotasCard
-              title="Confiança na equipe"
-              subtitle="De 1 a 10"
-              distribuicao={stats.distribuicaoConfianca}
-              total={stats.totalRespostas}
-              media={stats.notaConfiancaMedia}
+              title="Chance de indicar (NPS)"
+              subtitle="Distribuição das notas 1-10"
+              distribuicao={stats.distribuicaoIndicacao}
+              total={stats.nps.total}
+              media={stats.notaIndicacaoMedia}
+              highlightNps
             />
-          </div>
 
-          {/* Distribuição NPS detalhada */}
-          <DistribuicaoNotasCard
-            title="Chance de indicar (NPS)"
-            subtitle="Distribuição das notas 1-10"
-            distribuicao={stats.distribuicaoIndicacao}
-            total={stats.nps.total}
-            media={stats.notaIndicacaoMedia}
-            highlightNps
-          />
+            {/* Jornada */}
+            <section className="space-y-3">
+              <h2 className="text-lg md:text-xl font-semibold text-foreground flex items-center gap-2">
+                <Users className="w-5 h-5 text-azul-respira" />
+                Jornada das famílias
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <PesquisaDistribuicaoBarras
+                  title="Como conheceu a Respira Kids"
+                  items={stats.distribuicaoComoConheceu}
+                  barColor="azul"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Critério decisivo"
+                  items={stats.distribuicaoCriterioDecisao}
+                  barColor="roxo"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Motivo principal da busca"
+                  items={stats.distribuicaoMotivoPrincipal}
+                  barColor="roxo"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Tempo de acompanhamento"
+                  items={stats.distribuicaoTempoAcompanhamento}
+                  barColor="verde"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Idade do filho atendido"
+                  items={stats.distribuicaoIdadeFilho}
+                  barColor="amarelo"
+                />
+              </div>
+            </section>
 
-          {/* Jornada */}
-          <section className="space-y-3">
-            <h2 className="text-lg md:text-xl font-semibold text-foreground flex items-center gap-2">
-              <Users className="w-5 h-5 text-azul-respira" />
-              Jornada das famílias
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <PesquisaDistribuicaoBarras
-                title="Como conheceu a Respira Kids"
-                items={stats.distribuicaoComoConheceu}
-                barColor="azul"
-              />
-              <PesquisaDistribuicaoBarras
-                title="Motivo principal da busca"
-                items={stats.distribuicaoMotivoPrincipal}
-                barColor="roxo"
-              />
-              <PesquisaDistribuicaoBarras
-                title="Tempo de acompanhamento"
-                items={stats.distribuicaoTempoAcompanhamento}
-                barColor="verde"
-              />
-              <PesquisaDistribuicaoBarras
-                title="Idade do filho atendido"
-                items={stats.distribuicaoIdadeFilho}
-                barColor="amarelo"
-              />
-            </div>
-          </section>
+            {/* Demografia */}
+            <section className="space-y-3">
+              <h2 className="text-lg md:text-xl font-semibold text-foreground flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-azul-respira" />
+                Perfil das mães
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <PesquisaDistribuicaoBarras
+                  title="Faixa etária"
+                  items={stats.distribuicaoFaixaEtaria}
+                  barColor="azul"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Profissão"
+                  items={stats.distribuicaoProfissao}
+                  barColor="roxo"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Quantidade de filhos"
+                  items={stats.distribuicaoQuantidadeFilhos}
+                  barColor="amarelo"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Conteúdo nas redes sociais"
+                  items={stats.distribuicaoConteudoRedes}
+                  barColor="verde"
+                />
+              </div>
+            </section>
 
-          {/* Demografia */}
-          <section className="space-y-3">
-            <h2 className="text-lg md:text-xl font-semibold text-foreground flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-azul-respira" />
-              Perfil das mães
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <PesquisaDistribuicaoBarras
-                title="Faixa etária"
-                items={stats.distribuicaoFaixaEtaria}
-                barColor="azul"
-              />
-              <PesquisaDistribuicaoBarras
-                title="Conteúdo nas redes sociais"
-                items={stats.distribuicaoConteudoRedes}
-                barColor="verde"
-              />
-            </div>
-          </section>
+            {/* Percepção de valor */}
+            <section className="space-y-3">
+              <h2 className="text-lg md:text-xl font-semibold text-foreground flex items-center gap-2">
+                <Lightbulb className="w-5 h-5 text-amarelo-pipa" />
+                Percepção de valor
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <PesquisaDistribuicaoBarras
+                  title="O atendimento entrega…"
+                  items={stats.distribuicaoEntregaAtendimento}
+                  barColor="verde"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="O que faz valer a pena"
+                  subtitle="Até 2 por respondente"
+                  items={stats.distribuicaoOQueValePena}
+                  barColor="azul"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Comparado a outras experiências"
+                  items={stats.distribuicaoComparacaoOutras}
+                  barColor="roxo"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Tranquilidade para a família"
+                  items={stats.distribuicaoTrazTranquilidade}
+                  barColor="verde"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Custo-benefício"
+                  items={stats.distribuicaoCustoBeneficio}
+                  barColor="amarelo"
+                />
+              </div>
+            </section>
 
-          {/* Percepção / Marca */}
-          <section className="space-y-3">
-            <h2 className="text-lg md:text-xl font-semibold text-foreground flex items-center gap-2">
-              <Heart className="w-5 h-5 text-vermelho-kids" />
-              Percepção da marca
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <PesquisaDistribuicaoBarras
-                title="Como a Respira Kids faz se sentir"
-                subtitle="Múltipla escolha"
-                items={stats.distribuicaoComoSeSente}
-                barColor="verde"
-              />
-              <PesquisaDistribuicaoBarras
-                title="O que mais gerou confiança"
-                subtitle="Até 2 por respondente"
-                items={stats.distribuicaoMotivosConfianca}
-                barColor="azul"
-              />
-              <PesquisaDistribuicaoBarras
-                title="Como definiria a Respira Kids"
-                subtitle="Até 3 por respondente"
-                items={stats.distribuicaoComoDefiniria}
-                barColor="roxo"
-              />
-              <PesquisaDistribuicaoBarras
-                title="Se fosse uma pessoa, seria…"
-                subtitle="Até 3 por respondente"
-                items={stats.distribuicaoSeFossePessoa}
-                barColor="amarelo"
-              />
-              <PesquisaDistribuicaoBarras
-                title="O ambiente transmite"
-                subtitle="Múltipla escolha"
-                items={stats.distribuicaoAmbienteTransmite}
-                barColor="verde"
-              />
-              <PesquisaDistribuicaoBarras
-                title="Como vê a Respira Kids hoje"
-                items={stats.distribuicaoHojeVeComo}
-                barColor="roxo"
-              />
-            </div>
-          </section>
+            {/* Percepção / Marca */}
+            <section className="space-y-3">
+              <h2 className="text-lg md:text-xl font-semibold text-foreground flex items-center gap-2">
+                <Heart className="w-5 h-5 text-vermelho-kids" />
+                Percepção da marca
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <PesquisaDistribuicaoBarras
+                  title="Como a Respira Kids faz se sentir"
+                  subtitle="Múltipla escolha"
+                  items={stats.distribuicaoComoSeSente}
+                  barColor="verde"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="O que mais gerou confiança"
+                  subtitle="Até 2 por respondente"
+                  items={stats.distribuicaoMotivosConfianca}
+                  barColor="azul"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Como definiria a Respira Kids"
+                  subtitle="Até 3 por respondente"
+                  items={stats.distribuicaoComoDefiniria}
+                  barColor="roxo"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="O que mais surpreendeu positivamente"
+                  subtitle="Múltipla escolha"
+                  items={stats.distribuicaoSurpresaPositiva}
+                  barColor="amarelo"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="O ambiente transmite"
+                  subtitle="Múltipla escolha"
+                  items={stats.distribuicaoAmbienteTransmite}
+                  barColor="verde"
+                />
+                <PesquisaDistribuicaoBarras
+                  title="Como vê a Respira Kids hoje"
+                  items={stats.distribuicaoHojeVeComo}
+                  barColor="roxo"
+                />
+              </div>
+            </section>
 
-          {/* Comentários abertos */}
-          <section className="space-y-3">
-            <h2 className="text-lg md:text-xl font-semibold text-foreground">
-              Vozes das famílias
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <PesquisaComentariosList
-                rows={rows}
-                field="o_que_mais_ama"
-                title="O que mais amam"
-                accent="verde"
+            {/* Comentários abertos */}
+            <section className="space-y-3">
+              <h2 className="text-lg md:text-xl font-semibold text-foreground">
+                Vozes das famílias
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <PesquisaComentariosList
+                  rows={filteredRows}
+                  field="o_que_mais_ama"
+                  title="O que mais amam"
+                  accent="verde"
+                />
+                <PesquisaComentariosList
+                  rows={filteredRows}
+                  field="o_que_melhorar"
+                  title="Sugestões de melhoria"
+                  accent="amarelo"
+                />
+              </div>
+            </section>
+          </TabsContent>
+
+          {/* ============================================================ */}
+          {/* INSIGHTS                                                     */}
+          {/* ============================================================ */}
+          <TabsContent value="insights" className="space-y-6">
+            {/* Header da seção insights */}
+            <Card className="bg-bege-fundo/40 border-azul-respira/30">
+              <CardContent className="p-4 flex items-start gap-3">
+                <Lightbulb className="w-5 h-5 text-amarelo-pipa shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Insights estratégicos correlacionados
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Cruzamentos para entender padrões de satisfação, fontes de
+                    aquisição mais eficazes e perfil de quem mais ama (e de quem
+                    reclama).
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* NPS por dimensão */}
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <PesquisaNpsSegmentado
+                title="NPS por canal de aquisição"
+                subtitle="Qual canal traz famílias mais satisfeitas?"
+                segmentos={insights.npsPorCanal}
               />
-              <PesquisaComentariosList
-                rows={rows}
-                field="o_que_melhorar"
-                title="Sugestões de melhoria"
-                accent="amarelo"
+              <PesquisaNpsSegmentado
+                title="NPS por tempo de acompanhamento"
+                subtitle="A satisfação aumenta ou diminui com o tempo?"
+                segmentos={insights.npsPorTempoAcompanhamento}
               />
-            </div>
-          </section>
-        </>
+              <PesquisaNpsSegmentado
+                title="NPS por idade do filho"
+                subtitle="Algum recorte etário se destaca?"
+                segmentos={insights.npsPorIdadeFilho}
+              />
+              <PesquisaNpsSegmentado
+                title="NPS por motivo principal"
+                subtitle="Quais demandas geram mais promotores?"
+                segmentos={insights.npsPorMotivo}
+              />
+            </section>
+
+            {/* Ranking de pediatras */}
+            <PesquisaRankingPediatras ranking={insights.rankingPediatras} />
+
+            {/* Correlações */}
+            <section className="space-y-3">
+              <h2 className="text-lg md:text-xl font-semibold text-foreground">
+                Correlações
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <PesquisaCorrelacaoCard
+                  title="Confiança ↔ Indicação"
+                  subtitle="Quem confia mais, indica mais?"
+                  xLabel="Confiança"
+                  yLabel="Indicação"
+                  correlacao={insights.correlacaoConfiancaIndicacao}
+                />
+                <PesquisaCorrelacaoCard
+                  title="Custo-benefício ↔ Indicação"
+                  subtitle="Boa percepção de valor leva à indicação?"
+                  xLabel="Custo-benefício"
+                  yLabel="Indicação"
+                  correlacao={insights.correlacaoCustoBeneficioIndicacao}
+                />
+              </div>
+            </section>
+
+            {/* Perfis dos grupos NPS */}
+            <section className="space-y-3">
+              <h2 className="text-lg md:text-xl font-semibold text-foreground">
+                Perfil dos grupos NPS
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Comparativo do que cada grupo valoriza, sente e comenta.
+              </p>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <PesquisaPerfilGrupoCard
+                  title="Promotores"
+                  subtitle="Notas 9 e 10"
+                  perfil={insights.perfilPromotores}
+                  tone="verde"
+                />
+                <PesquisaPerfilGrupoCard
+                  title="Neutros"
+                  subtitle="Notas 7 e 8"
+                  perfil={insights.perfilNeutros}
+                  tone="amarelo"
+                />
+                <PesquisaPerfilGrupoCard
+                  title="Detratores"
+                  subtitle="Notas 1 a 6"
+                  perfil={insights.perfilDetratores}
+                  tone="vermelho"
+                />
+              </div>
+            </section>
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );
