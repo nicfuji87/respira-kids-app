@@ -406,9 +406,12 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   return (
     <div className={cn('space-y-6', className)}>
       {/* Campo de busca e filtros */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* AI dev note: busca ocupa a linha toda (w-full) até xl; filtros usam flex-wrap.
+          Antes o container virava uma única linha já em sm (640px), espremendo a busca
+          em tablets/telas médias - o campo ficava minúsculo e o texto digitado não aparecia. */}
+      <div className="flex flex-col xl:flex-row gap-3">
         {/* Campo de busca com autocomplete */}
-        <div className="relative flex-1">
+        <div className="relative w-full xl:flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
           <Input
             type="text"
@@ -422,82 +425,86 @@ export const PatientsList: React.FC<PatientsListProps> = ({
           )}
         </div>
 
-        {/* Filtro de ordenação */}
-        <div className="flex gap-2">
+        {/* Filtros - AI dev note: flex-wrap permite que os botoes quebrem linha em
+            telas menores, mantendo a busca utilizavel */}
+        <div className="flex flex-wrap gap-2">
+          {/* Filtro de ordenação */}
+          <div className="flex gap-2">
+            <Button
+              variant={sortBy === 'nome' ? 'default' : 'outline'}
+              size="default"
+              onClick={() => {
+                setSortBy('nome');
+                setCurrentPage(1);
+              }}
+              className="flex items-center gap-2"
+            >
+              <SortAsc className="h-4 w-4" />
+              <span className="hidden sm:inline">Alfabético</span>
+            </Button>
+            <Button
+              variant={sortBy === 'updated_at' ? 'default' : 'outline'}
+              size="default"
+              onClick={() => {
+                setSortBy('updated_at');
+                setSelectedLetter(null); // Limpar filtro de letra ao ordenar por data
+                setCurrentPage(1);
+              }}
+              className="flex items-center gap-2"
+            >
+              <Clock className="h-4 w-4" />
+              <span className="hidden sm:inline">Últimos atualizados</span>
+            </Button>
+          </div>
+
+          {/* Botão de filtro de pediatras */}
           <Button
-            variant={sortBy === 'nome' ? 'default' : 'outline'}
+            variant={selectedPediatras.length > 0 ? 'default' : 'outline'}
             size="default"
-            onClick={() => {
-              setSortBy('nome');
-              setCurrentPage(1);
-            }}
+            onClick={() => setShowPediatraFilter(!showPediatraFilter)}
             className="flex items-center gap-2"
           >
-            <SortAsc className="h-4 w-4" />
-            <span className="hidden sm:inline">Alfabético</span>
+            <Filter className="h-4 w-4" />
+            <span className="hidden sm:inline">Pediatras</span>
+            {selectedPediatras.length > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {selectedPediatras.length}
+              </Badge>
+            )}
           </Button>
+
+          {/* Botão de filtro de último atendimento */}
           <Button
-            variant={sortBy === 'updated_at' ? 'default' : 'outline'}
+            variant={lastAppointmentDays !== null ? 'default' : 'outline'}
             size="default"
-            onClick={() => {
-              setSortBy('updated_at');
-              setSelectedLetter(null); // Limpar filtro de letra ao ordenar por data
-              setCurrentPage(1);
-            }}
+            onClick={() => setShowAppointmentFilter(!showAppointmentFilter)}
             className="flex items-center gap-2"
           >
-            <Clock className="h-4 w-4" />
-            <span className="hidden sm:inline">Últimos atualizados</span>
+            <CalendarDays className="h-4 w-4" />
+            <span className="hidden sm:inline">Último Atend.</span>
+            {lastAppointmentDays !== null && (
+              <Badge variant="secondary" className="ml-1">
+                {lastAppointmentDays}d
+              </Badge>
+            )}
+          </Button>
+
+          {/* Botão de filtro de status de contrato */}
+          <Button
+            variant={contractStatus !== null ? 'default' : 'outline'}
+            size="default"
+            onClick={() => setShowContractFilter(!showContractFilter)}
+            className="flex items-center gap-2"
+          >
+            <FileSignature className="h-4 w-4" />
+            <span className="hidden sm:inline">Contrato</span>
+            {contractStatus !== null && (
+              <Badge variant="secondary" className="ml-1">
+                {contractStatusLabel(contractStatus)}
+              </Badge>
+            )}
           </Button>
         </div>
-
-        {/* Botão de filtro de pediatras */}
-        <Button
-          variant={selectedPediatras.length > 0 ? 'default' : 'outline'}
-          size="default"
-          onClick={() => setShowPediatraFilter(!showPediatraFilter)}
-          className="flex items-center gap-2"
-        >
-          <Filter className="h-4 w-4" />
-          <span className="hidden sm:inline">Pediatras</span>
-          {selectedPediatras.length > 0 && (
-            <Badge variant="secondary" className="ml-1">
-              {selectedPediatras.length}
-            </Badge>
-          )}
-        </Button>
-
-        {/* Botão de filtro de último atendimento */}
-        <Button
-          variant={lastAppointmentDays !== null ? 'default' : 'outline'}
-          size="default"
-          onClick={() => setShowAppointmentFilter(!showAppointmentFilter)}
-          className="flex items-center gap-2"
-        >
-          <CalendarDays className="h-4 w-4" />
-          <span className="hidden sm:inline">Último Atend.</span>
-          {lastAppointmentDays !== null && (
-            <Badge variant="secondary" className="ml-1">
-              {lastAppointmentDays}d
-            </Badge>
-          )}
-        </Button>
-
-        {/* Botão de filtro de status de contrato */}
-        <Button
-          variant={contractStatus !== null ? 'default' : 'outline'}
-          size="default"
-          onClick={() => setShowContractFilter(!showContractFilter)}
-          className="flex items-center gap-2"
-        >
-          <FileSignature className="h-4 w-4" />
-          <span className="hidden sm:inline">Contrato</span>
-          {contractStatus !== null && (
-            <Badge variant="secondary" className="ml-1">
-              {contractStatusLabel(contractStatus)}
-            </Badge>
-          )}
-        </Button>
       </div>
 
       {/* Filtro de pediatras expandido */}
