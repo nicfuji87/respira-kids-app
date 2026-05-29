@@ -456,9 +456,9 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
       const statusLabel = isLoadingSurveyTracking
         ? 'Carregando status da pesquisa...'
         : isUpToDate
-          ? `Respondida em ${formatDateBR(surveyTracking.respondidaEm!.slice(0, 10))}`
+          ? `Respondida em ${formatDateBR(surveyTracking!.respondidaEm!.slice(0, 10))}`
           : isOverdue
-            ? `Renovar desde ${formatDateBR(surveyTracking.proximaEm!)}`
+            ? `Renovar desde ${formatDateBR(surveyTracking!.proximaEm!)}`
             : 'Ainda não marcada como respondida';
       const nextLabel =
         surveyTracking?.proximaEm && isUpToDate
