@@ -8,6 +8,7 @@ import {
   ClipboardList,
   AlertTriangle,
   CheckCircle2,
+  Bell,
 } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 import { ToastAction } from '@/components/primitives/toast';
@@ -200,6 +201,9 @@ export const AppointmentDetailsManager =
 
       // Estado para emissão de NFe
       const [isEmitingNfe, setIsEmitingNfe] = useState(false);
+
+      // Estado para reenvio de notificação de agendamento
+      const [isSendingReminder, setIsSendingReminder] = useState(false);
 
       // Estado para modal de evolução estruturada
       const [showEvolutionModal, setShowEvolutionModal] = useState(false);
@@ -1513,6 +1517,42 @@ export const AppointmentDetailsManager =
         }
       };
 
+      const handleResendNotification = async () => {
+        if (!appointment) return;
+
+        setIsSendingReminder(true);
+        try {
+          const { data, error } = await supabase.rpc(
+            'reenviar_lembrete_agendamento',
+            { p_agendamento_id: appointment.id }
+          );
+
+          if (error) throw error;
+
+          if (data?.success === false) {
+            toast({
+              title: 'Erro ao reenviar notificação',
+              description: data.message || 'Tente novamente.',
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          toast({
+            title: 'Notificação reenviada!',
+            description: `Lembrete de agendamento enviado para ${appointment.responsavel_legal_nome || appointment.paciente_nome}.`,
+          });
+        } catch {
+          toast({
+            title: 'Erro ao reenviar notificação',
+            description: 'Não foi possível enviar. Tente novamente.',
+            variant: 'destructive',
+          });
+        } finally {
+          setIsSendingReminder(false);
+        }
+      };
+
       const handleSaveAll = async () => {
         if (!appointment || !user) return;
 
@@ -2316,20 +2356,31 @@ export const AppointmentDetailsManager =
               </ScrollArea>
 
               {/* Footer fixo com botão Salvar - SEMPRE VISÍVEL */}
-              <div className="border-t p-4 flex justify-end gap-2 bg-background">
+              <div className="border-t p-4 flex justify-between gap-2 bg-background">
                 <Button
                   variant="outline"
-                  onClick={onClose}
-                  disabled={isSavingEvolucao}
+                  onClick={handleResendNotification}
+                  disabled={isSendingReminder || isSavingEvolucao}
+                  title="Reenviar notificação de agendamento via WhatsApp"
                 >
-                  Cancelar
+                  <Bell className="h-4 w-4 mr-2" />
+                  {isSendingReminder ? 'Enviando...' : 'Reenviar Notificação'}
                 </Button>
-                <Button
-                  onClick={handleSaveAll}
-                  disabled={isSavingEvolucao || !isEdited}
-                >
-                  {isSavingEvolucao ? 'Salvando...' : 'Salvar Alterações'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={onClose}
+                    disabled={isSavingEvolucao}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleSaveAll}
+                    disabled={isSavingEvolucao || !isEdited}
+                  >
+                    {isSavingEvolucao ? 'Salvando...' : 'Salvar Alterações'}
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
