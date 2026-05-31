@@ -9,6 +9,7 @@ import {
   Webhook,
   Target,
   HeartHandshake,
+  MessagesSquare,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -68,6 +69,14 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Configurações',
     href: '/configuracoes',
     roles: ['admin', 'profissional', 'secretaria'],
+  },
+  // AI dev note: Análise de Conversas (WhatsApp) - acesso admin + secretaria.
+  // Profissionais NÃO têm acesso (gestão de atendimento/relacionamento).
+  {
+    icon: MessagesSquare,
+    label: 'Conversas',
+    href: '/conversas',
+    roles: ['admin', 'secretaria'],
   },
   // Admin only
   {

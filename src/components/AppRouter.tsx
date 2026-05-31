@@ -20,6 +20,7 @@ import {
   RelatoriosPage,
   WebhooksPage,
   PesquisaExperienciaDashboardPage,
+  WhatsAppConversasDashboardPage,
   GoogleOAuthDebugPage,
 } from '@/pages';
 import { GoogleCalendarCallback } from '@/components/domain/auth/GoogleCalendarCallback';
@@ -261,6 +262,16 @@ export const AppRouter: React.FC = () => {
               currentUserRole={validUserRole}
             >
               <PesquisaExperienciaDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Análise de Conversas (WhatsApp) - admin + secretaria */}
+        <Route
+          path="/conversas"
+          element={
+            <ProtectedRoute path="/conversas" currentUserRole={validUserRole}>
+              <WhatsAppConversasDashboardPage />
             </ProtectedRoute>
           }
         />
