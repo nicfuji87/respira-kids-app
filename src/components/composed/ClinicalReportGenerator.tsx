@@ -1218,13 +1218,20 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
       }
     };
 
-    const handleViewReport = async (url: string) => {
+    const handleViewReport = async (
+      url: string,
+      origem: SavedReport['origem']
+    ) => {
       try {
-        // Buscar o conteúdo HTML do relatório
+        // Relatórios manuais são PDF no storage; relatórios IA são HTML
+        if (origem === 'manual' || /\.pdf(\?|$)/i.test(url)) {
+          window.open(url, '_blank');
+          return;
+        }
+
         const response = await fetch(url);
         const htmlContent = await response.text();
 
-        // Abrir nova janela e escrever o HTML diretamente
         const viewWindow = window.open('', '_blank');
         if (viewWindow) {
           viewWindow.document.write(htmlContent);
@@ -1241,8 +1248,16 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     };
 
     // AI dev note: Função para imprimir/gerar PDF de um relatório salvo
-    const handlePrintSavedReport = async (url: string) => {
+    const handlePrintSavedReport = async (
+      url: string,
+      origem: SavedReport['origem']
+    ) => {
       try {
+        if (origem === 'manual' || /\.pdf(\?|$)/i.test(url)) {
+          window.open(url, '_blank');
+          return;
+        }
+
         const response = await fetch(url);
         const htmlContent = await response.text();
 
@@ -1499,7 +1514,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                       <>
                         <Separator />
                         <p className="text-sm text-muted-foreground line-clamp-2">
-                          {report.conteudo}
+                          {report.conteudo.replace(/<[^>]+>/g, '')}
                         </p>
                       </>
                     )}
@@ -1510,7 +1525,9 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleViewReport(report.pdf_url!)}
+                            onClick={() =>
+                              handleViewReport(report.pdf_url!, report.origem)
+                            }
                           >
                             <Eye className="h-4 w-4 mr-1" />
                             Ver
@@ -1519,7 +1536,10 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              handlePrintSavedReport(report.pdf_url!)
+                              handlePrintSavedReport(
+                                report.pdf_url!,
+                                report.origem
+                              )
                             }
                           >
                             <Printer className="h-4 w-4 mr-1" />
