@@ -1,5 +1,5 @@
 // AI dev note: Barra de filtros do dashboard de Análise de Conversas (WhatsApp).
-// Filtra por período, status, intenção, tipo de demanda, sentimento, canal,
+// Filtra por período, status, intenção, tipo de demanda, sentimento, tipo de serviço,
 // busca livre e atalhos (follow-up pendente / reclamações / clínico).
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -27,12 +27,12 @@ import {
   SENTIMENTO_LABELS,
   STATUS_LABELS,
   TIPO_DEMANDA_LABELS,
+  TIPO_SERVICO_LABELS,
 } from '@/lib/whatsapp-conversas-api';
 
 interface WhatsAppDashboardFiltersProps {
   filters: Filters;
   onChange: (next: Filters) => void;
-  canaisDisponiveis: string[];
   className?: string;
 }
 
@@ -160,7 +160,7 @@ ToggleChip.displayName = 'ToggleChip';
 
 export const WhatsAppDashboardFilters =
   React.memo<WhatsAppDashboardFiltersProps>(
-    ({ filters, onChange, canaisDisponiveis, className }) => {
+    ({ filters, onChange, className }) => {
       const totalActiveFilters = useMemo(() => {
         let c = 0;
         if (filters.startDate) c++;
@@ -170,17 +170,12 @@ export const WhatsAppDashboardFilters =
         c += filters.intencoes?.length || 0;
         c += filters.tiposDemanda?.length || 0;
         c += filters.sentimentos?.length || 0;
-        c += filters.canais?.length || 0;
+        c += filters.tiposServico?.length || 0;
         if (filters.apenasFollowup) c++;
         if (filters.apenasReclamacoes) c++;
         if (filters.apenasClinico) c++;
         return c;
       }, [filters]);
-
-      const canalOptions = useMemo(
-        () => canaisDisponiveis.map((c) => ({ value: c, label: c })),
-        [canaisDisponiveis]
-      );
 
       return (
         <Card className={cn('overflow-visible', className)}>
@@ -295,11 +290,12 @@ export const WhatsAppDashboardFilters =
                 onChange={(next) => onChange({ ...filters, sentimentos: next })}
               />
               <MultiSelectFilter
-                label="Canal"
-                options={canalOptions}
-                selected={filters.canais || []}
-                onChange={(next) => onChange({ ...filters, canais: next })}
-                emptyLabel="Sem canais registrados"
+                label="Tipo de serviço"
+                options={toOptions(TIPO_SERVICO_LABELS)}
+                selected={filters.tiposServico || []}
+                onChange={(next) =>
+                  onChange({ ...filters, tiposServico: next })
+                }
               />
             </div>
 

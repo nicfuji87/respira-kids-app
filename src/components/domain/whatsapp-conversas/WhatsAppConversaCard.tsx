@@ -10,11 +10,14 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
+  Activity,
   AlertTriangle,
   Baby,
   Check,
   CircleSlash,
   Clock,
+  DollarSign,
+  Home,
   MessageSquare,
   Phone,
   RotateCcw,
@@ -25,10 +28,12 @@ import {
 import type { WhatsAppConversaRow } from '@/types/whatsapp-conversas';
 import {
   INTENCAO_LABELS,
+  LOCAL_ATENDIMENTO_LABELS,
   RESPONSAVEL_LABELS,
   SENTIMENTO_LABELS,
   STATUS_LABELS,
   TIPO_DEMANDA_LABELS,
+  TIPO_SERVICO_LABELS,
   URGENCIA_LABELS,
   labelFor,
 } from '@/lib/whatsapp-conversas-api';
@@ -77,17 +82,27 @@ const POSITIVE_FLAGS: FlagDef[] = [
   { key: 'confirmacao_consulta', label: 'Confirmou consulta' },
   { key: 'pagamento_confirmado', label: 'Pagou' },
   { key: 'nota_fiscal_enviada', label: 'NF enviada' },
-  { key: 'avaliacao_google_solicitada', label: 'Avaliação Google' },
   { key: 'pesquisa_satisfacao_enviada', label: 'Pesquisa enviada' },
+  { key: 'resolvido_primeiro_contato', label: 'Resolvido no 1º contato' },
+  { key: 'indicacao_pediatra_mencionada', label: 'Indicação pediatra' },
 ];
 
 const ALERT_FLAGS: FlagDef[] = [
-  { key: 'no_show_detectado', label: 'No-show' },
   { key: 'cancelamento_detectado', label: 'Cancelou' },
   { key: 'remarcacao_solicitada', label: 'Remarcação' },
   { key: 'pagamento_solicitado', label: 'Cobrança em aberto' },
-  { key: 'possivel_excesso_automacao', label: 'Excesso de automação' },
+  { key: 'solicitou_encaixe', label: 'Pediu encaixe' },
 ];
+
+function fmtValor(v: number | null): string | null {
+  if (typeof v !== 'number' || v <= 0) return null;
+  return v.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
 
 function fmt(dateStr: string | null): string {
   if (!dateStr) return '—';
@@ -160,6 +175,19 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
                 {labelFor(TIPO_DEMANDA_LABELS, row.tipo_demanda)}
               </Badge>
             )}
+            {row.tipo_servico_mencionado &&
+              row.tipo_servico_mencionado !== 'nao_informado' && (
+                <Badge variant="outline" className="font-normal gap-1">
+                  <Activity className="w-3 h-3" />
+                  {labelFor(TIPO_SERVICO_LABELS, row.tipo_servico_mencionado)}
+                </Badge>
+              )}
+            {row.local_atendimento === 'domiciliar' && (
+              <Badge variant="outline" className="font-normal gap-1">
+                <Home className="w-3 h-3" />
+                {labelFor(LOCAL_ATENDIMENTO_LABELS, row.local_atendimento)}
+              </Badge>
+            )}
             {row.sentimento_cliente && (
               <span
                 className={cn(
@@ -187,13 +215,32 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
                   Urgência {labelFor(URGENCIA_LABELS, row.urgencia_clinica)}
                 </Badge>
               )}
-            {row.risco_lgpd === 'alto' && (
+            {(row.risco_lgpd === 'alto' || row.risco_lgpd === 'medio') && (
               <Badge
                 variant="outline"
-                className="font-normal gap-1 border-vermelho-kids/50 text-vermelho-kids"
+                className={cn(
+                  'font-normal gap-1',
+                  row.risco_lgpd === 'alto'
+                    ? 'border-vermelho-kids/50 text-vermelho-kids'
+                    : 'border-amarelo-pipa/50 text-roxo-titulo'
+                )}
               >
                 <ShieldAlert className="w-3 h-3" />
-                LGPD alto
+                LGPD {row.risco_lgpd}
+              </Badge>
+            )}
+            {(row.mensagens_automaticas || 0) > 0 && (
+              <Badge
+                variant="outline"
+                className="font-normal text-muted-foreground"
+              >
+                {row.mensagens_automaticas} msg autom.
+              </Badge>
+            )}
+            {row.fora_horario_comercial && (
+              <Badge variant="outline" className="font-normal gap-1">
+                <Clock className="w-3 h-3" />
+                Fora do horário
               </Badge>
             )}
           </div>
@@ -251,13 +298,20 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground border-t pt-2">
             <span className="inline-flex items-center gap-1">
               <MessageSquare className="w-3.5 h-3.5" />
-              {row.total_mensagens} msgs ({row.mensagens_cliente} cliente /{' '}
-              {row.mensagens_atendente} equipe)
+              {row.total_mensagens} msgs analisadas ({row.mensagens_cliente}{' '}
+              cliente / {row.mensagens_atendente} equipe)
+              {row.versao_analise > 1 ? ` · v${row.versao_analise}` : ''}
             </span>
             {typeof row.tempo_resposta_inicial_minutos === 'number' && (
               <span className="inline-flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" />
                 1ª resposta: {row.tempo_resposta_inicial_minutos} min
+              </span>
+            )}
+            {fmtValor(row.valor_mencionado) && (
+              <span className="inline-flex items-center gap-1">
+                <DollarSign className="w-3.5 h-3.5" />
+                {fmtValor(row.valor_mencionado)}
               </span>
             )}
             <span>Última: {fmt(row.ultima_mensagem_em)}</span>

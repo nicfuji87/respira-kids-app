@@ -36,13 +36,26 @@ export const INTENCAO_LABELS: Record<string, string> = {
   duvida_valor: 'Dúvida de valor',
   duvida_clinica: 'Dúvida clínica',
   financeiro: 'Financeiro',
-  documento: 'Documento',
-  atestado: 'Atestado',
+  documento: 'Documento / atestado',
   nota_fiscal: 'Nota fiscal',
   avaliacao: 'Avaliação',
   pos_consulta: 'Pós-consulta',
   sem_atendimento: 'Sem atendimento',
   outros: 'Outros',
+};
+
+export const TIPO_SERVICO_LABELS: Record<string, string> = {
+  respiratoria: 'Fisio respiratória',
+  motora: 'Fisio motora',
+  avaliacao: 'Avaliação',
+  multiplos: 'Múltiplos',
+  nao_informado: 'Não informado',
+};
+
+export const LOCAL_ATENDIMENTO_LABELS: Record<string, string> = {
+  clinica: 'Clínica',
+  domiciliar: 'Domiciliar',
+  nao_informado: 'Não informado',
 };
 
 export const TIPO_DEMANDA_LABELS: Record<string, string> = {
@@ -207,7 +220,8 @@ export function applyFilters(
       return false;
     if (!passesArrayFilter(filters.sentimentos, row.sentimento_cliente))
       return false;
-    if (!passesArrayFilter(filters.canais, row.canal_origem)) return false;
+    if (!passesArrayFilter(filters.tiposServico, row.tipo_servico_mencionado))
+      return false;
 
     if (filters.apenasFollowup) {
       if (!row.necessita_followup || row.followup_status !== 'pendente')
@@ -221,7 +235,9 @@ export function applyFilters(
         row.contato_nome,
         row.contato_telefone,
         row.resumo,
-        row.profissional_mencionado,
+        ...(Array.isArray(row.profissional_mencionado)
+          ? row.profissional_mencionado
+          : []),
       ]
         .filter(Boolean)
         .join(' ')
@@ -362,12 +378,23 @@ export function computeStats(
     agendamentosRealizados: countBool(rows, 'agendamento_realizado'),
     remarcacoes: countBool(rows, 'remarcacao_solicitada'),
     cancelamentos: countBool(rows, 'cancelamento_detectado'),
-    noShows: countBool(rows, 'no_show_detectado'),
     pagamentosSolicitados: countBool(rows, 'pagamento_solicitado'),
     pagamentosConfirmados: countBool(rows, 'pagamento_confirmado'),
     notasFiscaisEnviadas: countBool(rows, 'nota_fiscal_enviada'),
     pesquisasSatisfacao: countBool(rows, 'pesquisa_satisfacao_enviada'),
-    avaliacoesGoogle: countBool(rows, 'avaliacao_google_solicitada'),
+    foraHorarioComercial: countBool(rows, 'fora_horario_comercial'),
+
+    atendimentosDomiciliares: rows.filter(
+      (r) => r.local_atendimento === 'domiciliar'
+    ).length,
+    indicacoesPediatra: countBool(rows, 'indicacao_pediatra_mencionada'),
+    resolvidosPrimeiroContato: countBool(rows, 'resolvido_primeiro_contato'),
+    encaixesSolicitados: countBool(rows, 'solicitou_encaixe'),
+    valorMencionadoTotal: rows.reduce(
+      (acc, r) =>
+        acc + (typeof r.valor_mencionado === 'number' ? r.valor_mencionado : 0),
+      0
+    ),
 
     tempoMedioPrimeiraResposta: media(primeirasRespostas),
     tempoMedioResposta: media(respostasMedias),
@@ -387,7 +414,9 @@ export function computeStats(
     urgenciaClinicaAlta: rows.filter((r) => r.urgencia_clinica === 'alta')
       .length,
     triagemHumana: countBool(rows, 'necessita_triagem_humana'),
-    excessoAutomacao: countBool(rows, 'possivel_excesso_automacao'),
+    conversasComAutomacao: rows.filter(
+      (r) => (r.mensagens_automaticas || 0) > 0
+    ).length,
     riscoLgpdAlto: rows.filter((r) => r.risco_lgpd === 'alto').length,
 
     distribuicaoStatus: distribuicaoSingle(
@@ -411,7 +440,11 @@ export function computeStats(
       SENTIMENTO_LABELS
     ),
     distribuicaoEtapa: distribuicaoSingle(rows, 'etapa_conversa', ETAPA_LABELS),
-    distribuicaoCanal: distribuicaoSingle(rows, 'canal_origem'),
+    distribuicaoTipoServico: distribuicaoSingle(
+      rows,
+      'tipo_servico_mencionado',
+      TIPO_SERVICO_LABELS
+    ),
     distribuicaoUrgenciaClinica: distribuicaoSingle(
       rows.filter((r) => r.tem_conteudo_clinico),
       'urgencia_clinica',
@@ -465,21 +498,21 @@ export function computeInsights(
       r.status_conversa === 'aguardando_equipe'
   ).length;
 
-  // NPS operacional por canal = % finalizadas por canal
-  const canais = new Map<string, { total: number; finalizadas: number }>();
+  // Resolução por tipo de serviço = % finalizadas por tipo de serviço
+  const servicos = new Map<string, { total: number; finalizadas: number }>();
   for (const r of rows) {
-    const c = r.canal_origem || 'nao_informado';
-    const entry = canais.get(c) || { total: 0, finalizadas: 0 };
+    const c = r.tipo_servico_mencionado || 'nao_informado';
+    const entry = servicos.get(c) || { total: 0, finalizadas: 0 };
     entry.total += 1;
     if (r.status_conversa === 'finalizada') entry.finalizadas += 1;
-    canais.set(c, entry);
+    servicos.set(c, entry);
   }
-  const npsOperacionalPorCanal: DistribuicaoItem[] = Array.from(
-    canais.entries()
+  const resolucaoPorTipoServico: DistribuicaoItem[] = Array.from(
+    servicos.entries()
   )
     .map(([value, v]) => ({
       value,
-      label: value === 'nao_informado' ? 'Não informado' : value,
+      label: TIPO_SERVICO_LABELS[value] || value,
       count: v.total,
       percent: pct(v.finalizadas, v.total),
     }))
@@ -508,23 +541,16 @@ export function computeInsights(
       rows.filter((r) => r.reclamacao_identificada),
       'motivo_insatisfacao'
     ).slice(0, 10),
+    topProfissionais: distribuicaoArray(rows, 'profissional_mencionado').slice(
+      0,
+      10
+    ),
 
     taxaResolucao: pct(finalizadas, rows.length),
     taxaPendenteAtendente: pct(pendentesAtendente, rows.length),
 
-    npsOperacionalPorCanal,
+    resolucaoPorTipoServico,
 
     sugestoesMelhoria: sugestoes,
   };
-}
-
-/**
- * Lista os valores distintos de canal_origem presentes nas conversas (para filtros).
- */
-export function extractCanais(rows: WhatsAppConversaRow[]): string[] {
-  const set = new Set<string>();
-  for (const row of rows) {
-    if (row.canal_origem) set.add(row.canal_origem);
-  }
-  return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }

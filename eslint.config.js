@@ -11,6 +11,7 @@ export default tseslint.config([
       'dist/',
       'src/components/ui/',
       'components.json',
+      'scripts/n8n/',
     ],
   },
   {

@@ -1,13 +1,96 @@
 // AI dev note: Tipos da análise conversacional de WhatsApp (Chatwoot).
 // Tabela: public.whatsapp_conversas — 1 linha por conversa (chatwoot_conversa_id).
 // Escrita pelo n8n (service_role); leitura/atualização pelo dashboard (admin + secretaria).
-// Os enums de strings (status, intenção, etc.) são definidos no prompt da IA no n8n.
+// AI dev note: Os enums abaixo são a fonte única de verdade do dashboard e DEVEM
+// espelhar exatamente os CHECK constraints da tabela e os valores do prompt da IA (n8n).
+// Não adicione valores aqui sem atualizar o CHECK correspondente (migração) e o prompt.
 
 export type FollowupStatus =
   | 'pendente'
   | 'concluido'
   | 'ignorado'
   | 'nao_aplicavel';
+
+export type IntencaoConversa =
+  | 'agendamento'
+  | 'confirmacao'
+  | 'remarcacao'
+  | 'cancelamento'
+  | 'duvida_valor'
+  | 'duvida_clinica'
+  | 'financeiro'
+  | 'documento'
+  | 'nota_fiscal'
+  | 'avaliacao'
+  | 'pos_consulta'
+  | 'sem_atendimento'
+  | 'outros';
+
+export type TipoDemanda =
+  | 'clinica'
+  | 'administrativa'
+  | 'financeira'
+  | 'comercial'
+  | 'relacionamento'
+  | 'mista'
+  | 'outros';
+
+export type StatusConversa =
+  | 'finalizada'
+  | 'pendente_atendente'
+  | 'pendente_cliente'
+  | 'aguardando_equipe'
+  | 'aguardando_data_futura'
+  | 'sem_atendimento';
+
+export type EtapaConversa =
+  | 'novo_lead'
+  | 'paciente_ativo'
+  | 'pos_consulta'
+  | 'cobranca'
+  | 'recorrente'
+  | 'suporte'
+  | 'outros';
+
+export type UrgenciaClinica = 'baixa' | 'media' | 'alta' | 'nao_aplicavel';
+
+export type SentimentoCliente =
+  | 'positivo'
+  | 'satisfeito'
+  | 'neutro'
+  | 'ansioso'
+  | 'preocupado'
+  | 'frustrado'
+  | 'negativo';
+
+export type QualidadeAtendimento = 'otimo' | 'bom' | 'regular' | 'ruim';
+
+export type NivelEnum = 'nenhum' | 'baixo' | 'medio' | 'alto';
+
+export type ResponsavelSugerido =
+  | 'recepcao'
+  | 'fisioterapeuta'
+  | 'financeiro'
+  | 'gestao'
+  | 'medico_ou_triagem'
+  | 'nao_aplicavel';
+
+export type PrazoFollowup =
+  | 'hoje'
+  | '24h'
+  | '48h'
+  | 'esta_semana'
+  | 'antes_da_consulta'
+  | 'sem_prazo';
+
+export type TipoServico =
+  | 'respiratoria'
+  | 'motora'
+  | 'avaliacao'
+  | 'multiplos'
+  | 'nao_informado';
+
+export type LocalAtendimento = 'clinica' | 'domiciliar' | 'nao_informado';
 
 /**
  * Linha da tabela whatsapp_conversas (mapeamento 1:1 com as colunas).
@@ -21,7 +104,6 @@ export interface WhatsAppConversaRow {
   contato_nome: string | null;
   contato_telefone: string | null;
   pessoa_id: string | null;
-  canal_origem: string | null;
 
   // Detecção de mudança / processamento
   hash_conteudo: string | null;
@@ -54,18 +136,18 @@ export interface WhatsAppConversaRow {
 
   // Classificação (IA)
   resumo: string | null;
-  intencao_principal: string | null;
-  intencoes_secundarias: string[] | null;
-  tipo_demanda: string | null;
-  status_conversa: string | null;
-  etapa_conversa: string | null;
+  intencao_principal: IntencaoConversa | null;
+  intencoes_secundarias: IntencaoConversa[] | null;
+  tipo_demanda: TipoDemanda | null;
+  status_conversa: StatusConversa | null;
+  etapa_conversa: EtapaConversa | null;
 
   // Contexto clínico
   tem_conteudo_clinico: boolean;
   idade_paciente_mencionada: string | null;
   sintomas_mencionados: string[] | null;
   sinais_alerta_clinicos: string[] | null;
-  urgencia_clinica: string | null;
+  urgencia_clinica: UrgenciaClinica | null;
   necessita_triagem_humana: boolean;
 
   // Contexto operacional / comercial
@@ -78,46 +160,44 @@ export interface WhatsAppConversaRow {
   confirmacao_consulta: boolean;
   remarcacao_solicitada: boolean;
   cancelamento_detectado: boolean;
-  no_show_detectado: boolean;
   pagamento_solicitado: boolean;
   pagamento_confirmado: boolean;
   nota_fiscal_enviada: boolean;
-  atestado_solicitado_ou_enviado: boolean;
   pesquisa_satisfacao_enviada: boolean;
-  avaliacao_google_solicitada: boolean;
-  profissional_mencionado: string | null;
-  data_consulta_mencionada: string | null;
+  profissional_mencionado: string[] | null;
+  data_consulta_mencionada: string[] | null;
+
+  // Serviço / atendimento (novos)
+  tipo_servico_mencionado: TipoServico | null;
+  local_atendimento: LocalAtendimento | null;
+  valor_mencionado: number | null;
+  indicacao_pediatra_mencionada: boolean;
+  solicitou_encaixe: boolean;
+  resolvido_primeiro_contato: boolean;
 
   // Experiência / qualidade
-  sentimento_cliente: string | null;
-  nivel_ansiedade_cliente: string | null;
-  tom_atendimento: string | null;
-  qualidade_atendimento: string | null;
+  sentimento_cliente: SentimentoCliente | null;
+  qualidade_atendimento: QualidadeAtendimento | null;
   pontos_de_atrito: string[] | null;
   sugestao_melhoria: string | null;
 
   // Reclamação / insatisfação
   reclamacao_identificada: boolean;
-  nivel_insatisfacao: string | null;
+  nivel_insatisfacao: NivelEnum | null;
   motivo_insatisfacao: string | null;
   requer_atencao_admin: boolean;
   reclamacao_alertada_em: string | null;
 
-  // Automação
-  possui_mensagem_automatica: boolean;
-  possivel_excesso_automacao: boolean;
-  mensagens_automaticas_repetidas: boolean;
-
   // LGPD
   dados_sensiveis_detectados: boolean;
   tipos_dados_sensiveis: string[] | null;
-  risco_lgpd: string | null;
+  risco_lgpd: NivelEnum | null;
 
   // Follow-up / próxima ação
   necessita_followup: boolean;
   acao_recomendada: string | null;
-  responsavel_sugerido: string | null;
-  prazo_followup: string | null;
+  responsavel_sugerido: ResponsavelSugerido | null;
+  prazo_followup: PrazoFollowup | null;
   followup_status: FollowupStatus;
   followup_concluido_em: string | null;
   followup_concluido_por: string | null;
@@ -141,7 +221,7 @@ export interface WhatsAppDashboardFilters {
   intencoes?: string[];
   tiposDemanda?: string[];
   sentimentos?: string[];
-  canais?: string[];
+  tiposServico?: string[];
   /** Busca livre (nome, telefone, resumo). */
   search?: string;
   apenasFollowup?: boolean;
@@ -171,12 +251,18 @@ export interface WhatsAppConversasStats {
   agendamentosRealizados: number;
   remarcacoes: number;
   cancelamentos: number;
-  noShows: number;
   pagamentosSolicitados: number;
   pagamentosConfirmados: number;
   notasFiscaisEnviadas: number;
   pesquisasSatisfacao: number;
-  avaliacoesGoogle: number;
+  foraHorarioComercial: number;
+
+  // Serviço / atendimento (novos)
+  atendimentosDomiciliares: number;
+  indicacoesPediatra: number;
+  resolvidosPrimeiroContato: number;
+  encaixesSolicitados: number;
+  valorMencionadoTotal: number;
 
   // Atendimento (SLA)
   tempoMedioPrimeiraResposta: number | null;
@@ -192,7 +278,7 @@ export interface WhatsAppConversasStats {
   conteudoClinico: number;
   urgenciaClinicaAlta: number;
   triagemHumana: number;
-  excessoAutomacao: number;
+  conversasComAutomacao: number;
   riscoLgpdAlto: number;
 
   // Distribuições
@@ -201,7 +287,7 @@ export interface WhatsAppConversasStats {
   distribuicaoTipoDemanda: DistribuicaoItem[];
   distribuicaoSentimento: DistribuicaoItem[];
   distribuicaoEtapa: DistribuicaoItem[];
-  distribuicaoCanal: DistribuicaoItem[];
+  distribuicaoTipoServico: DistribuicaoItem[];
   distribuicaoUrgenciaClinica: DistribuicaoItem[];
   distribuicaoResponsavel: DistribuicaoItem[];
   conversasPorDia: Array<{ data: string; total: number }>;
@@ -225,13 +311,14 @@ export interface WhatsAppConversasInsights {
   topPontosAtrito: DistribuicaoItem[];
   topSintomas: DistribuicaoItem[];
   topMotivosInsatisfacao: DistribuicaoItem[];
+  topProfissionais: DistribuicaoItem[];
 
   // Resolução
   taxaResolucao: number; // % finalizada
   taxaPendenteAtendente: number; // %
 
-  // Qualidade por canal e demanda
-  npsOperacionalPorCanal: DistribuicaoItem[]; // % finalizadas por canal
+  // Resolução por tipo de serviço (% finalizadas)
+  resolucaoPorTipoServico: DistribuicaoItem[];
 
   // Sugestões da IA (texto)
   sugestoesMelhoria: string[];

@@ -35,7 +35,6 @@ import {
   applyFilters,
   computeInsights,
   computeStats,
-  extractCanais,
   fetchWhatsAppConversas,
   updateFollowupStatus,
 } from '@/lib/whatsapp-conversas-api';
@@ -56,6 +55,7 @@ import {
   Clock,
   DollarSign,
   Flame,
+  Home,
   Inbox,
   LayoutDashboard,
   Lightbulb,
@@ -63,7 +63,6 @@ import {
   MessagesSquare,
   RefreshCw,
   ShieldAlert,
-  Star,
   Stethoscope,
   TrendingUp,
   Users,
@@ -82,6 +81,15 @@ function formatMinutes(min: number | null): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
+function formatBRL(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 }
 
 export const WhatsAppConversasDashboardPage: React.FC = () => {
@@ -119,7 +127,6 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
   );
   const stats = useMemo(() => computeStats(filteredRows), [filteredRows]);
   const insights = useMemo(() => computeInsights(filteredRows), [filteredRows]);
-  const canais = useMemo(() => extractCanais(allRows), [allRows]);
 
   // Follow-up: pendentes primeiro
   const followupRows = useMemo(() => {
@@ -234,11 +241,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
       )}
 
       {/* Filtros */}
-      <WhatsAppDashboardFilters
-        filters={filters}
-        onChange={setFilters}
-        canaisDisponiveis={canais}
-      />
+      <WhatsAppDashboardFilters filters={filters} onChange={setFilters} />
 
       {/* Loading inicial */}
       {loading && allRows.length === 0 && (
@@ -374,6 +377,38 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
               />
             </div>
 
+            {/* KPIs de serviço / atendimento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <WhatsAppStatCard
+                icon={Home}
+                tone="roxo"
+                label="Atend. domiciliar"
+                value={stats.atendimentosDomiciliares}
+                hint="conversas sobre atendimento em casa"
+              />
+              <WhatsAppStatCard
+                icon={CheckCircle2}
+                tone="verde"
+                label="Resolvido no 1º contato"
+                value={stats.resolvidosPrimeiroContato}
+                hint="eficiência do atendimento"
+              />
+              <WhatsAppStatCard
+                icon={Stethoscope}
+                tone="azul"
+                label="Indicação de pediatra"
+                value={stats.indicacoesPediatra}
+                hint="origem da demanda"
+              />
+              <WhatsAppStatCard
+                icon={DollarSign}
+                tone="verde"
+                label="Valores mencionados"
+                value={formatBRL(stats.valorMencionadoTotal)}
+                hint={`${stats.encaixesSolicitados} encaixes solicitados`}
+              />
+            </div>
+
             {/* Volume por dia */}
             <Card>
               <CardHeader className="pb-2">
@@ -453,10 +488,11 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
                 barColor="roxo"
               />
               <WhatsAppDistribuicaoBarras
-                title="Canal de origem"
-                items={stats.distribuicaoCanal}
+                title="Tipo de serviço"
+                subtitle="Fisioterapia respiratória, motora, avaliação"
+                items={stats.distribuicaoTipoServico}
                 barColor="azul"
-                emptyLabel="Canal não informado nas conversas"
+                emptyLabel="Tipo de serviço não informado"
               />
             </div>
           </TabsContent>
@@ -635,16 +671,16 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
               <WhatsAppStatCard
                 icon={Bot}
                 tone="roxo"
-                label="Excesso de automação"
-                value={stats.excessoAutomacao}
-                hint="conversas com automação demais"
+                label="Conversas com automação"
+                value={stats.conversasComAutomacao}
+                hint="receberam mensagens automáticas"
               />
               <WhatsAppStatCard
-                icon={Star}
+                icon={ShieldAlert}
                 tone="amarelo"
-                label="Avaliações solicitadas"
-                value={stats.avaliacoesGoogle}
-                hint={`${stats.pesquisasSatisfacao} pesquisas de satisfação`}
+                label="Risco LGPD alto"
+                value={stats.riscoLgpdAlto}
+                hint={`${stats.foraHorarioComercial} fora do horário comercial`}
               />
             </div>
 
@@ -663,11 +699,18 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
                 emptyLabel="Nenhum sintoma registrado"
               />
               <WhatsAppDistribuicaoBarras
-                title="Resolução por canal"
-                subtitle="% de conversas finalizadas por canal"
-                items={insights.npsOperacionalPorCanal}
+                title="Resolução por tipo de serviço"
+                subtitle="% de conversas finalizadas por tipo de serviço"
+                items={insights.resolucaoPorTipoServico}
                 barColor="verde"
-                emptyLabel="Canal não informado"
+                emptyLabel="Tipo de serviço não informado"
+              />
+              <WhatsAppDistribuicaoBarras
+                title="Profissionais mais mencionados"
+                subtitle="Citados nas conversas"
+                items={insights.topProfissionais}
+                barColor="roxo"
+                emptyLabel="Nenhum profissional mencionado"
               />
               <Card className="overflow-hidden">
                 <CardHeader className="pb-2">
