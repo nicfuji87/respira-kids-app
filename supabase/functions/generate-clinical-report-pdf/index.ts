@@ -36,6 +36,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+const RESPIRA_KIDS_ADDRESS =
+  'Endereço Respira Kids - SEPS 709/909 Centro Medico Julio Adnet Bloco A Sala 311 - Asa Sul, Brasília - DF, 70390-095';
+
 // AI dev note: Cache em escopo de módulo (sobrevive entre invocações no mesmo worker)
 type LoadedImage = { base64: string; width: number; height: number };
 const imageCache = new Map<string, LoadedImage>();
@@ -199,7 +202,7 @@ Deno.serve(async (req) => {
     const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 20;
     const headerHeight = 32;
-    const footerHeight = 22;
+    const footerHeight = 30;
     const contentWidth = pageWidth - 2 * marginX;
     const contentTop = headerHeight + 4;
     const contentBottom = pageHeight - footerHeight;
@@ -261,9 +264,23 @@ Deno.serve(async (req) => {
 
     const addFooter = (pageNum: number) => {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
+      doc.setFontSize(7);
       doc.setTextColor(110, 110, 110);
+
       const pageNumberY = pageHeight - 8;
+      const addressLines = doc.splitTextToSize(
+        RESPIRA_KIDS_ADDRESS,
+        contentWidth
+      );
+      const addressLineH = 3.2;
+      let footerY = pageNumberY - 10;
+
+      for (let i = addressLines.length - 1; i >= 0; i--) {
+        doc.text(addressLines[i], pageWidth / 2, footerY, { align: 'center' });
+        footerY -= addressLineH;
+      }
+
+      doc.setFontSize(8);
       const text = `Relatório Clínico - ${body.patientName} - ${formatDateBRFromISO(body.reportDate)}`;
       doc.text(text, pageWidth / 2, pageNumberY - 5, { align: 'center' });
       doc.text(`Página ${pageNum}`, pageWidth / 2, pageNumberY, {
@@ -284,7 +301,10 @@ Deno.serve(async (req) => {
 
     const normalizeSegments = (segs: InlineSegment[]): Segment[] =>
       segs.map((s) => ({
-        text: s.text ?? '',
+        text: (s.text ?? '')
+          .replace(/\u00a0/g, ' ')
+          .replace(/\t/g, ' ')
+          .replace(/ {2,}/g, ' '),
         bold: !!s.bold,
         italic: !!s.italic,
         underline: !!s.underline,

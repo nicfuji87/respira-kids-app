@@ -207,6 +207,48 @@ interface PatientSearchHit {
 
 // ===================== HTML -> Blocks parser =====================
 
+// Normaliza espaços/tabs do Google Docs antes de gerar o PDF
+function normalizeInlineText(text: string): string {
+  return text
+    .replace(/\u00a0/g, ' ')
+    .replace(/\t/g, ' ')
+    .replace(/ {2,}/g, ' ');
+}
+
+function normalizeBlockSegments(blocks: Block[]): Block[] {
+  return blocks.map((block) => {
+    if (
+      block.type !== 'paragraph' &&
+      block.type !== 'heading' &&
+      block.type !== 'list_item'
+    ) {
+      return block;
+    }
+    return {
+      ...block,
+      segments: block.segments.map((seg) => ({
+        ...seg,
+        text: normalizeInlineText(seg.text),
+      })),
+    };
+  });
+}
+
+// Linhas com data/hora (ex.: agenda de consultas) não devem usar justify
+function resolveParagraphAlign(
+  segments: InlineSegment[],
+  requested?: 'left' | 'center' | 'right' | 'justify'
+): 'left' | 'center' | 'right' | 'justify' {
+  const text = segments
+    .map((s) => s.text)
+    .join('')
+    .trim();
+  if (/^\d{2}\/\d{2}\/\d{4}.+\d{2}:\d{2}/.test(text)) {
+    return 'left';
+  }
+  return requested ?? 'justify';
+}
+
 // AI dev note: Converte o HTML do contentEditable em blocos consumíveis pela
 // Edge Function de PDF. Suporta b/i/u, h1/h2/h3, p/div, ul/ol/li e alinhamento
 // via style="text-align: ..." aplicado pelo execCommand.
@@ -233,7 +275,7 @@ function htmlToBlocks(html: string): Block[] {
     inherited: { bold: boolean; italic: boolean; underline: boolean }
   ): InlineSegment[] => {
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent || '';
+      const text = normalizeInlineText(node.textContent || '');
       if (!text) return [];
       return [
         {
@@ -251,6 +293,19 @@ function htmlToBlocks(html: string): Block[] {
     // Quebra inline: <br> vira "\n"
     if (tag === 'br') {
       return [{ text: '\n' }];
+    }
+
+    // Tabs/espaçamento do Google Docs (Apple-tab-span, white-space:pre)
+    if (
+      tag === 'span' &&
+      (el.classList.contains('Apple-tab-span') ||
+        el.style.whiteSpace === 'pre' ||
+        el.style.whiteSpace === 'pre-wrap')
+    ) {
+      const inner = el.textContent || '';
+      if (/^\s*$/.test(inner)) {
+        return [{ text: ' ' }];
+      }
     }
 
     let bold = inherited.bold;
@@ -304,7 +359,7 @@ function htmlToBlocks(html: string): Block[] {
     if (inlineSegments.length === 0) return;
     blocks.push({
       type: 'paragraph',
-      align: 'justify',
+      align: resolveParagraphAlign(inlineSegments),
       segments: inlineSegments,
     });
   };
@@ -362,7 +417,7 @@ function htmlToBlocks(html: string): Block[] {
       italic: false,
       underline: false,
     });
-    const align = getAlign(el) ?? 'justify';
+    const align = resolveParagraphAlign(segments, getAlign(el) ?? 'justify');
 
     // Div vazio = espaçador (quebra de parágrafo)
     const hasOnlyBr =
@@ -415,24 +470,26 @@ function htmlToBlocks(html: string): Block[] {
   }
 
   // Limpa blocos de parágrafo realmente vazios (sem texto e sem espacers consecutivos)
-  return blocks.filter((b, idx, arr) => {
-    if (
-      b.type !== 'paragraph' &&
-      b.type !== 'heading' &&
-      b.type !== 'list_item'
-    )
+  return normalizeBlockSegments(
+    blocks.filter((b, idx, arr) => {
+      if (
+        b.type !== 'paragraph' &&
+        b.type !== 'heading' &&
+        b.type !== 'list_item'
+      )
+        return true;
+      const text = b.segments
+        .map((s) => s.text)
+        .join('')
+        .trim();
+      if (text.length === 0) {
+        // Evita virar um parágrafo vazio
+        const prev = arr[idx - 1];
+        return prev && prev.type === 'spacer' ? false : true;
+      }
       return true;
-    const text = b.segments
-      .map((s) => s.text)
-      .join('')
-      .trim();
-    if (text.length === 0) {
-      // Evita virar um parágrafo vazio
-      const prev = arr[idx - 1];
-      return prev && prev.type === 'spacer' ? false : true;
-    }
-    return true;
-  });
+    })
+  );
 }
 
 // ===================== Componente =====================
