@@ -43,6 +43,7 @@ import {
   ArrowLeft,
   CheckCircle,
   FileText,
+  PenLine,
 } from 'lucide-react';
 import {
   Dialog,
@@ -441,13 +442,15 @@ export interface ManualClinicalReportGeneratorProps {
   onClose: () => void;
   patientId: string;
   patientName: string;
+  /** Quando informado, abre o modal em modo edição para o relatório existente */
+  editReportId?: string | null;
   /** Disparado após salvar com sucesso para a lista do parent recarregar */
   onSaved?: () => void;
 }
 
 export const ManualClinicalReportGenerator =
   React.memo<ManualClinicalReportGeneratorProps>(
-    ({ isOpen, onClose, patientId, patientName, onSaved }) => {
+    ({ isOpen, onClose, patientId, patientName, editReportId, onSaved }) => {
       const { toast } = useToast();
       const { user } = useAuth();
 
@@ -455,6 +458,7 @@ export const ManualClinicalReportGenerator =
       const savedRangeRef = useRef<Range | null>(null);
 
       const [isLoadingContext, setIsLoadingContext] = useState(false);
+      const [isLoadingReport, setIsLoadingReport] = useState(false);
       const [isEnhancing, setIsEnhancing] = useState(false);
       const [isSaving, setIsSaving] = useState(false);
       const [isSending, setIsSending] = useState(false);
@@ -488,6 +492,9 @@ export const ManualClinicalReportGenerator =
         id: string;
         pdfUrl: string;
       } | null>(null);
+      const [editingReportId, setEditingReportId] = useState<string | null>(
+        null
+      );
 
       const userRole = user?.pessoa?.role as
         | 'admin'
@@ -496,21 +503,66 @@ export const ManualClinicalReportGenerator =
         | null;
       const canUse = userRole === 'admin' || userRole === 'profissional';
 
+      const loadExistingReport = useCallback(
+        async (reportId: string) => {
+          setIsLoadingReport(true);
+          try {
+            const { data, error } = await supabase
+              .from('relatorios_medicos')
+              .select('id, conteudo, pdf_url, created_at')
+              .eq('id', reportId)
+              .eq('id_pessoa', patientId)
+              .eq('ativo', true)
+              .single();
+
+            if (error || !data) {
+              throw new Error('Relatório não encontrado');
+            }
+
+            setEditingReportId(reportId);
+            setReportDate(data.created_at.split('T')[0]);
+            requestAnimationFrame(() => {
+              if (editorRef.current) {
+                editorRef.current.innerHTML = data.conteudo || '';
+                editorRef.current.focus();
+              }
+            });
+          } catch (err) {
+            console.error('Erro ao carregar relatório:', err);
+            toast({
+              title: 'Erro ao carregar relatório',
+              description:
+                err instanceof Error ? err.message : 'Erro desconhecido',
+              variant: 'destructive',
+            });
+            onClose();
+          } finally {
+            setIsLoadingReport(false);
+          }
+        },
+        [patientId, toast, onClose]
+      );
+
       // ============== Reset ao abrir/fechar ==============
 
       useEffect(() => {
         if (isOpen) {
-          setReportDate(new Date().toISOString().split('T')[0]);
           setSavedReport(null);
           loadPatientContext();
-          // Limpa editor
-          requestAnimationFrame(() => {
-            if (editorRef.current) {
-              editorRef.current.innerHTML = '';
-              editorRef.current.focus();
-            }
-          });
+          if (editReportId) {
+            loadExistingReport(editReportId);
+          } else {
+            setEditingReportId(null);
+            setReportDate(new Date().toISOString().split('T')[0]);
+            requestAnimationFrame(() => {
+              if (editorRef.current) {
+                editorRef.current.innerHTML = '';
+                editorRef.current.focus();
+              }
+            });
+          }
         } else {
+          setEditingReportId(null);
           setTemplateOpen(false);
           setTemplateSearch('');
           setTemplateResults([]);
@@ -518,7 +570,7 @@ export const ManualClinicalReportGenerator =
           setTemplateReports([]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [isOpen, patientId]);
+      }, [isOpen, patientId, editReportId]);
 
       const loadPatientContext = useCallback(async () => {
         setIsLoadingContext(true);
@@ -1084,6 +1136,34 @@ export const ManualClinicalReportGenerator =
           // Guarda HTML em 'conteudo' (para permitir uso como modelo no futuro)
           const htmlContent = editorRef.current.innerHTML;
 
+          if (editingReportId) {
+            const updateData = {
+              conteudo: htmlContent,
+              pdf_url: publicUrl,
+              ...(user?.pessoa?.id && { atualizado_por: user.pessoa.id }),
+              updated_at: new Date().toISOString(),
+            };
+            const { error: updateError } = await supabase
+              .from('relatorios_medicos')
+              .update(updateData)
+              .eq('id', editingReportId)
+              .eq('id_pessoa', patientId);
+
+            if (updateError) {
+              throw new Error(
+                `Erro ao atualizar no banco: ${updateError.message}`
+              );
+            }
+
+            setSavedReport({ id: editingReportId, pdfUrl: publicUrl });
+            toast({
+              title: 'Relatório atualizado',
+              description: 'As alterações foram salvas. O PDF foi regenerado.',
+            });
+            onSaved?.();
+            return;
+          }
+
           const insertData = {
             id_pessoa: patientId,
             tipo_relatorio_id: tipoData.id,
@@ -1130,6 +1210,7 @@ export const ManualClinicalReportGenerator =
         user,
         toast,
         onSaved,
+        editingReportId,
       ]);
 
       // ============== Exportar PDF (apenas baixar) ==============
@@ -1259,7 +1340,9 @@ export const ManualClinicalReportGenerator =
         return null;
       }
 
-      const isBusy = isSaving || isSending || isExporting || isEnhancing;
+      const isBusy =
+        isSaving || isSending || isExporting || isEnhancing || isLoadingReport;
+      const isEditing = !!editingReportId;
 
       return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -1269,7 +1352,14 @@ export const ManualClinicalReportGenerator =
                 {savedReport ? (
                   <>
                     <CheckCircle className="h-5 w-5 text-green-600" />
-                    Relatório Manual Salvo
+                    {isEditing
+                      ? 'Relatório Atualizado'
+                      : 'Relatório Manual Salvo'}
+                  </>
+                ) : isEditing ? (
+                  <>
+                    <PenLine className="h-5 w-5 text-primary" />
+                    Editar Relatório Manual
                   </>
                 ) : (
                   <>
@@ -1281,10 +1371,12 @@ export const ManualClinicalReportGenerator =
                   {patientName}
                 </Badge>
               </DialogTitle>
-              {isLoadingContext && (
+              {(isLoadingContext || isLoadingReport) && (
                 <p className="text-xs text-muted-foreground flex items-center gap-2">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  Carregando dados do paciente...
+                  {isLoadingReport
+                    ? 'Carregando relatório...'
+                    : 'Carregando dados do paciente...'}
                 </p>
               )}
             </DialogHeader>
@@ -1582,12 +1674,12 @@ export const ManualClinicalReportGenerator =
                       {isSaving ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Salvando...
+                          {isEditing ? 'Atualizando...' : 'Salvando...'}
                         </>
                       ) : (
                         <>
                           <Save className="h-4 w-4 mr-2" />
-                          Salvar Relatório
+                          {isEditing ? 'Salvar Alterações' : 'Salvar Relatório'}
                         </>
                       )}
                     </Button>
@@ -1600,8 +1692,9 @@ export const ManualClinicalReportGenerator =
                 <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
                   <CheckCircle className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-800 dark:text-green-200">
-                    Relatório salvo com sucesso! Você pode exportar em PDF ou
-                    enviar diretamente ao responsável.
+                    {isEditing
+                      ? 'Relatório atualizado com sucesso! O PDF foi regenerado com as alterações.'
+                      : 'Relatório salvo com sucesso! Você pode exportar em PDF ou enviar diretamente ao responsável.'}
                   </AlertDescription>
                 </Alert>
 

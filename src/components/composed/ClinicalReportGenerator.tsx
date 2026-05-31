@@ -18,6 +18,8 @@ import {
   ArrowLeft,
   CheckCircle,
   Trash2,
+  Calendar,
+  Pencil,
 } from 'lucide-react';
 import {
   Card,
@@ -70,7 +72,9 @@ interface SavedReport {
   conteudo: string;
   pdf_url: string | null;
   created_at: string;
+  updated_at: string | null;
   criado_por_nome: string | null;
+  atualizado_por_nome: string | null;
   // AI dev note: 'ia' = gerado a partir de evoluções via IA (tipo relatorio_medico)
   //              'manual' = digitado pelo profissional (tipo relatorio_medico_manual)
   origem: 'ia' | 'manual';
@@ -142,6 +146,19 @@ const htmlToPlainTextPreview = (html: string): string => {
     .trim();
 };
 
+const wasReportEdited = (
+  createdAt: string,
+  updatedAt: string | null
+): boolean => {
+  if (!updatedAt) return false;
+  return new Date(updatedAt).getTime() - new Date(createdAt).getTime() > 2000;
+};
+
+const formatReportDateTime = (iso: string): string => {
+  const date = new Date(iso);
+  return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+};
+
 export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
   ({ patientId, patientName, className }) => {
     const { toast } = useToast();
@@ -151,6 +168,9 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     const [isModalOpen, setIsModalOpen] = useState(false);
     // AI dev note: Modal separado para relatório manual (componente ManualClinicalReportGenerator)
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+    const [editingManualReportId, setEditingManualReportId] = useState<
+      string | null
+    >(null);
     const [isLoadingEvolutions, setIsLoadingEvolutions] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isSending, setIsSending] = useState(false);
@@ -316,7 +336,9 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
             conteudo,
             pdf_url,
             created_at,
+            updated_at,
             tipo_relatorio_id,
+            atualizado_por,
             criado_por_pessoa:pessoas!relatorios_medicos_criado_por_fkey(nome)
           `
           )
@@ -331,13 +353,35 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           return;
         }
 
+        const atualizadoPorIds = [
+          ...new Set(
+            (data || [])
+              .map((item) => item.atualizado_por)
+              .filter((id): id is string => !!id)
+          ),
+        ];
+        const atualizadoPorNomes: Record<string, string> = {};
+        if (atualizadoPorIds.length > 0) {
+          const { data: pessoasData } = await supabase
+            .from('pessoas')
+            .select('id, nome')
+            .in('id', atualizadoPorIds);
+          for (const p of pessoasData || []) {
+            atualizadoPorNomes[p.id] = p.nome;
+          }
+        }
+
         const reports: SavedReport[] = (data || []).map((item) => ({
           id: item.id,
           conteudo: item.conteudo,
           pdf_url: item.pdf_url,
           created_at: item.created_at,
+          updated_at: item.updated_at,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           criado_por_nome: (item.criado_por_pessoa as any)?.nome || null,
+          atualizado_por_nome: item.atualizado_por
+            ? atualizadoPorNomes[item.atualizado_por] || null
+            : null,
           origem: tipoIdToOrigin[item.tipo_relatorio_id] || 'ia',
         }));
 
@@ -1426,7 +1470,10 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={() => setIsManualModalOpen(true)}
+                    onClick={() => {
+                      setEditingManualReportId(null);
+                      setIsManualModalOpen(true);
+                    }}
                     title="Digitar relatório manualmente"
                   >
                     <PenLine className="h-4 w-4 mr-2" />
@@ -1491,6 +1538,18 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                             IA
                           </Badge>
                         )}
+                        {wasReportEdited(
+                          report.created_at,
+                          report.updated_at
+                        ) && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] gap-1"
+                          >
+                            <Pencil className="h-2.5 w-2.5" />
+                            Editado
+                          </Badge>
+                        )}
                       </div>
                       <Badge variant="secondary" className="text-xs">
                         {formatDateBR(new Date(report.created_at))}
@@ -1506,19 +1565,23 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                             {report.criado_por_nome || 'Sistema'}
                           </strong>
                           {' em '}
-                          {new Date(report.created_at).toLocaleDateString(
-                            'pt-BR'
-                          )}{' '}
-                          às{' '}
-                          {new Date(report.created_at).toLocaleTimeString(
-                            'pt-BR',
-                            {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            }
-                          )}
+                          {formatReportDateTime(report.created_at)}
                         </span>
                       </div>
+                      {wasReportEdited(report.created_at, report.updated_at) &&
+                        report.updated_at && (
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>
+                              Editado por:{' '}
+                              <strong className="text-foreground">
+                                {report.atualizado_por_nome || 'Sistema'}
+                              </strong>
+                              {' em '}
+                              {formatReportDateTime(report.updated_at)}
+                            </span>
+                          </div>
+                        )}
                     </div>
 
                     {report.conteudo && (
@@ -1531,6 +1594,19 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                     )}
 
                     <div className="flex gap-2 pt-2 flex-wrap">
+                      {report.origem === 'manual' && canGenerateReports && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingManualReportId(report.id);
+                            setIsManualModalOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4 mr-1" />
+                          Editar
+                        </Button>
+                      )}
                       {report.pdf_url && (
                         <>
                           <Button
@@ -1942,9 +2018,13 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
             Reaproveita a mesma lista de relatórios deste componente, recarregando após salvar. */}
         <ManualClinicalReportGenerator
           isOpen={isManualModalOpen}
-          onClose={() => setIsManualModalOpen(false)}
+          onClose={() => {
+            setIsManualModalOpen(false);
+            setEditingManualReportId(null);
+          }}
           patientId={patientId}
           patientName={patientName}
+          editReportId={editingManualReportId}
           onSaved={() => {
             loadSavedReports();
           }}

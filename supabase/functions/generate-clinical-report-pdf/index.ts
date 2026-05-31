@@ -534,10 +534,6 @@ Deno.serve(async (req) => {
         : body.patientInfo.pediatra;
       infoLines.push({ label: 'Pediatra:', value: pediatra });
     }
-    infoLines.push({
-      label: 'Data de Emissão:',
-      value: formatDateBRFromISO(body.reportDate),
-    });
 
     // Caixa do bloco
     const infoBoxPadding = 4;
