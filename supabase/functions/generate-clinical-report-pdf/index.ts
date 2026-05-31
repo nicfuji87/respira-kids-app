@@ -37,7 +37,7 @@ const corsHeaders = {
 };
 
 const RESPIRA_KIDS_ADDRESS =
-  'Endereço Respira Kids - SEPS 709/909 Centro Medico Julio Adnet Bloco A Sala 311 - Asa Sul, Brasília - DF, 70390-095';
+  'SEPS 709/909 Centro Medico Julio Adnet Bloco A Sala 311 - Asa Sul, Brasília - DF, 70390-095';
 
 // AI dev note: Cache em escopo de módulo (sobrevive entre invocações no mesmo worker)
 type LoadedImage = { base64: string; width: number; height: number };
