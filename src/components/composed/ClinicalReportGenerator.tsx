@@ -131,6 +131,17 @@ const formatDateExtended = (date: Date): string => {
   });
 };
 
+// Converte HTML (relatórios manuais) em texto legível para preview na lista
+const htmlToPlainTextPreview = (html: string): string => {
+  if (!html.includes('<')) return html;
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  return (container.innerText || container.textContent || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
   ({ patientId, patientName, className }) => {
     const { toast } = useToast();
@@ -1514,7 +1525,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                       <>
                         <Separator />
                         <p className="text-sm text-muted-foreground line-clamp-2">
-                          {report.conteudo.replace(/<[^>]+>/g, '')}
+                          {htmlToPlainTextPreview(report.conteudo)}
                         </p>
                       </>
                     )}
