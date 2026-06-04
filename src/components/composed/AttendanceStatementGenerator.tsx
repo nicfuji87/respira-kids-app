@@ -81,10 +81,25 @@ const formatDateBR = (date: Date): string => {
   });
 };
 
-// Determinar turno baseado no horário
+// AI dev note: Formatar data usando UTC para evitar deslocamento de fuso horário.
+// As datas no banco usam convenção "Brasília mascarado" (hora local salva com offset +00),
+// então getUTC*() retorna a hora/data real de Brasília.
+const formatDateBR_UTC = (date: Date): string => {
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+};
+
+// AI dev note: Determinar turno baseado no horário.
+// Usa getUTCHours() porque as datas no banco usam convenção "Brasília mascarado"
+// (hora local salva com offset +00). Se usarmos getHours(), o navegador subtrai 3h
+// (UTC-3), fazendo consultas das 12h-14h aparecerem como "matutino" incorretamente.
 const getShift = (dateString: string): string => {
   const date = new Date(dateString);
-  const hours = date.getHours();
+  const hours = date.getUTCHours();
   return hours < 12 ? 'matutino' : 'vespertino';
 };
 
@@ -205,7 +220,7 @@ export const AttendanceStatementGenerator: React.FC<
 
     const signatureUrl = `${SUPABASE_STORAGE_URL}/${encodeURIComponent(professional.signatureFile)}`;
     const appointmentDateObj = new Date(appointmentDate);
-    const appointmentDateFormatted = formatDateBR(appointmentDateObj);
+    const appointmentDateFormatted = formatDateBR_UTC(appointmentDateObj);
     const shift = getShift(appointmentDate);
     const hoje = formatDateBR(new Date());
 
@@ -575,7 +590,7 @@ export const AttendanceStatementGenerator: React.FC<
 
   // Calcular turno para exibição
   const displayShift = getShift(appointmentDate);
-  const appointmentDateFormatted = formatDateBR(new Date(appointmentDate));
+  const appointmentDateFormatted = formatDateBR_UTC(new Date(appointmentDate));
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
