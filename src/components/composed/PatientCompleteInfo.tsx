@@ -43,8 +43,16 @@ import { supabase } from '@/lib/supabase';
 import {
   fetchResponsibleExperienceSurveyTracking,
   markResponsibleExperienceSurveyAnswered,
+  updatePatientConsents,
   type ExperienceSurveyTracking,
 } from '@/lib/patient-api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
 import { useAuth } from '@/hooks/useAuth';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
@@ -61,6 +69,84 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
     const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(
       patient.foto_perfil || null
     );
+    const [autorizacaoUsoCientifico, setAutorizacaoUsoCientifico] = useState<
+      boolean | null | undefined
+    >(patient.autorizacao_uso_cientifico);
+    const [autorizacaoUsoRedesSociais, setAutorizacaoUsoRedesSociais] =
+      useState<boolean | null | undefined>(
+        patient.autorizacao_uso_redes_sociais
+      );
+    const [autorizacaoUsoNome, setAutorizacaoUsoNome] = useState<
+      boolean | null | undefined
+    >(patient.autorizacao_uso_nome);
+
+    useEffect(() => {
+      setAutorizacaoUsoCientifico(patient.autorizacao_uso_cientifico);
+      setAutorizacaoUsoRedesSociais(patient.autorizacao_uso_redes_sociais);
+      setAutorizacaoUsoNome(patient.autorizacao_uso_nome);
+    }, [
+      patient.autorizacao_uso_cientifico,
+      patient.autorizacao_uso_redes_sociais,
+      patient.autorizacao_uso_nome,
+    ]);
+
+    const handleConsentChange = async (
+      field:
+        | 'autorizacao_uso_cientifico'
+        | 'autorizacao_uso_redes_sociais'
+        | 'autorizacao_uso_nome',
+      valueStr: string
+    ) => {
+      const value =
+        valueStr === 'true' ? true : valueStr === 'false' ? false : null;
+
+      // Update state locally first
+      if (field === 'autorizacao_uso_cientifico')
+        setAutorizacaoUsoCientifico(value);
+      if (field === 'autorizacao_uso_redes_sociais')
+        setAutorizacaoUsoRedesSociais(value);
+      if (field === 'autorizacao_uso_nome') setAutorizacaoUsoNome(value);
+
+      try {
+        const consentsPayload = {
+          autorizacao_uso_cientifico:
+            field === 'autorizacao_uso_cientifico'
+              ? value
+              : (autorizacaoUsoCientifico ?? null),
+          autorizacao_uso_redes_sociais:
+            field === 'autorizacao_uso_redes_sociais'
+              ? value
+              : (autorizacaoUsoRedesSociais ?? null),
+          autorizacao_uso_nome:
+            field === 'autorizacao_uso_nome'
+              ? value
+              : (autorizacaoUsoNome ?? null),
+        };
+
+        await updatePatientConsents(patient.id, consentsPayload);
+
+        toast({
+          title: 'Consentimento atualizado',
+          description: 'A autorização foi salva com sucesso no banco de dados.',
+        });
+      } catch (err) {
+        console.error('Erro ao atualizar consentimento:', err);
+        toast({
+          title: 'Erro ao salvar',
+          description:
+            'Não foi possível atualizar o consentimento no banco de dados.',
+          variant: 'destructive',
+        });
+        // Rollback state
+        if (field === 'autorizacao_uso_cientifico')
+          setAutorizacaoUsoCientifico(patient.autorizacao_uso_cientifico);
+        if (field === 'autorizacao_uso_redes_sociais')
+          setAutorizacaoUsoRedesSociais(patient.autorizacao_uso_redes_sociais);
+        if (field === 'autorizacao_uso_nome')
+          setAutorizacaoUsoNome(patient.autorizacao_uso_nome);
+      }
+    };
+
     const [surveyTracking, setSurveyTracking] =
       useState<ExperienceSurveyTracking | null>(null);
     const [isLoadingSurveyTracking, setIsLoadingSurveyTracking] =
@@ -418,32 +504,78 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
       patient.responsavel_legal_telefone ===
         patient.responsavel_financeiro_telefone;
 
-    // Componente para consentimento
-    const ConsentItem = ({
+    // Componente para consentimento (editável se for admin ou secretária)
+    const ConsentEditItem = ({
       label,
+      field,
       value,
     }: {
       label: string;
+      field:
+        | 'autorizacao_uso_cientifico'
+        | 'autorizacao_uso_redes_sociais'
+        | 'autorizacao_uso_nome';
       value: boolean | null | undefined;
-    }) => (
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <p className="text-sm font-medium">{label}</p>
+    }) => {
+      const isEditable = userRole === 'admin' || userRole === 'secretaria';
+      const valueStr =
+        value === true ? 'true' : value === false ? 'false' : 'null';
+
+      if (isEditable) {
+        return (
+          <div className="flex items-center justify-between gap-4 py-1 border-b border-border/10 last:border-0">
+            <div className="flex-1">
+              <p className="text-sm font-medium">{label}</p>
+            </div>
+            <div className="w-[140px] flex-shrink-0">
+              <Select
+                value={valueStr}
+                onValueChange={(val) => handleConsentChange(field, val)}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null" className="text-xs">
+                    Não definido
+                  </SelectItem>
+                  <SelectItem value="true" className="text-xs">
+                    Sim
+                  </SelectItem>
+                  <SelectItem value="false" className="text-xs">
+                    Não
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex items-start justify-between gap-4 py-1 border-b border-border/10 last:border-0">
+          <div className="flex-1">
+            <p className="text-sm font-medium">{label}</p>
+          </div>
+          <div className="flex items-center gap-1">
+            {value === true ? (
+              <Check className="h-4 w-4 text-green-600" />
+            ) : value === false ? (
+              <X className="h-4 w-4 text-red-500" />
+            ) : (
+              <span className="text-xs text-muted-foreground">-</span>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {value === true
+                ? 'Sim'
+                : value === false
+                  ? 'Não'
+                  : 'Não definido'}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          {value === true ? (
-            <Check className="h-4 w-4 text-green-600" />
-          ) : value === false ? (
-            <X className="h-4 w-4 text-red-500" />
-          ) : (
-            <span className="text-xs text-muted-foreground">-</span>
-          )}
-          <span className="text-xs text-muted-foreground">
-            {value === true ? 'Sim' : value === false ? 'Não' : 'Não definido'}
-          </span>
-        </div>
-      </div>
-    );
+      );
+    };
 
     const SurveyTrackingControl = () => {
       if (!canManageSurveyTracking || !patient.responsavel_legal_id) {
@@ -1037,17 +1169,20 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
               Consentimentos e Autorizações
             </h4>
             <div className="space-y-3">
-              <ConsentItem
+              <ConsentEditItem
                 label="Autorização para Uso Científico"
-                value={patient.autorizacao_uso_cientifico}
+                field="autorizacao_uso_cientifico"
+                value={autorizacaoUsoCientifico}
               />
-              <ConsentItem
+              <ConsentEditItem
                 label="Autorização para Redes Sociais"
-                value={patient.autorizacao_uso_redes_sociais}
+                field="autorizacao_uso_redes_sociais"
+                value={autorizacaoUsoRedesSociais}
               />
-              <ConsentItem
+              <ConsentEditItem
                 label="Autorização para Uso do Nome"
-                value={patient.autorizacao_uso_nome}
+                field="autorizacao_uso_nome"
+                value={autorizacaoUsoNome}
               />
             </div>
           </div>

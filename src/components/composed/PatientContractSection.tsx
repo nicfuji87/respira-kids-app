@@ -125,7 +125,7 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
 
         if (patientError || !patientData) {
           errors.push('Erro ao buscar dados do paciente');
-          return errors;
+          return { errors, patientData: null, responsavelLegalData: null };
         }
 
         // Validar autorizações
@@ -163,7 +163,7 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
           .eq('ativo', true)
           .in('tipo_responsabilidade', ['legal', 'ambos'])
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (!responsavelLegalData) {
           errors.push('Responsável legal não cadastrado');
@@ -174,11 +174,11 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
           errors.push('Responsável financeiro não definido');
         }
 
-        return errors;
+        return { errors, patientData, responsavelLegalData };
       } catch (err) {
         console.error('Erro na validação:', err);
         errors.push('Erro ao validar dados');
-        return errors;
+        return { errors, patientData: null, responsavelLegalData: null };
       }
     }, [patientId]);
 
@@ -212,9 +212,67 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
         setValidationErrors([]);
 
         // Validar dados obrigatórios
-        const errors = await validatePatientData();
+        const {
+          errors,
+          patientData: validatedPatient,
+          responsavelLegalData,
+        } = await validatePatientData();
         if (errors.length > 0) {
           setValidationErrors(errors);
+
+          // Disparar webhook se as autorizações não estiverem preenchidas e tivermos os dados necessários
+          if (
+            errors.includes('Autorizações não preenchidas') &&
+            validatedPatient &&
+            responsavelLegalData?.pessoas
+          ) {
+            try {
+              const webhookPayload = {
+                evento: 'solicitar_autorizacao_consentimento',
+                payload: {
+                  tipo: 'solicitar_autorizacao_consentimento',
+                  timestamp: new Date().toISOString(),
+                  webhook_id: crypto.randomUUID(),
+                  data: {
+                    paciente: {
+                      id: patientId,
+                      nome: validatedPatient.nome,
+                      cpf: validatedPatient.cpf_cnpj || null,
+                    },
+                    responsavel_legal: {
+                      id: responsavelLegalData.pessoas.id,
+                      nome: responsavelLegalData.pessoas.nome,
+                      telefone: responsavelLegalData.pessoas.telefone || null,
+                      email: responsavelLegalData.pessoas.email || null,
+                    },
+                  },
+                },
+                status: 'pendente',
+                tentativas: 0,
+                max_tentativas: 3,
+              };
+
+              const { error: webhookError } = await supabase
+                .from('webhook_queue')
+                .insert(webhookPayload);
+
+              if (webhookError) throw webhookError;
+
+              toast({
+                title: 'Solicitação de Autorizações',
+                description:
+                  'Autorizações não preenchidas. Uma solicitação de consentimento foi enviada ao responsável legal via WhatsApp.',
+              });
+            } catch (err) {
+              console.error('Erro ao disparar webhook de consentimento:', err);
+              toast({
+                title: 'Erro ao solicitar autorizações',
+                description:
+                  'Não foi possível enviar a solicitação para o responsável automaticamente.',
+                variant: 'destructive',
+              });
+            }
+          }
           return;
         }
 

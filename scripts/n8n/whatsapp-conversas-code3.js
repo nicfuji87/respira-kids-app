@@ -268,7 +268,7 @@ Retorne exatamente:
  "data_consulta_mencionada": [],
  "tipo_servico_mencionado": "respiratoria|motora|avaliacao|multiplos|nao_informado",
  "local_atendimento": "clinica|domiciliar|nao_informado",
- "valor_mencionado": null,
+ "valor_mencionado": null ou número decimal (ex.: 21.9) — NUNCA string formatada como "R$21,90",
  "indicacao_pediatra_mencionada": false,
  "solicitou_encaixe": false,
  "resolvido_primeiro_contato": false,

@@ -40,6 +40,8 @@ const eventLabels: Record<string, string> = {
   relatorio_clinico_gerado: 'Relatório Clínico Gerado',
   webhook_failed: 'Webhook Falhou',
   registration_error: 'Erro no Cadastro',
+  whatsapp_followup_pendente: 'WhatsApp — Follow-ups',
+  whatsapp_reclamacao_admin: 'WhatsApp — Reclamações',
 };
 
 const statusColors = {

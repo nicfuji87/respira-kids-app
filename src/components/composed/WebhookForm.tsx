@@ -36,6 +36,14 @@ const eventOptions = [
     value: 'daily_pediatra_summary',
     label: 'Resumo Diário p/ Pediatras (D-1)',
   },
+  {
+    value: 'whatsapp_followup_pendente',
+    label: 'WhatsApp — Follow-ups pendentes (diário)',
+  },
+  {
+    value: 'whatsapp_reclamacao_admin',
+    label: 'WhatsApp — Reclamações para admin',
+  },
   { value: 'webhook_failed', label: 'Webhook Falhou' },
   { value: 'registration_error', label: 'Erro no Cadastro' },
 ];
