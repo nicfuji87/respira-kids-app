@@ -54,7 +54,10 @@ import {
   SelectValue,
 } from '@/components/primitives/select';
 import { useAuth } from '@/hooks/useAuth';
-import type { PatientPersonalInfoProps } from '@/types/patient-details';
+import type {
+  PatientPersonalInfoProps,
+  PatientConsent,
+} from '@/types/patient-details';
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
 import { PatientPediatriciansSection } from './PatientPediatriciansSection';
 
@@ -108,19 +111,18 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
       if (field === 'autorizacao_uso_nome') setAutorizacaoUsoNome(value);
 
       try {
-        const consentsPayload = {
+        const consentsPayload: PatientConsent = {
           autorizacao_uso_cientifico:
-            field === 'autorizacao_uso_cientifico'
+            (field === 'autorizacao_uso_cientifico'
               ? value
-              : (autorizacaoUsoCientifico ?? null),
+              : autorizacaoUsoCientifico) ?? false,
           autorizacao_uso_redes_sociais:
-            field === 'autorizacao_uso_redes_sociais'
+            (field === 'autorizacao_uso_redes_sociais'
               ? value
-              : (autorizacaoUsoRedesSociais ?? null),
+              : autorizacaoUsoRedesSociais) ?? false,
           autorizacao_uso_nome:
-            field === 'autorizacao_uso_nome'
-              ? value
-              : (autorizacaoUsoNome ?? null),
+            (field === 'autorizacao_uso_nome' ? value : autorizacaoUsoNome) ??
+            false,
         };
 
         await updatePatientConsents(patient.id, consentsPayload);

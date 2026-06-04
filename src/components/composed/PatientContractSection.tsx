@@ -227,6 +227,15 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
             responsavelLegalData?.pessoas
           ) {
             try {
+              // AI dev note: Supabase TS types infer joins as arrays, but .maybeSingle() returns a single object at runtime
+              const pessoaResponsavel =
+                responsavelLegalData.pessoas as unknown as {
+                  id: string;
+                  nome: string;
+                  cpf_cnpj: string | null;
+                  email: string | null;
+                  telefone: number | null;
+                };
               const webhookPayload = {
                 evento: 'solicitar_autorizacao_consentimento',
                 payload: {
@@ -240,10 +249,10 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
                       cpf: validatedPatient.cpf_cnpj || null,
                     },
                     responsavel_legal: {
-                      id: responsavelLegalData.pessoas.id,
-                      nome: responsavelLegalData.pessoas.nome,
-                      telefone: responsavelLegalData.pessoas.telefone || null,
-                      email: responsavelLegalData.pessoas.email || null,
+                      id: pessoaResponsavel.id,
+                      nome: pessoaResponsavel.nome,
+                      telefone: pessoaResponsavel.telefone || null,
+                      email: pessoaResponsavel.email || null,
                     },
                   },
                 },
