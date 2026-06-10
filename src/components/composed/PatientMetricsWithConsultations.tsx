@@ -1179,6 +1179,24 @@ export const PatientMetricsWithConsultations =
         loadFaturas();
       }, [loadFaturas, reloadTrigger]);
 
+      // AI dev note: Enquanto houver alguma fatura com NFe em 'sincronizando',
+      // recarregamos periodicamente. O link_nfe é atualizado de forma assíncrona
+      // por webhook (ASAAS -> n8n -> Supabase), então fazemos polling para o botão
+      // transicionar sozinho de "Gerando NFe" para "Ver NFe" / "Cancelar e reemitir"
+      // sem o usuário precisar atualizar a página.
+      useEffect(() => {
+        const temNfeSincronizando = faturas.some(
+          (f) => f.link_nfe === 'sincronizando'
+        );
+        if (!temNfeSincronizando) return;
+
+        const intervalId = setInterval(() => {
+          setReloadTrigger((prev) => prev + 1);
+        }, 8000);
+
+        return () => clearInterval(intervalId);
+      }, [faturas]);
+
       // Limpar seleção quando mudamos filtros
       useEffect(() => {
         if (isSelectionMode && !editingFatura) {
