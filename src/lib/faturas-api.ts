@@ -1186,31 +1186,72 @@ export async function emitirNfeFatura(
 
     try {
       // 5. Agendar nota fiscal
-      console.log('📋 Agendando nota fiscal...');
-      const scheduleResult = await scheduleAsaasInvoice(
-        fatura.id_asaas,
-        {
-          serviceDescription: fatura.descricao || 'Serviços de fisioterapia',
-          observations: '',
-          value: fatura.valor_total,
-          deductions: 0,
-          effectiveDate: new Date().toISOString().split('T')[0],
-          municipalServiceId: '290448',
-          municipalServiceName:
-            'Terapia ocupacional, fisioterapia e fonoaudiologia.',
-          updatePayment: false,
-          taxes: {
-            retainIss: false,
-            iss: 2, // 2% ISS
-            cofins: 0,
-            csll: 0,
-            inss: 0,
-            ir: 0,
-            pis: 0,
-          },
+      // AI dev note: invoicePayload fica em uma const para podermos reaproveitar
+      // numa eventual nova tentativa após limpar invoices órfãs no ASAAS.
+      const invoicePayload = {
+        serviceDescription: fatura.descricao || 'Serviços de fisioterapia',
+        observations: '',
+        value: fatura.valor_total,
+        deductions: 0,
+        effectiveDate: new Date().toISOString().split('T')[0],
+        municipalServiceId: '290448',
+        municipalServiceName:
+          'Terapia ocupacional, fisioterapia e fonoaudiologia.',
+        updatePayment: false,
+        taxes: {
+          retainIss: false,
+          iss: 2, // 2% ISS
+          cofins: 0,
+          csll: 0,
+          inss: 0,
+          ir: 0,
+          pis: 0,
         },
+      };
+
+      console.log('📋 Agendando nota fiscal...');
+      let scheduleResult = await scheduleAsaasInvoice(
+        fatura.id_asaas,
+        invoicePayload,
         apiConfig
       );
+
+      // AI dev note: O ASAAS rejeita o agendamento quando JÁ EXISTE uma invoice
+      // para o payment ("Já existe uma nota fiscal agendada para essa cobrança").
+      // Isso acontece com invoices órfãs (ex: webhook de NFe que nunca chegou e
+      // deixou o link_nfe defasado, ou emissão anterior interrompida). Mesmo que
+      // a fatura não esteja marcada como 'erro', limpamos as invoices existentes
+      // no ASAAS e tentamos agendar novamente UMA vez, deixando o botão
+      // "Emitir NFe" auto-curável em um único clique.
+      const invoiceAlreadyExists =
+        !scheduleResult.success &&
+        /j[áa]\s*existe|already\s*exist|agendada para essa cobran/i.test(
+          scheduleResult.error || ''
+        );
+
+      if (invoiceAlreadyExists && !isRetryAfterError && fatura.id_asaas) {
+        console.log(
+          '♻️ Já existe NFe para essa cobrança. Limpando invoices órfãs e reagendando...'
+        );
+        const autoCancelResult = await cancelAsaasInvoicesByPayment(
+          fatura.id_asaas,
+          apiConfig
+        );
+
+        if (!autoCancelResult.success) {
+          throw new Error(
+            autoCancelResult.error ||
+              'Não foi possível cancelar a nota fiscal existente para reemissão'
+          );
+        }
+
+        console.log('✅ Invoices órfãs tratadas. Reagendando nota fiscal...');
+        scheduleResult = await scheduleAsaasInvoice(
+          fatura.id_asaas,
+          invoicePayload,
+          apiConfig
+        );
+      }
 
       if (!scheduleResult.success) {
         throw new Error(scheduleResult.error || 'Erro ao agendar nota fiscal');

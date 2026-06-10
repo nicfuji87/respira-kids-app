@@ -536,6 +536,10 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
             result.error || 'Erro desconhecido ao emitir nota fiscal',
           variant: 'destructive',
         });
+        // AI dev note: Recarregar também no erro — emitirNfeFatura marca a fatura
+        // como 'erro', então a lista precisa atualizar para o botão passar a
+        // oferecer "Cancelar e reemitir NFe".
+        fetchFaturas();
       }
     } catch (err) {
       console.error('Erro ao emitir NFe:', err);

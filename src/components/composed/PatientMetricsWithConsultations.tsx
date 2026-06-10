@@ -338,6 +338,10 @@ export const PatientMetricsWithConsultations =
               description: result.error || 'Erro desconhecido ao emitir NFe',
               variant: 'destructive',
             });
+            // AI dev note: Recarregar também no erro — emitirNfeFatura marca a
+            // fatura como 'erro', então o botão precisa atualizar para oferecer
+            // "Cancelar e reemitir NFe".
+            setReloadTrigger((prev) => prev + 1);
           }
         } catch (error) {
           console.error('💥 Erro ao emitir NFe:', error);
