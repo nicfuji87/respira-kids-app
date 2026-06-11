@@ -40,8 +40,18 @@ WHERE sub.tel = w.contato_telefone
   AND w.pessoa_id IS DISTINCT FROM sub.id;
 
 -- =====================================================
--- Parte 3: view enriquecida (conciliação conversa x sistema)
+-- Parte 3: índice funcional p/ casar telefone (evita seq scan por linha)
+-- =====================================================
+CREATE INDEX IF NOT EXISTS idx_pessoas_telefone_text
+  ON public.pessoas ((telefone::text))
+  WHERE telefone IS NOT NULL;
+
+-- =====================================================
+-- Parte 4: view enriquecida (conciliação conversa x sistema)
 -- security_invoker = on => RLS das tabelas-base aplica para quem consulta.
+-- Usa tabelas base + índices (idx_agendamentos_paciente_data, idx_faturas_paciente_id,
+-- idx_pessoas_telefone_text) — ~50ms para ~300 conversas. NÃO usar
+-- vw_agendamentos_completos aqui (join de ~10 tabelas estoura o statement_timeout).
 -- =====================================================
 CREATE OR REPLACE VIEW public.vw_whatsapp_conversas_enriquecidas
 WITH (security_invoker = on) AS
@@ -63,41 +73,42 @@ LEFT JOIN LATERAL (
   ORDER BY pp.created_at ASC
   LIMIT 1
 ) p ON true
--- pacientes vinculados: a própria pessoa + dependentes (via pessoa_responsaveis)
+-- conjunto de pacientes: a própria pessoa + dependentes ativos (calculado uma vez)
 LEFT JOIN LATERAL (
-  SELECT jsonb_agg(jsonb_build_object('id', z.pid, 'nome', z.pnome)) AS pacientes
+  SELECT array_agg(DISTINCT pid) AS ids
   FROM (
-    SELECT p.id AS pid, p.nome AS pnome WHERE p.id IS NOT NULL
+    SELECT p.id AS pid WHERE p.id IS NOT NULL
     UNION
-    SELECT pr.id_pessoa, ps.nome
+    SELECT pr.id_pessoa
     FROM public.pessoa_responsaveis pr
-    JOIN public.pessoas ps ON ps.id = pr.id_pessoa
-    WHERE pr.id_responsavel = p.id
-      AND COALESCE(pr.ativo, true) = true
-  ) z
+    WHERE pr.id_responsavel = p.id AND COALESCE(pr.ativo, true) = true
+  ) s
+) pids ON true
+-- nomes dos pacientes vinculados
+LEFT JOIN LATERAL (
+  SELECT jsonb_agg(jsonb_build_object('id', ps.id, 'nome', ps.nome)) AS pacientes
+  FROM public.pessoas ps
+  WHERE pids.ids IS NOT NULL AND ps.id = ANY(pids.ids)
 ) pac ON true
 -- agendamentos do sistema na janela da conversa (-45d .. +120d)
 LEFT JOIN LATERAL (
   SELECT jsonb_agg(jsonb_build_object(
            'id', a.id,
            'data_hora', a.data_hora,
-           'paciente_nome', a.paciente_nome,
-           'status_consulta', a.status_consulta_nome,
-           'status_pagamento', a.status_pagamento_nome,
+           'paciente_nome', pn.nome,
+           'status_consulta', cs.descricao,
+           'status_pagamento', ps2.descricao,
            'valor', a.valor_servico,
            'tem_nfe', (a.link_nfe IS NOT NULL),
            'fatura_id', a.fatura_id
          ) ORDER BY a.data_hora) AS agendamentos
-  FROM public.vw_agendamentos_completos a
-  WHERE a.ativo = true
-    AND a.paciente_id IS NOT NULL
-    AND (
-      a.paciente_id = p.id
-      OR a.paciente_id IN (
-        SELECT pr.id_pessoa FROM public.pessoa_responsaveis pr
-        WHERE pr.id_responsavel = p.id AND COALESCE(pr.ativo, true) = true
-      )
-    )
+  FROM public.agendamentos a
+  LEFT JOIN public.pessoas pn ON pn.id = a.paciente_id
+  LEFT JOIN public.consulta_status cs ON cs.id = a.status_consulta_id
+  LEFT JOIN public.pagamento_status ps2 ON ps2.id = a.status_pagamento_id
+  WHERE pids.ids IS NOT NULL
+    AND a.ativo = true
+    AND a.paciente_id = ANY(pids.ids)
     AND a.data_hora >= COALESCE(w.iniciada_em, w.created_at) - interval '45 days'
     AND a.data_hora <= COALESCE(w.ultima_mensagem_em, w.created_at) + interval '120 days'
 ) ag ON true
@@ -112,15 +123,9 @@ LEFT JOIN LATERAL (
            'valor', f.valor_total
          ) ORDER BY f.created_at DESC) AS faturas
   FROM public.faturas f
-  WHERE COALESCE(f.ativo, true) = true
-    AND f.paciente_id IS NOT NULL
-    AND (
-      f.paciente_id = p.id
-      OR f.paciente_id IN (
-        SELECT pr.id_pessoa FROM public.pessoa_responsaveis pr
-        WHERE pr.id_responsavel = p.id AND COALESCE(pr.ativo, true) = true
-      )
-    )
+  WHERE pids.ids IS NOT NULL
+    AND COALESCE(f.ativo, true) = true
+    AND f.paciente_id = ANY(pids.ids)
     AND (
       f.status IN ('pendente', 'atrasado')
       OR f.created_at >= COALESCE(w.iniciada_em, w.created_at) - interval '45 days'
