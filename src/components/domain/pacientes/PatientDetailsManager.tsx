@@ -18,6 +18,7 @@ import {
 } from '@/components/composed';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
 import { AppointmentFormManager } from '@/components/domain/calendar/AppointmentFormManager';
+import { PatientConversasSection } from '@/components/domain/whatsapp-conversas';
 import {
   fetchPatientDetails,
   fetchPatientAnamnesis,
@@ -387,6 +388,15 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
             );
             handlePersonClick(responsibleId);
           }}
+        />
+
+        {/* Conversas no WhatsApp (análise + conciliação) - admin/secretaria */}
+        <PatientConversasSection
+          patientId={actualId}
+          userRole={
+            (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
+            null
+          }
         />
 
         {/* Contrato do Paciente - apenas para pacientes */}

@@ -109,8 +109,8 @@ LEFT JOIN LATERAL (
   WHERE pids.ids IS NOT NULL
     AND a.ativo = true
     AND a.paciente_id = ANY(pids.ids)
-    AND a.data_hora >= COALESCE(w.iniciada_em, w.created_at) - interval '45 days'
-    AND a.data_hora <= COALESCE(w.ultima_mensagem_em, w.created_at) + interval '120 days'
+    AND a.data_hora >= COALESCE(w.iniciada_em, w.created_at) - interval '30 days'
+    AND a.data_hora <= COALESCE(w.ultima_mensagem_em, w.created_at) + interval '30 days'
 ) ag ON true
 -- faturas do sistema (em aberto sempre + recentes na janela)
 LEFT JOIN LATERAL (
@@ -128,7 +128,7 @@ LEFT JOIN LATERAL (
     AND f.paciente_id = ANY(pids.ids)
     AND (
       f.status IN ('pendente', 'atrasado')
-      OR f.created_at >= COALESCE(w.iniciada_em, w.created_at) - interval '45 days'
+      OR f.created_at >= COALESCE(w.iniciada_em, w.created_at) - interval '30 days'
     )
 ) fat ON true;
 
@@ -163,3 +163,31 @@ $$;
 
 REVOKE ALL ON FUNCTION public.get_whatsapp_conversas_enriquecidas() FROM public;
 GRANT EXECUTE ON FUNCTION public.get_whatsapp_conversas_enriquecidas() TO authenticated;
+
+-- =====================================================
+-- Parte 6: RPC de conversas por paciente (usada no detalhe do paciente)
+-- =====================================================
+CREATE OR REPLACE FUNCTION public.get_whatsapp_conversas_por_paciente(p_paciente_id uuid)
+RETURNS SETOF public.vw_whatsapp_conversas_enriquecidas
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF NOT (public.is_admin() OR public.is_secretaria()) THEN
+    RAISE EXCEPTION 'Acesso negado' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+  SELECT *
+  FROM public.vw_whatsapp_conversas_enriquecidas v
+  WHERE v.pacientes_vinculados @> jsonb_build_array(
+          jsonb_build_object('id', p_paciente_id::text)
+        )
+  ORDER BY v.ultima_mensagem_em DESC NULLS LAST;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_whatsapp_conversas_por_paciente(uuid) FROM public;
+GRANT EXECUTE ON FUNCTION public.get_whatsapp_conversas_por_paciente(uuid) TO authenticated;

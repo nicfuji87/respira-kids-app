@@ -16,6 +16,7 @@ import type {
 } from '@/types/whatsapp-conversas';
 
 const RPC_FETCH = 'get_whatsapp_conversas_enriquecidas';
+const RPC_FETCH_PACIENTE = 'get_whatsapp_conversas_por_paciente';
 const TABLE = 'whatsapp_conversas';
 
 // =====================================================
@@ -126,6 +127,25 @@ export async function fetchWhatsAppConversas(): Promise<WhatsAppConversaRow[]> {
 }
 
 /**
+ * Busca as conversas vinculadas a um paciente (usado no detalhe do paciente).
+ * Casa o paciente (ou seu responsável) com a conversa pelo telefone.
+ */
+export async function fetchWhatsAppConversasByPaciente(
+  pacienteId: string
+): Promise<WhatsAppConversaRow[]> {
+  const { data, error } = await supabase.rpc(RPC_FETCH_PACIENTE, {
+    p_paciente_id: pacienteId,
+  });
+
+  if (error) {
+    console.error('[whatsapp-conversas] erro ao buscar por paciente:', error);
+    throw error;
+  }
+
+  return (data || []) as WhatsAppConversaRow[];
+}
+
+/**
  * Atualiza o estado de follow-up de uma conversa (concluir / ignorar / reabrir).
  * Escreve na tabela base (a view não é atualizável).
  */
@@ -157,6 +177,9 @@ export async function updateFollowupStatus(
 const MS_DIA = 24 * 60 * 60 * 1000;
 /** Tolerância para casar uma data mencionada com um agendamento (em dias). */
 const TOLERANCIA_DIAS = 2;
+/** Janela de conciliação ao redor da conversa (a conversa é processada parcialmente,
+ * então datas muito distantes geram falsos positivos). */
+const JANELA_DIAS = 30;
 
 function diaUTC(value: string | null | undefined): number | null {
   if (!value) return null;
@@ -206,13 +229,23 @@ export function computeConciliacao(
   const faturas = Array.isArray(row.faturas_sistema) ? row.faturas_sistema : [];
 
   // --- Agendamento ---
+  // Janela ±30 dias relativa ao período da conversa (descarta datas distantes).
+  const refIni = diaUTC(row.iniciada_em || row.created_at);
+  const refFim = diaUTC(row.ultima_mensagem_em || row.created_at);
+  const naJanela = (d: number): boolean => {
+    if (refIni !== null && d < refIni - JANELA_DIAS * MS_DIA) return false;
+    if (refFim !== null && d > refFim + JANELA_DIAS * MS_DIA) return false;
+    return true;
+  };
+
   const datasMencionadas = (
     Array.isArray(row.data_consulta_mencionada)
       ? row.data_consulta_mencionada
       : []
   )
     .map((d) => diaUTC(d))
-    .filter((d): d is number => d !== null);
+    .filter((d): d is number => d !== null)
+    .filter(naJanela);
 
   const datasSistema = agendamentos
     .map((a) => diaUTC(a.data_hora))
@@ -230,12 +263,11 @@ export function computeConciliacao(
   }
 
   if (conversaSobreAgenda(row)) {
-    const inicio = diaUTC(row.iniciada_em || row.created_at);
     for (const a of agendamentos) {
       const ds = diaUTC(a.data_hora);
       if (ds === null) continue;
-      // Considera só agendamentos a partir do início da conversa (futuros p/ ela).
-      if (inicio !== null && ds < inicio - TOLERANCIA_DIAS * MS_DIA) continue;
+      // Só agendamentos dentro da janela ±30 dias da conversa.
+      if (!naJanela(ds)) continue;
       if (!dentroDaTolerancia(ds, datasMencionadas)) {
         alertas.push({
           trilha: 'agendamento',

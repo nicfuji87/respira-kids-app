@@ -4,6 +4,7 @@
 // (conversa x sistema). Quando handlers de follow-up são passados, exibe ações.
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
 import { Button } from '@/components/primitives/button';
@@ -13,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   Activity,
   AlertTriangle,
+  CalendarClock,
   Check,
   CircleSlash,
   Clock,
@@ -25,6 +27,7 @@ import {
   Sparkles,
   Stethoscope,
   UserCheck,
+  UserCog,
   UserX,
 } from 'lucide-react';
 import type {
@@ -50,6 +53,8 @@ interface WhatsAppConversaCardProps {
   onReabrir?: (row: WhatsAppConversaRow) => void;
   busy?: boolean;
   className?: string;
+  /** Oculta os botões de navegação (ex.: quando exibido dentro do detalhe do paciente). */
+  hideNavigation?: boolean;
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -122,12 +127,27 @@ function fmt(dateStr: string | null): string {
 }
 
 export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
-  ({ row, onConcluir, onIgnorar, onReabrir, busy, className }) => {
+  ({
+    row,
+    onConcluir,
+    onIgnorar,
+    onReabrir,
+    busy,
+    className,
+    hideNavigation,
+  }) => {
+    const navigate = useNavigate();
     const showFollowupActions =
       Boolean(onConcluir || onIgnorar || onReabrir) &&
       (row.necessita_followup || row.followup_status !== 'nao_aplicavel');
 
     const alertasConciliacao = computeConciliacao(row);
+
+    const pacientes = Array.isArray(row.pacientes_vinculados)
+      ? row.pacientes_vinculados
+      : [];
+    const primeiroNome = (nome: string | null) =>
+      (nome || '').trim().split(/\s+/)[0] || 'paciente';
 
     return (
       <Card className={cn('overflow-hidden', className)}>
@@ -184,6 +204,37 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
                 <UserX className="w-3.5 h-3.5" />
                 Não cadastrado no sistema
               </span>
+            )}
+
+            {/* Navegação: cadastro do cliente / agenda dos pacientes */}
+            {!hideNavigation && row.cliente_cadastrado && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {row.pessoa_vinculada_id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() =>
+                      navigate(`/pessoa/${row.pessoa_vinculada_id}`)
+                    }
+                  >
+                    <UserCog className="w-3.5 h-3.5" />
+                    Ver cliente
+                  </Button>
+                )}
+                {pacientes.map((pac) => (
+                  <Button
+                    key={pac.id}
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => navigate(`/pacientes/${pac.id}`)}
+                  >
+                    <CalendarClock className="w-3.5 h-3.5" />
+                    Agenda: {primeiroNome(pac.nome)}
+                  </Button>
+                ))}
+              </div>
             )}
           </div>
 

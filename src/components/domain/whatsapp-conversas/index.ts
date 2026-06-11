@@ -5,3 +5,4 @@ export { WhatsAppDistribuicaoBarras } from './WhatsAppDistribuicaoBarras';
 export { WhatsAppDashboardFilters } from './WhatsAppDashboardFilters';
 export { WhatsAppConversaCard } from './WhatsAppConversaCard';
 export { WhatsAppConversasList } from './WhatsAppConversasList';
+export { PatientConversasSection } from './PatientConversasSection';
