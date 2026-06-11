@@ -147,6 +147,13 @@ export const PatientMetricsWithConsultations =
         []
       );
       const [reloadTrigger, setReloadTrigger] = useState(0);
+      // AI dev note: IDs de faturas aguardando o resultado assíncrono da (re)emissão
+      // de NFe (via webhook ASAAS -> n8n -> Supabase). Durante a REEMISSÃO o ASAAS
+      // dispara um webhook de cancelamento da nota antiga que grava link_nfe = '',
+      // o que faria o botão voltar para "Emitir NFe" no meio do processo. Enquanto
+      // a fatura estiver neste set, o botão fica em "Gerando NFe" e o polling segue,
+      // até o link_nfe chegar a um estado terminal (URL real ou 'erro').
+      const [awaitingNfe, setAwaitingNfe] = useState<Set<string>>(new Set());
 
       // Estados para exclusão de fatura
       const [faturaToDelete, setFaturaToDelete] =
@@ -329,6 +336,19 @@ export const PatientMetricsWithConsultations =
               description:
                 'A nota fiscal está sendo gerada. O status será atualizado automaticamente.',
             });
+
+            // AI dev note: Marcar como aguardando resultado para o botão não voltar
+            // para "Emitir NFe" quando o webhook de cancelamento da nota antiga
+            // gravar link_nfe = '' durante a reemissão. Removido quando link_nfe
+            // chegar a um estado terminal (URL/'erro') ou por timeout de segurança.
+            setAwaitingNfe((prev) => new Set(prev).add(fatura.id));
+            window.setTimeout(() => {
+              setAwaitingNfe((prev) => {
+                const next = new Set(prev);
+                next.delete(fatura.id);
+                return next;
+              });
+            }, 120000);
 
             // Recarregar dados para mostrar status "Gerando NFe"
             setReloadTrigger((prev) => prev + 1);
@@ -1188,14 +1208,31 @@ export const PatientMetricsWithConsultations =
         const temNfeSincronizando = faturas.some(
           (f) => f.link_nfe === 'sincronizando'
         );
-        if (!temNfeSincronizando) return;
+        if (!temNfeSincronizando && awaitingNfe.size === 0) return;
 
         const intervalId = setInterval(() => {
           setReloadTrigger((prev) => prev + 1);
         }, 8000);
 
         return () => clearInterval(intervalId);
-      }, [faturas]);
+      }, [faturas, awaitingNfe]);
+
+      // AI dev note: Quando o link_nfe de uma fatura aguardada chega a um estado
+      // terminal (URL real da NFe ou 'erro'), removemos do set para o botão refletir
+      // o resultado final. Estados intermediários (''/null/'sincronizando') mantêm
+      // a fatura aguardando.
+      useEffect(() => {
+        if (awaitingNfe.size === 0) return;
+        setAwaitingNfe((prev) => {
+          const next = new Set(prev);
+          faturas.forEach((f) => {
+            const v = f.link_nfe;
+            const terminal = !!v && v !== 'sincronizando';
+            if (terminal) next.delete(f.id);
+          });
+          return next.size === prev.size ? prev : next;
+        });
+      }, [faturas, awaitingNfe]);
 
       // Limpar seleção quando mudamos filtros
       useEffect(() => {
@@ -1616,6 +1653,7 @@ export const PatientMetricsWithConsultations =
                     userRole={user?.pessoa?.role}
                     isEmitingNfe={isEmitingNfe}
                     isReceivingPayment={isReceivingPayment}
+                    awaitingNfeIds={awaitingNfe}
                     showCard={false}
                     showVerMais={false}
                   />

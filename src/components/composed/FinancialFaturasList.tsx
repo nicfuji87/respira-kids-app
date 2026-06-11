@@ -95,6 +95,14 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEmitingNfe, setIsEmitingNfe] = useState<string | null>(null);
+  // AI dev note: IDs de faturas que acabaram de ter NFe (re)emitida e estão
+  // aguardando o resultado assíncrono via webhook (ASAAS -> n8n -> Supabase).
+  // Durante a REEMISSÃO, o ASAAS dispara um webhook de CANCELAMENTO da nota
+  // antiga que (legitimamente) grava link_nfe = '' — isso faria o botão voltar
+  // para "Emitir NFe" no meio do processo. Enquanto a fatura estiver neste set,
+  // forçamos o botão a "Gerando NFe" e mantemos o polling, até o link_nfe chegar
+  // a um estado terminal (URL real ou 'erro').
+  const [awaitingNfe, setAwaitingNfe] = useState<Set<string>>(new Set());
   // AI dev note: Armazena a fatura para a qual queremos abrir o diálogo de
   // "cancelar e reemitir NFe". Quando null, o diálogo fica fechado.
   const [faturaToCancelReissue, setFaturaToCancelReissue] =
@@ -514,14 +522,31 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     const temNfeSincronizando = faturas.some(
       (f) => f.link_nfe === 'sincronizando'
     );
-    if (!temNfeSincronizando) return;
+    if (!temNfeSincronizando && awaitingNfe.size === 0) return;
 
     const intervalId = setInterval(() => {
       fetchFaturas();
     }, 8000);
 
     return () => clearInterval(intervalId);
-  }, [faturas, fetchFaturas]);
+  }, [faturas, fetchFaturas, awaitingNfe]);
+
+  // AI dev note: Quando o link_nfe de uma fatura aguardada chega a um estado
+  // terminal (URL real da NFe ou 'erro'), removemos do set para o botão refletir
+  // o resultado final ("Ver NFe" ou "Cancelar e reemitir"). Estados intermediários
+  // (''/null/'sincronizando') mantêm a fatura aguardando.
+  useEffect(() => {
+    if (awaitingNfe.size === 0) return;
+    setAwaitingNfe((prev) => {
+      const next = new Set(prev);
+      faturas.forEach((f) => {
+        const v = f.link_nfe;
+        const terminal = !!v && v !== 'sincronizando';
+        if (terminal) next.delete(f.id);
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [faturas, awaitingNfe]);
 
   // Função para emitir NFe
   const handleEmitirNfe = async (fatura: FaturaComDetalhes) => {
@@ -545,6 +570,19 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           description:
             'A nota fiscal está sendo gerada e será disponibilizada em breve.',
         });
+
+        // AI dev note: Marcar como aguardando resultado para o botão não voltar
+        // para "Emitir NFe" quando o webhook de cancelamento da nota antiga
+        // gravar link_nfe = '' durante a reemissão. Removido quando link_nfe
+        // chegar a um estado terminal (URL/'erro') ou por timeout de segurança.
+        setAwaitingNfe((prev) => new Set(prev).add(fatura.id));
+        window.setTimeout(() => {
+          setAwaitingNfe((prev) => {
+            const next = new Set(prev);
+            next.delete(fatura.id);
+            return next;
+          });
+        }, 120000);
 
         fetchFaturas();
       } else {
@@ -655,6 +693,20 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     if (isProcessing) {
       return {
         text: 'Emitindo NFe...',
+        icon: FileText,
+        className: 'text-gray-500',
+        disabled: true,
+        action: null,
+      };
+    }
+
+    // AI dev note: Enquanto aguardamos o resultado assíncrono da (re)emissão,
+    // manter "Gerando NFe" mesmo que o link_nfe esteja momentaneamente vazio
+    // por causa do webhook de cancelamento da nota antiga. Evita o botão piscar
+    // para "Emitir NFe" no meio do processo.
+    if (awaitingNfe.has(fatura.id)) {
+      return {
+        text: 'Gerando NFe',
         icon: FileText,
         className: 'text-gray-500',
         disabled: true,

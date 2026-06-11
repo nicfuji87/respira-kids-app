@@ -52,6 +52,7 @@ const FaturaItem = React.memo<{
   userRole?: string | null;
   isEmitingNfe?: string | null;
   isReceivingPayment?: string | null;
+  awaitingNfeIds?: Set<string>;
 }>(
   ({
     fatura,
@@ -63,6 +64,7 @@ const FaturaItem = React.memo<{
     userRole,
     isEmitingNfe,
     isReceivingPayment,
+    awaitingNfeIds,
   }) => {
     const { toast } = useToast();
     // AI dev note: Controla o diálogo de confirmação de "cancelar e reemitir NFe"
@@ -244,6 +246,18 @@ const FaturaItem = React.memo<{
       if (isProcessing) {
         return {
           text: 'Emitindo NFe...',
+          icon: FileText,
+          className: 'text-gray-500',
+          disabled: true,
+        };
+      }
+
+      // AI dev note: Enquanto aguardamos o resultado assíncrono da (re)emissão,
+      // manter "Gerando NFe" mesmo que o link_nfe esteja momentaneamente vazio
+      // por causa do webhook de cancelamento da nota antiga durante a reemissão.
+      if (awaitingNfeIds?.has(fatura.id)) {
+        return {
+          text: 'Gerando NFe',
           icon: FileText,
           className: 'text-gray-500',
           disabled: true,
@@ -553,6 +567,7 @@ export interface FaturasListProps {
   userRole?: string | null;
   isEmitingNfe?: string | null; // faturaId sendo processada
   isReceivingPayment?: string | null; // faturaId sendo processada
+  awaitingNfeIds?: Set<string>; // faturaIds aguardando resultado assíncrono da NFe
 }
 
 // Componente principal da lista de faturas
@@ -575,6 +590,7 @@ export const FaturasList = React.memo<FaturasListProps>(
     userRole,
     isEmitingNfe,
     isReceivingPayment,
+    awaitingNfeIds,
   }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -629,6 +645,7 @@ export const FaturasList = React.memo<FaturasListProps>(
                 userRole={userRole}
                 isEmitingNfe={isEmitingNfe}
                 isReceivingPayment={isReceivingPayment}
+                awaitingNfeIds={awaitingNfeIds}
               />
             ))}
 
