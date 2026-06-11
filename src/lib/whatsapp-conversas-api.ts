@@ -1,10 +1,12 @@
 // AI dev note: API do dashboard de Análise de Conversas (WhatsApp/Chatwoot).
-// Leitura/atualização restrita a admin + secretaria (RLS na tabela whatsapp_conversas).
-// A escrita das análises é feita pelo n8n (service_role) — aqui só lemos e
+// Leitura na VIEW vw_whatsapp_conversas_enriquecidas (conversa + pessoa vinculada +
+// agendamentos/faturas do sistema). Escrita (follow-up) na tabela base whatsapp_conversas.
+// A escrita das análises é feita pelo n8n (service_role); aqui só lemos, conciliamos e
 // atualizamos o estado de follow-up (concluir/ignorar).
 
 import { supabase } from './supabase';
 import type {
+  ConciliacaoAlerta,
   DistribuicaoItem,
   FollowupStatus,
   WhatsAppConversaRow,
@@ -13,6 +15,7 @@ import type {
   WhatsAppDashboardFilters,
 } from '@/types/whatsapp-conversas';
 
+const VIEW = 'vw_whatsapp_conversas_enriquecidas';
 const TABLE = 'whatsapp_conversas';
 
 // =====================================================
@@ -78,23 +81,6 @@ export const SENTIMENTO_LABELS: Record<string, string> = {
   negativo: 'Negativo',
 };
 
-export const ETAPA_LABELS: Record<string, string> = {
-  novo_lead: 'Novo lead',
-  paciente_ativo: 'Paciente ativo',
-  pos_consulta: 'Pós-consulta',
-  cobranca: 'Cobrança',
-  recorrente: 'Recorrente',
-  suporte: 'Suporte',
-  outros: 'Outros',
-};
-
-export const URGENCIA_LABELS: Record<string, string> = {
-  baixa: 'Baixa',
-  media: 'Média',
-  alta: 'Alta',
-  nao_aplicavel: 'Não aplicável',
-};
-
 export const RESPONSAVEL_LABELS: Record<string, string> = {
   recepcao: 'Recepção',
   fisioterapeuta: 'Fisioterapeuta',
@@ -124,7 +110,7 @@ export function labelFor(
 // =====================================================
 
 /**
- * Busca conversas (admin/secretaria). Busca em lotes para suportar volume.
+ * Busca conversas enriquecidas (admin/secretaria). Busca em lotes para suportar volume.
  */
 export async function fetchWhatsAppConversas(): Promise<WhatsAppConversaRow[]> {
   const all: WhatsAppConversaRow[] = [];
@@ -134,7 +120,7 @@ export async function fetchWhatsAppConversas(): Promise<WhatsAppConversaRow[]> {
 
   while (hasMore) {
     const { data, error } = await supabase
-      .from(TABLE)
+      .from(VIEW)
       .select('*')
       .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
       .range(offset, offset + batchSize - 1);
@@ -156,6 +142,7 @@ export async function fetchWhatsAppConversas(): Promise<WhatsAppConversaRow[]> {
 
 /**
  * Atualiza o estado de follow-up de uma conversa (concluir / ignorar / reabrir).
+ * Escreve na tabela base (a view não é atualizável).
  */
 export async function updateFollowupStatus(
   id: string,
@@ -176,6 +163,160 @@ export async function updateFollowupStatus(
     console.error('[whatsapp-conversas] erro ao atualizar follow-up:', error);
     throw error;
   }
+}
+
+// =====================================================
+// CONCILIAÇÃO (conversa x sistema)
+// =====================================================
+
+const MS_DIA = 24 * 60 * 60 * 1000;
+/** Tolerância para casar uma data mencionada com um agendamento (em dias). */
+const TOLERANCIA_DIAS = 2;
+
+function diaUTC(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const t = Date.parse(value);
+  if (isNaN(t)) return null;
+  // Normaliza para o "dia" (descarta horas) usando referência local.
+  const d = new Date(t);
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function fmtDia(diaMs: number): string {
+  const d = new Date(diaMs);
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}`;
+}
+
+function dentroDaTolerancia(a: number, lista: number[]): boolean {
+  return lista.some((b) => Math.abs(a - b) <= TOLERANCIA_DIAS * MS_DIA);
+}
+
+function conversaSobreAgenda(row: WhatsAppConversaRow): boolean {
+  return (
+    row.agendamento_realizado ||
+    row.confirmacao_consulta ||
+    row.remarcacao_solicitada ||
+    row.intencao_principal === 'agendamento' ||
+    row.intencao_principal === 'confirmacao' ||
+    row.intencao_principal === 'remarcacao'
+  );
+}
+
+/**
+ * Compara o que a conversa afirma (IA) com o que o sistema tem (agendamentos /
+ * faturas) e devolve as divergências. Só faz sentido para clientes cadastrados.
+ */
+export function computeConciliacao(
+  row: WhatsAppConversaRow
+): ConciliacaoAlerta[] {
+  if (!row.cliente_cadastrado) return [];
+
+  const alertas: ConciliacaoAlerta[] = [];
+
+  const agendamentos = Array.isArray(row.agendamentos_sistema)
+    ? row.agendamentos_sistema
+    : [];
+  const faturas = Array.isArray(row.faturas_sistema) ? row.faturas_sistema : [];
+
+  // --- Agendamento ---
+  const datasMencionadas = (
+    Array.isArray(row.data_consulta_mencionada)
+      ? row.data_consulta_mencionada
+      : []
+  )
+    .map((d) => diaUTC(d))
+    .filter((d): d is number => d !== null);
+
+  const datasSistema = agendamentos
+    .map((a) => diaUTC(a.data_hora))
+    .filter((d): d is number => d !== null);
+
+  for (const dm of datasMencionadas) {
+    if (!dentroDaTolerancia(dm, datasSistema)) {
+      alertas.push({
+        trilha: 'agendamento',
+        direcao: 'conversa_sem_sistema',
+        severidade: 'media',
+        mensagem: `Conversa menciona consulta em ${fmtDia(dm)}, sem agendamento correspondente no sistema.`,
+      });
+    }
+  }
+
+  if (conversaSobreAgenda(row)) {
+    const inicio = diaUTC(row.iniciada_em || row.created_at);
+    for (const a of agendamentos) {
+      const ds = diaUTC(a.data_hora);
+      if (ds === null) continue;
+      // Considera só agendamentos a partir do início da conversa (futuros p/ ela).
+      if (inicio !== null && ds < inicio - TOLERANCIA_DIAS * MS_DIA) continue;
+      if (!dentroDaTolerancia(ds, datasMencionadas)) {
+        alertas.push({
+          trilha: 'agendamento',
+          direcao: 'sistema_sem_conversa',
+          severidade: 'baixa',
+          mensagem: `Agendamento em ${fmtDia(ds)}${
+            a.status_consulta ? ` (${a.status_consulta})` : ''
+          } no sistema não foi mencionado na conversa.`,
+        });
+      }
+    }
+  }
+
+  // --- Nota fiscal ---
+  const temNfeSistema =
+    faturas.some((f) => f.tem_nfe) || agendamentos.some((a) => a.tem_nfe);
+  if (row.nota_fiscal_enviada && !temNfeSistema) {
+    alertas.push({
+      trilha: 'nota_fiscal',
+      direcao: 'conversa_sem_sistema',
+      severidade: 'media',
+      mensagem:
+        'Conversa indica nota fiscal enviada, mas não há NF registrada no sistema.',
+    });
+  }
+  if (
+    !row.nota_fiscal_enviada &&
+    temNfeSistema &&
+    row.intencao_principal === 'nota_fiscal'
+  ) {
+    alertas.push({
+      trilha: 'nota_fiscal',
+      direcao: 'sistema_sem_conversa',
+      severidade: 'baixa',
+      mensagem:
+        'Sistema possui NF emitida que não aparece registrada na conversa.',
+    });
+  }
+
+  // --- Cobrança / pagamento ---
+  const faturasAberto = faturas.filter(
+    (f) => f.status === 'pendente' || f.status === 'atrasado'
+  );
+  if (row.pagamento_confirmado && faturasAberto.length > 0) {
+    const st = faturasAberto.some((f) => f.status === 'atrasado')
+      ? 'atrasada'
+      : 'pendente';
+    alertas.push({
+      trilha: 'cobranca',
+      direcao: 'conversa_sem_sistema',
+      severidade: 'alta',
+      mensagem: `Cliente indica pagamento na conversa, mas há fatura ${st} no sistema.`,
+    });
+  }
+  const temAtrasada = faturas.some((f) => f.status === 'atrasado');
+  if (temAtrasada && !row.pagamento_solicitado && !row.pagamento_confirmado) {
+    alertas.push({
+      trilha: 'cobranca',
+      direcao: 'sistema_sem_conversa',
+      severidade: 'media',
+      mensagem:
+        'Há fatura atrasada no sistema sem cobrança registrada na conversa.',
+    });
+  }
+
+  return alertas;
 }
 
 // =====================================================
@@ -223,17 +364,25 @@ export function applyFilters(
     if (!passesArrayFilter(filters.tiposServico, row.tipo_servico_mencionado))
       return false;
 
+    if (filters.cadastro === 'cadastrados' && !row.cliente_cadastrado)
+      return false;
+    if (filters.cadastro === 'nao_cadastrados' && row.cliente_cadastrado)
+      return false;
+
     if (filters.apenasFollowup) {
       if (!row.necessita_followup || row.followup_status !== 'pendente')
         return false;
     }
     if (filters.apenasReclamacoes && !row.reclamacao_identificada) return false;
     if (filters.apenasClinico && !row.tem_conteudo_clinico) return false;
+    if (filters.apenasDivergencias && computeConciliacao(row).length === 0)
+      return false;
 
     if (search) {
       const haystack = [
         row.contato_nome,
         row.contato_telefone,
+        row.pessoa_vinculada_nome,
         row.resumo,
         ...(Array.isArray(row.profissional_mencionado)
           ? row.profissional_mencionado
@@ -366,12 +515,32 @@ export function computeStats(
     .map((r) => r.tempo_medio_resposta_minutos)
     .filter((n): n is number => typeof n === 'number');
 
+  // Conciliação (uma passada)
+  let conversasComDivergencia = 0;
+  let divergenciasAgendamento = 0;
+  let divergenciasNotaFiscal = 0;
+  let divergenciasCobranca = 0;
+  for (const r of rows) {
+    const alertas = computeConciliacao(r);
+    if (alertas.length > 0) conversasComDivergencia += 1;
+    for (const a of alertas) {
+      if (a.trilha === 'agendamento') divergenciasAgendamento += 1;
+      else if (a.trilha === 'nota_fiscal') divergenciasNotaFiscal += 1;
+      else if (a.trilha === 'cobranca') divergenciasCobranca += 1;
+    }
+  }
+
+  const cadastrados = countBool(rows, 'cliente_cadastrado');
+
   return {
     totalConversas: rows.length,
     conversasUltimos7Dias: rows.filter((r) => agora - refDate(r) <= ms7).length,
     conversasUltimos30Dias: rows.filter((r) => agora - refDate(r) <= ms30)
       .length,
     totalMensagens: rows.reduce((acc, r) => acc + (r.total_mensagens || 0), 0),
+
+    clientesCadastrados: cadastrados,
+    clientesNaoCadastrados: rows.length - cadastrados,
 
     leadsQuentes: countBool(rows, 'lead_quente'),
     clientesNovos: countBool(rows, 'cliente_novo'),
@@ -381,20 +550,22 @@ export function computeStats(
     pagamentosSolicitados: countBool(rows, 'pagamento_solicitado'),
     pagamentosConfirmados: countBool(rows, 'pagamento_confirmado'),
     notasFiscaisEnviadas: countBool(rows, 'nota_fiscal_enviada'),
-    pesquisasSatisfacao: countBool(rows, 'pesquisa_satisfacao_enviada'),
     foraHorarioComercial: countBool(rows, 'fora_horario_comercial'),
 
     atendimentosDomiciliares: rows.filter(
       (r) => r.local_atendimento === 'domiciliar'
     ).length,
-    indicacoesPediatra: countBool(rows, 'indicacao_pediatra_mencionada'),
     resolvidosPrimeiroContato: countBool(rows, 'resolvido_primeiro_contato'),
-    encaixesSolicitados: countBool(rows, 'solicitou_encaixe'),
     valorMencionadoTotal: rows.reduce(
       (acc, r) =>
         acc + (typeof r.valor_mencionado === 'number' ? r.valor_mencionado : 0),
       0
     ),
+
+    conversasComDivergencia,
+    divergenciasAgendamento,
+    divergenciasNotaFiscal,
+    divergenciasCobranca,
 
     tempoMedioPrimeiraResposta: media(primeirasRespostas),
     tempoMedioResposta: media(respostasMedias),
@@ -411,13 +582,9 @@ export function computeStats(
     reclamacoes: countBool(rows, 'reclamacao_identificada'),
     reclamacoesAtencaoAdmin: countBool(rows, 'requer_atencao_admin'),
     conteudoClinico: countBool(rows, 'tem_conteudo_clinico'),
-    urgenciaClinicaAlta: rows.filter((r) => r.urgencia_clinica === 'alta')
-      .length,
-    triagemHumana: countBool(rows, 'necessita_triagem_humana'),
     conversasComAutomacao: rows.filter(
       (r) => (r.mensagens_automaticas || 0) > 0
     ).length,
-    riscoLgpdAlto: rows.filter((r) => r.risco_lgpd === 'alto').length,
 
     distribuicaoStatus: distribuicaoSingle(
       rows,
@@ -439,16 +606,10 @@ export function computeStats(
       'sentimento_cliente',
       SENTIMENTO_LABELS
     ),
-    distribuicaoEtapa: distribuicaoSingle(rows, 'etapa_conversa', ETAPA_LABELS),
     distribuicaoTipoServico: distribuicaoSingle(
       rows,
       'tipo_servico_mencionado',
       TIPO_SERVICO_LABELS
-    ),
-    distribuicaoUrgenciaClinica: distribuicaoSingle(
-      rows.filter((r) => r.tem_conteudo_clinico),
-      'urgencia_clinica',
-      URGENCIA_LABELS
     ),
     distribuicaoResponsavel: distribuicaoSingle(
       rows.filter((r) => r.necessita_followup),
@@ -533,10 +694,6 @@ export function computeInsights(
     leadsQuentesSemResposta,
 
     topPontosAtrito: distribuicaoArray(rows, 'pontos_de_atrito').slice(0, 10),
-    topSintomas: distribuicaoArray(
-      rows.filter((r) => r.tem_conteudo_clinico),
-      'sintomas_mencionados'
-    ).slice(0, 10),
     topMotivosInsatisfacao: distribuicaoSingle(
       rows.filter((r) => r.reclamacao_identificada),
       'motivo_insatisfacao'

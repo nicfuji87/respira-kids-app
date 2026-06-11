@@ -174,6 +174,8 @@ export const WhatsAppDashboardFilters =
         if (filters.apenasFollowup) c++;
         if (filters.apenasReclamacoes) c++;
         if (filters.apenasClinico) c++;
+        if (filters.cadastro) c++;
+        if (filters.apenasDivergencias) c++;
         return c;
       }, [filters]);
 
@@ -336,6 +338,47 @@ export const WhatsAppDashboardFilters =
                   onChange({
                     ...filters,
                     apenasClinico: filters.apenasClinico ? undefined : true,
+                  })
+                }
+              />
+              <ToggleChip
+                active={filters.cadastro === 'cadastrados'}
+                label="Cadastrados"
+                tone="azul"
+                onClick={() =>
+                  onChange({
+                    ...filters,
+                    cadastro:
+                      filters.cadastro === 'cadastrados'
+                        ? undefined
+                        : 'cadastrados',
+                  })
+                }
+              />
+              <ToggleChip
+                active={filters.cadastro === 'nao_cadastrados'}
+                label="Não cadastrados"
+                tone="azul"
+                onClick={() =>
+                  onChange({
+                    ...filters,
+                    cadastro:
+                      filters.cadastro === 'nao_cadastrados'
+                        ? undefined
+                        : 'nao_cadastrados',
+                  })
+                }
+              />
+              <ToggleChip
+                active={Boolean(filters.apenasDivergencias)}
+                label="Com divergência"
+                tone="vermelho"
+                onClick={() =>
+                  onChange({
+                    ...filters,
+                    apenasDivergencias: filters.apenasDivergencias
+                      ? undefined
+                      : true,
                   })
                 }
               />

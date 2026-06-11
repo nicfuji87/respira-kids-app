@@ -1,6 +1,7 @@
 // AI dev note: Tipos da análise conversacional de WhatsApp (Chatwoot).
-// Tabela: public.whatsapp_conversas — 1 linha por conversa (chatwoot_conversa_id).
-// Escrita pelo n8n (service_role); leitura/atualização pelo dashboard (admin + secretaria).
+// Tabela base: public.whatsapp_conversas — 1 linha por conversa (chatwoot_conversa_id).
+// Leitura no dashboard: VIEW public.vw_whatsapp_conversas_enriquecidas (telefone -> pessoa +
+// agendamentos/faturas do sistema, para a conciliação). Escrita (follow-up) na tabela base.
 // AI dev note: Os enums abaixo são a fonte única de verdade do dashboard e DEVEM
 // espelhar exatamente os CHECK constraints da tabela e os valores do prompt da IA (n8n).
 // Não adicione valores aqui sem atualizar o CHECK correspondente (migração) e o prompt.
@@ -43,17 +44,6 @@ export type StatusConversa =
   | 'aguardando_data_futura'
   | 'sem_atendimento';
 
-export type EtapaConversa =
-  | 'novo_lead'
-  | 'paciente_ativo'
-  | 'pos_consulta'
-  | 'cobranca'
-  | 'recorrente'
-  | 'suporte'
-  | 'outros';
-
-export type UrgenciaClinica = 'baixa' | 'media' | 'alta' | 'nao_aplicavel';
-
 export type SentimentoCliente =
   | 'positivo'
   | 'satisfeito'
@@ -62,8 +52,6 @@ export type SentimentoCliente =
   | 'preocupado'
   | 'frustrado'
   | 'negativo';
-
-export type QualidadeAtendimento = 'otimo' | 'bom' | 'regular' | 'ruim';
 
 export type NivelEnum = 'nenhum' | 'baixo' | 'medio' | 'alto';
 
@@ -137,25 +125,17 @@ export interface WhatsAppConversaRow {
   // Classificação (IA)
   resumo: string | null;
   intencao_principal: IntencaoConversa | null;
-  intencoes_secundarias: IntencaoConversa[] | null;
   tipo_demanda: TipoDemanda | null;
   status_conversa: StatusConversa | null;
-  etapa_conversa: EtapaConversa | null;
 
-  // Contexto clínico
+  // Contexto clínico (flag leve)
   tem_conteudo_clinico: boolean;
-  idade_paciente_mencionada: string | null;
-  sintomas_mencionados: string[] | null;
-  sinais_alerta_clinicos: string[] | null;
-  urgencia_clinica: UrgenciaClinica | null;
-  necessita_triagem_humana: boolean;
 
   // Contexto operacional / comercial
   lead_quente: boolean;
   cliente_novo: boolean;
   perguntou_valor: boolean;
   perguntou_disponibilidade: boolean;
-  solicitacao_mesmo_dia: boolean;
   agendamento_realizado: boolean;
   confirmacao_consulta: boolean;
   remarcacao_solicitada: boolean;
@@ -163,21 +143,18 @@ export interface WhatsAppConversaRow {
   pagamento_solicitado: boolean;
   pagamento_confirmado: boolean;
   nota_fiscal_enviada: boolean;
-  pesquisa_satisfacao_enviada: boolean;
   profissional_mencionado: string[] | null;
+  /** Datas mencionadas na conversa em ISO (YYYY-MM-DD) — base da conciliação. */
   data_consulta_mencionada: string[] | null;
 
-  // Serviço / atendimento (novos)
+  // Serviço / atendimento
   tipo_servico_mencionado: TipoServico | null;
   local_atendimento: LocalAtendimento | null;
   valor_mencionado: number | null;
-  indicacao_pediatra_mencionada: boolean;
-  solicitou_encaixe: boolean;
   resolvido_primeiro_contato: boolean;
 
   // Experiência / qualidade
   sentimento_cliente: SentimentoCliente | null;
-  qualidade_atendimento: QualidadeAtendimento | null;
   pontos_de_atrito: string[] | null;
   sugestao_melhoria: string | null;
 
@@ -187,11 +164,6 @@ export interface WhatsAppConversaRow {
   motivo_insatisfacao: string | null;
   requer_atencao_admin: boolean;
   reclamacao_alertada_em: string | null;
-
-  // LGPD
-  dados_sensiveis_detectados: boolean;
-  tipos_dados_sensiveis: string[] | null;
-  risco_lgpd: NivelEnum | null;
 
   // Follow-up / próxima ação
   necessita_followup: boolean;
@@ -204,9 +176,58 @@ export interface WhatsAppConversaRow {
   followup_lembrete_enviado_em: string | null;
 
   // Meta
-  confianca_analise: number | null;
   created_at: string;
   updated_at: string;
+
+  // ===== Enriquecimento (view vw_whatsapp_conversas_enriquecidas) =====
+  pessoa_vinculada_id: string | null;
+  pessoa_vinculada_nome: string | null;
+  cliente_cadastrado: boolean;
+  pacientes_vinculados: PacienteVinculado[];
+  agendamentos_sistema: AgendamentoSistema[];
+  faturas_sistema: FaturaSistema[];
+}
+
+export interface PacienteVinculado {
+  id: string;
+  nome: string | null;
+}
+
+export interface AgendamentoSistema {
+  id: string;
+  data_hora: string;
+  paciente_nome: string | null;
+  status_consulta: string | null;
+  status_pagamento: string | null;
+  valor: number | null;
+  tem_nfe: boolean;
+  fatura_id: string | null;
+}
+
+export interface FaturaSistema {
+  id: string;
+  status: string | null;
+  status_nfe: string | null;
+  tem_nfe: boolean;
+  vencimento: string | null;
+  valor: number | null;
+}
+
+// ===== Conciliação (estilo conciliação bancária) =====
+
+export type ConciliacaoTrilha = 'agendamento' | 'nota_fiscal' | 'cobranca';
+/** conversa: a conversa afirma algo que o sistema não confirma. sistema: o
+ * sistema tem algo que a conversa não menciona. */
+export type ConciliacaoDirecao =
+  | 'conversa_sem_sistema'
+  | 'sistema_sem_conversa';
+export type ConciliacaoSeveridade = 'alta' | 'media' | 'baixa';
+
+export interface ConciliacaoAlerta {
+  trilha: ConciliacaoTrilha;
+  direcao: ConciliacaoDirecao;
+  severidade: ConciliacaoSeveridade;
+  mensagem: string;
 }
 
 /**
@@ -227,6 +248,10 @@ export interface WhatsAppDashboardFilters {
   apenasFollowup?: boolean;
   apenasReclamacoes?: boolean;
   apenasClinico?: boolean;
+  /** 'cadastrados' | 'nao_cadastrados' (undefined = todos). */
+  cadastro?: 'cadastrados' | 'nao_cadastrados';
+  /** Apenas conversas com divergência na conciliação. */
+  apenasDivergencias?: boolean;
 }
 
 export interface DistribuicaoItem {
@@ -245,6 +270,10 @@ export interface WhatsAppConversasStats {
   conversasUltimos30Dias: number;
   totalMensagens: number;
 
+  // Cadastro
+  clientesCadastrados: number;
+  clientesNaoCadastrados: number;
+
   // Operacional / comercial
   leadsQuentes: number;
   clientesNovos: number;
@@ -254,15 +283,18 @@ export interface WhatsAppConversasStats {
   pagamentosSolicitados: number;
   pagamentosConfirmados: number;
   notasFiscaisEnviadas: number;
-  pesquisasSatisfacao: number;
   foraHorarioComercial: number;
 
-  // Serviço / atendimento (novos)
+  // Serviço / atendimento
   atendimentosDomiciliares: number;
-  indicacoesPediatra: number;
   resolvidosPrimeiroContato: number;
-  encaixesSolicitados: number;
   valorMencionadoTotal: number;
+
+  // Conciliação
+  conversasComDivergencia: number;
+  divergenciasAgendamento: number;
+  divergenciasNotaFiscal: number;
+  divergenciasCobranca: number;
 
   // Atendimento (SLA)
   tempoMedioPrimeiraResposta: number | null;
@@ -276,19 +308,14 @@ export interface WhatsAppConversasStats {
   reclamacoes: number;
   reclamacoesAtencaoAdmin: number;
   conteudoClinico: number;
-  urgenciaClinicaAlta: number;
-  triagemHumana: number;
   conversasComAutomacao: number;
-  riscoLgpdAlto: number;
 
   // Distribuições
   distribuicaoStatus: DistribuicaoItem[];
   distribuicaoIntencao: DistribuicaoItem[];
   distribuicaoTipoDemanda: DistribuicaoItem[];
   distribuicaoSentimento: DistribuicaoItem[];
-  distribuicaoEtapa: DistribuicaoItem[];
   distribuicaoTipoServico: DistribuicaoItem[];
-  distribuicaoUrgenciaClinica: DistribuicaoItem[];
   distribuicaoResponsavel: DistribuicaoItem[];
   conversasPorDia: Array<{ data: string; total: number }>;
 }
@@ -309,7 +336,6 @@ export interface WhatsAppConversasInsights {
 
   // Atrito e clínico
   topPontosAtrito: DistribuicaoItem[];
-  topSintomas: DistribuicaoItem[];
   topMotivosInsatisfacao: DistribuicaoItem[];
   topProfissionais: DistribuicaoItem[];
 

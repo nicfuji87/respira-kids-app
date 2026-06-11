@@ -1,6 +1,7 @@
 // AI dev note: Card de uma conversa de WhatsApp analisada.
 // Reutilizado na aba "Conversas", na fila de follow-up e na lista de reclamações.
-// Quando handlers de follow-up são passados, exibe ações (Concluir / Ignorar / Reabrir).
+// Mostra se o contato é um cliente cadastrado e as divergências da conciliação
+// (conversa x sistema). Quando handlers de follow-up são passados, exibe ações.
 
 import React from 'react';
 import { Card, CardContent } from '@/components/primitives/card';
@@ -12,7 +13,6 @@ import { ptBR } from 'date-fns/locale';
 import {
   Activity,
   AlertTriangle,
-  Baby,
   Check,
   CircleSlash,
   Clock,
@@ -21,11 +21,16 @@ import {
   MessageSquare,
   Phone,
   RotateCcw,
-  ShieldAlert,
+  Scale,
   Sparkles,
   Stethoscope,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
-import type { WhatsAppConversaRow } from '@/types/whatsapp-conversas';
+import type {
+  ConciliacaoAlerta,
+  WhatsAppConversaRow,
+} from '@/types/whatsapp-conversas';
 import {
   INTENCAO_LABELS,
   LOCAL_ATENDIMENTO_LABELS,
@@ -34,7 +39,7 @@ import {
   STATUS_LABELS,
   TIPO_DEMANDA_LABELS,
   TIPO_SERVICO_LABELS,
-  URGENCIA_LABELS,
+  computeConciliacao,
   labelFor,
 } from '@/lib/whatsapp-conversas-api';
 
@@ -70,6 +75,12 @@ const SENTIMENTO_TONE: Record<string, string> = {
   negativo: 'text-vermelho-kids',
 };
 
+const SEVERIDADE_TONE: Record<ConciliacaoAlerta['severidade'], string> = {
+  alta: 'border-vermelho-kids/40 bg-vermelho-kids/5 text-vermelho-kids',
+  media: 'border-amarelo-pipa/50 bg-amarelo-pipa/10 text-roxo-titulo',
+  baixa: 'border-border bg-muted/40 text-muted-foreground',
+};
+
 interface FlagDef {
   key: keyof WhatsAppConversaRow;
   label: string;
@@ -82,16 +93,13 @@ const POSITIVE_FLAGS: FlagDef[] = [
   { key: 'confirmacao_consulta', label: 'Confirmou consulta' },
   { key: 'pagamento_confirmado', label: 'Pagou' },
   { key: 'nota_fiscal_enviada', label: 'NF enviada' },
-  { key: 'pesquisa_satisfacao_enviada', label: 'Pesquisa enviada' },
   { key: 'resolvido_primeiro_contato', label: 'Resolvido no 1º contato' },
-  { key: 'indicacao_pediatra_mencionada', label: 'Indicação pediatra' },
 ];
 
 const ALERT_FLAGS: FlagDef[] = [
   { key: 'cancelamento_detectado', label: 'Cancelou' },
   { key: 'remarcacao_solicitada', label: 'Remarcação' },
   { key: 'pagamento_solicitado', label: 'Cobrança em aberto' },
-  { key: 'solicitou_encaixe', label: 'Pediu encaixe' },
 ];
 
 function fmtValor(v: number | null): string | null {
@@ -119,6 +127,8 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
       Boolean(onConcluir || onIgnorar || onReabrir) &&
       (row.necessita_followup || row.followup_status !== 'nao_aplicavel');
 
+    const alertasConciliacao = computeConciliacao(row);
+
     return (
       <Card className={cn('overflow-hidden', className)}>
         <CardContent className="p-4 space-y-3">
@@ -134,12 +144,6 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
                     className="w-4 h-4 text-azul-respira shrink-0"
                     aria-label="Conteúdo clínico"
                   />
-                )}
-                {row.idade_paciente_mencionada && (
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <Baby className="w-3.5 h-3.5" />
-                    {row.idade_paciente_mencionada}
-                  </span>
                 )}
               </div>
               {row.contato_telefone && (
@@ -160,6 +164,26 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
               >
                 {labelFor(STATUS_LABELS, row.status_conversa)}
               </Badge>
+            )}
+          </div>
+
+          {/* Cadastro: cliente cadastrado x não cadastrado */}
+          <div>
+            {row.cliente_cadastrado ? (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-verde-pipa/40 bg-verde-pipa/15 px-2 py-1 text-xs text-roxo-titulo">
+                <UserCheck className="w-3.5 h-3.5" />
+                Cliente cadastrado
+                {row.pessoa_vinculada_nome && (
+                  <span className="font-medium">
+                    · {row.pessoa_vinculada_nome}
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
+                <UserX className="w-3.5 h-3.5" />
+                Não cadastrado no sistema
+              </span>
             )}
           </div>
 
@@ -199,36 +223,6 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
                 {labelFor(SENTIMENTO_LABELS, row.sentimento_cliente)}
               </span>
             )}
-            {row.tem_conteudo_clinico &&
-              row.urgencia_clinica &&
-              row.urgencia_clinica !== 'nao_aplicavel' && (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    'font-normal gap-1',
-                    row.urgencia_clinica === 'alta'
-                      ? 'border-vermelho-kids/50 text-vermelho-kids'
-                      : 'border-amarelo-pipa/50 text-roxo-titulo'
-                  )}
-                >
-                  <Stethoscope className="w-3 h-3" />
-                  Urgência {labelFor(URGENCIA_LABELS, row.urgencia_clinica)}
-                </Badge>
-              )}
-            {(row.risco_lgpd === 'alto' || row.risco_lgpd === 'medio') && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  'font-normal gap-1',
-                  row.risco_lgpd === 'alto'
-                    ? 'border-vermelho-kids/50 text-vermelho-kids'
-                    : 'border-amarelo-pipa/50 text-roxo-titulo'
-                )}
-              >
-                <ShieldAlert className="w-3 h-3" />
-                LGPD {row.risco_lgpd}
-              </Badge>
-            )}
             {(row.mensagens_automaticas || 0) > 0 && (
               <Badge
                 variant="outline"
@@ -250,6 +244,28 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
             <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
               {row.resumo}
             </p>
+          )}
+
+          {/* Conciliação: divergências conversa x sistema */}
+          {alertasConciliacao.length > 0 && (
+            <div className="space-y-1.5">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <Scale className="w-3.5 h-3.5 text-azul-respira" />
+                Conciliação ({alertasConciliacao.length})
+              </span>
+              {alertasConciliacao.map((a, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'flex items-start gap-2 rounded-md border p-2 text-xs',
+                    SEVERIDADE_TONE[a.severidade]
+                  )}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{a.mensagem}</span>
+                </div>
+              ))}
+            </div>
           )}
 
           {/* Reclamação */}

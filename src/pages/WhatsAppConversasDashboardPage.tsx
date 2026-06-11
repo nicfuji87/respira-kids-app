@@ -33,6 +33,7 @@ import {
 } from '@/components/domain/whatsapp-conversas';
 import {
   applyFilters,
+  computeConciliacao,
   computeInsights,
   computeStats,
   fetchWhatsAppConversas,
@@ -54,6 +55,7 @@ import {
   CheckCircle2,
   Clock,
   DollarSign,
+  FileText,
   Flame,
   Home,
   Inbox,
@@ -62,9 +64,11 @@ import {
   ListChecks,
   MessagesSquare,
   RefreshCw,
+  Scale,
   ShieldAlert,
   Stethoscope,
   TrendingUp,
+  UserCheck,
   Users,
 } from 'lucide-react';
 
@@ -144,6 +148,12 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
 
   const reclamacaoRows = useMemo(
     () => filteredRows.filter((r) => r.reclamacao_identificada),
+    [filteredRows]
+  );
+
+  // Conciliação: conversas com divergência conversa x sistema
+  const conciliacaoRows = useMemo(
+    () => filteredRows.filter((r) => computeConciliacao(r).length > 0),
     [filteredRows]
   );
 
@@ -296,6 +306,15 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="conciliacao" className="gap-2">
+              <Scale className="w-4 h-4" />
+              Conciliação
+              {stats.conversasComDivergencia > 0 && (
+                <span className="ml-1 rounded-full bg-vermelho-kids/20 text-vermelho-kids text-xs px-1.5">
+                  {stats.conversasComDivergencia}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="reclamacoes" className="gap-2">
               <AlertTriangle className="w-4 h-4" />
               Reclamações
@@ -373,12 +392,26 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
                 tone="azul"
                 label="Conteúdo clínico"
                 value={stats.conteudoClinico}
-                hint={`${stats.urgenciaClinicaAlta} com urgência alta`}
+                hint="conversas com discussão clínica"
               />
             </div>
 
-            {/* KPIs de serviço / atendimento */}
+            {/* KPIs de cadastro / conciliação / serviço */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <WhatsAppStatCard
+                icon={UserCheck}
+                tone="verde"
+                label="Clientes cadastrados"
+                value={stats.clientesCadastrados}
+                hint={`${stats.clientesNaoCadastrados} não cadastrados`}
+              />
+              <WhatsAppStatCard
+                icon={Scale}
+                tone="vermelho"
+                label="Com divergência"
+                value={stats.conversasComDivergencia}
+                hint={`${stats.divergenciasCobranca} de cobrança · ${stats.divergenciasAgendamento} de agenda`}
+              />
               <WhatsAppStatCard
                 icon={Home}
                 tone="roxo"
@@ -387,25 +420,11 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
                 hint="conversas sobre atendimento em casa"
               />
               <WhatsAppStatCard
-                icon={CheckCircle2}
-                tone="verde"
-                label="Resolvido no 1º contato"
-                value={stats.resolvidosPrimeiroContato}
-                hint="eficiência do atendimento"
-              />
-              <WhatsAppStatCard
-                icon={Stethoscope}
-                tone="azul"
-                label="Indicação de pediatra"
-                value={stats.indicacoesPediatra}
-                hint="origem da demanda"
-              />
-              <WhatsAppStatCard
                 icon={DollarSign}
                 tone="verde"
                 label="Valores mencionados"
                 value={formatBRL(stats.valorMencionadoTotal)}
-                hint={`${stats.encaixesSolicitados} encaixes solicitados`}
+                hint={`${stats.resolvidosPrimeiroContato} resolvidos no 1º contato`}
               />
             </div>
 
@@ -483,11 +502,6 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
                 barColor="amarelo"
               />
               <WhatsAppDistribuicaoBarras
-                title="Etapa da jornada"
-                items={stats.distribuicaoEtapa}
-                barColor="roxo"
-              />
-              <WhatsAppDistribuicaoBarras
                 title="Tipo de serviço"
                 subtitle="Fisioterapia respiratória, motora, avaliação"
                 items={stats.distribuicaoTipoServico}
@@ -547,6 +561,62 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
             <WhatsAppConversasList
               rows={followupRows}
               emptyMessage="Nenhum follow-up para os filtros atuais. 🎉"
+              busyId={busyId}
+              onConcluir={onConcluir}
+              onIgnorar={onIgnorar}
+              onReabrir={onReabrir}
+            />
+          </TabsContent>
+
+          {/* ============================ CONCILIAÇÃO ============================ */}
+          <TabsContent value="conciliacao" className="space-y-4">
+            <Card className="bg-bege-fundo/40 border-azul-respira/30">
+              <CardContent className="p-4 flex items-start gap-3">
+                <Scale className="w-5 h-5 text-azul-respira shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Conciliação conversa × sistema
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Compara o que a conversa diz (agendamento, nota fiscal,
+                    pagamento) com o que existe no sistema para o cliente
+                    cadastrado, e acusa as divergências nos dois sentidos. Só
+                    avalia conversas de clientes cadastrados.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <WhatsAppStatCard
+                icon={Scale}
+                tone="vermelho"
+                label="Conversas com divergência"
+                value={stats.conversasComDivergencia}
+              />
+              <WhatsAppStatCard
+                icon={CalendarCheck}
+                tone="amarelo"
+                label="Divergências de agenda"
+                value={stats.divergenciasAgendamento}
+              />
+              <WhatsAppStatCard
+                icon={FileText}
+                tone="roxo"
+                label="Divergências de NF"
+                value={stats.divergenciasNotaFiscal}
+              />
+              <WhatsAppStatCard
+                icon={DollarSign}
+                tone="vermelho"
+                label="Divergências de cobrança"
+                value={stats.divergenciasCobranca}
+              />
+            </div>
+
+            <WhatsAppConversasList
+              rows={conciliacaoRows}
+              emptyMessage="Nenhuma divergência entre conversa e sistema. 🎉"
               busyId={busyId}
               onConcluir={onConcluir}
               onIgnorar={onIgnorar}
@@ -676,11 +746,11 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
                 hint="receberam mensagens automáticas"
               />
               <WhatsAppStatCard
-                icon={ShieldAlert}
+                icon={Clock}
                 tone="amarelo"
-                label="Risco LGPD alto"
-                value={stats.riscoLgpdAlto}
-                hint={`${stats.foraHorarioComercial} fora do horário comercial`}
+                label="Fora do horário comercial"
+                value={stats.foraHorarioComercial}
+                hint="clientes que escreveram fora do expediente"
               />
             </div>
 
@@ -690,13 +760,6 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
                 subtitle="Onde as conversas travam"
                 items={insights.topPontosAtrito}
                 barColor="vermelho"
-              />
-              <WhatsAppDistribuicaoBarras
-                title="Sintomas mais mencionados"
-                subtitle="Nas conversas com conteúdo clínico"
-                items={insights.topSintomas}
-                barColor="azul"
-                emptyLabel="Nenhum sintoma registrado"
               />
               <WhatsAppDistribuicaoBarras
                 title="Resolução por tipo de serviço"
