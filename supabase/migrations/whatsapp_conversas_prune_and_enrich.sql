@@ -134,3 +134,32 @@ LEFT JOIN LATERAL (
 
 GRANT SELECT ON public.vw_whatsapp_conversas_enriquecidas TO authenticated;
 GRANT SELECT ON public.vw_whatsapp_conversas_enriquecidas TO service_role;
+
+-- =====================================================
+-- Parte 5: RPC de leitura (SECURITY DEFINER)
+-- O dashboard lê por aqui, não pela view direta: a view é security_invoker e,
+-- sob o role authenticated, aplicaria RLS (is_admin/is_secretaria) em cada
+-- tabela-base do join — caro e sujeito a falta de grant (erro 500). A função
+-- checa o papel uma vez (mesma regra da RLS da tabela) e roda a view como dono.
+-- =====================================================
+CREATE OR REPLACE FUNCTION public.get_whatsapp_conversas_enriquecidas()
+RETURNS SETOF public.vw_whatsapp_conversas_enriquecidas
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF NOT (public.is_admin() OR public.is_secretaria()) THEN
+    RAISE EXCEPTION 'Acesso negado' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+  SELECT *
+  FROM public.vw_whatsapp_conversas_enriquecidas
+  ORDER BY ultima_mensagem_em DESC NULLS LAST;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_whatsapp_conversas_enriquecidas() FROM public;
+GRANT EXECUTE ON FUNCTION public.get_whatsapp_conversas_enriquecidas() TO authenticated;

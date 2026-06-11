@@ -15,7 +15,7 @@ import type {
   WhatsAppDashboardFilters,
 } from '@/types/whatsapp-conversas';
 
-const VIEW = 'vw_whatsapp_conversas_enriquecidas';
+const RPC_FETCH = 'get_whatsapp_conversas_enriquecidas';
 const TABLE = 'whatsapp_conversas';
 
 // =====================================================
@@ -110,34 +110,19 @@ export function labelFor(
 // =====================================================
 
 /**
- * Busca conversas enriquecidas (admin/secretaria). Busca em lotes para suportar volume.
+ * Busca conversas enriquecidas (admin/secretaria) via RPC SECURITY DEFINER.
+ * A função checa o papel (is_admin/is_secretaria) e roda a view como dono,
+ * evitando overhead de RLS por linha nas tabelas-base do join.
  */
 export async function fetchWhatsAppConversas(): Promise<WhatsAppConversaRow[]> {
-  const all: WhatsAppConversaRow[] = [];
-  const batchSize = 1000;
-  let offset = 0;
-  let hasMore = true;
+  const { data, error } = await supabase.rpc(RPC_FETCH);
 
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from(VIEW)
-      .select('*')
-      .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
-      .range(offset, offset + batchSize - 1);
-
-    if (error) {
-      console.error('[whatsapp-conversas] erro ao buscar:', error);
-      throw error;
-    }
-
-    const rows = (data || []) as WhatsAppConversaRow[];
-    all.push(...rows);
-    offset += batchSize;
-    hasMore = rows.length === batchSize;
-    if (offset > 20000) break; // Safety
+  if (error) {
+    console.error('[whatsapp-conversas] erro ao buscar:', error);
+    throw error;
   }
 
-  return all;
+  return (data || []) as WhatsAppConversaRow[];
 }
 
 /**
