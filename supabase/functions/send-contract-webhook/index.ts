@@ -91,12 +91,74 @@ Deno.serve(async (req: Request) => {
       contract.nome_contrato?.split(' - ')[1] ||
       'Paciente';
 
-    // 2) Buscar responsável legal/financeiro (para preencher o payload do webhook)
-    const { data: pessoa } = await supabase
-      .from('pessoas')
-      .select('id, nome, email, telefone')
-      .eq('id', pessoaId)
-      .maybeSingle();
+    // 2) Resolver o signatário (responsável legal/financeiro) do contrato.
+    // AI dev note: a fonte AUTORITATIVA é `variaveis_utilizadas` (responsavelLegal*),
+    // pois reflete exatamente quem foi usado ao GERAR o documento. NÃO usar
+    // pessoas[pessoa_id] como signatário: pessoa_id frequentemente é o PACIENTE
+    // (sem e-mail/telefone). Quando o e-mail vinha vazio, o n8n caía no fallback
+    // `GET /signers?search=` (vazio → retorna TODOS) e pegava data[0] = o primeiro
+    // signatário da conta Assinafy (signatário errado → contrato preso em "gerado").
+    const respNomeVar =
+      variaveis.responsavelLegalNome || variaveis.contratante || '';
+    const respEmailVar = variaveis.responsavelLegalEmail || '';
+    const respTelefoneVar = variaveis.responsavelLegalTelefone || '';
+
+    // Fallback (quando as variáveis não tiverem os dados): resolve pelo responsável
+    // de cobrança do paciente e, por último, pela própria pessoa do contrato.
+    let respFallback: {
+      id: string | null;
+      nome: string | null;
+      email: string | null;
+      telefone: number | string | null;
+    } | null = null;
+
+    if (!respEmailVar) {
+      const { data: pessoaContrato } = await supabase
+        .from('pessoas')
+        .select('id, nome, email, telefone, responsavel_cobranca_id')
+        .eq('id', pessoaId)
+        .maybeSingle();
+
+      const responsavelId =
+        pessoaContrato?.responsavel_cobranca_id ||
+        pessoaContrato?.id ||
+        pessoaId;
+
+      const { data: responsavelRow } = await supabase
+        .from('pessoas')
+        .select('id, nome, email, telefone')
+        .eq('id', responsavelId)
+        .maybeSingle();
+
+      respFallback = responsavelRow ?? pessoaContrato ?? null;
+    }
+
+    const responsavelLegal = {
+      id: respFallback?.id ?? pessoaId,
+      nome: respNomeVar || respFallback?.nome || '',
+      email: respEmailVar || respFallback?.email || null,
+      telefone: respTelefoneVar || respFallback?.telefone || null,
+    };
+
+    // Guard: sem e-mail do signatário NÃO enviamos para assinatura, senão o n8n
+    // atribuiria um signatário aleatório (data[0] de `?search=` vazio na Assinafy).
+    if (!responsavelLegal.email) {
+      console.error(
+        '❌ Signatário sem e-mail; abortando para não atribuir signatário errado.',
+        { contractId, pessoaId }
+      );
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            'Responsável legal sem e-mail. Cadastre o e-mail do responsável antes de enviar o contrato para assinatura.',
+        }),
+        {
+          status: 422,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     // 3) Buscar paciente (para incluir no payload) - prioriza variáveis do contrato
     const pacienteId = variaveis.paciente_id || variaveis.pacienteId || null;
@@ -251,15 +313,10 @@ Deno.serve(async (req: Request) => {
           data_geracao: contract.data_geracao,
           data_assinatura: contract.data_assinatura,
           paciente,
-          responsavel_legal: {
-            id: pessoa?.id ?? pessoaId,
-            nome: pessoa?.nome ?? '',
-            email: pessoa?.email ?? null,
-            telefone: pessoa?.telefone ?? null,
-          },
+          responsavel_legal: responsavelLegal,
           responsavel_financeiro: {
-            id: pessoa?.id ?? pessoaId,
-            nome: pessoa?.nome ?? '',
+            id: responsavelLegal.id,
+            nome: responsavelLegal.nome,
           },
           pdf: {
             signed_url: signedUrl,
