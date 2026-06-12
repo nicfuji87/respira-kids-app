@@ -36,10 +36,15 @@ export const PersonDetailsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto py-6 px-4">
-        <PatientDetailsManager personId={id} onBack={handleBack} />
-      </div>
+    // AI dev note: usar largura total (igual a PatientDetailsPage). Antes usava
+    // `container mx-auto`, que centralizava e estreitava o conteúdo, deixando a
+    // tela "cortada" com muito espaço vazio nos lados em telas largas.
+    <div className="w-full max-w-none">
+      <PatientDetailsManager
+        personId={id}
+        onBack={handleBack}
+        className="w-full"
+      />
     </div>
   );
 };

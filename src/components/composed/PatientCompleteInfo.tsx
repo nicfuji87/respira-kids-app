@@ -16,6 +16,7 @@ import {
   Trash2,
   AlertTriangle,
   CheckCircle2,
+  Pencil,
 } from 'lucide-react';
 import {
   Card,
@@ -60,12 +61,14 @@ import type {
 } from '@/types/patient-details';
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
 import { PatientPediatriciansSection } from './PatientPediatriciansSection';
+import { PersonQuickEditDialog } from './PersonQuickEditDialog';
 
 // AI dev note: PatientCompleteInfo - Component Composed que une informações pessoais, contato, endereço, responsáveis e consentimentos
 // Substitui múltiplos cards por um único card organizado em seções
 
 export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
-  ({ patient, userRole, className, onResponsibleClick }) => {
+  ({ patient, userRole, className, onResponsibleClick, onPatientUpdated }) => {
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -668,10 +671,25 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
     return (
       <Card className={cn('w-full', className)}>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Informações Pessoais
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Informações Pessoais
+            </CardTitle>
+            {/* AI dev note: Edição inline do cadastro (admin/secretária), evita ter
+                que ir até Configurações > Usuários. */}
+            {(userRole === 'admin' || userRole === 'secretaria') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 flex-shrink-0"
+                onClick={() => setIsEditModalOpen(true)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Editar</span>
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Seção: Avatar clicável para abrir modal */}
@@ -1188,6 +1206,23 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
               />
             </div>
           </div>
+
+          {/* Diálogo de edição rápida do cadastro */}
+          <PersonQuickEditDialog
+            person={{
+              id: patient.id,
+              nome: patient.nome,
+              email: patient.email,
+              telefone: patient.telefone,
+              cpf_cnpj: patient.cpf_cnpj,
+              data_nascimento: patient.data_nascimento,
+              numero_endereco: patient.numero_endereco,
+              complemento_endereco: patient.complemento_endereco,
+            }}
+            open={isEditModalOpen}
+            onOpenChange={setIsEditModalOpen}
+            onSaved={() => onPatientUpdated?.()}
+          />
         </CardContent>
       </Card>
     );

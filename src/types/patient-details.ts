@@ -242,6 +242,9 @@ export interface PatientPersonalInfoProps {
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
   className?: string;
   onResponsibleClick?: (responsibleId: string) => void;
+  // AI dev note: callback chamado após editar o cadastro inline, para o
+  // container recarregar os dados da pessoa exibidos.
+  onPatientUpdated?: () => void;
 }
 
 // Interface para mídia agrupada por sessão

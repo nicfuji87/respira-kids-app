@@ -67,6 +67,8 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       throw new Error('PatientDetailsManager requer patientId ou personId');
     }
     const [patient, setPatient] = useState<PatientDetails | null>(null);
+    // AI dev note: bump para recarregar os dados da pessoa após edição inline do cadastro
+    const [reloadKey, setReloadKey] = useState(0);
     const [anamnesis, setAnamnesis] = useState<string>('');
     const [observations, setObservations] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
@@ -155,7 +157,7 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       };
 
       loadPatientDetails();
-    }, [actualId, personId, user?.role]);
+    }, [actualId, personId, user?.role, reloadKey]);
 
     // Carregar locais de atendimento
     useEffect(() => {
@@ -388,6 +390,7 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
             );
             handlePersonClick(responsibleId);
           }}
+          onPatientUpdated={() => setReloadKey((k) => k + 1)}
         />
 
         {/* Conversas no WhatsApp (análise + conciliação) - admin/secretaria */}

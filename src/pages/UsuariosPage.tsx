@@ -6,7 +6,9 @@ import { UserManagement } from '@/components/domain/users';
 
 export const UsuariosPage = React.memo(() => {
   return (
-    <div className="container mx-auto p-6">
+    // AI dev note: largura total (antes `container mx-auto`, que estreitava o conteúdo
+    // e deixava muito espaço vazio nas laterais em telas largas).
+    <div className="w-full max-w-none">
       <UserManagement />
     </div>
   );
