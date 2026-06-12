@@ -8,6 +8,9 @@ import {
   Copy,
   CalendarDays,
   CheckCircle2,
+  Check,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 
 import {
@@ -30,9 +33,10 @@ import type {
 
 // AI dev note: Página pública de pagamento (#/pagamento/:token).
 // O cliente vê as datas das consultas e escolhe a forma de pagamento (PIX ou cartão
-// 1x..Nx) com os valores já calculados (repasse de taxas). Ao escolher, a edge
+// 1x..Nx) com os valores já calculados (repasse de taxas). Ao confirmar, a edge
 // function confirm-payment-link cria a cobrança no Asaas: PIX exibe o QR aqui;
 // cartão redireciona para o checkout hospedado do Asaas (invoiceUrl).
+// A seleção é unificada (PIX ou cartão+parcelas) com check visível na opção escolhida.
 
 const formatBRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -45,6 +49,9 @@ const formatDateBR = (iso: string) => {
   return d && m && y ? `${d}/${m}/${y}` : iso;
 };
 
+// Seleção do cliente: PIX ou cartão com nº de parcelas.
+type Selecao = { tipo: 'pix' } | { tipo: 'credit_card'; parcelas: number };
+
 export const PagamentoPublicoPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const { toast } = useToast();
@@ -53,7 +60,8 @@ export const PagamentoPublicoPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedParcelas, setSelectedParcelas] = useState(1);
+  // Por padrão já vem com PIX selecionado (forma sem acréscimo).
+  const [selecao, setSelecao] = useState<Selecao>({ tipo: 'pix' });
   const [isConfirming, setIsConfirming] = useState(false);
   const [pixResult, setPixResult] = useState<{
     encodedImage?: string;
@@ -126,17 +134,18 @@ export const PagamentoPublicoPage: React.FC = () => {
     }
   };
 
-  // ---------- Render states ----------
+  // ---------- Estados de carregamento / erro ----------
   if (isLoading) {
     return (
       <PageShell>
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md rounded-2xl shadow-lg">
           <CardHeader>
-            <Skeleton className="h-6 w-2/3" />
-            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="mx-auto h-12 w-12 rounded-full" />
+            <Skeleton className="mx-auto h-5 w-2/3" />
+            <Skeleton className="mx-auto h-4 w-1/2" />
           </CardHeader>
           <CardContent className="space-y-3">
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-20 w-full" />
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
           </CardContent>
@@ -148,7 +157,7 @@ export const PagamentoPublicoPage: React.FC = () => {
   if (error || !link) {
     return (
       <PageShell>
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md rounded-2xl shadow-lg">
           <CardContent className="pt-6">
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
@@ -168,8 +177,11 @@ export const PagamentoPublicoPage: React.FC = () => {
   if (invalido) {
     return (
       <PageShell>
-        <Card className="w-full max-w-md">
-          <CardHeader>
+        <Card className="w-full max-w-md rounded-2xl shadow-lg">
+          <CardHeader className="text-center">
+            <IconBubble tone="muted">
+              <AlertTriangle className="h-6 w-6" />
+            </IconBubble>
             <CardTitle>Link indisponível</CardTitle>
           </CardHeader>
           <CardContent>
@@ -187,18 +199,18 @@ export const PagamentoPublicoPage: React.FC = () => {
     );
   }
 
-  // PIX gerado: exibir QR
+  // ---------- PIX gerado: exibir QR ----------
   if (pixResult) {
     return (
       <PageShell>
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md rounded-2xl shadow-lg">
           <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center gap-2">
-              <QrCode className="h-5 w-5 text-verde-pipa" />
-              Pague com PIX
-            </CardTitle>
+            <IconBubble tone="verde">
+              <QrCode className="h-6 w-6" />
+            </IconBubble>
+            <CardTitle>Pague com PIX</CardTitle>
             <CardDescription>
-              Escaneie o QR Code ou copie o código abaixo.
+              Escaneie o QR Code no app do seu banco ou copie o código abaixo.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -207,13 +219,13 @@ export const PagamentoPublicoPage: React.FC = () => {
                 <img
                   src={`data:image/png;base64,${pixResult.encodedImage}`}
                   alt="QR Code PIX"
-                  className="h-56 w-56 rounded-lg border"
+                  className="h-60 w-60 rounded-xl border bg-white p-2"
                 />
               </div>
             )}
             {pixResult.payload && (
               <div className="space-y-2">
-                <div className="break-all rounded-md bg-muted p-3 text-xs">
+                <div className="break-all rounded-lg bg-muted p-3 text-xs text-muted-foreground">
                   {pixResult.payload}
                 </div>
                 <Button
@@ -225,38 +237,43 @@ export const PagamentoPublicoPage: React.FC = () => {
                   }}
                 >
                   <Copy className="mr-2 h-4 w-4" />
-                  Copiar código PIX
+                  Copiar código PIX (copia e cola)
                 </Button>
               </div>
             )}
-            <p className="text-center text-sm text-muted-foreground">
-              Após o pagamento, a confirmação é automática.
-            </p>
+            <div className="flex items-center justify-center gap-2 rounded-lg bg-verde-pipa/10 p-3 text-sm text-verde-pipa">
+              <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+              <span>Assim que você pagar, a confirmação é automática.</span>
+            </div>
           </CardContent>
         </Card>
       </PageShell>
     );
   }
 
-  // Já confirmado anteriormente (forma escolhida) -> permite continuar
+  // ---------- Já confirmado anteriormente ----------
   if (link.status === 'confirmado' && link.forma_escolhida) {
     return (
       <PageShell>
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md rounded-2xl shadow-lg">
           <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-verde-pipa" />
-              Pagamento já iniciado
-            </CardTitle>
+            <IconBubble tone="verde">
+              <CheckCircle2 className="h-6 w-6" />
+            </IconBubble>
+            <CardTitle>Pagamento já iniciado</CardTitle>
             <CardDescription>
               {link.forma_escolhida === 'pix'
                 ? 'Você escolheu pagar com PIX.'
-                : 'Você escolheu pagar com cartão de crédito.'}
+                : `Você escolheu cartão de crédito${
+                    link.installment_count && link.installment_count > 1
+                      ? ` em ${link.installment_count}x`
+                      : ' à vista'
+                  }.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button
-              className="w-full"
+              className="h-12 w-full text-base"
               disabled={isConfirming}
               onClick={() =>
                 handleConfirmar(
@@ -266,7 +283,7 @@ export const PagamentoPublicoPage: React.FC = () => {
               }
             >
               {isConfirming && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               )}
               Continuar pagamento
             </Button>
@@ -276,30 +293,74 @@ export const PagamentoPublicoPage: React.FC = () => {
     );
   }
 
-  // Estado normal: escolher forma de pagamento
+  // ---------- Estado principal: escolher forma de pagamento ----------
   const opcoes = link.opcoes;
-  const opcaoCartaoSelecionada = opcoes.cartao.find(
-    (c) => c.parcelas === selectedParcelas
-  );
+
+  // Valor e rótulo da seleção atual (para o CTA)
+  const opcaoCartao =
+    selecao.tipo === 'credit_card'
+      ? opcoes.cartao.find((c) => c.parcelas === selecao.parcelas)
+      : undefined;
+  const totalSelecionado =
+    selecao.tipo === 'pix' ? opcoes.pix.total : (opcaoCartao?.total ?? 0);
+  const labelCta =
+    selecao.tipo === 'pix'
+      ? `Pagar ${formatBRL(opcoes.pix.total)} com PIX`
+      : opcaoCartao
+        ? `Pagar ${formatBRL(opcaoCartao.total)} no cartão${
+            opcaoCartao.parcelas > 1
+              ? ` em ${opcaoCartao.parcelas}x`
+              : ' à vista'
+          }`
+        : 'Selecione uma forma de pagamento';
+
+  const confirmarSelecao = () => {
+    if (selecao.tipo === 'pix') handleConfirmar('pix', 1);
+    else handleConfirmar('credit_card', selecao.parcelas);
+  };
 
   return (
     <PageShell>
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle>Pagamento</CardTitle>
-          <CardDescription>
-            {link.empresa_nome && <span>{link.empresa_nome} • </span>}
-            {link.paciente_nome}
-          </CardDescription>
+      <Card className="w-full max-w-md overflow-hidden rounded-2xl shadow-lg">
+        <CardHeader className="space-y-3 text-center">
+          <IconBubble tone="verde">
+            <ShieldCheck className="h-6 w-6" />
+          </IconBubble>
+          <div>
+            <CardTitle className="text-xl">Pagamento</CardTitle>
+            <CardDescription className="mt-1">
+              {link.empresa_nome && (
+                <span className="font-medium text-foreground">
+                  {link.empresa_nome}
+                </span>
+              )}
+              {link.empresa_nome && ' • '}
+              {link.paciente_nome}
+            </CardDescription>
+          </div>
         </CardHeader>
+
         <CardContent className="space-y-5">
-          {/* Resumo */}
-          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+          {/* Banner explicativo de confiança */}
+          <div className="flex gap-2 rounded-xl border border-verde-pipa/30 bg-verde-pipa/5 p-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-verde-pipa" />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Escolha abaixo como prefere pagar. A cobrança é gerada com
+              segurança pelo <strong className="text-foreground">Asaas</strong>{' '}
+              somente <strong className="text-foreground">após</strong> a sua
+              confirmação.
+            </p>
+          </div>
+
+          {/* Resumo do atendimento */}
+          <div className="space-y-2 rounded-xl border bg-muted/30 p-3 text-sm">
             {link.descricao && (
-              <p className="mb-2 text-muted-foreground">{link.descricao}</p>
+              <p className="leading-relaxed text-muted-foreground">
+                {link.descricao}
+              </p>
             )}
             {link.datas_consultas?.length > 0 && (
-              <div className="flex items-start gap-2 text-muted-foreground">
+              <div className="flex items-start gap-2 border-t pt-2 text-muted-foreground">
                 <CalendarDays className="mt-0.5 h-4 w-4 flex-shrink-0" />
                 <span>
                   {link.datas_consultas.map(formatDateBR).join(' • ')}
@@ -308,93 +369,179 @@ export const PagamentoPublicoPage: React.FC = () => {
             )}
           </div>
 
-          {/* PIX */}
+          {/* Seleção: PIX */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-medium">
-                <QrCode className="h-4 w-4 text-verde-pipa" />
-                PIX
-              </div>
-              <span className="text-lg font-semibold text-verde-pipa">
-                {formatBRL(opcoes.pix.total)}
-              </span>
-            </div>
-            <Button
-              className="w-full"
-              disabled={isConfirming}
-              onClick={() => handleConfirmar('pix', 1)}
-            >
-              {isConfirming && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Pagar com PIX
-            </Button>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Forma de pagamento
+            </p>
+
+            <OptionRow
+              selected={selecao.tipo === 'pix'}
+              onClick={() => setSelecao({ tipo: 'pix' })}
+              icon={<QrCode className="h-5 w-5" />}
+              title="PIX"
+              subtitle="Aprovação na hora · sem acréscimo"
+              value={formatBRL(opcoes.pix.total)}
+            />
           </div>
 
-          {/* Cartão */}
+          {/* Seleção: Cartão de crédito */}
           {opcoes.cartao.length > 0 && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 font-medium">
-                <CreditCard className="h-4 w-4 text-verde-pipa" />
-                Cartão de crédito
+              <div className="flex items-center justify-between">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  Cartão de crédito
+                </p>
+                <span className="text-[11px] text-muted-foreground">
+                  taxas já incluídas
+                </span>
               </div>
-              <div className="grid grid-cols-1 gap-2">
-                {opcoes.cartao.map((opcao) => {
-                  const isSelected = opcao.parcelas === selectedParcelas;
-                  return (
-                    <button
-                      key={opcao.parcelas}
-                      type="button"
-                      onClick={() => setSelectedParcelas(opcao.parcelas)}
-                      className={cn(
-                        'flex items-center justify-between rounded-lg border p-3 text-left text-sm transition-colors',
-                        isSelected
-                          ? 'border-verde-pipa bg-verde-pipa/10'
-                          : 'hover:bg-muted/50'
-                      )}
-                    >
-                      <span>
-                        {opcao.parcelas === 1
-                          ? 'À vista'
-                          : `${opcao.parcelas}x de ${formatBRL(opcao.valor_parcela)}`}
-                      </span>
-                      <span className="font-semibold">
-                        {formatBRL(opcao.total)}
-                      </span>
-                    </button>
-                  );
-                })}
+
+              <div className="space-y-2">
+                {opcoes.cartao.map((opcao) => (
+                  <OptionRow
+                    key={opcao.parcelas}
+                    selected={
+                      selecao.tipo === 'credit_card' &&
+                      selecao.parcelas === opcao.parcelas
+                    }
+                    onClick={() =>
+                      setSelecao({
+                        tipo: 'credit_card',
+                        parcelas: opcao.parcelas,
+                      })
+                    }
+                    title={
+                      opcao.parcelas === 1
+                        ? 'À vista'
+                        : `${opcao.parcelas}x de ${formatBRL(opcao.valor_parcela)}`
+                    }
+                    value={formatBRL(opcao.total)}
+                  />
+                ))}
               </div>
-              <Button
-                className="w-full"
-                variant="outline"
-                disabled={isConfirming || !opcaoCartaoSelecionada}
-                onClick={() => handleConfirmar('credit_card', selectedParcelas)}
-              >
-                {isConfirming && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Pagar com cartão
-                {opcaoCartaoSelecionada
-                  ? ` (${formatBRL(opcaoCartaoSelecionada.total)})`
-                  : ''}
-              </Button>
             </div>
           )}
-
-          <p className="text-center text-xs text-muted-foreground">
-            Pagamento processado com segurança pelo Asaas.
-          </p>
         </CardContent>
+
+        {/* CTA fixo na base do card */}
+        <div className="space-y-2 border-t bg-background p-4">
+          <Button
+            className="h-12 w-full text-base"
+            disabled={isConfirming || totalSelecionado <= 0}
+            onClick={confirmarSelecao}
+          >
+            {isConfirming ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Lock className="mr-2 h-4 w-4" />
+            )}
+            {isConfirming ? 'Gerando pagamento…' : labelCta}
+          </Button>
+          <p className="flex items-center justify-center gap-1 text-center text-[11px] text-muted-foreground">
+            <Lock className="h-3 w-3" />
+            Pagamento processado com segurança pelo Asaas
+          </p>
+        </div>
       </Card>
     </PageShell>
   );
 };
 
+// ---------- Subcomponentes de UI ----------
+
 const PageShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="flex min-h-screen items-center justify-center bg-muted/20 p-4">
+  <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-background to-muted/40 p-4">
     {children}
   </div>
+);
+
+const IconBubble: React.FC<{
+  children: React.ReactNode;
+  tone: 'verde' | 'muted';
+}> = ({ children, tone }) => (
+  <div
+    className={cn(
+      'mx-auto flex h-12 w-12 items-center justify-center rounded-full',
+      tone === 'verde'
+        ? 'bg-verde-pipa/15 text-verde-pipa'
+        : 'bg-muted text-muted-foreground'
+    )}
+  >
+    {children}
+  </div>
+);
+
+interface OptionRowProps {
+  selected: boolean;
+  onClick: () => void;
+  title: string;
+  value: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+}
+
+const OptionRow: React.FC<OptionRowProps> = ({
+  selected,
+  onClick,
+  title,
+  value,
+  subtitle,
+  icon,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={selected}
+    className={cn(
+      'flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all',
+      selected
+        ? 'border-verde-pipa bg-verde-pipa/10 ring-1 ring-verde-pipa'
+        : 'hover:border-muted-foreground/30 hover:bg-muted/50'
+    )}
+  >
+    {/* Indicador de seleção (check) */}
+    <span
+      className={cn(
+        'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+        selected
+          ? 'border-verde-pipa bg-verde-pipa text-white'
+          : 'border-muted-foreground/30'
+      )}
+    >
+      {selected && <Check className="h-3 w-3" strokeWidth={3} />}
+    </span>
+
+    {icon && (
+      <span
+        className={cn(
+          'flex-shrink-0',
+          selected ? 'text-verde-pipa' : 'text-muted-foreground'
+        )}
+      >
+        {icon}
+      </span>
+    )}
+
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-sm font-medium">{title}</span>
+      {subtitle && (
+        <span className="block truncate text-xs text-muted-foreground">
+          {subtitle}
+        </span>
+      )}
+    </span>
+
+    <span
+      className={cn(
+        'flex-shrink-0 text-sm font-semibold',
+        selected ? 'text-verde-pipa' : 'text-foreground'
+      )}
+    >
+      {value}
+    </span>
+  </button>
 );
 
 export default PagamentoPublicoPage;
