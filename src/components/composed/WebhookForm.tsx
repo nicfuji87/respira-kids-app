@@ -44,6 +44,7 @@ const eventOptions = [
     value: 'whatsapp_reclamacao_admin',
     label: 'WhatsApp — Reclamações para admin',
   },
+  { value: 'pagamento_link_criado', label: 'Link de Pagamento Criado' },
   { value: 'webhook_failed', label: 'Webhook Falhou' },
   { value: 'registration_error', label: 'Erro no Cadastro' },
 ];
