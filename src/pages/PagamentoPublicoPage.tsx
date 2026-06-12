@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Loader2,
@@ -68,6 +68,20 @@ export const PagamentoPublicoPage: React.FC = () => {
     payload?: string;
     expirationDate?: string;
   } | null>(null);
+
+  // CTA: ao selecionar uma opção, rolamos a tela até o botão e o destacamos por
+  // um instante, deixando claro que ainda é preciso CONFIRMAR para gerar o pagamento.
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const [ctaHighlight, setCtaHighlight] = useState(false);
+
+  const selecionar = useCallback((s: Selecao) => {
+    setSelecao(s);
+    setCtaHighlight(true);
+    window.setTimeout(() => {
+      ctaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+    window.setTimeout(() => setCtaHighlight(false), 1500);
+  }, []);
 
   const load = useCallback(async (t: string) => {
     setIsLoading(true);
@@ -371,13 +385,18 @@ export const PagamentoPublicoPage: React.FC = () => {
 
           {/* Seleção: PIX */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Forma de pagamento
-            </p>
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Forma de pagamento
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                escolha e confirme abaixo
+              </p>
+            </div>
 
             <OptionRow
               selected={selecao.tipo === 'pix'}
-              onClick={() => setSelecao({ tipo: 'pix' })}
+              onClick={() => selecionar({ tipo: 'pix' })}
               icon={<QrCode className="h-5 w-5" />}
               title="PIX"
               subtitle="Aprovação na hora · sem acréscimo"
@@ -407,7 +426,7 @@ export const PagamentoPublicoPage: React.FC = () => {
                       selecao.parcelas === opcao.parcelas
                     }
                     onClick={() =>
-                      setSelecao({
+                      selecionar({
                         tipo: 'credit_card',
                         parcelas: opcao.parcelas,
                       })
@@ -426,9 +445,18 @@ export const PagamentoPublicoPage: React.FC = () => {
         </CardContent>
 
         {/* CTA fixo na base do card */}
-        <div className="space-y-2 border-t bg-background p-4">
+        <div
+          ref={ctaRef}
+          className={cn(
+            'space-y-2 border-t bg-background p-4 transition-colors',
+            ctaHighlight && 'bg-verde-pipa/5'
+          )}
+        >
           <Button
-            className="h-12 w-full text-base"
+            className={cn(
+              'h-12 w-full text-base transition-all',
+              ctaHighlight && 'ring-2 ring-verde-pipa ring-offset-2'
+            )}
             disabled={isConfirming || totalSelecionado <= 0}
             onClick={confirmarSelecao}
           >
