@@ -4,6 +4,7 @@ import { PatientPublicRegistrationPage } from '@/pages/PatientPublicRegistration
 import { PatientRegistrationSuccessPage } from '@/pages/public/PatientRegistrationSuccessPage';
 import { AddFinancialResponsiblePage } from '@/pages/AddFinancialResponsiblePage';
 import { SharedSchedulePage } from '@/pages/SharedSchedulePage';
+import { PagamentoPublicoPage } from '@/pages/PagamentoPublicoPage';
 import { PesquisaExperienciaPage } from '@/pages/PesquisaExperienciaPage';
 import { Toaster } from '@/components/primitives/toaster';
 
@@ -40,6 +41,9 @@ export const PublicRouter: React.FC = () => {
 
         {/* Rota de agenda compartilhada (pública via token) */}
         <Route path="/agenda-publica/:token" element={<SharedSchedulePage />} />
+
+        {/* Rota pública de pagamento (PIX x Cartão via token) */}
+        <Route path="/pagamento/:token" element={<PagamentoPublicoPage />} />
 
         {/* Pesquisa de Experiência pública e anônima */}
         <Route path="/experiencia" element={<PesquisaExperienciaPage />} />

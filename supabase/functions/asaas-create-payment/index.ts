@@ -1,4 +1,8 @@
-// AI dev note: Edge Function para criar cobrança PIX no Asaas
+// AI dev note: Edge Function para criar cobrança no Asaas.
+// Suporta PIX e CARTÃO DE CRÉDITO (à vista e parcelado). O cartão usa o checkout
+// HOSPEDADO do Asaas (retornamos `invoiceUrl` para redirecionar o cliente).
+// - 1x: enviar `value`.
+// - Parcelado (>=2x): enviar `installmentCount` + `totalValue` (Asaas divide as parcelas).
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 interface CreatePaymentRequest {
@@ -9,11 +13,15 @@ interface CreatePaymentRequest {
   };
   paymentData: {
     customer: string;
-    billingType: 'PIX';
-    value: number;
+    billingType: 'PIX' | 'CREDIT_CARD';
+    value?: number;
+    installmentCount?: number;
+    installmentValue?: number;
+    totalValue?: number;
     dueDate: string;
     description: string;
     externalReference?: string;
+    callback?: { successUrl: string; autoRedirect?: boolean };
   };
 }
 
@@ -24,7 +32,6 @@ interface CreatePaymentResponse {
 }
 
 Deno.serve(async (req: Request) => {
-  // Configurar CORS
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers':
@@ -32,7 +39,6 @@ Deno.serve(async (req: Request) => {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
-  // Handle preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -51,12 +57,7 @@ Deno.serve(async (req: Request) => {
     const { apiConfig, paymentData }: CreatePaymentRequest = await req.json();
 
     // Validar dados obrigatórios
-    if (
-      !apiConfig?.apiKey ||
-      !paymentData?.customer ||
-      !paymentData?.value ||
-      !paymentData?.dueDate
-    ) {
+    if (!apiConfig?.apiKey || !paymentData?.customer || !paymentData?.dueDate) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -69,10 +70,33 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // AI dev note: Esta validação é CORRETA - ASAAS não aceita cobranças com valor zero
-    // Consultas gratuitas podem existir no sistema, mas não devem gerar cobranças
-    // Validar valor mínimo
-    if (paymentData.value <= 0) {
+    const billingType = paymentData.billingType || 'PIX';
+    const isParcelado =
+      typeof paymentData.installmentCount === 'number' &&
+      paymentData.installmentCount >= 2;
+
+    // AI dev note: ASAAS não aceita cobranças com valor <= 0. Validar conforme o modo.
+    if (isParcelado) {
+      const totalParcelado =
+        paymentData.totalValue ??
+        (paymentData.installmentValue
+          ? paymentData.installmentValue * paymentData.installmentCount!
+          : 0);
+      if (!(totalParcelado > 0)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Valor total do parcelamento deve ser maior que zero',
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    } else if (
+      !(typeof paymentData.value === 'number' && paymentData.value > 0)
+    ) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -100,27 +124,40 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Preparar dados para API do Asaas
-    const asaasPayload = {
+    // Preparar payload para a API do Asaas
+    const asaasPayload: Record<string, unknown> = {
       customer: paymentData.customer,
-      billingType: 'PIX' as const,
-      value: paymentData.value,
+      billingType,
       dueDate: paymentData.dueDate,
       description: paymentData.description || 'Cobrança Respira Kids',
-      externalReference: paymentData.externalReference,
     };
 
-    // Remover campos vazios opcionais
-    if (!asaasPayload.externalReference) {
-      delete asaasPayload.externalReference;
+    if (isParcelado) {
+      asaasPayload.installmentCount = paymentData.installmentCount;
+      if (typeof paymentData.totalValue === 'number') {
+        asaasPayload.totalValue = paymentData.totalValue;
+      } else if (typeof paymentData.installmentValue === 'number') {
+        asaasPayload.installmentValue = paymentData.installmentValue;
+      }
+    } else {
+      asaasPayload.value = paymentData.value;
+    }
+
+    if (paymentData.externalReference) {
+      asaasPayload.externalReference = paymentData.externalReference;
+    }
+    if (paymentData.callback?.successUrl) {
+      asaasPayload.callback = {
+        successUrl: paymentData.callback.successUrl,
+        autoRedirect: paymentData.callback.autoRedirect ?? true,
+      };
     }
 
     console.log(
-      'Criando cobrança PIX no Asaas:',
+      `Criando cobrança ${billingType}${isParcelado ? ` ${paymentData.installmentCount}x` : ''} no Asaas:`,
       JSON.stringify(asaasPayload, null, 2)
     );
 
-    // Chamada para API do Asaas
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
@@ -140,7 +177,7 @@ Deno.serve(async (req: Request) => {
     const asaasData = await asaasResponse.json();
 
     if (asaasResponse.ok) {
-      console.log('Cobrança PIX criada com sucesso:', asaasData.id);
+      console.log('Cobrança criada com sucesso:', asaasData.id);
 
       const response: CreatePaymentResponse = {
         success: true,

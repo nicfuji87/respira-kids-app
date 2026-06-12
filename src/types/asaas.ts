@@ -30,7 +30,7 @@ export interface AsaasCustomer {
 export interface AsaasPayment {
   id?: string; // ID retornado pelo Asaas após criação
   customer: string; // ID do customer no Asaas
-  billingType: 'PIX'; // Respira Kids só aceita PIX
+  billingType: 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'UNDEFINED';
   value: number;
   dueDate: string; // YYYY-MM-DD
   description?: string;
@@ -144,13 +144,24 @@ export interface CreateCustomerRequest {
   addressNumber?: string; // numero + complemento do endereco
 }
 
+// AI dev note: Redirecionamento pós-pagamento (checkout hospedado Asaas).
+export interface AsaasCallback {
+  successUrl: string;
+  autoRedirect?: boolean;
+}
+
 export interface CreatePaymentRequest {
   customer: string; // ID do customer no Asaas
-  billingType: 'PIX';
-  value: number;
+  billingType: 'PIX' | 'CREDIT_CARD';
+  // Cobrança única (1x): usar `value`. Parcelado (>=2x): usar installmentCount + totalValue.
+  value?: number;
+  installmentCount?: number;
+  installmentValue?: number;
+  totalValue?: number;
   dueDate: string; // formato YYYY-MM-DD
   description: string;
   externalReference?: string;
+  callback?: AsaasCallback; // redireciona de volta após pagar (cartão)
 }
 
 export interface UpdatePaymentRequest {

@@ -16,6 +16,7 @@ import {
   List,
   Users,
   Check,
+  Copy,
 } from 'lucide-react';
 import {
   Card,
@@ -45,8 +46,7 @@ import {
 import { DatePicker } from './DatePicker';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
-import { processPayment } from '@/lib/asaas-api';
-import type { ProcessPaymentData } from '@/types/asaas';
+import { criarLinkPagamento } from '@/lib/payment-links-api';
 import { generateChargeDescription } from '@/lib/charge-description';
 import type { ConsultationData, PatientData } from '@/lib/charge-description';
 import { useAuth } from '@/hooks/useAuth';
@@ -256,6 +256,10 @@ export const FinancialConsultationsList: React.FC<
     []
   ); // AI dev note: Mantém IDs selecionados entre páginas
   const [isGeneratingCharges, setIsGeneratingCharges] = useState(false);
+  // AI dev note: Links públicos de pagamento gerados (para copiar/abrir manualmente)
+  const [generatedLinks, setGeneratedLinks] = useState<
+    Array<{ patientName: string; url: string; token: string }>
+  >([]);
 
   // Estados de visualização
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('grouped'); // AI dev note: Novo modo de visualização agrupado por paciente
@@ -909,8 +913,10 @@ export const FinancialConsultationsList: React.FC<
     }
   };
 
-  // AI dev note: Cobrança em massa - all-or-nothing por paciente, continua outros se um falhar
-  const handleGenerateBulkCharges = async () => {
+  // AI dev note: Gera links públicos de pagamento (PIX x Cartão) - um por paciente.
+  // A cobrança no Asaas + fatura só são criadas quando o cliente escolhe a forma na
+  // página pública. all-or-nothing por paciente, continua os outros se um falhar.
+  const handleGeneratePaymentLinks = async () => {
     if (selectedConsultations.length === 0) {
       toast({
         title: 'Nenhuma consulta selecionada',
@@ -953,6 +959,11 @@ export const FinancialConsultationsList: React.FC<
         patientName: string;
         success: boolean;
         error?: string;
+      }> = [];
+      const generated: Array<{
+        patientName: string;
+        url: string;
+        token: string;
       }> = [];
 
       // Processar paciente por paciente (all-or-nothing por paciente)
@@ -1066,22 +1077,31 @@ export const FinancialConsultationsList: React.FC<
             0
           );
 
-          // Criar dados para processamento
-          const paymentData: ProcessPaymentData = {
-            consultationIds: patientConsultations.map((c) => c.id),
-            patientId,
-            responsibleId,
-            totalValue,
-            description,
-          };
+          // empresaFaturaIds validado acima como única empresa
+          const empresaId = empresaFaturaIds[0]!;
 
-          // Processar pagamento (D+1)
-          const result = await processPayment(paymentData, user.pessoa.id);
+          // Gerar link público de pagamento (cobrança no Asaas só no aceite do cliente)
+          const result = await criarLinkPagamento(
+            {
+              agendamentoIds: patientConsultations.map((c) => c.id),
+              pacienteId: patientId,
+              responsavelId: responsibleId,
+              empresaId,
+              valorBase: totalValue,
+              descricao: description,
+            },
+            user.pessoa.id
+          );
 
-          if (!result.success) {
-            throw new Error(result.error || 'Erro ao processar pagamento');
+          if (!result.success || !result.data) {
+            throw new Error(result.error || 'Erro ao gerar link de pagamento');
           }
 
+          generated.push({
+            patientName,
+            url: result.data.url,
+            token: result.data.token,
+          });
           results.push({ patientName, success: true });
         } catch (patientError) {
           // Falha em um paciente não interrompe os outros
@@ -1105,9 +1125,12 @@ export const FinancialConsultationsList: React.FC<
             : '';
 
         toast({
-          title: 'Cobranças processadas',
+          title: 'Links de pagamento gerados',
           description: `✅ ${successes.length} paciente(s) com sucesso${failures.length > 0 ? `\n❌ ${failures.length} com falha` : ''}${failureDetails}`,
         });
+
+        // Exibir links gerados (copiar/abrir manualmente, além do envio via n8n)
+        setGeneratedLinks(generated);
 
         // Limpar seleção e recarregar
         setSelectedConsultations([]);
@@ -1115,7 +1138,7 @@ export const FinancialConsultationsList: React.FC<
         fetchConsultations();
       } else {
         toast({
-          title: 'Erro ao gerar cobranças',
+          title: 'Erro ao gerar links de pagamento',
           description: `Todas falharam:\n${failures.map((f) => `${f.patientName}: ${f.error}`).join('\n')}`,
           variant: 'destructive',
         });
@@ -1242,7 +1265,7 @@ export const FinancialConsultationsList: React.FC<
                 </Button>
                 <Button
                   size="sm"
-                  onClick={handleGenerateBulkCharges}
+                  onClick={handleGeneratePaymentLinks}
                   disabled={
                     selectedConsultations.length === 0 || isGeneratingCharges
                   }
@@ -1250,10 +1273,10 @@ export const FinancialConsultationsList: React.FC<
                   <CreditCard className="h-4 w-4 flex-shrink-0" />
                   <span className="ml-1.5 sm:ml-2">
                     <span className="sm:hidden">
-                      Gerar ({selectedConsultations.length})
+                      Gerar link ({selectedConsultations.length})
                     </span>
                     <span className="hidden sm:inline">
-                      Gerar Cobranças ({selectedConsultations.length})
+                      Gerar links de pagamento ({selectedConsultations.length})
                     </span>
                   </span>
                 </Button>
@@ -1273,6 +1296,58 @@ export const FinancialConsultationsList: React.FC<
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Links de pagamento gerados (copiar/abrir manualmente) */}
+        {generatedLinks.length > 0 && (
+          <Alert className="bg-verde-pipa/10 border-verde-pipa">
+            <CheckSquare className="h-4 w-4 text-verde-pipa" />
+            <AlertDescription>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium">
+                  {generatedLinks.length} link(s) de pagamento gerado(s)
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setGeneratedLinks([])}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Fechar
+                </Button>
+              </div>
+              <div className="space-y-1">
+                {generatedLinks.map((l) => (
+                  <div
+                    key={l.token}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="truncate">{l.patientName}</span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(l.url);
+                          toast({ title: 'Link copiado' });
+                        }}
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copiar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(l.url, '_blank')}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Filtros */}
         <div className="space-y-4">
           {/* Busca */}

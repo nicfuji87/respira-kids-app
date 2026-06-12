@@ -47,9 +47,8 @@ import { DatePicker } from './DatePicker';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import { processPayment } from '@/lib/asaas-api';
+import { criarLinkPagamento } from '@/lib/payment-links-api';
 import { receivePaymentManual } from '@/lib/receive-payment-api';
-import type { ProcessPaymentData } from '@/types/asaas';
 import type {
   PatientMetricsProps,
   PatientMetrics as PatientMetricsData,
@@ -612,43 +611,49 @@ export const PatientMetricsWithConsultations =
             patientDataForDescription
           );
 
-          // Preparar dados para processamento
-          const processData: ProcessPaymentData = {
-            consultationIds: selectedConsultations,
-            patientId: patientId,
-            responsibleId: responsibleId,
-            totalValue: totalValue,
-            description: description,
-          };
+          const empresaId = Array.from(empresasUnicas)[0] as string;
 
-          console.log('⚙️ Processando cobrança:', processData);
-
-          // Processar cobrança
-          const result = await processPayment(
-            processData,
+          // AI dev note: Gera link público de pagamento (PIX x Cartão). A cobrança no
+          // Asaas + fatura só são criadas quando o cliente escolhe a forma na página.
+          const result = await criarLinkPagamento(
+            {
+              agendamentoIds: selectedConsultations,
+              pacienteId: patientId,
+              responsavelId: responsibleId,
+              empresaId,
+              valorBase: totalValue,
+              descricao: description,
+            },
             user?.pessoa?.id || 'system'
           );
 
-          console.log('📥 Resultado do processamento:', result);
+          console.log('📥 Resultado da geração de link:', result);
 
-          if (result.success) {
-            console.log('✅ Cobrança criada com sucesso:', result);
+          if (result.success && result.data) {
+            console.log('✅ Link de pagamento gerado:', result.data.url);
 
             // Limpar seleção
             setSelectedConsultations([]);
             setIsSelectionMode(false);
 
+            // Copiar o link para a área de transferência (best-effort)
+            try {
+              await navigator.clipboard.writeText(result.data.url);
+            } catch {
+              /* clipboard pode falhar em alguns contextos; segue */
+            }
+
             toast({
-              title: 'Cobrança criada com sucesso!',
-              description: `ID do pagamento: ${result.asaasPaymentId}`,
+              title: 'Link de pagamento gerado!',
+              description: 'Link copiado e enviado ao responsável de cobrança.',
             });
 
             // Recarregar dados das consultas e faturas
             setReloadTrigger((prev) => prev + 1);
           } else {
-            console.error('❌ Falha no processamento:', result.error);
+            console.error('❌ Falha ao gerar link:', result.error);
             throw new Error(
-              result.error || 'Erro desconhecido ao gerar cobrança'
+              result.error || 'Erro desconhecido ao gerar link de pagamento'
             );
           }
         } catch (error) {
