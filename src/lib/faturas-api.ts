@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import {
   updateAsaasPayment,
   cancelAsaasPayment,
+  getAsaasPayment,
   scheduleAsaasInvoice,
   authorizeAsaasInvoice,
   cancelAsaasInvoicesByPayment,
@@ -33,6 +34,100 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   totalPages: number;
+}
+
+// AI dev note: Eventos de webhook disparados quando uma fatura/cobrança é manipulada.
+// O n8n consome `webhook_queue`. Mantemos um evento por tipo de manipulação.
+export type FaturaWebhookEvento =
+  | 'fatura_criada'
+  | 'fatura_atualizada'
+  | 'fatura_cancelada'
+  | 'fatura_ajustada';
+
+// AI dev note: Enfileira webhook padrão sempre que uma fatura é manipulada.
+// Segue o MESMO formato dos demais webhooks de cliente (evento + payload com
+// tipo/timestamp/webhook_id/data). Busca a fatura fresca do banco para montar o
+// payload completo. NUNCA lança: falha ao enfileirar não pode quebrar a operação
+// principal (a cobrança no ASAAS já foi efetivada).
+async function enfileirarWebhookFatura(
+  evento: FaturaWebhookEvento,
+  faturaId: string,
+  userId: string,
+  extra?: Record<string, unknown>
+): Promise<void> {
+  try {
+    const { data: fatura } = await supabase
+      .from('faturas')
+      .select(
+        `id, id_asaas, status, valor_total, descricao, vencimento,
+         paciente_id, responsavel_cobranca_id, empresa_id,
+         link_nfe, status_nfe, pago_em, ativo`
+      )
+      .eq('id', faturaId)
+      .single();
+
+    if (!fatura) {
+      console.warn(
+        '⚠️ Webhook de fatura não enfileirado: fatura não encontrada',
+        faturaId
+      );
+      return;
+    }
+
+    const { error } = await supabase.from('webhook_queue').insert({
+      evento,
+      payload: {
+        tipo: evento,
+        timestamp: new Date().toISOString(),
+        webhook_id: crypto.randomUUID(),
+        data: {
+          ...fatura,
+          acao: evento,
+          usuario_id: userId === 'system' ? null : userId,
+          ...(extra || {}),
+        },
+      },
+      status: 'pendente',
+      tentativas: 0,
+      max_tentativas: 3,
+    });
+
+    if (error) {
+      console.warn('⚠️ Falha ao enfileirar webhook de fatura:', error);
+    } else {
+      console.log(`📤 Webhook ${evento} enfileirado para fatura`, faturaId);
+    }
+  } catch (e) {
+    console.warn('⚠️ Erro inesperado ao enfileirar webhook de fatura:', e);
+  }
+}
+
+// AI dev note: Mapeia o status do pagamento no ASAAS para o status local da fatura.
+// Usado pela re-sincronização manual. `deleted` (404 ou payment.deleted) => cancelado.
+function mapAsaasStatusToFatura(
+  asaasStatus?: string,
+  deleted?: boolean
+): 'pago' | 'pendente' | 'atrasado' | 'cancelado' | 'estornado' {
+  if (deleted) return 'cancelado';
+  switch ((asaasStatus || '').toUpperCase()) {
+    case 'RECEIVED':
+    case 'CONFIRMED':
+    case 'RECEIVED_IN_CASH':
+      return 'pago';
+    case 'OVERDUE':
+      return 'atrasado';
+    case 'REFUNDED':
+    case 'REFUND_REQUESTED':
+    case 'REFUND_IN_PROGRESS':
+    case 'CHARGEBACK_REQUESTED':
+    case 'CHARGEBACK_DISPUTE':
+    case 'AWAITING_CHARGEBACK_REVERSAL':
+      return 'estornado';
+    case 'PENDING':
+    case 'AWAITING_RISK_ANALYSIS':
+    default:
+      return 'pendente';
+  }
 }
 
 // === BUSCAR FATURAS COM DETALHES ===
@@ -389,6 +484,12 @@ export async function criarFatura(
     }
 
     console.log('✅ Fatura criada com sucesso:', novaFatura.id);
+
+    // AI dev note: Dispara webhook de manipulação (cobrança criada) para o n8n.
+    await enfileirarWebhookFatura('fatura_criada', novaFatura.id, userId, {
+      agendamento_ids: faturaData.agendamento_ids,
+    });
+
     return {
       success: true,
       data: novaFatura,
@@ -856,6 +957,13 @@ export async function editarFatura(
     }
 
     console.log('🎉 Fatura editada com sucesso');
+
+    // AI dev note: Dispara webhook de manipulação (cobrança atualizada) para o n8n.
+    await enfileirarWebhookFatura('fatura_atualizada', faturaId, userId, {
+      agendamentos_adicionados: updates.agendamentosParaAdicionar,
+      agendamentos_removidos: updates.agendamentosParaRemover,
+    });
+
     return {
       success: true,
       data: faturaAtualizada,
@@ -1023,6 +1131,10 @@ export async function excluirFatura(
     }
 
     console.log('🎉 Fatura excluída com sucesso');
+
+    // AI dev note: Dispara webhook de manipulação (cobrança cancelada) para o n8n.
+    await enfileirarWebhookFatura('fatura_cancelada', faturaId, userId);
+
     return {
       success: true,
       data: true,
@@ -1032,6 +1144,349 @@ export async function excluirFatura(
     return {
       success: false,
       error: 'Erro inesperado ao excluir fatura',
+    };
+  }
+}
+
+// === AJUSTE MANUAL DE FATURA (sem ASAAS) ===
+// AI dev note: Usado quando o webhook ASAAS -> n8n -> Supabase falhou e os
+// parâmetros locais ficaram dessincronizados. NÃO chama o ASAAS (assume que o
+// ASAAS já está correto). Permite corrigir status/valor/vencimento/descrição e,
+// opcionalmente, desvincular as consultas (reabrindo-as para uma nova cobrança).
+export interface AjusteManualFaturaInput {
+  status?: 'pago' | 'pendente' | 'atrasado' | 'cancelado' | 'estornado';
+  valor_total?: number;
+  vencimento?: string; // YYYY-MM-DD
+  descricao?: string;
+  pago_em?: string | null;
+  observacoes?: string;
+  // Quando true: marca a fatura como inativa e desvincula os agendamentos,
+  // que voltam para "pendente" e ficam livres para uma nova cobrança.
+  desvincularConsultas?: boolean;
+}
+
+export async function ajustarFaturaManual(
+  faturaId: string,
+  ajuste: AjusteManualFaturaInput,
+  userId: string
+): Promise<ApiResponse<Fatura>> {
+  try {
+    console.log('🛠️ Ajuste manual da fatura:', faturaId, ajuste);
+
+    // Validar permissão (admin ou secretaria)
+    if (userId !== 'system') {
+      const { data: userData, error: userError } = await supabase
+        .from('pessoas')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      if (
+        userError ||
+        !userData ||
+        !['admin', 'secretaria'].includes(userData.role)
+      ) {
+        return {
+          success: false,
+          error:
+            'Apenas administradores e secretárias podem ajustar faturas manualmente',
+        };
+      }
+    }
+
+    const { data: faturaAtual, error: buscarError } = await supabase
+      .from('faturas')
+      .select('id, status, ativo')
+      .eq('id', faturaId)
+      .single();
+
+    if (buscarError || !faturaAtual) {
+      return {
+        success: false,
+        error: `Fatura não encontrada: ${buscarError?.message}`,
+      };
+    }
+
+    const cancelar =
+      ajuste.desvincularConsultas || ajuste.status === 'cancelado';
+
+    // Montar update apenas com os campos fornecidos
+    const updateData: Record<string, unknown> = {
+      atualizado_por: userId === 'system' ? null : userId,
+    };
+    if (ajuste.status !== undefined) updateData.status = ajuste.status;
+    if (ajuste.valor_total !== undefined)
+      updateData.valor_total = ajuste.valor_total;
+    if (ajuste.vencimento !== undefined)
+      updateData.vencimento = ajuste.vencimento;
+    if (ajuste.descricao !== undefined) updateData.descricao = ajuste.descricao;
+    if (ajuste.pago_em !== undefined) updateData.pago_em = ajuste.pago_em;
+    if (ajuste.observacoes !== undefined)
+      updateData.observacoes = ajuste.observacoes;
+    if (cancelar) {
+      updateData.ativo = false;
+      if (ajuste.status === undefined) updateData.status = 'cancelado';
+    }
+
+    const { data: faturaAtualizada, error: updateError } = await supabase
+      .from('faturas')
+      .update(updateData)
+      .eq('id', faturaId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('❌ Erro ao ajustar fatura:', updateError);
+      return {
+        success: false,
+        error: `Erro ao ajustar fatura: ${updateError.message}`,
+      };
+    }
+
+    // Desvincular agendamentos quando cancelar/desvincular (sem tocar no ASAAS)
+    if (cancelar) {
+      const { data: statusPendente } = await supabase
+        .from('pagamento_status')
+        .select('id')
+        .eq('codigo', 'pendente')
+        .single();
+
+      const { error: unlinkError } = await supabase
+        .from('agendamentos')
+        .update({
+          fatura_id: null,
+          id_pagamento_externo: null,
+          cobranca_gerada_em: null,
+          cobranca_gerada_por: null,
+          status_pagamento_id: statusPendente?.id || null,
+          atualizado_por: userId === 'system' ? null : userId,
+        })
+        .eq('fatura_id', faturaId);
+
+      if (unlinkError) {
+        console.warn(
+          '⚠️ Erro ao desvincular agendamentos no ajuste manual:',
+          unlinkError
+        );
+      }
+    }
+
+    // Dispara webhook de manipulação (ajuste manual) para o n8n
+    await enfileirarWebhookFatura('fatura_ajustada', faturaId, userId, {
+      ajuste_manual: true,
+      campos_ajustados: Object.keys(ajuste),
+    });
+
+    console.log('✅ Fatura ajustada manualmente:', faturaId);
+    return { success: true, data: faturaAtualizada };
+  } catch (error) {
+    console.error('❌ Erro inesperado ao ajustar fatura manualmente:', error);
+    return { success: false, error: 'Erro inesperado ao ajustar fatura' };
+  }
+}
+
+// === RE-SINCRONIZAR FATURA COM O ASAAS ===
+// AI dev note: Consulta o estado atual da cobrança no ASAAS (fonte da verdade) e
+// atualiza a fatura local. Resolve o caso de webhook perdido sem precisar editar à
+// mão. Se a cobrança não existe mais no ASAAS (404), trata como cancelada e
+// desvincula as consultas. NÃO cria/edita nada no ASAAS — apenas lê.
+export interface RessincronizarFaturaResult {
+  statusAnterior: string;
+  statusAtual: string;
+  notFound: boolean;
+  asaas?: {
+    status?: string;
+    value?: number;
+    dueDate?: string;
+    description?: string;
+  };
+}
+
+export async function ressincronizarFaturaAsaas(
+  faturaId: string,
+  userId: string
+): Promise<ApiResponse<RessincronizarFaturaResult>> {
+  try {
+    console.log('🔁 Re-sincronizando fatura com o ASAAS:', faturaId);
+
+    // Validar permissão (admin ou secretaria)
+    if (userId !== 'system') {
+      const { data: userData, error: userError } = await supabase
+        .from('pessoas')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      if (
+        userError ||
+        !userData ||
+        !['admin', 'secretaria'].includes(userData.role)
+      ) {
+        return {
+          success: false,
+          error:
+            'Apenas administradores e secretárias podem re-sincronizar faturas',
+        };
+      }
+    }
+
+    const { data: fatura, error: buscarError } = await supabase
+      .from('faturas')
+      .select('id, status, id_asaas, empresa_id')
+      .eq('id', faturaId)
+      .single();
+
+    if (buscarError || !fatura) {
+      return {
+        success: false,
+        error: `Fatura não encontrada: ${buscarError?.message}`,
+      };
+    }
+
+    if (!fatura.id_asaas) {
+      return {
+        success: false,
+        error: 'Fatura não possui cobrança no ASAAS para sincronizar',
+      };
+    }
+
+    const apiConfig = await determineApiKeyFromEmpresa(fatura.empresa_id);
+    if (!apiConfig) {
+      return {
+        success: false,
+        error: 'Empresa não possui API key do ASAAS configurada',
+      };
+    }
+
+    const result = await getAsaasPayment(fatura.id_asaas, apiConfig);
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error || 'Falha ao consultar cobrança no ASAAS',
+      };
+    }
+
+    const statusAnterior: string = fatura.status;
+
+    // Cobrança excluída no ASAAS => cancelar localmente e desvincular consultas
+    if (result.notFound || !result.data) {
+      await ajustarFaturaManual(
+        faturaId,
+        {
+          status: 'cancelado',
+          desvincularConsultas: true,
+          observacoes: `Sincronizado com ASAAS em ${new Date().toLocaleString(
+            'pt-BR'
+          )}: cobrança não existe mais no ASAAS (cancelada).`,
+        },
+        userId
+      );
+
+      return {
+        success: true,
+        data: {
+          statusAnterior,
+          statusAtual: 'cancelado',
+          notFound: true,
+        },
+      };
+    }
+
+    const payment = result.data as {
+      status?: string;
+      deleted?: boolean;
+      value?: number;
+      dueDate?: string;
+      description?: string;
+      paymentDate?: string;
+      clientPaymentDate?: string;
+      confirmedDate?: string;
+    };
+
+    const novoStatus = mapAsaasStatusToFatura(payment.status, payment.deleted);
+
+    const updateData: Record<string, unknown> = {
+      status: novoStatus,
+      atualizado_por: userId === 'system' ? null : userId,
+    };
+    if (typeof payment.value === 'number')
+      updateData.valor_total = payment.value;
+    if (payment.dueDate) updateData.vencimento = payment.dueDate;
+    if (payment.description) updateData.descricao = payment.description;
+    if (novoStatus === 'pago') {
+      updateData.pago_em =
+        payment.paymentDate ||
+        payment.clientPaymentDate ||
+        payment.confirmedDate ||
+        new Date().toISOString();
+    }
+    if (novoStatus === 'cancelado') updateData.ativo = false;
+
+    const { error: updateError } = await supabase
+      .from('faturas')
+      .update(updateData)
+      .eq('id', faturaId);
+
+    if (updateError) {
+      return {
+        success: false,
+        error: `Erro ao atualizar fatura: ${updateError.message}`,
+      };
+    }
+
+    // Se virou cancelado pelo ASAAS, desvincular consultas (sem tocar no ASAAS)
+    if (novoStatus === 'cancelado') {
+      const { data: statusPendente } = await supabase
+        .from('pagamento_status')
+        .select('id')
+        .eq('codigo', 'pendente')
+        .single();
+
+      await supabase
+        .from('agendamentos')
+        .update({
+          fatura_id: null,
+          id_pagamento_externo: null,
+          cobranca_gerada_em: null,
+          cobranca_gerada_por: null,
+          status_pagamento_id: statusPendente?.id || null,
+          atualizado_por: userId === 'system' ? null : userId,
+        })
+        .eq('fatura_id', faturaId);
+    }
+
+    await enfileirarWebhookFatura('fatura_ajustada', faturaId, userId, {
+      ressincronizado_asaas: true,
+      status_anterior: statusAnterior,
+      status_atual: novoStatus,
+    });
+
+    console.log('✅ Fatura re-sincronizada com o ASAAS:', {
+      faturaId,
+      statusAnterior,
+      statusAtual: novoStatus,
+    });
+
+    return {
+      success: true,
+      data: {
+        statusAnterior,
+        statusAtual: novoStatus,
+        notFound: false,
+        asaas: {
+          status: payment.status,
+          value: payment.value,
+          dueDate: payment.dueDate,
+          description: payment.description,
+        },
+      },
+    };
+  } catch (error) {
+    console.error('❌ Erro inesperado ao re-sincronizar fatura:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao re-sincronizar fatura',
     };
   }
 }

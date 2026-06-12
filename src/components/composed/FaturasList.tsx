@@ -9,6 +9,7 @@ import {
   FileText,
   RefreshCw,
   DollarSign,
+  Wrench,
 } from 'lucide-react';
 import {
   Card,
@@ -47,6 +48,7 @@ const FaturaItem = React.memo<{
   onClick?: (fatura: FaturaComDetalhes) => void;
   onEdit?: (fatura: FaturaComDetalhes) => void;
   onDelete?: (fatura: FaturaComDetalhes) => void;
+  onAjustar?: (fatura: FaturaComDetalhes) => void;
   onEmitirNfe?: (fatura: FaturaComDetalhes) => void;
   onReceivePayment?: (fatura: FaturaComDetalhes) => void;
   userRole?: string | null;
@@ -59,6 +61,7 @@ const FaturaItem = React.memo<{
     onClick,
     onEdit,
     onDelete,
+    onAjustar,
     onEmitirNfe,
     onReceivePayment,
     userRole,
@@ -470,6 +473,25 @@ const FaturaItem = React.memo<{
                       Excluir
                     </Button>
                   )}
+
+                  {/* AI dev note: Ajuste manual — para quando o webhook ASAAS->n8n
+                      ->Supabase falhou e os parâmetros locais ficaram defasados.
+                      Re-sincroniza com o ASAAS e/ou permite editar local. */}
+                  {onAjustar && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-1 text-xs text-azul-respira hover:text-azul-respira/80"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAjustar(fatura);
+                      }}
+                      title="Ajustar parâmetros (sincronizar com o ASAAS)"
+                    >
+                      <Wrench className="h-3 w-3 mr-1" />
+                      Ajustar
+                    </Button>
+                  )}
                 </div>
               )}
           </div>
@@ -556,6 +578,7 @@ export interface FaturasListProps {
   onFaturaClick?: (fatura: FaturaComDetalhes) => void;
   onFaturaEdit?: (fatura: FaturaComDetalhes) => void;
   onFaturaDelete?: (fatura: FaturaComDetalhes) => void;
+  onFaturaAjustar?: (fatura: FaturaComDetalhes) => void;
   onEmitirNfe?: (fatura: FaturaComDetalhes) => void;
   onReceivePayment?: (fatura: FaturaComDetalhes) => void;
   onVerMais?: () => void;
@@ -579,6 +602,7 @@ export const FaturasList = React.memo<FaturasListProps>(
     onFaturaClick,
     onFaturaEdit,
     onFaturaDelete,
+    onFaturaAjustar,
     onEmitirNfe,
     onReceivePayment,
     onVerMais,
@@ -640,6 +664,7 @@ export const FaturasList = React.memo<FaturasListProps>(
                 onClick={onFaturaClick}
                 onEdit={onFaturaEdit}
                 onDelete={onFaturaDelete}
+                onAjustar={onFaturaAjustar}
                 onEmitirNfe={onEmitirNfe}
                 onReceivePayment={onReceivePayment}
                 userRole={userRole}

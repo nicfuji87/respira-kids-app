@@ -314,6 +314,101 @@ export async function updateAsaasPayment(
   }
 }
 
+// AI dev note: Sincroniza o cadastro de uma pessoa em TODAS as contas ASAAS das
+// empresas (BC FISIO, F.S PACHECO, etc.). Procura o cliente por CPF em cada conta e
+// atualiza onde existir (não cria). Deve ser chamada (fire-and-forget) após salvar
+// qualquer alteração de cadastro. Nunca lança: falha na sincronização não pode
+// quebrar o salvamento do cadastro.
+export interface AsaasCustomerSyncResult {
+  empresa: string;
+  empresaId: string;
+  status: 'updated' | 'not_found' | 'error';
+  asaasCustomerId?: string;
+  error?: string;
+}
+
+export async function syncCustomerToAsaasAccounts(
+  personId: string
+): Promise<{
+  success: boolean;
+  results?: AsaasCustomerSyncResult[];
+  error?: string;
+}> {
+  try {
+    if (!personId) return { success: false, error: 'personId é obrigatório' };
+
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-sync-customer',
+      { body: { personId } }
+    );
+
+    if (error) {
+      console.warn(
+        '⚠️ Falha ao sincronizar cadastro com o ASAAS (asaas-sync-customer):',
+        error
+      );
+      return { success: false, error: 'Erro ao sincronizar cadastro no ASAAS' };
+    }
+
+    if (!data?.success) {
+      console.warn('⚠️ asaas-sync-customer retornou erro:', data?.error);
+      return { success: false, error: data?.error };
+    }
+
+    return { success: true, results: data.results };
+  } catch (e) {
+    console.warn('⚠️ Erro inesperado ao sincronizar cadastro com o ASAAS:', e);
+    return { success: false, error: 'Erro inesperado na sincronização ASAAS' };
+  }
+}
+
+// AI dev note: Consulta cobrança no Asaas (GET /payments/{id}). Usada pelo
+// "Ajuste manual" para re-sincronizar a fatura quando o webhook do n8n falhou.
+// `notFound` indica que a cobrança foi excluída no Asaas (HTTP 404).
+export async function getAsaasPayment(
+  paymentId: string,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult & { notFound?: boolean }> {
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-get-payment',
+      {
+        body: {
+          apiConfig,
+          paymentId,
+        },
+      }
+    );
+
+    if (error) {
+      console.error('Erro ao chamar Edge Function asaas-get-payment:', error);
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de consulta de cobrança',
+      };
+    }
+
+    if (!data?.success) {
+      return {
+        success: false,
+        error: data?.error || 'Erro desconhecido ao consultar cobrança',
+      };
+    }
+
+    return {
+      success: true,
+      data: data.payment,
+      notFound: Boolean(data.notFound),
+    };
+  } catch (error) {
+    console.error('Erro ao consultar cobrança no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao consultar cobrança',
+    };
+  }
+}
+
 // AI dev note: Cancela cobrança no Asaas
 export async function cancelAsaasPayment(
   paymentId: string,
@@ -420,7 +515,9 @@ export async function processPayment(
   console.log('👤 ID do usuário:', userId);
 
   try {
-    // Validar se usuário tem permissão (apenas admin pode gerar faturas)
+    // Validar se usuário tem permissão (admin ou secretaria podem gerar faturas)
+    // AI dev note: secretaria também gera cobranças (mesma regra de editar/cancelar
+    // em faturas-api). A RLS `faturas_secretaria_full_access` já libera o INSERT.
     if (userId !== 'system') {
       const { data: userData, error: userError } = await supabase
         .from('pessoas')
@@ -428,14 +525,18 @@ export async function processPayment(
         .eq('id', userId)
         .single();
 
-      if (userError || !userData || userData.role !== 'admin') {
+      if (
+        userError ||
+        !userData ||
+        !['admin', 'secretaria'].includes(userData.role)
+      ) {
         console.error(
           '❌ Usuário sem permissão para gerar faturas:',
           userData?.role
         );
         return {
           success: false,
-          error: 'Apenas administradores podem gerar faturas',
+          error: 'Apenas administradores e secretárias podem gerar faturas',
         };
       }
       console.log('✅ Usuário autorizado:', userData.role);

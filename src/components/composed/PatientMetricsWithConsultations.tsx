@@ -64,6 +64,7 @@ import {
 } from '@/lib/faturas-api';
 import { generateChargeDescription } from '@/lib/charge-description';
 import { FaturasList } from './FaturasList';
+import { FaturaAjusteManualDialog } from './FaturaAjusteManualDialog';
 import {
   validateResponsibleForAsaas,
   getAsaasValidationErrorMessage,
@@ -159,6 +160,10 @@ export const PatientMetricsWithConsultations =
       const [faturaToDelete, setFaturaToDelete] =
         useState<FaturaComDetalhes | null>(null);
       const [isDeletingFatura, setIsDeletingFatura] = useState(false);
+
+      // Estado para ajuste manual de fatura (re-sync ASAAS + edição local)
+      const [faturaToAdjust, setFaturaToAdjust] =
+        useState<FaturaComDetalhes | null>(null);
 
       // Estados para emissão de NFe
       const [isEmitingNfe, setIsEmitingNfe] = useState<string | null>(null); // faturaId sendo processada
@@ -1648,6 +1653,10 @@ export const PatientMetricsWithConsultations =
                       // Abrir modal de confirmação para exclusão
                       setFaturaToDelete(fatura);
                     }}
+                    onFaturaAjustar={(fatura) => {
+                      // Abrir diálogo de ajuste manual (re-sync ASAAS + edição local)
+                      setFaturaToAdjust(fatura);
+                    }}
                     onEmitirNfe={handleEmitirNfe}
                     onReceivePayment={handleReceivePayment}
                     userRole={user?.pessoa?.role}
@@ -2242,6 +2251,17 @@ export const PatientMetricsWithConsultations =
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {/* Diálogo de ajuste manual de fatura (re-sync ASAAS + edição local) */}
+          <FaturaAjusteManualDialog
+            fatura={faturaToAdjust}
+            open={!!faturaToAdjust}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) setFaturaToAdjust(null);
+            }}
+            userId={user?.pessoa?.id || 'system'}
+            onSaved={() => setReloadTrigger((prev) => prev + 1)}
+          />
         </>
       );
     }

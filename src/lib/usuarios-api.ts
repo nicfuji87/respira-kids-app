@@ -13,6 +13,7 @@ interface UsuarioMetadata {
   created_at: string;
 }
 import { supabase } from './supabase';
+import { syncCustomerToAsaasAccounts } from './asaas-api';
 import type {
   Usuario,
   UsuarioFilters,
@@ -324,6 +325,11 @@ export async function updateUsuario(
     }
 
     console.log('✅ Usuário atualizado com sucesso');
+
+    // AI dev note: Propaga a atualização de cadastro para TODAS as contas ASAAS
+    // (BC FISIO, F.S PACHECO, ...) onde a pessoa existir. Fire-and-forget: não
+    // bloqueia nem quebra o salvamento se a sincronização falhar.
+    void syncCustomerToAsaasAccounts(id);
 
     return { data: data as Usuario, error: null, success: true };
   } catch (error) {

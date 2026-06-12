@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { User } from '@supabase/supabase-js';
+import { syncCustomerToAsaasAccounts } from './asaas-api';
 
 // AI dev note: Profile API para CRUD de dados da pessoa
 // Funções centralizadas para gerenciar perfil do usuário
@@ -179,6 +180,12 @@ export async function updateUserProfile(
     const updatedProfile = await getUserProfile(user);
     if (!updatedProfile) {
       throw new Error('Erro ao buscar perfil atualizado');
+    }
+
+    // AI dev note: Propaga a atualização de cadastro para TODAS as contas ASAAS
+    // onde a pessoa existir. Fire-and-forget: não bloqueia o retorno do perfil.
+    if (updatedProfile.id) {
+      void syncCustomerToAsaasAccounts(updatedProfile.id);
     }
 
     return updatedProfile;
