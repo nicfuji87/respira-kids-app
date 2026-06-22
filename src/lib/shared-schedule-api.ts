@@ -3,6 +3,19 @@
 
 import { supabase } from './supabase';
 import { nanoid } from 'nanoid';
+
+// AI dev note: Erros do Supabase (PostgrestError) são objetos planos
+// { message, details, hint, code } e NÃO instâncias de Error. Usar apenas
+// `error instanceof Error` mascarava a causa real como "Erro desconhecido"
+// (ex.: violação de RLS). Este helper extrai a mensagem real desses objetos.
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.length > 0) return message;
+  }
+  return 'Erro desconhecido';
+}
 import type {
   AgendaCompartilhada,
   AgendaCompartilhadaStats,
@@ -99,7 +112,7 @@ export async function checkSlotConflict(
     console.error('Erro ao verificar conflito:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -170,7 +183,7 @@ export async function checkAppointmentConflicts(
     console.error('Erro ao verificar conflitos:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -300,7 +313,7 @@ export async function createSharedSchedule(
     console.error('Erro ao criar agenda compartilhada:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -407,7 +420,7 @@ export async function updateSharedSchedule(
     console.error('Erro ao atualizar agenda compartilhada:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -442,7 +455,7 @@ export async function deleteSharedSchedule(
     console.error('Erro ao deletar agenda compartilhada:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -537,7 +550,7 @@ export async function fetchSharedScheduleById(
     console.error('Erro ao buscar agenda por ID:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -646,7 +659,7 @@ export async function fetchSharedScheduleByToken(
     console.error('Erro ao buscar agenda por token:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -696,7 +709,7 @@ export async function listSharedSchedulesByProfessional(
     console.error('Erro ao listar agendas:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -771,7 +784,7 @@ export async function addSlotsToSchedule(
     console.error('Erro ao adicionar slots:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -846,7 +859,7 @@ export async function removeSlots(
     console.error('❌ [removeSlots] Erro:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -922,7 +935,7 @@ export async function fetchSlotsWithSelections(
     console.error('Erro ao buscar slots com seleções:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -1054,7 +1067,7 @@ export async function checkExistingAppointment(
     console.error('❌ [checkExistingAppointment] Erro:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -1130,7 +1143,7 @@ export async function rescheduleAppointment(
     console.error('❌ [rescheduleAppointment] Erro:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -1221,7 +1234,7 @@ export async function selectSlotAndCreateAppointment(
     console.error('❌ [selectSlotAndCreateAppointment] Erro:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
@@ -1259,7 +1272,7 @@ export async function isTokenAvailable(
   } catch (error) {
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: getErrorMessage(error),
       success: false,
     };
   }
