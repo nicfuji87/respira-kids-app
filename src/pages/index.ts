@@ -18,6 +18,7 @@ export { UsuariosPage } from './UsuariosPage';
 export { RelatoriosPage } from './RelatoriosPage';
 export { WebhooksPage } from './WebhooksPage';
 export { PesquisaExperienciaDashboardPage } from './PesquisaExperienciaDashboardPage';
+export { ProcessoSeletivoDashboardPage } from './ProcessoSeletivoDashboardPage';
 export { WhatsAppConversasDashboardPage } from './WhatsAppConversasDashboardPage';
 
 // Debug pages
@@ -27,3 +28,4 @@ export { GoogleOAuthDebugPage } from './GoogleOAuthDebugPage';
 export { PatientPublicRegistrationPage } from './PatientPublicRegistrationPage';
 export { AddFinancialResponsiblePage } from './AddFinancialResponsiblePage';
 export { PesquisaExperienciaPage } from './PesquisaExperienciaPage';
+export { ProcessoSeletivoPage } from './ProcessoSeletivoPage';

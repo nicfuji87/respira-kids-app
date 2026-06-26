@@ -6,6 +6,7 @@ import { AddFinancialResponsiblePage } from '@/pages/AddFinancialResponsiblePage
 import { SharedSchedulePage } from '@/pages/SharedSchedulePage';
 import { PagamentoPublicoPage } from '@/pages/PagamentoPublicoPage';
 import { PesquisaExperienciaPage } from '@/pages/PesquisaExperienciaPage';
+import { ProcessoSeletivoPage } from '@/pages/ProcessoSeletivoPage';
 import { Toaster } from '@/components/primitives/toaster';
 
 // AI dev note: PublicRouter - Roteamento para páginas públicas (sem autenticação)
@@ -47,6 +48,9 @@ export const PublicRouter: React.FC = () => {
 
         {/* Pesquisa de Experiência pública e anônima */}
         <Route path="/experiencia" element={<PesquisaExperienciaPage />} />
+
+        {/* Processo seletivo de estagiários (teste público) */}
+        <Route path="/vaga-estagio" element={<ProcessoSeletivoPage />} />
 
         {/* Redirect padrão APENAS para root */}
         <Route

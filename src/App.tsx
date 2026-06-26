@@ -24,7 +24,8 @@ function App() {
       hash.startsWith('#/adicionar-responsavel-financeiro') ||
       hash.startsWith('#/agenda-publica/') ||
       hash.startsWith('#/pagamento/') ||
-      hash.startsWith('#/experiencia')
+      hash.startsWith('#/experiencia') ||
+      hash.startsWith('#/vaga-estagio')
     );
   });
 
@@ -37,7 +38,8 @@ function App() {
         hash.startsWith('#/adicionar-responsavel-financeiro') ||
         hash.startsWith('#/agenda-publica/') ||
         hash.startsWith('#/pagamento/') ||
-        hash.startsWith('#/experiencia');
+        hash.startsWith('#/experiencia') ||
+        hash.startsWith('#/vaga-estagio');
       console.log('🔍 [App] Verificando rota pública:', hash, '→', isPublic);
       setIsPublicRoute(isPublic);
     };

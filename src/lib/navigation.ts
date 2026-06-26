@@ -10,6 +10,7 @@ import {
   Target,
   HeartHandshake,
   MessagesSquare,
+  GraduationCap,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -96,6 +97,13 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Pesquisa Experiência',
     href: '/pesquisa-experiencia',
     roles: ['admin'],
+  },
+  // AI dev note: Processo seletivo de estagiários — admin + secretaria.
+  {
+    icon: GraduationCap,
+    label: 'Processo Seletivo',
+    href: '/processo-seletivo',
+    roles: ['admin', 'secretaria'],
   },
 ];
 

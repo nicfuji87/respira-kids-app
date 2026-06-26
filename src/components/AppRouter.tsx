@@ -20,6 +20,7 @@ import {
   RelatoriosPage,
   WebhooksPage,
   PesquisaExperienciaDashboardPage,
+  ProcessoSeletivoDashboardPage,
   WhatsAppConversasDashboardPage,
   GoogleOAuthDebugPage,
 } from '@/pages';
@@ -262,6 +263,18 @@ export const AppRouter: React.FC = () => {
               currentUserRole={validUserRole}
             >
               <PesquisaExperienciaDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/processo-seletivo"
+          element={
+            <ProtectedRoute
+              path="/processo-seletivo"
+              currentUserRole={validUserRole}
+            >
+              <ProcessoSeletivoDashboardPage />
             </ProtectedRoute>
           }
         />
