@@ -18,6 +18,9 @@ export interface Fatura {
   // Relacionamentos
   empresa_id: string;
   responsavel_cobranca_id: string;
+  // AI dev note: tomador da NFS-e (em nome de quem a nota é emitida = customer Asaas).
+  // Separado do responsavel_cobranca_id (pagador). NULL => usa responsavel_cobranca_id.
+  tomador_nfe_id?: string | null;
   paciente_id?: string | null; // AI dev note: ID do paciente relacionado à fatura
 
   // Datas importantes
@@ -80,6 +83,7 @@ export interface CriarFaturaInput {
   descricao?: string;
   empresa_id: string;
   responsavel_cobranca_id: string;
+  tomador_nfe_id?: string | null; // AI dev note: tomador da NFS-e; NULL => responsavel_cobranca_id
   paciente_id: string; // AI dev note: ID do paciente relacionado à fatura (obrigatório)
   vencimento?: string;
   dados_asaas?: Record<string, unknown>;

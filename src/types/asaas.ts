@@ -241,6 +241,9 @@ export interface ProcessPaymentData {
   consultationIds: string[];
   patientId: string;
   responsibleId: string;
+  // AI dev note: tomador da NFS-e (customer Asaas). Quando ausente, usa responsibleId.
+  // Separa "em nome de quem sai a nota" de "quem paga/recebe a cobrança".
+  tomadorId?: string;
   totalValue: number;
   description: string;
 }

@@ -327,9 +327,7 @@ export interface AsaasCustomerSyncResult {
   error?: string;
 }
 
-export async function syncCustomerToAsaasAccounts(
-  personId: string
-): Promise<{
+export async function syncCustomerToAsaasAccounts(personId: string): Promise<{
   success: boolean;
   results?: AsaasCustomerSyncResult[];
   error?: string;
@@ -588,14 +586,15 @@ export async function processPayment(
     );
 
     // 1. Buscar ou criar cliente na conta específica desta empresa (NOVA LÓGICA)
+    // AI dev note: O customer do Asaas (e, portanto, o tomador da NFS-e) é o
+    // tomadorId quando informado; senão cai no responsibleId (pagador). É isso que
+    // permite a nota sair no nome do paciente sem trocar o responsável de cobrança.
+    const tomadorId = processData.tomadorId || processData.responsibleId;
     console.log(
       '👤 Processando cliente para empresa:',
       agendamentosData.razao_social
     );
-    const customerResult = await getOrCreateAsaasCustomer(
-      processData.responsibleId,
-      apiConfig
-    );
+    const customerResult = await getOrCreateAsaasCustomer(tomadorId, apiConfig);
 
     if (!customerResult.success) {
       console.error('❌ Erro ao obter/criar cliente:', customerResult.error);
@@ -670,6 +669,8 @@ export async function processPayment(
         descricao: processData.description,
         empresa_id: agendamentosData.empresa_id,
         responsavel_cobranca_id: processData.responsibleId,
+        // AI dev note: snapshot do tomador (customer Asaas usado nesta cobrança)
+        tomador_nfe_id: tomadorId,
         paciente_id: agendamentosData.paciente_id, // AI dev note: Incluir paciente_id da view
         vencimento: dueDateString,
         dados_asaas: paymentResult.data as Record<string, unknown>,

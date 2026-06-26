@@ -181,11 +181,11 @@ serve(async (req: Request) => {
     }
 
     // 4. Garantir cliente no Asaas
-    const customerId = await ensureAsaasCustomer(
-      supabase,
-      apiKey,
-      link.responsavel_cobranca_id
-    );
+    // AI dev note: O customer (= tomador da NFS-e) é o tomador_nfe_id do link quando
+    // definido; senão, o responsável de cobrança (pagador). Isso permite a nota sair
+    // no nome do paciente sem trocar quem paga/recebe a cobrança.
+    const tomadorId = link.tomador_nfe_id || link.responsavel_cobranca_id;
+    const customerId = await ensureAsaasCustomer(supabase, apiKey, tomadorId);
 
     // 5. Vencimento (PIX usa; cartão exige também)
     const dueDate =
@@ -206,17 +206,39 @@ serve(async (req: Request) => {
     } else {
       paymentPayload.value = chargeValue;
     }
-    if (forma === 'credit_card' && body.successUrl) {
+    // AI dev note: O callback (auto-redirect de volta ao app após o pagamento do
+    // cartão) só é aceito pelo Asaas quando a conta tem um SITE/DOMÍNIO cadastrado
+    // (Minha Conta > Informações). Sem isso, o Asaas REJEITA a cobrança inteira
+    // com "Não há nenhum domínio configurado em sua conta." — o que quebrava 100%
+    // dos pagamentos no cartão (o PIX não envia callback, por isso funcionava).
+    // Solução: enviar o callback como best-effort. Se a criação falhar e havia
+    // callback, refazemos SEM o callback — a cobrança é criada normalmente,
+    // perdendo-se apenas o redirecionamento automático (o cliente fica na tela de
+    // confirmação do Asaas). Quando o domínio for cadastrado, o callback passa a
+    // funcionar na primeira tentativa, sem alteração de código.
+    const usouCallback = forma === 'credit_card' && !!body.successUrl;
+    if (usouCallback) {
       paymentPayload.callback = {
         successUrl: body.successUrl,
         autoRedirect: true,
       };
     }
 
-    const payRes = await asaasFetch(apiKey, '/payments', {
+    let payRes = await asaasFetch(apiKey, '/payments', {
       method: 'POST',
       body: paymentPayload,
     });
+    if (!payRes.ok && usouCallback) {
+      console.warn(
+        '⚠️ [confirm-payment-link] Falha ao criar cobrança com callback; refazendo sem callback:',
+        payRes.data?.errors?.[0]?.description
+      );
+      delete paymentPayload.callback;
+      payRes = await asaasFetch(apiKey, '/payments', {
+        method: 'POST',
+        body: paymentPayload,
+      });
+    }
     if (!payRes.ok) {
       const msg =
         payRes.data?.errors?.[0]?.description ||
@@ -364,6 +386,8 @@ async function registrarFaturaEAgendamentos(
       descricao: link.descricao,
       empresa_id: link.empresa_id,
       responsavel_cobranca_id: link.responsavel_cobranca_id,
+      // AI dev note: snapshot do tomador da NFS-e (customer usado nesta cobrança)
+      tomador_nfe_id: link.tomador_nfe_id ?? link.responsavel_cobranca_id,
       paciente_id: link.paciente_id,
       vencimento: link.vencimento,
       dados_asaas: {
@@ -428,6 +452,7 @@ async function registrarFaturaEAgendamentos(
         vencimento: fatura.vencimento,
         paciente_id: fatura.paciente_id,
         responsavel_cobranca_id: fatura.responsavel_cobranca_id,
+        tomador_nfe_id: fatura.tomador_nfe_id,
         empresa_id: fatura.empresa_id,
         link_nfe: fatura.link_nfe,
         status_nfe: fatura.status_nfe,

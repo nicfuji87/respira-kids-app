@@ -18,6 +18,9 @@ dist-ssr
 
 # Claude Code local settings (contém allowlist com segredos/tokens)
 .claude/settings.local.json
+
+# MCP servers config (contém tokens de acesso)
+.mcp.json
 .idea
 .DS_Store
 *.suo

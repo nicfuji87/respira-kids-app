@@ -689,11 +689,23 @@ Deno.serve(async (req) => {
       '_'
     );
 
+    // AI dev note: o header HTTP exige ByteString (Latin-1, code points 0-255).
+    // Nomes acentuados em forma decomposta (Unicode NFD) trazem marcas combinantes
+    // > 255 que quebravam o header ("Value is not a valid ByteString"). Usamos
+    // RFC 5987: um `filename` puramente ASCII como fallback + `filename*` com o
+    // nome completo em UTF-8 (percent-encoded). Assim o header é sempre ASCII válido.
+    const asciiFileName = `${safeFileName}.pdf`
+      .normalize('NFKD')
+      .replace(/[^\x20-\x7E]/g, '_');
+    const contentDisposition =
+      `attachment; filename="${asciiFileName}"; ` +
+      `filename*=UTF-8''${encodeURIComponent(`${safeFileName}.pdf`)}`;
+
     return new Response(pdfBuffer, {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${safeFileName}.pdf"`,
+        'Content-Disposition': contentDisposition,
       },
     });
   } catch (error) {

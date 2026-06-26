@@ -142,6 +142,16 @@ export async function criarLinkPagamento(
 
     const opcoes = calcularOpcoesPagamento(input.valorBase, taxas);
 
+    // AI dev note: Resolver o tomador da NFS-e (em nome de quem a nota é emitida =
+    // customer Asaas). Vem da configuração do paciente (pessoas.tomador_nfe_id);
+    // quando ausente, cai no responsável de cobrança (pagador) — comportamento padrão.
+    const { data: pacienteTomador } = await supabase
+      .from('pessoas')
+      .select('tomador_nfe_id')
+      .eq('id', input.pacienteId)
+      .maybeSingle();
+    const tomadorId = pacienteTomador?.tomador_nfe_id || input.responsavelId;
+
     const vencimento =
       input.vencimento || format(addDays(new Date(), 3), 'yyyy-MM-dd');
     const expiraEm = new Date(`${vencimento}T23:59:59`).toISOString();
@@ -154,6 +164,7 @@ export async function criarLinkPagamento(
         token,
         paciente_id: input.pacienteId,
         responsavel_cobranca_id: input.responsavelId,
+        tomador_nfe_id: tomadorId,
         empresa_id: input.empresaId,
         valor_base: input.valorBase,
         descricao: input.descricao,
@@ -215,6 +226,7 @@ export async function criarLinkPagamento(
             url,
             paciente_id: input.pacienteId,
             responsavel_cobranca_id: input.responsavelId,
+            tomador_nfe_id: tomadorId,
             empresa_id: input.empresaId,
             valor_base: input.valorBase,
             descricao: input.descricao,

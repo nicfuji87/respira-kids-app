@@ -1,6 +1,9 @@
 // AI dev note: Edge Function para finalizar cadastro público de paciente
 // Cria todas as entidades no banco de dados seguindo a ordem correta
 // Logs detalhados em cada etapa para rastreamento
+// Versão 45: Tomador da NFS-e desacoplado do pagador. "Nota no nome do paciente"
+//            grava pessoas.tomador_nfe_id = pacienteId; responsavel_cobranca_id
+//            permanece no responsável financeiro (pagador). Sem conflação.
 // Versão 44: Opção de nota fiscal no nome do paciente define o tomador fiscal
 //            via responsavel_cobranca_id = pacienteId, sem alterar vínculos de responsáveis
 // Versão 43: Idempotência no STEP 6+ para retry de cadastro público
@@ -778,31 +781,26 @@ Deno.serve(async (req: Request) => {
     });
 
     // AI dev note: emitirNotaNomePaciente altera apenas o tomador fiscal.
-    // Quando true, responsavel_cobranca_id aponta para o próprio paciente para
-    // que o Asaas/NFe use o CPF da criança; pessoa_responsaveis continua
-    // representando os vínculos legal/financeiro do cadastro.
+    // Quando true, grava pessoas.tomador_nfe_id = paciente (Asaas/NFe usam o CPF da
+    // criança), enquanto responsavel_cobranca_id permanece no responsável financeiro
+    // (pagador). pessoa_responsaveis segue representando os vínculos legal/financeiro.
     // AI dev note: A validação inicial do cadastro é por WhatsApp/responsável.
     // A constraint pessoas_nome_responsavel_unique_when_active é a garantia final
     // no banco; por isso o backend precisa ser idempotente aqui para retries.
-    let pacienteExistenteQuery = supabase
-      .from('pessoas')
-      .select('id')
-      .eq('id_tipo_pessoa', tipoPaciente.id)
-      .eq('ativo', true);
-
-    if (emitirNotaNomePaciente) {
-      pacienteExistenteQuery = pacienteExistenteQuery.eq(
-        'cpf_cnpj',
-        cpfPaciente
-      );
-    } else {
-      pacienteExistenteQuery = pacienteExistenteQuery
-        .eq('responsavel_cobranca_id', responsavelFinanceiroId)
-        .eq('nome', pacienteNome);
-    }
-
+    // AI dev note: responsavel_cobranca_id agora é SEMPRE o responsável financeiro
+    // (pagador). O tomador da nota é separado (tomador_nfe_id), então a busca de
+    // paciente existente usa o mesmo critério (nome + financeiro) para os dois casos
+    // — casa com a constraint pessoas_nome_responsavel_unique_when_active.
     const { data: pacienteExistente, error: errorPacienteExistente } =
-      await pacienteExistenteQuery.limit(1).maybeSingle();
+      await supabase
+        .from('pessoas')
+        .select('id')
+        .eq('id_tipo_pessoa', tipoPaciente.id)
+        .eq('ativo', true)
+        .eq('responsavel_cobranca_id', responsavelFinanceiroId)
+        .eq('nome', pacienteNome)
+        .limit(1)
+        .maybeSingle();
 
     if (errorPacienteExistente) {
       console.error(
@@ -819,11 +817,14 @@ Deno.serve(async (req: Request) => {
       console.log('✅ [STEP 6] Paciente já existe (reutilizando):', pacienteId);
 
       if (emitirNotaNomePaciente) {
+        // AI dev note: tomador fiscal separado do pagador — grava tomador_nfe_id =
+        // paciente e mantém responsavel_cobranca_id no responsável financeiro.
         const { error: errorUpdateTomadorPaciente } = await supabase
           .from('pessoas')
           .update({
             cpf_cnpj: cpfPaciente,
-            responsavel_cobranca_id: pacienteId,
+            tomador_nfe_id: pacienteId,
+            responsavel_cobranca_id: responsavelFinanceiroId,
           })
           .eq('id', pacienteId);
 
@@ -832,15 +833,12 @@ Deno.serve(async (req: Request) => {
             '❌ [STEP 6] Erro ao atualizar tomador fiscal do paciente:',
             errorUpdateTomadorPaciente
           );
-          throw new Error('Erro ao definir paciente como tomador fiscal');
+          throw new Error('Erro ao definir tomador fiscal do paciente');
         }
         console.log('✅ [STEP 6] Paciente definido como tomador fiscal');
       }
     } else {
       const novoPacienteId = crypto.randomUUID();
-      const responsavelCobrancaPacienteId = emitirNotaNomePaciente
-        ? novoPacienteId
-        : responsavelFinanceiroId;
 
       const { data: novoPaciente, error: errorPaciente } = await supabase
         .from('pessoas')
@@ -854,7 +852,9 @@ Deno.serve(async (req: Request) => {
           id_endereco: enderecoId,
           numero_endereco: data.endereco.numero,
           complemento_endereco: data.endereco.complemento || null,
-          responsavel_cobranca_id: responsavelCobrancaPacienteId,
+          // AI dev note: pagador = responsável financeiro; tomador da nota é separado
+          responsavel_cobranca_id: responsavelFinanceiroId,
+          tomador_nfe_id: emitirNotaNomePaciente ? novoPacienteId : null,
           autorizacao_uso_cientifico: data.autorizacoes.usoCientifico,
           autorizacao_uso_redes_sociais: data.autorizacoes.usoRedesSociais,
           autorizacao_uso_do_nome: data.autorizacoes.usoNome,
@@ -867,21 +867,13 @@ Deno.serve(async (req: Request) => {
         console.error('❌ [STEP 6] Erro ao criar paciente:', errorPaciente);
 
         if (errorPaciente?.code === '23505') {
-          let pacienteRetryQuery = supabase
+          const { data: pacienteCriadoEmRetry } = await supabase
             .from('pessoas')
             .select('id')
             .eq('id_tipo_pessoa', tipoPaciente.id)
-            .eq('ativo', true);
-
-          if (emitirNotaNomePaciente) {
-            pacienteRetryQuery = pacienteRetryQuery.eq('cpf_cnpj', cpfPaciente);
-          } else {
-            pacienteRetryQuery = pacienteRetryQuery
-              .eq('responsavel_cobranca_id', responsavelFinanceiroId)
-              .ilike('nome', pacienteNome);
-          }
-
-          const { data: pacienteCriadoEmRetry } = await pacienteRetryQuery
+            .eq('ativo', true)
+            .eq('responsavel_cobranca_id', responsavelFinanceiroId)
+            .ilike('nome', pacienteNome)
             .limit(1)
             .maybeSingle();
 
@@ -895,7 +887,7 @@ Deno.serve(async (req: Request) => {
             if (emitirNotaNomePaciente) {
               const { error: errorUpdateRetryTomador } = await supabase
                 .from('pessoas')
-                .update({ responsavel_cobranca_id: pacienteId })
+                .update({ cpf_cnpj: cpfPaciente, tomador_nfe_id: pacienteId })
                 .eq('id', pacienteId);
 
               if (errorUpdateRetryTomador) {
@@ -903,7 +895,7 @@ Deno.serve(async (req: Request) => {
                   '❌ [STEP 6] Erro ao atualizar tomador fiscal após retry:',
                   errorUpdateRetryTomador
                 );
-                throw new Error('Erro ao definir paciente como tomador fiscal');
+                throw new Error('Erro ao definir tomador fiscal do paciente');
               }
             }
           } else {
@@ -1066,11 +1058,15 @@ Deno.serve(async (req: Request) => {
     let contratoId: string;
     let contratoCriadoAgora = false;
 
+    // AI dev note: o contrato é DO PACIENTE — pessoa_id = pacienteId (não o responsável).
+    // Um responsável pode ter vários pacientes; gravar sob o responsável tornava
+    // impossível saber a qual filho o contrato pertence e quebrava as checagens de
+    // "tem contrato assinado?" (app/n8n/link_contrato), que usam o id do paciente.
     const { data: contratoExistente, error: errorContratoExistente } =
       await supabase
         .from('user_contracts')
         .select('id, status_contrato')
-        .eq('pessoa_id', responsavelFinanceiroId)
+        .eq('pessoa_id', pacienteId)
         .eq('nome_contrato', nomeContrato)
         .eq('ativo', true)
         .in('status_contrato', ['gerado', 'assinado'])
@@ -1125,7 +1121,7 @@ Deno.serve(async (req: Request) => {
         .from('user_contracts')
         .insert({
           contract_template_id: template.id,
-          pessoa_id: responsavelFinanceiroId,
+          pessoa_id: pacienteId,
           nome_contrato: nomeContrato,
           conteudo_final: conteudoFinal,
           variaveis_utilizadas: data.contractVariables,
@@ -1162,7 +1158,8 @@ Deno.serve(async (req: Request) => {
 
       let pdfSignedUrl: string | null = null;
       const PDF_URL_EXPIRES_IN = 60 * 60 * 24; // 24 horas
-      const pdfStoragePath = `${responsavelFinanceiroId}/${contratoId}.pdf`;
+      // AI dev note: caminho do bucket usa o id do PACIENTE (pessoa_id do contrato).
+      const pdfStoragePath = `${pacienteId}/${contratoId}.pdf`;
 
       try {
         const pdfResponse = await fetch(
@@ -1398,7 +1395,7 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         http_status: 200,
         duration_ms: Date.now() - startTime,
-        edge_function_version: 44, // AI dev note: Incrementar versão
+        edge_function_version: 45, // AI dev note: Incrementar versão
         paciente_id: pacienteId,
         responsavel_legal_id: responsavelLegalId,
         responsavel_financeiro_id: responsavelFinanceiroId,

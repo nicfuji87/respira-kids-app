@@ -30,6 +30,7 @@ import {
   Search,
   Users,
   Trash2,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -121,6 +122,13 @@ export const BillingResponsibleSelect: React.FC<
   >(effectiveResponsibleId || null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // AI dev note: Tomador da NFS-e (em nome de quem a nota é emitida). Separado do
+  // responsável de cobrança (pagador). null = usa o responsável de cobrança (padrão).
+  const [tomadorNfeId, setTomadorNfeId] = useState<string | null>(null);
+  const [pacienteNome, setPacienteNome] = useState<string>('');
+  const [pacienteCpf, setPacienteCpf] = useState<string | null>(null);
+  const [savingTomador, setSavingTomador] = useState(false);
 
   // Modal de busca de responsável existente
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -243,6 +251,18 @@ export const BillingResponsibleSelect: React.FC<
           };
         });
         setResponsaveisAssociados(responsaveisFormatados);
+      }
+
+      // AI dev note: Carregar dados do paciente para o seletor de tomador da NFS-e
+      const { data: pacienteData } = await supabase
+        .from('pessoas')
+        .select('nome, cpf_cnpj, tomador_nfe_id')
+        .eq('id', effectivePatientId)
+        .maybeSingle();
+      if (pacienteData) {
+        setPacienteNome(pacienteData.nome || '');
+        setPacienteCpf(pacienteData.cpf_cnpj || null);
+        setTomadorNfeId(pacienteData.tomador_nfe_id || null);
       }
 
       // Buscar dados do responsável atual
@@ -536,6 +556,103 @@ export const BillingResponsibleSelect: React.FC<
       triggerCallback(responsibleId);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // AI dev note: Define o tomador da NFS-e (em nome de quem a nota sai). '__DEFAULT__'
+  // grava null = usa o responsável de cobrança. Valida CPF (Asaas/NFe exigem).
+  const handleChangeTomador = async (value: string) => {
+    if (!effectivePatientId) return;
+    const novoTomador = value === '__DEFAULT__' ? null : value;
+
+    setSavingTomador(true);
+    try {
+      if (novoTomador) {
+        const { data: pessoaTomador } = await supabase
+          .from('pessoas')
+          .select('cpf_cnpj')
+          .eq('id', novoTomador)
+          .maybeSingle();
+        if (!pessoaTomador?.cpf_cnpj) {
+          toast({
+            title: 'Tomador sem CPF',
+            description:
+              'A pessoa escolhida precisa de CPF cadastrado para emitir nota fiscal.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
+      const { error } = await supabase
+        .from('pessoas')
+        .update({ tomador_nfe_id: novoTomador })
+        .eq('id', effectivePatientId);
+
+      if (error) {
+        toast({
+          title: 'Erro ao definir tomador da nota',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setTomadorNfeId(novoTomador);
+
+      // AI dev note: Propaga o novo tomador para os LINKS DE PAGAMENTO ainda
+      // PENDENTES (status 'pendente' = sem cobrança criada no Asaas; o customer só
+      // nasce no aceite do cliente). Para esses, basta atualizar o snapshot.
+      // Cobranças JÁ emitidas no Asaas NÃO podem ter o customer trocado (regra do
+      // Asaas: "after creation it is not possible to change the customer"); por isso
+      // apenas detectamos e avisamos — a troca exige cancelar e regerar a cobrança.
+      const { data: linksPend } = await supabase
+        .from('pagamento_links')
+        .update({ tomador_nfe_id: novoTomador })
+        .eq('paciente_id', effectivePatientId)
+        .eq('status', 'pendente')
+        .eq('ativo', true)
+        .select('id');
+
+      const { data: agsFatura } = await supabase
+        .from('agendamentos')
+        .select('fatura_id')
+        .eq('paciente_id', effectivePatientId)
+        .not('fatura_id', 'is', null);
+      const faturaIds = [
+        ...new Set((agsFatura || []).map((a) => a.fatura_id).filter(Boolean)),
+      ];
+      let cobrancasEmitidas = 0;
+      if (faturaIds.length > 0) {
+        const { count } = await supabase
+          .from('faturas')
+          .select('id', { count: 'exact', head: true })
+          .in('id', faturaIds)
+          .in('status', ['pendente', 'atrasado'])
+          .eq('ativo', true)
+          .not('id_asaas', 'is', null);
+        cobrancasEmitidas = count || 0;
+      }
+
+      const linksCount = linksPend?.length || 0;
+      const avisos: string[] = [];
+      if (linksCount > 0) {
+        avisos.push(
+          `${linksCount} link(s) de pagamento pendente(s) já atualizado(s)`
+        );
+      }
+      if (cobrancasEmitidas > 0) {
+        avisos.push(
+          `${cobrancasEmitidas} cobrança(s) já emitida(s) e não paga(s) precisam ser canceladas e regeradas para mudar o nome da nota (o Asaas não permite trocar isso numa cobrança existente)`
+        );
+      }
+
+      toast({
+        title: 'Tomador da nota fiscal atualizado',
+        description: avisos.length ? avisos.join('. ') : undefined,
+      });
+    } finally {
+      setSavingTomador(false);
     }
   };
 
@@ -1025,6 +1142,49 @@ export const BillingResponsibleSelect: React.FC<
               <UserPlus className="h-4 w-4 mr-2" />
               Cadastrar novo
             </Button>
+          </div>
+
+          {/* AI dev note: Tomador da NFS-e — em nome de quem a nota é emitida.
+              Separado do responsável de cobrança (pagador). */}
+          <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+            <Label className="flex items-center gap-1.5 text-sm">
+              <FileText className="h-4 w-4" />
+              Nome na nota fiscal (tomador)
+            </Label>
+            <Select
+              value={tomadorNfeId || '__DEFAULT__'}
+              onValueChange={handleChangeTomador}
+              disabled={savingTomador}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__DEFAULT__">
+                  Responsável de cobrança (padrão)
+                </SelectItem>
+                {effectivePatientId && (
+                  <SelectItem value={effectivePatientId}>
+                    O próprio paciente
+                    {pacienteNome ? ` — ${pacienteNome}` : ''}
+                    {!pacienteCpf ? ' (sem CPF)' : ''}
+                  </SelectItem>
+                )}
+                {responsaveisAssociados.map((resp) => (
+                  <SelectItem
+                    key={`tomador-${resp.id_responsavel}`}
+                    value={resp.id_responsavel}
+                  >
+                    {resp.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Define em nome de quem a nota fiscal será emitida, sem alterar
+              quem paga/recebe a cobrança. Aplica-se às próximas cobranças
+              geradas.
+            </p>
           </div>
         </div>
       )}

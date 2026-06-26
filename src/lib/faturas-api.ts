@@ -448,6 +448,8 @@ export async function criarFatura(
         descricao: faturaData.descricao,
         empresa_id: faturaData.empresa_id,
         responsavel_cobranca_id: faturaData.responsavel_cobranca_id,
+        // AI dev note: tomador da NFS-e; quando ausente, NULL => usa responsavel_cobranca_id
+        tomador_nfe_id: faturaData.tomador_nfe_id ?? null,
         paciente_id: faturaData.paciente_id, // AI dev note: Incluir paciente_id na criação da fatura
         vencimento: faturaData.vencimento,
         dados_asaas: faturaData.dados_asaas || {},
