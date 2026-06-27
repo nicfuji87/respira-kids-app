@@ -178,6 +178,14 @@ const FaturaItem = React.memo<{
 
     const asaasUrl = getAsaasPaymentUrl(fatura.id_asaas);
 
+    // AI dev note: no cartão as taxas são repassadas ao cliente. Quebramos o valor em
+    // Serviço (líquido = receita) + acréscimo do cartão = Cobrado (bruto = base da
+    // NFS-e/caixa), pra não parecer que o serviço custa o bruto. PIX/legado: serviço =
+    // total, então mostramos só um valor.
+    const valorServico = fatura.valor_servico ?? fatura.valor_total;
+    const acrescimoCartao = Math.max(0, fatura.valor_total - valorServico);
+    const temAcrescimo = acrescimoCartao > 0.001;
+
     // Debug log para verificar campos NFe
     if (process.env.NODE_ENV === 'development' && fatura.status === 'pago') {
       console.log('🔍 Debug NFe fatura:', {
@@ -350,9 +358,31 @@ const FaturaItem = React.memo<{
                   )}
                 </div>
               )}
-              <div className={cn(getValueColor(fatura.status), 'font-medium')}>
-                {formatCurrency(fatura.valor_total)}
-              </div>
+              {temAcrescimo ? (
+                <div className="space-y-0.5">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                    <span>Serviço {formatCurrency(valorServico)}</span>
+                    <span className="inline-flex items-center gap-0.5">
+                      <CreditCard className="h-3 w-3" />+{' '}
+                      {formatCurrency(acrescimoCartao)}
+                    </span>
+                  </div>
+                  <div
+                    className={cn(getValueColor(fatura.status), 'font-medium')}
+                  >
+                    {formatCurrency(fatura.valor_total)}
+                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                      cobrado · base NFS-e
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={cn(getValueColor(fatura.status), 'font-medium')}
+                >
+                  {formatCurrency(fatura.valor_total)}
+                </div>
+              )}
             </div>
             {getStatusBadge(fatura.status)}
           </div>

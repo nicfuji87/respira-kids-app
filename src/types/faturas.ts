@@ -9,7 +9,12 @@ export interface Fatura {
   numero_interno?: string | null; // Numeração interna (ex: RK-2025-001)
 
   // Dados da fatura
+  // AI dev note: valor_total = BRUTO cobrado (serviço + acréscimo de cartão repassado
+  // ao cliente). É a base da NFS-e e da conciliação/caixa.
   valor_total: number;
+  // AI dev note: valor_servico = LÍQUIDO (= o que conta como receita; soma das consultas).
+  // Acréscimo do cartão = valor_total - valor_servico. PIX/legado: serviço = total.
+  valor_servico?: number | null;
   descricao?: string | null;
 
   // Status e controle
@@ -80,6 +85,8 @@ export interface FaturaComDetalhes extends Fatura {
 export interface CriarFaturaInput {
   id_asaas: string;
   valor_total: number;
+  // AI dev note: líquido/serviço; quando ausente, assume valor_total (sem acréscimo).
+  valor_servico?: number;
   descricao?: string;
   empresa_id: string;
   responsavel_cobranca_id: string;
@@ -114,7 +121,11 @@ export interface FaturaFiltros {
 // Interface para métricas de faturas
 export interface FaturaMetricas {
   total_faturas: number;
-  valor_total: number;
+  valor_total: number; // BRUTO cobrado (serviço + acréscimo); base de caixa/conciliação
+  // AI dev note: separação serviço x acréscimo p/ relatórios não misturarem repasse de
+  // cartão na receita. valor_servico = receita; valor_acrescimo = total - serviço.
+  valor_servico: number;
+  valor_acrescimo: number;
   valor_pendente: number;
   valor_pago: number;
   valor_atrasado: number;

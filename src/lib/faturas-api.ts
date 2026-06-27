@@ -445,6 +445,8 @@ export async function criarFatura(
       .insert({
         id_asaas: faturaData.id_asaas,
         valor_total: faturaData.valor_total,
+        // AI dev note: líquido/serviço (receita). Sem repasse => igual ao bruto.
+        valor_servico: faturaData.valor_servico ?? faturaData.valor_total,
         descricao: faturaData.descricao,
         empresa_id: faturaData.empresa_id,
         responsavel_cobranca_id: faturaData.responsavel_cobranca_id,
@@ -1790,7 +1792,7 @@ export async function fetchFaturaMetricas(
   try {
     let query = supabase
       .from('faturas')
-      .select('id, valor_total, status, vencimento')
+      .select('id, valor_total, valor_servico, status, vencimento')
       .eq('ativo', true);
 
     // Se filtrar por paciente
@@ -1811,6 +1813,8 @@ export async function fetchFaturaMetricas(
           data: {
             total_faturas: 0,
             valor_total: 0,
+            valor_servico: 0,
+            valor_acrescimo: 0,
             valor_pendente: 0,
             valor_pago: 0,
             valor_atrasado: 0,
@@ -1837,6 +1841,11 @@ export async function fetchFaturaMetricas(
       (acc, fatura) => {
         acc.total_faturas++;
         acc.valor_total += fatura.valor_total;
+        // AI dev note: serviço = receita; acréscimo = repasse de cartão (não é receita).
+        // valor_pago/pendente/atrasado seguem o BRUTO (é o que o cliente deve/pagou).
+        const servico = fatura.valor_servico ?? fatura.valor_total;
+        acc.valor_servico += servico;
+        acc.valor_acrescimo += Math.max(0, fatura.valor_total - servico);
 
         switch (fatura.status) {
           case 'pago':
@@ -1867,6 +1876,8 @@ export async function fetchFaturaMetricas(
       {
         total_faturas: 0,
         valor_total: 0,
+        valor_servico: 0,
+        valor_acrescimo: 0,
         valor_pendente: 0,
         valor_pago: 0,
         valor_atrasado: 0,

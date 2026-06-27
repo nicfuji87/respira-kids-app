@@ -383,6 +383,9 @@ async function registrarFaturaEAgendamentos(
     .insert({
       id_asaas: payment.id,
       valor_total: valorCobrado,
+      // AI dev note: valor do SERVIÇO (líquido = receita). O acréscimo do cartão
+      // (valor_total - valor_servico) é repasse ao cliente, não receita. PIX: igual.
+      valor_servico: link.valor_base,
       descricao: link.descricao,
       empresa_id: link.empresa_id,
       responsavel_cobranca_id: link.responsavel_cobranca_id,
