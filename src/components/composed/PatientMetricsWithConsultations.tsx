@@ -62,7 +62,7 @@ import {
   emitirNfeFatura,
 } from '@/lib/faturas-api';
 import { generateChargeDescription } from '@/lib/charge-description';
-import { FaturasList } from './FaturasList';
+import { FaturasList, FaturasResumoServico } from './FaturasList';
 import { FaturaAjusteManualDialog } from './FaturaAjusteManualDialog';
 import {
   validateResponsibleForAsaas,
@@ -1587,6 +1587,12 @@ export const PatientMetricsWithConsultations =
                       <Badge variant="outline">{faturas.length} total</Badge>
                     )}
                   </div>
+
+                  {/* AI dev note: resumo serviço x acréscimo de cartão x cobrado.
+                      Mantém o "valor dos serviços" limpo (sem o repasse de taxas). */}
+                  {faturas.length > 0 && (
+                    <FaturasResumoServico faturas={faturas} />
+                  )}
 
                   <FaturasList
                     faturas={faturas}

@@ -127,6 +127,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   // Estados de totais (todos os registros do filtro, não apenas da página)
   const [totalSummary, setTotalSummary] = useState({
     totalValue: 0,
+    totalServico: 0,
+    totalAcrescimo: 0,
     paidCount: 0,
     unpaidCount: 0,
     nfeEmittedCount: 0,
@@ -261,7 +263,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       // Buscar todas as faturas com filtros aplicados para calcular totais
       let allFaturasQuery = supabase
         .from('vw_faturas_completas')
-        .select('valor_total, status, link_nfe');
+        .select('valor_total, valor_servico, status, link_nfe');
 
       // Aplicar mesmos filtros de período
       if (periodFilter !== 'todos') {
@@ -279,6 +281,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       // Buscar TODAS as faturas em lotes para evitar limite de 1000
       const allFaturas: Array<{
         valor_total: number;
+        valor_servico: number | null;
         status: string;
         link_nfe: string | null;
       }> = [];
@@ -312,6 +315,13 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         (sum, item) => sum + (item.valor_total || 0),
         0
       );
+      // AI dev note: serviço (receita líquida) x acréscimo de cartão (repasse ao
+      // cliente). totalValue é o BRUTO cobrado; acréscimo = bruto - serviço.
+      const totalServico = allFaturas.reduce(
+        (sum, item) => sum + (item.valor_servico ?? item.valor_total ?? 0),
+        0
+      );
+      const totalAcrescimo = Math.max(0, totalValue - totalServico);
       const paidCount = allFaturas.filter(
         (item) => item.status === 'pago'
       ).length;
@@ -344,6 +354,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
 
       setTotalSummary({
         totalValue,
+        totalServico,
+        totalAcrescimo,
         paidCount,
         unpaidCount,
         nfeEmittedCount,
@@ -1081,16 +1093,34 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           {/* Resumo - Totais de TODOS os registros do filtro */}
           {!isLoading && !error && filteredFaturas.length > 0 && (
             <div className="mt-4 p-4 bg-muted/30 rounded-lg">
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">
                     Total de faturas:
                   </span>
                   <p className="font-semibold">{totalCount}</p>
                 </div>
+                {/* AI dev note: receita (serviço/líquido) separada do bruto cobrado.
+                    O acréscimo de cartão é repasse das taxas ao cliente, não receita. */}
                 <div>
-                  <span className="text-muted-foreground">Valor total:</span>
+                  <span className="text-muted-foreground">
+                    Faturamento de serviços:
+                  </span>
                   <p className="font-semibold text-verde-pipa">
+                    {formatCurrency(totalSummary.totalServico)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">
+                    Acréscimo cartão:
+                  </span>
+                  <p className="font-semibold text-muted-foreground">
+                    {formatCurrency(totalSummary.totalAcrescimo)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total cobrado:</span>
+                  <p className="font-semibold">
                     {formatCurrency(totalSummary.totalValue)}
                   </p>
                 </div>

@@ -766,3 +766,69 @@ export const FaturasList = React.memo<FaturasListProps>(
 );
 
 FaturasList.displayName = 'FaturasList';
+
+// AI dev note: Resumo de faturas separando RECEITA (serviço/líquido) do BRUTO cobrado.
+// O acréscimo de cartão (valor_total - valor_servico) é repasse das taxas ao cliente,
+// NÃO é receita. Mostra "Acréscimo" e "Total cobrado" só quando há repasse (senão
+// serviço == cobrado e um card basta). Exclui cancelado/estornado do faturamento.
+export const FaturasResumoServico = React.memo<{
+  faturas: FaturaComDetalhes[];
+  className?: string;
+}>(({ faturas, className }) => {
+  const fmt = (v: number) =>
+    new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(v);
+
+  const validas = faturas.filter(
+    (f) => f.status !== 'cancelado' && f.status !== 'estornado'
+  );
+  if (validas.length === 0) return null;
+
+  const cobrado = validas.reduce((s, f) => s + (Number(f.valor_total) || 0), 0);
+  const servico = validas.reduce(
+    (s, f) => s + (Number(f.valor_servico ?? f.valor_total) || 0),
+    0
+  );
+  const acrescimo = Math.max(0, cobrado - servico);
+  const temAcrescimo = acrescimo > 0.001;
+
+  return (
+    <div
+      className={cn(
+        'grid gap-3',
+        temAcrescimo ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1',
+        className
+      )}
+    >
+      <div className="rounded-lg border border-verde-pipa/40 bg-verde-pipa/5 p-3">
+        <p className="text-xs text-muted-foreground">Faturamento de serviços</p>
+        <p className="text-lg font-semibold text-verde-pipa">{fmt(servico)}</p>
+        <p className="text-[11px] text-muted-foreground">
+          o que conta como receita
+        </p>
+      </div>
+      {temAcrescimo && (
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <p className="text-xs text-muted-foreground">Acréscimo de cartão</p>
+          <p className="text-lg font-semibold">{fmt(acrescimo)}</p>
+          <p className="text-[11px] text-muted-foreground">
+            repassado ao cliente
+          </p>
+        </div>
+      )}
+      {temAcrescimo && (
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <p className="text-xs text-muted-foreground">Total cobrado</p>
+          <p className="text-lg font-semibold">{fmt(cobrado)}</p>
+          <p className="text-[11px] text-muted-foreground">
+            base NFS-e / caixa
+          </p>
+        </div>
+      )}
+    </div>
+  );
+});
+
+FaturasResumoServico.displayName = 'FaturasResumoServico';
