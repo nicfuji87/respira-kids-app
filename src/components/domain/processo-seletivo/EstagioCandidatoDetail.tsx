@@ -178,7 +178,7 @@ export const EstagioCandidatoDetail: React.FC<EstagioCandidatoDetailProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl pr-6">{row.nome}</DialogTitle>
           <div className="flex flex-wrap items-center gap-2 pt-1">

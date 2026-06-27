@@ -164,8 +164,8 @@ export const ProcessoSeletivoPage: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 w-full flex items-start justify-center px-4 md:px-8 py-8 md:py-12">
-        <div className="w-full max-w-2xl">
+      <main className="flex-1 w-full flex flex-col px-4 md:px-8 py-6 md:py-12">
+        <div className="w-full max-w-2xl mx-auto my-auto">
           {stage === 'welcome' && (
             <EstagioWelcomeScreen onStart={() => setStage('dados')} />
           )}

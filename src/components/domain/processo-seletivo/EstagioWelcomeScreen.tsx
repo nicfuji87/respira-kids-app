@@ -12,7 +12,7 @@ interface EstagioWelcomeScreenProps {
 export const EstagioWelcomeScreen = React.memo<EstagioWelcomeScreenProps>(
   ({ onStart }) => {
     return (
-      <div className="w-full max-w-xl mx-auto flex flex-col items-center text-center space-y-8 py-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <div className="w-full max-w-xl mx-auto flex flex-col items-center text-center space-y-6 py-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
         {/* Logo */}
         <div className="relative">
           <div className="absolute inset-0 bg-azul-respira/30 blur-2xl rounded-full animate-respira-pulse" />
