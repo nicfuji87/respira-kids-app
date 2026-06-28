@@ -1,8 +1,10 @@
 // AI dev note: Cálculo de repasse de taxas (gross-up) do pagamento via cartão.
 // Dado o valor BASE (líquido que a clínica quer receber), calcula o valor BRUTO
 // que o cliente paga em cada opção (PIX, cartão à vista, 2x..Nx) de forma que,
-// após as taxas do Asaas (MDR + antecipação automática + tarifa fixa), a clínica
-// receba o valor base. Função PURA e sem dependências — é a fonte da verdade dos
+// após as taxas do Asaas (MDR + antecipação automática + tarifa fixa) E o imposto
+// sobre o acréscimo (NFS-e sai no bruto), a clínica receba o valor base líquido. O
+// imposto só entra no cartão (PIX não tem acréscimo). Função PURA e sem dependências
+// — é a fonte da verdade dos
 // valores exibidos na página pública (recalculados a partir do taxas_snapshot do link).
 //
 // Modelo da antecipação: para n parcelas, os meses de antecipação seguem a média
@@ -51,6 +53,10 @@ export function calcularOpcoesPagamento(
 
   const maxParcelas = Math.max(1, taxas.max_parcelas || 1);
   const fixoCartao = taxas.cartao?.fixo || 0;
+  // Imposto repassado junto da taxa (gross-up COMBINADO). Como a NFS-e sai sobre o
+  // bruto, o acréscimo gera imposto; resolvendo taxa + imposto juntos a clínica fica
+  // neutra vs. PIX (recebe o líquido após Asaas E imposto). Só no cartão; PIX não.
+  const fracaoImposto = Math.max(0, (taxas.imposto?.percent || 0) / 100);
   const cartao: OpcaoCartao[] = [];
 
   for (let n = 1; n <= maxParcelas; n++) {
@@ -59,9 +65,10 @@ export function calcularOpcoesPagamento(
 
     const meses = mesesAntecipacao(n, faixa.meses);
     const fracaoTaxa = faixa.mdr / 100 + (faixa.antecipacao_mes / 100) * meses;
-    if (fracaoTaxa >= 1) continue; // config inválida; evita divisão <= 0
+    const denom = 1 - fracaoTaxa - fracaoImposto;
+    if (denom <= 0) continue; // config inválida; evita divisão <= 0
 
-    const bruto = ceil2((valorBase + fixoCartao) / (1 - fracaoTaxa));
+    const bruto = ceil2((valorBase * (1 - fracaoImposto) + fixoCartao) / denom);
     cartao.push({
       parcelas: n,
       total: bruto,
@@ -82,6 +89,7 @@ export function gerarTaxasCartaoPadrao(): TaxasCartaoConfig {
   return {
     max_parcelas: 6,
     pix: { percent: 0, fixo: 0 },
+    imposto: { percent: 0 },
     cartao: {
       fixo: 0.49,
       faixas: [

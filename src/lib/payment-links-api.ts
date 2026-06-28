@@ -91,6 +91,22 @@ async function refreshTaxasFromAsaas(
   }
 }
 
+// Alíquota de imposto repassada ao cliente no cartão (gross-up). É a MAIOR entre as
+// empresas ativas (preço uniforme em qualquer CNPJ — decisão do dono), NÃO a da empresa
+// que emite. A margem/recolhimento usa a alíquota real por empresa. Falha => 0.
+async function fetchAliquotaImpostoRepasse(): Promise<number> {
+  try {
+    const { data, error } = await supabase.rpc(
+      'fn_aliquota_imposto_repasse',
+      {}
+    );
+    if (error || data == null) return 0;
+    return Number(data) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 async function assertSecretariaOuAdmin(userId: string): Promise<string | null> {
   if (userId === 'system') return null;
   const { data, error } = await supabase
@@ -134,11 +150,20 @@ export async function criarLinkPagamento(
       (empresa?.taxas_cartao as TaxasCartaoConfig) || gerarTaxasCartaoPadrao();
 
     // Atualiza MDR/tarifa fixa com as taxas reais do Asaas da empresa (fallback: config)
-    const taxas = await refreshTaxasFromAsaas(
+    const taxasAsaas = await refreshTaxasFromAsaas(
       input.empresaId,
       input.valorBase,
       taxasConfig
     );
+
+    // Imposto repassado no cartão (gross-up): MAIOR alíquota entre as empresas ativas,
+    // pra o cliente ver o mesmo % em qualquer CNPJ. Congelada no snapshot. A margem usa
+    // a alíquota real por empresa (fn_aliquota_imposto_bruto).
+    const aliquotaImposto = await fetchAliquotaImpostoRepasse();
+    const taxas: TaxasCartaoConfig = {
+      ...taxasAsaas,
+      imposto: { percent: aliquotaImposto },
+    };
 
     const opcoes = calcularOpcoesPagamento(input.valorBase, taxas);
 

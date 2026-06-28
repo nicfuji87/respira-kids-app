@@ -17,6 +17,12 @@ export interface TaxasCartaoConfig {
   max_parcelas: number;
   pix: { percent: number; fixo: number };
   cartao: { fixo: number; faixas: TaxaFaixaCartao[] };
+  // Imposto repassado ao cliente NO CARTÃO (gross-up junto da taxa Asaas). É a MAIOR
+  // alíquota de tributos base='bruto' entre as empresas ativas (ver RPC
+  // fn_aliquota_imposto_repasse) — preço uniforme em qualquer CNPJ —, congelada no
+  // taxas_snapshot do link. A NFS-e sai sobre o bruto, então o acréscimo gera imposto.
+  // A margem usa a alíquota REAL por empresa. Ausente/0 = sem repasse. NÃO no PIX.
+  imposto?: { percent: number };
 }
 
 // === Saída do cálculo (valores BRUTOS pagos pelo cliente) ===
