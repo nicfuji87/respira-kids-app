@@ -12,3 +12,6 @@ export { RecorrenciaLogViewer } from './RecorrenciaLogViewer';
 export { ConfiguracaoDivisaoSocios } from './ConfiguracaoDivisaoSocios';
 export { RelatorioProfissionais } from './RelatorioProfissionais';
 export { LancamentoResponsavelManager } from './LancamentoResponsavelManager';
+export { CaixaClinicaPanel } from './CaixaClinicaPanel';
+export { TributosEmpresaManager } from './TributosEmpresaManager';
+export { ResumoCarteiras } from './ResumoCarteiras';
