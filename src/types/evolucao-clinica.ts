@@ -118,8 +118,10 @@ export interface EstadoGeralAntes {
 
   // 2️⃣ Sinais Vitais
   temperatura_aferida?: number; // em graus Celsius
+  temperatura_nao_aferida?: boolean; // marca explícita "não medido" (distingue de esquecido)
   frequencia_cardiaca?: number; // bpm
   saturacao_o2?: number; // percentual em ar ambiente
+  saturacao_nao_aferida?: boolean; // marca explícita "não medido"
   necessita_suporte_o2?: boolean; // Se necessita de suporte de O2
   saturacao_com_suporte?: number; // percentual com suporte O2 (só se necessita_suporte_o2 = true)
 
@@ -147,8 +149,10 @@ export interface EstadoGeralAntes {
   cansaco_respiratorio?: boolean;
   esforco_respiratorio?: boolean; // Esforço respiratório percebido
   respiracao_ruidosa?: boolean;
-  tosse_seca_referida?: boolean; // Tosse seca referida pelo responsável
-  tosse_produtiva_referida?: boolean; // Tosse produtiva referida pelo responsável
+  // @deprecated Tosse consolidada no campo único `tosse` (item 6). Mantidos
+  // apenas para leitura de registros antigos; não preencher em novos.
+  tosse_seca_referida?: boolean;
+  tosse_produtiva_referida?: boolean;
 
   // 6️⃣ Sintomas Respiratórios - Tosse
   tosse?: 'ausente' | 'seca' | 'produtiva' | null;
@@ -544,8 +548,10 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       comportamento_agitado: false,
       // 2️⃣ Sinais Vitais
       temperatura_aferida: undefined,
+      temperatura_nao_aferida: false,
       frequencia_cardiaca: undefined,
       saturacao_o2: undefined,
+      saturacao_nao_aferida: false,
       necessita_suporte_o2: false,
       saturacao_com_suporte: undefined,
       // 3️⃣ Contexto Clínico
@@ -658,6 +664,79 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       alta: false,
     },
   };
+}
+
+/**
+ * Retorna uma avaliação respiratória "normal" (exame sem alterações), usada
+ * pelo botão "Exame respiratório normal" (charting by exception): o
+ * profissional aplica o padrão normal e edita apenas as exceções.
+ */
+export function getAvaliacaoRespiratoriaNormal(): AvaliacaoRespiratoriaAntes {
+  const hemitoraxNormal = (): AuscultaHemitorax => ({
+    murmurio_vesicular: 'preservado',
+    ruidos_ausentes: true,
+    sibilos: false,
+    roncos: false,
+    roncos_transmissao: false,
+    estertores_finos: false,
+    estertores_grossos: false,
+    localizacao_difusos: false,
+    localizacao_apice: false,
+    localizacao_terco_medio: false,
+    localizacao_base: false,
+  });
+  return {
+    padrao_respiratorio: {
+      tipo: 'nasal',
+      ritmo_respiratorio: 'eupneico',
+      dispneia: false,
+      classificacao_clinica: 'normal',
+    },
+    sinais_dispneia: {
+      uso_musculatura_acessoria: false,
+      batimento_asa_nasal: false,
+      tiragem_intercostal: false,
+      tiragem_subcostal: false,
+      tiragem_supraclavicular: false,
+      retracao_furcula: false,
+      gemencia: false,
+      postura_antalgica: false,
+      tempo_expiratorio_prolongado: false,
+    },
+    ausculta: {
+      hemitorax_direito: hemitoraxNormal(),
+      hemitorax_esquerdo: hemitoraxNormal(),
+    },
+  };
+}
+
+/**
+ * Cria uma nova evolução respiratória reaproveitando a última do paciente.
+ * Copia apenas o que é estável entre sessões (contexto clínico, conduta e
+ * orientações). Exame, intervenção e resposta começam em branco — devem ser
+ * refeitos a cada atendimento (evita documentar achados/condutas que não
+ * ocorreram nesta sessão).
+ */
+export function criarEvolucaoRespiratoriaDeAnterior(
+  anterior: EvolucaoRespiratoria
+): EvolucaoRespiratoria {
+  const nova = criarEvolucaoRespiratoriaVazia();
+  const ant = anterior.estado_geral_antes || ({} as EstadoGeralAntes);
+  nova.estado_geral_antes = {
+    ...nova.estado_geral_antes,
+    // Contexto clínico (estável entre sessões)
+    infeccao_recente: ant.infeccao_recente,
+    episodios_recorrentes_sibilancia: ant.episodios_recorrentes_sibilancia,
+    contato_pessoas_sintomaticas: ant.contato_pessoas_sintomaticas,
+    uso_medicacao_respiratoria: ant.uso_medicacao_respiratoria,
+    inicio_sintomas_dias: ant.inicio_sintomas_dias,
+    quadro_compativel_com: ant.quadro_compativel_com || [],
+    origem_informacao_quadro: ant.origem_informacao_quadro || [],
+  };
+  // Plano terapêutico (estável)
+  if (anterior.conduta) nova.conduta = { ...anterior.conduta };
+  if (anterior.orientacoes) nova.orientacoes = { ...anterior.orientacoes };
+  return nova;
 }
 
 /**

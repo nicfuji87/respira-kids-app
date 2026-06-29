@@ -40,6 +40,7 @@ import {
   EVOLUCAO_RESPIRATORIA_SECOES,
   EVOLUCAO_MOTORA_ASSIMETRIA_SECOES,
   criarEvolucaoRespiratoriaVazia,
+  criarEvolucaoRespiratoriaDeAnterior,
   criarEvolucaoMotoraAssimetriaVazia,
   verificarSecaoEvolucaoCompleta,
 } from '@/types/evolucao-clinica';
@@ -64,6 +65,12 @@ export interface EvolutionFormModalProps {
     evolucao_respiratoria?: EvolucaoRespiratoria;
     evolucao_motora_assimetria?: EvolucaoMotoraAssimetria;
   };
+  // AI dev note: última evolução do paciente p/ carry-forward (reaproveita
+  // contexto clínico, conduta e orientações ao iniciar uma nova evolução)
+  previousData?: {
+    evolucao_respiratoria?: EvolucaoRespiratoria;
+  };
+  previousDate?: string;
   mode?: 'create' | 'edit' | 'view';
 }
 
@@ -85,6 +92,8 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   patientName,
   appointmentId,
   existingData,
+  previousData,
+  previousDate,
   mode = 'create',
 }) => {
   // Chave única para autosave baseada no agendamento
@@ -132,6 +141,22 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const isReadOnly = mode === 'view';
+
+  // AI dev note: carry-forward — reaproveita a última evolução do paciente
+  // (contexto clínico, conduta e orientações) como ponto de partida.
+  const [carryApplied, setCarryApplied] = useState(false);
+  const podeReaproveitar =
+    mode === 'create' &&
+    tipoEvolucao === 'respiratoria' &&
+    !!previousData?.evolucao_respiratoria &&
+    !carryApplied;
+  const aplicarReaproveitamento = useCallback(() => {
+    if (!previousData?.evolucao_respiratoria) return;
+    setEvolucaoRespiratoria(
+      criarEvolucaoRespiratoriaDeAnterior(previousData.evolucao_respiratoria)
+    );
+    setCarryApplied(true);
+  }, [previousData]);
 
   // Scroll to top when section changes
   useEffect(() => {
@@ -526,6 +551,30 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
           {/* Conteúdo da seção */}
           <ScrollArea className="flex-1" ref={scrollAreaRef}>
             <div className="p-4 sm:p-6">
+              {podeReaproveitar && currentSection === 0 && (
+                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-blue-800">
+                      Reaproveitar última evolução
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      {previousDate
+                        ? `Última em ${new Date(previousDate).toLocaleDateString('pt-BR')}. `
+                        : ''}
+                      Copia contexto clínico, conduta e orientações. O exame, a
+                      intervenção e a resposta começam em branco.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={aplicarReaproveitamento}
+                    className="flex-shrink-0"
+                  >
+                    Usar
+                  </Button>
+                </div>
+              )}
               <EvolutionSectionContent
                 tipoEvolucao={tipoEvolucao}
                 secaoId={currentSectionData?.id || ''}

@@ -53,6 +53,7 @@ import {
   fetchConsultaStatus,
   fetchTiposServico,
   fetchRelatoriosEvolucao,
+  fetchUltimaEvolucaoRespiratoriaPaciente,
   saveRelatorioEvolucao,
   updateRelatorioEvolucao,
   updateRelatorioEvolucaoCompleta,
@@ -213,6 +214,44 @@ export const AppointmentDetailsManager =
         evolucao_respiratoria?: EvolucaoRespiratoria;
         evolucao_motora_assimetria?: EvolucaoMotoraAssimetria;
       } | null>(null);
+      // AI dev note: última evolução do paciente p/ carry-forward (oferecida no
+      // modal ao iniciar uma NOVA evolução respiratória).
+      const [previousEvolucao, setPreviousEvolucao] = useState<{
+        evolucao_respiratoria?: EvolucaoRespiratoria;
+        date?: string;
+      } | null>(null);
+
+      // Busca a última evolução do paciente ao abrir o modal p/ nova evolução
+      useEffect(() => {
+        if (!showEvolutionModal || editingEvolucaoData) return;
+        const pacienteId = appointment?.paciente_id;
+        if (!pacienteId) return;
+        let cancelado = false;
+        fetchUltimaEvolucaoRespiratoriaPaciente(pacienteId, appointment?.id)
+          .then((rel) => {
+            if (cancelado) return;
+            setPreviousEvolucao(
+              rel?.evolucao_respiratoria
+                ? {
+                    evolucao_respiratoria:
+                      rel.evolucao_respiratoria as unknown as EvolucaoRespiratoria,
+                    date: rel.created_at,
+                  }
+                : null
+            );
+          })
+          .catch(() => {
+            if (!cancelado) setPreviousEvolucao(null);
+          });
+        return () => {
+          cancelado = true;
+        };
+      }, [
+        showEvolutionModal,
+        editingEvolucaoData,
+        appointment?.paciente_id,
+        appointment?.id,
+      ]);
 
       // Estado para modal de atestado de comparecimento
       const [showAttendanceStatementModal, setShowAttendanceStatementModal] =
@@ -810,11 +849,9 @@ export const AppointmentDetailsManager =
             }
 
             // 5. Sinais Associados (relato do responsável)
+            // AI dev note: tosse consolidada no campo único `tosse` (ver item 6).
+            // Não duplicar aqui via tosse_seca_referida/tosse_produtiva_referida.
             const sinaisAssociados = [];
-            if (ev.estado_geral_antes.tosse_seca_referida)
-              sinaisAssociados.push('Tosse seca');
-            if (ev.estado_geral_antes.tosse_produtiva_referida)
-              sinaisAssociados.push('Tosse produtiva');
             if (ev.estado_geral_antes.chiado_referido)
               sinaisAssociados.push('Sibilo referido');
             if (ev.estado_geral_antes.cansaco_respiratorio)
@@ -1344,10 +1381,11 @@ export const AppointmentDetailsManager =
               irritabilidade_respiratoria:
                 ev.estado_geral_antes.irritabilidade_respiratoria || false,
               // Sinais Associados (relato do responsável)
-              tosse_seca_referida:
-                ev.estado_geral_antes.tosse_seca_referida || false,
+              // AI dev note: tosse unificada -> deriva os flags a partir do campo
+              // único `tosse` (colunas mantidas p/ compatibilidade de analytics).
+              tosse_seca_referida: ev.estado_geral_antes.tosse === 'seca',
               tosse_produtiva_referida:
-                ev.estado_geral_antes.tosse_produtiva_referida || false,
+                ev.estado_geral_antes.tosse === 'produtiva',
               chiado: ev.estado_geral_antes.chiado_referido || false,
               cansaco_respiratorio:
                 ev.estado_geral_antes.cansaco_respiratorio || false,
@@ -2407,6 +2445,15 @@ export const AppointmentDetailsManager =
                   }
                 : undefined
             }
+            previousData={
+              previousEvolucao
+                ? {
+                    evolucao_respiratoria:
+                      previousEvolucao.evolucao_respiratoria,
+                  }
+                : undefined
+            }
+            previousDate={previousEvolucao?.date}
             mode={editingEvolucaoData ? 'edit' : 'create'}
           />
 

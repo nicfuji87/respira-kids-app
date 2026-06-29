@@ -1213,6 +1213,39 @@ export const fetchRelatoriosEvolucao = async (
   }));
 };
 
+// AI dev note: Carry-forward — busca a última evolução respiratória estruturada
+// do PACIENTE (qualquer agendamento), p/ reaproveitar contexto/conduta/orientações
+// ao iniciar uma nova evolução. Retorna null se não houver.
+export const fetchUltimaEvolucaoRespiratoriaPaciente = async (
+  pacienteId: string,
+  excludeAgendamentoId?: string
+): Promise<SupabaseRelatorioEvolucao | null> => {
+  const tipoEvolucaoId = await fetchTipoEvolucaoId();
+
+  let query = supabase
+    .from('relatorio_evolucao')
+    .select('*, agendamentos!inner(paciente_id)')
+    .eq('agendamentos.paciente_id', pacienteId)
+    .eq('tipo_relatorio_id', tipoEvolucaoId)
+    .eq('tipo_evolucao', 'respiratoria')
+    .not('evolucao_respiratoria', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (excludeAgendamentoId) {
+    query = query.neq('id_agendamento', excludeAgendamentoId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Erro ao buscar última evolução do paciente:', error);
+    return null;
+  }
+
+  return (data?.[0] as SupabaseRelatorioEvolucao) ?? null;
+};
+
 export const saveRelatorioEvolucao = async (
   evolucaoData: SaveEvolucaoData
 ): Promise<SupabaseRelatorioEvolucao> => {

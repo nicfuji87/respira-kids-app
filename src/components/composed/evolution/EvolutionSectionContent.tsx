@@ -33,6 +33,7 @@ import {
   calcularMetricasCraniometriaEvolucao,
   calcularClassificacaoClinica,
   getTextoClassificacaoClinica,
+  getAvaliacaoRespiratoriaNormal,
 } from '@/types/evolucao-clinica';
 
 // AI dev note: EvolutionSectionContent - Renderiza conteúdo de cada seção da evolução
@@ -166,6 +167,20 @@ export const EvolutionSectionContent: React.FC<
           });
         };
 
+        // Temperatura: parte inteira/decimal p/ os chips de atalho (passo 0,1)
+        const tempInt =
+          estado.temperatura_aferida != null
+            ? Math.floor(estado.temperatura_aferida)
+            : null;
+        const tempDec =
+          estado.temperatura_aferida != null
+            ? Math.round(
+                (estado.temperatura_aferida -
+                  Math.floor(estado.temperatura_aferida)) *
+                  10
+              )
+            : null;
+
         return (
           <div className="space-y-8">
             {/* Explicação da seção */}
@@ -276,8 +291,68 @@ export const EvolutionSectionContent: React.FC<
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-red-700">🌡️ Sinais Vitais</h4>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Field label="Temperatura (°C)">
+              {/* Temperatura — chips de atalho em 2 níveis (inteiro + decimal),
+                  passo 0,1; input preciso continua p/ edição direta */}
+              <Field label="Temperatura (°C)">
+                <div className="flex flex-wrap items-center gap-2">
+                  <RadioButtonGroup
+                    value={tempInt != null ? String(tempInt) : null}
+                    onChange={(v) => {
+                      const dec =
+                        estado.temperatura_aferida != null
+                          ? estado.temperatura_aferida % 1
+                          : 0;
+                      updateEstado({
+                        temperatura_aferida: Number(
+                          (Number(v) + dec).toFixed(1)
+                        ),
+                        temperatura_nao_aferida: false,
+                      });
+                    }}
+                    options={[
+                      { valor: '35', label: '35' },
+                      { valor: '36', label: '36' },
+                      { valor: '37', label: '37' },
+                      { valor: '38', label: '38' },
+                      { valor: '39', label: '39' },
+                      { valor: '40', label: '40' },
+                      { valor: '41', label: '41' },
+                    ]}
+                    size="sm"
+                    disabled={disabled || estado.temperatura_nao_aferida}
+                  />
+                  <span className="text-sm text-gray-400">,</span>
+                  <RadioButtonGroup
+                    value={tempDec != null ? String(tempDec) : null}
+                    onChange={(v) => {
+                      const intPart =
+                        estado.temperatura_aferida != null
+                          ? Math.floor(estado.temperatura_aferida)
+                          : 36;
+                      updateEstado({
+                        temperatura_aferida: Number(
+                          (intPart + Number(v) / 10).toFixed(1)
+                        ),
+                        temperatura_nao_aferida: false,
+                      });
+                    }}
+                    options={[
+                      { valor: '0', label: ',0' },
+                      { valor: '1', label: ',1' },
+                      { valor: '2', label: ',2' },
+                      { valor: '3', label: ',3' },
+                      { valor: '4', label: ',4' },
+                      { valor: '5', label: ',5' },
+                      { valor: '6', label: ',6' },
+                      { valor: '7', label: ',7' },
+                      { valor: '8', label: ',8' },
+                      { valor: '9', label: ',9' },
+                    ]}
+                    size="sm"
+                    disabled={disabled || estado.temperatura_nao_aferida}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
                   <Input
                     type="number"
                     inputMode="decimal"
@@ -289,34 +364,77 @@ export const EvolutionSectionContent: React.FC<
                       const value = e.target.value.replace(/[^0-9.]/g, '');
                       updateEstado({
                         temperatura_aferida: value ? Number(value) : undefined,
+                        temperatura_nao_aferida: value
+                          ? false
+                          : estado.temperatura_nao_aferida,
                       });
                     }}
                     placeholder="36.5"
-                    disabled={disabled}
-                    className="w-full"
+                    disabled={disabled || estado.temperatura_nao_aferida}
+                    className="w-full sm:w-32"
                   />
-                </Field>
-
-                <Field label="FC (bpm)">
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={40}
-                    max={220}
-                    value={estado.frequencia_cardiaca || ''}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9]/g, '');
+                  <CheckboxField
+                    label="Não aferida"
+                    checked={estado.temperatura_nao_aferida || false}
+                    onChange={(checked) =>
                       updateEstado({
-                        frequencia_cardiaca: value ? Number(value) : undefined,
-                      });
-                    }}
-                    placeholder="120"
+                        temperatura_nao_aferida: checked,
+                        temperatura_aferida: checked
+                          ? undefined
+                          : estado.temperatura_aferida,
+                      })
+                    }
                     disabled={disabled}
-                    className="w-full"
                   />
-                </Field>
+                </div>
+              </Field>
 
-                <Field label="SpO₂ (%) (inicial)">
+              <Field label="FC (bpm)">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={40}
+                  max={220}
+                  value={estado.frequencia_cardiaca || ''}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    updateEstado({
+                      frequencia_cardiaca: value ? Number(value) : undefined,
+                    });
+                  }}
+                  placeholder="120"
+                  disabled={disabled}
+                  className="w-full sm:w-32"
+                />
+              </Field>
+
+              {/* SpO₂ com chips de atalho + campo p/ valores fora da faixa */}
+              <Field label="SpO₂ (%) (inicial)">
+                <RadioButtonGroup
+                  value={
+                    estado.saturacao_o2 != null
+                      ? String(estado.saturacao_o2)
+                      : null
+                  }
+                  onChange={(v) =>
+                    updateEstado({
+                      saturacao_o2: Number(v),
+                      saturacao_nao_aferida: false,
+                    })
+                  }
+                  options={[
+                    { valor: '94', label: '94' },
+                    { valor: '95', label: '95' },
+                    { valor: '96', label: '96' },
+                    { valor: '97', label: '97' },
+                    { valor: '98', label: '98' },
+                    { valor: '99', label: '99' },
+                    { valor: '100', label: '100' },
+                  ]}
+                  size="sm"
+                  disabled={disabled || estado.saturacao_nao_aferida}
+                />
+                <div className="flex flex-wrap items-center gap-3">
                   <Input
                     type="number"
                     inputMode="numeric"
@@ -327,14 +445,28 @@ export const EvolutionSectionContent: React.FC<
                       const value = e.target.value.replace(/[^0-9]/g, '');
                       updateEstado({
                         saturacao_o2: value ? Number(value) : undefined,
+                        saturacao_nao_aferida: value
+                          ? false
+                          : estado.saturacao_nao_aferida,
                       });
                     }}
-                    placeholder="97"
-                    disabled={disabled}
-                    className="w-full"
+                    placeholder="Outro valor"
+                    disabled={disabled || estado.saturacao_nao_aferida}
+                    className="w-full sm:w-40"
                   />
-                </Field>
-              </div>
+                  <CheckboxField
+                    label="Não aferida"
+                    checked={estado.saturacao_nao_aferida || false}
+                    onChange={(checked) =>
+                      updateEstado({
+                        saturacao_nao_aferida: checked,
+                        saturacao_o2: checked ? undefined : estado.saturacao_o2,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              </Field>
 
               {/* Suporte de O2 condicional */}
               <div className="space-y-3">
@@ -539,76 +671,13 @@ export const EvolutionSectionContent: React.FC<
               </div>
             </div>
 
-            {/* 5️⃣ Sinais Associados */}
+            {/* 5️⃣ Sinais e Sintomas Respiratórios (tosse unificada) */}
+            {/* AI dev note: Tosse antes ficava duplicada (checkbox em "Sinais
+                Associados" + radio em "Sintomas Respiratórios"). Consolidado em
+                um único controle com a cascata de tosse produtiva. */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-orange-700">
-                ⚠️ Sinais Associados{' '}
-                <span className="text-sm font-normal text-gray-500">
-                  (relato do responsável)
-                </span>
-              </h4>
-              <p className="text-sm text-gray-500">
-                Podem coexistir com qualquer tipo de tosse
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <CheckboxField
-                  label="Tosse seca"
-                  checked={estado.tosse_seca_referida || false}
-                  onChange={(checked) =>
-                    updateEstado({ tosse_seca_referida: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Tosse produtiva"
-                  checked={estado.tosse_produtiva_referida || false}
-                  onChange={(checked) =>
-                    updateEstado({ tosse_produtiva_referida: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Sibilo referido pelos responsáveis"
-                  checked={estado.chiado_referido || false}
-                  onChange={(checked) =>
-                    updateEstado({ chiado_referido: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Cansaço respiratório"
-                  checked={estado.cansaco_respiratorio || false}
-                  onChange={(checked) =>
-                    updateEstado({ cansaco_respiratorio: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Esforço respiratório percebido"
-                  checked={estado.esforco_respiratorio || false}
-                  onChange={(checked) =>
-                    updateEstado({ esforco_respiratorio: checked })
-                  }
-                  disabled={disabled}
-                />
-                <CheckboxField
-                  label="Respiração ruidosa"
-                  checked={estado.respiracao_ruidosa || false}
-                  onChange={(checked) =>
-                    updateEstado({ respiracao_ruidosa: checked })
-                  }
-                  disabled={disabled}
-                />
-              </div>
-            </div>
-
-            {/* 6️⃣ Sintomas Respiratórios - Tosse */}
-            <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-blue-700">
-                🫁 Sintomas Respiratórios{' '}
-                <span className="text-sm font-normal text-gray-500">
-                  (avaliação do profissional)
-                </span>
+                ⚠️ Sinais e Sintomas Respiratórios
               </h4>
 
               <Field label="Tosse">
@@ -747,6 +816,53 @@ export const EvolutionSectionContent: React.FC<
                   )}
                 </div>
               )}
+
+              {/* Outros sinais (relato do responsável) */}
+              <div className="space-y-2 border-t pt-4">
+                <label className="text-sm font-medium">
+                  Outros sinais{' '}
+                  <span className="text-sm font-normal text-gray-500">
+                    (relato do responsável)
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500">
+                  Podem coexistir com qualquer tipo de tosse
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <CheckboxField
+                    label="Sibilo referido pelos responsáveis"
+                    checked={estado.chiado_referido || false}
+                    onChange={(checked) =>
+                      updateEstado({ chiado_referido: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Cansaço respiratório"
+                    checked={estado.cansaco_respiratorio || false}
+                    onChange={(checked) =>
+                      updateEstado({ cansaco_respiratorio: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Esforço respiratório percebido"
+                    checked={estado.esforco_respiratorio || false}
+                    onChange={(checked) =>
+                      updateEstado({ esforco_respiratorio: checked })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Respiração ruidosa"
+                    checked={estado.respiracao_ruidosa || false}
+                    onChange={(checked) =>
+                      updateEstado({ respiracao_ruidosa: checked })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Observações Gerais */}
@@ -855,6 +971,27 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-8">
+            {/* Atalho: exame normal (charting by exception) */}
+            {!disabled && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onRespiratoriaChange({
+                      avaliacao_antes: getAvaliacaoRespiratoriaNormal(),
+                    })
+                  }
+                  className="w-full rounded-lg border-2 border-green-300 bg-green-50 py-2.5 text-sm font-medium text-green-800 transition-colors hover:bg-green-100"
+                >
+                  ✅ Marcar exame respiratório normal
+                </button>
+                <p className="text-xs text-gray-500">
+                  Preenche eupneico, MV preservado bilateral, sem ruídos e sem
+                  dispneia. Depois é só ajustar as exceções.
+                </p>
+              </div>
+            )}
+
             {/* Padrão Respiratório */}
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-blue-700">
