@@ -55,6 +55,8 @@ interface ConsultaComComissao {
   status_pagamento_codigo: string;
   status_pagamento_nome: string;
   status_consulta_codigo: string;
+  empresa_fatura_id: string | null;
+  empresa_fatura_nome_fantasia: string | null;
 }
 
 interface ResumoComissaoProfissional {
@@ -107,6 +109,8 @@ export const FinancialProfessionalReport: React.FC<
   const [professionalFilter, setProfessionalFilter] = useState<string>('todos');
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [empresaFilter, setEmpresaFilter] = useState<string>('todos');
+  const [modoFilter, setModoFilter] = useState<string>('todos');
   const [sortOption, setSortOption] = useState<SortOption>('nome_asc');
   const [showFaturamento, setShowFaturamento] = useState<boolean>(true);
 
@@ -122,6 +126,14 @@ export const FinancialProfessionalReport: React.FC<
   const [serviceTypes, setServiceTypes] = useState<
     Array<{ id: string; nome: string }>
   >([]);
+  const [empresas, setEmpresas] = useState<Array<{ id: string; nome: string }>>(
+    []
+  );
+  // AI dev note: modo_financeiro por profissional (socia/comissionado/repasse_integral).
+  // Carregado de `pessoas` — a vw_agendamentos_completos não expõe esse campo.
+  const [modosPorProfissional, setModosPorProfissional] = useState<
+    Record<string, string>
+  >({});
 
   // Buscar consultas com comissões
   const fetchConsultas = useCallback(async () => {
@@ -140,7 +152,8 @@ export const FinancialProfessionalReport: React.FC<
           comissao_tipo_recebimento, comissao_valor_fixo,
           comissao_valor_percentual, comissao_valor_calculado,
           status_pagamento_codigo, status_pagamento_nome,
-          status_consulta_codigo
+          status_consulta_codigo,
+          empresa_fatura_id, empresa_fatura_nome_fantasia
         `
         )
         .not('status_consulta_codigo', 'eq', 'cancelado')
@@ -223,6 +236,20 @@ export const FinancialProfessionalReport: React.FC<
         ).values()
       );
       setServiceTypes(uniqueServiceTypes);
+
+      const uniqueEmpresas = Array.from(
+        new Map(
+          (data || [])
+            .filter(
+              (c) => c.empresa_fatura_id && c.empresa_fatura_nome_fantasia
+            )
+            .map((c) => [
+              c.empresa_fatura_id,
+              { id: c.empresa_fatura_id, nome: c.empresa_fatura_nome_fantasia },
+            ])
+        ).values()
+      );
+      setEmpresas(uniqueEmpresas);
     } catch (err) {
       console.error('Erro ao buscar consultas:', err);
       setError('Erro ao carregar consultas');
@@ -234,6 +261,24 @@ export const FinancialProfessionalReport: React.FC<
   useEffect(() => {
     fetchConsultas();
   }, [fetchConsultas]);
+
+  // Carrega o modo financeiro de cada profissional (uma vez) para o filtro de modo
+  useEffect(() => {
+    const loadModos = async () => {
+      const { data } = await supabase
+        .from('pessoas')
+        .select('id, modo_financeiro')
+        .or('role.eq.profissional,pode_atender.eq.true');
+      if (data) {
+        const map: Record<string, string> = {};
+        for (const p of data) {
+          if (p.modo_financeiro) map[p.id] = p.modo_financeiro;
+        }
+        setModosPorProfissional(map);
+      }
+    };
+    loadModos();
+  }, []);
 
   // Aplicar filtros e calcular resumos
   const resumos = React.useMemo(() => {
@@ -257,6 +302,18 @@ export const FinancialProfessionalReport: React.FC<
     if (statusFilter !== 'todos') {
       filtered = filtered.filter(
         (c) => c.status_pagamento_codigo === statusFilter
+      );
+    }
+
+    // Filtro de empresa (carteira de faturamento)
+    if (empresaFilter !== 'todos') {
+      filtered = filtered.filter((c) => c.empresa_fatura_id === empresaFilter);
+    }
+
+    // Filtro de modo financeiro do profissional (socia/comissionado/repasse)
+    if (modoFilter !== 'todos') {
+      filtered = filtered.filter(
+        (c) => modosPorProfissional[c.profissional_id] === modoFilter
       );
     }
 
@@ -378,6 +435,9 @@ export const FinancialProfessionalReport: React.FC<
     professionalFilter,
     serviceTypeFilter,
     statusFilter,
+    empresaFilter,
+    modoFilter,
+    modosPorProfissional,
     sortOption,
   ]);
 
@@ -459,7 +519,7 @@ export const FinancialProfessionalReport: React.FC<
 
         <CardContent className="space-y-4">
           {/* Filtros */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Ordenação */}
             <Select
               value={sortOption}
@@ -541,6 +601,36 @@ export const FinancialProfessionalReport: React.FC<
                 <SelectItem value="aberto">Em aberto</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Empresa (carteira de faturamento) */}
+            <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Empresa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas as empresas</SelectItem>
+                {empresas.map((emp) => (
+                  <SelectItem key={emp.id} value={emp.id}>
+                    {emp.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Modo financeiro do profissional */}
+            <Select value={modoFilter} onValueChange={setModoFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Modo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os modos</SelectItem>
+                <SelectItem value="comissionado">Comissionado</SelectItem>
+                <SelectItem value="socia">Sócia</SelectItem>
+                <SelectItem value="repasse_integral">
+                  Repasse integral
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Datas personalizadas */}
@@ -571,6 +661,8 @@ export const FinancialProfessionalReport: React.FC<
               setProfessionalFilter('todos');
               setServiceTypeFilter('todos');
               setStatusFilter('todos');
+              setEmpresaFilter('todos');
+              setModoFilter('todos');
             }}
             className="w-full md:w-auto"
           >
