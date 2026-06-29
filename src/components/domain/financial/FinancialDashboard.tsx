@@ -71,7 +71,8 @@ import {
 
 // AI dev note: Dashboard financeiro com indicadores principais
 // Exibe métricas, gráficos e alertas para controle financeiro
-// Integra dados de lançamentos, contas a pagar e recorrências
+// Receita = regime de CAIXA: faturas pagas no período (via buscarFaturamento, por
+// faturas.pago_em). Despesas = lançamentos por competência. Integra contas a pagar.
 // Filtros: período (mês atual, anterior, etc) e conta/sócio (consolidado, individual)
 // Para cálculo por sócio:
 //   - eh_divisao_socios = true → aplica percentual_divisao do sócio
@@ -459,24 +460,21 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
         mode: FaturamentoModeType,
         filter: FaturamentoFilterType
       ): Promise<number> => {
-        // Query base para agendamentos pagos no período
+        // AI dev note: Receita em regime de CAIXA — valor_servico (líquido) dos
+        // agendamentos cujas FATURAS foram PAGAS no período (faturas.pago_em). Antes
+        // era pela data do atendimento + status do agendamento, o que fazia o mês
+        // corrente parecer vazio (a cobrança é gerada/paga no fim do mês). O join por
+        // fatura paga bate exatamente com faturas.valor_servico e mantém os filtros
+        // por empresa (empresa_fatura) e profissional (profissional_id).
         let query = supabase
           .from('agendamentos')
-          .select('valor_servico, profissional_id, empresa_fatura')
-          .gte('data_hora', format(dataInicio, 'yyyy-MM-dd'))
-          .lte('data_hora', format(dataFim, 'yyyy-MM-dd') + 'T23:59:59')
-          .eq('ativo', true);
-
-        // Buscar status "pago"
-        const { data: statusPago } = await supabase
-          .from('pagamento_status')
-          .select('id')
-          .eq('codigo', 'pago')
-          .single();
-
-        if (statusPago) {
-          query = query.eq('status_pagamento_id', statusPago.id);
-        }
+          .select(
+            'valor_servico, empresa_fatura, profissional_id, faturas!inner(status, pago_em)'
+          )
+          .eq('ativo', true)
+          .eq('faturas.status', 'pago')
+          .gte('faturas.pago_em', format(dataInicio, 'yyyy-MM-dd'))
+          .lte('faturas.pago_em', format(dataFim, 'yyyy-MM-dd') + 'T23:59:59');
 
         // Aplicar filtro por modo
         if (filter !== 'todos') {
@@ -1267,6 +1265,9 @@ export const FinancialDashboard = React.memo<FinancialDashboardProps>(
               <div className="text-2xl font-bold text-green-600">
                 {formatCurrency(dashboardData.receitasPeriodo)}
               </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                recebido no período (caixa)
+              </p>
               <div className="flex items-center gap-2 mt-2 text-sm">
                 {variacaoReceitas !== 0 && (
                   <>
