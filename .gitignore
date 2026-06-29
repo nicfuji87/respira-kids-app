@@ -16,8 +16,14 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 
-# Claude Code local settings (contém allowlist com segredos/tokens)
-.claude/settings.local.json
+# Tooling de desenvolvimento local — não pertence ao repo do app
+# (.claude/ tem settings.local.json com allowlist/segredos + skills instaladas
+#  como a 'impeccable'; DESIGN.md/PRODUCT.md são artefatos gerados por elas)
+.claude/
+.impeccable/
+.github/skills/
+DESIGN.md
+PRODUCT.md
 
 # MCP servers config (contém tokens de acesso)
 .mcp.json
