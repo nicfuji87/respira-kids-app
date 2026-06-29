@@ -273,7 +273,7 @@ export const CaixaClinicaPanel = React.memo(() => {
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {saldoConta?.dataCorte
-                ? `desde ${format(new Date(saldoConta.dataCorte), 'dd/MM/yyyy')} (Nubank)`
+                ? `desde ${format(new Date(saldoConta.dataCorte + 'T00:00:00'), 'dd/MM/yyyy')} (Nubank)`
                 : 'conta não configurada'}
             </p>
           </CardContent>
