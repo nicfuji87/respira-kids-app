@@ -73,6 +73,13 @@ export const CaixaClinicaPanel = React.memo(() => {
   const [resumo, setResumo] = React.useState<ResumoRow[]>([]);
   const [extrato, setExtrato] = React.useState<MargemRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  // Saldo REAL da conta (saldo inicial no corte + movimentos reais após o corte).
+  // Separado da margem, que é resultado provisório (alíquota estimada).
+  const [saldoConta, setSaldoConta] = React.useState<{
+    saldoInicial: number;
+    dataCorte: string | null;
+    saldo: number;
+  } | null>(null);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -122,6 +129,42 @@ export const CaixaClinicaPanel = React.memo(() => {
             pago_em: m.pago_em,
           }))
         );
+
+        // Saldo REAL: saldo inicial da conta (no corte) + movimentos reais
+        // (lançamentos pagos no centro Clínica após o corte). Lançamentos anteriores
+        // ao corte já estão no saldo inicial — daí o filtro por data_competencia.
+        const { data: centro } = await supabase
+          .from('centros_financeiros')
+          .select(
+            'id, conta:conta_bancaria_id(saldo_inicial, data_saldo_inicial)'
+          )
+          .eq('tipo', 'comum')
+          .maybeSingle();
+        const conta = Array.isArray(centro?.conta)
+          ? centro?.conta[0]
+          : centro?.conta;
+        if (centro?.id && conta?.data_saldo_inicial) {
+          const { data: movs } = await supabase
+            .from('lancamentos_financeiros')
+            .select('tipo_lancamento, valor_total')
+            .eq('centro_financeiro_id', centro.id)
+            .eq('pago', true)
+            .gt('data_competencia', conta.data_saldo_inicial);
+          const movimentos = (movs || []).reduce(
+            (s, l) =>
+              s +
+              (l.tipo_lancamento === 'receita'
+                ? num(l.valor_total)
+                : -num(l.valor_total)),
+            0
+          );
+          const inicial = num(conta.saldo_inicial);
+          setSaldoConta({
+            saldoInicial: inicial,
+            dataCorte: conta.data_saldo_inicial,
+            saldo: inicial + movimentos,
+          });
+        }
       } catch (error) {
         console.error('Erro ao carregar caixa da clínica:', error);
         toast({
@@ -199,36 +242,55 @@ export const CaixaClinicaPanel = React.memo(() => {
           Caixa da Clínica
         </h2>
         <p className="text-muted-foreground">
-          Alimentado pela margem dos atendimentos comissionados (após comissão e
-          impostos)
+          Saldo real da conta desde o corte + margem dos atendimentos
+          comissionados como resultado a conciliar
         </p>
       </div>
 
       <Alert>
         <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Valores provisórios</AlertTitle>
+        <AlertTitle>Saldo real x margem provisória</AlertTitle>
         <AlertDescription>
-          Os impostos usam as alíquotas estimadas cadastradas em Tributos.
-          Ajuste com a contadora e reconcilie com o imposto real para fechar o
-          caixa.
+          O <strong>Saldo em conta</strong> é o saldo inicial no corte +
+          movimentos reais lançados depois. A <strong>margem</strong> usa
+          alíquotas estimadas (Tributos) e é referência do resultado a conciliar
+          — não soma direto no saldo.
         </AlertDescription>
       </Alert>
 
       {/* Cards de resumo */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <Card className="border-emerald-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center justify-between">
-              Saldo (margem acumulada)
+              Saldo em conta
               <PiggyBank className="h-4 w-4 text-emerald-600" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-600">
+              {formatCurrency(saldoConta?.saldo ?? 0)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {saldoConta?.dataCorte
+                ? `desde ${format(new Date(saldoConta.dataCorte), 'dd/MM/yyyy')} (Nubank)`
+                : 'conta não configurada'}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center justify-between">
+              Resultado gerado (margens)
+              <PiggyBank className="h-4 w-4 text-muted-foreground" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
               {formatCurrency(totais.margem)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {totais.atendimentos} atendimentos
+              {totais.atendimentos} atendimentos · a conciliar
             </p>
           </CardContent>
         </Card>
