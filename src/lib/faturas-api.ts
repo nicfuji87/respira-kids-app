@@ -761,12 +761,24 @@ export async function editarFatura(
       }
 
       // Filtrar agendamentos que serão removidos
-      const agendamentosFinais = [
+      const agendamentosFinaisBrutos = [
         ...(agendamentosAtuais || []).filter(
           (a) => !updates.agendamentosParaRemover.includes(a.id)
         ),
         ...novosAgendamentos,
       ];
+
+      // AI dev note: BLINDAGEM CONTRA COBRANÇA DUPLICADA - dedupe por id. Um
+      // agendamento já vinculado à fatura que também venha em "adicionar" não pode
+      // entrar 2x, senão valor_total (reduce) e descrição dobram.
+      const idsFatura = new Set<string>();
+      const agendamentosFinais = agendamentosFinaisBrutos.filter((a) => {
+        const aId = a.id as string | undefined;
+        if (!aId) return true;
+        if (idsFatura.has(aId)) return false;
+        idsFatura.add(aId);
+        return true;
+      });
 
       // Calcular novo valor total
       novoValorTotal = agendamentosFinais.reduce(

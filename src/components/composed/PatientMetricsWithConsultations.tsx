@@ -451,9 +451,16 @@ export const PatientMetricsWithConsultations =
           console.log('📋 Consultas selecionadas:', selectedConsultations);
 
           // Buscar dados completos das consultas selecionadas
-          const selectedConsultationData = consultations.filter((c) =>
-            selectedConsultations.includes(c.id)
-          );
+          // AI dev note: BLINDAGEM CONTRA COBRANÇA DUPLICADA - dedupe por id. Se a
+          // lista de origem trouxer a mesma consulta repetida, o valor total (reduce)
+          // e a descrição NÃO podem dobrar.
+          const idsSelecionadosVistos = new Set<string>();
+          const selectedConsultationData = consultations.filter((c) => {
+            if (!selectedConsultations.includes(c.id)) return false;
+            if (idsSelecionadosVistos.has(c.id)) return false;
+            idsSelecionadosVistos.add(c.id);
+            return true;
+          });
 
           console.log(
             '📊 Dados das consultas filtradas:',

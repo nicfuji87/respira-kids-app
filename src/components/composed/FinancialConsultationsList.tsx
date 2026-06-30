@@ -413,7 +413,11 @@ export const FinancialConsultationsList: React.FC<
           .from('vw_agendamentos_completos')
           .select(selectFields)
           .not('status_consulta_codigo', 'eq', 'cancelado')
-          .order('data_hora', { ascending: false });
+          // AI dev note: ordenação ESTÁVEL (data_hora + id como desempate). Sem o id,
+          // a paginação por .range() pode retornar a mesma linha em duas páginas
+          // (data_hora não é única), duplicando consultas na lista e dobrando cobranças.
+          .order('data_hora', { ascending: false })
+          .order('id', { ascending: false });
 
         if (isSearchMode && pacienteIdsParaBusca) {
           q = q.in('paciente_id', pacienteIdsParaBusca);
@@ -454,7 +458,17 @@ export const FinancialConsultationsList: React.FC<
         allRows.push(...rows);
         if (rows.length < PAGE_SIZE) break;
       }
-      const data = allRows;
+      // AI dev note: BLINDAGEM - dedupe defensivo por id após juntar as páginas.
+      // Mesmo com ordenação estável, garantimos que nenhuma consulta apareça 2x na
+      // lista (a duplicata se propagaria para seleção, contagem e cobrança).
+      const idsVistos = new Set<string>();
+      const data = allRows.filter((row) => {
+        const rowId = (row as { id?: string })?.id;
+        if (!rowId) return true;
+        if (idsVistos.has(rowId)) return false;
+        idsVistos.add(rowId);
+        return true;
+      });
 
       // Buscar responsáveis para todos os pacientes
       const pacienteIds = [
@@ -784,7 +798,11 @@ export const FinancialConsultationsList: React.FC<
         !c.fatura_id
     );
 
-    const allUnpaidIds = eligibleConsultations.map((item) => item.id);
+    // AI dev note: dedupe defensivo - a seleção nunca pode conter o mesmo id 2x,
+    // senão valor/descrição/IDs da cobrança dobram.
+    const allUnpaidIds = Array.from(
+      new Set(eligibleConsultations.map((item) => item.id))
+    );
 
     setSelectedConsultations(allUnpaidIds);
 
@@ -944,7 +962,14 @@ export const FinancialConsultationsList: React.FC<
         ConsultationWithPatient[]
       >();
 
+      // AI dev note: BLINDAGEM CONTRA COBRANÇA DUPLICADA - dedupe por id antes de
+      // agrupar. Se o mesmo id aparecer 2x na seleção, NÃO pode entrar 2x no grupo,
+      // senão valor (reduce), descrição e agendamentoIds dobram (bug que gerou
+      // cobrança de R$520 para 1 sessão de R$260).
+      const idsProcessados = new Set<string>();
       selectedConsultations.forEach((id) => {
+        if (idsProcessados.has(id)) return;
+        idsProcessados.add(id);
         const consultation = consultations.find((c) => c.id === id);
         if (consultation) {
           const patientId = consultation.paciente_id;

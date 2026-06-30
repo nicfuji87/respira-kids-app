@@ -37,6 +37,19 @@ export async function generateChargeDescription(
   consultationData: ConsultationData[],
   patientData: PatientData
 ): Promise<string> {
+  // AI dev note: BLINDAGEM CONTRA COBRANÇA DUPLICADA - dedupe por id do agendamento.
+  // Se a mesma consulta chegar repetida (ex.: linha duplicada na paginação da view,
+  // seleção sem dedupe), a descrição NÃO pode listar o mesmo atendimento 2x nem o
+  // valor pode dobrar. Esta é a fonte única de verdade da descrição de TODAS as
+  // cobranças/faturas, então o dedupe aqui protege todos os chamadores.
+  const seenConsultaIds = new Set<string>();
+  consultationData = consultationData.filter((c) => {
+    if (!c?.id) return true; // sem id: não dá pra deduplicar, mantém
+    if (seenConsultaIds.has(c.id)) return false;
+    seenConsultaIds.add(c.id);
+    return true;
+  });
+
   console.log('🎯 Gerando descrição da cobrança:', {
     consultationsCount: consultationData.length,
     patientData: patientData,
