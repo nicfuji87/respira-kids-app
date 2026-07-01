@@ -17,6 +17,7 @@ import {
   Users,
   Check,
   Copy,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Card,
@@ -75,6 +76,9 @@ interface ConsultationWithPatient {
   profissional_nome: string;
   paciente_id: string;
   paciente_nome: string;
+  paciente_cpf?: string | null;
+  responsavel_cobranca_id?: string | null;
+  responsavel_cobranca_cpf?: string | null;
   responsavel_legal_id?: string;
   responsavel_legal_nome?: string;
   responsavel_financeiro_id?: string;
@@ -106,6 +110,30 @@ const podeGerarCobranca = (c: {
   c.status_pagamento_codigo !== 'cancelado' &&
   c.status_pagamento_codigo !== 'cobranca_gerada' &&
   !c.fatura_id;
+
+// AI dev note: Motivo que IMPEDE (ou atrapalha) gerar a cobrança de um paciente,
+// avaliado sobre as consultas elegíveis do grupo. Espelha as validações de
+// handleGeneratePaymentLinks para o usuário ver o problema NO CARD, antes de tentar
+// gerar. Retorna null quando está tudo ok. Ordem: bloqueios de dado primeiro
+// (empresa/CPF), depois o caso "empresas diferentes" (resolvível selecionando por
+// empresa). O CPF segue a mesma regra da geração: usa o do responsável de cobrança;
+// na ausência dele, o do próprio paciente.
+const motivoBloqueioCobranca = (
+  elegiveis: ConsultationWithPatient[]
+): string | null => {
+  if (elegiveis.length === 0) return null;
+  if (elegiveis.some((c) => !c.empresa_fatura_id))
+    return 'Consulta sem empresa de faturamento';
+  const c0 = elegiveis[0];
+  const cpf = c0.responsavel_cobranca_id
+    ? c0.responsavel_cobranca_cpf
+    : c0.paciente_cpf;
+  if (!cpf) return 'Responsável de cobrança sem CPF cadastrado';
+  const empresas = new Set(elegiveis.map((c) => c.empresa_fatura_id));
+  if (empresas.size > 1)
+    return 'Consultas de empresas diferentes — gere uma empresa por vez';
+  return null;
+};
 
 type PeriodFilter =
   | 'mes_atual'
@@ -332,6 +360,7 @@ export const FinancialConsultationsList: React.FC<
       const selectFields = `
         id, data_hora, servico_nome, servico_duracao, valor_servico,
         profissional_id, profissional_nome, paciente_id, paciente_nome,
+        paciente_cpf, responsavel_cobranca_id, responsavel_cobranca_cpf,
         local_id, local_nome, status_consulta_codigo, status_consulta_nome,
         status_pagamento_codigo, status_pagamento_nome, id_pagamento_externo,
         fatura_id, tipo_servico_id, empresa_fatura_id, empresa_fatura_razao_social
@@ -569,6 +598,9 @@ export const FinancialConsultationsList: React.FC<
           profissional_nome: item.profissional_nome,
           paciente_id: item.paciente_id,
           paciente_nome: item.paciente_nome,
+          paciente_cpf: item.paciente_cpf,
+          responsavel_cobranca_id: item.responsavel_cobranca_id,
+          responsavel_cobranca_cpf: item.responsavel_cobranca_cpf,
           responsavel_legal_id: responsaveis.legal?.id,
           responsavel_legal_nome: responsaveis.legal?.nome,
           responsavel_financeiro_id: responsaveis.financeiro?.id,
@@ -1676,6 +1708,10 @@ export const FinancialConsultationsList: React.FC<
               const isExpanded = expandedPatients.has(patientGroup.paciente_id);
               const eligibleConsultations =
                 patientGroup.consultas.filter(podeGerarCobranca);
+              // Motivo que impede gerar a cobrança deste paciente (null = ok)
+              const motivoBloqueio = motivoBloqueioCobranca(
+                eligibleConsultations
+              );
               const allPatientConsultationsSelected =
                 eligibleConsultations.length > 0 &&
                 eligibleConsultations.every((c) =>
@@ -1735,6 +1771,17 @@ export const FinancialConsultationsList: React.FC<
                               className="bg-orange-500/10 text-orange-600"
                             >
                               {patientGroup.consultas_nao_pagas} não paga(s)
+                            </Badge>
+                          )}
+                          {/* Motivo que impede gerar a cobrança (CPF, empresa, etc) */}
+                          {motivoBloqueio && (
+                            <Badge
+                              variant="outline"
+                              className="border-red-300 bg-red-500/10 text-red-700"
+                              title={motivoBloqueio}
+                            >
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              {motivoBloqueio}
                             </Badge>
                           )}
                         </div>
