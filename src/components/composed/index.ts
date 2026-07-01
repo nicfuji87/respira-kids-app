@@ -145,6 +145,8 @@ export { PinConfiguration } from './PinConfiguration';
 export { PinValidationDialog } from './PinValidationDialog';
 export { FinancialConsultationsList } from './FinancialConsultationsList';
 export { FinancialFaturasList } from './FinancialFaturasList';
+export { FinancialPreFaturasList } from './FinancialPreFaturasList';
+export { PreFaturaEditDialog } from './PreFaturaEditDialog';
 export { FinancialProfessionalReport } from './FinancialProfessionalReport';
 export { FaturasList } from './FaturasList';
 export { ProfessionalFinancialSummary } from './ProfessionalFinancialSummary';

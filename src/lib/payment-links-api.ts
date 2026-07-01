@@ -12,6 +12,7 @@ import {
   calcularOpcoesPagamento,
   gerarTaxasCartaoPadrao,
 } from './payment-fees';
+import { generateChargeDescription } from './charge-description';
 import type {
   PagamentoLinkPublico,
   TaxasCartaoConfig,
@@ -386,4 +387,425 @@ export async function cancelarLinkPagamento(
     console.error('❌ Erro ao cancelar link de pagamento:', error);
     return { success: false, error: 'Erro inesperado ao cancelar link' };
   }
+}
+
+// ============================================================================
+// PRÉ-FATURAS (links de pagamento AINDA NÃO gerados no Asaas)
+// ----------------------------------------------------------------------------
+// AI dev note: Uma "pré-fatura" é um pagamento_links pendente/ativo SEM id_asaas
+// (o cliente ainda não escolheu a forma, logo nenhuma cobrança existe no Asaas).
+// Ao contrário de faturas (faturas-api.ts), editar/excluir uma pré-fatura NÃO
+// toca no Asaas — é puramente gestão interna. Fica visível na aba Faturas,
+// rotulada como "não gerada no Asaas", para a secretaria conseguir corrigir os
+// itens ou apagar antes do cliente pagar (ex: cobrança duplicada da Barbara).
+// ============================================================================
+
+export interface PreFaturaAgendamento {
+  id: string;
+  data_hora: string;
+  servico_nome: string;
+  valor_servico: number;
+  profissional_nome: string;
+}
+
+export interface PreFaturaResumo {
+  id: string;
+  token: string;
+  url: string;
+  paciente_id: string;
+  paciente_nome: string;
+  empresa_id: string;
+  empresa_nome: string;
+  responsavel_cobranca_id: string;
+  responsavel_nome: string;
+  valor_base: number;
+  descricao: string | null;
+  vencimento: string | null;
+  expira_em: string | null;
+  criado_em: string;
+  qtd_consultas: number;
+  agendamentos: PreFaturaAgendamento[];
+}
+
+// === LISTAR PRÉ-FATURAS (não geradas no Asaas) ===
+export async function fetchPreFaturas(filtros?: {
+  startDate?: string;
+  endDate?: string;
+}): Promise<ApiResponse<PreFaturaResumo[]>> {
+  try {
+    let query = supabase
+      .from('pagamento_links')
+      .select(
+        `id, token, paciente_id, empresa_id, responsavel_cobranca_id,
+         valor_base, descricao, vencimento, expira_em, criado_em`
+      )
+      .eq('ativo', true)
+      .eq('status', 'pendente')
+      .is('id_asaas', null)
+      .order('criado_em', { ascending: false });
+
+    if (filtros?.startDate) query = query.gte('criado_em', filtros.startDate);
+    if (filtros?.endDate)
+      query = query.lte('criado_em', filtros.endDate + 'T23:59:59');
+
+    const { data: links, error } = await query;
+    if (error) {
+      return {
+        success: false,
+        error: `Erro ao carregar pré-faturas: ${error.message}`,
+      };
+    }
+
+    if (!links || links.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // Nomes de pessoas (paciente + responsável) e empresas em lote
+    const pessoaIds = [
+      ...new Set(
+        links.flatMap((l) => [l.paciente_id, l.responsavel_cobranca_id])
+      ),
+    ].filter(Boolean);
+    const empresaIds = [...new Set(links.map((l) => l.empresa_id))].filter(
+      Boolean
+    );
+
+    const [{ data: pessoas }, { data: empresas }, { data: agendamentos }] =
+      await Promise.all([
+        supabase.from('pessoas').select('id, nome').in('id', pessoaIds),
+        supabase
+          .from('pessoa_empresas')
+          .select('id, razao_social, nome_fantasia')
+          .in('id', empresaIds),
+        supabase
+          .from('agendamentos')
+          .select(
+            'id, data_hora, valor_servico, tipo_servico_id, profissional_id, pagamento_link_id'
+          )
+          .in(
+            'pagamento_link_id',
+            links.map((l) => l.id)
+          )
+          .eq('ativo', true),
+      ]);
+
+    const pessoaNome = new Map(
+      (pessoas || []).map((p) => [p.id, p.nome as string])
+    );
+    const empresaNome = new Map(
+      (empresas || []).map((e) => [
+        e.id,
+        (e.nome_fantasia || e.razao_social || 'Empresa') as string,
+      ])
+    );
+
+    // Nomes de serviço e profissional dos agendamentos vinculados
+    const servicoIds = [
+      ...new Set((agendamentos || []).map((a) => a.tipo_servico_id)),
+    ].filter(Boolean);
+    const profIds = [
+      ...new Set((agendamentos || []).map((a) => a.profissional_id)),
+    ].filter(Boolean);
+    const [{ data: servicos }, { data: profs }] = await Promise.all([
+      servicoIds.length
+        ? supabase.from('tipo_servicos').select('id, nome').in('id', servicoIds)
+        : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
+      profIds.length
+        ? supabase.from('pessoas').select('id, nome').in('id', profIds)
+        : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
+    ]);
+    const servicoNome = new Map(
+      (servicos || []).map((s) => [s.id, s.nome as string])
+    );
+    const profNome = new Map(
+      (profs || []).map((p) => [p.id, p.nome as string])
+    );
+
+    const agsPorLink = new Map<string, PreFaturaAgendamento[]>();
+    (agendamentos || []).forEach((a) => {
+      const arr = agsPorLink.get(a.pagamento_link_id) || [];
+      arr.push({
+        id: a.id,
+        data_hora: a.data_hora,
+        servico_nome: servicoNome.get(a.tipo_servico_id) || 'Atendimento',
+        valor_servico: Number(a.valor_servico || 0),
+        profissional_nome: profNome.get(a.profissional_id) || 'Profissional',
+      });
+      agsPorLink.set(a.pagamento_link_id, arr);
+    });
+
+    const preFaturas: PreFaturaResumo[] = links.map((l) => {
+      const ags = (agsPorLink.get(l.id) || []).sort(
+        (a, b) =>
+          new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime()
+      );
+      return {
+        id: l.id,
+        token: l.token,
+        url: montarUrlPagamento(l.token),
+        paciente_id: l.paciente_id,
+        paciente_nome: pessoaNome.get(l.paciente_id) || 'Paciente',
+        empresa_id: l.empresa_id,
+        empresa_nome: empresaNome.get(l.empresa_id) || 'Empresa',
+        responsavel_cobranca_id: l.responsavel_cobranca_id,
+        responsavel_nome:
+          pessoaNome.get(l.responsavel_cobranca_id) || 'Responsável',
+        valor_base: Number(l.valor_base || 0),
+        descricao: l.descricao,
+        vencimento: l.vencimento,
+        expira_em: l.expira_em,
+        criado_em: l.criado_em,
+        qtd_consultas: ags.length,
+        agendamentos: ags,
+      };
+    });
+
+    return { success: true, data: preFaturas };
+  } catch (error) {
+    console.error('❌ Erro ao buscar pré-faturas:', error);
+    return { success: false, error: 'Erro inesperado ao carregar pré-faturas' };
+  }
+}
+
+// === AGENDAMENTOS ELEGÍVEIS PARA ADICIONAR À PRÉ-FATURA ===
+// AI dev note: Espelha a regra de geração da pré-cobrança (FinancialConsultationsList):
+// mesmo responsável de cobrança e empresa, ainda não faturado nem pago/cancelado.
+// Inclui os que já estão NESTE link (para pré-seleção) e os livres (sem link).
+export async function fetchAgendamentosElegiveisParaPreFatura(
+  responsavelCobrancaId: string,
+  empresaId: string,
+  linkId: string
+): Promise<ApiResponse<PreFaturaAgendamento[]>> {
+  try {
+    // IDs já reservados a QUALQUER link (para excluir os de outros links)
+    const { data: reservados } = await supabase
+      .from('agendamentos')
+      .select('id, pagamento_link_id')
+      .not('pagamento_link_id', 'is', null)
+      .eq('ativo', true);
+    const idsDesteLink = new Set(
+      (reservados || [])
+        .filter((r) => r.pagamento_link_id === linkId)
+        .map((r) => r.id)
+    );
+    const idsOutrosLinks = new Set(
+      (reservados || [])
+        .filter((r) => r.pagamento_link_id !== linkId)
+        .map((r) => r.id)
+    );
+
+    const { data, error } = await supabase
+      .from('vw_agendamentos_completos')
+      .select(
+        `id, data_hora, servico_nome, valor_servico, profissional_nome,
+         status_pagamento_codigo, fatura_id, responsavel_cobranca_id,
+         empresa_fatura_id, ativo`
+      )
+      .eq('responsavel_cobranca_id', responsavelCobrancaId)
+      .eq('empresa_fatura_id', empresaId)
+      .eq('ativo', true)
+      .is('fatura_id', null)
+      .not('status_pagamento_codigo', 'in', '("pago","cancelado")')
+      .order('data_hora', { ascending: false });
+
+    if (error) {
+      return {
+        success: false,
+        error: `Erro ao buscar agendamentos: ${error.message}`,
+      };
+    }
+
+    const elegiveis = (data || [])
+      // Mantém: os deste link (pré-selecionados) OU livres (não reservados a outro link)
+      .filter((a) => idsDesteLink.has(a.id) || !idsOutrosLinks.has(a.id))
+      .map((a) => ({
+        id: a.id,
+        data_hora: a.data_hora,
+        servico_nome: a.servico_nome || 'Atendimento',
+        valor_servico: Number(a.valor_servico || 0),
+        profissional_nome: a.profissional_nome || 'Profissional',
+      }));
+
+    return { success: true, data: elegiveis };
+  } catch (error) {
+    console.error('❌ Erro ao buscar agendamentos elegíveis:', error);
+    return { success: false, error: 'Erro inesperado ao buscar agendamentos' };
+  }
+}
+
+// === EDITAR PRÉ-FATURA (recalcula valor/descrição, sem tocar no Asaas) ===
+export async function editarPreFatura(
+  linkId: string,
+  updates: {
+    agendamentosParaAdicionar: string[];
+    agendamentosParaRemover: string[];
+  },
+  userId: string
+): Promise<ApiResponse<PreFaturaResumo>> {
+  try {
+    const permErro = await assertSecretariaOuAdmin(userId);
+    if (permErro) return { success: false, error: permErro };
+
+    // 1. Buscar o link e validar que ainda é uma pré-fatura editável
+    const { data: link, error: linkErr } = await supabase
+      .from('pagamento_links')
+      .select(`id, status, id_asaas, paciente_id, empresa_id, taxas_snapshot`)
+      .eq('id', linkId)
+      .single();
+
+    if (linkErr || !link) {
+      return { success: false, error: 'Pré-fatura não encontrada' };
+    }
+    if (link.status !== 'pendente' || link.id_asaas) {
+      return {
+        success: false,
+        error:
+          'Esta cobrança já foi gerada no Asaas e não pode ser editada como pré-fatura',
+      };
+    }
+
+    // 2. Montar o conjunto final de agendamentos (atuais - remover + adicionar), dedupe
+    const { data: atuais } = await supabase
+      .from('agendamentos')
+      .select('id')
+      .eq('pagamento_link_id', linkId)
+      .eq('ativo', true);
+
+    const finalIds = Array.from(
+      new Set(
+        [
+          ...(atuais || []).map((a) => a.id),
+          ...updates.agendamentosParaAdicionar,
+        ].filter((id) => !updates.agendamentosParaRemover.includes(id))
+      )
+    );
+
+    if (finalIds.length === 0) {
+      return {
+        success: false,
+        error:
+          'A pré-fatura ficaria sem nenhuma consulta. Para removê-la use "Excluir".',
+      };
+    }
+
+    // 3. Buscar dados dos agendamentos finais (para valor + descrição)
+    const { data: agsView } = await supabase
+      .from('vw_agendamentos_completos')
+      .select(
+        `id, data_hora, servico_nome, valor_servico, profissional_nome,
+         profissional_id, tipo_servico_id, paciente_nome, paciente_id`
+      )
+      .in('id', finalIds);
+
+    const consultationData = (agsView || []).map((a) => ({
+      id: a.id,
+      data_hora: a.data_hora,
+      servico_nome: a.servico_nome || 'Atendimento',
+      valor_servico: Number(a.valor_servico || 0),
+      profissional_nome: a.profissional_nome || 'Profissional',
+      profissional_id: a.profissional_id,
+      tipo_servico_id: a.tipo_servico_id,
+    }));
+
+    const novoValorBase = consultationData.reduce(
+      (sum, a) => sum + a.valor_servico,
+      0
+    );
+
+    // Descrição via função centralizada (já com dedupe interno)
+    const { data: pacienteData } = await supabase
+      .from('pessoas')
+      .select('nome, cpf_cnpj')
+      .eq('id', link.paciente_id)
+      .maybeSingle();
+
+    const novaDescricao = await generateChargeDescription(consultationData, {
+      nome: pacienteData?.nome || 'Paciente',
+      cpf_cnpj: pacienteData?.cpf_cnpj || '',
+    });
+
+    // Recalcular as opções de pagamento (PIX/cartão) com o snapshot de taxas do link
+    const opcoes = calcularOpcoesPagamento(
+      novoValorBase,
+      link.taxas_snapshot as TaxasCartaoConfig
+    );
+
+    // 4. Atualizar o link
+    const { error: updLinkErr } = await supabase
+      .from('pagamento_links')
+      .update({
+        valor_base: novoValorBase,
+        descricao: novaDescricao,
+        opcoes_snapshot: opcoes,
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq('id', linkId);
+
+    if (updLinkErr) {
+      return {
+        success: false,
+        error: `Erro ao atualizar pré-fatura: ${updLinkErr.message}`,
+      };
+    }
+
+    // 5. Status de pagamento (pendente/cobranca_gerada)
+    const { data: statuses } = await supabase
+      .from('pagamento_status')
+      .select('id, codigo')
+      .in('codigo', ['pendente', 'cobranca_gerada']);
+    const statusPendenteId = statuses?.find((s) => s.codigo === 'pendente')?.id;
+    const statusCobrancaId = statuses?.find(
+      (s) => s.codigo === 'cobranca_gerada'
+    )?.id;
+
+    // 6. Desvincular removidos (voltam a "pendente" e livres)
+    if (updates.agendamentosParaRemover.length > 0) {
+      await supabase
+        .from('agendamentos')
+        .update({
+          pagamento_link_id: null,
+          cobranca_gerada_em: null,
+          cobranca_gerada_por: null,
+          ...(statusPendenteId
+            ? { status_pagamento_id: statusPendenteId }
+            : {}),
+          atualizado_por: userId === 'system' ? null : userId,
+        })
+        .in('id', updates.agendamentosParaRemover);
+    }
+
+    // 7. Vincular adicionados (reservam a "cobrança gerada")
+    if (updates.agendamentosParaAdicionar.length > 0) {
+      await supabase
+        .from('agendamentos')
+        .update({
+          pagamento_link_id: linkId,
+          cobranca_gerada_em: new Date().toISOString(),
+          cobranca_gerada_por: userId === 'system' ? null : userId,
+          ...(statusCobrancaId
+            ? { status_pagamento_id: statusCobrancaId }
+            : {}),
+          atualizado_por: userId === 'system' ? null : userId,
+        })
+        .in('id', updates.agendamentosParaAdicionar);
+    }
+
+    // Retornar o resumo atualizado
+    const lista = await fetchPreFaturas();
+    const atualizada = lista.data?.find((p) => p.id === linkId);
+    return { success: true, data: atualizada };
+  } catch (error) {
+    console.error('❌ Erro ao editar pré-fatura:', error);
+    return { success: false, error: 'Erro inesperado ao editar pré-fatura' };
+  }
+}
+
+// === EXCLUIR PRÉ-FATURA (libera as consultas) ===
+// AI dev note: Mesma mecânica de cancelarLinkPagamento — soft-delete do link e as
+// consultas voltam a "pendente", livres para uma nova cobrança. Sem Asaas.
+export async function excluirPreFatura(
+  linkId: string,
+  userId: string
+): Promise<ApiResponse<boolean>> {
+  return cancelarLinkPagamento(linkId, userId);
 }

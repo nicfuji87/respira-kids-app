@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { PinValidationDialog } from '@/components/composed/PinValidationDialog';
 import { FinancialConsultationsList } from '@/components/composed/FinancialConsultationsList';
 import { FinancialFaturasList } from '@/components/composed/FinancialFaturasList';
+import { FinancialPreFaturasList } from '@/components/composed/FinancialPreFaturasList';
 import { FaturamentoChart } from '@/components/composed/FaturamentoChart';
 import { FinancialProfessionalReport } from '@/components/composed/FinancialProfessionalReport';
 import { ProfessionalFinancialSummary } from '@/components/composed/ProfessionalFinancialSummary';
@@ -321,6 +322,7 @@ export const FinanceiroPage: React.FC = () => {
                     </TabsContent>
 
                     <TabsContent value="faturas" className="space-y-4">
+                      <FinancialPreFaturasList />
                       <FinancialFaturasList onFaturaClick={handleFaturaClick} />
                     </TabsContent>
 
