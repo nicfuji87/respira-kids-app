@@ -57,7 +57,6 @@ import {
 import { DatePicker } from './DatePicker';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
-import { criarLinkPagamento } from '@/lib/payment-links-api';
 import { generateChargeDescription } from '@/lib/charge-description';
 import type { ConsultationData, PatientData } from '@/lib/charge-description';
 import { useAuth } from '@/hooks/useAuth';
@@ -319,6 +318,14 @@ export const FinancialConsultationsList: React.FC<
   const [confirmGenerate, setConfirmGenerate] = useState<{
     pacientes: number;
     consultas: number;
+  } | null>(null);
+  // AI dev note: Lote em processamento no SERVIDOR (edge function generate-payment-
+  // links-bulk). Quando setado, um efeito de polling lê pagamento_link_geracao_log
+  // por lote_id e mostra o progresso; ao terminar, limpa tudo.
+  const [generationLote, setGenerationLote] = useState<{
+    loteId: string;
+    dryRun: boolean;
+    total: number;
   } | null>(null);
   // AI dev note: Links públicos de pagamento gerados (para copiar/abrir manualmente)
   const [generatedLinks, setGeneratedLinks] = useState<
@@ -989,7 +996,7 @@ export const FinancialConsultationsList: React.FC<
   // AI dev note: Gera links públicos de pagamento (PIX x Cartão) - um por paciente.
   // A cobrança no Asaas + fatura só são criadas quando o cliente escolhe a forma na
   // página pública. all-or-nothing por paciente, continua os outros se um falhar.
-  const handleGeneratePaymentLinks = async () => {
+  const handleGeneratePaymentLinks = async (dryRun = false) => {
     if (selectedConsultations.length === 0) {
       toast({
         title: 'Nenhuma consulta selecionada',
@@ -1010,6 +1017,10 @@ export const FinancialConsultationsList: React.FC<
 
     setIsGeneratingCharges(true);
     cancelGenerationRef.current = false;
+    setGeneratedLinks([]);
+    // Quando o lote é disparado pro servidor, o polling assume o "isGenerating";
+    // o finally não deve desligar nesse caso.
+    let disparou = false;
 
     try {
       // Agrupar consultas por paciente
@@ -1036,28 +1047,24 @@ export const FinancialConsultationsList: React.FC<
         }
       });
 
-      const results: Array<{
-        patientName: string;
-        success: boolean;
-        error?: string;
+      // AI dev note: FASE 1 (cliente) — valida e monta descrição/valor por paciente,
+      // formando o LOTE. A parte pesada (Asaas + inserts + envios) vai pro servidor
+      // (edge function generate-payment-links-bulk) na FASE 2, sem travar a tela.
+      const itens: Array<{
+        agendamentoIds: string[];
+        pacienteId: string;
+        pacienteNome: string;
+        responsavelId: string;
+        empresaId: string;
+        valorBase: number;
+        descricao: string;
       }> = [];
-      const generated: Array<{
-        patientName: string;
-        url: string;
-        token: string;
-      }> = [];
-
-      // AI dev note: Espaçamento anti-ban (API WhatsApp não oficial). O ENVIO de cada
-      // link é agendado (proximo_retry) 5–9 min após o anterior — o 1º sai na hora.
-      // A gravação no banco continua rápida/sequencial; só a mensagem sai espaçada.
-      // t0 fixo no início pra o espaçamento não driftar com o tempo do loop.
-      const t0 = Date.now();
-      let acumuladoMs = 0;
+      const preFailures: Array<{ patientName: string; error: string }> = [];
 
       const totalPacientes = consultationsByPatient.size;
       setGenerationProgress({ atual: 0, total: totalPacientes });
 
-      // Processar paciente por paciente (all-or-nothing por paciente)
+      // Preparar paciente por paciente (validação + descrição, sem Asaas)
       let indice = 0;
       for (const [patientId, patientConsultations] of Array.from(
         consultationsByPatient.entries()
@@ -1176,92 +1183,103 @@ export const FinancialConsultationsList: React.FC<
           // empresaFaturaIds validado acima como única empresa
           const empresaId = empresaFaturaIds[0]!;
 
-          // Gerar link público de pagamento (cobrança no Asaas só no aceite do cliente).
-          // agendarEnvioEm: 1º sai na hora; os seguintes espaçados 5–9 min (anti-ban).
-          const result = await criarLinkPagamento(
-            {
-              agendamentoIds: patientConsultations.map((c) => c.id),
-              pacienteId: patientId,
-              responsavelId: responsibleId,
-              empresaId,
-              valorBase: totalValue,
-              descricao: description,
-              agendarEnvioEm: new Date(t0 + acumuladoMs).toISOString(),
-            },
-            user.pessoa.id
-          );
-
-          if (!result.success || !result.data) {
-            throw new Error(result.error || 'Erro ao gerar link de pagamento');
-          }
-
-          // Próximo envio: +5 a 9 min (só avança em sucesso; falha não consome janela)
-          acumuladoMs += (300 + Math.random() * 240) * 1000;
-
-          generated.push({
-            patientName,
-            url: result.data.url,
-            token: result.data.token,
+          // Item do lote — a criação de fato (Asaas + link + envio) acontece no
+          // servidor (FASE 2), espaçando os envios.
+          itens.push({
+            agendamentoIds: patientConsultations.map((c) => c.id),
+            pacienteId: patientId,
+            pacienteNome: patientName,
+            responsavelId: responsibleId,
+            empresaId,
+            valorBase: totalValue,
+            descricao: description,
           });
-          results.push({ patientName, success: true });
         } catch (patientError) {
-          // Falha em um paciente não interrompe os outros
+          // Falha de validação num paciente não interrompe os outros
           const errorMessage =
             patientError instanceof Error
               ? patientError.message
               : 'Erro desconhecido';
-          console.error(`Erro ao processar ${patientName}:`, patientError);
-          results.push({ patientName, success: false, error: errorMessage });
+          console.error(`Erro ao preparar ${patientName}:`, patientError);
+          preFailures.push({ patientName, error: errorMessage });
         }
       }
 
-      // Contar sucessos e falhas
-      const successes = results.filter((r) => r.success);
-      const failures = results.filter((r) => !r.success);
+      // Cancelado durante a preparação (antes de disparar) — nada foi criado
+      if (cancelGenerationRef.current) {
+        toast({ title: 'Preparação cancelada' });
+        return;
+      }
 
-      if (successes.length > 0) {
-        const failureDetails =
-          failures.length > 0
-            ? `\n\nFalhas: ${failures.map((f) => `${f.patientName} (${f.error})`).join(', ')}`
-            : '';
-
+      if (itens.length === 0) {
         toast({
-          title: cancelGenerationRef.current
-            ? 'Geração interrompida'
-            : 'Links de pagamento gerados',
-          description: `✅ ${successes.length} paciente(s) com sucesso${failures.length > 0 ? `\n❌ ${failures.length} com falha` : ''}${successes.length > 1 ? '\n📲 Os envios de WhatsApp saem espaçados (5–9 min) para não sobrecarregar o número.' : ''}${failureDetails}`,
-        });
-
-        // Exibir links gerados (copiar/abrir manualmente, além do envio via n8n)
-        setGeneratedLinks(generated);
-
-        // Limpar seleção e recarregar
-        setSelectedConsultations([]);
-        setIsSelectionMode(false);
-        fetchConsultations();
-      } else {
-        toast({
-          title: 'Erro ao gerar links de pagamento',
-          description: `Todas falharam:\n${failures.map((f) => `${f.patientName}: ${f.error}`).join('\n')}`,
+          title: 'Nenhuma cobrança pôde ser preparada',
+          description: preFailures.length
+            ? preFailures.map((f) => `${f.patientName}: ${f.error}`).join('\n')
+            : 'Verifique as consultas selecionadas.',
           variant: 'destructive',
         });
+        return;
       }
+
+      // FASE 2 (servidor): dispara e volta na hora; o progresso vem do log
+      const { data: resp, error: fnError } = await supabase.functions.invoke(
+        'generate-payment-links-bulk',
+        { body: { itens, dryRun } }
+      );
+      if (fnError || !resp?.success || !resp?.loteId) {
+        throw new Error(
+          resp?.error || fnError?.message || 'Falha ao iniciar a geração'
+        );
+      }
+
+      toast({
+        title: dryRun ? 'Simulação iniciada' : 'Geração iniciada',
+        description: `${itens.length} ${
+          dryRun ? 'em simulação' : 'sendo gerada(s)'
+        } em segundo plano.${
+          preFailures.length
+            ? `\n⚠️ ${preFailures.length} não entraram: ${preFailures
+                .map((f) => f.patientName)
+                .join(', ')}`
+            : ''
+        }${
+          !dryRun && itens.length > 1
+            ? '\n📲 Envios de WhatsApp espaçados 5–9 min.'
+            : ''
+        }`,
+      });
+
+      // Limpa a seleção e passa a ACOMPANHAR pelo log (efeito de polling)
+      setSelectedConsultations([]);
+      setIsSelectionMode(false);
+      setGenerationProgress({ atual: 0, total: itens.length });
+      setGenerationLote({ loteId: resp.loteId, dryRun, total: itens.length });
+      disparou = true;
     } catch (err) {
       console.error('Erro crítico ao gerar cobranças:', err);
       toast({
-        title: 'Erro crítico',
-        description: 'Ocorreu um erro inesperado ao processar as cobranças.',
+        title: 'Erro ao iniciar a geração',
+        description:
+          err instanceof Error ? err.message : 'Erro inesperado ao processar.',
         variant: 'destructive',
       });
     } finally {
-      setIsGeneratingCharges(false);
-      setGenerationProgress(null);
       cancelGenerationRef.current = false;
+      // Se disparou o lote, o polling é quem desliga ao terminar.
+      if (!disparou) {
+        setIsGeneratingCharges(false);
+        setGenerationProgress(null);
+      }
     }
   };
 
-  // Abre a confirmação (massa) ou gera direto (1 paciente)
-  const handleGenerateClick = () => {
+  // Simular (dry-run) roda direto (0 risco). Gerar real: confirma se >1 paciente.
+  const handleGenerateClick = (dryRun: boolean) => {
+    if (dryRun) {
+      handleGeneratePaymentLinks(true);
+      return;
+    }
     const pacientesUnicos = new Set(
       selectedConsultations
         .map((id) => consultations.find((c) => c.id === id)?.paciente_id)
@@ -1273,9 +1291,70 @@ export const FinancialConsultationsList: React.FC<
         consultas: selectedConsultations.length,
       });
     } else {
-      handleGeneratePaymentLinks();
+      handleGeneratePaymentLinks(false);
     }
   };
+
+  // AI dev note: Polling do lote em processamento no servidor. Lê o log por lote_id
+  // a cada 2,5s; mostra progresso e, ao terminar (0 'processando'), resume + limpa.
+  useEffect(() => {
+    if (!generationLote) return;
+    let parou = false;
+    const poll = async () => {
+      const { data } = await supabase
+        .from('pagamento_link_geracao_log')
+        .select('status, paciente_nome, token, erro')
+        .eq('lote_id', generationLote.loteId);
+      if (parou || !data) return;
+      const total = data.length;
+      const processando = data.filter((r) => r.status === 'processando').length;
+      setGenerationProgress({ atual: total - processando, total });
+      if (processando > 0) return;
+
+      parou = true;
+      const sucessos = data.filter((r) => r.status === 'sucesso');
+      const simulados = data.filter((r) => r.status === 'simulado');
+      const erros = data.filter((r) => r.status === 'erro');
+      const detalheErros = erros.length
+        ? `\n❌ ${erros.length} com problema: ${erros
+            .map((e) => `${e.paciente_nome} (${e.erro})`)
+            .join(', ')}`
+        : '';
+
+      if (generationLote.dryRun) {
+        toast({
+          title: 'Simulação concluída',
+          description: `✅ ${simulados.length} seriam geradas${detalheErros}`,
+        });
+      } else {
+        toast({
+          title: 'Geração concluída',
+          description: `✅ ${sucessos.length} cobrança(s) gerada(s)${detalheErros}`,
+        });
+        setGeneratedLinks(
+          sucessos
+            .filter((s) => s.token)
+            .map((s) => ({
+              patientName: s.paciente_nome || 'Paciente',
+              token: s.token as string,
+              url: `https://app.respirakidsbrasilia.com.br/#/pagamento/${s.token}`,
+            }))
+        );
+      }
+
+      setGenerationLote(null);
+      setGenerationProgress(null);
+      setIsGeneratingCharges(false);
+      fetchConsultations();
+    };
+    poll();
+    const iv = setInterval(poll, 2500);
+    return () => {
+      parou = true;
+      clearInterval(iv);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generationLote]);
 
   // AI dev note: Função para formatar data SEM conversão de timezone
   // Mantém exatamente como vem do Supabase
@@ -1374,59 +1453,80 @@ export const FinancialConsultationsList: React.FC<
             {isSelectionMode ? (
               <>
                 {isGeneratingCharges ? (
-                  // Durante a geração: cancelar PARA o loop (mantém o já gerado)
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      cancelGenerationRef.current = true;
-                    }}
-                    className="gap-1"
-                  >
-                    <X className="h-4 w-4" />
-                    <span className="hidden sm:inline">Cancelar geração</span>
-                  </Button>
+                  <>
+                    {/* Cancelar só na preparação (antes de disparar pro servidor) */}
+                    {!generationLote && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          cancelGenerationRef.current = true;
+                        }}
+                        className="gap-1"
+                      >
+                        <X className="h-4 w-4" />
+                        <span className="hidden sm:inline">Cancelar</span>
+                      </Button>
+                    )}
+                    <Button size="sm" disabled>
+                      <CreditCard className="h-4 w-4 flex-shrink-0" />
+                      <span className="ml-1.5 sm:ml-2">
+                        {generationLote?.dryRun
+                          ? 'Simulando'
+                          : generationLote
+                            ? 'Gerando'
+                            : 'Preparando'}{' '}
+                        {generationProgress
+                          ? `${generationProgress.atual}/${generationProgress.total}`
+                          : ''}
+                        …
+                      </span>
+                    </Button>
+                  </>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setIsSelectionMode(false);
-                      setSelectedConsultations([]);
-                    }}
-                    className="gap-1"
-                  >
-                    <X className="h-4 w-4" />
-                    <span className="hidden sm:inline">Cancelar</span>
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  onClick={handleGenerateClick}
-                  disabled={
-                    selectedConsultations.length === 0 || isGeneratingCharges
-                  }
-                >
-                  <CreditCard className="h-4 w-4 flex-shrink-0" />
-                  <span className="ml-1.5 sm:ml-2">
-                    {isGeneratingCharges && generationProgress ? (
-                      <>
-                        Gerando {generationProgress.atual}/
-                        {generationProgress.total}…
-                      </>
-                    ) : (
-                      <>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setIsSelectionMode(false);
+                        setSelectedConsultations([]);
+                      }}
+                      className="gap-1"
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="hidden sm:inline">Cancelar</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleGenerateClick(true)}
+                      disabled={selectedConsultations.length === 0}
+                      title="Simular sem criar nem enviar nada"
+                    >
+                      <span className="hidden sm:inline">
+                        Simular ({selectedConsultations.length})
+                      </span>
+                      <span className="sm:hidden">Simular</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleGenerateClick(false)}
+                      disabled={selectedConsultations.length === 0}
+                    >
+                      <CreditCard className="h-4 w-4 flex-shrink-0" />
+                      <span className="ml-1.5 sm:ml-2">
                         <span className="sm:hidden">
-                          Gerar link ({selectedConsultations.length})
+                          Gerar ({selectedConsultations.length})
                         </span>
                         <span className="hidden sm:inline">
                           Gerar links de pagamento (
                           {selectedConsultations.length})
                         </span>
-                      </>
-                    )}
-                  </span>
-                </Button>
+                      </span>
+                    </Button>
+                  </>
+                )}
               </>
             ) : (
               <Button
@@ -2265,7 +2365,7 @@ export const FinancialConsultationsList: React.FC<
               <AlertDialogAction
                 onClick={() => {
                   setConfirmGenerate(null);
-                  handleGeneratePaymentLinks();
+                  handleGeneratePaymentLinks(false);
                 }}
               >
                 Gerar {confirmGenerate?.pacientes} cobranças
