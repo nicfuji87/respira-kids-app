@@ -183,9 +183,9 @@ export const FinancialPreFaturasList: React.FC<
             </Badge>
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Cobranças criadas aguardando o cliente escolher a forma de
-            pagamento. Ainda não existe cobrança no Asaas — dá para editar os
-            itens ou excluir livremente.
+            Cobranças aguardando o cliente escolher a forma de pagamento (ou já
+            expiradas). Ainda não existe cobrança no Asaas — dá para editar os
+            itens, reativar as expiradas ou excluir livremente.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -202,15 +202,24 @@ export const FinancialPreFaturasList: React.FC<
             preFaturas.map((pf) => (
               <div
                 key={pf.id}
-                className="rounded-lg border border-amber-200 bg-card p-4"
+                className={cn(
+                  'rounded-lg border bg-card p-4',
+                  pf.expirado ? 'border-red-200' : 'border-amber-200'
+                )}
               >
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <Badge className="bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">
-                        Pré-fatura · aguardando cliente
-                      </Badge>
+                      {pf.expirado ? (
+                        <Badge className="bg-red-100 text-red-800 border-red-300 hover:bg-red-100">
+                          Pré-fatura · expirada
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">
+                          Pré-fatura · aguardando cliente
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         #{pf.id.slice(0, 8)}
                       </span>
@@ -260,6 +269,15 @@ export const FinancialPreFaturasList: React.FC<
                   </div>
                 </div>
 
+                {/* Aviso de expiração */}
+                {pf.expirado && (
+                  <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md p-2 mb-3">
+                    Link expirado — o cliente não consegue mais pagar por ele.
+                    Use <strong>Editar itens</strong> e salve para reativar
+                    (estende o prazo em 30 dias) e reenviar.
+                  </div>
+                )}
+
                 {/* Ações */}
                 <div className="flex items-center gap-2 pt-3 border-t flex-wrap">
                   <Button
@@ -268,16 +286,18 @@ export const FinancialPreFaturasList: React.FC<
                     onClick={() => setEditing(pf)}
                   >
                     <Pencil className="h-4 w-4 mr-2" />
-                    Editar itens
+                    {pf.expirado ? 'Editar / reativar' : 'Editar itens'}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopyLink(pf)}
-                  >
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copiar link
-                  </Button>
+                  {!pf.expirado && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCopyLink(pf)}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copiar link
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"

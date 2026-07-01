@@ -15,6 +15,7 @@ import {
 import { generateChargeDescription } from './charge-description';
 import type {
   PagamentoLinkPublico,
+  PagamentoLinkStatus,
   TaxasCartaoConfig,
   FormaPagamento,
   ConfirmarPagamentoResult,
@@ -392,12 +393,13 @@ export async function cancelarLinkPagamento(
 // ============================================================================
 // PRÉ-FATURAS (links de pagamento AINDA NÃO gerados no Asaas)
 // ----------------------------------------------------------------------------
-// AI dev note: Uma "pré-fatura" é um pagamento_links pendente/ativo SEM id_asaas
-// (o cliente ainda não escolheu a forma, logo nenhuma cobrança existe no Asaas).
-// Ao contrário de faturas (faturas-api.ts), editar/excluir uma pré-fatura NÃO
-// toca no Asaas — é puramente gestão interna. Fica visível na aba Faturas,
-// rotulada como "não gerada no Asaas", para a secretaria conseguir corrigir os
-// itens ou apagar antes do cliente pagar (ex: cobrança duplicada da Barbara).
+// AI dev note: Uma "pré-fatura" é um pagamento_links ativo SEM id_asaas (o cliente
+// ainda não escolheu a forma, logo nenhuma cobrança existe no Asaas). Inclui os
+// status 'pendente' E 'expirado': o confirm-payment-link marca o link como
+// 'expirado' quando o cliente o abre depois do vencimento (ver index.ts) — esses
+// ficam presos em limbo e são JUSTAMENTE os que a secretaria precisa enxergar para
+// reativar/reenviar ou apagar. Ao contrário de faturas (faturas-api.ts),
+// editar/excluir uma pré-fatura NÃO toca no Asaas — é gestão puramente interna.
 // ============================================================================
 
 export interface PreFaturaAgendamento {
@@ -423,6 +425,10 @@ export interface PreFaturaResumo {
   vencimento: string | null;
   expira_em: string | null;
   criado_em: string;
+  status: PagamentoLinkStatus;
+  // AI dev note: expirado = já passou de expira_em. O link fica inutilizável para
+  // o cliente até ser reativado (editar itens reativa e estende o prazo).
+  expirado: boolean;
   qtd_consultas: number;
   agendamentos: PreFaturaAgendamento[];
 }
@@ -437,10 +443,10 @@ export async function fetchPreFaturas(filtros?: {
       .from('pagamento_links')
       .select(
         `id, token, paciente_id, empresa_id, responsavel_cobranca_id,
-         valor_base, descricao, vencimento, expira_em, criado_em`
+         valor_base, descricao, vencimento, expira_em, criado_em, status`
       )
       .eq('ativo', true)
-      .eq('status', 'pendente')
+      .in('status', ['pendente', 'expirado'])
       .is('id_asaas', null)
       .order('criado_em', { ascending: false });
 
@@ -555,6 +561,10 @@ export async function fetchPreFaturas(filtros?: {
         vencimento: l.vencimento,
         expira_em: l.expira_em,
         criado_em: l.criado_em,
+        status: l.status as PagamentoLinkStatus,
+        expirado:
+          l.status === 'expirado' ||
+          (!!l.expira_em && new Date(l.expira_em) < new Date()),
         qtd_consultas: ags.length,
         agendamentos: ags,
       };
@@ -649,14 +659,18 @@ export async function editarPreFatura(
     // 1. Buscar o link e validar que ainda é uma pré-fatura editável
     const { data: link, error: linkErr } = await supabase
       .from('pagamento_links')
-      .select(`id, status, id_asaas, paciente_id, empresa_id, taxas_snapshot`)
+      .select(
+        `id, status, id_asaas, paciente_id, empresa_id, taxas_snapshot, vencimento`
+      )
       .eq('id', linkId)
       .single();
 
     if (linkErr || !link) {
       return { success: false, error: 'Pré-fatura não encontrada' };
     }
-    if (link.status !== 'pendente' || link.id_asaas) {
+    // Pendente OU expirado podem ser editados. Uma vez com id_asaas (confirmada
+    // no Asaas), vira fatura e sai daqui.
+    if (!['pendente', 'expirado'].includes(link.status) || link.id_asaas) {
       return {
         success: false,
         error:
@@ -730,6 +744,16 @@ export async function editarPreFatura(
       link.taxas_snapshot as TaxasCartaoConfig
     );
 
+    // AI dev note: Reativação — se o link estava 'expirado' (cliente abriu depois do
+    // prazo), editar reabre a cobrança: volta para 'pendente' e estende expira_em em
+    // 30 dias, para o mesmo link poder ser reenviado sem cair em "Link expirado".
+    const reativar = link.status === 'expirado';
+    const novaExpiraEm = reativar
+      ? new Date(
+          new Date().setHours(23, 59, 59, 0) + 30 * 24 * 60 * 60 * 1000
+        ).toISOString()
+      : undefined;
+
     // 4. Atualizar o link
     const { error: updLinkErr } = await supabase
       .from('pagamento_links')
@@ -737,6 +761,7 @@ export async function editarPreFatura(
         valor_base: novoValorBase,
         descricao: novaDescricao,
         opcoes_snapshot: opcoes,
+        ...(reativar ? { status: 'pendente', expira_em: novaExpiraEm } : {}),
         atualizado_em: new Date().toISOString(),
       })
       .eq('id', linkId);
@@ -801,11 +826,57 @@ export async function editarPreFatura(
 }
 
 // === EXCLUIR PRÉ-FATURA (libera as consultas) ===
-// AI dev note: Mesma mecânica de cancelarLinkPagamento — soft-delete do link e as
-// consultas voltam a "pendente", livres para uma nova cobrança. Sem Asaas.
+// AI dev note: Soft-delete do link (pendente OU expirado) e as consultas voltam a
+// "pendente", livres para uma nova cobrança. Sem Asaas. Não reusa
+// cancelarLinkPagamento porque aquele só cancela status='pendente' — precisamos
+// cobrir os expirados-em-limbo também.
 export async function excluirPreFatura(
   linkId: string,
   userId: string
 ): Promise<ApiResponse<boolean>> {
-  return cancelarLinkPagamento(linkId, userId);
+  try {
+    const permErro = await assertSecretariaOuAdmin(userId);
+    if (permErro) return { success: false, error: permErro };
+
+    const { error: linkError } = await supabase
+      .from('pagamento_links')
+      .update({
+        status: 'cancelado',
+        ativo: false,
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq('id', linkId)
+      .in('status', ['pendente', 'expirado']);
+
+    if (linkError) {
+      return {
+        success: false,
+        error: `Erro ao excluir pré-fatura: ${linkError.message}`,
+      };
+    }
+
+    // Liberar as consultas reservadas (voltam a "pendente")
+    const { data: statusPendente } = await supabase
+      .from('pagamento_status')
+      .select('id')
+      .eq('codigo', 'pendente')
+      .single();
+
+    await supabase
+      .from('agendamentos')
+      .update({
+        pagamento_link_id: null,
+        cobranca_gerada_em: null,
+        cobranca_gerada_por: null,
+        ...(statusPendente?.id
+          ? { status_pagamento_id: statusPendente.id }
+          : {}),
+      })
+      .eq('pagamento_link_id', linkId);
+
+    return { success: true, data: true };
+  } catch (error) {
+    console.error('❌ Erro ao excluir pré-fatura:', error);
+    return { success: false, error: 'Erro inesperado ao excluir pré-fatura' };
+  }
 }

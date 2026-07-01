@@ -162,8 +162,12 @@ export const PreFaturaEditDialog: React.FC<PreFaturaEditDialogProps> = ({
 
       if (result.success) {
         toast({
-          title: 'Pré-fatura atualizada',
-          description: `Agora com ${selecionados.length} consulta${
+          title: preFatura.expirado
+            ? 'Pré-fatura reativada'
+            : 'Pré-fatura atualizada',
+          description: `${
+            preFatura.expirado ? 'Reativada e recalculada' : 'Agora'
+          } com ${selecionados.length} consulta${
             selecionados.length !== 1 ? 's' : ''
           } — ${formatCurrency(total)}.`,
         });
