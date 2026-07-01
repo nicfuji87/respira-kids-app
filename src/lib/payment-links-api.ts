@@ -179,13 +179,21 @@ export async function criarLinkPagamento(
       .maybeSingle();
     const tomadorId = pacienteTomador?.tomador_nfe_id || input.responsavelId;
 
-    // AI dev note: O link vale 30 dias a partir da criação (regra do negócio). O
-    // vencimento e a expiração andam juntos: assim, se o cliente pagar em qualquer
-    // dia dentro da janela, o dueDate enviado ao Asaas (= link.vencimento) ainda
-    // está no futuro — não cria cobrança já vencida. Passado o prazo, geramos outro.
+    // AI dev note: vencimento e expira_em são DESACOPLADOS de propósito.
+    // - vencimento = data "oficial" mostrada ao cliente e usada pelo lembrete de
+    //   inadimplência (vencida = elegível para lembrete). Curto (1 dia).
+    // - expira_em = vida útil do link em si (30 dias da criação), independente do
+    //   vencimento — é o que garante a janela "vencida mas ainda pagável" que o
+    //   cron de lembrete (fn_enqueue_lembretes_pre_cobranca) precisa para existir.
+    //   Se fossem a mesma data (como antes), o link morreria no instante em que
+    //   vence, e o lembrete nunca teria uma janela válida pra disparar.
+    // O dueDate enviado ao Asaas NÃO usa este vencimento — é recalculado no
+    // momento da confirmação (ver confirm-payment-link), pra nunca nascer vencido
+    // mesmo se o cliente pagar no dia 29 da janela de 30 dias.
     const vencimento =
-      input.vencimento || format(addDays(new Date(), 30), 'yyyy-MM-dd');
-    const expiraEm = new Date(`${vencimento}T23:59:59`).toISOString();
+      input.vencimento || format(addDays(new Date(), 1), 'yyyy-MM-dd');
+    const dataExpiracao = format(addDays(new Date(), 30), 'yyyy-MM-dd');
+    const expiraEm = new Date(`${dataExpiracao}T23:59:59`).toISOString();
     const token = nanoid();
 
     // Inserir o link
@@ -752,15 +760,20 @@ export async function editarPreFatura(
     );
 
     // AI dev note: Reativação — se o link estava 'expirado' (cliente abriu depois do
-    // prazo), editar reabre a cobrança: volta para 'pendente' e renova a janela de 30
-    // dias. Renovamos vencimento E expira_em juntos para o dueDate enviado ao Asaas
-    // (= link.vencimento) continuar no futuro e não nascer vencido.
+    // prazo), editar reabre a cobrança: volta para 'pendente', com vencimento
+    // renovado (1 dia, reinicia a elegibilidade pro lembrete) e expira_em renovado
+    // (30 dias, vida útil do link) — os DOIS a partir de agora, desacoplados (ver
+    // AI dev note em criarLinkPagamento). O dueDate do Asaas não usa nenhum dos
+    // dois — é recalculado na confirmação (ver confirm-payment-link).
     const reativar = link.status === 'expirado';
     const novoVencimento = reativar
+      ? format(addDays(new Date(), 1), 'yyyy-MM-dd')
+      : undefined;
+    const novaDataExpiracao = reativar
       ? format(addDays(new Date(), 30), 'yyyy-MM-dd')
       : undefined;
-    const novaExpiraEm = novoVencimento
-      ? new Date(`${novoVencimento}T23:59:59`).toISOString()
+    const novaExpiraEm = novaDataExpiracao
+      ? new Date(`${novaDataExpiracao}T23:59:59`).toISOString()
       : undefined;
 
     // 4. Atualizar o link

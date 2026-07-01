@@ -187,10 +187,17 @@ serve(async (req: Request) => {
     const tomadorId = link.tomador_nfe_id || link.responsavel_cobranca_id;
     const customerId = await ensureAsaasCustomer(supabase, apiKey, tomadorId);
 
-    // 5. Vencimento (PIX usa; cartão exige também)
-    const dueDate =
-      (link.vencimento as string | null) ||
-      new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+    // 5. Vencimento no Asaas (PIX usa; cartão exige também) = dia da CONFIRMAÇÃO,
+    // não o vencimento original da pré-cobrança. O link fica válido por 30 dias
+    // (expira_em), então o cliente pode confirmar bem depois do vencimento
+    // "oficial" — usar link.vencimento aqui poderia mandar ao Asaas uma data já
+    // no passado. Calculado em horário de Brasília (não UTC do servidor).
+    const dueDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
 
     // 6. Criar cobrança no Asaas
     const paymentPayload: Record<string, unknown> = {
@@ -253,7 +260,8 @@ serve(async (req: Request) => {
       link,
       payment,
       forma,
-      parcelas
+      parcelas,
+      dueDate
     );
 
     // 8. Resultado p/ a página (QR PIX ou invoiceUrl do cartão)
@@ -368,7 +376,8 @@ async function registrarFaturaEAgendamentos(
   link: Record<string, any>,
   payment: Record<string, any>,
   forma: 'pix' | 'credit_card',
-  parcelas: number
+  parcelas: number,
+  dueDate: string
 ): Promise<void> {
   // valor_total da fatura = valor efetivamente cobrado no Asaas (reconciliação)
   const valorCobrado =
@@ -392,7 +401,10 @@ async function registrarFaturaEAgendamentos(
       // AI dev note: snapshot do tomador da NFS-e (customer usado nesta cobrança)
       tomador_nfe_id: link.tomador_nfe_id ?? link.responsavel_cobranca_id,
       paciente_id: link.paciente_id,
-      vencimento: link.vencimento,
+      // AI dev note: vencimento da FATURA = mesma data enviada ao Asaas (dueDate,
+      // dia da confirmação), não o link.vencimento original — mantém fatura e
+      // Asaas sempre coerentes entre si.
+      vencimento: dueDate,
       dados_asaas: {
         ...payment,
         pagamento_link_id: link.id,
