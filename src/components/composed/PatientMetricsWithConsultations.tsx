@@ -64,6 +64,7 @@ import {
 import { generateChargeDescription } from '@/lib/charge-description';
 import { FaturasList, FaturasResumoServico } from './FaturasList';
 import { FaturaAjusteManualDialog } from './FaturaAjusteManualDialog';
+import { FinancialPreFaturasList } from './FinancialPreFaturasList';
 import {
   validateResponsibleForAsaas,
   getAsaasValidationErrorMessage,
@@ -1594,6 +1595,15 @@ export const PatientMetricsWithConsultations =
                       <Badge variant="outline">{faturas.length} total</Badge>
                     )}
                   </div>
+
+                  {/* AI dev note: Pré-faturas (links ainda não gerados no Asaas) do
+                      paciente. Some sozinho quando não há nenhuma. onChanged recarrega
+                      as métricas/faturas, pois excluir/editar mexe no status das
+                      consultas. */}
+                  <FinancialPreFaturasList
+                    pacienteId={patientId}
+                    onChanged={() => setReloadTrigger((prev) => prev + 1)}
+                  />
 
                   {/* AI dev note: resumo serviço x acréscimo de cartão x cobrado.
                       Mantém o "valor dos serviços" limpo (sem o repasse de taxas). */}

@@ -179,8 +179,12 @@ export async function criarLinkPagamento(
       .maybeSingle();
     const tomadorId = pacienteTomador?.tomador_nfe_id || input.responsavelId;
 
+    // AI dev note: O link vale 30 dias a partir da criação (regra do negócio). O
+    // vencimento e a expiração andam juntos: assim, se o cliente pagar em qualquer
+    // dia dentro da janela, o dueDate enviado ao Asaas (= link.vencimento) ainda
+    // está no futuro — não cria cobrança já vencida. Passado o prazo, geramos outro.
     const vencimento =
-      input.vencimento || format(addDays(new Date(), 3), 'yyyy-MM-dd');
+      input.vencimento || format(addDays(new Date(), 30), 'yyyy-MM-dd');
     const expiraEm = new Date(`${vencimento}T23:59:59`).toISOString();
     const token = nanoid();
 
@@ -437,6 +441,7 @@ export interface PreFaturaResumo {
 export async function fetchPreFaturas(filtros?: {
   startDate?: string;
   endDate?: string;
+  pacienteId?: string;
 }): Promise<ApiResponse<PreFaturaResumo[]>> {
   try {
     let query = supabase
@@ -450,6 +455,8 @@ export async function fetchPreFaturas(filtros?: {
       .is('id_asaas', null)
       .order('criado_em', { ascending: false });
 
+    if (filtros?.pacienteId)
+      query = query.eq('paciente_id', filtros.pacienteId);
     if (filtros?.startDate) query = query.gte('criado_em', filtros.startDate);
     if (filtros?.endDate)
       query = query.lte('criado_em', filtros.endDate + 'T23:59:59');
@@ -745,13 +752,15 @@ export async function editarPreFatura(
     );
 
     // AI dev note: Reativação — se o link estava 'expirado' (cliente abriu depois do
-    // prazo), editar reabre a cobrança: volta para 'pendente' e estende expira_em em
-    // 30 dias, para o mesmo link poder ser reenviado sem cair em "Link expirado".
+    // prazo), editar reabre a cobrança: volta para 'pendente' e renova a janela de 30
+    // dias. Renovamos vencimento E expira_em juntos para o dueDate enviado ao Asaas
+    // (= link.vencimento) continuar no futuro e não nascer vencido.
     const reativar = link.status === 'expirado';
-    const novaExpiraEm = reativar
-      ? new Date(
-          new Date().setHours(23, 59, 59, 0) + 30 * 24 * 60 * 60 * 1000
-        ).toISOString()
+    const novoVencimento = reativar
+      ? format(addDays(new Date(), 30), 'yyyy-MM-dd')
+      : undefined;
+    const novaExpiraEm = novoVencimento
+      ? new Date(`${novoVencimento}T23:59:59`).toISOString()
       : undefined;
 
     // 4. Atualizar o link
@@ -761,7 +770,13 @@ export async function editarPreFatura(
         valor_base: novoValorBase,
         descricao: novaDescricao,
         opcoes_snapshot: opcoes,
-        ...(reativar ? { status: 'pendente', expira_em: novaExpiraEm } : {}),
+        ...(reativar
+          ? {
+              status: 'pendente',
+              vencimento: novoVencimento,
+              expira_em: novaExpiraEm,
+            }
+          : {}),
         atualizado_em: new Date().toISOString(),
       })
       .eq('id', linkId);

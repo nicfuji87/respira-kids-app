@@ -46,6 +46,12 @@ import { PreFaturaEditDialog } from './PreFaturaEditDialog';
 
 interface FinancialPreFaturasListProps {
   className?: string;
+  // AI dev note: Quando informado, lista só as pré-faturas deste paciente (usado
+  // nos detalhes do paciente). Sem ele, lista todas (aba Financeiro).
+  pacienteId?: string;
+  // Notifica o container (ex: página do paciente) após excluir/editar, para
+  // recarregar métricas e faturas que dependem do status das consultas.
+  onChanged?: () => void;
 }
 
 const formatCurrency = (value: number) =>
@@ -70,7 +76,7 @@ const formatDataConsulta = (dateString: string) =>
 
 export const FinancialPreFaturasList: React.FC<
   FinancialPreFaturasListProps
-> = ({ className }) => {
+> = ({ className, pacienteId, onChanged }) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -86,7 +92,9 @@ export const FinancialPreFaturasList: React.FC<
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchPreFaturas();
+      const result = await fetchPreFaturas(
+        pacienteId ? { pacienteId } : undefined
+      );
       if (result.success && result.data) {
         setPreFaturas(result.data);
       } else {
@@ -98,7 +106,7 @@ export const FinancialPreFaturasList: React.FC<
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [pacienteId]);
 
   useEffect(() => {
     carregar();
@@ -137,6 +145,7 @@ export const FinancialPreFaturasList: React.FC<
         });
         setToDelete(null);
         carregar();
+        onChanged?.();
       } else {
         toast({
           title: 'Erro ao excluir',
@@ -322,7 +331,10 @@ export const FinancialPreFaturasList: React.FC<
           if (!open) setEditing(null);
         }}
         userId={user?.pessoa?.id || 'system'}
-        onSaved={carregar}
+        onSaved={() => {
+          carregar();
+          onChanged?.();
+        }}
       />
 
       {/* Confirmação de exclusão */}
