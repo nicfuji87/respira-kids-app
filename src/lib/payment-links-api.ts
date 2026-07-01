@@ -34,7 +34,12 @@ export interface CriarLinkPagamentoInput {
   empresaId: string;
   valorBase: number;
   descricao: string;
-  vencimento?: string; // YYYY-MM-DD (default: hoje + 3 dias)
+  vencimento?: string; // YYYY-MM-DD (default: hoje + 1 dia)
+  // AI dev note: Quando informado, o envio do WhatsApp (webhook pagamento_link_criado)
+  // só é entregue a partir deste instante (proximo_retry). Usado na geração EM MASSA
+  // para espaçar os envios 5–9 min e não sobrecarregar a API não oficial. Ausente =
+  // envia na hora (geração de 1 link).
+  agendarEnvioEm?: string; // ISO timestamp
 }
 
 export interface LinkPagamentoCriado {
@@ -275,6 +280,8 @@ export async function criarLinkPagamento(
         status: 'pendente',
         tentativas: 0,
         max_tentativas: 3,
+        // Espaçamento anti-ban na geração em massa (default: agora = envia já)
+        proximo_retry: input.agendarEnvioEm ?? new Date().toISOString(),
       });
 
     if (webhookError) {

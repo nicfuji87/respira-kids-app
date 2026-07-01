@@ -28,6 +28,16 @@ import { Badge } from '@/components/primitives/badge';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import { Checkbox } from '@/components/primitives/checkbox';
 import { Input } from '@/components/primitives/input';
 import { useToast } from '@/components/primitives/use-toast';
@@ -82,6 +92,20 @@ interface ConsultationWithPatient {
   empresa_fatura_id?: string; // Necessário para validação de cobrança
   empresa_fatura_razao_social?: string; // Nome da empresa para exibição
 }
+
+// AI dev note: Fonte ÚNICA da verdade da elegibilidade para GERAR uma nova cobrança/
+// link. Uma consulta é elegível quando não está paga, não foi cancelada, não está numa
+// fatura E ainda NÃO tem uma pré-cobrança gerada ('cobranca_gerada' já está reservada a
+// um link pendente — gerar de novo criaria link duplicado/órfão e reenviaria o WhatsApp
+// ao cliente). Usada por todos os pontos de seleção (todas/página/paciente/linha).
+const podeGerarCobranca = (c: {
+  status_pagamento_codigo: string;
+  fatura_id?: string | null;
+}): boolean =>
+  c.status_pagamento_codigo !== 'pago' &&
+  c.status_pagamento_codigo !== 'cancelado' &&
+  c.status_pagamento_codigo !== 'cobranca_gerada' &&
+  !c.fatura_id;
 
 type PeriodFilter =
   | 'mes_atual'
@@ -256,6 +280,18 @@ export const FinancialConsultationsList: React.FC<
     []
   ); // AI dev note: Mantém IDs selecionados entre páginas
   const [isGeneratingCharges, setIsGeneratingCharges] = useState(false);
+  // AI dev note: Progresso da geração em massa (X de N pacientes) + cancelamento.
+  // O cancelamento usa ref (lido dentro do loop async sem re-render).
+  const [generationProgress, setGenerationProgress] = useState<{
+    atual: number;
+    total: number;
+  } | null>(null);
+  const cancelGenerationRef = React.useRef(false);
+  // Diálogo de confirmação antes de gerar em massa (>1 paciente)
+  const [confirmGenerate, setConfirmGenerate] = useState<{
+    pacientes: number;
+    consultas: number;
+  } | null>(null);
   // AI dev note: Links públicos de pagamento gerados (para copiar/abrir manualmente)
   const [generatedLinks, setGeneratedLinks] = useState<
     Array<{ patientName: string; url: string; token: string }>
@@ -757,12 +793,7 @@ export const FinancialConsultationsList: React.FC<
   // Mantém seleções de outras páginas intactas
   const toggleSelectAll = () => {
     const eligibleIdsCurrentPage = filteredConsultations
-      .filter(
-        (c) =>
-          c.status_pagamento_codigo !== 'pago' &&
-          c.status_pagamento_codigo !== 'cancelado' &&
-          !c.fatura_id
-      )
+      .filter(podeGerarCobranca)
       .map((c) => c.id);
 
     // Verificar se todos da página atual já estão selecionados
@@ -791,12 +822,8 @@ export const FinancialConsultationsList: React.FC<
   // Agora usa filteredConsultations que já tem todos os filtros aplicados
   const selectAllUnpaid = () => {
     // AI dev note: Usar consultas já filtradas localmente (inclui filtro de empresa, profissional, etc)
-    const eligibleConsultations = filteredConsultations.filter(
-      (c) =>
-        c.status_pagamento_codigo !== 'pago' &&
-        c.status_pagamento_codigo !== 'cancelado' &&
-        !c.fatura_id
-    );
+    const eligibleConsultations =
+      filteredConsultations.filter(podeGerarCobranca);
 
     // AI dev note: dedupe defensivo - a seleção nunca pode conter o mesmo id 2x,
     // senão valor/descrição/IDs da cobrança dobram.
@@ -903,12 +930,8 @@ export const FinancialConsultationsList: React.FC<
     );
     if (!patientGroup) return;
 
-    const eligibleConsultations = patientGroup.consultas.filter(
-      (c) =>
-        c.status_pagamento_codigo !== 'pago' &&
-        c.status_pagamento_codigo !== 'cancelado' &&
-        !c.fatura_id
-    );
+    const eligibleConsultations =
+      patientGroup.consultas.filter(podeGerarCobranca);
 
     const eligibleIds = eligibleConsultations.map((c) => c.id);
 
@@ -954,6 +977,7 @@ export const FinancialConsultationsList: React.FC<
     }
 
     setIsGeneratingCharges(true);
+    cancelGenerationRef.current = false;
 
     try {
       // Agrupar consultas por paciente
@@ -991,10 +1015,25 @@ export const FinancialConsultationsList: React.FC<
         token: string;
       }> = [];
 
+      // AI dev note: Espaçamento anti-ban (API WhatsApp não oficial). O ENVIO de cada
+      // link é agendado (proximo_retry) 5–9 min após o anterior — o 1º sai na hora.
+      // A gravação no banco continua rápida/sequencial; só a mensagem sai espaçada.
+      // t0 fixo no início pra o espaçamento não driftar com o tempo do loop.
+      const t0 = Date.now();
+      let acumuladoMs = 0;
+
+      const totalPacientes = consultationsByPatient.size;
+      setGenerationProgress({ atual: 0, total: totalPacientes });
+
       // Processar paciente por paciente (all-or-nothing por paciente)
+      let indice = 0;
       for (const [patientId, patientConsultations] of Array.from(
         consultationsByPatient.entries()
       )) {
+        // Cancelamento: para após o paciente atual, mantém o que já foi gerado
+        if (cancelGenerationRef.current) break;
+        indice += 1;
+        setGenerationProgress({ atual: indice, total: totalPacientes });
         const patientName = patientConsultations[0].paciente_nome;
 
         try {
@@ -1105,7 +1144,8 @@ export const FinancialConsultationsList: React.FC<
           // empresaFaturaIds validado acima como única empresa
           const empresaId = empresaFaturaIds[0]!;
 
-          // Gerar link público de pagamento (cobrança no Asaas só no aceite do cliente)
+          // Gerar link público de pagamento (cobrança no Asaas só no aceite do cliente).
+          // agendarEnvioEm: 1º sai na hora; os seguintes espaçados 5–9 min (anti-ban).
           const result = await criarLinkPagamento(
             {
               agendamentoIds: patientConsultations.map((c) => c.id),
@@ -1114,6 +1154,7 @@ export const FinancialConsultationsList: React.FC<
               empresaId,
               valorBase: totalValue,
               descricao: description,
+              agendarEnvioEm: new Date(t0 + acumuladoMs).toISOString(),
             },
             user.pessoa.id
           );
@@ -1121,6 +1162,9 @@ export const FinancialConsultationsList: React.FC<
           if (!result.success || !result.data) {
             throw new Error(result.error || 'Erro ao gerar link de pagamento');
           }
+
+          // Próximo envio: +5 a 9 min (só avança em sucesso; falha não consome janela)
+          acumuladoMs += (300 + Math.random() * 240) * 1000;
 
           generated.push({
             patientName,
@@ -1150,8 +1194,10 @@ export const FinancialConsultationsList: React.FC<
             : '';
 
         toast({
-          title: 'Links de pagamento gerados',
-          description: `✅ ${successes.length} paciente(s) com sucesso${failures.length > 0 ? `\n❌ ${failures.length} com falha` : ''}${failureDetails}`,
+          title: cancelGenerationRef.current
+            ? 'Geração interrompida'
+            : 'Links de pagamento gerados',
+          description: `✅ ${successes.length} paciente(s) com sucesso${failures.length > 0 ? `\n❌ ${failures.length} com falha` : ''}${successes.length > 1 ? '\n📲 Os envios de WhatsApp saem espaçados (5–9 min) para não sobrecarregar o número.' : ''}${failureDetails}`,
         });
 
         // Exibir links gerados (copiar/abrir manualmente, além do envio via n8n)
@@ -1177,6 +1223,25 @@ export const FinancialConsultationsList: React.FC<
       });
     } finally {
       setIsGeneratingCharges(false);
+      setGenerationProgress(null);
+      cancelGenerationRef.current = false;
+    }
+  };
+
+  // Abre a confirmação (massa) ou gera direto (1 paciente)
+  const handleGenerateClick = () => {
+    const pacientesUnicos = new Set(
+      selectedConsultations
+        .map((id) => consultations.find((c) => c.id === id)?.paciente_id)
+        .filter(Boolean)
+    );
+    if (pacientesUnicos.size > 1) {
+      setConfirmGenerate({
+        pacientes: pacientesUnicos.size,
+        consultas: selectedConsultations.length,
+      });
+    } else {
+      handleGeneratePaymentLinks();
     }
   };
 
@@ -1276,33 +1341,58 @@ export const FinancialConsultationsList: React.FC<
 
             {isSelectionMode ? (
               <>
+                {isGeneratingCharges ? (
+                  // Durante a geração: cancelar PARA o loop (mantém o já gerado)
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      cancelGenerationRef.current = true;
+                    }}
+                    className="gap-1"
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="hidden sm:inline">Cancelar geração</span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsSelectionMode(false);
+                      setSelectedConsultations([]);
+                    }}
+                    className="gap-1"
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="hidden sm:inline">Cancelar</span>
+                  </Button>
+                )}
                 <Button
-                  variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setIsSelectionMode(false);
-                    setSelectedConsultations([]);
-                  }}
-                  className="gap-1"
-                >
-                  <X className="h-4 w-4" />
-                  <span className="hidden sm:inline">Cancelar</span>
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleGeneratePaymentLinks}
+                  onClick={handleGenerateClick}
                   disabled={
                     selectedConsultations.length === 0 || isGeneratingCharges
                   }
                 >
                   <CreditCard className="h-4 w-4 flex-shrink-0" />
                   <span className="ml-1.5 sm:ml-2">
-                    <span className="sm:hidden">
-                      Gerar link ({selectedConsultations.length})
-                    </span>
-                    <span className="hidden sm:inline">
-                      Gerar links de pagamento ({selectedConsultations.length})
-                    </span>
+                    {isGeneratingCharges && generationProgress ? (
+                      <>
+                        Gerando {generationProgress.atual}/
+                        {generationProgress.total}…
+                      </>
+                    ) : (
+                      <>
+                        <span className="sm:hidden">
+                          Gerar link ({selectedConsultations.length})
+                        </span>
+                        <span className="hidden sm:inline">
+                          Gerar links de pagamento (
+                          {selectedConsultations.length})
+                        </span>
+                      </>
+                    )}
                   </span>
                 </Button>
               </>
@@ -1525,33 +1615,15 @@ export const FinancialConsultationsList: React.FC<
                 <Checkbox
                   checked={
                     filteredConsultations
-                      .filter(
-                        (c) =>
-                          c.status_pagamento_codigo !== 'pago' &&
-                          c.status_pagamento_codigo !== 'cancelado' &&
-                          !c.fatura_id
-                      )
+                      .filter(podeGerarCobranca)
                       .every((c) => selectedConsultations.includes(c.id)) &&
-                    filteredConsultations.filter(
-                      (c) =>
-                        c.status_pagamento_codigo !== 'pago' &&
-                        c.status_pagamento_codigo !== 'cancelado' &&
-                        !c.fatura_id
-                    ).length > 0
+                    filteredConsultations.filter(podeGerarCobranca).length > 0
                   }
                   onCheckedChange={toggleSelectAll}
                 />
                 <span className="text-sm font-medium">
                   Selecionar desta página (
-                  {
-                    filteredConsultations.filter(
-                      (c) =>
-                        c.status_pagamento_codigo !== 'pago' &&
-                        c.status_pagamento_codigo !== 'cancelado' &&
-                        !c.fatura_id
-                    ).length
-                  }
-                  )
+                  {filteredConsultations.filter(podeGerarCobranca).length})
                 </span>
               </div>
 
@@ -1602,12 +1674,8 @@ export const FinancialConsultationsList: React.FC<
           <div className="space-y-3">
             {groupedByPatient.map((patientGroup) => {
               const isExpanded = expandedPatients.has(patientGroup.paciente_id);
-              const eligibleConsultations = patientGroup.consultas.filter(
-                (c) =>
-                  c.status_pagamento_codigo !== 'pago' &&
-                  c.status_pagamento_codigo !== 'cancelado' &&
-                  !c.fatura_id
-              );
+              const eligibleConsultations =
+                patientGroup.consultas.filter(podeGerarCobranca);
               const allPatientConsultationsSelected =
                 eligibleConsultations.length > 0 &&
                 eligibleConsultations.every((c) =>
@@ -1713,11 +1781,7 @@ export const FinancialConsultationsList: React.FC<
                             )
                           : null;
                         const canSelect =
-                          isSelectionMode &&
-                          consultation.status_pagamento_codigo !== 'pago' &&
-                          consultation.status_pagamento_codigo !==
-                            'cancelado' &&
-                          !consultation.fatura_id;
+                          isSelectionMode && podeGerarCobranca(consultation);
 
                         return (
                           <div
@@ -1890,12 +1954,9 @@ export const FinancialConsultationsList: React.FC<
               const asaasUrl = consultation.id_pagamento_externo
                 ? getAsaasPaymentUrl(consultation.id_pagamento_externo)
                 : null;
-              // AI dev note: Pode selecionar se não está paga e não tem fatura
+              // AI dev note: Pode selecionar só se ainda pode gerar cobrança (ver podeGerarCobranca)
               const canSelect =
-                isSelectionMode &&
-                consultation.status_pagamento_codigo !== 'pago' &&
-                consultation.status_pagamento_codigo !== 'cancelado' &&
-                !consultation.fatura_id;
+                isSelectionMode && podeGerarCobranca(consultation);
 
               return (
                 <div
@@ -2120,6 +2181,51 @@ export const FinancialConsultationsList: React.FC<
             </p>
           </div>
         )}
+
+        {/* Confirmação antes de gerar em massa (>1 paciente) */}
+        <AlertDialog
+          open={!!confirmGenerate}
+          onOpenChange={(open) => {
+            if (!open) setConfirmGenerate(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Gerar cobranças em massa?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <p>
+                    Você vai gerar cobrança para{' '}
+                    <strong>{confirmGenerate?.pacientes} pacientes</strong> (
+                    {confirmGenerate?.consultas} consultas) e enviar o link de
+                    pagamento por WhatsApp.
+                  </p>
+                  <p>
+                    Para não sobrecarregar o número, os envios saem{' '}
+                    <strong>espaçados (5–9 min)</strong> — o primeiro sai na
+                    hora e o último por volta de{' '}
+                    <strong>
+                      ~{Math.round(((confirmGenerate?.pacientes ?? 1) - 1) * 7)}{' '}
+                      min
+                    </strong>{' '}
+                    depois. Dá para acompanhar o progresso e cancelar.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Voltar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setConfirmGenerate(null);
+                  handleGeneratePaymentLinks();
+                }}
+              >
+                Gerar {confirmGenerate?.pacientes} cobranças
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
