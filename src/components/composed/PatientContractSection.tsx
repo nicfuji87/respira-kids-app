@@ -22,9 +22,12 @@ import { Badge } from '@/components/primitives/badge';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { useToast } from '@/components/primitives/use-toast';
 import { fetchPatientContract } from '@/lib/patient-api';
-import { generateContract, buildUsoImagemVars } from '@/lib/contract-api';
-import type { ContractVariables } from '@/lib/contract-api';
+import {
+  generateContract,
+  buildContractVariablesForPatient,
+} from '@/lib/contract-api';
 import { ContractViewModal } from './ContractViewModal';
+import { RefazerContratoDialog } from './RefazerContratoDialog';
 import { supabase } from '@/lib/supabase';
 
 interface PatientContractSectionProps {
@@ -52,8 +55,11 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
     const [resending, setResending] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isRefazerOpen, setIsRefazerOpen] = useState(false);
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
     const { toast } = useToast();
+
+    const canManageContract = userRole === 'admin' || userRole === 'secretaria';
 
     // AI dev note: Determinar status do contrato baseado no arquivo_url
     const contractStatus = React.useMemo<ContractStatus>(() => {
@@ -65,29 +71,29 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
     }, [contract]);
 
     // Buscar contrato do paciente
-    useEffect(() => {
-      const loadContract = async () => {
-        try {
-          setLoading(true);
-          setError(null);
+    const loadContract = useCallback(async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-          const response = await fetchPatientContract(patientId);
+        const response = await fetchPatientContract(patientId);
 
-          if (response.error) {
-            setError(response.error);
-          } else {
-            setContract(response.contract);
-          }
-        } catch (err) {
-          console.error('Erro ao carregar contrato:', err);
-          setError('Erro ao carregar informações do contrato');
-        } finally {
-          setLoading(false);
+        if (response.error) {
+          setError(response.error);
+        } else {
+          setContract(response.contract);
         }
-      };
-
-      loadContract();
+      } catch (err) {
+        console.error('Erro ao carregar contrato:', err);
+        setError('Erro ao carregar informações do contrato');
+      } finally {
+        setLoading(false);
+      }
     }, [patientId]);
+
+    useEffect(() => {
+      loadContract();
+    }, [loadContract]);
 
     // Validar campos obrigatórios para gerar contrato
     const validatePatientData = useCallback(async () => {
@@ -285,119 +291,11 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
           return;
         }
 
-        // Buscar todos os dados necessários para o contrato
-        const { data: patientData } = await supabase
-          .from('pacientes_com_responsaveis_view')
-          .select('*')
-          .eq('id', patientId)
-          .single();
-
-        if (!patientData) {
-          throw new Error('Dados do paciente não encontrados');
-        }
-
-        // Buscar pediatra
-        await supabase
-          .from('paciente_pediatra')
-          .select(
-            `
-            pessoa_pediatra!inner(
-              pessoa_id,
-              pessoas!pessoa_id(nome)
-            )
-          `
-          )
-          .eq('paciente_id', patientId)
-          .eq('ativo', true)
-          .limit(1)
-          .maybeSingle();
-
-        // Formatar data brasileira
-        const formatarDataBrasileira = (dataISO: string): string => {
-          if (!dataISO) return '';
-          const [year, month, day] = dataISO.split('-');
-          return `${day}/${month}/${year}`;
-        };
-
-        // Formatar telefone
-        const formatarTelefone = (telefone: bigint | number | null): string => {
-          if (!telefone) return '';
-          const tel = telefone.toString();
-          if (tel.length === 11) {
-            return `(${tel.slice(0, 2)}) ${tel.slice(2, 7)}-${tel.slice(7)}`;
-          }
-          return tel;
-        };
-
-        // Montar variáveis do contrato
-        const contractVariables: ContractVariables = {
-          // Responsável Legal
-          responsavelLegalNome: patientData.responsavel_legal_nome || '',
-          responsavelLegalCpf: patientData.responsavel_legal_cpf || '',
-          responsavelLegalTelefone: formatarTelefone(
-            patientData.responsavel_legal_telefone
-          ),
-          responsavelLegalEmail: patientData.responsavel_legal_email || '',
-          responsavelLegalFinanceiro:
-            patientData.responsavel_legal_id ===
-            patientData.responsavel_financeiro_id
-              ? 'e Financeiro'
-              : '',
-
-          // Cláusula condicional para responsável financeiro diferente
-          clausulaResponsavelFinanceiro:
-            patientData.responsavel_legal_id !==
-              patientData.responsavel_financeiro_id &&
-            patientData.responsavel_financeiro_nome
-              ? `\n\n**Parágrafo único:** Os pagamentos referentes aos serviços prestados serão realizados por **${patientData.responsavel_financeiro_nome}**, CPF nº ${patientData.responsavel_financeiro_cpf || ''}, telefone ${formatarTelefone(patientData.responsavel_financeiro_telefone)}, email ${patientData.responsavel_financeiro_email || ''}, na qualidade de **RESPONSÁVEL FINANCEIRO**.`
-              : '',
-
-          // Variáveis antigas (compatibilidade)
-          contratante: patientData.responsavel_legal_nome || '',
-          cpf: patientData.responsavel_legal_cpf || '',
-          telefone: formatarTelefone(patientData.responsavel_legal_telefone),
-          email: patientData.responsavel_legal_email || '',
-
-          // Endereço
-          endereco_completo: [
-            patientData.logradouro,
-            patientData.numero_endereco && `, ${patientData.numero_endereco}`,
-            patientData.complemento_endereco &&
-              ` ${patientData.complemento_endereco}`,
-            patientData.bairro && `, ${patientData.bairro}`,
-            patientData.cidade && `, ${patientData.cidade}`,
-            patientData.estado && ` - ${patientData.estado}`,
-            patientData.cep && `, CEP ${patientData.cep}`,
-          ]
-            .filter(Boolean)
-            .join(''),
-
-          logradouro: patientData.logradouro || '',
-          numero: patientData.numero_endereco || '',
-          complemento: patientData.complemento_endereco,
-          bairro: patientData.bairro || '',
-          cidade: patientData.cidade || '',
-          uf: patientData.estado || '',
-          cep: patientData.cep || '',
-
-          // Paciente
-          paciente: patientData.nome || '',
-          dnPac: formatarDataBrasileira(patientData.data_nascimento || ''),
-          cpfPac: patientData.cpf_cnpj || 'não fornecido',
-
-          // Data
-          hoje: new Date().toLocaleDateString('pt-BR'),
-
-          // Autorizações
-          // AI dev note: uso científico e redes sociais são independentes —
-          // buildUsoImagemVars monta autorizo/fimTerapeutico/vinculoNome sem
-          // misturar/negar uma autorização quando só a outra foi recusada.
-          ...buildUsoImagemVars({
-            usoCientifico: patientData.autorizacao_uso_cientifico ?? false,
-            usoRedesSociais: patientData.autorizacao_uso_redes_sociais ?? false,
-            usoNome: patientData.autorizacao_uso_do_nome ?? false,
-          }),
-        };
+        // AI dev note: variáveis montadas por buildContractVariablesForPatient
+        // (fonte única — mesma projeção usada no "refazer"). Trata as autorizações
+        // de forma independente e busca o CPF dos responsáveis em `pessoas`.
+        const contractVariables =
+          await buildContractVariablesForPatient(patientId);
 
         // Gerar contrato (insere em user_contracts com status 'gerado')
         const newContract = await generateContract(
@@ -688,6 +586,19 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
                     )}
                   </Button>
                 )}
+
+                {/* AI dev note: Refazer regera o contrato a partir dos dados
+                    atuais (ajustando autorizações) e reenvia — com auditoria. */}
+                {canManageContract && (
+                  <Button
+                    onClick={() => setIsRefazerOpen(true)}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <RotateCw className="h-4 w-4 mr-2" />
+                    Refazer Contrato
+                  </Button>
+                )}
               </div>
             )}
 
@@ -745,6 +656,19 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
                     Ver Contrato
                   </Button>
                 )}
+
+                {/* AI dev note: Refazer contrato assinado (ex.: correção de
+                    cláusula). Não disponível para contratos legados. */}
+                {canManageContract && !contract?.is_legacy && (
+                  <Button
+                    onClick={() => setIsRefazerOpen(true)}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <RotateCw className="h-4 w-4 mr-2" />
+                    Refazer Contrato
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>
@@ -763,6 +687,16 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
                 : undefined
             }
             patientName={contract.nome_contrato.split(' - ')[1] || 'Paciente'}
+          />
+        )}
+
+        {/* Diálogo de refazer contrato (admin/secretária) */}
+        {canManageContract && (
+          <RefazerContratoDialog
+            isOpen={isRefazerOpen}
+            onClose={() => setIsRefazerOpen(false)}
+            patientId={patientId}
+            onDone={loadContract}
           />
         )}
       </>

@@ -2,6 +2,7 @@
 // Funções para buscar templates, gerar contratos e registrar aceites
 
 import { supabase } from './supabase';
+import { formatCPF } from './profile';
 
 // Interfaces conforme plano aprovado
 export interface ContractVariables {
@@ -249,6 +250,252 @@ export async function generateContract(
     console.error('❌ Erro em generateContract:', error);
     throw error;
   }
+}
+
+/**
+ * Montar as variáveis do contrato a partir dos dados ATUAIS do paciente.
+ * AI dev note: fonte única de verdade para a projeção "dados do cadastro -> contrato".
+ * Usada tanto na geração quanto no "refazer", garantindo que os dois caminhos
+ * produzam exatamente o mesmo texto (autorizações via buildUsoImagemVars).
+ */
+export async function buildContractVariablesForPatient(
+  patientId: string
+): Promise<ContractVariables> {
+  const { data: p, error } = await supabase
+    .from('pacientes_com_responsaveis_view')
+    .select('*')
+    .eq('id', patientId)
+    .single();
+
+  if (error || !p) {
+    console.error(
+      '❌ Erro ao buscar dados do paciente para o contrato:',
+      error
+    );
+    throw new Error('Dados do paciente não encontrados');
+  }
+
+  // AI dev note: a view não expõe o CPF dos responsáveis (só o do paciente em
+  // cpf_cnpj). Buscamos direto em `pessoas` pelos ids e formatamos (a view
+  // guardava dígitos crus; o contrato usa xxx.xxx.xxx-xx).
+  const respIds = [p.responsavel_legal_id, p.responsavel_financeiro_id].filter(
+    Boolean
+  ) as string[];
+  const cpfPorPessoa: Record<string, string> = {};
+  if (respIds.length > 0) {
+    const { data: resps } = await supabase
+      .from('pessoas')
+      .select('id, cpf_cnpj')
+      .in('id', respIds);
+    for (const r of resps ?? []) {
+      cpfPorPessoa[r.id] = r.cpf_cnpj ? formatCPF(r.cpf_cnpj) : '';
+    }
+  }
+  const responsavelLegalCpf = p.responsavel_legal_id
+    ? cpfPorPessoa[p.responsavel_legal_id] || ''
+    : '';
+  const responsavelFinanceiroCpf = p.responsavel_financeiro_id
+    ? cpfPorPessoa[p.responsavel_financeiro_id] || ''
+    : '';
+
+  const formatarDataBrasileira = (dataISO: string): string => {
+    if (!dataISO) return '';
+    const [year, month, day] = dataISO.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const formatarTelefone = (telefone: bigint | number | null): string => {
+    if (!telefone) return '';
+    const tel = telefone.toString();
+    if (tel.length === 11) {
+      return `(${tel.slice(0, 2)}) ${tel.slice(2, 7)}-${tel.slice(7)}`;
+    }
+    return tel;
+  };
+
+  const mesmoResponsavel =
+    p.responsavel_legal_id === p.responsavel_financeiro_id;
+
+  return {
+    // Responsável Legal
+    responsavelLegalNome: p.responsavel_legal_nome || '',
+    responsavelLegalCpf: responsavelLegalCpf,
+    responsavelLegalTelefone: formatarTelefone(p.responsavel_legal_telefone),
+    responsavelLegalEmail: p.responsavel_legal_email || '',
+    responsavelLegalFinanceiro: mesmoResponsavel ? 'e Financeiro' : '',
+
+    // Cláusula condicional para responsável financeiro diferente
+    clausulaResponsavelFinanceiro:
+      !mesmoResponsavel && p.responsavel_financeiro_nome
+        ? `\n\n**Parágrafo único:** Os pagamentos referentes aos serviços prestados serão realizados por **${p.responsavel_financeiro_nome}**, CPF nº ${responsavelFinanceiroCpf}, telefone ${formatarTelefone(p.responsavel_financeiro_telefone)}, email ${p.responsavel_financeiro_email || ''}, na qualidade de **RESPONSÁVEL FINANCEIRO**.`
+        : '',
+
+    // Variáveis antigas (compatibilidade)
+    contratante: p.responsavel_legal_nome || '',
+    cpf: responsavelLegalCpf,
+    telefone: formatarTelefone(p.responsavel_legal_telefone),
+    email: p.responsavel_legal_email || '',
+
+    // Endereço
+    endereco_completo: [
+      p.logradouro,
+      p.numero_endereco && `, ${p.numero_endereco}`,
+      p.complemento_endereco && ` ${p.complemento_endereco}`,
+      p.bairro && `, ${p.bairro}`,
+      p.cidade && `, ${p.cidade}`,
+      p.estado && ` - ${p.estado}`,
+      p.cep && `, CEP ${p.cep}`,
+    ]
+      .filter(Boolean)
+      .join(''),
+    logradouro: p.logradouro || '',
+    numero: p.numero_endereco || '',
+    complemento: p.complemento_endereco,
+    bairro: p.bairro || '',
+    cidade: p.cidade || '',
+    uf: p.estado || '',
+    cep: p.cep || '',
+
+    // Paciente
+    paciente: p.nome || '',
+    dnPac: formatarDataBrasileira(p.data_nascimento || ''),
+    cpfPac: p.cpf_cnpj ? formatCPF(p.cpf_cnpj) : 'não fornecido',
+
+    // Data
+    hoje: new Date().toLocaleDateString('pt-BR'),
+
+    // Autorizações (uso científico e redes sociais são INDEPENDENTES)
+    ...buildUsoImagemVars({
+      usoCientifico: p.autorizacao_uso_cientifico ?? false,
+      usoRedesSociais: p.autorizacao_uso_redes_sociais ?? false,
+      usoNome: p.autorizacao_uso_do_nome ?? false,
+    }),
+  };
+}
+
+export interface RefazerContratoParams {
+  /** Paciente dono do contrato */
+  patientId: string;
+  /** Novos valores das autorizações (podem ser iguais aos atuais) */
+  autorizacoes: UsoImagemAutorizacoes;
+  /** Motivo do refazer (obrigatório para auditoria) */
+  motivo: string;
+  /** pessoas.id de quem está refazendo (para auditoria); null se não resolvido */
+  refeitoPor: string | null;
+}
+
+/**
+ * Refazer o contrato do paciente.
+ * AI dev note: NÃO sobrescreve o contrato assinado. Fluxo (preserva histórico):
+ *  1. Salva as autorizações atuais em `pessoas`.
+ *  2. Cancela o contrato ativo (`ativo=false`, status `cancelado`).
+ *  3. Gera um NOVO contrato a partir dos dados atuais (texto já corrigido).
+ *  4. Registra em `contrato_audit_log` (quem, quando, motivo, o que mudou).
+ * O envio para assinatura (send-contract-webhook) é disparado pelo chamador,
+ * como já acontece na geração/reenvio.
+ */
+export async function refazerContrato(
+  params: RefazerContratoParams
+): Promise<UserContract> {
+  const { patientId, autorizacoes, motivo, refeitoPor } = params;
+
+  // 1. Ler autorizações atuais (para o "antes" da auditoria) e salvar as novas.
+  const { data: pessoaAntes } = await supabase
+    .from('pessoas')
+    .select(
+      'autorizacao_uso_cientifico, autorizacao_uso_redes_sociais, autorizacao_uso_do_nome'
+    )
+    .eq('id', patientId)
+    .single();
+
+  const { error: updateAuthError } = await supabase
+    .from('pessoas')
+    .update({
+      autorizacao_uso_cientifico: autorizacoes.usoCientifico,
+      autorizacao_uso_redes_sociais: autorizacoes.usoRedesSociais,
+      autorizacao_uso_do_nome: autorizacoes.usoNome,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', patientId);
+
+  if (updateAuthError) {
+    console.error('❌ Erro ao salvar autorizações:', updateAuthError);
+    throw new Error('Não foi possível salvar as autorizações');
+  }
+
+  // 2. Buscar o contrato ativo atual (será cancelado).
+  const contratoAtual = await fetchUserContract(patientId);
+
+  // 3. Montar as variáveis a partir dos dados atuais (já com as novas autorizações).
+  const variables = await buildContractVariablesForPatient(patientId);
+
+  // 4. Cancelar o contrato atual (mantém como histórico do que foi assinado).
+  if (contratoAtual) {
+    const carimbo = new Date().toLocaleString('pt-BR');
+    const novaObs = [
+      contratoAtual.observacoes,
+      `Refeito em ${carimbo}: ${motivo}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const { error: cancelError } = await supabase
+      .from('user_contracts')
+      .update({
+        ativo: false,
+        status_contrato: 'cancelado',
+        atualizado_por: refeitoPor,
+        observacoes: novaObs,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', contratoAtual.id);
+
+    if (cancelError) {
+      console.error('❌ Erro ao cancelar contrato anterior:', cancelError);
+      throw new Error('Não foi possível cancelar o contrato anterior');
+    }
+  }
+
+  // 5. Gerar o novo contrato (status 'gerado').
+  const novo = await generateContract(patientId, variables);
+
+  await supabase
+    .from('user_contracts')
+    .update({ criado_por: refeitoPor, arquivo_url: 'Aguardando' })
+    .eq('id', novo.id);
+
+  // 6. Registrar auditoria (quem, quando, motivo e o que mudou).
+  const { error: auditError } = await supabase
+    .from('contrato_audit_log')
+    .insert({
+      pessoa_id: patientId,
+      contrato_id_anterior: contratoAtual?.id ?? null,
+      contrato_id_novo: novo.id,
+      acao: 'refazer',
+      motivo,
+      detalhes: {
+        autorizacoes_antes: pessoaAntes
+          ? {
+              cientifico: pessoaAntes.autorizacao_uso_cientifico,
+              redes: pessoaAntes.autorizacao_uso_redes_sociais,
+              nome: pessoaAntes.autorizacao_uso_do_nome,
+            }
+          : null,
+        autorizacoes_depois: {
+          cientifico: autorizacoes.usoCientifico,
+          redes: autorizacoes.usoRedesSociais,
+          nome: autorizacoes.usoNome,
+        },
+      },
+      refeito_por: refeitoPor,
+    });
+
+  if (auditError) {
+    // Não bloqueia o refazer (contrato já foi gerado), mas loga o problema.
+    console.error('⚠️ Erro ao registrar auditoria do refazer:', auditError);
+  }
+
+  return novo;
 }
 
 /**
