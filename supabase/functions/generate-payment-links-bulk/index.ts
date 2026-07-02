@@ -296,136 +296,90 @@ async function processarLote(
       .eq('id', logId);
   };
 
-  for (const item of itens) {
-    const logId = logIdPorPaciente.get(item.pacienteId);
-    try {
-      if (!(item.valorBase > 0))
-        throw new Error('Valor deve ser maior que zero');
-      if (!item.agendamentoIds?.length)
-        throw new Error('Nenhuma consulta no item');
+  try {
+    for (const item of itens) {
+      const logId = logIdPorPaciente.get(item.pacienteId);
+      try {
+        if (!(item.valorBase > 0))
+          throw new Error('Valor deve ser maior que zero');
+        if (!item.agendamentoIds?.length)
+          throw new Error('Nenhuma consulta no item');
 
-      // 3a. Idempotência: as consultas ainda precisam estar livres (não faturadas,
-      // não reservadas a outro link). Evita cobrança duplicada se o estado mudou.
-      const { data: ags } = await supabase
-        .from('agendamentos')
-        .select('id, ativo, fatura_id, pagamento_link_id')
-        .in('id', item.agendamentoIds);
-      const invalidas = (ags || []).filter(
-        (a: any) => !a.ativo || a.fatura_id || a.pagamento_link_id
-      );
-      if (!ags || ags.length === 0)
-        throw new Error('Consultas não encontradas');
-      if (invalidas.length > 0)
-        throw new Error(
-          'Consulta(s) já faturada(s) ou já reservada(s) a outra cobrança'
+        // 3a. Idempotência: as consultas ainda precisam estar livres (não faturadas,
+        // não reservadas a outro link). Evita cobrança duplicada se o estado mudou.
+        const { data: ags } = await supabase
+          .from('agendamentos')
+          .select('id, ativo, fatura_id, pagamento_link_id')
+          .in('id', item.agendamentoIds);
+        const invalidas = (ags || []).filter(
+          (a: any) => !a.ativo || a.fatura_id || a.pagamento_link_id
         );
+        if (!ags || ags.length === 0)
+          throw new Error('Consultas não encontradas');
+        if (invalidas.length > 0)
+          throw new Error(
+            'Consulta(s) já faturada(s) ou já reservada(s) a outra cobrança'
+          );
 
-      // 3b. Taxas (empresa -> Asaas ao vivo -> imposto) + opções (fee math verbatim)
-      const { data: empresa } = await supabase
-        .from('pessoa_empresas')
-        .select('taxas_cartao')
-        .eq('id', item.empresaId)
-        .single();
-      const taxasConfig: TaxasCartaoConfig =
-        (empresa?.taxas_cartao as TaxasCartaoConfig) ||
-        gerarTaxasCartaoPadrao();
-      const taxasAsaas = await refreshTaxasFromAsaas(
-        supabase,
-        item.empresaId,
-        item.valorBase,
-        taxasConfig
-      );
-      const { data: aliquotaData } = await supabase.rpc(
-        'fn_aliquota_imposto_repasse',
-        {}
-      );
-      const taxas: TaxasCartaoConfig = {
-        ...taxasAsaas,
-        imposto: { percent: Number(aliquotaData) || 0 },
-      };
-      const opcoes = calcularOpcoesPagamento(item.valorBase, taxas);
+        // 3b. Taxas (empresa -> Asaas ao vivo -> imposto) + opções (fee math verbatim)
+        const { data: empresa } = await supabase
+          .from('pessoa_empresas')
+          .select('taxas_cartao')
+          .eq('id', item.empresaId)
+          .single();
+        const taxasConfig: TaxasCartaoConfig =
+          (empresa?.taxas_cartao as TaxasCartaoConfig) ||
+          gerarTaxasCartaoPadrao();
+        const taxasAsaas = await refreshTaxasFromAsaas(
+          supabase,
+          item.empresaId,
+          item.valorBase,
+          taxasConfig
+        );
+        const { data: aliquotaData } = await supabase.rpc(
+          'fn_aliquota_imposto_repasse',
+          {}
+        );
+        const taxas: TaxasCartaoConfig = {
+          ...taxasAsaas,
+          imposto: { percent: Number(aliquotaData) || 0 },
+        };
+        const opcoes = calcularOpcoesPagamento(item.valorBase, taxas);
 
-      // 3c. Tomador da NFS-e
-      const { data: pacienteTomador } = await supabase
-        .from('pessoas')
-        .select('tomador_nfe_id')
-        .eq('id', item.pacienteId)
-        .maybeSingle();
-      const tomadorId = pacienteTomador?.tomador_nfe_id || item.responsavelId;
+        // 3c. Tomador da NFS-e
+        const { data: pacienteTomador } = await supabase
+          .from('pessoas')
+          .select('tomador_nfe_id')
+          .eq('id', item.pacienteId)
+          .maybeSingle();
+        const tomadorId = pacienteTomador?.tomador_nfe_id || item.responsavelId;
 
-      const hoje = new Date();
-      const vencimento =
-        item.vencimento || ymd(new Date(hoje.getTime() + 1 * 86400000));
-      const dataExpiracao = ymd(new Date(hoje.getTime() + 30 * 86400000));
-      const expiraEm = new Date(
-        `${dataExpiracao}T23:59:59-03:00`
-      ).toISOString();
-      const agendarEnvioEm = new Date(t0 + acumuladoMs).toISOString();
+        const hoje = new Date();
+        const vencimento =
+          item.vencimento || ymd(new Date(hoje.getTime() + 1 * 86400000));
+        const dataExpiracao = ymd(new Date(hoje.getTime() + 30 * 86400000));
+        const expiraEm = new Date(
+          `${dataExpiracao}T23:59:59-03:00`
+        ).toISOString();
+        const agendarEnvioEm = new Date(t0 + acumuladoMs).toISOString();
 
-      // === DRY RUN: não grava nada, só registra o que SERIA gerado ===
-      if (dryRun) {
-        await marcar(logId, {
-          status: 'simulado',
-          valor_base: item.valorBase,
-          erro: `PIX ${opcoes.pix.total} | ${opcoes.cartao.length} opções de cartão | venc ${vencimento}`,
-        });
-        acumuladoMs += (300 + Math.random() * 240) * 1000;
-        continue;
-      }
+        // === DRY RUN: não grava nada, só registra o que SERIA gerado ===
+        if (dryRun) {
+          await marcar(logId, {
+            status: 'simulado',
+            valor_base: item.valorBase,
+            erro: `PIX ${opcoes.pix.total} | ${opcoes.cartao.length} opções de cartão | venc ${vencimento}`,
+          });
+          acumuladoMs += (300 + Math.random() * 240) * 1000;
+          continue;
+        }
 
-      // 3d. Inserir o link (idêntico ao criarLinkPagamento)
-      const novoToken = gerarToken();
-      const { data: link, error: linkError } = await supabase
-        .from('pagamento_links')
-        .insert({
-          token: novoToken,
-          paciente_id: item.pacienteId,
-          responsavel_cobranca_id: item.responsavelId,
-          tomador_nfe_id: tomadorId,
-          empresa_id: item.empresaId,
-          valor_base: item.valorBase,
-          descricao: item.descricao,
-          vencimento,
-          status: 'pendente',
-          taxas_snapshot: taxas,
-          opcoes_snapshot: opcoes,
-          expira_em: expiraEm,
-          criado_por: userId,
-        })
-        .select('id, token')
-        .single();
-      if (linkError || !link)
-        throw new Error(`Erro ao criar link: ${linkError?.message}`);
-
-      // 3e. Reservar as consultas (guarda: só as ainda livres)
-      const { error: updErr } = await supabase
-        .from('agendamentos')
-        .update({
-          pagamento_link_id: link.id,
-          cobranca_gerada_em: new Date().toISOString(),
-          cobranca_gerada_por: userId,
-          ...(statusCobranca?.id
-            ? { status_pagamento_id: statusCobranca.id }
-            : {}),
-        })
-        .in('id', item.agendamentoIds)
-        .is('fatura_id', null)
-        .is('pagamento_link_id', null);
-      if (updErr)
-        console.warn('⚠️ Erro ao reservar consultas:', updErr.message);
-
-      // 3f. Enfileirar o WhatsApp com espaçamento anti-ban (proximo_retry)
-      const url = `https://app.respirakidsbrasilia.com.br/#/pagamento/${link.token}`;
-      await supabase.from('webhook_queue').insert({
-        evento: 'pagamento_link_criado',
-        payload: {
-          tipo: 'pagamento_link_criado',
-          timestamp: new Date().toISOString(),
-          webhook_id: crypto.randomUUID(),
-          data: {
-            pagamento_link_id: link.id,
-            token: link.token,
-            url,
+        // 3d. Inserir o link (idêntico ao criarLinkPagamento)
+        const novoToken = gerarToken();
+        const { data: link, error: linkError } = await supabase
+          .from('pagamento_links')
+          .insert({
+            token: novoToken,
             paciente_id: item.pacienteId,
             responsavel_cobranca_id: item.responsavelId,
             tomador_nfe_id: tomadorId,
@@ -433,27 +387,86 @@ async function processarLote(
             valor_base: item.valorBase,
             descricao: item.descricao,
             vencimento,
+            status: 'pendente',
+            taxas_snapshot: taxas,
+            opcoes_snapshot: opcoes,
+            expira_em: expiraEm,
+            criado_por: userId,
+          })
+          .select('id, token')
+          .single();
+        if (linkError || !link)
+          throw new Error(`Erro ao criar link: ${linkError?.message}`);
+
+        // 3e. Reservar as consultas (guarda: só as ainda livres)
+        const { error: updErr } = await supabase
+          .from('agendamentos')
+          .update({
+            pagamento_link_id: link.id,
+            cobranca_gerada_em: new Date().toISOString(),
+            cobranca_gerada_por: userId,
+            ...(statusCobranca?.id
+              ? { status_pagamento_id: statusCobranca.id }
+              : {}),
+          })
+          .in('id', item.agendamentoIds)
+          .is('fatura_id', null)
+          .is('pagamento_link_id', null);
+        if (updErr)
+          console.warn('⚠️ Erro ao reservar consultas:', updErr.message);
+
+        // 3f. Enfileirar o WhatsApp com espaçamento anti-ban (proximo_retry)
+        const url = `https://app.respirakidsbrasilia.com.br/#/pagamento/${link.token}`;
+        await supabase.from('webhook_queue').insert({
+          evento: 'pagamento_link_criado',
+          payload: {
+            tipo: 'pagamento_link_criado',
+            timestamp: new Date().toISOString(),
+            webhook_id: crypto.randomUUID(),
+            data: {
+              pagamento_link_id: link.id,
+              token: link.token,
+              url,
+              paciente_id: item.pacienteId,
+              responsavel_cobranca_id: item.responsavelId,
+              tomador_nfe_id: tomadorId,
+              empresa_id: item.empresaId,
+              valor_base: item.valorBase,
+              descricao: item.descricao,
+              vencimento,
+            },
           },
-        },
-        status: 'pendente',
-        tentativas: 0,
-        max_tentativas: 3,
-        proximo_retry: agendarEnvioEm,
-      });
+          status: 'pendente',
+          tentativas: 0,
+          max_tentativas: 3,
+          proximo_retry: agendarEnvioEm,
+        });
 
-      await marcar(logId, {
-        status: 'sucesso',
-        token: link.token,
-        pagamento_link_id: link.id,
-      });
+        await marcar(logId, {
+          status: 'sucesso',
+          token: link.token,
+          pagamento_link_id: link.id,
+        });
 
-      // Próximo envio só avança em sucesso (falha não consome janela)
-      acumuladoMs += (300 + Math.random() * 240) * 1000;
-    } catch (e) {
-      await marcar(logId, {
-        status: 'erro',
-        erro: e instanceof Error ? e.message : 'Erro desconhecido',
-      });
+        // Próximo envio só avança em sucesso (falha não consome janela)
+        acumuladoMs += (300 + Math.random() * 240) * 1000;
+      } catch (e) {
+        await marcar(logId, {
+          status: 'erro',
+          erro: e instanceof Error ? e.message : 'Erro desconhecido',
+        });
+      }
     }
+  } catch {
+    // Falha inesperada do lote: marca o que sobrou como erro (evita polling infinito)
+    await supabase
+      .from('pagamento_link_geracao_log')
+      .update({
+        status: 'erro',
+        erro: 'Falha no processamento do lote',
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq('lote_id', loteId)
+      .eq('status', 'processando');
   }
 }

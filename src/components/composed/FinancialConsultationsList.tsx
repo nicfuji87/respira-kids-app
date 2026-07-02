@@ -1300,6 +1300,8 @@ export const FinancialConsultationsList: React.FC<
   useEffect(() => {
     if (!generationLote) return;
     let parou = false;
+    let tentativas = 0;
+    const MAX_TENTATIVAS = 160; // ~6-7 min a 2,5s (teto de segurança)
     const poll = async () => {
       const { data } = await supabase
         .from('pagamento_link_geracao_log')
@@ -1309,6 +1311,21 @@ export const FinancialConsultationsList: React.FC<
       const total = data.length;
       const processando = data.filter((r) => r.status === 'processando').length;
       setGenerationProgress({ atual: total - processando, total });
+
+      // Teto: evita polling infinito se algo travar no servidor
+      tentativas += 1;
+      if (processando > 0 && tentativas >= MAX_TENTATIVAS) {
+        parou = true;
+        toast({
+          title: 'Ainda processando',
+          description:
+            'A geração está demorando mais que o esperado. Atualize a lista em alguns minutos para ver o resultado.',
+        });
+        setGenerationLote(null);
+        setGenerationProgress(null);
+        setIsGeneratingCharges(false);
+        return;
+      }
       if (processando > 0) return;
 
       parou = true;
