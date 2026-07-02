@@ -384,8 +384,11 @@ export const FinancialConsultationsList: React.FC<
           startDateFilter = new Date(today.getFullYear(), today.getMonth(), 1)
             .toISOString()
             .split('T')[0];
-          // Hoje
-          endDateFilter = today.toISOString().split('T')[0];
+          // AI dev note: ÚLTIMO dia do mês atual (mês inteiro, inclui as consultas
+          // agendadas para depois de hoje) — não mais "até hoje".
+          endDateFilter = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+            .toISOString()
+            .split('T')[0];
           break;
         case 'mes_anterior':
           // Primeiro dia do mês anterior
