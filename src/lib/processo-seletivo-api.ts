@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 import type {
   CandidaturaEstagioPayload,
   CandidaturaEstagioRow,
+  EntrevistaFicha,
   ProcessoSeletivoStats,
   Recomendacao,
   StatusCandidatura,
@@ -50,6 +51,8 @@ export interface AvaliacaoInput {
   status?: StatusCandidatura;
   avaliacao_nota?: number | null;
   avaliacao_observacoes?: string | null;
+  /** Ficha de entrevista (checklist do roteiro + notas). */
+  entrevista?: EntrevistaFicha;
   /** pessoa.id de quem está avaliando. */
   avaliadoPor?: string | null;
 }
@@ -67,6 +70,7 @@ export async function updateCandidaturaAvaliacao(
     patch.avaliacao_nota = input.avaliacao_nota;
   if (input.avaliacao_observacoes !== undefined)
     patch.avaliacao_observacoes = input.avaliacao_observacoes;
+  if (input.entrevista !== undefined) patch.entrevista = input.entrevista;
   if (input.avaliadoPor !== undefined) patch.avaliado_por = input.avaliadoPor;
 
   const { data, error } = await supabase

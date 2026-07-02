@@ -110,7 +110,53 @@ export interface CandidaturaEstagioRow {
   avaliado_por: string | null;
   avaliado_em: string | null;
 
+  // Ficha de entrevista (roteiro preenchido presencialmente)
+  entrevista: EntrevistaFicha;
+
   ativo: boolean;
+}
+
+// =====================================================
+// Ficha de entrevista (roteiro do lado interno)
+// =====================================================
+
+/** Avaliação rápida de uma pergunta durante a entrevista. */
+export type EntrevistaAvaliacao = 'bom' | 'neutro' | 'atencao';
+
+/** Resposta do avaliador para um item do roteiro. */
+export interface EntrevistaRespostaItem {
+  /** já perguntei / já cobri este ponto. */
+  ok?: boolean;
+  /** impressão rápida da resposta do candidato. */
+  aval?: EntrevistaAvaliacao | null;
+  /** anotação livre. */
+  nota?: string;
+}
+
+/** Ficha completa (armazenada em candidaturas_estagio.entrevista). */
+export interface EntrevistaFicha {
+  itens?: Record<string, EntrevistaRespostaItem>;
+  impressao_geral?: string;
+  pontos_fortes?: string;
+  pontos_atencao?: string;
+  concluida?: boolean;
+  atualizado_em?: string;
+}
+
+/** Item do roteiro (pergunta a fazer na entrevista). */
+export interface EntrevistaItem {
+  id: string;
+  pergunta: string;
+  /** dica para o entrevistador: o que observar / o que é uma boa resposta. */
+  dica?: string;
+}
+
+/** Bloco do roteiro (grupo de perguntas). */
+export interface EntrevistaBloco {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  itens: EntrevistaItem[];
 }
 
 // =====================================================
