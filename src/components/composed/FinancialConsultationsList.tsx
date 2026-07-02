@@ -1065,7 +1065,73 @@ export const FinancialConsultationsList: React.FC<
       const totalPacientes = consultationsByPatient.size;
       setGenerationProgress({ atual: 0, total: totalPacientes });
 
-      // Preparar paciente por paciente (validação + descrição, sem Asaas)
+      // AI dev note: FASE 3c — pré-carrega em MASSA tudo que a montagem do lote precisa
+      // (paciente, responsável, tipos de serviço, profissionais) em ~10 queries no total,
+      // em vez de ~4 POR paciente. Sem isso, 400 pacientes = ~1600 round-trips no navegador
+      // antes do background começar. Os lookups são passados adiante (sem reconsultar).
+      const inChunks = async <T,>(
+        ids: string[],
+        fetchChunk: (chunk: string[]) => Promise<T[]>
+      ): Promise<T[]> => {
+        const uniq = Array.from(new Set(ids.filter(Boolean)));
+        const out: T[] = [];
+        for (let i = 0; i < uniq.length; i += 100) {
+          out.push(...(await fetchChunk(uniq.slice(i, i + 100))));
+        }
+        return out;
+      };
+
+      const patientIds = Array.from(consultationsByPatient.keys());
+      const allSelected = Array.from(consultationsByPatient.values()).flat();
+      const serviceIds = allSelected
+        .map((c) => c.tipo_servico_id)
+        .filter((id): id is string => !!id);
+      const professionalIds = allSelected
+        .map((c) => c.profissional_id)
+        .filter((id): id is string => !!id);
+
+      const patientsRaw = await inChunks(patientIds, async (chunk) => {
+        const { data } = await supabase
+          .from('pessoas')
+          .select('id, nome, cpf_cnpj, responsavel_cobranca_id')
+          .in('id', chunk);
+        return data || [];
+      });
+      const patientMap = new Map(patientsRaw.map((p) => [p.id, p] as const));
+
+      const responsibleIds = patientIds.map(
+        (pid) => patientMap.get(pid)?.responsavel_cobranca_id || pid
+      );
+      const responsiblesRaw = await inChunks(responsibleIds, async (chunk) => {
+        const { data } = await supabase
+          .from('pessoas')
+          .select('id, nome, cpf_cnpj')
+          .in('id', chunk);
+        return data || [];
+      });
+      const responsibleMap = new Map(
+        responsiblesRaw.map((p) => [p.id, p] as const)
+      );
+
+      const preloadedServices = await inChunks(serviceIds, async (chunk) => {
+        const { data } = await supabase
+          .from('tipo_servicos')
+          .select('id, nome, descricao')
+          .in('id', chunk);
+        return data || [];
+      });
+      const preloadedProfessionals = await inChunks(
+        professionalIds,
+        async (chunk) => {
+          const { data } = await supabase
+            .from('pessoas')
+            .select('id, cpf_cnpj, registro_profissional, especialidade')
+            .in('id', chunk);
+          return data || [];
+        }
+      );
+
+      // Preparar paciente por paciente (validação + descrição, sem Asaas nem N queries)
       let indice = 0;
       for (const [patientId, patientConsultations] of Array.from(
         consultationsByPatient.entries()
@@ -1113,13 +1179,8 @@ export const FinancialConsultationsList: React.FC<
           // - Paciente pode ser MAIOR e ainda ter um responsável de cobrança diferente dele
           // - SEMPRE validar e usar o CPF do responsavel_cobranca_id, nunca do paciente
           // - Menores nem sempre têm CPF cadastrado (normal e esperado)
-          const { data: patientData, error: patientError } = await supabase
-            .from('pessoas')
-            .select('id, nome, cpf_cnpj, responsavel_cobranca_id')
-            .eq('id', patientId)
-            .single();
-
-          if (patientError || !patientData) {
+          const patientData = patientMap.get(patientId);
+          if (!patientData) {
             throw new Error('Dados do paciente não encontrados');
           }
 
@@ -1127,15 +1188,9 @@ export const FinancialConsultationsList: React.FC<
           const responsibleId =
             patientData.responsavel_cobranca_id || patientId;
 
-          // Buscar dados do responsável de cobrança
-          const { data: responsibleData, error: responsibleError } =
-            await supabase
-              .from('pessoas')
-              .select('nome, cpf_cnpj')
-              .eq('id', responsibleId)
-              .single();
-
-          if (responsibleError || !responsibleData) {
+          // Dados do responsável de cobrança (pré-carregado em massa)
+          const responsibleData = responsibleMap.get(responsibleId);
+          if (!responsibleData) {
             throw new Error('Dados do responsável de cobrança não encontrados');
           }
 
@@ -1167,10 +1222,14 @@ export const FinancialConsultationsList: React.FC<
             cpf_cnpj: patientData.cpf_cnpj || '',
           };
 
-          // Gerar descrição da cobrança
+          // Gerar descrição da cobrança (lookups já pré-carregados = sem query por paciente)
           const description = await generateChargeDescription(
             consultationData,
-            patientDataForDescription
+            patientDataForDescription,
+            {
+              services: preloadedServices,
+              professionals: preloadedProfessionals,
+            }
           );
 
           // AI dev note: Usar o mesmo responsibleId já determinado acima

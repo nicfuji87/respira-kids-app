@@ -35,7 +35,20 @@ interface ProfessionalData {
 // Agrupa por profissional quando há mais de um, mantendo formato legível
 export async function generateChargeDescription(
   consultationData: ConsultationData[],
-  patientData: PatientData
+  patientData: PatientData,
+  // AI dev note: OPCIONAL — na geração EM MASSA, tipos de serviço e profissionais já vêm
+  // pré-carregados (1 busca pro lote todo) pra não reconsultar por paciente. Se presentes,
+  // são FILTRADOS pelos ids deste paciente → resultado IDÊNTICO ao das queries .in(). Se
+  // ausentes (uso normal / 1 paciente), consulta como antes (100% backward-compatible).
+  preloaded?: {
+    services?: Array<{ id: string; nome: string; descricao: string | null }>;
+    professionals?: Array<{
+      id: string;
+      cpf_cnpj: string | null;
+      registro_profissional: string | null;
+      especialidade: string | null;
+    }>;
+  }
 ): Promise<string> {
   // AI dev note: BLINDAGEM CONTRA COBRANÇA DUPLICADA - dedupe por id do agendamento.
   // Se a mesma consulta chegar repetida (ex.: linha duplicada na paginação da view,
@@ -63,12 +76,23 @@ export async function generateChargeDescription(
   let serviceDescriptions: Record<string, string> = {};
 
   if (serviceIds.length > 0) {
-    const { data: serviceData, error: serviceError } = await supabase
-      .from('tipo_servicos')
-      .select('id, nome, descricao')
-      .in('id', serviceIds);
+    let serviceData: Array<{
+      id: string;
+      nome: string;
+      descricao: string | null;
+    }> | null = null;
+    if (preloaded?.services) {
+      const set = new Set(serviceIds);
+      serviceData = preloaded.services.filter((s) => set.has(s.id));
+    } else {
+      const { data, error } = await supabase
+        .from('tipo_servicos')
+        .select('id, nome, descricao')
+        .in('id', serviceIds);
+      if (!error) serviceData = data;
+    }
 
-    if (!serviceError && serviceData) {
+    if (serviceData) {
       serviceDescriptions = serviceData.reduce(
         (acc, service) => {
           acc[service.nome] = service.descricao || service.nome;
@@ -91,13 +115,24 @@ export async function generateChargeDescription(
   const professionalsDataMap = new Map<string, ProfessionalData>();
 
   if (uniqueProfessionalIds.length > 0) {
-    const { data: professionalsData, error: professionalsError } =
-      await supabase
+    let professionalsData: Array<{
+      id: string;
+      cpf_cnpj: string | null;
+      registro_profissional: string | null;
+      especialidade: string | null;
+    }> | null = null;
+    if (preloaded?.professionals) {
+      const set = new Set(uniqueProfessionalIds);
+      professionalsData = preloaded.professionals.filter((p) => set.has(p.id));
+    } else {
+      const { data, error } = await supabase
         .from('pessoas')
         .select('id, cpf_cnpj, registro_profissional, especialidade')
         .in('id', uniqueProfessionalIds);
+      if (!error) professionalsData = data;
+    }
 
-    if (!professionalsError && professionalsData) {
+    if (professionalsData) {
       professionalsData.forEach((prof) => {
         let profTipo = 'fisioterapeuta'; // Default
         if (prof.especialidade?.toLowerCase().includes('fisioterapeuta')) {
