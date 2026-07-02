@@ -1246,7 +1246,7 @@ export const FinancialConsultationsList: React.FC<
             : ''
         }${
           !dryRun && itens.length > 1
-            ? '\n📲 Envios de WhatsApp espaçados 5–9 min.'
+            ? '\n📲 Envios saem no ritmo automático (8h–20h, até 80/dia).'
             : ''
         }`,
       });
@@ -2357,14 +2357,26 @@ export const FinancialConsultationsList: React.FC<
                     pagamento por WhatsApp.
                   </p>
                   <p>
-                    Para não sobrecarregar o número, os envios saem{' '}
-                    <strong>espaçados (5–9 min)</strong> — o primeiro sai na
-                    hora e o último por volta de{' '}
-                    <strong>
-                      ~{Math.round(((confirmGenerate?.pacientes ?? 1) - 1) * 7)}{' '}
-                      min
-                    </strong>{' '}
-                    depois. Dá para acompanhar o progresso e cancelar.
+                    Para proteger o número, os envios saem no{' '}
+                    <strong>ritmo automático</strong>: espaçados 5–9 min, só
+                    entre <strong>8h e 20h</strong>, até{' '}
+                    <strong>80 por dia</strong>. Um lote grande se espalha por
+                    alguns dias sozinho — sem acompanhar nem repetir nada.
+                    {(confirmGenerate?.pacientes ?? 0) > 80 && (
+                      <>
+                        {' '}
+                        Estimativa: ~
+                        <strong>
+                          {Math.ceil((confirmGenerate?.pacientes ?? 0) / 80)}{' '}
+                          dias
+                        </strong>{' '}
+                        de envio.
+                      </>
+                    )}
+                  </p>
+                  <p>
+                    As cobranças <strong>avulsas</strong> (1 paciente) continuam
+                    saindo na hora, em paralelo — não entram nessa fila.
                   </p>
                 </div>
               </AlertDialogDescription>
