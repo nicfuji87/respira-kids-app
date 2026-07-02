@@ -54,6 +54,35 @@ export function montarUrlPagamento(token: string): string {
   return `${origin}/#/pagamento/${token}`;
 }
 
+// AI dev note: Envio AVULSO (pista expressa, 1 paciente) respeita a janela 8h-20h de
+// Brasília — nunca chega de madrugada. Dentro da janela: envia JÁ. Fora: agenda pro
+// próximo 8h BRT (= 11:00 UTC; BRT é UTC-3 fixo, sem horário de verão desde 2019). O LOTE
+// tem o próprio motor (fn_liberar_envio_lote) com janela+intervalo+teto; o avulso só precisa
+// da janela, pois vai em PARALELO ao lote (não entra na fila do lote) e é baixo volume.
+function proximoEnvioAvulsoBRT(): string {
+  const agora = new Date();
+  const horaBrt = Number(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).format(agora)
+  );
+  if (horaBrt >= 8 && horaBrt < 20) return agora.toISOString();
+  // Fora da janela → próximo 8h BRT
+  const dataBrt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+  }).format(agora); // YYYY-MM-DD (data de hoje em BRT)
+  const [y, m, d] = dataBrt.split('-').map(Number);
+  const baseUtc = Date.UTC(y, m - 1, d);
+  // depois das 20h → amanhã; antes das 8h → hoje mesmo (às 8h)
+  const alvo = new Date(horaBrt >= 20 ? baseUtc + 86400000 : baseUtc);
+  const yy = alvo.getUTCFullYear();
+  const mm = String(alvo.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(alvo.getUTCDate()).padStart(2, '0');
+  return new Date(`${yy}-${mm}-${dd}T11:00:00Z`).toISOString();
+}
+
 // Atualiza MDR e tarifa fixa do cartão com as taxas REAIS do Asaas da empresa
 // (via edge function asaas-simulate-payment). Mantém antecipação/estrutura da config.
 // Em qualquer falha, retorna a config original (degradação graciosa).
@@ -280,8 +309,9 @@ export async function criarLinkPagamento(
         status: 'pendente',
         tentativas: 0,
         max_tentativas: 3,
-        // Espaçamento anti-ban na geração em massa (default: agora = envia já)
-        proximo_retry: input.agendarEnvioEm ?? new Date().toISOString(),
+        // Avulso: envia já se estiver na janela 8-20h BRT, senão agenda pro próximo 8h
+        // (o lote passa agendarEnvioEm/pacing próprio; aqui é o caminho de 1 paciente).
+        proximo_retry: input.agendarEnvioEm ?? proximoEnvioAvulsoBRT(),
       });
 
     if (webhookError) {

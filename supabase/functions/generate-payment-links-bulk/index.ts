@@ -2,9 +2,11 @@
 // AI dev note: Geração EM MASSA de pré-cobranças no SERVIDOR (Fase 2). A tela monta o
 // lote (validações + descrição — que ficam no cliente pra reusar generateChargeDescription
 // sem re-portar) e chama esta função, que RESPONDE NA HORA e processa em segundo plano
-// (EdgeRuntime.waitUntil): cria cada link igual ao criarLinkPagamento (payment-links-api.ts),
-// espaçando os envios de WhatsApp 5–9 min (anti-ban). Grava o resultado por paciente em
-// pagamento_link_geracao_log (a tela acompanha por lote_id).
+// (EdgeRuntime.waitUntil): cria cada link igual ao criarLinkPagamento (payment-links-api.ts).
+// Os envios de WhatsApp entram SEGURADOS (pacing='lote', proximo_retry no futuro) e quem
+// os libera é o motor fn_liberar_envio_lote (cron 1/min): janela 8-20h BRT, intervalo 5-9min,
+// teto 80/dia. Grava o resultado por paciente em pagamento_link_geracao_log (tela acompanha
+// por lote_id). Avulsos (1 paciente via criarLinkPagamento) NÃO passam por aqui — vão na hora.
 //
 // IMPORTANTE: o cálculo de taxas/parcelas (calcularOpcoesPagamento / gerarTaxasCartaoPadrao)
 // é CÓPIA VERBATIM de src/lib/payment-fees.ts — se mudar lá, mude aqui. A chamada ao Asaas
@@ -279,8 +281,11 @@ async function processarLote(
   dryRun: boolean,
   logIdPorPaciente: Map<string, string>
 ): Promise<void> {
-  const t0 = Date.now();
-  let acumuladoMs = 0;
+  // Envio SEGURADO (held): todo webhook do LOTE fica com proximo_retry no futuro distante
+  // e pacing='lote'. O motor fn_liberar_envio_lote (cron 1/min) libera UM por vez
+  // respeitando janela 8-20h BRT, intervalo 5-9min e teto 80/dia. Substitui o antigo
+  // stagger fixo por-item (que não respeitava janela/teto e não escalava p/ 300-400).
+  const HELD_ATE = new Date(Date.now() + 100 * 365 * 86400000).toISOString();
 
   const { data: statusCobranca } = await supabase
     .from('pagamento_status')
@@ -364,7 +369,6 @@ async function processarLote(
         const expiraEm = new Date(
           `${dataExpiracao}T23:59:59-03:00`
         ).toISOString();
-        const agendarEnvioEm = new Date(t0 + acumuladoMs).toISOString();
 
         // === DRY RUN: não grava nada, só registra o que SERIA gerado ===
         if (dryRun) {
@@ -373,7 +377,6 @@ async function processarLote(
             valor_base: item.valorBase,
             erro: `PIX ${opcoes.pix.total} | ${opcoes.cartao.length} opções de cartão | venc ${vencimento}`,
           });
-          acumuladoMs += (300 + Math.random() * 240) * 1000;
           continue;
         }
 
@@ -418,7 +421,8 @@ async function processarLote(
         if (updErr)
           console.warn('⚠️ Erro ao reservar consultas:', updErr.message);
 
-        // 3f. Enfileirar o WhatsApp com espaçamento anti-ban (proximo_retry)
+        // 3f. Enfileirar o WhatsApp SEGURADO (pacing='lote' + proximo_retry no futuro).
+        // Quem controla o ritmo/janela/teto é fn_liberar_envio_lote (NÃO aqui).
         const url = `https://app.respirakidsbrasilia.com.br/#/pagamento/${link.token}`;
         await supabase.from('webhook_queue').insert({
           evento: 'pagamento_link_criado',
@@ -427,6 +431,7 @@ async function processarLote(
             timestamp: new Date().toISOString(),
             webhook_id: crypto.randomUUID(),
             data: {
+              pacing: 'lote',
               pagamento_link_id: link.id,
               token: link.token,
               url,
@@ -442,7 +447,7 @@ async function processarLote(
           status: 'pendente',
           tentativas: 0,
           max_tentativas: 3,
-          proximo_retry: agendarEnvioEm,
+          proximo_retry: HELD_ATE,
         });
 
         await marcar(logId, {
@@ -450,9 +455,6 @@ async function processarLote(
           token: link.token,
           pagamento_link_id: link.id,
         });
-
-        // Próximo envio só avança em sucesso (falha não consome janela)
-        acumuladoMs += (300 + Math.random() * 240) * 1000;
       } catch (e) {
         await marcar(logId, {
           status: 'erro',
