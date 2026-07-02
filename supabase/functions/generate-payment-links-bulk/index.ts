@@ -1,19 +1,27 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// AI dev note: Geração EM MASSA de pré-cobranças no SERVIDOR (Fase 2). A tela monta o
-// lote (validações + descrição — que ficam no cliente pra reusar generateChargeDescription
-// sem re-portar) e chama esta função, que RESPONDE NA HORA e processa em segundo plano
-// (EdgeRuntime.waitUntil): cria cada link igual ao criarLinkPagamento (payment-links-api.ts).
-// Os envios de WhatsApp entram SEGURADOS (pacing='lote', proximo_retry no futuro) e quem
-// os libera é o motor fn_liberar_envio_lote (cron 1/min): janela 8-20h BRT, intervalo 5-9min,
-// teto 80/dia. Grava o resultado por paciente em pagamento_link_geracao_log (tela acompanha
-// por lote_id). Avulsos (1 paciente via criarLinkPagamento) NÃO passam por aqui — vão na hora.
+// AI dev note: Geração EM MASSA de pré-cobranças no SERVIDOR.
+// Fase 2 (criação) + Fase 3a (envio pausado) + Fase 3b (worker de criação em blocos).
 //
-// IMPORTANTE: o cálculo de taxas/parcelas (calcularOpcoesPagamento / gerarTaxasCartaoPadrao)
-// é CÓPIA VERBATIM de src/lib/payment-fees.ts — se mudar lá, mude aqui. A chamada ao Asaas
-// é REUSADA (invoca a edge function asaas-simulate-payment), não re-implementada.
+// FLUXO:
+//  - ENTRY (chamado pela UI, com JWT do usuário): valida auth (admin/secretaria), SEMEIA o
+//    log-fila (1 linha por item, status 'processando', com o PAYLOAD do item) e volta NA
+//    HORA — não cria nada. Dá um "kick" no worker (waitUntil) pra começar já.
+//  - WORKER (mode:'worker', cutucado pelo cron process-payment-generation-job via pg_net):
+//    reivindica UM bloco (fn_claim_geracao_chunk, SKIP LOCKED = atômico), cria cada link de
+//    forma IDEMPOTENTE e enfileira o WhatsApp SEGURADO. Uma rodada = um bloco; quem continua
+//    é o cron (1/min) — 300-400 drena em blocos sem estourar tempo nem empilhar workers.
 //
-// dryRun=true: faz tudo (validação + taxas + Asaas + cálculo) MENOS criar/reservar/enviar —
-// grava 'simulado' no log com o que SERIA gerado. Rede de segurança pra validar sem risco.
+// ENVIO não sai aqui: entra held (pacing='lote', proximo_retry no futuro). Quem libera é
+// fn_liberar_envio_lote (janela 8-20h BRT, 5-9 min, teto 80/dia). Avulso (criarLinkPagamento,
+// 1 paciente) é PISTA EXPRESSA em paralelo — não passa por esta fila.
+//
+// AUTH: verify_jwt fica true. A UI manda o JWT do usuário; o cron manda a ANON KEY (JWT
+// válido) — ambos passam. O ENTRY faz auth manual (getUser + role); o WORKER pula a auth de
+// usuário (suas entradas vêm SÓ da fila do banco, semeada por um ENTRY já autenticado).
+//
+// IMPORTANTE: fee math (calcularOpcoesPagamento/gerarTaxasCartaoPadrao) é CÓPIA VERBATIM de
+// src/lib/payment-fees.ts — se mudar lá, mude aqui. Asaas REUSADO via asaas-simulate-payment.
+// dryRun (dormante, sem botão): faz tudo menos criar/reservar/enviar — grava 'simulado'.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
@@ -23,6 +31,9 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+// Itens criados por rodada do worker (~2s/item por causa do Asaas -> folga vs. timeout)
+const CHUNK = 15;
 
 // ===================== Tipos (espelham types/payment-links.ts) =====================
 interface TaxaFaixaCartao {
@@ -58,6 +69,16 @@ interface ItemLote {
   valorBase: number;
   descricao: string;
   vencimento?: string; // YYYY-MM-DD
+}
+
+// Linha reivindicada da fila (retorno de fn_claim_geracao_chunk)
+interface ChunkRow {
+  id: string; // id da linha de log
+  payload: ItemLote;
+  criado_por: string;
+  dry_run: boolean;
+  pagamento_link_id: string | null;
+  paciente_id: string;
 }
 
 // ============ Fee math — CÓPIA VERBATIM de src/lib/payment-fees.ts ============
@@ -202,6 +223,16 @@ serve(async (req: Request) => {
   );
 
   try {
+    const body = await req.json().catch(() => ({}));
+
+    // ===================== WORKER =====================
+    // Cutucado pelo cron (ou auto-encadeado). Sem auth de usuário: só drena a fila.
+    if (body?.mode === 'worker') {
+      const n = await processarChunkWorker(supabase);
+      return json({ success: true, worker: true, processados: n });
+    }
+
+    // ===================== ENTRY (UI) =====================
     // 1. Autenticação: o chamador precisa ser admin ou secretaria
     const authHeader = req.headers.get('Authorization') || '';
     const token = authHeader.replace('Bearer ', '');
@@ -225,7 +256,6 @@ serve(async (req: Request) => {
     }
     const pessoaId = perfil.id as string;
 
-    const body = await req.json();
     const itens: ItemLote[] = Array.isArray(body?.itens) ? body.itens : [];
     const dryRun: boolean = body?.dryRun === true;
     if (itens.length === 0)
@@ -233,7 +263,7 @@ serve(async (req: Request) => {
 
     const loteId = crypto.randomUUID();
 
-    // 2. Semear o log (uma linha 'processando' por paciente) para a tela ver o total já
+    // 2. Semear a FILA: uma linha por item, com o PAYLOAD (o worker recria a partir daqui).
     const seed = itens.map((it) => ({
       lote_id: loteId,
       paciente_id: it.pacienteId,
@@ -241,24 +271,14 @@ serve(async (req: Request) => {
       valor_base: it.valorBase,
       status: 'processando',
       criado_por: pessoaId,
+      payload: it,
+      dry_run: dryRun,
     }));
-    const { data: logRows } = await supabase
-      .from('pagamento_link_geracao_log')
-      .insert(seed)
-      .select('id, paciente_id');
+    await supabase.from('pagamento_link_geracao_log').insert(seed);
 
-    // Mapa paciente_id -> id da linha de log (para atualizar depois)
-    const logIdPorPaciente = new Map<string, string>();
-    (logRows || []).forEach((r: any) => {
-      if (!logIdPorPaciente.has(r.paciente_id))
-        logIdPorPaciente.set(r.paciente_id, r.id);
-    });
-
-    // 3. Responde NA HORA; processa em segundo plano
+    // 3. Responde NA HORA; dá um kick no worker pra começar já (o cron continua depois).
     // @ts-expect-error EdgeRuntime é global no runtime do Supabase
-    EdgeRuntime.waitUntil(
-      processarLote(supabase, pessoaId, loteId, itens, dryRun, logIdPorPaciente)
-    );
+    EdgeRuntime.waitUntil(kickWorker(supabase));
 
     return json({ success: true, loteId, total: itens.length, dryRun });
   } catch (error) {
@@ -273,19 +293,29 @@ serve(async (req: Request) => {
   }
 });
 
-async function processarLote(
-  supabase: any,
-  userId: string,
-  loteId: string,
-  itens: ItemLote[],
-  dryRun: boolean,
-  logIdPorPaciente: Map<string, string>
-): Promise<void> {
-  // Envio SEGURADO (held): todo webhook do LOTE fica com proximo_retry no futuro distante
-  // e pacing='lote'. O motor fn_liberar_envio_lote (cron 1/min) libera UM por vez
-  // respeitando janela 8-20h BRT, intervalo 5-9min e teto 80/dia. Substitui o antigo
-  // stagger fixo por-item (que não respeitava janela/teto e não escalava p/ 300-400).
-  const HELD_ATE = new Date(Date.now() + 100 * 365 * 86400000).toISOString();
+// Dispara uma rodada do worker (fire-and-forget). Usado pelo entry pra começar já
+// (sem esperar o próximo tick do cron).
+async function kickWorker(supabase: any): Promise<void> {
+  try {
+    await supabase.functions.invoke('generate-payment-links-bulk', {
+      body: { mode: 'worker' },
+    });
+  } catch (e) {
+    console.warn('⚠️ Falha ao cutucar worker:', e);
+  }
+}
+
+// Reivindica e processa UM bloco da fila. Se pegou bloco cheio, re-chama (cron é o backstop).
+async function processarChunkWorker(supabase: any): Promise<number> {
+  const { data: rows, error } = await supabase.rpc('fn_claim_geracao_chunk', {
+    p_limit: CHUNK,
+  });
+  if (error) {
+    console.error('❌ Erro no claim da fila:', error.message);
+    return 0;
+  }
+  const itens: ChunkRow[] = rows || [];
+  if (itens.length === 0) return 0;
 
   const { data: statusCobranca } = await supabase
     .from('pagamento_status')
@@ -293,11 +323,29 @@ async function processarLote(
     .eq('codigo', 'cobranca_gerada')
     .single();
 
-  const marcar = async (
-    logId: string | undefined,
-    fields: Record<string, unknown>
-  ) => {
-    if (!logId) return;
+  for (const row of itens) {
+    await processarItem(supabase, statusCobranca, row);
+  }
+
+  // Uma rodada = UM bloco. Quem continua é o cron (process-payment-generation-job, 1/min)
+  // — sem auto-encadeamento pra não empilhar workers concorrentes. Criar a 15/min é de
+  // sobra: o ENVIO sai a 80/dia (fn_liberar_envio_lote), então a criação não é o gargalo.
+  return itens.length;
+}
+
+// Cria UM link a partir da linha reivindicada. Idempotente: se a linha já tem
+// pagamento_link_id (recuperação de crash), não recria — só finaliza.
+async function processarItem(
+  supabase: any,
+  statusCobranca: { id: string } | null,
+  row: ChunkRow
+): Promise<void> {
+  const logId = row.id;
+  const item = row.payload;
+  const userId = row.criado_por;
+  const dryRun = row.dry_run === true;
+
+  const marcar = async (fields: Record<string, unknown>) => {
     await supabase
       .from('pagamento_link_geracao_log')
       .update({ ...fields, atualizado_em: new Date().toISOString() })
@@ -305,173 +353,158 @@ async function processarLote(
   };
 
   try {
-    for (const item of itens) {
-      const logId = logIdPorPaciente.get(item.pacienteId);
-      try {
-        if (!(item.valorBase > 0))
-          throw new Error('Valor deve ser maior que zero');
-        if (!item.agendamentoIds?.length)
-          throw new Error('Nenhuma consulta no item');
-
-        // 3a. Idempotência: as consultas ainda precisam estar livres (não faturadas,
-        // não reservadas a outro link). Evita cobrança duplicada se o estado mudou.
-        const { data: ags } = await supabase
-          .from('agendamentos')
-          .select('id, ativo, fatura_id, pagamento_link_id')
-          .in('id', item.agendamentoIds);
-        const invalidas = (ags || []).filter(
-          (a: any) => !a.ativo || a.fatura_id || a.pagamento_link_id
-        );
-        if (!ags || ags.length === 0)
-          throw new Error('Consultas não encontradas');
-        if (invalidas.length > 0)
-          throw new Error(
-            'Consulta(s) já faturada(s) ou já reservada(s) a outra cobrança'
-          );
-
-        // 3b. Taxas (empresa -> Asaas ao vivo -> imposto) + opções (fee math verbatim)
-        const { data: empresa } = await supabase
-          .from('pessoa_empresas')
-          .select('taxas_cartao')
-          .eq('id', item.empresaId)
-          .single();
-        const taxasConfig: TaxasCartaoConfig =
-          (empresa?.taxas_cartao as TaxasCartaoConfig) ||
-          gerarTaxasCartaoPadrao();
-        const taxasAsaas = await refreshTaxasFromAsaas(
-          supabase,
-          item.empresaId,
-          item.valorBase,
-          taxasConfig
-        );
-        const { data: aliquotaData } = await supabase.rpc(
-          'fn_aliquota_imposto_repasse',
-          {}
-        );
-        const taxas: TaxasCartaoConfig = {
-          ...taxasAsaas,
-          imposto: { percent: Number(aliquotaData) || 0 },
-        };
-        const opcoes = calcularOpcoesPagamento(item.valorBase, taxas);
-
-        // 3c. Tomador da NFS-e
-        const { data: pacienteTomador } = await supabase
-          .from('pessoas')
-          .select('tomador_nfe_id')
-          .eq('id', item.pacienteId)
-          .maybeSingle();
-        const tomadorId = pacienteTomador?.tomador_nfe_id || item.responsavelId;
-
-        const hoje = new Date();
-        const vencimento =
-          item.vencimento || ymd(new Date(hoje.getTime() + 1 * 86400000));
-        const dataExpiracao = ymd(new Date(hoje.getTime() + 30 * 86400000));
-        const expiraEm = new Date(
-          `${dataExpiracao}T23:59:59-03:00`
-        ).toISOString();
-
-        // === DRY RUN: não grava nada, só registra o que SERIA gerado ===
-        if (dryRun) {
-          await marcar(logId, {
-            status: 'simulado',
-            valor_base: item.valorBase,
-            erro: `PIX ${opcoes.pix.total} | ${opcoes.cartao.length} opções de cartão | venc ${vencimento}`,
-          });
-          continue;
-        }
-
-        // 3d. Inserir o link (idêntico ao criarLinkPagamento)
-        const novoToken = gerarToken();
-        const { data: link, error: linkError } = await supabase
-          .from('pagamento_links')
-          .insert({
-            token: novoToken,
-            paciente_id: item.pacienteId,
-            responsavel_cobranca_id: item.responsavelId,
-            tomador_nfe_id: tomadorId,
-            empresa_id: item.empresaId,
-            valor_base: item.valorBase,
-            descricao: item.descricao,
-            vencimento,
-            status: 'pendente',
-            taxas_snapshot: taxas,
-            opcoes_snapshot: opcoes,
-            expira_em: expiraEm,
-            criado_por: userId,
-          })
-          .select('id, token')
-          .single();
-        if (linkError || !link)
-          throw new Error(`Erro ao criar link: ${linkError?.message}`);
-
-        // 3e. Reservar as consultas (guarda: só as ainda livres)
-        const { error: updErr } = await supabase
-          .from('agendamentos')
-          .update({
-            pagamento_link_id: link.id,
-            cobranca_gerada_em: new Date().toISOString(),
-            cobranca_gerada_por: userId,
-            ...(statusCobranca?.id
-              ? { status_pagamento_id: statusCobranca.id }
-              : {}),
-          })
-          .in('id', item.agendamentoIds)
-          .is('fatura_id', null)
-          .is('pagamento_link_id', null);
-        if (updErr)
-          console.warn('⚠️ Erro ao reservar consultas:', updErr.message);
-
-        // 3f. Enfileirar o WhatsApp SEGURADO (pacing='lote' + proximo_retry no futuro).
-        // Quem controla o ritmo/janela/teto é fn_liberar_envio_lote (NÃO aqui).
-        const url = `https://app.respirakidsbrasilia.com.br/#/pagamento/${link.token}`;
-        await supabase.from('webhook_queue').insert({
-          evento: 'pagamento_link_criado',
-          payload: {
-            tipo: 'pagamento_link_criado',
-            timestamp: new Date().toISOString(),
-            webhook_id: crypto.randomUUID(),
-            data: {
-              pacing: 'lote',
-              pagamento_link_id: link.id,
-              token: link.token,
-              url,
-              paciente_id: item.pacienteId,
-              responsavel_cobranca_id: item.responsavelId,
-              tomador_nfe_id: tomadorId,
-              empresa_id: item.empresaId,
-              valor_base: item.valorBase,
-              descricao: item.descricao,
-              vencimento,
-            },
-          },
-          status: 'pendente',
-          tentativas: 0,
-          max_tentativas: 3,
-          proximo_retry: HELD_ATE,
-        });
-
-        await marcar(logId, {
-          status: 'sucesso',
-          token: link.token,
-          pagamento_link_id: link.id,
-        });
-      } catch (e) {
-        await marcar(logId, {
-          status: 'erro',
-          erro: e instanceof Error ? e.message : 'Erro desconhecido',
-        });
-      }
+    // IDEMPOTÊNCIA: link já criado pra esta linha (crash entre criar e finalizar) =>
+    // não recria (evita cobrança duplicada). Melhor "não reenviar" do que "duplicar".
+    if (row.pagamento_link_id) {
+      await marcar({ status: 'sucesso' });
+      return;
     }
-  } catch {
-    // Falha inesperada do lote: marca o que sobrou como erro (evita polling infinito)
-    await supabase
-      .from('pagamento_link_geracao_log')
-      .update({
-        status: 'erro',
-        erro: 'Falha no processamento do lote',
-        atualizado_em: new Date().toISOString(),
+
+    if (!item || !(item.valorBase > 0))
+      throw new Error('Valor deve ser maior que zero');
+    if (!item.agendamentoIds?.length)
+      throw new Error('Nenhuma consulta no item');
+
+    // Idempotência das consultas: ainda precisam estar livres (não faturadas/reservadas).
+    const { data: ags } = await supabase
+      .from('agendamentos')
+      .select('id, ativo, fatura_id, pagamento_link_id')
+      .in('id', item.agendamentoIds);
+    const invalidas = (ags || []).filter(
+      (a: any) => !a.ativo || a.fatura_id || a.pagamento_link_id
+    );
+    if (!ags || ags.length === 0) throw new Error('Consultas não encontradas');
+    if (invalidas.length > 0)
+      throw new Error(
+        'Consulta(s) já faturada(s) ou já reservada(s) a outra cobrança'
+      );
+
+    // Taxas (empresa -> Asaas ao vivo -> imposto) + opções (fee math verbatim)
+    const { data: empresa } = await supabase
+      .from('pessoa_empresas')
+      .select('taxas_cartao')
+      .eq('id', item.empresaId)
+      .single();
+    const taxasConfig: TaxasCartaoConfig =
+      (empresa?.taxas_cartao as TaxasCartaoConfig) || gerarTaxasCartaoPadrao();
+    const taxasAsaas = await refreshTaxasFromAsaas(
+      supabase,
+      item.empresaId,
+      item.valorBase,
+      taxasConfig
+    );
+    const { data: aliquotaData } = await supabase.rpc(
+      'fn_aliquota_imposto_repasse',
+      {}
+    );
+    const taxas: TaxasCartaoConfig = {
+      ...taxasAsaas,
+      imposto: { percent: Number(aliquotaData) || 0 },
+    };
+    const opcoes = calcularOpcoesPagamento(item.valorBase, taxas);
+
+    // Tomador da NFS-e
+    const { data: pacienteTomador } = await supabase
+      .from('pessoas')
+      .select('tomador_nfe_id')
+      .eq('id', item.pacienteId)
+      .maybeSingle();
+    const tomadorId = pacienteTomador?.tomador_nfe_id || item.responsavelId;
+
+    const hoje = new Date();
+    const vencimento =
+      item.vencimento || ymd(new Date(hoje.getTime() + 1 * 86400000));
+    const dataExpiracao = ymd(new Date(hoje.getTime() + 30 * 86400000));
+    const expiraEm = new Date(`${dataExpiracao}T23:59:59-03:00`).toISOString();
+
+    // === DRY RUN: não grava nada, só registra o que SERIA gerado ===
+    if (dryRun) {
+      await marcar({
+        status: 'simulado',
+        valor_base: item.valorBase,
+        erro: `PIX ${opcoes.pix.total} | ${opcoes.cartao.length} opções de cartão | venc ${vencimento}`,
+      });
+      return;
+    }
+
+    // Inserir o link (idêntico ao criarLinkPagamento)
+    const novoToken = gerarToken();
+    const { data: link, error: linkError } = await supabase
+      .from('pagamento_links')
+      .insert({
+        token: novoToken,
+        paciente_id: item.pacienteId,
+        responsavel_cobranca_id: item.responsavelId,
+        tomador_nfe_id: tomadorId,
+        empresa_id: item.empresaId,
+        valor_base: item.valorBase,
+        descricao: item.descricao,
+        vencimento,
+        status: 'pendente',
+        taxas_snapshot: taxas,
+        opcoes_snapshot: opcoes,
+        expira_em: expiraEm,
+        criado_por: userId,
       })
-      .eq('lote_id', loteId)
-      .eq('status', 'processando');
+      .select('id, token')
+      .single();
+    if (linkError || !link)
+      throw new Error(`Erro ao criar link: ${linkError?.message}`);
+
+    // Carimba o link na fila JÁ (recuperação: se cair agora, o reprocesso não duplica).
+    await marcar({ pagamento_link_id: link.id, token: link.token });
+
+    // Reservar as consultas (guarda: só as ainda livres)
+    const { error: updErr } = await supabase
+      .from('agendamentos')
+      .update({
+        pagamento_link_id: link.id,
+        cobranca_gerada_em: new Date().toISOString(),
+        cobranca_gerada_por: userId,
+        ...(statusCobranca?.id
+          ? { status_pagamento_id: statusCobranca.id }
+          : {}),
+      })
+      .in('id', item.agendamentoIds)
+      .is('fatura_id', null)
+      .is('pagamento_link_id', null);
+    if (updErr) console.warn('⚠️ Erro ao reservar consultas:', updErr.message);
+
+    // Enfileirar o WhatsApp SEGURADO (pacing='lote' + proximo_retry no futuro).
+    // Quem controla o ritmo/janela/teto é fn_liberar_envio_lote (NÃO aqui).
+    const url = `https://app.respirakidsbrasilia.com.br/#/pagamento/${link.token}`;
+    const HELD_ATE = new Date(Date.now() + 100 * 365 * 86400000).toISOString();
+    await supabase.from('webhook_queue').insert({
+      evento: 'pagamento_link_criado',
+      payload: {
+        tipo: 'pagamento_link_criado',
+        timestamp: new Date().toISOString(),
+        webhook_id: crypto.randomUUID(),
+        data: {
+          pacing: 'lote',
+          pagamento_link_id: link.id,
+          token: link.token,
+          url,
+          paciente_id: item.pacienteId,
+          responsavel_cobranca_id: item.responsavelId,
+          tomador_nfe_id: tomadorId,
+          empresa_id: item.empresaId,
+          valor_base: item.valorBase,
+          descricao: item.descricao,
+          vencimento,
+        },
+      },
+      status: 'pendente',
+      tentativas: 0,
+      max_tentativas: 3,
+      proximo_retry: HELD_ATE,
+    });
+
+    await marcar({ status: 'sucesso' });
+  } catch (e) {
+    await marcar({
+      status: 'erro',
+      erro: e instanceof Error ? e.message : 'Erro desconhecido',
+    });
   }
 }

@@ -1302,7 +1302,12 @@ export const FinancialConsultationsList: React.FC<
     if (!generationLote) return;
     let parou = false;
     let tentativas = 0;
-    const MAX_TENTATIVAS = 160; // ~6-7 min a 2,5s (teto de segurança)
+    // O worker cria ~15/min (cron). Teto generoso p/ lotes grandes (~3 polls/item); se
+    // estourar, a geração CONTINUA no servidor (é background) — só paramos de exibir.
+    const MAX_TENTATIVAS = Math.max(
+      200,
+      Math.ceil((generationLote.total || 0) * 3)
+    );
     const poll = async () => {
       const { data } = await supabase
         .from('pagamento_link_geracao_log')
@@ -1310,24 +1315,29 @@ export const FinancialConsultationsList: React.FC<
         .eq('lote_id', generationLote.loteId);
       if (parou || !data) return;
       const total = data.length;
-      const processando = data.filter((r) => r.status === 'processando').length;
-      setGenerationProgress({ atual: total - processando, total });
+      // 'processando' (na fila) + 'gerando' (sendo criado agora) = ainda não terminou.
+      // AI dev note: precisa contar 'gerando' também — senão, quando o último bloco é
+      // reivindicado, 'processando' zera e a tela declararia "concluída" cedo demais.
+      const naoTerminais = data.filter(
+        (r) => r.status === 'processando' || r.status === 'gerando'
+      ).length;
+      setGenerationProgress({ atual: total - naoTerminais, total });
 
-      // Teto: evita polling infinito se algo travar no servidor
+      // Teto: para de EXIBIR se demorar demais (o worker segue no servidor)
       tentativas += 1;
-      if (processando > 0 && tentativas >= MAX_TENTATIVAS) {
+      if (naoTerminais > 0 && tentativas >= MAX_TENTATIVAS) {
         parou = true;
         toast({
-          title: 'Ainda processando',
+          title: 'Geração em andamento',
           description:
-            'A geração está demorando mais que o esperado. Atualize a lista em alguns minutos para ver o resultado.',
+            'Continua rodando em segundo plano no servidor (pode levar alguns minutos). Atualize a lista depois para ver todas.',
         });
         setGenerationLote(null);
         setGenerationProgress(null);
         setIsGeneratingCharges(false);
         return;
       }
-      if (processando > 0) return;
+      if (naoTerminais > 0) return;
 
       parou = true;
       const sucessos = data.filter((r) => r.status === 'sucesso');
