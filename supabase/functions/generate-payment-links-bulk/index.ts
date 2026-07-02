@@ -208,10 +208,12 @@ serve(async (req: Request) => {
     } = await supabase.auth.getUser(token);
     if (!user) return json({ success: false, error: 'Não autenticado' }, 401);
 
+    // AI dev note: pessoas.id != auth.users.id — a ligação é pessoas.auth_user_id.
+    // criado_por/cobranca_gerada_por usam o ID DA PESSOA (perfil.id), não o auth id.
     const { data: perfil } = await supabase
       .from('pessoas')
-      .select('role')
-      .eq('id', user.id)
+      .select('id, role')
+      .eq('auth_user_id', user.id)
       .single();
     if (!perfil || !['admin', 'secretaria'].includes(perfil.role)) {
       return json(
@@ -219,6 +221,7 @@ serve(async (req: Request) => {
         403
       );
     }
+    const pessoaId = perfil.id as string;
 
     const body = await req.json();
     const itens: ItemLote[] = Array.isArray(body?.itens) ? body.itens : [];
@@ -235,7 +238,7 @@ serve(async (req: Request) => {
       paciente_nome: it.pacienteNome || null,
       valor_base: it.valorBase,
       status: 'processando',
-      criado_por: user.id,
+      criado_por: pessoaId,
     }));
     const { data: logRows } = await supabase
       .from('pagamento_link_geracao_log')
@@ -252,7 +255,7 @@ serve(async (req: Request) => {
     // 3. Responde NA HORA; processa em segundo plano
     // @ts-expect-error EdgeRuntime é global no runtime do Supabase
     EdgeRuntime.waitUntil(
-      processarLote(supabase, user.id, loteId, itens, dryRun, logIdPorPaciente)
+      processarLote(supabase, pessoaId, loteId, itens, dryRun, logIdPorPaciente)
     );
 
     return json({ success: true, loteId, total: itens.length, dryRun });
