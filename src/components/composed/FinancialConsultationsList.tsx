@@ -1515,18 +1515,9 @@ export const FinancialConsultationsList: React.FC<
                       <X className="h-4 w-4" />
                       <span className="hidden sm:inline">Cancelar</span>
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleGenerateClick(true)}
-                      disabled={selectedConsultations.length === 0}
-                      title="Simular sem criar nem enviar nada"
-                    >
-                      <span className="hidden sm:inline">
-                        Simular ({selectedConsultations.length})
-                      </span>
-                      <span className="sm:hidden">Simular</span>
-                    </Button>
+                    {/* AI dev note: Botão "Simular" (dryRun) removido a pedido — a geração
+                        já foi validada em produção. A capacidade dryRun continua VIVA na
+                        edge function (body.dryRun) como rede de segurança, só não exposta. */}
                     <Button
                       size="sm"
                       onClick={() => handleGenerateClick(false)}
