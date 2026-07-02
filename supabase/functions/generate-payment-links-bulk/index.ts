@@ -5,7 +5,8 @@
 // FLUXO:
 //  - ENTRY (chamado pela UI, com JWT do usuário): valida auth (admin/secretaria), SEMEIA o
 //    log-fila (1 linha por item, status 'processando', com o PAYLOAD do item) e volta NA
-//    HORA — não cria nada. Dá um "kick" no worker (waitUntil) pra começar já.
+//    HORA. Lote <= INLINE_MAX (60): cria INLINE aqui (reusa processarChunkWorker, sem
+//    depender do cron). Lote maior: só dá um "kick" e o worker/cron drena em blocos.
 //  - WORKER (mode:'worker', cutucado pelo cron process-payment-generation-job via pg_net):
 //    reivindica UM bloco (fn_claim_geracao_chunk, SKIP LOCKED = atômico), cria cada link de
 //    forma IDEMPOTENTE e enfileira o WhatsApp SEGURADO. Uma rodada = um bloco; quem continua
@@ -34,6 +35,10 @@ const corsHeaders = {
 
 // Itens criados por rodada do worker (~2s/item por causa do Asaas -> folga vs. timeout)
 const CHUNK = 15;
+// Corte inline vs. worker: lote com ATÉ INLINE_MAX itens é criado INLINE aqui na edge
+// (sem depender do cron/worker); acima disso, entrega pro worker/cron drenar em blocos.
+// Bem abaixo do limite prático de ~150 do waitUntil da edge.
+const INLINE_MAX = 60;
 
 // ===================== Tipos (espelham types/payment-links.ts) =====================
 interface TaxaFaixaCartao {
@@ -276,9 +281,28 @@ serve(async (req: Request) => {
     }));
     await supabase.from('pagamento_link_geracao_log').insert(seed);
 
-    // 3. Responde NA HORA; dá um kick no worker pra começar já (o cron continua depois).
-    // @ts-expect-error EdgeRuntime é global no runtime do Supabase
-    EdgeRuntime.waitUntil(kickWorker(supabase));
+    // 3. Responde NA HORA e cria em segundo plano (EdgeRuntime.waitUntil):
+    //  - lote <= INLINE_MAX: DRENA INLINE aqui, reusando a MESMA lógica do worker
+    //    (processarChunkWorker) — sem depender do cron. O cron segue de backstop (SKIP
+    //    LOCKED = nunca duplica). maxIter limita o tempo caso outro lote seja semeado junto.
+    //  - lote grande: só dá um kick e deixa o worker/cron drenar em blocos.
+    if (itens.length <= INLINE_MAX) {
+      const maxIter = Math.ceil(itens.length / CHUNK) + 1;
+      // @ts-expect-error EdgeRuntime é global no runtime do Supabase
+      EdgeRuntime.waitUntil(
+        (async () => {
+          let iter = 0;
+          let n = 0;
+          do {
+            n = await processarChunkWorker(supabase);
+            iter++;
+          } while (n >= CHUNK && iter < maxIter);
+        })()
+      );
+    } else {
+      // @ts-expect-error EdgeRuntime é global no runtime do Supabase
+      EdgeRuntime.waitUntil(kickWorker(supabase));
+    }
 
     return json({ success: true, loteId, total: itens.length, dryRun });
   } catch (error) {
