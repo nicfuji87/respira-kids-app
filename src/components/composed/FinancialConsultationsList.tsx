@@ -452,12 +452,17 @@ export const FinancialConsultationsList: React.FC<
 
       let pacienteIdsParaBusca: string[] | null = null;
       if (isSearchMode) {
-        const { data: pessoasMatch, error: pessoasError } = await supabase
-          .from('pessoas')
-          .select('id')
-          .ilike('nome', `%${searchTerm}%`);
+        // AI dev note: Busca ACENTO-INSENSÍVEL via RPC (unaccent) — digitar "nic"
+        // acha "Nícolas". Antes usava .ilike, que é só case-insensitive (perdia
+        // nomes acentuados). Casa paciente OU responsável (nome de pessoa).
+        const { data: pessoasMatch, error: pessoasError } = await supabase.rpc(
+          'buscar_pessoas_ids_por_nome',
+          { p_termo: searchTerm }
+        );
         if (pessoasError) throw pessoasError;
-        const pessoasMatchIds = (pessoasMatch || []).map((p) => p.id);
+        const pessoasMatchIds = (
+          (pessoasMatch || []) as Array<{ id: string }>
+        ).map((p) => p.id);
 
         const idsSet = new Set<string>(pessoasMatchIds);
 
@@ -708,16 +713,10 @@ export const FinancialConsultationsList: React.FC<
       );
     }
 
-    // Filtro de busca
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (c) =>
-          c.paciente_nome?.toLowerCase().includes(query) ||
-          c.responsavel_legal_nome?.toLowerCase().includes(query) ||
-          c.responsavel_financeiro_nome?.toLowerCase().includes(query)
-      );
-    }
+    // AI dev note: A busca por nome é feita no SERVIDOR (fetchConsultations, RPC
+    // acento-insensível que já casa paciente + responsáveis e traz os dependentes).
+    // NÃO re-filtramos aqui: o re-filtro local era mais estreito (só legal/financeiro,
+    // sensível a acento) e escondia resultados válidos que o servidor retornou.
 
     // AI dev note: Aplicar ordenação
     switch (sortOption) {
@@ -758,7 +757,6 @@ export const FinancialConsultationsList: React.FC<
     serviceTypeFilter,
     empresaFilter,
     paymentStatusFilter,
-    searchQuery,
     sortOption,
   ]);
 
