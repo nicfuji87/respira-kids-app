@@ -38,6 +38,66 @@ export interface ContractVariables {
   vinculoNome: 'poderão' | 'não poderão';
 }
 
+// AI dev note: Autorizações de uso de imagem/nome captadas no cadastro (3 perguntas
+// independentes Sim/Não). Cada uma vira uma cláusula própria no contrato.
+export interface UsoImagemAutorizacoes {
+  usoCientifico: boolean;
+  usoRedesSociais: boolean;
+  usoNome: boolean;
+}
+
+export interface UsoImagemVars {
+  autorizo: 'autorizo' | 'não autorizo';
+  fimTerapeutico: string;
+  vinculoNome: 'poderão' | 'não poderão';
+}
+
+// AI dev note: Monta as variáveis da Cláusula 13a (DO USO DE NOME E IMAGEM).
+// IMPORTANTE: uso científico e uso em redes sociais são autorizações INDEPENDENTES.
+// Cada resposta (Sim/Não) do cadastro gera sua própria frase, sem misturar as duas.
+//
+// Bug histórico (corrigido aqui): a lógica anterior negava "divulgações científicas"
+// junto com as redes sociais quando o responsável autorizava só o científico — ou
+// seja, o contrato dizia que ele NÃO autorizava o científico que ele HAVIA autorizado.
+// Pior: quando ambas eram "Não", o texto gerado era o de autorização TOTAL. Agora
+// cada caso é tratado separadamente e sem contradição.
+export function buildUsoImagemVars(auth: UsoImagemAutorizacoes): UsoImagemVars {
+  const FINS_TERAPEUTICOS =
+    'fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam elas impressas ou digitais';
+  const DIVULGACAO_CIENTIFICA =
+    'divulgações científicas e jornalísticas, produções fotográficas, materiais impressos, publicações internas e externas, palestras e materiais EAD, acervos de biblioteca e periódicos';
+  const DIVULGACAO_REDES =
+    'divulgações publicitárias, programas televisivos, redes sociais e demais materiais de divulgação da clínica';
+  const SEM_LUCRO = ', sempre sem fins lucrativos';
+
+  const c = auth.usoCientifico;
+  const r = auth.usoRedesSociais;
+
+  let autorizo: 'autorizo' | 'não autorizo' = 'autorizo';
+  let fimTerapeutico: string;
+
+  if (c && r) {
+    // Autoriza tudo: uso terapêutico/científico + redes sociais.
+    fimTerapeutico = `${FINS_TERAPEUTICOS}, bem como em ${DIVULGACAO_CIENTIFICA}, ${DIVULGACAO_REDES}${SEM_LUCRO}`;
+  } else if (c && !r) {
+    // Autoriza científico, NÃO autoriza redes sociais (caso reportado pelo cliente).
+    fimTerapeutico = `${FINS_TERAPEUTICOS}, bem como em ${DIVULGACAO_CIENTIFICA}${SEM_LUCRO}. A CONTRATANTE não autoriza, contudo, o uso e a veiculação das imagens em ${DIVULGACAO_REDES}`;
+  } else if (!c && r) {
+    // Autoriza redes sociais, NÃO autoriza uso científico/terapêutico.
+    fimTerapeutico = `${DIVULGACAO_REDES}${SEM_LUCRO}. A CONTRATANTE não autoriza, contudo, o uso e a veiculação das imagens para ${FINS_TERAPEUTICOS}, tampouco em ${DIVULGACAO_CIENTIFICA}`;
+  } else {
+    // Não autoriza nenhum uso de imagem.
+    autorizo = 'não autorizo';
+    fimTerapeutico = 'quaisquer finalidades';
+  }
+
+  return {
+    autorizo,
+    fimTerapeutico,
+    vinculoNome: auth.usoNome ? 'poderão' : 'não poderão',
+  };
+}
+
 export interface ContractTemplate {
   id: string;
   nome: string;

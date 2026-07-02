@@ -184,8 +184,15 @@ serve(async (req: Request) => {
     // AI dev note: O customer (= tomador da NFS-e) é o tomador_nfe_id do link quando
     // definido; senão, o responsável de cobrança (pagador). Isso permite a nota sair
     // no nome do paciente sem trocar quem paga/recebe a cobrança.
+    // O responsável de cobrança entra como FALLBACK de contato: quando o tomador é o
+    // próprio paciente (bebê, sem email/telefone), a NFS-e usa o contato de quem paga.
     const tomadorId = link.tomador_nfe_id || link.responsavel_cobranca_id;
-    const customerId = await ensureAsaasCustomer(supabase, apiKey, tomadorId);
+    const customerId = await ensureAsaasCustomer(
+      supabase,
+      apiKey,
+      tomadorId,
+      link.responsavel_cobranca_id
+    );
 
     // 5. Vencimento no Asaas (PIX usa; cartão exige também) = dia da CONFIRMAÇÃO,
     // não o vencimento original da pré-cobrança. O link fica válido por 30 dias
@@ -310,10 +317,16 @@ async function getEmpresaApiKey(
 }
 
 // Busca o cliente por CPF na conta da empresa; cria se não existir.
+// AI dev note: fallbackContactId = responsável de cobrança. A NFS-e exige EMAIL do
+// tomador (e o Asaas recusa com "E-mail do cliente incompleto." sem ele). Quando o
+// tomador é o próprio paciente sem email/telefone, usamos o contato do responsável de
+// cobrança — sem alterar o cadastro do paciente. Se o cliente já existir no Asaas mas
+// estiver sem esse contato, completamos (senão as notas continuariam falhando).
 async function ensureAsaasCustomer(
   supabase: ReturnType<typeof createClient>,
   apiKey: string,
-  responsavelId: string
+  responsavelId: string,
+  fallbackContactId?: string | null
 ): Promise<string> {
   const { data: resp, error } = await supabase
     .from('vw_usuarios_admin')
@@ -330,6 +343,25 @@ async function ensureAsaasCustomer(
     throw new Error('CPF/CNPJ é obrigatório para criar cobrança no Asaas');
   }
 
+  // Resolver contato (com fallback do responsável quando o tomador não tem o seu)
+  let email = resp.email || '';
+  let telefone = resp.telefone ? String(resp.telefone) : '';
+  if (
+    (!email || !telefone) &&
+    fallbackContactId &&
+    fallbackContactId !== responsavelId
+  ) {
+    const { data: fb } = await supabase
+      .from('vw_usuarios_admin')
+      .select('email, telefone')
+      .eq('id', fallbackContactId)
+      .maybeSingle();
+    if (fb) {
+      if (!email && fb.email) email = fb.email as string;
+      if (!telefone && fb.telefone) telefone = String(fb.telefone);
+    }
+  }
+
   const cpf = String(resp.cpf_cnpj).replace(/\D/g, '');
 
   // Buscar existente
@@ -337,12 +369,22 @@ async function ensureAsaasCustomer(
     apiKey,
     `/customers?cpfCnpj=${encodeURIComponent(cpf)}&limit=1`
   );
-  if (
-    search.ok &&
-    Array.isArray(search.data?.data) &&
-    search.data.data[0]?.id
-  ) {
-    return search.data.data[0].id as string;
+  const existing =
+    search.ok && Array.isArray(search.data?.data) ? search.data.data[0] : null;
+  if (existing?.id) {
+    // Cliente já existe: completa email/telefone se estiverem faltando lá (NFS-e).
+    const precisaEmail = !existing.email && !!email;
+    const precisaTel = !existing.mobilePhone && !existing.phone && !!telefone;
+    if (precisaEmail || precisaTel) {
+      const patch: Record<string, unknown> = {};
+      if (precisaEmail) patch.email = email;
+      if (precisaTel) patch.mobilePhone = telefone;
+      await asaasFetch(apiKey, `/customers/${existing.id}`, {
+        method: 'PUT',
+        body: patch,
+      });
+    }
+    return existing.id as string;
   }
 
   // Criar novo (com notificações nativas desabilitadas — quem avisa é o n8n)
@@ -351,8 +393,8 @@ async function ensureAsaasCustomer(
     body: {
       name: resp.nome,
       cpfCnpj: cpf,
-      email: resp.email || undefined,
-      mobilePhone: resp.telefone ? String(resp.telefone) : undefined,
+      email: email || undefined,
+      mobilePhone: telefone || undefined,
       postalCode: resp.cep || undefined,
       externalReference: resp.id,
       addressNumber:

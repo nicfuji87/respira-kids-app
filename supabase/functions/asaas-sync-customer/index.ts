@@ -1,9 +1,16 @@
 // AI dev note: Edge Function que SINCRONIZA o cadastro de uma pessoa em TODAS as
 // contas ASAAS das empresas (BC FISIO, F.S PACHECO, etc.). Cada empresa tem sua
 // própria base de clientes no ASAAS. Ao atualizar um cadastro na aplicação, esta
-// função procura o cliente (por CPF/CNPJ) em cada conta e, SE existir, atualiza os
-// dados (não cria — apenas atualiza onde já existe). Usa service role para ler as
-// API keys das empresas. É chamada (fire-and-forget) após salvar um cadastro.
+// função procura o cliente (por CPF/CNPJ) em cada conta e atualiza os dados onde já
+// existe. Usa service role para ler as API keys das empresas. Chamada (fire-and-forget)
+// após salvar um cadastro.
+//
+// Parâmetros opcionais:
+//   - createIfMissing: quando true, CRIA o cliente nas contas onde ele ainda não existe
+//     (usado ao escolher o tomador da NFS-e — garante cadastro no Asaas na hora).
+//   - contactFallbackPersonId: pessoa cujo email/telefone é usado como FALLBACK quando
+//     a pessoa sincronizada não tem os seus (tomador = paciente bebê → usa o contato do
+//     responsável de cobrança). Não altera o cadastro da pessoa, só o payload do Asaas.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -40,7 +47,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { personId } = await req.json();
+    const { personId, createIfMissing, contactFallbackPersonId } =
+      await req.json();
 
     if (!personId) {
       return new Response(
@@ -112,14 +120,35 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Contato com fallback: quando a pessoa não tem email/telefone e foi informado um
+    // contactFallbackPersonId (ex.: responsável de cobrança), usamos o contato dele —
+    // a NFS-e exige email do tomador. Não grava nada no cadastro da pessoa.
+    let email = pessoa.email || '';
+    let mobilePhone = normalizePhone(pessoa.telefone) || '';
+    if (
+      (!email || !mobilePhone) &&
+      contactFallbackPersonId &&
+      contactFallbackPersonId !== personId
+    ) {
+      const { data: fb } = await supabase
+        .from('vw_usuarios_admin')
+        .select('email, telefone')
+        .eq('id', contactFallbackPersonId)
+        .maybeSingle();
+      if (fb) {
+        if (!email && fb.email) email = fb.email as string;
+        if (!mobilePhone && fb.telefone)
+          mobilePhone = normalizePhone(fb.telefone) || '';
+      }
+    }
+
     // Campos a sincronizar (apenas os que têm valor, para não apagar dados no ASAAS)
     const updatePayloadBase: Record<string, string> = {
       name: pessoa.nome || '',
       cpfCnpj,
       externalReference: pessoa.id,
     };
-    const mobilePhone = normalizePhone(pessoa.telefone);
-    if (pessoa.email) updatePayloadBase.email = pessoa.email;
+    if (email) updatePayloadBase.email = email;
     if (mobilePhone) updatePayloadBase.mobilePhone = mobilePhone;
     if (pessoa.cep)
       updatePayloadBase.postalCode = String(pessoa.cep).replace(/[^\d]/g, '');
@@ -130,7 +159,7 @@ Deno.serve(async (req: Request) => {
     const results: Array<{
       empresa: string;
       empresaId: string;
-      status: 'updated' | 'not_found' | 'error';
+      status: 'updated' | 'created' | 'not_found' | 'error';
       asaasCustomerId?: string;
       error?: string;
     }> = [];
@@ -166,11 +195,51 @@ Deno.serve(async (req: Request) => {
 
         const customer = (searchData.data || [])[0];
         if (!customer?.id) {
-          results.push({
-            empresa: empresa.razao_social,
-            empresaId: empresa.id,
-            status: 'not_found',
+          // Não existe: cria quando solicitado (ex.: escolha do tomador da NFS-e).
+          if (!createIfMissing) {
+            results.push({
+              empresa: empresa.razao_social,
+              empresaId: empresa.id,
+              status: 'not_found',
+            });
+            continue;
+          }
+
+          const createResp = await fetch(`${ASAAS_BASE_URL}/customers`, {
+            method: 'POST',
+            headers: {
+              access_token: apiKey,
+              'Content-Type': 'application/json',
+              'User-Agent': 'RespiraKids/1.0',
+            },
+            // notificationDisabled: quem avisa o cliente é o n8n, não o Asaas
+            body: JSON.stringify({
+              ...updatePayloadBase,
+              notificationDisabled: true,
+            }),
           });
+          const createData = await createResp.json().catch(() => ({}));
+          if (createResp.ok && createData?.id) {
+            results.push({
+              empresa: empresa.razao_social,
+              empresaId: empresa.id,
+              status: 'created',
+              asaasCustomerId: createData.id,
+            });
+            console.log(
+              `🆕 Cliente criado no ASAAS (${empresa.razao_social}):`,
+              createData.id
+            );
+          } else {
+            results.push({
+              empresa: empresa.razao_social,
+              empresaId: empresa.id,
+              status: 'error',
+              error:
+                createData?.errors?.[0]?.description ||
+                `Erro ${createResp.status} ao criar cliente`,
+            });
+          }
           continue;
         }
 
@@ -221,10 +290,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const updated = results.filter((r) => r.status === 'updated').length;
+    const created = results.filter((r) => r.status === 'created').length;
     console.log(
-      `🔁 Sincronização ASAAS concluída para ${pessoa.nome}: ${updated}/${
-        results.length
-      } empresa(s) atualizada(s).`
+      `🔁 Sincronização ASAAS concluída para ${pessoa.nome}: ${updated} atualizada(s), ${created} criada(s) de ${results.length} empresa(s).`
     );
 
     return new Response(JSON.stringify({ success: true, results }), {

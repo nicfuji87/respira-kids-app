@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { cleanCPF } from '@/lib/cpf-validator';
 import {
   generateContractPreview,
+  buildUsoImagemVars,
   type ContractVariables,
 } from '@/lib/contract-api';
 import {
@@ -681,39 +682,16 @@ export const PatientRegistrationSteps =
           ),
           cpfPac: registrationData.paciente?.cpf || 'não fornecido',
           hoje: new Date().toLocaleDateString('pt-BR'),
-          autorizo: (() => {
-            const cientifico = registrationData.autorizacoes?.usoCientifico;
-            const redesSociais = registrationData.autorizacoes?.usoRedesSociais;
-
-            // Se pelo menos uma é SIM, retorna "autorizo"
-            if (cientifico || redesSociais) {
-              return 'autorizo';
-            }
-            // Se ambas NÃO, retorna "não autorizo"
-            return 'não autorizo';
-          })(),
-          fimTerapeutico: (() => {
-            const cientifico = registrationData.autorizacoes?.usoCientifico;
-            const redesSociais = registrationData.autorizacoes?.usoRedesSociais;
-
-            // Se ambas SIM
-            if (cientifico && redesSociais) {
-              return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
-            }
-            // Se SIM e NÃO
-            if (cientifico && !redesSociais) {
-              return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, porém a CONTRATANTE não autoriza em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
-            }
-            // Se NÃO e SIM
-            if (!cientifico && redesSociais) {
-              return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, porém a CONTRATANTE não autoriza em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
-            }
-            // Se ambas NÃO
-            return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
-          })(),
-          vinculoNome: registrationData.autorizacoes?.usoNome
-            ? 'poderão'
-            : 'não poderão',
+          // AI dev note: uso científico e redes sociais são autorizações
+          // INDEPENDENTES — buildUsoImagemVars monta cada cláusula corretamente,
+          // sem misturar/negar uma quando só a outra foi recusada.
+          ...buildUsoImagemVars({
+            usoCientifico:
+              registrationData.autorizacoes?.usoCientifico ?? false,
+            usoRedesSociais:
+              registrationData.autorizacoes?.usoRedesSociais ?? false,
+            usoNome: registrationData.autorizacoes?.usoNome ?? false,
+          }),
         };
 
         // Gerar PREVIEW do contrato (sem salvar no banco)

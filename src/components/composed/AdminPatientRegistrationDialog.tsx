@@ -21,7 +21,7 @@ import {
   createPatientAdmin,
   type AdminPatientData,
 } from '@/lib/admin-patient-registration-api';
-import type { ContractVariables } from '@/lib/contract-api';
+import { buildUsoImagemVars, type ContractVariables } from '@/lib/contract-api';
 import { toast } from '@/components/primitives/use-toast';
 import { formatCPF } from '@/lib/profile';
 import { formatDateBR } from '@/lib/utils';
@@ -431,15 +431,15 @@ export const AdminPatientRegistrationDialog: React.FC<
 
       // Outros
       hoje: new Date().toLocaleDateString('pt-BR'),
-      autorizo: (formData.autorizacoes?.uso_imagem_marketing
-        ? 'autorizo'
-        : 'não autorizo') as 'autorizo' | 'não autorizo',
-      fimTerapeutico: formData.autorizacoes?.uso_imagem_tratamento
-        ? 'autorizo'
-        : 'não autorizo',
-      vinculoNome: (formData.autorizacoes?.compartilhamento_equipe
-        ? 'poderão'
-        : 'não poderão') as 'poderão' | 'não poderão',
+      // AI dev note: mesma lógica do cadastro público (buildUsoImagemVars) para
+      // manter os contratos consistentes entre os dois fluxos. No admin, o
+      // científico está mapeado em uso_imagem_tratamento/educacional, as redes
+      // sociais em uso_imagem_marketing e o uso do nome em compartilhamento_equipe.
+      ...buildUsoImagemVars({
+        usoCientifico: formData.autorizacoes?.uso_imagem_tratamento ?? false,
+        usoRedesSociais: formData.autorizacoes?.uso_imagem_marketing ?? false,
+        usoNome: formData.autorizacoes?.compartilhamento_equipe ?? false,
+      }),
     };
   };
 

@@ -22,7 +22,7 @@ import { Badge } from '@/components/primitives/badge';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { useToast } from '@/components/primitives/use-toast';
 import { fetchPatientContract } from '@/lib/patient-api';
-import { generateContract } from '@/lib/contract-api';
+import { generateContract, buildUsoImagemVars } from '@/lib/contract-api';
 import type { ContractVariables } from '@/lib/contract-api';
 import { ContractViewModal } from './ContractViewModal';
 import { supabase } from '@/lib/supabase';
@@ -389,28 +389,14 @@ export const PatientContractSection = React.memo<PatientContractSectionProps>(
           hoje: new Date().toLocaleDateString('pt-BR'),
 
           // Autorizações
-          autorizo:
-            patientData.autorizacao_uso_cientifico ||
-            patientData.autorizacao_uso_redes_sociais
-              ? 'autorizo'
-              : 'não autorizo',
-
-          fimTerapeutico: (() => {
-            const cientifico = patientData.autorizacao_uso_cientifico;
-            const redesSociais = patientData.autorizacao_uso_redes_sociais;
-
-            if (cientifico && redesSociais) {
-              return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
-            }
-            if (cientifico && !redesSociais) {
-              return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, porém a CONTRATANTE não autoriza em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
-            }
-            return 'para fins terapêuticos, com o objetivo de aprimorar os procedimentos técnicos dos aplicadores e a evolução clínica do paciente, sejam eles impressos, ou digitais, em divulgações científicas, jornalísticas e publicitárias, produções fotográficas; em materiais impressos; publicações internas e externas; palestras e materiais EAD; programas televisivos; redes sociais e outros dessa natureza. Sempre sem fins lucrativos, permitido igualmente a disponibilização deste material em DVD ou outra forma de mídia em acervos de biblioteca, periódicos, entre outros';
-          })(),
-
-          vinculoNome: patientData.autorizacao_uso_do_nome
-            ? 'poderão'
-            : 'não poderão',
+          // AI dev note: uso científico e redes sociais são independentes —
+          // buildUsoImagemVars monta autorizo/fimTerapeutico/vinculoNome sem
+          // misturar/negar uma autorização quando só a outra foi recusada.
+          ...buildUsoImagemVars({
+            usoCientifico: patientData.autorizacao_uso_cientifico ?? false,
+            usoRedesSociais: patientData.autorizacao_uso_redes_sociais ?? false,
+            usoNome: patientData.autorizacao_uso_do_nome ?? false,
+          }),
         };
 
         // Gerar contrato (insere em user_contracts com status 'gerado')

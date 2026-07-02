@@ -44,6 +44,7 @@ import {
   fetchAddressByCep,
   type EnderecoViaCepDataExtended,
 } from '@/lib/enderecos-api';
+import { syncCustomerToAsaasAccounts } from '@/lib/asaas-api';
 
 // AI dev note: BillingResponsibleSelect - Componente UNIFICADO para gerenciar todos os responsáveis de um paciente
 // Funcionalidades: listar responsáveis, alterar tipo (legal/financeiro/ambos), definir responsável de cobrança,
@@ -567,10 +568,11 @@ export const BillingResponsibleSelect: React.FC<
 
     setSavingTomador(true);
     try {
+      let tomadorSemContato = false;
       if (novoTomador) {
         const { data: pessoaTomador } = await supabase
           .from('pessoas')
-          .select('cpf_cnpj')
+          .select('cpf_cnpj, email, telefone')
           .eq('id', novoTomador)
           .maybeSingle();
         if (!pessoaTomador?.cpf_cnpj) {
@@ -582,6 +584,11 @@ export const BillingResponsibleSelect: React.FC<
           });
           return;
         }
+        // AI dev note: A NFS-e exige EMAIL do tomador (o Asaas recusa com "E-mail do
+        // cliente incompleto." sem ele). Se o tomador escolhido não tem email/telefone
+        // próprios, avisamos — o envio ao Asaas usa o contato do responsável de cobrança
+        // como fallback (ver syncCustomerToAsaasAccounts / confirm-payment-link).
+        tomadorSemContato = !pessoaTomador.email || !pessoaTomador.telefone;
       }
 
       const { error } = await supabase
@@ -645,6 +652,24 @@ export const BillingResponsibleSelect: React.FC<
         avisos.push(
           `${cobrancasEmitidas} cobrança(s) já emitida(s) e não paga(s) precisam ser canceladas e regeradas para mudar o nome da nota (o Asaas não permite trocar isso numa cobrança existente)`
         );
+      }
+
+      // AI dev note: Garante/atualiza o cliente do tomador nas contas ASAAS na HORA da
+      // escolha (createIfMissing), usando o contato do responsável de cobrança como
+      // fallback quando o tomador não tem email/telefone próprios. Fire-and-forget: não
+      // bloqueia a UI. Ao voltar para o padrão (novoTomador null), não há o que criar.
+      if (novoTomador) {
+        void syncCustomerToAsaasAccounts(novoTomador, {
+          createIfMissing: true,
+          contactFallbackPersonId: selectedResponsibleId || undefined,
+        });
+        if (tomadorSemContato) {
+          avisos.push(
+            selectedResponsibleId
+              ? 'O tomador não tem email/telefone próprios; a nota usará o contato do responsável de cobrança'
+              : 'O tomador não tem email/telefone e não há responsável de cobrança para usar como contato — cadastre um email para a nota poder ser emitida'
+          );
+        }
       }
 
       toast({

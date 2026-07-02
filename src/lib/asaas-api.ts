@@ -322,12 +322,19 @@ export async function updateAsaasPayment(
 export interface AsaasCustomerSyncResult {
   empresa: string;
   empresaId: string;
-  status: 'updated' | 'not_found' | 'error';
+  status: 'updated' | 'created' | 'not_found' | 'error';
   asaasCustomerId?: string;
   error?: string;
 }
 
-export async function syncCustomerToAsaasAccounts(personId: string): Promise<{
+// AI dev note: options.createIfMissing cria o cliente onde ainda não existe (usado ao
+// escolher o tomador da NFS-e). options.contactFallbackPersonId = pessoa (ex.: responsável
+// de cobrança) cujo email/telefone completa o do tomador quando este não tem — a NFS-e
+// exige email do tomador.
+export async function syncCustomerToAsaasAccounts(
+  personId: string,
+  options?: { createIfMissing?: boolean; contactFallbackPersonId?: string }
+): Promise<{
   success: boolean;
   results?: AsaasCustomerSyncResult[];
   error?: string;
@@ -337,7 +344,13 @@ export async function syncCustomerToAsaasAccounts(personId: string): Promise<{
 
     const { data, error } = await supabase.functions.invoke(
       'asaas-sync-customer',
-      { body: { personId } }
+      {
+        body: {
+          personId,
+          createIfMissing: options?.createIfMissing,
+          contactFallbackPersonId: options?.contactFallbackPersonId,
+        },
+      }
     );
 
     if (error) {
