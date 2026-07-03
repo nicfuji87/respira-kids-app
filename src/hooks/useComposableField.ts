@@ -1,19 +1,21 @@
 import * as React from 'react';
 
-// AI dev note: useComposableField torna inputs controlados seguros para
-// composição IME (acentos e texto preditivo em teclados Android/Samsung).
+// AI dev note: useComposableField torna inputs de texto seguros para composição
+// IME (acentos e texto preditivo em teclados Android/Samsung, inclusive com
+// teclado físico + dead keys tipo ~ -> ã).
 //
-// Problema: em um <input>/<textarea> controlado, cada tecla dispara onChange ->
-// o pai faz setState -> re-render -> o React reescreve node.value no DOM. Se
-// isso acontece no meio de uma composição IME (ex.: digitar o acento de "á"),
-// a região de composição é colapsada e o acento "apaga" a letra anterior.
+// Problema: num <input>/<textarea> CONTROLADO (value={state}), o React reconcilia
+// node.value a cada render. Durante uma composição IME, se houver qualquer atraso
+// entre o keystroke e o re-render (tablet lento, componente pai grande), o IME já
+// avançou o node.value e o React o reescreve com um valor defasado -> a região de
+// composição colapsa e o acento "apaga" a letra anterior (ex.: "não" vira "ão").
 //
-// Solução: manter um buffer interno (innerValue) que espelha o DOM. Durante a
-// composição, o onChange NÃO é propagado ao pai (evitando o re-render que
-// reescreve o value); o valor final é enviado ao pai no compositionend. Como o
-// value renderizado sempre bate com node.value, o React nunca interfere na
-// composição. Fora de composição, o comportamento é idêntico ao de um input
-// controlado comum.
+// Solução: manter o input NÃO-CONTROLADO (o DOM é dono do value durante a
+// digitação, então o React nunca reescreve node.value enquanto se digita/compõe).
+// O valor externo (`value`) é sincronizado imperativamente para o DOM apenas
+// quando muda de fora (ex.: "reaproveitar evolução", chips, troca de seção) e
+// nunca no meio de uma composição. O onChange continua subindo p/ o pai a cada
+// tecla (fora de composição) e o valor final é commitado no compositionend.
 
 type FieldValue = string | number | readonly string[] | undefined;
 
@@ -27,41 +29,57 @@ interface UseComposableFieldParams<T extends ComposableElement> {
 }
 
 interface ComposableFieldBindings<T extends ComposableElement> {
-  value: FieldValue;
+  ref: React.RefCallback<T>;
+  defaultValue: FieldValue;
   onChange: React.ChangeEventHandler<T>;
   onCompositionStart: React.CompositionEventHandler<T>;
   onCompositionEnd: React.CompositionEventHandler<T>;
 }
 
-export function useComposableField<T extends ComposableElement>({
-  value,
-  onChange,
-  onCompositionStart,
-  onCompositionEnd,
-}: UseComposableFieldParams<T>): ComposableFieldBindings<T> {
-  // value === undefined => input não-controlado; nesse caso a composição já
-  // funciona nativamente (o React nunca reescreve node.value), então apenas
-  // repassamos os handlers sem bufferizar.
-  const isControlled = value !== undefined;
-  const isComposingRef = React.useRef(false);
-  const [innerValue, setInnerValue] = React.useState<FieldValue>(value ?? '');
+function toDomValue(value: FieldValue): string {
+  if (value == null) return '';
+  return Array.isArray(value) ? value.join(',') : String(value);
+}
 
-  // Sincroniza valor externo -> buffer interno, exceto durante composição IME
-  React.useEffect(() => {
-    if (isControlled && !isComposingRef.current) {
-      setInnerValue(value ?? '');
-    }
-  }, [value, isControlled]);
+export function useComposableField<T extends ComposableElement>(
+  {
+    value,
+    onChange,
+    onCompositionStart,
+    onCompositionEnd,
+  }: UseComposableFieldParams<T>,
+  forwardedRef: React.Ref<T>
+): ComposableFieldBindings<T> {
+  const elRef = React.useRef<T | null>(null);
+  const isComposingRef = React.useRef(false);
+
+  // Merge do ref interno com o ref repassado pelo consumidor
+  const setRef = React.useCallback<React.RefCallback<T>>(
+    (node) => {
+      elRef.current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef)
+        (forwardedRef as React.MutableRefObject<T | null>).current = node;
+    },
+    [forwardedRef]
+  );
+
+  // Sincroniza valor externo -> DOM. Não roda durante composição (não pode
+  // reescrever node.value no meio do acento). Só escreve quando de fato difere,
+  // para não mexer no cursor durante a digitação normal.
+  React.useLayoutEffect(() => {
+    const el = elRef.current;
+    if (!el || value === undefined || isComposingRef.current) return;
+    const next = toDomValue(value);
+    if (el.value !== next) el.value = next;
+  }, [value]);
 
   const handleChange = React.useCallback<React.ChangeEventHandler<T>>(
     (e) => {
-      if (isControlled) setInnerValue(e.target.value);
-      // Segura a propagação apenas enquanto compõe em input controlado
-      if (!isComposingRef.current || !isControlled) {
-        onChange?.(e);
-      }
+      // Durante composição, o pai não é atualizado; o commit vem no compositionend
+      if (!isComposingRef.current) onChange?.(e);
     },
-    [isControlled, onChange]
+    [onChange]
   );
 
   const handleCompositionStart = React.useCallback<
@@ -80,17 +98,16 @@ export function useComposableField<T extends ComposableElement>({
     (e) => {
       isComposingRef.current = false;
       onCompositionEnd?.(e);
-      // Commit do texto composto: espelha e propaga o valor final ao pai
-      if (isControlled) {
-        setInnerValue(e.currentTarget.value);
-        onChange?.(e as unknown as React.ChangeEvent<T>);
-      }
+      // Commit do texto final (o pai lê e.target.value do elemento)
+      onChange?.(e as unknown as React.ChangeEvent<T>);
     },
-    [isControlled, onChange, onCompositionEnd]
+    [onChange, onCompositionEnd]
   );
 
   return {
-    value: isControlled ? innerValue : value,
+    ref: setRef,
+    // defaultValue = valor inicial; atualizações externas vão pelo layout effect
+    defaultValue: value,
     onChange: handleChange,
     onCompositionStart: handleCompositionStart,
     onCompositionEnd: handleCompositionEnd,
