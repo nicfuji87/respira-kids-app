@@ -44,6 +44,7 @@ import {
 } from '@/lib/processo-seletivo-api';
 import { StatusBadge, RecomendacaoBadge } from './EstagioBadges';
 import { EstagioEntrevistaFicha } from './EstagioEntrevistaFicha';
+import { EstagioContratoSection } from './EstagioContratoSection';
 import type {
   CandidaturaEstagioRow,
   EntrevistaFicha,
@@ -206,9 +207,17 @@ export const EstagioCandidatoDetail: React.FC<EstagioCandidatoDetailProps> = ({
         </DialogHeader>
 
         <Tabs defaultValue="candidatura" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-1">
+          <TabsList
+            className={cn(
+              'grid w-full mb-1',
+              row.status === 'aprovado' ? 'grid-cols-3' : 'grid-cols-2'
+            )}
+          >
             <TabsTrigger value="candidatura">Candidatura</TabsTrigger>
             <TabsTrigger value="entrevista">Ficha de entrevista</TabsTrigger>
+            {row.status === 'aprovado' && (
+              <TabsTrigger value="contrato">Contrato</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent
@@ -413,6 +422,15 @@ export const EstagioCandidatoDetail: React.FC<EstagioCandidatoDetailProps> = ({
               onChange={setEntrevista}
             />
           </TabsContent>
+
+          {row.status === 'aprovado' && (
+            <TabsContent
+              value="contrato"
+              className="focus-visible:outline-none"
+            >
+              <EstagioContratoSection row={row} />
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Avaliação humana — rodapé sempre visível nas duas abas */}

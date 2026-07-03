@@ -11,3 +11,4 @@ export { EstagioSuccessScreen } from './EstagioSuccessScreen';
 // Painel interno
 export { StatusBadge, RecomendacaoBadge } from './EstagioBadges';
 export { EstagioCandidatoDetail } from './EstagioCandidatoDetail';
+export { EstagioContratoSection } from './EstagioContratoSection';
