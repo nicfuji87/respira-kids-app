@@ -129,7 +129,7 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-            Processo Seletivo — Estagiários
+            Estagiários
           </h1>
           <p className="text-muted-foreground mt-1">
             Candidaturas, correção automática do teste situacional e avaliação
@@ -326,7 +326,7 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
                       'w-full text-left rounded-xl border bg-card p-4 transition-all',
                       'hover:border-azul-respira/50 hover:shadow-md',
                       'flex items-center gap-4',
-                      row.tem_resposta_perigosa
+                      row.tem_resposta_perigosa && row.status === 'a_avaliar'
                         ? 'border-vermelho-kids/40'
                         : 'border-border/60'
                     )}

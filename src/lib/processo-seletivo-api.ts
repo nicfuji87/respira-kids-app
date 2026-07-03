@@ -121,7 +121,12 @@ export function computeStats(
     entrevista: rows.filter((r) => r.status === 'entrevista').length,
     aprovados: rows.filter((r) => r.status === 'aprovado').length,
     descartados: rows.filter((r) => r.status === 'descartado').length,
-    comRespostaPerigosa: rows.filter((r) => r.tem_resposta_perigosa).length,
+    // AI dev note: alerta de risco só conta candidaturas ainda em triagem
+    // ('a_avaliar'). Ao avançar no funil (entrevista/aprovado/descartado) a
+    // notificação some sozinha — o avaliador já viu e decidiu.
+    comRespostaPerigosa: rows.filter(
+      (r) => r.tem_resposta_perigosa && r.status === 'a_avaliar'
+    ).length,
     mediaPontuacao:
       pontuacoes.length > 0
         ? Number((soma / pontuacoes.length).toFixed(1))

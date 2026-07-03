@@ -33,6 +33,19 @@ export interface CandidatoDados {
   disponibilidade?: string[];
   como_soube?: string;
   linkedin_url?: string;
+
+  // Documentos e endereço (necessários para o Termo de Estágio / Assinafy)
+  cpf?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  uf?: string;
+
+  // Resultado da verificação de WhatsApp (existência + JID normalizado 5561...)
+  whatsapp_jid?: string;
+  whatsapp_verificado?: boolean;
 }
 
 /** Respostas do situacional: { s1: 'c', s2: 'b', ... } (value da alternativa). */
@@ -87,6 +100,17 @@ export interface CandidaturaEstagioRow {
   disponibilidade: string[];
   como_soube: string | null;
   linkedin_url: string | null;
+
+  // Documentos e endereço
+  cpf: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  uf: string | null;
+  whatsapp_jid: string | null;
+  whatsapp_verificado: boolean;
 
   // Situacional
   situacional_respostas: SituacionalRespostas;

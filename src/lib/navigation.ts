@@ -101,7 +101,7 @@ export const navigationConfig: NavigationConfig[] = [
   // AI dev note: Processo seletivo de estagiários — admin + secretaria.
   {
     icon: GraduationCap,
-    label: 'Processo Seletivo',
+    label: 'Estagiários',
     href: '/processo-seletivo',
     roles: ['admin', 'secretaria'],
   },

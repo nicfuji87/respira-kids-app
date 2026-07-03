@@ -65,12 +65,8 @@ export const DADOS_FIELDS: DadosField[] = [
     type: 'text',
     placeholder: 'Ex.: 2026/2',
   },
-  {
-    id: 'cidade',
-    label: 'Cidade',
-    type: 'text',
-    placeholder: 'Onde você mora',
-  },
+  // AI dev note: 'cidade' saiu daqui — agora faz parte do bloco de endereço
+  // completo (CPF + endereço) renderizado explicitamente em EstagioDadosForm.
   {
     id: 'disponibilidade',
     label: 'Disponibilidade de horário',
