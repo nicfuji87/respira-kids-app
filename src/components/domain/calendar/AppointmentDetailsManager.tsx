@@ -639,6 +639,20 @@ export const AppointmentDetailsManager =
         setIsEdited(true);
       };
 
+      // AI dev note: Ao trocar o tipo de serviço na edição, o valor deve
+      // acompanhar o valor do novo serviço (ex.: respiratório -> motora).
+      // Espelha o comportamento do formulário de criação (AppointmentFormManager).
+      // O valor só é efetivamente persistido para admin/secretaria (ver handleSaveAll).
+      const handleTipoServicoChange = (value: string) => {
+        const tipo = tipoServicoOptions.find((t) => t.id === value);
+        setFormData((prev) => ({
+          ...prev,
+          tipoServicoId: value,
+          valorServico: tipo ? String(tipo.valor) : prev.valorServico,
+        }));
+        setIsEdited(true);
+      };
+
       // Funções para edição de evoluções
       const canEditEvolucao = (
         evolucao: SupabaseRelatorioEvolucaoCompleto
@@ -2025,9 +2039,7 @@ export const AppointmentDetailsManager =
                       </Label>
                       <Select
                         value={formData.tipoServicoId}
-                        onValueChange={(value) =>
-                          handleInputChange('tipoServicoId', value)
-                        }
+                        onValueChange={handleTipoServicoChange}
                         disabled={isLoadingTipoServico}
                       >
                         <SelectTrigger>
