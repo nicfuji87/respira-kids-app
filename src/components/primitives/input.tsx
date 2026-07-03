@@ -1,9 +1,31 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
+import { useComposableField } from '@/hooks/useComposableField';
 
+// AI dev note: Input usa useComposableField p/ suportar composição IME
+// (acentos/preditivo em tablets Android/Samsung) sem perder caractere anterior.
+// Só bufferiza quando controlado (value !== undefined); file/checkbox/uncontrolled
+// passam direto.
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
-  ({ className, type, ...props }, ref) => {
+  (
+    {
+      className,
+      type,
+      value,
+      onChange,
+      onCompositionStart,
+      onCompositionEnd,
+      ...props
+    },
+    ref
+  ) => {
+    const composable = useComposableField<HTMLInputElement>({
+      value,
+      onChange,
+      onCompositionStart,
+      onCompositionEnd,
+    });
     return (
       <input
         type={type}
@@ -12,6 +34,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
           className
         )}
         ref={ref}
+        {...composable}
         {...props}
       />
     );
