@@ -8,7 +8,8 @@ export { MetasPage } from './MetasPage';
 export { PatientDetailsPage } from './PatientDetailsPage';
 export { default as PersonDetailsPage } from './PersonDetailsPage';
 
-// Placeholder pages for other modules
+// Módulos
+export { ProdutosPage } from './ProdutosPage';
 export { EstoquePage } from './EstoquePage';
 export { FinanceiroPage } from './FinanceiroPage';
 export { ConfiguracoesPage } from './ConfiguracoesPage';

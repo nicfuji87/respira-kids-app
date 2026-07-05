@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Calendar,
   Users,
+  ShoppingBag,
   Package,
   DollarSign,
   Settings,
@@ -53,11 +54,20 @@ export const navigationConfig: NavigationConfig[] = [
     roles: ['admin', 'profissional', 'secretaria'],
   },
   // Pessoa foi removido do sidebar - função disponível em Configurações > Usuarios
+  // AI dev note: Produtos = catálogo do que a clínica vende (cadastro).
+  // Estoque = posição/movimentação de quantidade. Mesmo banco (produtos_servicos),
+  // duas visões. Ambos admin + secretaria.
+  {
+    icon: ShoppingBag,
+    label: 'Produtos',
+    href: '/produtos',
+    roles: ['admin', 'secretaria'],
+  },
   {
     icon: Package,
     label: 'Estoque',
     href: '/estoque',
-    roles: ['admin'], // Apenas admin acessa estoque
+    roles: ['admin', 'secretaria'],
   },
   {
     icon: DollarSign,
