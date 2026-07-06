@@ -298,6 +298,70 @@ export async function fetchVendasPaciente(
   }));
 }
 
+interface VendaReenvioRow {
+  id: string;
+  paciente_id: string | null;
+  responsavel_cobranca_id: string;
+  valor_total: number;
+  observacoes: string | null;
+  itens:
+    | {
+        quantidade: number;
+        preco_unitario: number;
+        produto: { id: string; nome: string } | null;
+      }[]
+    | null;
+}
+
+// Reenfileira o webhook padrão da venda (mesmo evento 'venda_produto_criada', com
+// reenvio=true) para o n8n reenviar a cobrança existente. Lança em falha (o botão
+// dá feedback). Não altera o status da venda.
+export async function reenviarCobrancaVenda(
+  vendaId: string,
+  userId: string
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('produto_vendas')
+    .select(
+      'id, paciente_id, responsavel_cobranca_id, valor_total, observacoes, itens:produto_venda_itens (quantidade, preco_unitario, produto:produto_id (id, nome))'
+    )
+    .eq('id', vendaId)
+    .single();
+  if (error) throw new Error(error.message);
+
+  const venda = data as unknown as VendaReenvioRow;
+  const itens = (venda.itens ?? []).map((i) => ({
+    produto_id: i.produto?.id ?? null,
+    nome: i.produto?.nome ?? 'Produto',
+    quantidade: i.quantidade,
+    preco_unitario: Number(i.preco_unitario),
+    subtotal: Number(i.preco_unitario) * i.quantidade,
+  }));
+
+  const { error: whErr } = await supabase.from('webhook_queue').insert({
+    evento: 'venda_produto_criada',
+    payload: {
+      tipo: 'venda_produto_criada',
+      timestamp: new Date().toISOString(),
+      webhook_id: crypto.randomUUID(),
+      data: {
+        venda_id: venda.id,
+        paciente_id: venda.paciente_id,
+        responsavel_cobranca_id: venda.responsavel_cobranca_id,
+        valor_total: Number(venda.valor_total),
+        observacoes: venda.observacoes,
+        usuario_id: userId || null,
+        reenvio: true,
+        itens,
+      },
+    },
+    status: 'pendente',
+    tentativas: 0,
+    max_tentativas: 3,
+  });
+  if (whErr) throw new Error(whErr.message);
+}
+
 // Cria a venda (produto_vendas + itens) e enfileira o webhook p/ o n8n criar a
 // cobrança ASAAS (origem=produto) e tocar o fluxo Nubank. Quando o pagamento
 // confirmar e a venda virar 'pago', o trigger baixa o estoque automaticamente.

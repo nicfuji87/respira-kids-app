@@ -29,6 +29,7 @@ import {
   ShoppingCart,
   Send,
   Receipt,
+  RotateCw,
 } from 'lucide-react';
 import { ProdutoThumb } from './ProdutoThumb';
 import {
@@ -36,6 +37,7 @@ import {
   fetchResponsavelCobranca,
   fetchVendasPaciente,
   finalizarVendaProduto,
+  reenviarCobrancaVenda,
   formatBRL,
   type ResponsavelCobranca,
 } from '@/lib/produtos-api';
@@ -204,6 +206,22 @@ export const PatientProdutosSection = React.memo<PatientProdutosSectionProps>(
       }
     };
 
+    const handleReenviar = async (vendaId: string) => {
+      try {
+        await reenviarCobrancaVenda(vendaId, userId);
+        toast({
+          title: 'Cobrança reenviada',
+          description: 'O webhook foi reenfileirado para reenviar a cobrança.',
+        });
+      } catch (err) {
+        toast({
+          title: 'Erro ao reenviar cobrança',
+          description: err instanceof Error ? err.message : 'Tente novamente.',
+          variant: 'destructive',
+        });
+      }
+    };
+
     if (!canManage) return null;
 
     return (
@@ -243,7 +261,11 @@ export const PatientProdutosSection = React.memo<PatientProdutosSectionProps>(
               onFinalizar={handleFinalizar}
             />
           ) : (
-            <HistoricoTab loading={loadingVendas} vendas={vendas} />
+            <HistoricoTab
+              loading={loadingVendas}
+              vendas={vendas}
+              onReenviar={handleReenviar}
+            />
           )}
         </CardContent>
       </Card>
@@ -430,7 +452,19 @@ const VendaTab: React.FC<VendaTabProps> = ({
 const HistoricoTab: React.FC<{
   loading: boolean;
   vendas: VendaProdutoResumo[];
-}> = ({ loading, vendas }) => {
+  onReenviar: (vendaId: string) => Promise<void>;
+}> = ({ loading, vendas, onReenviar }) => {
+  const [reenviandoId, setReenviandoId] = useState<string | null>(null);
+
+  const handleReenviarClick = async (vendaId: string) => {
+    setReenviandoId(vendaId);
+    try {
+      await onReenviar(vendaId);
+    } finally {
+      setReenviandoId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-2">
@@ -475,8 +509,28 @@ const HistoricoTab: React.FC<{
               ? v.itens.map((i) => `${i.quantidade}× ${i.nome}`).join(' · ')
               : 'Sem itens'}
           </p>
-          <div className="mt-1 text-right text-sm font-bold text-foreground">
-            {formatBRL(v.valor_total)}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            {v.status === 'aguardando_pagamento' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={reenviandoId === v.id}
+                onClick={() => void handleReenviarClick(v.id)}
+              >
+                {reenviandoId === v.id ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCw className="h-3.5 w-3.5" />
+                )}
+                Reenviar cobrança
+              </Button>
+            ) : (
+              <span />
+            )}
+            <span className="text-sm font-bold text-foreground">
+              {formatBRL(v.valor_total)}
+            </span>
           </div>
         </div>
       ))}
