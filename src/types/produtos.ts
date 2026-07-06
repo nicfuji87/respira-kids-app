@@ -84,3 +84,25 @@ export interface KitComponenteInput {
   componente_produto_id: string;
   quantidade: number;
 }
+
+export type StatusVenda =
+  | 'rascunho'
+  | 'aguardando_pagamento'
+  | 'pago'
+  | 'cancelado';
+
+export const STATUS_VENDA_LABELS: Record<StatusVenda, string> = {
+  rascunho: 'Rascunho',
+  aguardando_pagamento: 'Aguardando pagamento',
+  pago: 'Pago',
+  cancelado: 'Cancelado',
+};
+
+export interface VendaProdutoResumo {
+  id: string;
+  status: StatusVenda;
+  valor_total: number;
+  created_at: string;
+  pago_em: string | null;
+  itens: { nome: string; quantidade: number }[];
+}

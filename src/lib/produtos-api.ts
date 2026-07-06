@@ -11,6 +11,8 @@ import type {
   KitComponenteInput,
   EstoqueMovimento,
   TipoMovimento,
+  VendaProdutoResumo,
+  StatusVenda,
 } from '@/types/produtos';
 
 const PRODUTO_COLS =
@@ -258,6 +260,42 @@ export async function fetchResponsavelCobranca(
 export interface CarrinhoItem {
   produto: Produto;
   quantidade: number;
+}
+
+interface VendaRow {
+  id: string;
+  status: string;
+  valor_total: number;
+  created_at: string;
+  pago_em: string | null;
+  itens: { quantidade: number; produto: { nome: string } | null }[] | null;
+}
+
+// Histórico de vendas de produto de um paciente (mais recentes primeiro).
+export async function fetchVendasPaciente(
+  patientId: string
+): Promise<VendaProdutoResumo[]> {
+  const { data, error } = await supabase
+    .from('produto_vendas')
+    .select(
+      'id, status, valor_total, created_at, pago_em, itens:produto_venda_itens (quantidade, produto:produto_id (nome))'
+    )
+    .eq('paciente_id', patientId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as unknown as VendaRow[];
+  return rows.map((v) => ({
+    id: v.id,
+    status: v.status as StatusVenda,
+    valor_total: Number(v.valor_total),
+    created_at: v.created_at,
+    pago_em: v.pago_em,
+    itens: (v.itens ?? []).map((i) => ({
+      nome: i.produto?.nome ?? 'Produto',
+      quantidade: i.quantidade,
+    })),
+  }));
 }
 
 // Cria a venda (produto_vendas + itens) e enfileira o webhook p/ o n8n criar a
