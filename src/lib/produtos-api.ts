@@ -4,6 +4,13 @@
 // Funções lançam Error em falha (páginas tratam com try/catch).
 
 import { supabase } from './supabase';
+import {
+  determineApiKeyFromEmpresa,
+  getOrCreateAsaasCustomer,
+  disableNotifications,
+  createPayment,
+} from './asaas-api';
+import { criarFatura } from './faturas-api';
 import type {
   Produto,
   ProdutoInput,
@@ -302,8 +309,10 @@ interface VendaReenvioRow {
   id: string;
   paciente_id: string | null;
   responsavel_cobranca_id: string;
+  empresa_id: string | null;
   valor_total: number;
   observacoes: string | null;
+  fatura_id: string | null;
   itens:
     | {
         quantidade: number;
@@ -313,9 +322,9 @@ interface VendaReenvioRow {
     | null;
 }
 
-// Reenfileira o webhook padrão da venda (mesmo evento 'venda_produto_criada', com
-// reenvio=true) para o n8n reenviar a cobrança existente. Lança em falha (o botão
-// dá feedback). Não altera o status da venda.
+// Reenvia a cobrança da venda. Se ainda não há cobrança ASAAS (fatura), cria agora;
+// se já existe, reaproveita o link da fatura. Em ambos os casos enfileira o webhook
+// padrão com reenvio=true para o n8n reenviar ao cliente. Lança em falha.
 export async function reenviarCobrancaVenda(
   vendaId: string,
   userId: string
@@ -323,7 +332,7 @@ export async function reenviarCobrancaVenda(
   const { data, error } = await supabase
     .from('produto_vendas')
     .select(
-      'id, paciente_id, responsavel_cobranca_id, valor_total, observacoes, itens:produto_venda_itens (quantidade, preco_unitario, produto:produto_id (id, nome))'
+      'id, paciente_id, responsavel_cobranca_id, empresa_id, valor_total, observacoes, fatura_id, itens:produto_venda_itens (quantidade, preco_unitario, produto:produto_id (id, nome))'
     )
     .eq('id', vendaId)
     .single();
@@ -337,6 +346,45 @@ export async function reenviarCobrancaVenda(
     preco_unitario: Number(i.preco_unitario),
     subtotal: Number(i.preco_unitario) * i.quantidade,
   }));
+
+  let cobranca: CobrancaAsaasResultado | null = null;
+  if (venda.fatura_id) {
+    // cobrança já existe: reaproveita o link da fatura
+    const { data: fat } = await supabase
+      .from('faturas')
+      .select('id, id_asaas, dados_asaas')
+      .eq('id', venda.fatura_id)
+      .single();
+    const dados = (fat?.dados_asaas ?? {}) as Record<string, unknown>;
+    cobranca = {
+      asaasPaymentId: (fat?.id_asaas as string) ?? '',
+      invoiceUrl:
+        typeof dados.invoiceUrl === 'string' ? dados.invoiceUrl : null,
+      faturaId: (fat?.id as string) ?? null,
+    };
+  } else {
+    // sem cobrança ainda: cria agora (direto)
+    if (!venda.empresa_id) {
+      throw new Error(
+        'Venda sem empresa de faturamento. Refaça a venda pelo carrinho.'
+      );
+    }
+    cobranca = await criarCobrancaAsaasProduto(
+      {
+        vendaId: venda.id,
+        empresaId: venda.empresa_id,
+        responsavelId: venda.responsavel_cobranca_id,
+        pacienteId: venda.paciente_id ?? '',
+        valorTotal: Number(venda.valor_total),
+        descricao:
+          `Produtos: ${itens.map((i) => `${i.quantidade}x ${i.nome}`).join(', ')}`.slice(
+            0,
+            480
+          ),
+      },
+      userId
+    );
+  }
 
   const { error: whErr } = await supabase.from('webhook_queue').insert({
     evento: 'venda_produto_criada',
@@ -352,6 +400,9 @@ export async function reenviarCobrancaVenda(
         observacoes: venda.observacoes,
         usuario_id: userId || null,
         reenvio: true,
+        asaas_payment_id: cobranca?.asaasPaymentId ?? null,
+        invoice_url: cobranca?.invoiceUrl ?? null,
+        fatura_id: cobranca?.faturaId ?? null,
         itens,
       },
     },
@@ -362,13 +413,140 @@ export async function reenviarCobrancaVenda(
   if (whErr) throw new Error(whErr.message);
 }
 
-// Cria a venda (produto_vendas + itens) e enfileira o webhook p/ o n8n criar a
-// cobrança ASAAS (origem=produto) e tocar o fluxo Nubank. Quando o pagamento
-// confirmar e a venda virar 'pago', o trigger baixa o estoque automaticamente.
+// === EMPRESAS DE FATURAMENTO (para a cobrança do produto) ===
+
+export interface EmpresaCobranca {
+  id: string;
+  nome: string;
+}
+
+export async function fetchEmpresasCobranca(): Promise<EmpresaCobranca[]> {
+  const { data, error } = await supabase
+    .from('pessoa_empresas')
+    .select('id, razao_social, nome_fantasia')
+    .eq('ativo', true)
+    .not('api_token_externo', 'is', null)
+    .order('nome_fantasia', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((e) => ({
+    id: e.id as string,
+    nome: (e.nome_fantasia as string) || (e.razao_social as string),
+  }));
+}
+
+function montarDescricaoProdutos(
+  itens: { produto: Produto; quantidade: number }[]
+): string {
+  const partes = itens.map((i) => `${i.quantidade}x ${i.produto.nome}`);
+  return `Produtos: ${partes.join(', ')}`.slice(0, 480);
+}
+
+export interface CobrancaAsaasResultado {
+  asaasPaymentId: string;
+  invoiceUrl: string | null;
+  faturaId: string | null;
+}
+
+// Cria a cobrança ASAAS (PIX) da venda DIRETO (sem fila), igual à cobrança de
+// agendamento: getOrCreateAsaasCustomer + createPayment + criarFatura(origem='produto').
+// Vincula a fatura + empresa à venda. Lança em falha.
+export async function criarCobrancaAsaasProduto(
+  input: {
+    vendaId: string;
+    empresaId: string;
+    responsavelId: string;
+    pacienteId: string;
+    valorTotal: number;
+    descricao: string;
+  },
+  userId: string
+): Promise<CobrancaAsaasResultado> {
+  const apiConfig = await determineApiKeyFromEmpresa(input.empresaId);
+  if (!apiConfig) {
+    throw new Error(
+      'A empresa de faturamento não tem chave do Asaas configurada.'
+    );
+  }
+
+  const customer = await getOrCreateAsaasCustomer(
+    input.responsavelId,
+    apiConfig
+  );
+  if (!customer.success || !customer.asaasCustomerId) {
+    throw new Error(
+      customer.error || 'Não foi possível preparar o cliente no Asaas.'
+    );
+  }
+
+  // silencia notificações nativas do Asaas (best-effort, igual aos agendamentos)
+  try {
+    await disableNotifications(customer.asaasCustomerId, apiConfig);
+  } catch {
+    /* não bloqueia a cobrança */
+  }
+
+  const due = new Date();
+  due.setDate(due.getDate() + 2);
+  const dueDate = due.toISOString().split('T')[0];
+
+  const pay = await createPayment(
+    {
+      customer: customer.asaasCustomerId,
+      billingType: 'PIX',
+      value: input.valorTotal,
+      dueDate,
+      description: input.descricao,
+      externalReference: `produto-${input.vendaId}`,
+    },
+    apiConfig
+  );
+  if (!pay.success || !pay.asaasPaymentId) {
+    throw new Error(pay.error || 'Falha ao criar a cobrança no Asaas.');
+  }
+
+  const dadosAsaas = (pay.data ?? {}) as Record<string, unknown>;
+  const invoiceUrl =
+    typeof dadosAsaas.invoiceUrl === 'string' ? dadosAsaas.invoiceUrl : null;
+
+  const fatura = await criarFatura(
+    {
+      id_asaas: pay.asaasPaymentId,
+      valor_total: input.valorTotal,
+      descricao: input.descricao,
+      empresa_id: input.empresaId,
+      responsavel_cobranca_id: input.responsavelId,
+      tomador_nfe_id: input.responsavelId,
+      paciente_id: input.pacienteId,
+      vencimento: dueDate,
+      dados_asaas: dadosAsaas,
+      agendamento_ids: [],
+      origem: 'produto',
+    },
+    userId
+  );
+  const faturaId = fatura.success ? (fatura.data?.id ?? null) : null;
+
+  const { error: upErr } = await supabase
+    .from('produto_vendas')
+    .update({
+      fatura_id: faturaId,
+      empresa_id: input.empresaId,
+      status: 'aguardando_pagamento',
+    })
+    .eq('id', input.vendaId);
+  if (upErr) console.warn('⚠️ Falha ao vincular fatura à venda:', upErr);
+
+  return { asaasPaymentId: pay.asaasPaymentId, invoiceUrl, faturaId };
+}
+
+// Cria a venda (produto_vendas + itens), gera a cobrança ASAAS direto e enfileira o
+// webhook padrão (com o link) p/ o n8n enviar ao cliente + tocar o fluxo Nubank.
+// Quando a venda virar 'pago', o trigger baixa o estoque automaticamente.
 export async function finalizarVendaProduto(
   input: {
     paciente_id: string;
     responsavel_cobranca_id: string;
+    empresa_id: string;
     itens: CarrinhoItem[];
     observacoes?: string | null;
   },
@@ -376,6 +554,9 @@ export async function finalizarVendaProduto(
 ): Promise<{ venda_id: string }> {
   if (input.itens.length === 0) {
     throw new Error('O carrinho está vazio.');
+  }
+  if (!input.empresa_id) {
+    throw new Error('Selecione a empresa de faturamento.');
   }
 
   const valorTotal = input.itens.reduce(
@@ -388,6 +569,7 @@ export async function finalizarVendaProduto(
     .insert({
       paciente_id: input.paciente_id,
       responsavel_cobranca_id: input.responsavel_cobranca_id,
+      empresa_id: input.empresa_id,
       valor_total: valorTotal,
       status: 'aguardando_pagamento',
       observacoes: input.observacoes ?? null,
@@ -409,7 +591,26 @@ export async function finalizarVendaProduto(
   );
   if (iErr) throw new Error(iErr.message);
 
-  await enfileirarWebhookVendaProduto(vendaId, input, valorTotal, userId);
+  // cria a cobrança ASAAS de verdade (direto, sem fila) — igual aos agendamentos
+  const cobranca = await criarCobrancaAsaasProduto(
+    {
+      vendaId,
+      empresaId: input.empresa_id,
+      responsavelId: input.responsavel_cobranca_id,
+      pacienteId: input.paciente_id,
+      valorTotal,
+      descricao: montarDescricaoProdutos(input.itens),
+    },
+    userId
+  );
+
+  await enfileirarWebhookVendaProduto(
+    vendaId,
+    input,
+    valorTotal,
+    userId,
+    cobranca
+  );
 
   return { venda_id: vendaId };
 }
@@ -425,7 +626,8 @@ async function enfileirarWebhookVendaProduto(
     observacoes?: string | null;
   },
   valorTotal: number,
-  userId: string
+  userId: string,
+  cobranca?: CobrancaAsaasResultado | null
 ): Promise<void> {
   try {
     const { error } = await supabase.from('webhook_queue').insert({
@@ -441,6 +643,9 @@ async function enfileirarWebhookVendaProduto(
           valor_total: valorTotal,
           observacoes: input.observacoes ?? null,
           usuario_id: userId || null,
+          asaas_payment_id: cobranca?.asaasPaymentId ?? null,
+          invoice_url: cobranca?.invoiceUrl ?? null,
+          fatura_id: cobranca?.faturaId ?? null,
           itens: input.itens.map((i) => ({
             produto_id: i.produto.id,
             nome: i.produto.nome,

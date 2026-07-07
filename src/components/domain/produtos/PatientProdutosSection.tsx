@@ -15,6 +15,13 @@ import { Badge } from '@/components/primitives/badge';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { Tabs, TabsList, TabsTrigger } from '@/components/primitives/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
 import { useToast } from '@/components/primitives/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -36,10 +43,12 @@ import {
   fetchProdutos,
   fetchResponsavelCobranca,
   fetchVendasPaciente,
+  fetchEmpresasCobranca,
   finalizarVendaProduto,
   reenviarCobrancaVenda,
   formatBRL,
   type ResponsavelCobranca,
+  type EmpresaCobranca,
 } from '@/lib/produtos-api';
 import {
   CATEGORIA_LABELS,
@@ -95,15 +104,21 @@ export const PatientProdutosSection = React.memo<PatientProdutosSectionProps>(
     const [vendas, setVendas] = useState<VendaProdutoResumo[]>([]);
     const [loadingVendas, setLoadingVendas] = useState(true);
 
+    const [empresas, setEmpresas] = useState<EmpresaCobranca[]>([]);
+    const [empresaId, setEmpresaId] = useState<string>('');
+
     const loadData = useCallback(async () => {
       setLoading(true);
       try {
-        const [prods, resp] = await Promise.all([
+        const [prods, resp, emps] = await Promise.all([
           fetchProdutos(),
           fetchResponsavelCobranca(patientId),
+          fetchEmpresasCobranca(),
         ]);
         setProdutos(prods);
         setResponsavel(resp);
+        setEmpresas(emps);
+        setEmpresaId((prev) => prev || emps[0]?.id || '');
       } catch (err) {
         console.error('[PatientProdutosSection] erro:', err);
       } finally {
@@ -178,12 +193,20 @@ export const PatientProdutosSection = React.memo<PatientProdutosSectionProps>(
         toast({ title: 'Carrinho vazio', variant: 'destructive' });
         return;
       }
+      if (!empresaId) {
+        toast({
+          title: 'Selecione a empresa de faturamento',
+          variant: 'destructive',
+        });
+        return;
+      }
       setFinalizando(true);
       try {
         await finalizarVendaProduto(
           {
             paciente_id: patientId,
             responsavel_cobranca_id: responsavel.id,
+            empresa_id: empresaId,
             itens: itensCarrinho,
           },
           userId
@@ -256,6 +279,9 @@ export const PatientProdutosSection = React.memo<PatientProdutosSectionProps>(
               itensCarrinho={itensCarrinho}
               total={total}
               finalizando={finalizando}
+              empresas={empresas}
+              empresaId={empresaId}
+              onEmpresaChange={setEmpresaId}
               onAdd={add}
               onSetQtd={setQtd}
               onFinalizar={handleFinalizar}
@@ -286,6 +312,9 @@ interface VendaTabProps {
   itensCarrinho: { produto: Produto; quantidade: number }[];
   total: number;
   finalizando: boolean;
+  empresas: EmpresaCobranca[];
+  empresaId: string;
+  onEmpresaChange: (id: string) => void;
   onAdd: (id: string) => void;
   onSetQtd: (id: string, qtd: number) => void;
   onFinalizar: () => void;
@@ -298,6 +327,9 @@ const VendaTab: React.FC<VendaTabProps> = ({
   itensCarrinho,
   total,
   finalizando,
+  empresas,
+  empresaId,
+  onEmpresaChange,
   onAdd,
   onSetQtd,
   onFinalizar,
@@ -416,7 +448,32 @@ const VendaTab: React.FC<VendaTabProps> = ({
             </div>
           ))}
 
-          <div className="flex items-center justify-between border-t pt-2">
+          {empresas.length > 1 && (
+            <div className="flex items-center gap-2 border-t pt-2">
+              <span className="shrink-0 text-sm text-muted-foreground">
+                Faturar por
+              </span>
+              <Select value={empresaId} onValueChange={onEmpresaChange}>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {empresas.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div
+            className={cn(
+              'flex items-center justify-between',
+              empresas.length > 1 ? '' : 'border-t pt-2'
+            )}
+          >
             <span className="text-sm text-muted-foreground">
               {responsavel
                 ? `Cobrança: ${responsavel.nome}`
@@ -429,7 +486,7 @@ const VendaTab: React.FC<VendaTabProps> = ({
 
           <Button
             onClick={onFinalizar}
-            disabled={finalizando || !responsavel}
+            disabled={finalizando || !responsavel || !empresaId}
             className="w-full gap-2"
           >
             {finalizando ? (

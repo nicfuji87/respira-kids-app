@@ -456,6 +456,7 @@ export async function criarFatura(
         vencimento: faturaData.vencimento,
         dados_asaas: faturaData.dados_asaas || {},
         observacoes: faturaData.observacoes,
+        origem: faturaData.origem ?? 'atendimento',
         criado_por: userId === 'system' ? null : userId,
       })
       .select()

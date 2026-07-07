@@ -96,6 +96,9 @@ export interface CriarFaturaInput {
   dados_asaas?: Record<string, unknown>;
   observacoes?: string;
   agendamento_ids: string[]; // IDs dos agendamentos a vincular
+  // AI dev note: discriminador da origem da cobrança. 'produto' => venda de produto
+  // (o n8n usa isso no pagamento recebido p/ transferir ao Nubank). Default 'atendimento'.
+  origem?: 'atendimento' | 'produto';
 }
 
 // Interface para atualização de fatura
