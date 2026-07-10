@@ -60,6 +60,7 @@ import {
   editarFatura,
   excluirFatura,
   emitirNfeFatura,
+  refazerCobranca,
 } from '@/lib/faturas-api';
 import { generateChargeDescription } from '@/lib/charge-description';
 import { FaturasList, FaturasResumoServico } from './FaturasList';
@@ -1684,6 +1685,28 @@ export const PatientMetricsWithConsultations =
                     onFaturaAjustar={(fatura) => {
                       // Abrir diálogo de ajuste manual (re-sync ASAAS + edição local)
                       setFaturaToAdjust(fatura);
+                    }}
+                    onFaturaRefazer={async (fatura) => {
+                      // Trocar forma de pagamento: cancela a cobrança atual e gera
+                      // um novo link, reenviando ao cliente para re-escolher.
+                      const result = await refazerCobranca(
+                        fatura.id,
+                        user?.pessoa?.id || 'system'
+                      );
+                      if (result.success) {
+                        toast({
+                          title: 'Nova cobrança gerada',
+                          description:
+                            'A cobrança anterior foi cancelada e um novo link foi reenviado ao cliente para ele escolher a forma de pagamento.',
+                        });
+                        setReloadTrigger((prev) => prev + 1);
+                      } else {
+                        toast({
+                          title: 'Não foi possível refazer a cobrança',
+                          description: result.error,
+                          variant: 'destructive',
+                        });
+                      }
                     }}
                     onEmitirNfe={handleEmitirNfe}
                     onReceivePayment={handleReceivePayment}

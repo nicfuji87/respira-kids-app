@@ -51,6 +51,7 @@ const FaturaItem = React.memo<{
   onAjustar?: (fatura: FaturaComDetalhes) => void;
   onEmitirNfe?: (fatura: FaturaComDetalhes) => void;
   onReceivePayment?: (fatura: FaturaComDetalhes) => void;
+  onRefazer?: (fatura: FaturaComDetalhes) => void | Promise<void>;
   userRole?: string | null;
   isEmitingNfe?: string | null;
   isReceivingPayment?: string | null;
@@ -64,6 +65,7 @@ const FaturaItem = React.memo<{
     onAjustar,
     onEmitirNfe,
     onReceivePayment,
+    onRefazer,
     userRole,
     isEmitingNfe,
     isReceivingPayment,
@@ -73,6 +75,20 @@ const FaturaItem = React.memo<{
     // AI dev note: Controla o diálogo de confirmação de "cancelar e reemitir NFe"
     const [showCancelReissueDialog, setShowCancelReissueDialog] =
       useState(false);
+    // AI dev note: Controla o diálogo de "refazer cobrança" (trocar forma de pagamento).
+    const [showRefazerDialog, setShowRefazerDialog] = useState(false);
+    const [refazendo, setRefazendo] = useState(false);
+
+    const handleRefazerConfirm = async () => {
+      if (!onRefazer) return;
+      setRefazendo(true);
+      try {
+        await onRefazer(fatura);
+        setShowRefazerDialog(false);
+      } finally {
+        setRefazendo(false);
+      }
+    };
 
     const formatCurrency = (value: number) => {
       return new Intl.NumberFormat('pt-BR', {
@@ -488,6 +504,27 @@ const FaturaItem = React.memo<{
                       </Button>
                     )}
 
+                  {/* AI dev note: Refazer cobrança — troca a forma de pagamento.
+                      Só p/ cobrança já gerada no Asaas e ainda NÃO paga. Cancela a
+                      cobrança atual e gera um novo link, reenviando ao cliente. */}
+                  {onRefazer &&
+                    fatura.id_asaas &&
+                    ['pendente', 'atrasado'].includes(fatura.status) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto p-1 text-xs text-azul-respira hover:text-azul-respira/80"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowRefazerDialog(true);
+                        }}
+                        title="Cancelar esta cobrança e gerar uma nova (trocar forma de pagamento)"
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Refazer cobrança
+                      </Button>
+                    )}
+
                   {/* Botão Excluir */}
                   {onDelete && (
                     <Button
@@ -526,6 +563,52 @@ const FaturaItem = React.memo<{
               )}
           </div>
         </div>
+
+        {/* AI dev note: Confirmação de "refazer cobrança" — cancela a cobrança atual
+            no Asaas e gera um novo link, reenviando ao cliente para ele re-escolher a
+            forma de pagamento. Só aparece p/ cobrança não paga. */}
+        <AlertDialog
+          open={showRefazerDialog}
+          onOpenChange={(open) => {
+            if (!refazendo) setShowRefazerDialog(open);
+          }}
+        >
+          <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Refazer esta cobrança?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <p>
+                    A cobrança atual será <strong>cancelada no Asaas</strong> e
+                    um <strong>novo link de pagamento</strong> será gerado com
+                    as mesmas consultas e reenviado ao cliente, para ele
+                    escolher a forma de pagamento de novo (PIX ou
+                    cartão/parcelas).
+                  </p>
+                  <p className="text-muted-foreground">
+                    Use quando o cliente quer trocar a forma de pagamento (ex.:
+                    gerou PIX e quer cartão). Cobranças já pagas não podem ser
+                    trocadas.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={refazendo}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleRefazerConfirm();
+                }}
+                disabled={refazendo}
+              >
+                {refazendo ? 'Refazendo…' : 'Cancelar e gerar novo link'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* AI dev note: Confirmação antes de cancelar a NFe em erro e reemitir.
             Cancelar NFe tem efeito fiscal, por isso exigimos confirmação explícita. */}
@@ -609,6 +692,7 @@ export interface FaturasListProps {
   onFaturaEdit?: (fatura: FaturaComDetalhes) => void;
   onFaturaDelete?: (fatura: FaturaComDetalhes) => void;
   onFaturaAjustar?: (fatura: FaturaComDetalhes) => void;
+  onFaturaRefazer?: (fatura: FaturaComDetalhes) => void | Promise<void>;
   onEmitirNfe?: (fatura: FaturaComDetalhes) => void;
   onReceivePayment?: (fatura: FaturaComDetalhes) => void;
   onVerMais?: () => void;
@@ -633,6 +717,7 @@ export const FaturasList = React.memo<FaturasListProps>(
     onFaturaEdit,
     onFaturaDelete,
     onFaturaAjustar,
+    onFaturaRefazer,
     onEmitirNfe,
     onReceivePayment,
     onVerMais,
@@ -695,6 +780,7 @@ export const FaturasList = React.memo<FaturasListProps>(
                 onEdit={onFaturaEdit}
                 onDelete={onFaturaDelete}
                 onAjustar={onFaturaAjustar}
+                onRefazer={onFaturaRefazer}
                 onEmitirNfe={onEmitirNfe}
                 onReceivePayment={onReceivePayment}
                 userRole={userRole}

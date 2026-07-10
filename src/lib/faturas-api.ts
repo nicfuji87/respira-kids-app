@@ -12,6 +12,7 @@ import {
   determineApiKeyFromEmpresa,
 } from './asaas-api';
 import { generateChargeDescription } from './charge-description';
+import { criarLinkPagamento } from './payment-links-api';
 import type {
   Fatura,
   FaturaComDetalhes,
@@ -997,7 +998,12 @@ export async function editarFatura(
 // === EXCLUIR FATURA EXISTENTE ===
 export async function excluirFatura(
   faturaId: string,
-  userId: string
+  userId: string,
+  // AI dev note: skipWebhook evita disparar o webhook 'fatura_cancelada' ao n8n.
+  // Usado pelo "refazer cobrança" (re-emissão): não é um cancelamento de verdade —
+  // um novo link é enviado logo em seguida, então avisar "cobrança cancelada" ao
+  // cliente confundiria. Callers normais mantêm o webhook (default false).
+  options?: { skipWebhook?: boolean }
 ): Promise<ApiResponse<boolean>> {
   try {
     console.log('🗑️ Iniciando exclusão da fatura:', faturaId);
@@ -1150,7 +1156,10 @@ export async function excluirFatura(
     console.log('🎉 Fatura excluída com sucesso');
 
     // AI dev note: Dispara webhook de manipulação (cobrança cancelada) para o n8n.
-    await enfileirarWebhookFatura('fatura_cancelada', faturaId, userId);
+    // Suprimido no "refazer cobrança" (o novo link já avisa o cliente).
+    if (!options?.skipWebhook) {
+      await enfileirarWebhookFatura('fatura_cancelada', faturaId, userId);
+    }
 
     return {
       success: true,
@@ -1162,6 +1171,109 @@ export async function excluirFatura(
       success: false,
       error: 'Erro inesperado ao excluir fatura',
     };
+  }
+}
+
+// === REFAZER COBRANÇA (trocar forma de pagamento) ===
+// AI dev note: O cliente quer trocar a forma de pagamento depois que a cobrança já
+// foi gerada (ex.: gerou PIX e quer cartão, ou escolheu 6x mas saiu à vista). O Asaas
+// NÃO deixa trocar o método (billingType) nem o parcelamento de uma cobrança existente,
+// e o valor MUDA conforme o método (o cartão embute o repasse). Então a única forma é
+// CANCELAR a cobrança atual (se NÃO paga) e GERAR UM NOVO link, reenviando ao cliente
+// para ele re-escolher. Cobrança PAGA não pode ser trocada (seria caso de estorno).
+// Reaproveita excluirFatura (cancela no Asaas + solta as consultas p/ "pendente" +
+// soft-delete) e criarLinkPagamento (novo link + reserva as consultas + reenvia WhatsApp).
+export async function refazerCobranca(
+  faturaId: string,
+  userId: string
+): Promise<ApiResponse<{ token: string; url: string }>> {
+  try {
+    // 1. Carregar a fatura e validar elegibilidade
+    const { data: fatura, error } = await supabase
+      .from('faturas')
+      .select(
+        `id, status, id_asaas, ativo, empresa_id, paciente_id,
+         responsavel_cobranca_id, descricao, valor_servico`
+      )
+      .eq('id', faturaId)
+      .single();
+
+    if (error || !fatura) {
+      return { success: false, error: 'Fatura não encontrada' };
+    }
+    if (!fatura.ativo) {
+      return { success: false, error: 'Esta fatura não está ativa' };
+    }
+    if (fatura.status === 'pago') {
+      return {
+        success: false,
+        error:
+          'Cobrança já paga não pode ter a forma trocada. Para devolver o valor, faça um estorno.',
+      };
+    }
+    if (!fatura.id_asaas) {
+      return {
+        success: false,
+        error: 'Esta fatura não tem cobrança no Asaas. Use "Editar".',
+      };
+    }
+
+    // 2. Capturar as consultas vinculadas ANTES de cancelar (excluirFatura as solta)
+    const { data: ags } = await supabase
+      .from('agendamentos')
+      .select('id, valor_servico')
+      .eq('fatura_id', faturaId)
+      .eq('ativo', true);
+    const agendamentoIds = (ags || []).map((a) => a.id as string);
+    if (agendamentoIds.length === 0) {
+      return {
+        success: false,
+        error: 'Nenhuma consulta vinculada a esta cobrança para refazer.',
+      };
+    }
+    const valorBase =
+      (ags || []).reduce((s, a) => s + Number(a.valor_servico || 0), 0) ||
+      Number(fatura.valor_servico || 0);
+
+    // 3. Cancelar a cobrança atual (Asaas + solta consultas p/ pendente + soft-delete).
+    // skipWebhook: não avisar "cobrança cancelada" — o novo link reenviado já comunica.
+    const cancelou = await excluirFatura(faturaId, userId, {
+      skipWebhook: true,
+    });
+    if (!cancelou.success) {
+      return {
+        success: false,
+        error: `Não foi possível cancelar a cobrança atual: ${cancelou.error}`,
+      };
+    }
+
+    // 4. Gerar o novo link (reserva as consultas de novo e reenvia o link ao cliente)
+    const novo = await criarLinkPagamento(
+      {
+        agendamentoIds,
+        pacienteId: fatura.paciente_id,
+        responsavelId: fatura.responsavel_cobranca_id,
+        empresaId: fatura.empresa_id,
+        valorBase,
+        descricao: fatura.descricao || 'Cobrança Respira Kids',
+      },
+      userId
+    );
+
+    if (!novo.success || !novo.data) {
+      return {
+        success: false,
+        error: `A cobrança foi cancelada, mas houve falha ao gerar o novo link (${novo.error}). Gere uma nova cobrança para o paciente manualmente.`,
+      };
+    }
+
+    return {
+      success: true,
+      data: { token: novo.data.token, url: novo.data.url },
+    };
+  } catch (error) {
+    console.error('❌ Erro ao refazer cobrança:', error);
+    return { success: false, error: 'Erro inesperado ao refazer a cobrança' };
   }
 }
 
