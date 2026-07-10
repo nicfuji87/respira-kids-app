@@ -30,6 +30,15 @@ function mesesAntecipacao(n: number, mesesOverride?: number | null): number {
   return (n + 1) / 2;
 }
 
+// AI dev note: A antecipação REAL do Asaas no PARCELADO fica ~3-4% acima do modelo
+// linear "parcela k = k meses" (o Asaas conta um pouco mais de mês por parcela — é o
+// day-count interno dele; a TAXA em si, 1,6%/mês, está correta e confirmada no painel).
+// Sem isso a clínica recebia ~R$1-2 a menos do que a base+imposto em cada parcelamento.
+// Calibrado com extratos reais: 2x +2,7%, 3x +3,8%, 6x +3,3%. Usamos 1,04 (cobre o pior
+// caso observado com uma folga mínima) SÓ no parcelado — mantém o princípio "líquido >=
+// base" do ceil2, errando por centavos a favor da clínica. À vista/PIX ficam exatos.
+const FATOR_ANTECIPACAO_PARCELADO = 1.04;
+
 function faixaParaParcela(
   taxas: TaxasCartaoConfig,
   n: number
@@ -63,7 +72,12 @@ export function calcularOpcoesPagamento(
     const faixa = faixaParaParcela(taxas, n);
     if (!faixa) continue; // faixa não configurada => parcela indisponível
 
-    const meses = mesesAntecipacao(n, faixa.meses);
+    // À vista usa o override de meses (faixa.meses) e fica exato; o parcelado (sem
+    // override) leva o fator de segurança da antecipação (ver constante acima).
+    const temOverride = typeof faixa.meses === 'number' && faixa.meses > 0;
+    const meses =
+      mesesAntecipacao(n, faixa.meses) *
+      (temOverride ? 1 : FATOR_ANTECIPACAO_PARCELADO);
     const fracaoTaxa = faixa.mdr / 100 + (faixa.antecipacao_mes / 100) * meses;
     const denom = 1 - fracaoTaxa - fracaoImposto;
     if (denom <= 0) continue; // config inválida; evita divisão <= 0

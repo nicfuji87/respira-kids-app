@@ -97,6 +97,10 @@ function mesesAntecipacao(n: number, mesesOverride?: number | null): number {
     return mesesOverride;
   return (n + 1) / 2;
 }
+// AI dev note: fator de segurança da antecipação no PARCELADO — MANTER IDÊNTICO à
+// cópia em src/lib/payment-fees.ts. A antecipação real do Asaas no parcelado fica
+// ~3-4% acima do modelo linear; sem isso a clínica recebe ~R$1-2 a menos que a base.
+const FATOR_ANTECIPACAO_PARCELADO = 1.04;
 function faixaParaParcela(
   taxas: TaxasCartaoConfig,
   n: number
@@ -120,7 +124,10 @@ function calcularOpcoesPagamento(
   for (let n = 1; n <= maxParcelas; n++) {
     const faixa = faixaParaParcela(taxas, n);
     if (!faixa) continue;
-    const meses = mesesAntecipacao(n, faixa.meses);
+    const temOverride = typeof faixa.meses === 'number' && faixa.meses > 0;
+    const meses =
+      mesesAntecipacao(n, faixa.meses) *
+      (temOverride ? 1 : FATOR_ANTECIPACAO_PARCELADO);
     const fracaoTaxa = faixa.mdr / 100 + (faixa.antecipacao_mes / 100) * meses;
     const denom = 1 - fracaoTaxa - fracaoImposto;
     if (denom <= 0) continue;
