@@ -227,11 +227,21 @@ serve(async (req: Request) => {
     }).format(new Date());
 
     // 6. Criar cobrança no Asaas
+    // AI dev note: o Asaas limita a description do PARCELAMENTO a 500 chars e RECUSA a
+    // cobrança inteira (HTTP 400 "A descrição do parcelamento não deve ultrapassar 500
+    // caracteres") quando passa disso — o que barrava cartão parcelado de atendimentos
+    // com descrição longa (2+ profissionais / nomes de serviço grandes). Truncamos só o
+    // texto que vai pro PAYMENT; a descrição COMPLETA (com o CPF do paciente) continua na
+    // FATURA e é o que a NFS-e usa (serviceDescription = fatura.descricao), então a nota
+    // não é afetada.
+    const rawDesc = link.descricao || 'Cobrança Respira Kids';
+    const description =
+      rawDesc.length > 500 ? `${rawDesc.slice(0, 497)}...` : rawDesc;
     const paymentPayload: Record<string, unknown> = {
       customer: customerId,
       billingType: forma === 'pix' ? 'PIX' : 'CREDIT_CARD',
       dueDate,
-      description: link.descricao || 'Cobrança Respira Kids',
+      description,
       externalReference: `LINK-${String(link.id).slice(0, 8)}`,
     };
     if (forma === 'credit_card' && isParcelado) {
