@@ -298,7 +298,8 @@ serve(async (req: Request) => {
       payment,
       forma,
       parcelas,
-      dueDate
+      dueDate,
+      chargeValue
     );
 
     // 8. Resultado p/ a página (QR PIX ou invoiceUrl do cartão)
@@ -449,15 +450,22 @@ async function registrarFaturaEAgendamentos(
   payment: Record<string, any>,
   forma: 'pix' | 'credit_card',
   parcelas: number,
-  dueDate: string
+  dueDate: string,
+  chargeTotal: number
 ): Promise<void> {
-  // valor_total da fatura = valor efetivamente cobrado no Asaas (reconciliação)
+  // valor_total da fatura = valor bruto TOTAL cobrado (base da NFS-e/caixa).
+  // AI dev note: no cartão PARCELADO o Asaas devolve `payment.value` = valor de UMA
+  // parcela (ex.: 100.65 de 603.91 em 6x). O total é o chargeTotal (opcao.total), que é
+  // o que precisa ir na fatura — senão a fatura (e a nota) sairiam com o valor da 1ª
+  // parcela. PIX / cartão à vista: payment.value já é o total.
   const valorCobrado =
-    typeof payment.value === 'number'
-      ? payment.value
-      : typeof payment.netValue === 'number'
-        ? payment.netValue
-        : link.valor_base;
+    forma === 'credit_card' && parcelas >= 2
+      ? chargeTotal
+      : typeof payment.value === 'number'
+        ? payment.value
+        : typeof payment.netValue === 'number'
+          ? payment.netValue
+          : link.valor_base;
 
   const { data: fatura, error: faturaError } = await supabase
     .from('faturas')
