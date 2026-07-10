@@ -67,17 +67,29 @@ Deno.serve(async (req: Request) => {
     // Normalizar CPF/CNPJ (remover pontuação)
     const normalizedCpfCnpj = customerData.cpfCnpj.replace(/[^\d]/g, '');
 
-    // AI dev note: Normalizar telefone (remover caracteres especiais e DDI 55)
-    // Asaas exige telefone sem código do país
-    // Exemplos: 556181446666 -> 6181446666 | 5511987652345 -> 11987652345
+    // AI dev note: Normalizar telefone p/ o Asaas. O banco guarda o JID do WhatsApp
+    // (55 + DDD + local), e o local costuma vir SEM o 9 do celular (556181257981).
+    // Sem tratar, o Asaas interpreta o 55 como DDD e corta o número. Aqui:
+    //   1) remove não-dígitos; 2) tira o DDI 55 (só quando o número é longo o bastante —
+    //   o guard length>11 preserva o DDD 55 legítimo de Santa Maria/RS);
+    //   3) se sobrar 10 dígitos (DDD + 8 locais) e for celular (local começa em 6-9),
+    //   insere o 9 que o JID omite. Ex.: 556181257981 -> 61981257981.
+    // MANTER IDÊNTICA às cópias em confirm-payment-link e asaas-sync-customer.
     let normalizedPhone = customerData.mobilePhone?.replace(/[^\d]/g, '');
-    if (
-      normalizedPhone &&
-      normalizedPhone.startsWith('55') &&
-      normalizedPhone.length > 11
-    ) {
-      normalizedPhone = normalizedPhone.substring(2); // Remove DDI 55
+    if (normalizedPhone) {
+      if (normalizedPhone.startsWith('55') && normalizedPhone.length > 11) {
+        normalizedPhone = normalizedPhone.substring(2); // Remove DDI 55
+      }
+      if (normalizedPhone.length === 10 && /[6-9]/.test(normalizedPhone[2])) {
+        normalizedPhone =
+          normalizedPhone.substring(0, 2) + '9' + normalizedPhone.substring(2);
+      }
     }
+
+    // AI dev note: Sempre enviar addressNumber quando houver postalCode — o Asaas
+    // exige o número junto do CEP. Default 'S/N' quando não informado.
+    const addressNumber =
+      customerData.addressNumber || (customerData.postalCode ? 'S/N' : '');
 
     // Preparar dados para API do Asaas
     const asaasPayload = {
@@ -87,11 +99,12 @@ Deno.serve(async (req: Request) => {
       mobilePhone: normalizedPhone || '',
       postalCode: customerData.postalCode || '',
       externalReference: customerData.externalReference,
-      addressNumber: customerData.addressNumber || '',
+      addressNumber,
     };
 
-    // Remover campos vazios
+    // Remover campos vazios (mantém addressNumber quando há postalCode)
     Object.keys(asaasPayload).forEach((key) => {
+      if (key === 'addressNumber' && customerData.postalCode) return;
       if (!asaasPayload[key as keyof typeof asaasPayload]) {
         delete asaasPayload[key as keyof typeof asaasPayload];
       }

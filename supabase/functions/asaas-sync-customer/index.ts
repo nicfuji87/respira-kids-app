@@ -23,11 +23,21 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// Normaliza telefone: remove não-dígitos e o DDI 55 (ASAAS exige sem código do país)
+// AI dev note: Normaliza telefone p/ o Asaas. O banco guarda o JID do WhatsApp
+// (55 + DDD + local), e o local costuma vir SEM o 9 do celular (556181257981).
+// Sem tratar, o Asaas interpreta o 55 como DDD e corta o número. Aqui:
+//   1) remove não-dígitos; 2) tira o DDI 55 (só quando o número é longo o bastante —
+//   o guard length>11 preserva o DDD 55 legítimo de Santa Maria/RS);
+//   3) se sobrar 10 dígitos (DDD + 8 locais) e for celular (local começa em 6-9),
+//   insere o 9 que o JID omite. Ex.: 556181257981 -> 61981257981.
+// MANTER IDÊNTICA às cópias em asaas-create-customer e confirm-payment-link.
 function normalizePhone(phone?: string | number | null): string | undefined {
   if (phone === null || phone === undefined) return undefined;
   let p = String(phone).replace(/[^\d]/g, '');
   if (p.startsWith('55') && p.length > 11) p = p.substring(2);
+  if (p.length === 10 && /[6-9]/.test(p[2])) {
+    p = p.substring(0, 2) + '9' + p.substring(2);
+  }
   return p || undefined;
 }
 
