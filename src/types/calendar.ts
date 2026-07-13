@@ -48,6 +48,7 @@ export interface CalendarHeaderProps {
   onNext: () => void;
   onToday: () => void;
   onNewEvent?: () => void;
+  onBlockAgenda?: () => void;
 }
 
 // Mapeamento de cores para o tema do projeto

@@ -22,6 +22,7 @@ import {
   AppointmentFormManager,
 } from '@/components/domain/calendar';
 import { SharedSchedulesList } from '@/components/domain/calendar/SharedSchedulesList';
+import { BloqueioAgendaDialog } from '@/components/domain/calendar/BloqueioAgendaDialog';
 import {
   Tabs,
   TabsList,
@@ -30,6 +31,7 @@ import {
 } from '@/components/primitives/tabs';
 
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
+import type { AgendaBloqueioComProfissional } from '@/types/agenda-bloqueios';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
 import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
@@ -151,6 +153,9 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     );
     const [isEventManagerOpen, setIsEventManagerOpen] = useState(false);
     const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
+    const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
+    const [blockToEdit, setBlockToEdit] =
+      useState<AgendaBloqueioComProfissional | null>(null);
     const [newEventDate, setNewEventDate] = useState<Date | undefined>();
     const [newEventTime, setNewEventTime] = useState<string | undefined>();
 
@@ -265,6 +270,15 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     // Event handlers
     const handleEventClick = useCallback(
       (event: CalendarEvent) => {
+        // Bloqueios abrem o diálogo de bloqueio (em edição), não o de consulta
+        if (event.metadata?.type === 'bloqueio') {
+          const bloqueio = (
+            event.metadata as { bloqueio?: AgendaBloqueioComProfissional }
+          ).bloqueio;
+          setBlockToEdit(bloqueio ?? null);
+          setIsBlockDialogOpen(true);
+          return;
+        }
         if (canEditEvents) {
           setSelectedEvent(event);
           setIsEventManagerOpen(true);
@@ -293,6 +307,11 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       },
       [canCreateEvents]
     );
+
+    const handleBlockAgendaClick = useCallback(() => {
+      setBlockToEdit(null);
+      setIsBlockDialogOpen(true);
+    }, []);
 
     // AI dev note: handleEventSave temporariamente comentado para evitar double update flow
     // const handleEventSave = useCallback(
@@ -509,6 +528,9 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                   onDateChange={handleDateChange}
                   onViewChange={handleViewChange}
                   onNewEvent={canCreateEvents ? handleNewEventClick : undefined}
+                  onBlockAgenda={
+                    canCreateEvents ? handleBlockAgendaClick : undefined
+                  }
                 />
               </div>
 
@@ -536,6 +558,9 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                 onDateChange={handleDateChange}
                 onViewChange={handleViewChange}
                 onNewEvent={canCreateEvents ? handleNewEventClick : undefined}
+                onBlockAgenda={
+                  canCreateEvents ? handleBlockAgendaClick : undefined
+                }
               />
             </div>
 
@@ -624,6 +649,17 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           initialDate={newEventDate}
           initialTime={newEventTime}
           onSave={handleAppointmentFormSave}
+        />
+
+        {/* Bloquear Agenda Modal - Indisponibilidade de profissional/clínica */}
+        <BloqueioAgendaDialog
+          isOpen={isBlockDialogOpen}
+          onClose={() => {
+            setIsBlockDialogOpen(false);
+            setBlockToEdit(null);
+          }}
+          initialDate={currentDate}
+          editBloqueio={blockToEdit}
         />
       </div>
     );

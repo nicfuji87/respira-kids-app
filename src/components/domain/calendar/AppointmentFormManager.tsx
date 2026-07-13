@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { Save, X, AlertTriangle, Calendar } from 'lucide-react';
 
 import { Button } from '@/components/primitives/button';
@@ -34,7 +33,8 @@ import {
 import { cn } from '@/lib/utils';
 import {
   createAgendamento,
-  fetchAgendamentosFromView,
+  checkHorarioDisponivel,
+  mapAgendamentoError,
 } from '@/lib/calendar-services';
 import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
 import { useToast } from '@/components/primitives/use-toast';
@@ -42,7 +42,6 @@ import { ToastAction } from '@/components/primitives/toast';
 import type {
   CreateAgendamento,
   SupabaseTipoServico,
-  CalendarFilters,
 } from '@/types/supabase-calendar';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -128,6 +127,10 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
     // AI dev note: Armazenar nome do serviço para validação de valor zero apenas para serviços SOCIAL
     const [selectedServiceName, setSelectedServiceName] = useState<string>('');
+    // AI dev note: Duração do serviço selecionado — usada para calcular o fim do
+    // período e checar disponibilidade (fn_horario_disponivel) por sobreposição real.
+    const [selectedServiceDuration, setSelectedServiceDuration] =
+      useState<number>(0);
 
     // Estados para empresas de faturamento
     const [empresasOptions, setEmpresasOptions] = useState<
@@ -201,54 +204,39 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
     // Validar conflitos de horário
     const checkScheduleConflicts = useCallback(
-      async (data_hora: string, profissional_id: string) => {
+      async (
+        data_hora: string,
+        profissional_id: string,
+        duracao_minutos: number
+      ) => {
         if (!data_hora || !profissional_id) return;
 
         try {
-          const appointmentDate = parseSupabaseDatetime(data_hora);
-          const startDate = new Date(appointmentDate);
-          startDate.setHours(0, 0, 0, 0);
-          const endDate = new Date(appointmentDate);
-          endDate.setHours(23, 59, 59, 999);
+          // AI dev note: Sem serviço/duração ainda não dá para checar sobreposição
+          // com precisão. O banco é o backstop (constraint + trigger de bloqueio).
+          if (!duracao_minutos || duracao_minutos <= 0) {
+            setHasConflict(false);
+            setConflictDetails('');
+            return;
+          }
 
-          const filters: CalendarFilters = {
-            startDate,
-            endDate,
-            profissionalId: profissional_id,
-          };
+          const inicio = parseSupabaseDatetime(data_hora);
+          const fim = new Date(inicio.getTime() + duracao_minutos * 60 * 1000);
 
-          const existingAppointments = await fetchAgendamentosFromView(filters);
-
-          // AI dev note: Verificar conflitos no mesmo horário, EXCLUINDO agendamentos cancelados ou com falta
-          const conflictingAppointments = existingAppointments.filter(
-            (appointment) => {
-              // Ignorar agendamentos cancelados ou com falta - eles podem ser sobrescritos
-              // pois o horário ficou disponível
-              const statusCodigo = appointment.status_consulta?.codigo;
-              if (statusCodigo === 'cancelado' || statusCodigo === 'faltou') {
-                return false;
-              }
-
-              const existingDateTime = parseSupabaseDatetime(
-                appointment.data_hora
-              );
-              const newDateTime = parseSupabaseDatetime(data_hora);
-
-              // Mesmo horário exato ou sobreposição
-              return (
-                Math.abs(existingDateTime.getTime() - newDateTime.getTime()) <
-                30 * 60 * 1000
-              ); // 30 minutos de tolerância
-            }
+          // AI dev note: Fonte única — consultas ativas (agendado/confirmado) +
+          // bloqueios de agenda de clínica/profissional, por sobreposição real.
+          const disponivel = await checkHorarioDisponivel(
+            profissional_id,
+            inicio.toISOString(),
+            fim.toISOString()
           );
 
-          if (conflictingAppointments.length > 0) {
-            const conflict = conflictingAppointments[0];
+          if (!disponivel) {
             setHasConflict(true);
             setConflictDetails(
-              `Conflito com agendamento existente: ${conflict.paciente.nome} às ${format(parseSupabaseDatetime(conflict.data_hora), 'HH:mm', { locale: ptBR })}`
+              'Este horário não está disponível para o profissional (já há consulta nesse período ou um bloqueio de agenda).'
             );
-            return; // Conflito já detectado
+            return;
           }
 
           // AI dev note: Verificar se existe agenda pública com slot disponível neste horário
@@ -314,9 +302,24 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           updateField('valor_servico', serviceData.valor);
           // AI dev note: Armazenar nome do serviço para validação de valor zero
           setSelectedServiceName(serviceData.nome || '');
+          // AI dev note: Duração altera o período -> revalida disponibilidade
+          const duracao = serviceData.duracao_minutos || 0;
+          setSelectedServiceDuration(duracao);
+          if (formData.data_hora && formData.profissional_id) {
+            checkScheduleConflicts(
+              formData.data_hora,
+              formData.profissional_id,
+              duracao
+            );
+          }
         }
       },
-      [updateField]
+      [
+        updateField,
+        formData.data_hora,
+        formData.profissional_id,
+        checkScheduleConflicts,
+      ]
     );
 
     // Handler para mudança de data/hora com validação de conflitos
@@ -329,10 +332,19 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setFutureWeekConfirmed(false);
 
         if (formData.profissional_id) {
-          checkScheduleConflicts(value, formData.profissional_id);
+          checkScheduleConflicts(
+            value,
+            formData.profissional_id,
+            selectedServiceDuration
+          );
         }
       },
-      [updateField, formData.profissional_id, checkScheduleConflicts]
+      [
+        updateField,
+        formData.profissional_id,
+        selectedServiceDuration,
+        checkScheduleConflicts,
+      ]
     );
 
     // Handler para mudança de profissional com validação de conflitos
@@ -341,10 +353,19 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         updateField('profissional_id', professionalId);
 
         if (formData.data_hora) {
-          checkScheduleConflicts(formData.data_hora, professionalId);
+          checkScheduleConflicts(
+            formData.data_hora,
+            professionalId,
+            selectedServiceDuration
+          );
         }
       },
-      [updateField, formData.data_hora, checkScheduleConflicts]
+      [
+        updateField,
+        formData.data_hora,
+        selectedServiceDuration,
+        checkScheduleConflicts,
+      ]
     );
 
     // Validar e salvar agendamento
@@ -493,10 +514,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       } catch (error: unknown) {
         console.error('Erro ao criar agendamento:', error);
 
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : 'Erro ao criar agendamento. Tente novamente.';
+        const errorMessage = mapAgendamentoError(error);
 
         setErrors({
           general: errorMessage,
@@ -504,7 +522,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
         toast({
           title: 'Erro',
-          description: 'Não foi possível criar o agendamento.',
+          description: errorMessage,
           variant: 'destructive',
         });
       } finally {

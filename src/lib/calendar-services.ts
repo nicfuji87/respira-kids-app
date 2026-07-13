@@ -531,6 +531,58 @@ export const fetchProfissionaisAutorizados = async (
 };
 
 // AI dev note: Cria novo agendamento usando view para evitar problemas de join
+// AI dev note: Fonte única de disponibilidade — espelha a RPC fn_horario_disponivel
+// no banco (consultas ativas agendado/confirmado + bloqueios de agenda de
+// clínica/profissional). Retorna true se [inicio, fim) está livre para o profissional.
+// Em erro de checagem retorna true (não trava o fluxo; o banco é o backstop com a
+// constraint agendamentos_sem_sobreposicao e o trigger de bloqueio).
+export const checkHorarioDisponivel = async (
+  profissionalId: string,
+  inicio: string,
+  fim: string,
+  ignorarAgendamentoId?: string
+): Promise<boolean> => {
+  const { data, error } = await supabase.rpc('fn_horario_disponivel', {
+    p_profissional_id: profissionalId,
+    p_inicio: inicio,
+    p_fim: fim,
+    p_ignorar_agendamento_id: ignorarAgendamentoId ?? null,
+  });
+
+  if (error) {
+    console.error('Erro ao checar disponibilidade de horário:', error);
+    return true;
+  }
+
+  return data === true;
+};
+
+// AI dev note: Traduz erros de conflito de agenda vindos do banco em mensagens
+// amigáveis. A constraint agendamentos_sem_sobreposicao (appt×appt) e o trigger de
+// bloqueio (appt×block) usam ambos o SQLSTATE 23P01 (exclusion_violation);
+// distinguimos pelo conteúdo da mensagem.
+export const mapAgendamentoError = (error: unknown): string => {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code ?? '')
+      : '';
+
+  if (message.includes('agendamentos_sem_sobreposicao')) {
+    return 'Já existe uma consulta nesse horário para este profissional.';
+  }
+  if (message.toLowerCase().includes('bloqueio')) {
+    return 'Este horário está bloqueado na agenda do profissional.';
+  }
+  if (code === '23P01') {
+    return 'Este horário não está disponível para o profissional.';
+  }
+  return message || 'Erro ao salvar o agendamento. Tente novamente.';
+};
+
 export const createAgendamento = async (
   agendamento: CreateAgendamento
 ): Promise<SupabaseAgendamentoCompleto> => {

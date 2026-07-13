@@ -168,8 +168,31 @@ export async function checkAppointmentConflicts(
 
     if (error) throw error;
 
-    const conflictingSlots =
+    const appointmentConflicts =
       agendamentosExistentes?.map((a) => a.data_hora) || [];
+
+    // AI dev note: Também tratar bloqueios de agenda (clínica ou do profissional)
+    // como conflito, para não publicar slots em horários bloqueados. Complementa o
+    // trigger trg_bloqueio_sincroniza_slots (que cobre bloqueios criados DEPOIS dos slots).
+    const { data: bloqueios } = await supabase
+      .from('agenda_bloqueios')
+      .select('inicio, fim')
+      .eq('ativo', true)
+      .is('deleted_at', null)
+      .or(`profissional_id.eq.${profissionalId},profissional_id.is.null`);
+
+    const blockedSlots = slotsDataHora.filter((slot) => {
+      const t = new Date(slot).getTime();
+      return (bloqueios || []).some((b) => {
+        const ini = new Date(b.inicio).getTime();
+        const fim = new Date(b.fim).getTime();
+        return t >= ini && t < fim;
+      });
+    });
+
+    const conflictingSlots = Array.from(
+      new Set([...appointmentConflicts, ...blockedSlots])
+    );
 
     return {
       data: {

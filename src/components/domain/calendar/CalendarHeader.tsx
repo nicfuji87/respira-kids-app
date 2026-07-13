@@ -1,7 +1,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Ban } from 'lucide-react';
 
 import { Button } from '@/components/primitives/button';
 import { DatePicker, ViewToggle } from '@/components/composed';
@@ -21,6 +21,7 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
     onNext,
     onToday,
     onNewEvent,
+    onBlockAgenda,
   }) => {
     const getDateLabel = () => {
       switch (currentView) {
@@ -120,6 +121,19 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
             variant="compact"
             className="sm:hidden"
           />
+
+          {/* Botão de bloquear agenda */}
+          {onBlockAgenda && (
+            <Button
+              variant="outline"
+              onClick={onBlockAgenda}
+              className="h-8 px-3 text-sm"
+              title="Bloquear agenda"
+            >
+              <Ban className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Bloquear</span>
+            </Button>
+          )}
 
           {/* Botão de novo evento */}
           {onNewEvent && (

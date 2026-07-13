@@ -37,6 +37,7 @@ import {
   mapCalendarEventToAgendamento,
   calculateCalendarPermissions,
 } from '@/lib/calendar-mappers';
+import { fetchBloqueiosAsEvents } from '@/lib/agenda-bloqueios-api';
 import { useAuth } from './useAuth';
 import type {
   SupabaseTipoServico,
@@ -202,7 +203,25 @@ export const useCalendarData = (
         });
       }
 
-      setEvents(calendarEvents);
+      // AI dev note: Mesclar bloqueios de agenda (eventos cinza) no mesmo range.
+      // Falha ao buscar bloqueios NÃO pode derrubar o calendário de consultas.
+      let bloqueioEvents: CalendarEvent[] = [];
+      try {
+        const role = user.pessoa?.role as
+          | 'admin'
+          | 'profissional'
+          | 'secretaria';
+        bloqueioEvents = await fetchBloqueiosAsEvents({
+          from: dateRange.start.toISOString(),
+          to: dateRange.end.toISOString(),
+          profissionalId: role === 'profissional' ? user.pessoa.id : undefined,
+          incluirClinica: role === 'profissional',
+        });
+      } catch (bloqErr) {
+        console.error('❌ Erro ao buscar bloqueios de agenda:', bloqErr);
+      }
+
+      setEvents([...calendarEvents, ...bloqueioEvents]);
     } catch (err) {
       console.error('❌ Erro ao buscar eventos:', err);
       setError('Erro ao carregar eventos do calendário');
@@ -257,6 +276,16 @@ export const useCalendarData = (
     view,
     currentDate,
   ]);
+
+  // AI dev note: Recarrega quando bloqueios de agenda mudam (criados/editados/
+  // removidos no BloqueioAgendaDialog dispara window 'bloqueios:changed').
+  useEffect(() => {
+    const handler = () => {
+      if (user?.pessoa?.id) fetchEvents();
+    };
+    window.addEventListener('bloqueios:changed', handler);
+    return () => window.removeEventListener('bloqueios:changed', handler);
+  }, [fetchEvents, user?.pessoa?.id]);
 
   // AI dev note: Handlers para mudança de data/vista
   const handleViewChange = useCallback(
