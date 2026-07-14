@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Loader2,
   Camera,
+  CameraOff,
   X,
   CheckCircle2,
   LogIn,
@@ -86,6 +87,7 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
   );
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const [observacao, setObservacao] = useState('');
+  const [camAttempt, setCamAttempt] = useState(0);
   const [geofence, setGeofence] = useState<GeofenceConfig | null>(null);
   const [bloqueio, setBloqueio] = useState<{
     motivo: 'fora' | 'sem_gps';
@@ -172,7 +174,7 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
       cancel = true;
       stopCamera();
     };
-  }, [view, stopCamera, geofence]);
+  }, [view, stopCamera, geofence, camAttempt]);
 
   // Volta para a lista após confirmar.
   useEffect(() => {
@@ -312,9 +314,11 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
           <h2 className="text-lg font-bold text-foreground">
             Ponto eletrônico
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Toque no seu nome para registrar entrada ou saída.
-          </p>
+          {view === 'lista' && (
+            <p className="text-sm text-muted-foreground">
+              Toque no seu nome para registrar entrada ou saída.
+            </p>
+          )}
         </div>
         {onClose && (
           <Button variant="ghost" size="sm" onClick={onClose} className="gap-2">
@@ -474,7 +478,7 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
 
         {/* ---- Câmera ---- */}
         {view === 'camera' && selected && (
-          <div className="max-w-md mx-auto flex flex-col items-center gap-4">
+          <div className="max-w-[300px] mx-auto flex flex-col items-center gap-3">
             <div
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-full font-semibold',
@@ -514,19 +518,33 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
               </div>
             )}
 
-            <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-black/80 border border-border/60">
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                className="w-full h-full object-cover -scale-x-100"
-              />
-              {camError && (
-                <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-white bg-black/70">
-                  {camError}
-                </div>
-              )}
-            </div>
+            {camError ? (
+              <div className="w-full rounded-2xl border border-vermelho-kids/30 bg-vermelho-kids/5 p-5 text-center space-y-3">
+                <CameraOff className="w-8 h-8 text-vermelho-kids mx-auto" />
+                <p className="text-sm text-foreground">{camError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => {
+                    setCamError(null);
+                    setCamAttempt((a) => a + 1);
+                  }}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : (
+              <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-black/80 border border-border/60">
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover -scale-x-100"
+                />
+              </div>
+            )}
 
             {/* Status da localização */}
             <div
