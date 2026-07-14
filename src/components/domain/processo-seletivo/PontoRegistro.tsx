@@ -20,6 +20,7 @@ import {
   Square,
   ClipboardCheck,
   ListChecks,
+  Ban,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Textarea } from '@/components/primitives/textarea';
@@ -31,9 +32,12 @@ import {
   uploadPontoFoto,
   registrarPonto,
   getGeolocation,
+  fetchGeofence,
+  avaliarCerca,
   type EstagiarioAtivo,
   type PontoTipo,
   type Coords,
+  type GeofenceConfig,
 } from '@/lib/estagio-pontos-api';
 import {
   CHECKLIST_SAIDA,
@@ -47,7 +51,13 @@ interface Props {
   onClose?: () => void;
 }
 
-type View = 'lista' | 'checklist' | 'camera' | 'ok';
+type View =
+  | 'lista'
+  | 'verificando'
+  | 'bloqueado'
+  | 'checklist'
+  | 'camera'
+  | 'ok';
 
 function iniciais(nome: string): string {
   const parts = nome.trim().split(/\s+/);
@@ -76,6 +86,11 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
   );
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const [observacao, setObservacao] = useState('');
+  const [geofence, setGeofence] = useState<GeofenceConfig | null>(null);
+  const [bloqueio, setBloqueio] = useState<{
+    motivo: 'fora' | 'sem_gps';
+    distancia?: number;
+  } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -86,8 +101,14 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
     setLoadingLista(true);
     (async () => {
       try {
-        const data = await fetchEstagiariosAtivos();
-        if (!cancel) setEstagiarios(data);
+        const [data, cerca] = await Promise.all([
+          fetchEstagiariosAtivos(),
+          fetchGeofence(),
+        ]);
+        if (!cancel) {
+          setEstagiarios(data);
+          setGeofence(cerca);
+        }
       } catch {
         if (!cancel) setErro('Não consegui carregar os estagiários.');
       } finally {
@@ -109,13 +130,17 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
     if (view !== 'camera') return;
     let cancel = false;
 
-    setGeoStatus('pendente');
-    setCoords(null);
-    void getGeolocation().then((c) => {
-      if (cancel) return;
-      setCoords(c);
-      setGeoStatus(c ? 'ok' : 'sem');
-    });
+    // Com cerca ativa, a localização já foi validada em escolher() e coords já
+    // está setado; aqui só pedimos GPS quando NÃO há cerca (registro best-effort).
+    if (!geofence?.ativo) {
+      setGeoStatus('pendente');
+      setCoords(null);
+      void getGeolocation().then((c) => {
+        if (cancel) return;
+        setCoords(c);
+        setGeoStatus(c ? 'ok' : 'sem');
+      });
+    }
 
     (async () => {
       try {
@@ -147,7 +172,7 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
       cancel = true;
       stopCamera();
     };
-  }, [view, stopCamera]);
+  }, [view, stopCamera, geofence]);
 
   // Volta para a lista após confirmar.
   useEffect(() => {
@@ -166,19 +191,10 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
     setChecklist({});
     setObservacao('');
     setErro(null);
+    setBloqueio(null);
   }, [stopCamera]);
 
-  const escolher = useCallback(async (e: EstagiarioAtivo) => {
-    setSelected(e);
-    setErro(null);
-    let t: PontoTipo = 'entrada';
-    try {
-      const hoje = await fetchPontosHoje(e.id);
-      t = proximaBatida(hoje);
-    } catch {
-      t = 'entrada';
-    }
-    setTipo(t);
+  const prosseguir = useCallback((t: PontoTipo) => {
     if (t === 'saida') {
       const init: Record<string, boolean> = {};
       CHECKLIST_SAIDA.forEach((i) => {
@@ -191,6 +207,45 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
       setView('camera');
     }
   }, []);
+
+  const escolher = useCallback(
+    async (e: EstagiarioAtivo) => {
+      setSelected(e);
+      setErro(null);
+      setBloqueio(null);
+      setCoords(null);
+      setGeoStatus('pendente');
+      let t: PontoTipo = 'entrada';
+      try {
+        const hoje = await fetchPontosHoje(e.id);
+        t = proximaBatida(hoje);
+      } catch {
+        t = 'entrada';
+      }
+      setTipo(t);
+
+      // Cerca ativa: valida a localização ANTES de abrir a câmera.
+      if (geofence?.ativo) {
+        setView('verificando');
+        const c = await getGeolocation();
+        if (!c) {
+          setBloqueio({ motivo: 'sem_gps' });
+          setView('bloqueado');
+          return;
+        }
+        const res = avaliarCerca(geofence, c);
+        if (!res.dentro) {
+          setBloqueio({ motivo: 'fora', distancia: res.distancia });
+          setView('bloqueado');
+          return;
+        }
+        setCoords(c);
+        setGeoStatus('ok');
+      }
+      prosseguir(t);
+    },
+    [geofence, prosseguir]
+  );
 
   const capturar = useCallback(async () => {
     const video = videoRef.current;
@@ -374,6 +429,44 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
               >
                 <ListChecks className="w-4 h-4" />
                 Continuar ({feitos}/{CHECKLIST_SAIDA.length})
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ---- Verificando localização ---- */}
+        {view === 'verificando' && (
+          <div className="max-w-md mx-auto flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin text-azul-respira" />
+            <p>Verificando se você está na clínica...</p>
+          </div>
+        )}
+
+        {/* ---- Bloqueado (fora da cerca / sem GPS) ---- */}
+        {view === 'bloqueado' && selected && (
+          <div className="max-w-md mx-auto flex flex-col items-center gap-4 py-12 text-center">
+            <div className="flex items-center justify-center w-20 h-20 rounded-full bg-vermelho-kids/10">
+              <Ban className="w-10 h-10 text-vermelho-kids" />
+            </div>
+            <p className="text-xl font-bold text-foreground">
+              Ponto indisponível aqui
+            </p>
+            <p className="text-muted-foreground">
+              {bloqueio?.motivo === 'sem_gps'
+                ? 'Não foi possível confirmar sua localização. Ative o GPS/localização do tablet e tente novamente.'
+                : `Você está fora do raio da clínica${
+                    bloqueio?.distancia
+                      ? ` (~${Math.round(bloqueio.distancia)}m de distância)`
+                      : ''
+                  }. O ponto só pode ser registrado na clínica.`}
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={voltarLista}>
+                Voltar
+              </Button>
+              <Button className="gap-2" onClick={() => void escolher(selected)}>
+                <RotateCcw className="w-4 h-4" />
+                Tentar novamente
               </Button>
             </div>
           </div>

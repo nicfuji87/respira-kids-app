@@ -179,6 +179,132 @@ export async function registrarPonto(params: {
   if (error) throw error;
 }
 
+// =====================================================
+// Geofence (cerca virtual da clínica)
+// =====================================================
+
+export interface GeofenceConfig {
+  id: string;
+  lat: number;
+  lng: number;
+  raio_m: number;
+  ativo: boolean;
+  updated_at: string;
+}
+
+/** Distância em metros entre dois pontos (Haversine). */
+export function distanceMeters(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+export interface CercaResultado {
+  dentro: boolean;
+  distancia: number;
+}
+
+/**
+ * Avalia se as coordenadas estão dentro da cerca. Dá uma folga pela precisão do
+ * GPS (até 150m) para não bloquear falsamente quem está dentro com sinal ruim;
+ * como a casa costuma ficar a quilômetros, isso não abre brecha real.
+ */
+export function avaliarCerca(
+  cerca: GeofenceConfig,
+  coords: Coords
+): CercaResultado {
+  const distancia = distanceMeters(coords, cerca);
+  const folga = Math.min(coords.precisao || 0, 150);
+  return { dentro: distancia <= cerca.raio_m + folga, distancia };
+}
+
+/** Config da cerca (linha única) — inclui `ativo` para a tela de config. */
+export async function fetchGeofence(): Promise<GeofenceConfig | null> {
+  const { data, error } = await supabase
+    .from('estagio_ponto_geofence')
+    .select('id, lat, lng, raio_m, ativo, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as GeofenceConfig;
+}
+
+/** Salva (upsert de linha única) a config da cerca. */
+export async function salvarGeofence(params: {
+  lat: number;
+  lng: number;
+  raioM: number;
+  ativo: boolean;
+  updatedBy: string | null;
+}): Promise<void> {
+  const { data: existing } = await supabase
+    .from('estagio_ponto_geofence')
+    .select('id')
+    .limit(1)
+    .maybeSingle();
+  const payload = {
+    lat: params.lat,
+    lng: params.lng,
+    raio_m: params.raioM,
+    ativo: params.ativo,
+    updated_by: params.updatedBy,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = existing
+    ? await supabase
+        .from('estagio_ponto_geofence')
+        .update(payload)
+        .eq('id', existing.id)
+    : await supabase.from('estagio_ponto_geofence').insert(payload);
+  if (error) throw error;
+}
+
+// =====================================================
+// Ajuste manual de ponto (esqueceu de bater / correção)
+// =====================================================
+
+/** Adiciona uma batida manual (origem='manual'), com motivo obrigatório. */
+export async function registrarPontoManual(params: {
+  candidaturaId: string;
+  tipo: PontoTipo;
+  registradoEm: string; // ISO
+  observacao: string;
+  registradoPor: string | null;
+}): Promise<void> {
+  const { error } = await supabase.from(TABLE).insert({
+    candidatura_id: params.candidaturaId,
+    tipo: params.tipo,
+    registrado_em: params.registradoEm,
+    origem: 'manual',
+    observacao: params.observacao,
+    registrado_por: params.registradoPor,
+  });
+  if (error) throw error;
+}
+
+/** Remove (soft delete) uma batida, gravando o motivo. */
+export async function desativarPonto(
+  id: string,
+  motivo: string
+): Promise<void> {
+  const { error } = await supabase
+    .from(TABLE)
+    .update({ ativo: false, observacao: motivo })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 /** Mapa id→nome dos acessos (admin/secretaria) que podem registrar ponto. */
 export async function fetchStaffNomes(): Promise<Record<string, string>> {
   const { data, error } = await supabase

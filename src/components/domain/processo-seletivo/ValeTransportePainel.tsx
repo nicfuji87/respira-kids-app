@@ -15,22 +15,38 @@ import {
   MapPin,
   MapPinOff,
   ListChecks,
+  ClipboardEdit,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Card, CardContent } from '@/components/primitives/card';
 import { Input } from '@/components/primitives/input';
 import { useToast } from '@/components/primitives/use-toast';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/primitives/alert-dialog';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 import {
   fetchEstagiariosAtivos,
   fetchPontosMes,
   fetchTermosContrato,
   fetchContratoVars,
   fetchStaffNomes,
+  desativarPonto,
   agruparDias,
   type FechamentoLinha,
+  type PontoRow,
 } from '@/lib/estagio-pontos-api';
 import { checklistResumo } from '@/lib/estagio-ponto-checklist';
+import { AjustePontoDialog } from './AjustePontoDialog';
 import {
   buildRelatorioEstagioHTML,
   abrirRelatorioParaImpressao,
@@ -81,6 +97,8 @@ function mesRefLabel(mesValue: string): string {
 
 export const ValeTransportePainel: React.FC = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const registradoPor = user?.pessoa?.id ?? null;
 
   const [mesValue, setMesValue] = useState<string>(currentMonthValue());
   const [linhas, setLinhas] = useState<FechamentoLinha[]>([]);
@@ -89,6 +107,12 @@ export const ValeTransportePainel: React.FC = () => {
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [gerandoId, setGerandoId] = useState<string | null>(null);
   const [staffNomes, setStaffNomes] = useState<Record<string, string>>({});
+  const [ajusteFor, setAjusteFor] = useState<{
+    id: string;
+    nome: string;
+  } | null>(null);
+  const [removendo, setRemovendo] = useState<PontoRow | null>(null);
+  const [removeSaving, setRemoveSaving] = useState(false);
 
   const carregar = useCallback(async () => {
     const [anoStr, mesStr] = mesValue.split('-');
@@ -189,6 +213,24 @@ export const ValeTransportePainel: React.FC = () => {
     [mesValue, toast]
   );
 
+  const confirmarRemocao = useCallback(async () => {
+    if (!removendo) return;
+    setRemoveSaving(true);
+    try {
+      await desativarPonto(
+        removendo.id,
+        'Removido manualmente (ajuste de ponto).'
+      );
+      setRemovendo(null);
+      await carregar();
+      toast({ title: 'Batida removida' });
+    } catch {
+      toast({ title: 'Falha ao remover', variant: 'destructive' });
+    } finally {
+      setRemoveSaving(false);
+    }
+  }, [removendo, carregar, toast]);
+
   return (
     <div className="space-y-5">
       {/* Fechamento mensal */}
@@ -247,9 +289,7 @@ export const ValeTransportePainel: React.FC = () => {
                 <th className="text-right font-medium px-4 py-2.5">Horas</th>
                 <th className="text-right font-medium px-4 py-2.5">VT/dia</th>
                 <th className="text-right font-medium px-4 py-2.5">VT total</th>
-                <th className="text-right font-medium px-4 py-2.5">
-                  Relatório
-                </th>
+                <th className="text-right font-medium px-4 py-2.5">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -287,24 +327,41 @@ export const ValeTransportePainel: React.FC = () => {
                       <td className="px-4 py-2.5 text-right font-semibold text-foreground">
                         {brl(l.vtTotal)}
                       </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          disabled={gerandoId === l.candidaturaId}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            void gerarRelatorio(l);
-                          }}
-                        >
-                          {gerandoId === l.candidaturaId ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Printer className="w-3.5 h-3.5" />
-                          )}
-                          Gerar
-                        </Button>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              setAjusteFor({
+                                id: l.candidaturaId,
+                                nome: l.nome,
+                              });
+                            }}
+                          >
+                            <ClipboardEdit className="w-3.5 h-3.5" />
+                            Ajustar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            disabled={gerandoId === l.candidaturaId}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              void gerarRelatorio(l);
+                            }}
+                          >
+                            {gerandoId === l.candidaturaId ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Printer className="w-3.5 h-3.5" />
+                            )}
+                            Gerar
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                     {aberto && l.pontos.length > 0 && (
@@ -339,6 +396,11 @@ export const ValeTransportePainel: React.FC = () => {
                                   >
                                     {p.tipo === 'entrada' ? 'Entrada' : 'Saída'}
                                   </span>
+                                  {p.origem === 'manual' && (
+                                    <span className="px-1.5 py-0.5 rounded bg-azul-respira/15 text-azul-respira font-medium">
+                                      manual
+                                    </span>
+                                  )}
                                   <span>
                                     acesso:{' '}
                                     <span className="text-foreground">
@@ -387,6 +449,19 @@ export const ValeTransportePainel: React.FC = () => {
                                       checklist {resumo.feitos}/{resumo.total}
                                     </span>
                                   )}
+                                  {p.origem === 'manual' && p.observacao && (
+                                    <span className="italic">
+                                      — {p.observacao}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setRemovendo(p)}
+                                    className="ml-auto inline-flex items-center gap-1 text-vermelho-kids hover:underline"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    remover
+                                  </button>
                                 </div>
                               );
                             })}
@@ -414,6 +489,52 @@ export const ValeTransportePainel: React.FC = () => {
           </table>
         </div>
       )}
+
+      <AjustePontoDialog
+        estagiario={ajusteFor}
+        registradoPor={registradoPor}
+        onSaved={() => void carregar()}
+        onOpenChange={(o) => {
+          if (!o) setAjusteFor(null);
+        }}
+      />
+
+      <AlertDialog
+        open={!!removendo}
+        onOpenChange={(o) => {
+          if (!o) setRemovendo(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover esta batida?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {removendo
+                ? `${removendo.tipo === 'entrada' ? 'Entrada' : 'Saída'} de ${fmtDataHora(
+                    removendo.registrado_em
+                  )}. A batida deixa de contar no fechamento e no relatório. Ação reversível apenas no banco.`
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeSaving}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmarRemocao();
+              }}
+              disabled={removeSaving}
+            >
+              {removeSaving && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

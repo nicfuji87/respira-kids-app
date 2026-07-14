@@ -10,6 +10,7 @@ import { Button } from '@/components/primitives/button';
 import { Card, CardContent } from '@/components/primitives/card';
 import { useAuth } from '@/hooks/useAuth';
 import { PontoRegistro } from './PontoRegistro';
+import { GeofenceConfig } from './GeofenceConfig';
 
 export const PontoEletronicoTab: React.FC = () => {
   const { user } = useAuth();
@@ -29,6 +30,7 @@ export const PontoEletronicoTab: React.FC = () => {
 
   return (
     <div className="space-y-3">
+      <GeofenceConfig />
       <div className="flex justify-end">
         <Button
           variant="outline"
