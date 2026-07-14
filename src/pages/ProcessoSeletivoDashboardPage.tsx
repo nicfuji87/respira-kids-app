@@ -27,7 +27,7 @@ import {
   ClipboardCheck,
   ChevronRight,
   Clock,
-  Wallet,
+  ClipboardList,
 } from 'lucide-react';
 import {
   StatusBadge,
@@ -76,7 +76,7 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
   const [filter, setFilter] = useState<FilterStatus>('todos');
   const [selected, setSelected] = useState<CandidaturaEstagioRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [mainTab, setMainTab] = useState<'ponto' | 'vt' | 'candidaturas'>(
+  const [mainTab, setMainTab] = useState<'ponto' | 'gestao' | 'candidaturas'>(
     'ponto'
   );
 
@@ -144,23 +144,25 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
             Estagiários
           </h1>
           <p className="text-muted-foreground mt-1">
-            Ponto eletrônico, vale-transporte e candidaturas dos estagiários.
+            Ponto eletrônico, gestão do estágio e candidaturas dos estagiários.
           </p>
         </div>
       </div>
 
       <Tabs
         value={mainTab}
-        onValueChange={(v) => setMainTab(v as 'ponto' | 'vt' | 'candidaturas')}
+        onValueChange={(v) =>
+          setMainTab(v as 'ponto' | 'gestao' | 'candidaturas')
+        }
       >
         <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="ponto" className="gap-2">
             <Clock className="w-4 h-4" />
             Ponto eletrônico
           </TabsTrigger>
-          <TabsTrigger value="vt" className="gap-2">
-            <Wallet className="w-4 h-4" />
-            Vale-transporte
+          <TabsTrigger value="gestao" className="gap-2">
+            <ClipboardList className="w-4 h-4" />
+            Gestão do estágio
           </TabsTrigger>
           <TabsTrigger value="candidaturas" className="gap-2">
             <Users className="w-4 h-4" />
@@ -172,7 +174,7 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
           <PontoEletronicoTab />
         </TabsContent>
 
-        <TabsContent value="vt" className="mt-4">
+        <TabsContent value="gestao" className="mt-4">
           <ValeTransportePainel />
         </TabsContent>
 
