@@ -12,3 +12,5 @@ export { EstagioSuccessScreen } from './EstagioSuccessScreen';
 export { StatusBadge, RecomendacaoBadge } from './EstagioBadges';
 export { EstagioCandidatoDetail } from './EstagioCandidatoDetail';
 export { EstagioContratoSection } from './EstagioContratoSection';
+export { PontoPainel } from './PontoPainel';
+export { PontoKiosk } from './PontoKiosk';

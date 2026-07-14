@@ -6,7 +6,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/primitives/card';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/primitives/tabs';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '@/components/primitives/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
@@ -21,11 +26,13 @@ import {
   Users,
   ClipboardCheck,
   ChevronRight,
+  Clock,
 } from 'lucide-react';
 import {
   StatusBadge,
   RecomendacaoBadge,
   EstagioCandidatoDetail,
+  PontoPainel,
 } from '@/components/domain/processo-seletivo';
 import {
   computeStats,
@@ -67,6 +74,9 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
   const [filter, setFilter] = useState<FilterStatus>('todos');
   const [selected, setSelected] = useState<CandidaturaEstagioRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [mainTab, setMainTab] = useState<'candidaturas' | 'ponto'>(
+    'candidaturas'
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -169,201 +179,230 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Card do link público */}
-      <Card className="bg-azul-respira/5 border-azul-respira/30">
-        <CardContent className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground/80 font-medium mb-1">
-              Link público do teste
-            </p>
-            <p className="text-sm font-mono text-foreground truncate">
-              {publicUrl}
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleCopyLink}
-            className="shrink-0 gap-2"
-          >
-            <Copy className="w-4 h-4" />
-            Copiar
-          </Button>
-        </CardContent>
-      </Card>
+      <Tabs
+        value={mainTab}
+        onValueChange={(v) => setMainTab(v as 'candidaturas' | 'ponto')}
+      >
+        <TabsList className="flex flex-wrap h-auto">
+          <TabsTrigger value="candidaturas" className="gap-2">
+            <Users className="w-4 h-4" />
+            Candidaturas
+          </TabsTrigger>
+          <TabsTrigger value="ponto" className="gap-2">
+            <Clock className="w-4 h-4" />
+            Ponto &amp; Vale-transporte
+          </TabsTrigger>
+        </TabsList>
 
-      {error && (
-        <Card className="border-destructive/40 bg-destructive/5">
-          <CardContent className="p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-            <p className="flex-1 text-sm text-foreground">{error}</p>
-            <Button variant="ghost" size="sm" onClick={() => void loadData()}>
-              Tentar novamente
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+        <TabsContent value="candidaturas" className="space-y-6 mt-4">
+          {/* Card do link público */}
+          <Card className="bg-azul-respira/5 border-azul-respira/30">
+            <CardContent className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground/80 font-medium mb-1">
+                  Link público do teste
+                </p>
+                <p className="text-sm font-mono text-foreground truncate">
+                  {publicUrl}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCopyLink}
+                className="shrink-0 gap-2"
+              >
+                <Copy className="w-4 h-4" />
+                Copiar
+              </Button>
+            </CardContent>
+          </Card>
 
-      {/* KPIs */}
-      {loading && rows.length === 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[0, 1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-5">
-                <Skeleton className="h-4 w-24 mb-3" />
-                <Skeleton className="h-8 w-16" />
+          {error && (
+            <Card className="border-destructive/40 bg-destructive/5">
+              <CardContent className="p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                <p className="flex-1 text-sm text-foreground">{error}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void loadData()}
+                >
+                  Tentar novamente
+                </Button>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      ) : (
-        rows.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              icon={Users}
-              tone="azul"
-              label="Candidaturas"
-              value={stats.total}
-            />
-            <StatCard
-              icon={Inbox}
-              tone="amarelo"
-              label="A avaliar"
-              value={stats.aAvaliar}
-            />
-            <StatCard
-              icon={ClipboardCheck}
-              tone="roxo"
-              label="Em entrevista"
-              value={stats.entrevista}
-            />
-            <StatCard
-              icon={Award}
-              tone="verde"
-              label="Média situacional"
-              value={
-                stats.mediaPontuacao !== null
-                  ? `${stats.mediaPontuacao}/${stats.pontuacaoMaxima}`
-                  : '—'
-              }
-            />
-          </div>
-        )
-      )}
+          )}
 
-      {/* Alerta de respostas de risco */}
-      {stats.comRespostaPerigosa > 0 && (
-        <Card className="border-vermelho-kids/40 bg-vermelho-kids/5">
-          <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-vermelho-kids shrink-0" />
-            <p className="text-sm text-foreground">
-              <span className="font-semibold">{stats.comRespostaPerigosa}</span>{' '}
-              candidatura(s) com resposta de risco em segurança — destacadas na
-              lista.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Empty state */}
-      {!loading && rows.length === 0 && (
-        <Card className="bg-bege-fundo/30 border-azul-respira/20">
-          <CardContent className="p-8 text-center space-y-3">
-            <Inbox className="w-12 h-12 text-azul-respira mx-auto" />
-            <p className="text-base text-foreground font-medium">
-              Ainda não há candidaturas
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Compartilhe o link público para começar a receber inscrições.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Filtro + lista */}
-      {rows.length > 0 && (
-        <div className="space-y-4">
-          <Tabs
-            value={filter}
-            onValueChange={(v) => setFilter(v as FilterStatus)}
-          >
-            <TabsList className="flex flex-wrap h-auto">
-              <TabsTrigger value="todos">Todos ({rows.length})</TabsTrigger>
-              {(
-                [
-                  'a_avaliar',
-                  'entrevista',
-                  'aprovado',
-                  'descartado',
-                ] as StatusCandidatura[]
-              ).map((s) => {
-                const count = rows.filter((r) => r.status === s).length;
-                return (
-                  <TabsTrigger key={s} value={s}>
-                    {STATUS_LABELS[s]} ({count})
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-          </Tabs>
-
-          {filteredRows.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                Nenhuma candidatura neste status.
-              </CardContent>
-            </Card>
+          {/* KPIs */}
+          {loading && rows.length === 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[0, 1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-5">
+                    <Skeleton className="h-4 w-24 mb-3" />
+                    <Skeleton className="h-8 w-16" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           ) : (
-            <div className="space-y-2">
-              {filteredRows.map((row) => {
-                const recomendacao = getRecomendacao(row);
-                return (
-                  <button
-                    key={row.id}
-                    type="button"
-                    onClick={() => handleOpenRow(row)}
-                    className={cn(
-                      'w-full text-left rounded-xl border bg-card p-4 transition-all',
-                      'hover:border-azul-respira/50 hover:shadow-md',
-                      'flex items-center gap-4',
-                      row.tem_resposta_perigosa && row.status === 'a_avaliar'
-                        ? 'border-vermelho-kids/40'
-                        : 'border-border/60'
-                    )}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-foreground truncate">
-                          {row.nome}
-                        </span>
-                        <StatusBadge status={row.status} />
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate mt-0.5">
-                        {[row.curso, row.instituicao]
-                          .filter(Boolean)
-                          .join(' · ') || row.email}
-                        <span className="text-muted-foreground/60">
-                          {' '}
-                          · {formatDate(row.created_at)}
-                        </span>
-                      </p>
-                    </div>
+            rows.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard
+                  icon={Users}
+                  tone="azul"
+                  label="Candidaturas"
+                  value={stats.total}
+                />
+                <StatCard
+                  icon={Inbox}
+                  tone="amarelo"
+                  label="A avaliar"
+                  value={stats.aAvaliar}
+                />
+                <StatCard
+                  icon={ClipboardCheck}
+                  tone="roxo"
+                  label="Em entrevista"
+                  value={stats.entrevista}
+                />
+                <StatCard
+                  icon={Award}
+                  tone="verde"
+                  label="Média situacional"
+                  value={
+                    stats.mediaPontuacao !== null
+                      ? `${stats.mediaPontuacao}/${stats.pontuacaoMaxima}`
+                      : '—'
+                  }
+                />
+              </div>
+            )
+          )}
 
-                    <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
-                      <span className="text-sm font-bold text-foreground">
-                        {row.pontuacao_situacional}/{row.pontuacao_maxima}
-                      </span>
-                      <RecomendacaoBadge recomendacao={recomendacao} />
-                    </div>
+          {/* Alerta de respostas de risco */}
+          {stats.comRespostaPerigosa > 0 && (
+            <Card className="border-vermelho-kids/40 bg-vermelho-kids/5">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-vermelho-kids shrink-0" />
+                <p className="text-sm text-foreground">
+                  <span className="font-semibold">
+                    {stats.comRespostaPerigosa}
+                  </span>{' '}
+                  candidatura(s) com resposta de risco em segurança — destacadas
+                  na lista.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
-                    <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
-                  </button>
-                );
-              })}
+          {/* Empty state */}
+          {!loading && rows.length === 0 && (
+            <Card className="bg-bege-fundo/30 border-azul-respira/20">
+              <CardContent className="p-8 text-center space-y-3">
+                <Inbox className="w-12 h-12 text-azul-respira mx-auto" />
+                <p className="text-base text-foreground font-medium">
+                  Ainda não há candidaturas
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Compartilhe o link público para começar a receber inscrições.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Filtro + lista */}
+          {rows.length > 0 && (
+            <div className="space-y-4">
+              <Tabs
+                value={filter}
+                onValueChange={(v) => setFilter(v as FilterStatus)}
+              >
+                <TabsList className="flex flex-wrap h-auto">
+                  <TabsTrigger value="todos">Todos ({rows.length})</TabsTrigger>
+                  {(
+                    [
+                      'a_avaliar',
+                      'entrevista',
+                      'aprovado',
+                      'descartado',
+                    ] as StatusCandidatura[]
+                  ).map((s) => {
+                    const count = rows.filter((r) => r.status === s).length;
+                    return (
+                      <TabsTrigger key={s} value={s}>
+                        {STATUS_LABELS[s]} ({count})
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </Tabs>
+
+              {filteredRows.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center text-muted-foreground">
+                    Nenhuma candidatura neste status.
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-2">
+                  {filteredRows.map((row) => {
+                    const recomendacao = getRecomendacao(row);
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => handleOpenRow(row)}
+                        className={cn(
+                          'w-full text-left rounded-xl border bg-card p-4 transition-all',
+                          'hover:border-azul-respira/50 hover:shadow-md',
+                          'flex items-center gap-4',
+                          row.tem_resposta_perigosa &&
+                            row.status === 'a_avaliar'
+                            ? 'border-vermelho-kids/40'
+                            : 'border-border/60'
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-foreground truncate">
+                              {row.nome}
+                            </span>
+                            <StatusBadge status={row.status} />
+                          </div>
+                          <p className="text-sm text-muted-foreground truncate mt-0.5">
+                            {[row.curso, row.instituicao]
+                              .filter(Boolean)
+                              .join(' · ') || row.email}
+                            <span className="text-muted-foreground/60">
+                              {' '}
+                              · {formatDate(row.created_at)}
+                            </span>
+                          </p>
+                        </div>
+
+                        <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
+                          <span className="text-sm font-bold text-foreground">
+                            {row.pontuacao_situacional}/{row.pontuacao_maxima}
+                          </span>
+                          <RecomendacaoBadge recomendacao={recomendacao} />
+                        </div>
+
+                        <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
+
+        <TabsContent value="ponto" className="mt-4">
+          <PontoPainel />
+        </TabsContent>
+      </Tabs>
 
       <EstagioCandidatoDetail
         row={selected}

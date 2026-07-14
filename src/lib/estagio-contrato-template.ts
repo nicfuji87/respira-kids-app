@@ -99,7 +99,7 @@ O presente Termo vigorará de {{vigenciaInicio}} a {{vigenciaFim}}, podendo ser 
 
 **Cláusula 5ª – Bolsa-Auxílio e Benefícios**
 
-A parte concedente pagará ao(à) estagiário(a) bolsa-auxílio no valor de R$ {{bolsaValor}} mensais, bem como auxílio-transporte no valor de R$ {{auxilioTransporte}}, sendo tais benefícios compulsórios em caso de estágio não obrigatório (art. 12 da Lei nº 11.788/2008), sem que isso configure vínculo empregatício.
+A parte concedente pagará ao(à) estagiário(a) bolsa-auxílio no valor de R$ {{bolsaValor}} mensais, bem como auxílio-transporte no valor de R$ {{auxilioTransporte}} por dia de efetivo comparecimento ao estágio, sendo tais benefícios compulsórios em caso de estágio não obrigatório (art. 12 da Lei nº 11.788/2008), sem que isso configure vínculo empregatício.
 
 **Cláusula 6ª – Seguro contra Acidentes Pessoais**
 

@@ -34,6 +34,18 @@ interface Props {
   row: CandidaturaEstagioRow;
 }
 
+interface EmpresaOption {
+  id: string;
+  razao_social: string;
+  cnpj: string;
+}
+
+interface PessoaOption {
+  id: string;
+  nome: string;
+  registro_profissional: string | null;
+}
+
 // Campos editáveis do form de aprovação (o restante vem da candidatura).
 interface FormState {
   obrigatorio: 'obrigatório' | 'não obrigatório';
@@ -81,6 +93,14 @@ export const EstagioContratoSection: React.FC<Props> = ({ row }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
+  // Listas para os selects de clínica / representante / supervisor.
+  const [empresas, setEmpresas] = useState<EmpresaOption[]>([]);
+  const [admins, setAdmins] = useState<PessoaOption[]>([]);
+  const [profissionais, setProfissionais] = useState<PessoaOption[]>([]);
+  const [empresaId, setEmpresaId] = useState('');
+  const [representanteId, setRepresentanteId] = useState('');
+  const [supervisorId, setSupervisorId] = useState('');
+
   const [form, setForm] = useState<FormState>({
     obrigatorio: 'não obrigatório',
     iesNome: row.instituicao || '',
@@ -108,28 +128,72 @@ export const EstagioContratoSection: React.FC<Props> = ({ row }) => {
     []
   );
 
-  // Carrega contrato existente + defaults da clínica (pessoa_empresas).
+  // Carrega contrato existente + listas (clínicas, admins, profissionais).
   useEffect(() => {
     let cancel = false;
     (async () => {
       setLoading(true);
       try {
-        const [existing, empresaRes] = await Promise.all([
+        const [existing, empresasRes, pessoasRes] = await Promise.all([
           fetchEstagioContrato(row.id),
           supabase
             .from('pessoa_empresas')
-            .select('razao_social, cnpj')
+            .select('id, razao_social, cnpj')
             .eq('ativo', true)
-            .order('razao_social')
-            .limit(1)
-            .maybeSingle(),
+            .order('razao_social'),
+          supabase
+            .from('pessoas')
+            .select('id, nome, role, registro_profissional')
+            .in('role', ['admin', 'profissional'])
+            .eq('ativo', true)
+            .order('nome'),
         ]);
         if (cancel) return;
         setContrato(existing);
-        if (empresaRes.data) {
+
+        const empresasList = (empresasRes.data ?? []) as (EmpresaOption & {
+          razao_social: string | null;
+          cnpj: string | null;
+        })[];
+        const empresasNorm: EmpresaOption[] = empresasList.map((e) => ({
+          id: e.id,
+          razao_social: e.razao_social || '',
+          cnpj: e.cnpj || '',
+        }));
+        setEmpresas(empresasNorm);
+
+        const pessoasList = (pessoasRes.data ?? []) as {
+          id: string;
+          nome: string;
+          role: string;
+          registro_profissional: string | null;
+        }[];
+        setAdmins(
+          pessoasList
+            .filter((p) => p.role === 'admin')
+            .map((p) => ({
+              id: p.id,
+              nome: p.nome,
+              registro_profissional: p.registro_profissional,
+            }))
+        );
+        setProfissionais(
+          pessoasList
+            .filter((p) => p.role === 'profissional')
+            .map((p) => ({
+              id: p.id,
+              nome: p.nome,
+              registro_profissional: p.registro_profissional,
+            }))
+        );
+
+        // Default: primeira clínica (ordenada por razão social).
+        const first = empresasNorm[0];
+        if (first) {
+          setEmpresaId(first.id);
           set({
-            concedenteRazaoSocial: empresaRes.data.razao_social || '',
-            concedenteCnpj: empresaRes.data.cnpj || '',
+            concedenteRazaoSocial: first.razao_social,
+            concedenteCnpj: first.cnpj,
           });
         }
       } finally {
@@ -140,6 +204,38 @@ export const EstagioContratoSection: React.FC<Props> = ({ row }) => {
       cancel = true;
     };
   }, [row.id, set]);
+
+  const onSelectEmpresa = useCallback(
+    (id: string) => {
+      setEmpresaId(id);
+      const e = empresas.find((x) => x.id === id);
+      if (e)
+        set({ concedenteRazaoSocial: e.razao_social, concedenteCnpj: e.cnpj });
+    },
+    [empresas, set]
+  );
+
+  const onSelectRepresentante = useCallback(
+    (id: string) => {
+      setRepresentanteId(id);
+      const p = admins.find((x) => x.id === id);
+      if (p) set({ representanteLegal: p.nome });
+    },
+    [admins, set]
+  );
+
+  const onSelectSupervisor = useCallback(
+    (id: string) => {
+      setSupervisorId(id);
+      const p = profissionais.find((x) => x.id === id);
+      if (p)
+        set({
+          supervisorNome: p.nome,
+          supervisorCrefito: p.registro_profissional || '',
+        });
+    },
+    [profissionais, set]
+  );
 
   const estagiarioEndereco = useMemo(() => buildEstagiarioEndereco(row), [row]);
 
@@ -367,7 +463,7 @@ export const EstagioContratoSection: React.FC<Props> = ({ row }) => {
         {field('bolsaValor', 'Bolsa-auxílio (R$/mês)', {
           placeholder: '0,00',
         })}
-        {field('auxilioTransporte', 'Auxílio-transporte (R$)', {
+        {field('auxilioTransporte', 'Auxílio-transporte (R$/dia)', {
           placeholder: '0,00',
         })}
         {field('avisoRescisaoDias', 'Aviso de rescisão (dias)', {
@@ -375,13 +471,63 @@ export const EstagioContratoSection: React.FC<Props> = ({ row }) => {
         })}
 
         <div className="sm:col-span-2 pt-1 border-t border-border/50" />
-        {field('concedenteRazaoSocial', 'Clínica (razão social)', {
-          full: true,
-        })}
+
+        {/* Clínica: selecionada dentre as empresas cadastradas (autofill CNPJ) */}
+        <div className="sm:col-span-2 space-y-1.5">
+          <Label className="text-foreground">Clínica (razão social)</Label>
+          <Select value={empresaId} onValueChange={onSelectEmpresa}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione a clínica" />
+            </SelectTrigger>
+            <SelectContent>
+              {empresas.map((e) => (
+                <SelectItem key={e.id} value={e.id}>
+                  {e.razao_social}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {field('concedenteCnpj', 'CNPJ da clínica')}
         {field('concedenteEndereco', 'Endereço da clínica', { full: true })}
-        {field('representanteLegal', 'Representante legal da clínica')}
-        {field('supervisorNome', 'Supervisor(a) (fisioterapeuta)')}
+
+        {/* Representante legal: selecionado dentre os admins */}
+        <div className="space-y-1.5">
+          <Label className="text-foreground">
+            Representante legal da clínica
+          </Label>
+          <Select value={representanteId} onValueChange={onSelectRepresentante}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione o(a) responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              {admins.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Supervisor: selecionado dentre os profissionais (autofill CREFITO) */}
+        <div className="space-y-1.5">
+          <Label className="text-foreground">
+            Supervisor(a) (fisioterapeuta)
+          </Label>
+          <Select value={supervisorId} onValueChange={onSelectSupervisor}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione o(a) supervisor(a)" />
+            </SelectTrigger>
+            <SelectContent>
+              {profissionais.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {field('supervisorCrefito', 'CREFITO do supervisor')}
         {field('comarca', 'Comarca (foro)')}
         {field('cidadeAssinatura', 'Cidade da assinatura')}
