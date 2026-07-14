@@ -1,8 +1,9 @@
-// AI dev note: Quiosque de ponto para o tablet da clínica. Overlay fullscreen
-// (cobre a sidebar) aberto pela staff logada; os estagiários batem o ponto sozinhos.
-// Fluxo: escolhe o nome -> abre a câmera -> tira a selfie (foto-comprovante) ->
-// registra entrada/saída (o tipo é decidido pela última batida do dia).
-// A foto é só comprovante visual — sem reconhecimento facial (LGPD leve).
+// AI dev note: Fluxo de registro de ponto do estagiário (usado inline na aba
+// "Ponto eletrônico" e também em tela cheia no tablet). Passos:
+//   lista de estagiários -> [se SAÍDA: checklist do turno] -> câmera (foto-
+//   comprovante + GPS; se ENTRADA mostra lembrete curto) -> confirmação.
+// Roda sob a sessão logada (admin/secretaria); o estagiário não tem acesso.
+// registradoPor = qual acesso registrou (auditoria). Checklist só na saída.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -15,8 +16,13 @@ import {
   RotateCcw,
   MapPin,
   MapPinOff,
+  CheckSquare,
+  Square,
+  ClipboardCheck,
+  ListChecks,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
+import { Textarea } from '@/components/primitives/textarea';
 import { cn } from '@/lib/utils';
 import {
   fetchEstagiariosAtivos,
@@ -29,14 +35,19 @@ import {
   type PontoTipo,
   type Coords,
 } from '@/lib/estagio-pontos-api';
+import {
+  CHECKLIST_SAIDA,
+  LEMBRETE_ENTRADA,
+  type ChecklistData,
+} from '@/lib/estagio-ponto-checklist';
 
 interface Props {
-  open: boolean;
-  onClose: () => void;
   registradoPor: string | null;
+  /** Se fornecido, mostra o botão "Sair da tela cheia" (uso no tablet). */
+  onClose?: () => void;
 }
 
-type View = 'lista' | 'camera' | 'ok';
+type View = 'lista' | 'checklist' | 'camera' | 'ok';
 
 function iniciais(nome: string): string {
   const parts = nome.trim().split(/\s+/);
@@ -49,11 +60,7 @@ function horaBR(d: Date): string {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export const PontoKiosk: React.FC<Props> = ({
-  open,
-  onClose,
-  registradoPor,
-}) => {
+export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
   const [view, setView] = useState<View>('lista');
   const [estagiarios, setEstagiarios] = useState<EstagiarioAtivo[]>([]);
   const [loadingLista, setLoadingLista] = useState(true);
@@ -67,13 +74,14 @@ export const PontoKiosk: React.FC<Props> = ({
   const [geoStatus, setGeoStatus] = useState<'pendente' | 'ok' | 'sem'>(
     'pendente'
   );
+  const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+  const [observacao, setObservacao] = useState('');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Carrega a lista quando abre.
+  // Carrega a lista de estagiários ativos.
   useEffect(() => {
-    if (!open) return;
     let cancel = false;
     setLoadingLista(true);
     (async () => {
@@ -89,19 +97,18 @@ export const PontoKiosk: React.FC<Props> = ({
     return () => {
       cancel = true;
     };
-  }, [open]);
+  }, []);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   }, []);
 
-  // Liga/desliga a câmera conforme a view.
+  // Liga a câmera + pede localização quando entra na view de câmera.
   useEffect(() => {
     if (view !== 'camera') return;
     let cancel = false;
 
-    // Pede a localização em paralelo (não bloqueia a câmera).
     setGeoStatus('pendente');
     setCoords(null);
     void getGeolocation().then((c) => {
@@ -142,17 +149,6 @@ export const PontoKiosk: React.FC<Props> = ({
     };
   }, [view, stopCamera]);
 
-  // Some tudo quando fecha.
-  useEffect(() => {
-    if (!open) {
-      stopCamera();
-      setView('lista');
-      setSelected(null);
-      setErro(null);
-      setCamError(null);
-    }
-  }, [open, stopCamera]);
-
   // Volta para a lista após confirmar.
   useEffect(() => {
     if (view !== 'ok') return;
@@ -163,16 +159,37 @@ export const PontoKiosk: React.FC<Props> = ({
     return () => clearTimeout(t);
   }, [view]);
 
+  const voltarLista = useCallback(() => {
+    stopCamera();
+    setView('lista');
+    setSelected(null);
+    setChecklist({});
+    setObservacao('');
+    setErro(null);
+  }, [stopCamera]);
+
   const escolher = useCallback(async (e: EstagiarioAtivo) => {
     setSelected(e);
     setErro(null);
+    let t: PontoTipo = 'entrada';
     try {
       const hoje = await fetchPontosHoje(e.id);
-      setTipo(proximaBatida(hoje));
+      t = proximaBatida(hoje);
     } catch {
-      setTipo('entrada');
+      t = 'entrada';
     }
-    setView('camera');
+    setTipo(t);
+    if (t === 'saida') {
+      const init: Record<string, boolean> = {};
+      CHECKLIST_SAIDA.forEach((i) => {
+        init[i.id] = false;
+      });
+      setChecklist(init);
+      setObservacao('');
+      setView('checklist');
+    } else {
+      setView('camera');
+    }
   }, []);
 
   const capturar = useCallback(async () => {
@@ -200,12 +217,17 @@ export const PontoKiosk: React.FC<Props> = ({
     setErro(null);
     try {
       const path = await uploadPontoFoto(selected.id, blob);
+      const checklistData: ChecklistData | null =
+        tipo === 'saida'
+          ? { items: checklist, observacao: observacao.trim() || undefined }
+          : null;
       await registrarPonto({
         candidaturaId: selected.id,
         tipo,
         fotoPath: path,
         registradoPor,
         coords,
+        checklist: checklistData,
       });
       stopCamera();
       setDoneAt(new Date());
@@ -215,48 +237,52 @@ export const PontoKiosk: React.FC<Props> = ({
     } finally {
       setSaving(false);
     }
-  }, [selected, tipo, registradoPor, coords, stopCamera]);
+  }, [
+    selected,
+    tipo,
+    checklist,
+    observacao,
+    registradoPor,
+    coords,
+    stopCamera,
+  ]);
 
-  const voltarLista = useCallback(() => {
-    stopCamera();
-    setView('lista');
-    setSelected(null);
-  }, [stopCamera]);
-
-  if (!open) return null;
+  const feitos = CHECKLIST_SAIDA.filter((i) => checklist[i.id]).length;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-bege-fundo to-background flex flex-col">
+    <div className="flex flex-col">
       {/* Cabeçalho */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-card/60 backdrop-blur">
+      <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border/60">
         <div>
-          <h2 className="text-xl font-bold text-foreground">
-            Ponto do estágio
+          <h2 className="text-lg font-bold text-foreground">
+            Ponto eletrônico
           </h2>
           <p className="text-sm text-muted-foreground">
             Toque no seu nome para registrar entrada ou saída.
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose} className="gap-2">
-          <X className="w-4 h-4" />
-          Sair do quiosque
-        </Button>
+        {onClose && (
+          <Button variant="ghost" size="sm" onClick={onClose} className="gap-2">
+            <X className="w-4 h-4" />
+            Sair da tela cheia
+          </Button>
+        )}
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        {/* ---- Lista de estagiários ---- */}
-        {view === 'lista' && (
-          <>
-            {loadingLista ? (
-              <div className="flex items-center justify-center py-20 text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin mr-2" /> Carregando...
-              </div>
-            ) : estagiarios.length === 0 ? (
-              <div className="text-center py-20 text-muted-foreground">
-                Nenhum estagiário ativo. Aprove candidaturas para habilitar o
-                ponto.
-              </div>
-            ) : (
+      <div className="flex-1 min-h-[260px]">
+        {/* ---- Lista ---- */}
+        {view === 'lista' &&
+          (loadingLista ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" /> Carregando...
+            </div>
+          ) : estagiarios.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              Nenhum estagiário ativo. Aprove candidaturas para habilitar o
+              ponto.
+            </div>
+          ) : (
+            <>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
                 {estagiarios.map((e) => (
                   <button
@@ -264,7 +290,7 @@ export const PontoKiosk: React.FC<Props> = ({
                     type="button"
                     onClick={() => void escolher(e)}
                     className={cn(
-                      'flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-border/60 bg-card p-6 min-h-[160px]',
+                      'flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-border/60 bg-card p-6 min-h-[150px]',
                       'transition-all hover:border-azul-respira hover:shadow-lg active:scale-95'
                     )}
                   >
@@ -277,13 +303,80 @@ export const PontoKiosk: React.FC<Props> = ({
                   </button>
                 ))}
               </div>
-            )}
-            {erro && (
-              <p className="text-center text-vermelho-kids text-sm mt-6">
-                {erro}
-              </p>
-            )}
-          </>
+              {erro && (
+                <p className="text-center text-vermelho-kids text-sm mt-6">
+                  {erro}
+                </p>
+              )}
+            </>
+          ))}
+
+        {/* ---- Checklist de saída ---- */}
+        {view === 'checklist' && selected && (
+          <div className="max-w-lg mx-auto space-y-4">
+            <div className="flex items-center gap-2 text-roxo-titulo">
+              <ClipboardCheck className="w-5 h-5" />
+              <span className="font-semibold">
+                Antes de sair, confirme o turno — {selected.nome}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {CHECKLIST_SAIDA.map((item) => {
+                const on = !!checklist[item.id];
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      setChecklist((p) => ({ ...p, [item.id]: !p[item.id] }))
+                    }
+                    className={cn(
+                      'w-full flex items-start gap-3 text-left rounded-xl border p-3 transition-colors',
+                      on
+                        ? 'border-verde-pipa bg-verde-pipa/10'
+                        : 'border-border/60 bg-card hover:border-azul-respira/50'
+                    )}
+                  >
+                    {on ? (
+                      <CheckSquare className="w-5 h-5 text-verde-pipa shrink-0 mt-0.5" />
+                    ) : (
+                      <Square className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+                    )}
+                    <span className="text-sm text-foreground">
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-muted-foreground">
+                Observações do turno (opcional)
+              </label>
+              <Textarea
+                value={observacao}
+                onChange={(e) => setObservacao(e.target.value)}
+                placeholder="Algo que a equipe precise saber?"
+                rows={2}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={voltarLista}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 gap-2"
+                onClick={() => setView('camera')}
+              >
+                <ListChecks className="w-4 h-4" />
+                Continuar ({feitos}/{CHECKLIST_SAIDA.length})
+              </Button>
+            </div>
+          </div>
         )}
 
         {/* ---- Câmera ---- */}
@@ -308,6 +401,26 @@ export const PontoKiosk: React.FC<Props> = ({
               {selected.nome}
             </p>
 
+            {/* Lembrete das atividades (só na entrada) */}
+            {tipo === 'entrada' && (
+              <div className="w-full rounded-xl border border-azul-respira/30 bg-azul-respira/5 p-3">
+                <p className="text-xs font-semibold text-azul-respira mb-1.5">
+                  Lembrete do turno
+                </p>
+                <ul className="space-y-1">
+                  {LEMBRETE_ENTRADA.map((l) => (
+                    <li
+                      key={l}
+                      className="text-xs text-foreground flex items-start gap-1.5"
+                    >
+                      <span className="text-azul-respira">•</span>
+                      {l}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-black/80 border border-border/60">
               <video
                 ref={videoRef}
@@ -322,7 +435,7 @@ export const PontoKiosk: React.FC<Props> = ({
               )}
             </div>
 
-            {/* Status da localização (comprova que bateu na clínica) */}
+            {/* Status da localização */}
             <div
               className={cn(
                 'flex items-center gap-1.5 text-xs',
@@ -352,10 +465,12 @@ export const PontoKiosk: React.FC<Props> = ({
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={voltarLista}
+                onClick={
+                  tipo === 'saida' ? () => setView('checklist') : voltarLista
+                }
                 disabled={saving}
               >
-                Cancelar
+                Voltar
               </Button>
               <Button
                 className="flex-1 gap-2"
@@ -375,7 +490,7 @@ export const PontoKiosk: React.FC<Props> = ({
 
         {/* ---- Confirmação ---- */}
         {view === 'ok' && selected && (
-          <div className="max-w-md mx-auto flex flex-col items-center gap-4 py-16 text-center">
+          <div className="max-w-md mx-auto flex flex-col items-center gap-4 py-12 text-center">
             <CheckCircle2 className="w-20 h-20 text-verde-pipa" />
             <p className="text-2xl font-bold text-foreground">
               {tipo === 'entrada' ? 'Entrada' : 'Saída'} registrada!
@@ -399,4 +514,4 @@ export const PontoKiosk: React.FC<Props> = ({
   );
 };
 
-PontoKiosk.displayName = 'PontoKiosk';
+PontoRegistro.displayName = 'PontoRegistro';

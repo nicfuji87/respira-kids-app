@@ -27,12 +27,14 @@ import {
   ClipboardCheck,
   ChevronRight,
   Clock,
+  Wallet,
 } from 'lucide-react';
 import {
   StatusBadge,
   RecomendacaoBadge,
   EstagioCandidatoDetail,
-  PontoPainel,
+  PontoEletronicoTab,
+  ValeTransportePainel,
 } from '@/components/domain/processo-seletivo';
 import {
   computeStats,
@@ -74,8 +76,8 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
   const [filter, setFilter] = useState<FilterStatus>('todos');
   const [selected, setSelected] = useState<CandidaturaEstagioRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [mainTab, setMainTab] = useState<'candidaturas' | 'ponto'>(
-    'candidaturas'
+  const [mainTab, setMainTab] = useState<'ponto' | 'vt' | 'candidaturas'>(
+    'ponto'
   );
 
   const loadData = useCallback(async () => {
@@ -142,59 +144,72 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
             Estagiários
           </h1>
           <p className="text-muted-foreground mt-1">
-            Candidaturas, correção automática do teste situacional e avaliação
-            da equipe.
+            Ponto eletrônico, vale-transporte e candidaturas dos estagiários.
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void loadData()}
-            disabled={loading}
-            className="gap-2"
-          >
-            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-            Atualizar
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyLink}
-            className="gap-2"
-          >
-            <Copy className="w-4 h-4" />
-            Copiar link
-          </Button>
-          <Button
-            size="sm"
-            onClick={() =>
-              window.open(publicUrl, '_blank', 'noopener,noreferrer')
-            }
-            className="gap-2"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Abrir teste
-          </Button>
         </div>
       </div>
 
       <Tabs
         value={mainTab}
-        onValueChange={(v) => setMainTab(v as 'candidaturas' | 'ponto')}
+        onValueChange={(v) => setMainTab(v as 'ponto' | 'vt' | 'candidaturas')}
       >
         <TabsList className="flex flex-wrap h-auto">
+          <TabsTrigger value="ponto" className="gap-2">
+            <Clock className="w-4 h-4" />
+            Ponto eletrônico
+          </TabsTrigger>
+          <TabsTrigger value="vt" className="gap-2">
+            <Wallet className="w-4 h-4" />
+            Vale-transporte
+          </TabsTrigger>
           <TabsTrigger value="candidaturas" className="gap-2">
             <Users className="w-4 h-4" />
             Candidaturas
           </TabsTrigger>
-          <TabsTrigger value="ponto" className="gap-2">
-            <Clock className="w-4 h-4" />
-            Ponto &amp; Vale-transporte
-          </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="ponto" className="mt-4">
+          <PontoEletronicoTab />
+        </TabsContent>
+
+        <TabsContent value="vt" className="mt-4">
+          <ValeTransportePainel />
+        </TabsContent>
+
         <TabsContent value="candidaturas" className="space-y-6 mt-4">
+          {/* Ações da candidatura */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadData()}
+              disabled={loading}
+              className="gap-2"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+              Atualizar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyLink}
+              className="gap-2"
+            >
+              <Copy className="w-4 h-4" />
+              Copiar link
+            </Button>
+            <Button
+              size="sm"
+              onClick={() =>
+                window.open(publicUrl, '_blank', 'noopener,noreferrer')
+              }
+              className="gap-2"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Abrir teste
+            </Button>
+          </div>
+
           {/* Card do link público */}
           <Card className="bg-azul-respira/5 border-azul-respira/30">
             <CardContent className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -397,10 +412,6 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
               )}
             </div>
           )}
-        </TabsContent>
-
-        <TabsContent value="ponto" className="mt-4">
-          <PontoPainel />
         </TabsContent>
       </Tabs>
 

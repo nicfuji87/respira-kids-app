@@ -6,6 +6,7 @@
 // Estagiário é identificado por candidatura_id (não existe em `pessoas`).
 
 import { supabase } from './supabase';
+import type { ChecklistData } from './estagio-ponto-checklist';
 
 const TABLE = 'estagio_pontos';
 const BUCKET = 'estagio-pontos';
@@ -30,6 +31,7 @@ export interface PontoRow {
   lat: number | null;
   lng: number | null;
   precisao_m: number | null;
+  checklist: ChecklistData | null;
   ativo: boolean;
 }
 
@@ -157,6 +159,7 @@ export async function registrarPonto(params: {
   fotoPath: string | null;
   registradoPor: string | null;
   coords?: Coords | null;
+  checklist?: ChecklistData | null;
 }): Promise<void> {
   const { error } = await supabase.from(TABLE).insert({
     candidatura_id: params.candidaturaId,
@@ -171,6 +174,7 @@ export async function registrarPonto(params: {
     lat: params.coords?.lat ?? null,
     lng: params.coords?.lng ?? null,
     precisao_m: params.coords?.precisao ?? null,
+    checklist: params.checklist ?? null,
   });
   if (error) throw error;
 }

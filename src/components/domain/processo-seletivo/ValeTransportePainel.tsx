@@ -1,12 +1,12 @@
-// AI dev note: Aba "Ponto & Vale-transporte" do painel de Estagiários.
-// Junta o launcher do quiosque (tablet) com o fechamento mensal: por estagiário,
-// dias de presença e horas (agregados das batidas) × valor/dia do contrato = VT a
-// pagar. É a base da folha de frequência que vai para a instituição de ensino.
+// AI dev note: Aba "Vale-transporte" do painel de Estagiários. Fechamento mensal:
+// por estagiário, dias de presença e horas (agregados das batidas de ponto) ×
+// valor/dia do contrato = VT a pagar. Expandindo a linha, mostra a auditoria de
+// cada batida (qual acesso registrou, localização e — na saída — o checklist do
+// turno). Botão "Gerar" imprime o relatório de estágio para a instituição.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Loader2,
-  MonitorSmartphone,
   RefreshCw,
   ChevronDown,
   ChevronRight,
@@ -14,14 +14,13 @@ import {
   Printer,
   MapPin,
   MapPinOff,
+  ListChecks,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Card, CardContent } from '@/components/primitives/card';
 import { Input } from '@/components/primitives/input';
 import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/hooks/useAuth';
-import { PontoKiosk } from './PontoKiosk';
 import {
   fetchEstagiariosAtivos,
   fetchPontosMes,
@@ -31,6 +30,7 @@ import {
   agruparDias,
   type FechamentoLinha,
 } from '@/lib/estagio-pontos-api';
+import { checklistResumo } from '@/lib/estagio-ponto-checklist';
 import {
   buildRelatorioEstagioHTML,
   abrirRelatorioParaImpressao,
@@ -79,12 +79,9 @@ function mesRefLabel(mesValue: string): string {
   return `${MESES[(m || 1) - 1]} de ${y}`;
 }
 
-export const PontoPainel: React.FC = () => {
-  const { user } = useAuth();
+export const ValeTransportePainel: React.FC = () => {
   const { toast } = useToast();
-  const registradoPor = user?.pessoa?.id ?? null;
 
-  const [kioskOpen, setKioskOpen] = useState(false);
   const [mesValue, setMesValue] = useState<string>(currentMonthValue());
   const [linhas, setLinhas] = useState<FechamentoLinha[]>([]);
   const [loading, setLoading] = useState(false);
@@ -129,7 +126,7 @@ export const PontoPainel: React.FC = () => {
       );
       setLinhas(result);
     } catch (err) {
-      console.error('[PontoPainel] erro ao carregar fechamento:', err);
+      console.error('[ValeTransportePainel] erro ao carregar fechamento:', err);
       setErro('Não consegui carregar o fechamento do mês.');
     } finally {
       setLoading(false);
@@ -183,7 +180,7 @@ export const PontoPainel: React.FC = () => {
           });
         }
       } catch (err) {
-        console.error('[PontoPainel] erro ao gerar relatório:', err);
+        console.error('[ValeTransportePainel] erro ao gerar relatório:', err);
         toast({ title: 'Falha ao gerar o relatório', variant: 'destructive' });
       } finally {
         setGerandoId(null);
@@ -194,28 +191,6 @@ export const PontoPainel: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      {/* Launcher do quiosque */}
-      <Card className="bg-azul-respira/5 border-azul-respira/30">
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <MonitorSmartphone className="w-6 h-6 text-azul-respira shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-foreground">
-                Quiosque de ponto (tablet)
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Abra em tela cheia no tablet da clínica. Cada estagiário
-                registra entrada/saída com uma selfie de comprovante.
-              </p>
-            </div>
-          </div>
-          <Button className="gap-2 shrink-0" onClick={() => setKioskOpen(true)}>
-            <MonitorSmartphone className="w-4 h-4" />
-            Abrir quiosque
-          </Button>
-        </CardContent>
-      </Card>
-
       {/* Fechamento mensal */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
@@ -337,57 +312,84 @@ export const PontoPainel: React.FC = () => {
                         <td />
                         <td colSpan={6} className="px-4 py-3">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground/70 font-medium mb-1.5">
-                            Auditoria das batidas · quem registrou e onde
+                            Auditoria das batidas · quem registrou, onde e o
+                            checklist da saída
                           </p>
-                          <div className="space-y-1">
-                            {l.pontos.map((p) => (
-                              <div
-                                key={p.id}
-                                className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground"
-                              >
-                                <span className="font-medium text-foreground w-24">
-                                  {fmtDataHora(p.registrado_em)}
-                                </span>
-                                <span
-                                  className={cn(
-                                    'px-1.5 py-0.5 rounded font-medium',
-                                    p.tipo === 'entrada'
-                                      ? 'bg-verde-pipa/25 text-roxo-titulo'
-                                      : 'bg-amarelo-pipa/25 text-roxo-titulo'
-                                  )}
+                          <div className="space-y-1.5">
+                            {l.pontos.map((p) => {
+                              const resumo =
+                                p.tipo === 'saida'
+                                  ? checklistResumo(p.checklist)
+                                  : null;
+                              return (
+                                <div
+                                  key={p.id}
+                                  className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground"
                                 >
-                                  {p.tipo === 'entrada' ? 'Entrada' : 'Saída'}
-                                </span>
-                                <span>
-                                  acesso:{' '}
-                                  <span className="text-foreground">
-                                    {p.registrado_por
-                                      ? (staffNomes[p.registrado_por] ??
-                                        'acesso removido')
-                                      : '—'}
+                                  <span className="font-medium text-foreground w-24">
+                                    {fmtDataHora(p.registrado_em)}
                                   </span>
-                                </span>
-                                {p.lat != null && p.lng != null ? (
-                                  <a
-                                    href={`https://www.google.com/maps?q=${p.lat},${p.lng}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-azul-respira underline"
+                                  <span
+                                    className={cn(
+                                      'px-1.5 py-0.5 rounded font-medium',
+                                      p.tipo === 'entrada'
+                                        ? 'bg-verde-pipa/25 text-roxo-titulo'
+                                        : 'bg-amarelo-pipa/25 text-roxo-titulo'
+                                    )}
                                   >
-                                    <MapPin className="w-3 h-3" />
-                                    ver no mapa
-                                    {p.precisao_m
-                                      ? ` (±${Math.round(p.precisao_m)}m)`
-                                      : ''}
-                                  </a>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-amarelo-pipa">
-                                    <MapPinOff className="w-3 h-3" />
-                                    sem localização
+                                    {p.tipo === 'entrada' ? 'Entrada' : 'Saída'}
                                   </span>
-                                )}
-                              </div>
-                            ))}
+                                  <span>
+                                    acesso:{' '}
+                                    <span className="text-foreground">
+                                      {p.registrado_por
+                                        ? (staffNomes[p.registrado_por] ??
+                                          'acesso removido')
+                                        : '—'}
+                                    </span>
+                                  </span>
+                                  {p.lat != null && p.lng != null ? (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${p.lat},${p.lng}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-azul-respira underline"
+                                    >
+                                      <MapPin className="w-3 h-3" />
+                                      ver no mapa
+                                      {p.precisao_m
+                                        ? ` (±${Math.round(p.precisao_m)}m)`
+                                        : ''}
+                                    </a>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-amarelo-pipa">
+                                      <MapPinOff className="w-3 h-3" />
+                                      sem localização
+                                    </span>
+                                  )}
+                                  {resumo && (
+                                    <span
+                                      title={
+                                        resumo.pendentes.length
+                                          ? `Pendentes: ${resumo.pendentes
+                                              .map((x) => x.label)
+                                              .join('; ')}`
+                                          : 'Tudo confirmado'
+                                      }
+                                      className={cn(
+                                        'inline-flex items-center gap-1',
+                                        resumo.pendentes.length
+                                          ? 'text-amarelo-pipa'
+                                          : 'text-verde-pipa'
+                                      )}
+                                    >
+                                      <ListChecks className="w-3 h-3" />
+                                      checklist {resumo.feitos}/{resumo.total}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </td>
                       </tr>
@@ -412,14 +414,8 @@ export const PontoPainel: React.FC = () => {
           </table>
         </div>
       )}
-
-      <PontoKiosk
-        open={kioskOpen}
-        onClose={() => setKioskOpen(false)}
-        registradoPor={registradoPor}
-      />
     </div>
   );
 };
 
-PontoPainel.displayName = 'PontoPainel';
+ValeTransportePainel.displayName = 'ValeTransportePainel';
