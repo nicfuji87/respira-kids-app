@@ -77,6 +77,24 @@ export interface ExistingUserFullData {
   estado?: string; // AI dev note: Campo correto da view vw_usuarios_admin
 }
 
+// AI dev note: Endereço de um usuário existente só pode ser reaproveitado (pulando a
+// etapa 'address') se estiver completo E o estado tiver exatamente 2 caracteres —
+// é o que a constraint enderecos_estado_check exige no banco. Cadastros antigos podem
+// ter endereço vazio/incompleto; sem esta checagem a etapa era pulada e o cadastro
+// quebrava no finalize sem que o usuário tivesse como corrigir o dado.
+function hasValidExistingAddress(
+  existingUserData?: ExistingUserFullData
+): boolean {
+  return !!(
+    existingUserData?.cep &&
+    existingUserData?.logradouro &&
+    existingUserData?.bairro &&
+    existingUserData?.cidade &&
+    existingUserData?.estado &&
+    existingUserData.estado.trim().length === 2
+  );
+}
+
 export interface PatientRegistrationData {
   // Etapa 1: WhatsApp
   whatsappJid?: string;
@@ -286,13 +304,36 @@ export const PatientRegistrationSteps =
         }));
 
         if (isSelfResponsible) {
-          // Se pessoa EXISTE e é o responsável → pular direto para financial-responsible
+          // Se pessoa EXISTE e é o responsável → pular direto para financial-responsible,
+          // MAS só se o endereço já cadastrado for válido e completo. Caso contrário,
+          // manda para a etapa 'address' (pré-preenchida) para o usuário corrigir.
           if (registrationData.existingPersonId) {
-            console.log(
-              '✅ [PatientRegistrationSteps] Usuário existente → pula direto para financial-responsible'
-            );
-            log('step_started', 'financial-responsible');
-            setCurrentStep('financial-responsible');
+            if (hasValidExistingAddress(registrationData.existingUserData)) {
+              console.log(
+                '✅ [PatientRegistrationSteps] Usuário existente com endereço válido → pula direto para financial-responsible'
+              );
+              log('step_started', 'financial-responsible');
+              setCurrentStep('financial-responsible');
+            } else {
+              console.log(
+                '⚠️ [PatientRegistrationSteps] Usuário existente com endereço incompleto/inválido → vai para address'
+              );
+              const existing = registrationData.existingUserData;
+              setRegistrationData((prev) => ({
+                ...prev,
+                endereco: {
+                  cep: existing?.cep || '',
+                  logradouro: existing?.logradouro || '',
+                  bairro: existing?.bairro || '',
+                  cidade: existing?.cidade || '',
+                  estado: existing?.estado || '',
+                  numero: existing?.numero_endereco || '',
+                  complemento: existing?.complemento_endereco || undefined,
+                },
+              }));
+              log('step_started', 'address');
+              setCurrentStep('address');
+            }
           } else {
             // Pessoa NOVA e é o responsável → cadastrar dados do responsável primeiro
             console.log(
@@ -314,7 +355,11 @@ export const PatientRegistrationSteps =
           });
         }
       },
-      [registrationData.existingPersonId, log]
+      [
+        registrationData.existingPersonId,
+        registrationData.existingUserData,
+        log,
+      ]
     );
 
     // Handler para dados do responsável
@@ -598,27 +643,30 @@ export const PatientRegistrationSteps =
         };
 
         // AI dev note: Formatar endereço completo evitando vírgulas duplas quando número está vazio
+        // AI dev note: registrationData.endereco tem prioridade — é o valor que passou pela
+        // etapa 'address' (validado). existingUserData é só fallback para quando essa etapa
+        // foi pulada (endereço já cadastrado e válido).
         const formatarEnderecoCompleto = () => {
           const logradouro =
-            existingUserData?.logradouro ||
             registrationData.endereco?.logradouro ||
+            existingUserData?.logradouro ||
             '';
           const numero =
-            existingUserData?.numero_endereco ||
             registrationData.endereco?.numero ||
+            existingUserData?.numero_endereco ||
             '';
           const complemento =
-            existingUserData?.complemento_endereco ||
             registrationData.endereco?.complemento ||
+            existingUserData?.complemento_endereco ||
             '';
           const bairro =
-            existingUserData?.bairro || registrationData.endereco?.bairro || '';
+            registrationData.endereco?.bairro || existingUserData?.bairro || '';
           const cidade =
-            existingUserData?.cidade || registrationData.endereco?.cidade || '';
+            registrationData.endereco?.cidade || existingUserData?.cidade || '';
           const uf =
-            existingUserData?.estado || registrationData.endereco?.estado || '';
+            registrationData.endereco?.estado || existingUserData?.estado || '';
           const cep =
-            existingUserData?.cep || registrationData.endereco?.cep || '';
+            registrationData.endereco?.cep || existingUserData?.cep || '';
 
           // Montar endereço: se número vazio, não incluir a vírgula extra
           let endereco = logradouro;
@@ -659,23 +707,23 @@ export const PatientRegistrationSteps =
           email: contratanteEmail,
           endereco_completo: formatarEnderecoCompleto(),
           logradouro:
-            existingUserData?.logradouro ||
             registrationData.endereco?.logradouro ||
+            existingUserData?.logradouro ||
             '',
           numero:
-            existingUserData?.numero_endereco ||
             registrationData.endereco?.numero ||
+            existingUserData?.numero_endereco ||
             '',
           complemento:
-            existingUserData?.complemento_endereco ||
-            registrationData.endereco?.complemento,
+            registrationData.endereco?.complemento ||
+            existingUserData?.complemento_endereco,
           bairro:
-            existingUserData?.bairro || registrationData.endereco?.bairro || '',
+            registrationData.endereco?.bairro || existingUserData?.bairro || '',
           cidade:
-            existingUserData?.cidade || registrationData.endereco?.cidade || '',
+            registrationData.endereco?.cidade || existingUserData?.cidade || '',
           uf:
-            existingUserData?.estado || registrationData.endereco?.estado || '',
-          cep: existingUserData?.cep || registrationData.endereco?.cep || '',
+            registrationData.endereco?.estado || existingUserData?.estado || '',
+          cep: registrationData.endereco?.cep || existingUserData?.cep || '',
           paciente: registrationData.paciente?.nome || '',
           dnPac: formatarDataBrasileira(
             registrationData.paciente?.dataNascimento || ''
