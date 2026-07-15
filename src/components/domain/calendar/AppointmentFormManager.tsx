@@ -199,6 +199,10 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setFutureWeekConfirmed(false);
         // AI dev note: Resetar nome do serviço ao abrir o formulário
         setSelectedServiceName('');
+        // AI dev note: Zerar a duração também — senão fica grudada de um serviço
+        // escolhido numa abertura anterior e a checagem de conflito roda com
+        // duração antiga (>0) mesmo sem serviço selecionado, gerando erro fantasma.
+        setSelectedServiceDuration(0);
       }
     }, [isOpen, initialDate, initialTime, initialPatientId]);
 
@@ -220,15 +224,29 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             return;
           }
 
-          const inicio = parseSupabaseDatetime(data_hora);
-          const fim = new Date(inicio.getTime() + duracao_minutos * 60 * 1000);
+          // AI dev note: data_hora é "hora de parede" (naïve). O banco grava e lê
+          // nesse mesmo referencial (ex.: 09:00 -> 09:00:00+00), então a janela de
+          // checagem precisa ser ancorada como UTC-de-parede — NÃO usar
+          // parseSupabaseDatetime()+toISOString(), que aplica o offset do navegador
+          // (BRT −03 -> +3h) e gera falso conflito com consultas 3h à frente.
+          const [datePart, timePartRaw = '00:00'] = data_hora.split('T');
+          const [year, month, day] = datePart.split('-').map(Number);
+          const [hour, minute, second = 0] = timePartRaw
+            .split('+')[0]
+            .split(':')
+            .map(Number);
+          const inicioMs = Date.UTC(year, month - 1, day, hour, minute, second);
+          const inicioIso = new Date(inicioMs).toISOString();
+          const fimIso = new Date(
+            inicioMs + duracao_minutos * 60 * 1000
+          ).toISOString();
 
           // AI dev note: Fonte única — consultas ativas (agendado/confirmado) +
           // bloqueios de agenda de clínica/profissional, por sobreposição real.
           const disponivel = await checkHorarioDisponivel(
             profissional_id,
-            inicio.toISOString(),
-            fim.toISOString()
+            inicioIso,
+            fimIso
           );
 
           if (!disponivel) {
