@@ -1,7 +1,7 @@
 // AI dev note: Configuração da cerca virtual (geofence) do ponto — define o centro
 // (posição atual, capturada DENTRO da clínica) + raio, e liga/desliga o bloqueio.
-// Fica no topo da aba "Ponto eletrônico" (admin/secretaria). Enquanto não houver
-// config ativa, o ponto funciona sem bloqueio por localização.
+// Fica no topo da aba "Ponto eletrônico" e SÓ aparece para admin (editar é
+// admin-only via RLS). Enquanto não houver config ativa, o ponto roda sem bloqueio.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {

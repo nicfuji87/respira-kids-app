@@ -271,6 +271,38 @@ export async function salvarGeofence(params: {
 }
 
 // =====================================================
+// Lockdown do quiosque (PIN para sair da tela cheia)
+// =====================================================
+
+/** Existe um PIN de quiosque configurado? (define se o lockdown está ligado) */
+export async function kioskHasPin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('estagio_kiosk_has_pin');
+  if (error) return false;
+  return data === true;
+}
+
+/** Valida o PIN digitado para sair do quiosque. */
+export async function kioskCheckPin(pin: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('estagio_kiosk_check_pin', {
+    p_pin: pin,
+  });
+  if (error) return false;
+  return data === true;
+}
+
+/** Define/atualiza o PIN do quiosque (apenas admin, valida no servidor). */
+export async function kioskSetPin(pin: string): Promise<void> {
+  const { error } = await supabase.rpc('estagio_kiosk_set_pin', { p_pin: pin });
+  if (error) throw error;
+}
+
+/** Remove o PIN do quiosque (desliga o lockdown, apenas admin). */
+export async function kioskClearPin(): Promise<void> {
+  const { error } = await supabase.rpc('estagio_kiosk_clear_pin');
+  if (error) throw error;
+}
+
+// =====================================================
 // Ajuste manual de ponto (esqueceu de bater / correção)
 // =====================================================
 
