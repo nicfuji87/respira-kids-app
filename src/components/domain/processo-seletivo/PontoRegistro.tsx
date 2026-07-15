@@ -255,16 +255,19 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
     const vw = video.videoWidth || 480;
     const vh = video.videoHeight || 480;
     const size = Math.min(vw, vh);
+    // A foto é só comprovante de presença — reduz para um quadrado pequeno e
+    // comprime bem (JPEG q0.5) para não ocupar espaço no bucket (~10-20KB).
+    const OUT = Math.min(size, 320);
     const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
+    canvas.width = OUT;
+    canvas.height = OUT;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const sx = (vw - size) / 2;
     const sy = (vh - size) / 2;
-    ctx.drawImage(video, sx, sy, size, size, 0, 0, size, size);
+    ctx.drawImage(video, sx, sy, size, size, 0, 0, OUT, OUT);
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85)
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.5)
     );
     if (!blob) {
       setErro('Falha ao capturar a foto. Tente novamente.');
