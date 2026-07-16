@@ -73,17 +73,21 @@ export const AgendaView = React.memo<AgendaViewProps>(
       );
     }
 
+    // AI dev note: Comparar sempre por início do dia. Usar new Date() (com hora
+    // atual) em differenceInDays trunca a fração e faz o dia seguinte virar "Hoje".
+    const today = startOfDay(new Date());
+
     return (
       <Card className={cn('w-full', className)}>
         <CardContent className="p-0">
           <ScrollArea className="h-[calc(100vh-10rem)] w-full">
             <div className="p-3 md:p-4 space-y-4 md:space-y-6">
               {daysWithEvents.map((day, dayIndex) => {
-                const isToday = isSameDay(day.date, new Date());
+                const isToday = isSameDay(day.date, today);
                 const dayLabel = format(day.date, "EEEE, dd 'de' MMMM", {
                   locale: ptBR,
                 });
-                const relativeDays = differenceInDays(day.date, new Date());
+                const relativeDays = differenceInDays(day.date, today);
 
                 let relativeLabel = '';
                 if (relativeDays === 0) relativeLabel = 'Hoje';

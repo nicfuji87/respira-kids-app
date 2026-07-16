@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   addDays,
+  startOfDay,
   startOfWeek,
   endOfWeek,
   addWeeks,
@@ -424,11 +425,14 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           if (process.env.NODE_ENV === 'development') {
             filteredEvents = events; // Simplificado para debug
           } else {
-            // Show upcoming events from current date
+            // AI dev note: Mostrar o dia inteiro a partir do INÍCIO do dia atual
+            // (startOfDay), não do horário atual. Usar currentDate cru escondia as
+            // consultas já passadas de hoje (ex.: manhã sumia após o meio-dia).
+            const inicioDoDia = startOfDay(currentDate);
             filteredEvents = events
               .filter((event) => {
                 const eventDate = new Date(event.start);
-                return eventDate >= currentDate;
+                return eventDate >= inicioDoDia;
               })
               .sort(
                 (a, b) =>

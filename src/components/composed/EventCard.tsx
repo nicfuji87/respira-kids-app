@@ -440,6 +440,10 @@ export const EventCard = React.memo<EventCardProps>(
       // Extrair dados do metadata
       const statusConsulta = (event.metadata?.statusConsulta as string) || '';
       const statusPagamento = (event.metadata?.statusPagamento as string) || '';
+      const profissionalNome =
+        (event.metadata?.profissionalNome as string) || '';
+      const responsavelLegalNome =
+        (event.metadata?.responsavelLegalNome as string) || '';
       const statusConsultaCor =
         (event.metadata?.statusConsultaCor as string) || '#3B82F6';
       const statusPagamentoCor =
@@ -491,15 +495,28 @@ export const EventCard = React.memo<EventCardProps>(
                 )}
               </div>
 
-              {event.description && (
+              {/* Responsável legal (se houver) */}
+              {responsavelLegalNome && (
                 <p
                   className={cn(
-                    'text-xs md:text-sm line-clamp-2',
-                    isCancelado ? 'text-gray-500' : 'text-muted-foreground'
+                    'text-xs md:text-sm italic',
+                    isCancelado ? 'text-gray-400' : 'text-muted-foreground'
                   )}
                 >
-                  {event.description}
+                  ({responsavelLegalNome})
                 </p>
+              )}
+
+              {/* Profissional (somente o nome, sem "Atendimento com...") */}
+              {profissionalNome && (
+                <div className="flex items-center gap-1.5 text-xs md:text-sm text-muted-foreground">
+                  <Users className="h-3 w-3 flex-shrink-0" />
+                  <span
+                    className={cn('truncate', isCancelado && 'text-gray-500')}
+                  >
+                    {profissionalNome}
+                  </span>
+                </div>
               )}
 
               {/* Status badges com cores corretas */}
