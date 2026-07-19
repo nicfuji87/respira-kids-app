@@ -1,7 +1,10 @@
 // AI dev note: PatientsList - Componente Composed para lista paginada de pacientes
 // Lista com 20 itens por página, busca integrada e navegação para detalhes
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+// AI dev note: busca/letra/filtros/página vivem na URL (useSearchParams) para
+// que voltar do detalhe restaure exatamente a vista; atualizações usam
+// replace:true para não poluir o histórico a cada tecla/filtro.
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   User,
@@ -51,30 +54,75 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   const [patients, setPatients] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalPatients, setTotalPatients] = useState(0);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortOption>('nome');
+
+  // AI dev note: Estado da vista derivado da URL (fonte de verdade). Params:
+  // q, pagina, letra, ordem, pediatras (ids separados por vírgula), atend, contrato
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const searchTerm = searchParams.get('q') ?? '';
+  const currentPage = (() => {
+    const n = parseInt(searchParams.get('pagina') ?? '1', 10);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  })();
+  const selectedLetter = searchParams.get('letra');
+  const sortBy: SortOption =
+    searchParams.get('ordem') === 'updated_at' ? 'updated_at' : 'nome';
+  const pediatrasParam = searchParams.get('pediatras') ?? '';
+  const selectedPediatras = useMemo(
+    () => (pediatrasParam ? pediatrasParam.split(',').filter(Boolean) : []),
+    [pediatrasParam]
+  );
+  const lastAppointmentDays = (() => {
+    const raw = searchParams.get('atend');
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+  const contractStatusParam = searchParams.get('contrato');
+  const contractStatus: ContractStatusFilter | null =
+    contractStatusParam === 'assinado' ||
+    contractStatusParam === 'pendente' ||
+    contractStatusParam === 'sem_contrato'
+      ? contractStatusParam
+      : null;
+
+  // Helper único para atualizar a URL (null/'' remove o param)
+  const updateParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [key, value] of Object.entries(updates)) {
+            if (value === null || value === '') {
+              next.delete(key);
+            } else {
+              next.set(key, value);
+            }
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  // Campo de busca local (a URL só é atualizada após o debounce)
+  const [searchInput, setSearchInput] = useState(searchTerm);
 
   // AI dev note: Filtro de pediatras
   const [pediatras, setPediatras] = useState<Pediatra[]>([]);
-  const [selectedPediatras, setSelectedPediatras] = useState<string[]>([]);
   const [pediatrasLoading, setPediatrasLoading] = useState(true);
   const [showPediatraFilter, setShowPediatraFilter] = useState(false);
 
-  // AI dev note: Filtro de último atendimento
-  const [lastAppointmentDays, setLastAppointmentDays] = useState<number | null>(
-    null
-  );
+  // AI dev note: Filtro de último atendimento (customDays é só o input transitório)
   const [customDays, setCustomDays] = useState<string>('');
   const [showAppointmentFilter, setShowAppointmentFilter] = useState(false);
 
   // AI dev note: Filtro de status de contrato (assinado/pendente/sem_contrato)
-  const [contractStatus, setContractStatus] =
-    useState<ContractStatusFilter | null>(null);
   const [showContractFilter, setShowContractFilter] = useState(false);
 
   const navigate = useNavigate();
@@ -151,11 +199,13 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     []
   );
 
-  // AI dev note: Carregar inicial
+  // AI dev note: Efeito ÚNICO de carga — dispara sempre que a vista (URL)
+  // muda. Também roda no mount, restaurando exatamente a vista ao voltar do
+  // detalhe do paciente.
   useEffect(() => {
     loadPatients(
-      '',
-      1,
+      searchTerm,
+      currentPage,
       selectedLetter,
       sortBy,
       selectedPediatras,
@@ -164,6 +214,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     );
   }, [
     loadPatients,
+    searchTerm,
+    currentPage,
     selectedLetter,
     sortBy,
     selectedPediatras,
@@ -171,69 +223,27 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     contractStatus,
   ]);
 
-  // AI dev note: Debounce para busca - removido currentPage da dependência
+  // AI dev note: Debounce da busca — o input local só vai para a URL (param q)
+  // após 300ms sem digitação; mudar a busca sempre volta para a página 1
   useEffect(() => {
+    if (searchInput === searchTerm) return;
     const timeoutId = setTimeout(() => {
-      setCurrentPage(1); // Sempre resetar para página 1 ao buscar
-      loadPatients(
-        searchTerm,
-        1,
-        selectedLetter,
-        sortBy,
-        selectedPediatras,
-        lastAppointmentDays,
-        contractStatus
-      );
+      updateParams({ q: searchInput || null, pagina: null });
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [
-    searchTerm,
-    selectedLetter,
-    sortBy,
-    selectedPediatras,
-    lastAppointmentDays,
-    contractStatus,
-    loadPatients,
-  ]);
-
-  // AI dev note: Carregar pacientes quando a página muda
-  useEffect(() => {
-    if (currentPage > 1) {
-      loadPatients(
-        searchTerm,
-        currentPage,
-        selectedLetter,
-        sortBy,
-        selectedPediatras,
-        lastAppointmentDays,
-        contractStatus
-      );
-    }
-  }, [
-    currentPage,
-    loadPatients,
-    searchTerm,
-    selectedLetter,
-    sortBy,
-    selectedPediatras,
-    lastAppointmentDays,
-    contractStatus,
-  ]);
+  }, [searchInput, searchTerm, updateParams]);
 
   // AI dev note: Funções para filtro de pediatras
   const handlePediatraToggle = (pediatraId: string) => {
-    setSelectedPediatras((prev) =>
-      prev.includes(pediatraId)
-        ? prev.filter((id) => id !== pediatraId)
-        : [...prev, pediatraId]
-    );
-    setCurrentPage(1);
+    const next = selectedPediatras.includes(pediatraId)
+      ? selectedPediatras.filter((id) => id !== pediatraId)
+      : [...selectedPediatras, pediatraId];
+    updateParams({ pediatras: next.join(',') || null, pagina: null });
   };
 
   const clearPediatraFilter = () => {
-    setSelectedPediatras([]);
-    setCurrentPage(1);
+    updateParams({ pediatras: null, pagina: null });
   };
 
   // AI dev note: Funções para filtro de último atendimento
@@ -246,23 +256,20 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   ];
 
   const handleAppointmentFilterChange = (days: number | null) => {
-    setLastAppointmentDays(days);
     setCustomDays('');
-    setCurrentPage(1);
+    updateParams({ atend: days ? String(days) : null, pagina: null });
   };
 
   const handleCustomDaysApply = () => {
     const days = parseInt(customDays, 10);
     if (!isNaN(days) && days > 0) {
-      setLastAppointmentDays(days);
-      setCurrentPage(1);
+      updateParams({ atend: String(days), pagina: null });
     }
   };
 
   const clearAppointmentFilter = () => {
-    setLastAppointmentDays(null);
     setCustomDays('');
-    setCurrentPage(1);
+    updateParams({ atend: null, pagina: null });
   };
 
   // AI dev note: Funções para filtro de status de contrato
@@ -289,13 +296,11 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   ];
 
   const handleContractStatusChange = (status: ContractStatusFilter | null) => {
-    setContractStatus(status);
-    setCurrentPage(1);
+    updateParams({ contrato: status, pagina: null });
   };
 
   const clearContractFilter = () => {
-    setContractStatus(null);
-    setCurrentPage(1);
+    updateParams({ contrato: null, pagina: null });
   };
 
   const contractStatusLabel = (status: ContractStatusFilter): string =>
@@ -310,38 +315,39 @@ export const PatientsList: React.FC<PatientsListProps> = ({
     }
   };
 
-  // AI dev note: Funções de paginação
+  // AI dev note: Funções de paginação (página 1 = sem param na URL)
+  const setPage = (page: number) => {
+    updateParams({ pagina: page <= 1 ? null : String(page) });
+  };
   const goToFirstPage = () => {
     if (currentPage !== 1 && !loading) {
-      setCurrentPage(1);
+      setPage(1);
     }
   };
   const goToPrevPage = () => {
     if (currentPage > 1 && !loading) {
-      setCurrentPage(currentPage - 1);
+      setPage(currentPage - 1);
     }
   };
   const goToNextPage = () => {
     if (currentPage < totalPages && !loading) {
-      setCurrentPage(currentPage + 1);
+      setPage(currentPage + 1);
     }
   };
   const goToLastPage = () => {
     if (currentPage !== totalPages && !loading) {
-      setCurrentPage(totalPages);
+      setPage(totalPages);
     }
   };
 
   // AI dev note: Funções de navegação por letra
   const handleLetterClick = (letter: string) => {
-    setSelectedLetter(letter);
-    setSearchTerm(''); // Limpar busca ao selecionar letra
-    setCurrentPage(1);
+    setSearchInput(''); // Limpar busca ao selecionar letra
+    updateParams({ letra: letter, q: null, pagina: null });
   };
 
   const clearLetterFilter = () => {
-    setSelectedLetter(null);
-    setCurrentPage(1);
+    updateParams({ letra: null, pagina: null });
   };
 
   // AI dev note: Função para formatar telefone
@@ -416,8 +422,8 @@ export const PatientsList: React.FC<PatientsListProps> = ({
           <Input
             type="text"
             placeholder="Buscar pacientes por nome, email, telefone ou CPF..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10 pr-4"
           />
           {searchLoading && (
@@ -434,8 +440,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
               variant={sortBy === 'nome' ? 'default' : 'outline'}
               size="default"
               onClick={() => {
-                setSortBy('nome');
-                setCurrentPage(1);
+                updateParams({ ordem: null, pagina: null });
               }}
               className="flex items-center gap-2"
             >
@@ -446,9 +451,12 @@ export const PatientsList: React.FC<PatientsListProps> = ({
               variant={sortBy === 'updated_at' ? 'default' : 'outline'}
               size="default"
               onClick={() => {
-                setSortBy('updated_at');
-                setSelectedLetter(null); // Limpar filtro de letra ao ordenar por data
-                setCurrentPage(1);
+                // Limpar filtro de letra ao ordenar por data
+                updateParams({
+                  ordem: 'updated_at',
+                  letra: null,
+                  pagina: null,
+                });
               }}
               className="flex items-center gap-2"
             >
@@ -737,9 +745,9 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
       {/* Lista de pacientes */}
       {loading && currentPage === 1 ? (
-        // Skeleton loading
+        // Skeleton loading (páginas têm 20 itens; 10 equilibra fidelidade e render)
         <div className="space-y-4">
-          {Array.from({ length: 5 }).map((_, index) => (
+          {Array.from({ length: 10 }).map((_, index) => (
             <Card key={index}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-4">
@@ -854,25 +862,27 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
                       {/* Status de pagamento e consultas */}
                       <div className="flex flex-col items-end gap-2 shrink-0">
-                        {/* Bolinha de status de pagamento */}
+                        {/* AI dev note: Badge com TEXTO (não só cor/tooltip) —
+                            estado de pagamento legível sem hover e acessível */}
                         {(patient.total_consultas_pagamento || 0) > 0 && (
                           <div className="flex items-center gap-2">
-                            <div
-                              className={`w-3 h-3 rounded-full ${
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-xs font-medium',
                                 patient.todas_consultas_pagas
-                                  ? 'bg-green-500' // Verde se todas pagas
+                                  ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300'
                                   : patient.tem_consultas_atrasadas
-                                    ? 'bg-red-500' // Vermelho se tem atrasadas
-                                    : 'bg-yellow-500' // Amarelo se tem pendentes
-                              }`}
-                              title={
-                                patient.todas_consultas_pagas
-                                  ? 'Todas as consultas pagas'
-                                  : patient.tem_consultas_atrasadas
-                                    ? `${patient.consultas_atrasadas} consulta${patient.consultas_atrasadas !== 1 ? 's' : ''} atrasada${patient.consultas_atrasadas !== 1 ? 's' : ''}`
-                                    : `${patient.consultas_pendentes} consulta${patient.consultas_pendentes !== 1 ? 's' : ''} pendente${patient.consultas_pendentes !== 1 ? 's' : ''}`
-                              }
-                            />
+                                    ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
+                                    : 'border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-300'
+                              )}
+                            >
+                              {patient.todas_consultas_pagas
+                                ? 'Em dia'
+                                : patient.tem_consultas_atrasadas
+                                  ? `${patient.consultas_atrasadas} atrasada${patient.consultas_atrasadas !== 1 ? 's' : ''}`
+                                  : `${patient.consultas_pendentes} pendente${patient.consultas_pendentes !== 1 ? 's' : ''}`}
+                            </Badge>
                             <span className="text-xs text-muted-foreground">
                               {patient.consultas_pagas}/
                               {patient.total_consultas_pagamento}
@@ -905,8 +915,9 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             size="sm"
             onClick={goToFirstPage}
             disabled={currentPage === 1 || loading}
+            aria-label="Primeira página"
           >
-            <ChevronsLeft className="h-4 w-4" />
+            <ChevronsLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
 
           <Button
@@ -914,8 +925,9 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             size="sm"
             onClick={goToPrevPage}
             disabled={currentPage === 1 || loading}
+            aria-label="Página anterior"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
 
           <div className="flex items-center gap-2 px-4">
@@ -932,8 +944,9 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             size="sm"
             onClick={goToNextPage}
             disabled={currentPage === totalPages || loading}
+            aria-label="Próxima página"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
 
           <Button
@@ -941,8 +954,9 @@ export const PatientsList: React.FC<PatientsListProps> = ({
             size="sm"
             onClick={goToLastPage}
             disabled={currentPage === totalPages || loading}
+            aria-label="Última página"
           >
-            <ChevronsRight className="h-4 w-4" />
+            <ChevronsRight className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       )}

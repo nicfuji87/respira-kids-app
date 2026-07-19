@@ -199,14 +199,6 @@ export const ComissaoManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: ComissaoProfissional) => {
-    if (
-      !confirm(
-        `Tem certeza que deseja excluir a comissão de "${item.profissional_nome}" para "${item.servico_nome}"?`
-      )
-    ) {
-      return;
-    }
-
     const userId = user?.pessoa?.id || undefined;
     const result = await deleteComissao(item.id, userId);
 
@@ -318,6 +310,8 @@ export const ComissaoManagement: React.FC = () => {
           onDelete={() => handleDelete(item)}
           ativo={item.ativo}
           canToggleStatus={false}
+          confirmDeleteTitle={`Excluir a comissão de "${item.profissional_nome}" para "${item.servico_nome}"?`}
+          confirmDeleteDescription="Esta ação não pode ser desfeita."
         />
       ),
       className: 'w-16',

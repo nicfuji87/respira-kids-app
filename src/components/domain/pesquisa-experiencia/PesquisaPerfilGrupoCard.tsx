@@ -126,7 +126,7 @@ export const PesquisaPerfilGrupoCard = React.memo<PesquisaPerfilGrupoCardProps>(
               <p className="text-2xl font-bold leading-none">
                 {perfil.totalRespondentes}
               </p>
-              <p className="text-[10px] uppercase tracking-wide mt-0.5">
+              <p className="text-[11px] uppercase tracking-wide mt-0.5">
                 respostas
               </p>
             </div>

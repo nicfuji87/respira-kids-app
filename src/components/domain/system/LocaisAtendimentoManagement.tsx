@@ -9,10 +9,10 @@ import {
   type GenericTableColumn,
   type FormField,
 } from '@/components/composed';
-import type { 
-  LocalAtendimento, 
+import type {
+  LocalAtendimento,
   LocalAtendimentoCreateInput,
-  SystemEntityFilters 
+  SystemEntityFilters,
 } from '@/types/system-config';
 import {
   fetchLocaisAtendimento,
@@ -30,7 +30,7 @@ export const LocaisAtendimentoManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filters] = useState<SystemEntityFilters>({
     page: 1,
-    limit: 10
+    limit: 10,
   });
 
   // Modal states
@@ -45,8 +45,8 @@ export const LocaisAtendimentoManagement: React.FC = () => {
       tipo_local: 'clinica',
       numero_endereco: '',
       complemento_endereco: '',
-      ativo: true
-    }
+      ativo: true,
+    },
   });
 
   // === DATA LOADING ===
@@ -85,12 +85,12 @@ export const LocaisAtendimentoManagement: React.FC = () => {
       tipo_local: 'clinica' as const,
       numero_endereco: '',
       complemento_endereco: '',
-      ativo: true
+      ativo: true,
     };
-    
+
     form.reset(defaultValues);
     setEditingItem(null);
-    
+
     // Pequeno delay para garantir que o form seja resetado antes do modal abrir
     setTimeout(() => {
       setIsFormOpen(true);
@@ -101,12 +101,12 @@ export const LocaisAtendimentoManagement: React.FC = () => {
     // Garantir que todos os valores sejam válidos para evitar React.Children.only error
     const formValues = {
       nome: item.nome || '',
-      tipo_local: item.tipo_local || 'clinica' as const,
+      tipo_local: item.tipo_local || ('clinica' as const),
       numero_endereco: item.numero_endereco || '',
       complemento_endereco: item.complemento_endereco || '',
-      ativo: Boolean(item.ativo)
+      ativo: Boolean(item.ativo),
     };
-    
+
     form.reset(formValues);
     setEditingItem(item);
     setIsFormOpen(true);
@@ -114,15 +114,15 @@ export const LocaisAtendimentoManagement: React.FC = () => {
 
   const handleSubmit = async (formData: LocalAtendimentoCreateInput) => {
     setIsSubmitting(true);
-    
+
     try {
       let result;
-      
+
       if (editingItem) {
         // Ao editar, manter ID original
         result = await updateLocalAtendimento({
           ...formData,
-          id: editingItem.id
+          id: editingItem.id,
         });
       } else {
         // Ao criar, novo local
@@ -155,12 +155,8 @@ export const LocaisAtendimentoManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: LocalAtendimento) => {
-    if (!confirm(`Tem certeza que deseja excluir "${item.nome}"?`)) {
-      return;
-    }
-
     const result = await deleteLocalAtendimento(item.id);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -178,7 +174,7 @@ export const LocaisAtendimentoManagement: React.FC = () => {
 
   const handleToggleStatus = async (item: LocalAtendimento) => {
     const result = await toggleLocalAtendimentoStatus(item.id, !item.ativo);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -197,18 +193,18 @@ export const LocaisAtendimentoManagement: React.FC = () => {
   // === HELPER FUNCTIONS ===
   const getTipoLocalLabel = (tipo: string) => {
     const labels = {
-      'clinica': 'Clínica',
-      'domiciliar': 'Domiciliar',
-      'externa': 'Externa'
+      clinica: 'Clínica',
+      domiciliar: 'Domiciliar',
+      externa: 'Externa',
     };
     return labels[tipo as keyof typeof labels] || tipo;
   };
 
   const getTipoLocalBadgeColor = (tipo: string) => {
     const colors = {
-      'clinica': 'bg-blue-100 text-blue-800',
-      'domiciliar': 'bg-green-100 text-green-800',
-      'externa': 'bg-orange-100 text-orange-800'
+      clinica: 'bg-blue-100 text-blue-800',
+      domiciliar: 'bg-green-100 text-green-800',
+      externa: 'bg-orange-100 text-orange-800',
     };
     return colors[tipo as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
@@ -218,17 +214,19 @@ export const LocaisAtendimentoManagement: React.FC = () => {
     {
       key: 'nome',
       label: 'Nome',
-      className: 'font-medium'
+      className: 'font-medium',
     },
     {
       key: 'tipo_local',
       label: 'Tipo',
       render: (item) => (
-        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getTipoLocalBadgeColor(item.tipo_local)}`}>
+        <span
+          className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getTipoLocalBadgeColor(item.tipo_local)}`}
+        >
           {getTipoLocalLabel(item.tipo_local)}
         </span>
       ),
-      className: 'w-32'
+      className: 'w-32',
     },
     {
       key: 'endereco',
@@ -241,20 +239,22 @@ export const LocaisAtendimentoManagement: React.FC = () => {
             item.numero_endereco,
             item.endereco.bairro,
             item.endereco.cidade,
-            item.endereco.estado
-          ].filter(Boolean).join(', ');
-          
+            item.endereco.estado,
+          ]
+            .filter(Boolean)
+            .join(', ');
+
           return enderecoCompleto || '-';
         }
-        
+
         // Fallback para número e complemento apenas (casos antigos)
         const enderecoParts = [
           item.numero_endereco,
-          item.complemento_endereco
+          item.complemento_endereco,
         ].filter(Boolean);
         return enderecoParts.length > 0 ? enderecoParts.join(', ') : '-';
       },
-      className: 'text-muted-foreground max-w-xs truncate'
+      className: 'text-muted-foreground max-w-xs truncate',
     },
     {
       key: 'ativo',
@@ -268,13 +268,13 @@ export const LocaisAtendimentoManagement: React.FC = () => {
           <StatusBadge ativo={item.ativo} />
         </button>
       ),
-      className: 'w-24'
+      className: 'w-24',
     },
     {
       key: 'created_at',
       label: 'Criado em',
       render: (item) => new Date(item.created_at).toLocaleDateString('pt-BR'),
-      className: 'w-32 text-sm text-muted-foreground'
+      className: 'w-32 text-sm text-muted-foreground',
     },
     {
       key: 'actions',
@@ -285,10 +285,12 @@ export const LocaisAtendimentoManagement: React.FC = () => {
           onDelete={() => handleDelete(item)}
           ativo={item.ativo}
           canToggleStatus={false}
+          confirmDeleteTitle={`Excluir o local de atendimento "${item.nome}"?`}
+          confirmDeleteDescription="Esta ação não pode ser desfeita."
         />
       ),
-      className: 'w-16'
-    }
+      className: 'w-16',
+    },
   ];
 
   // === FORM FIELDS ===
@@ -298,7 +300,7 @@ export const LocaisAtendimentoManagement: React.FC = () => {
       label: 'Nome',
       type: 'text',
       placeholder: 'Ex: Clínica - Sala 1, Atendimento Domiciliar',
-      required: true
+      required: true,
     },
     {
       name: 'tipo_local',
@@ -308,21 +310,21 @@ export const LocaisAtendimentoManagement: React.FC = () => {
       options: [
         { value: 'clinica', label: 'Clínica' },
         { value: 'domiciliar', label: 'Domiciliar' },
-        { value: 'externa', label: 'Externa' }
-      ]
+        { value: 'externa', label: 'Externa' },
+      ],
     },
     {
       name: 'numero_endereco',
       label: 'Número/Endereço',
       type: 'text',
-      placeholder: 'Ex: 311, Rua das Flores 123'
+      placeholder: 'Ex: 311, Rua das Flores 123',
     },
     {
       name: 'complemento_endereco',
       label: 'Complemento',
       type: 'text',
-      placeholder: 'Ex: Bloco A, Apt 205, Sala 3'
-    }
+      placeholder: 'Ex: Bloco A, Apt 205, Sala 3',
+    },
   ];
 
   return (
@@ -346,10 +348,14 @@ export const LocaisAtendimentoManagement: React.FC = () => {
         onSubmit={handleSubmit}
         form={form}
         fields={formFields}
-        title={editingItem ? 'Editar Local de Atendimento' : 'Novo Local de Atendimento'}
+        title={
+          editingItem
+            ? 'Editar Local de Atendimento'
+            : 'Novo Local de Atendimento'
+        }
         description={
-          editingItem 
-            ? 'Altere os dados do local de atendimento' 
+          editingItem
+            ? 'Altere os dados do local de atendimento'
             : 'Preencha os dados para criar um novo local'
         }
         isEditing={!!editingItem}
@@ -359,4 +365,4 @@ export const LocaisAtendimentoManagement: React.FC = () => {
   );
 };
 
-LocaisAtendimentoManagement.displayName = 'LocaisAtendimentoManagement'; 
+LocaisAtendimentoManagement.displayName = 'LocaisAtendimentoManagement';

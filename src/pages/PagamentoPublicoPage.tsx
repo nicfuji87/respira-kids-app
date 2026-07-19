@@ -11,6 +11,7 @@ import {
   Check,
   ShieldCheck,
   Lock,
+  MessageCircle,
 } from 'lucide-react';
 
 import {
@@ -22,7 +23,6 @@ import {
 } from '@/components/primitives/card';
 import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
-import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
 import { fetchLinkPublico, confirmarPagamento } from '@/lib/payment-links-api';
@@ -37,6 +37,10 @@ import type {
 // function confirm-payment-link cria a cobrança no Asaas: PIX exibe o QR aqui;
 // cartão redireciona para o checkout hospedado do Asaas (invoiceUrl).
 // A seleção é unificada (PIX ou cartão+parcelas) com check visível na opção escolhida.
+
+// AI dev note: WhatsApp de contato da clínica (mesmo número usado em
+// SharedSchedulePage e PatientRegistrationSteps). Se mudar, atualizar nos três.
+const CLINIC_WHATSAPP_URL = 'https://wa.me/556181446666';
 
 const formatBRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -170,18 +174,10 @@ export const PagamentoPublicoPage: React.FC = () => {
 
   if (error || !link) {
     return (
-      <PageShell>
-        <Card className="w-full max-w-md rounded-2xl shadow-lg">
-          <CardContent className="pt-6">
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                {error || 'Link de pagamento não encontrado'}
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-      </PageShell>
+      <LinkIndisponivelScreen
+        titulo="Este link de pagamento não está mais disponível"
+        descricao="Ele pode ter expirado ou o pagamento já pode ter sido concluído. Se precisar de um novo link, é só falar com a gente."
+      />
     );
   }
 
@@ -189,27 +185,20 @@ export const PagamentoPublicoPage: React.FC = () => {
     link.expirado || link.status === 'expirado' || link.status === 'cancelado';
 
   if (invalido) {
+    const expirou = link.expirado || link.status === 'expirado';
     return (
-      <PageShell>
-        <Card className="w-full max-w-md rounded-2xl shadow-lg">
-          <CardHeader className="text-center">
-            <IconBubble tone="muted">
-              <AlertTriangle className="h-6 w-6" />
-            </IconBubble>
-            <CardTitle>Link indisponível</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                {link.expirado || link.status === 'expirado'
-                  ? 'Este link de pagamento expirou. Entre em contato para gerar um novo.'
-                  : 'Este link de pagamento foi cancelado.'}
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-      </PageShell>
+      <LinkIndisponivelScreen
+        titulo={
+          expirou
+            ? 'Este link de pagamento expirou'
+            : 'Este link de pagamento foi cancelado'
+        }
+        descricao={
+          expirou
+            ? 'Por segurança, os links de pagamento têm prazo de validade. Fale com a clínica para receber um novo link.'
+            : 'Se você acredita que isso foi um engano ou precisa de um novo link, fale com a clínica.'
+        }
+      />
     );
   }
 
@@ -228,6 +217,21 @@ export const PagamentoPublicoPage: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Valor em destaque para conferência no app do banco */}
+            <div className="rounded-xl border bg-muted/30 p-3 text-center">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Valor a pagar
+              </p>
+              <p className="text-3xl font-bold tracking-tight text-foreground">
+                {formatBRL(link.opcoes.pix.total)}
+              </p>
+              {link.paciente_nome && (
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {link.paciente_nome}
+                  {link.empresa_nome && ` • ${link.empresa_nome}`}
+                </p>
+              )}
+            </div>
             {pixResult.encodedImage && (
               <div className="flex justify-center">
                 <img
@@ -285,7 +289,7 @@ export const PagamentoPublicoPage: React.FC = () => {
                   }.`}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Button
               className="h-12 w-full text-base"
               disabled={isConfirming}
@@ -301,6 +305,20 @@ export const PagamentoPublicoPage: React.FC = () => {
               )}
               Continuar pagamento
             </Button>
+
+            {/* Orientação: o que fazer em cada situação */}
+            <div className="space-y-1.5 rounded-xl border bg-muted/30 p-3 text-sm leading-relaxed text-muted-foreground">
+              <p>
+                <strong className="text-foreground">Já pagou?</strong> Pode
+                desconsiderar este link — a confirmação é automática.
+              </p>
+              <p>
+                <strong className="text-foreground">Teve algum problema</strong>{' '}
+                ou quer trocar a forma de pagamento? Fale com a clínica.
+              </p>
+            </div>
+
+            <WhatsAppCta variant="outline" />
           </CardContent>
         </Card>
       </PageShell>
@@ -483,6 +501,60 @@ const PageShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-background to-muted/40 p-4">
     {children}
   </div>
+);
+
+// CTA de contato com a clínica (WhatsApp). Primário quando é a única saída da
+// tela (ex.: link indisponível); outline quando é ação secundária.
+const WhatsAppCta: React.FC<{ variant?: 'default' | 'outline' }> = ({
+  variant = 'default',
+}) => (
+  <Button
+    asChild
+    variant={variant}
+    className={cn(
+      'h-12 w-full text-base',
+      variant === 'outline' && 'text-sm font-medium'
+    )}
+  >
+    <a href={CLINIC_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+      <MessageCircle className="mr-2 h-5 w-5" />
+      Falar com a clínica no WhatsApp
+    </a>
+  </Button>
+);
+
+// Tela completa (com marca) para link inexistente, expirado ou cancelado.
+// Nunca deixar a pessoa sem saída: sempre oferecer o WhatsApp da clínica.
+const LinkIndisponivelScreen: React.FC<{
+  titulo: string;
+  descricao: string;
+}> = ({ titulo, descricao }) => (
+  <PageShell>
+    <Card className="w-full max-w-md rounded-2xl shadow-lg">
+      <CardHeader className="space-y-4 text-center">
+        <img
+          src="/images/logos/nome-logo-respira-kids.png"
+          alt="Respira Kids"
+          className="mx-auto h-10 w-auto"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+        <IconBubble tone="muted">
+          <AlertTriangle className="h-6 w-6" />
+        </IconBubble>
+        <div className="space-y-1.5">
+          <CardTitle className="text-xl leading-snug">{titulo}</CardTitle>
+          <CardDescription className="leading-relaxed">
+            {descricao}
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <WhatsAppCta />
+      </CardContent>
+    </Card>
+  </PageShell>
 );
 
 const IconBubble: React.FC<{

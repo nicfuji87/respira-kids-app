@@ -52,8 +52,8 @@ export function PatientRegistrationSuccessPage() {
         {/* Ícone de Sucesso */}
         <div className="flex justify-center">
           <div className="relative">
-            <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping" />
-            <div className="relative bg-green-500 rounded-full p-6">
+            <div className="absolute inset-0 bg-verde-pipa/25 rounded-full animate-ping" />
+            <div className="relative bg-verde-pipa rounded-full p-6">
               <CheckCircle className="w-16 h-16 text-white" />
             </div>
           </div>
@@ -124,8 +124,8 @@ export function PatientRegistrationSuccessPage() {
             </div>
 
             {/* Agendamento */}
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800">
-              <CheckCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-roxo-titulo/5 dark:bg-roxo-titulo/15 border border-roxo-titulo/20 dark:border-roxo-titulo/30">
+              <CheckCircle className="w-5 h-5 text-roxo-titulo dark:text-roxo-titulo/90 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
                 <h3 className="font-semibold text-foreground">
                   Aguarde o Contato
@@ -157,7 +157,7 @@ export function PatientRegistrationSuccessPage() {
             variant="outline"
             size="lg"
             onClick={handleInstagramClick}
-            className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0"
+            className="w-full sm:w-auto border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
           >
             <Instagram className="w-4 h-4 mr-2" />
             Seguir @respira.kids

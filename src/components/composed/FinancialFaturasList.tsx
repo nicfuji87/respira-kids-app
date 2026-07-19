@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Bell,
   Download,
+  Wrench,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -44,7 +45,6 @@ import {
   SelectValue,
 } from '@/components/primitives/select';
 import { DatePicker } from './DatePicker';
-import { cn } from '@/lib/utils';
 import { emitirNfeFatura } from '@/lib/faturas-api';
 import {
   gerarRelatorioNfePdf,
@@ -62,6 +62,7 @@ import {
   FinancialNfeEmissaoMassa,
   type FaturaParaNfe,
 } from './FinancialNfeEmissaoMassa';
+import { FaturaAjusteManualDialog } from './FaturaAjusteManualDialog';
 import { supabase } from '@/lib/supabase';
 
 // AI dev note: Lista de faturas para área financeira com otimizações de performance
@@ -102,22 +103,24 @@ type SortOption =
   | 'valor_desc'
   | 'valor_asc';
 
+// AI dev note: o card NÃO tem mais onFaturaClick — clicar no card abria o site do
+// ASAAS em nova aba sem nenhuma indicação. As ações agora são botões explícitos
+// por card: "Ver no ASAAS" e "Ajustar/Sincronizar" (recuperação de webhook).
 interface FinancialFaturasListProps {
-  onFaturaClick?: (fatura: FaturaComDetalhes) => void;
   className?: string;
 }
 
 export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
-  onFaturaClick,
   className,
 }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [faturas, setFaturas] = useState<FaturaComDetalhes[]>([]);
-  const [filteredFaturas, setFilteredFaturas] = useState<FaturaComDetalhes[]>(
-    []
-  );
   const [isLoading, setIsLoading] = useState(true);
+  // AI dev note: skeleton só na PRIMEIRA carga. Nas recargas por mudança de
+  // filtro/busca (agora aplicados no servidor) mantemos a lista montada para
+  // não desmontar o campo de busca no meio da digitação (perderia o foco).
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEmitingNfe, setIsEmitingNfe] = useState<string | null>(null);
   // AI dev note: IDs de faturas que acabaram de ter NFe (re)emitida e estão
@@ -132,6 +135,11 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   // "cancelar e reemitir NFe". Quando null, o diálogo fica fechado.
   const [faturaToCancelReissue, setFaturaToCancelReissue] =
     useState<FaturaComDetalhes | null>(null);
+  // AI dev note: Fatura com o diálogo de Ajustar/Sincronizar aberto (recuperação
+  // de webhook falho — 41 faturas pagas já ficaram presas como pendentes). Reusa
+  // o FaturaAjusteManualDialog da página do paciente, agora a 1 clique daqui.
+  const [faturaParaAjuste, setFaturaParaAjuste] =
+    useState<FaturaComDetalhes | null>(null);
 
   // Estados de filtro
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('mes_atual');
@@ -139,6 +147,9 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   const [endDate, setEndDate] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
   const [searchQuery, setSearchQuery] = useState('');
+  // AI dev note: a busca agora filtra no SERVIDOR; o termo com debounce é o que
+  // entra na query, para não disparar uma requisição a cada tecla digitada.
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('data_desc');
   const [professionalFilter, setProfessionalFilter] = useState<string>('todos');
   const [empresaFilter, setEmpresaFilter] = useState<string>('todos');
@@ -175,20 +186,113 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     []
   );
 
+  // Debounce da busca (o termo com debounce é o que vai para o servidor)
+  useEffect(() => {
+    const t = window.setTimeout(
+      () => setDebouncedSearchQuery(searchQuery),
+      400
+    );
+    return () => window.clearTimeout(t);
+  }, [searchQuery]);
+
+  // AI dev note: fonte ÚNICA dos filtros, aplicados direto na query do Supabase
+  // (antes status/NFe/profissional/busca eram filtrados client-side só sobre a
+  // página de 100 — a lista escondia o resto do conjunto nas outras páginas).
+  // Usada pela lista paginada, pela contagem, pelos totais e por
+  // fetchFaturasDoFiltro (PDF/emissão em massa): todos enxergam o MESMO conjunto.
+  // Espelho servidor de statusNfe(): ''/null => não emitida · 'erro' ·
+  // 'sincronizando' · qualquer outro valor => emitida.
+  const aplicarFiltrosServidor = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (query: any): any => {
+      const { dateStart, dateEnd } = computeDateRange(
+        periodFilter,
+        startDate,
+        endDate
+      );
+      let q = query;
+      if (periodFilter !== 'todos') {
+        if (dateStart) q = q.gte('created_at', dateStart);
+        if (dateEnd) q = q.lte('created_at', dateEnd + 'T23:59:59');
+      }
+      if (statusFilter !== 'todos') q = q.eq('status', statusFilter);
+      if (empresaFilter !== 'todos') q = q.eq('empresa_id', empresaFilter);
+      if (professionalFilter !== 'todos') {
+        q = q.contains('profissionais_envolvidos', [professionalFilter]);
+      }
+      if (debouncedSearchQuery) {
+        // Escapa curingas do LIKE (%, _ e \) para a busca ser literal
+        const termo = debouncedSearchQuery.replace(/[\\%_]/g, '\\$&');
+        q = q.ilike('responsavel_nome', `%${termo}%`);
+      }
+      if (nfeFilter === 'erro') {
+        q = q.eq('link_nfe', 'erro');
+      } else if (nfeFilter === 'sincronizando') {
+        q = q.eq('link_nfe', 'sincronizando');
+      } else if (nfeFilter === 'nao_emitida') {
+        q = q.eq('status', 'pago').or('link_nfe.is.null,link_nfe.eq.""');
+      } else if (nfeFilter === 'pendente_acao') {
+        q = q
+          .eq('status', 'pago')
+          .or('link_nfe.is.null,link_nfe.eq."",link_nfe.eq.erro');
+      } else if (nfeFilter === 'emitida') {
+        q = q
+          .not('link_nfe', 'is', null)
+          .not('link_nfe', 'in', '("","erro","sincronizando")');
+      }
+      return q;
+    },
+    [
+      periodFilter,
+      startDate,
+      endDate,
+      statusFilter,
+      empresaFilter,
+      professionalFilter,
+      debouncedSearchQuery,
+      nfeFilter,
+    ]
+  );
+
+  // AI dev note: ordenação também no SERVIDOR — ordenar só a página de 100
+  // mentia sobre "Valor (maior)" etc. Desempate por created_at para a
+  // paginação ser estável.
+  const aplicarOrdenacaoServidor = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (query: any): any => {
+      switch (sortOption) {
+        case 'data_asc':
+          return query.order('created_at', { ascending: true });
+        case 'responsavel_asc':
+          return query
+            .order('responsavel_nome', { ascending: true })
+            .order('created_at', { ascending: false });
+        case 'responsavel_desc':
+          return query
+            .order('responsavel_nome', { ascending: false })
+            .order('created_at', { ascending: false });
+        case 'valor_asc':
+          return query
+            .order('valor_total', { ascending: true })
+            .order('created_at', { ascending: false });
+        case 'valor_desc':
+          return query
+            .order('valor_total', { ascending: false })
+            .order('created_at', { ascending: false });
+        case 'data_desc':
+        default:
+          return query.order('created_at', { ascending: false });
+      }
+    },
+    [sortOption]
+  );
+
   // AI dev note: Busca otimizada com paginação e select de campos específicos
   const fetchFaturas = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // AI dev note: intervalo de datas centralizado em computeDateRange (mesma
-      // regra reaproveitada pela exportação PDF).
-      const { dateStart, dateEnd } = computeDateRange(
-        periodFilter,
-        startDate,
-        endDate
-      );
-
       // AI dev note: Select apenas campos necessários para performance
       const selectFields = [
         'id',
@@ -196,6 +300,10 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         'valor_total',
         'status',
         'vencimento',
+        // AI dev note: pago_em já era exibido no card e descricao pré-preenche o
+        // diálogo de Ajustar/Sincronizar — ambos faltavam no select.
+        'pago_em',
+        'descricao',
         'created_at',
         'empresa_id',
         'empresa_razao_social',
@@ -214,42 +322,25 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         'ultimo_lembrete_em',
       ].join(',');
 
-      // AI dev note: Buscar count COM OS MESMOS FILTROS aplicados
-      let countQuery = supabase
-        .from('vw_faturas_completas')
-        .select('id', { count: 'exact', head: true });
-
-      // Aplicar filtros apenas se não for 'todos'
-      if (periodFilter !== 'todos') {
-        if (dateStart) {
-          countQuery = countQuery.gte('created_at', dateStart);
-        }
-        if (dateEnd) {
-          countQuery = countQuery.lte('created_at', dateEnd + 'T23:59:59');
-        }
-      }
+      // AI dev note: Buscar count COM OS MESMOS FILTROS aplicados (TODOS os
+      // filtros, não só o período — é o N do "Mostrando X-Y de N" e do badge)
+      const countQuery = aplicarFiltrosServidor(
+        supabase
+          .from('vw_faturas_completas')
+          .select('id', { count: 'exact', head: true })
+      );
 
       const { count } = await countQuery;
       setTotalCount(count || 0);
 
-      // AI dev note: Buscar totais usando agregação no banco (sem limite de 1000)
-      // Buscar todas as faturas com filtros aplicados para calcular totais
-      let allFaturasQuery = supabase
-        .from('vw_faturas_completas')
-        .select('valor_total, valor_servico, status, link_nfe');
-
-      // Aplicar mesmos filtros de período
-      if (periodFilter !== 'todos') {
-        if (dateStart) {
-          allFaturasQuery = allFaturasQuery.gte('created_at', dateStart);
-        }
-        if (dateEnd) {
-          allFaturasQuery = allFaturasQuery.lte(
-            'created_at',
-            dateEnd + 'T23:59:59'
-          );
-        }
-      }
+      // AI dev note: Buscar totais com TODOS os filtros aplicados (mesmo
+      // conjunto da lista/contagem), em lotes para evitar o limite de 1000
+      const buildTotaisQuery = () =>
+        aplicarFiltrosServidor(
+          supabase
+            .from('vw_faturas_completas')
+            .select('valor_total, valor_servico, status, link_nfe')
+        );
 
       // Buscar TODAS as faturas em lotes para evitar limite de 1000
       const allFaturas: Array<{
@@ -264,7 +355,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
 
       while (hasMoreRecords) {
         const { data: batchData, error: batchError } =
-          await allFaturasQuery.range(
+          await buildTotaisQuery().range(
             currentOffset,
             currentOffset + batchSize - 1
           );
@@ -313,18 +404,6 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           (!item.link_nfe || item.link_nfe.trim() === '')
       ).length;
 
-      console.log('📊 Totais de Faturas (com lotes):', {
-        periodFilter,
-        totalRegistros: allFaturas.length,
-        totalValue,
-        paidCount,
-        unpaidCount,
-        nfeEmittedCount,
-        nfeNotEmittedCount,
-        dateStart,
-        dateEnd,
-      });
-
       setTotalSummary({
         totalValue,
         totalServico,
@@ -335,25 +414,15 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         nfeNotEmittedCount,
       });
 
-      // Buscar dados com paginação
+      // Buscar dados com paginação (filtros E ordenação aplicados no servidor)
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      let query = supabase
-        .from('vw_faturas_completas')
-        .select(selectFields)
-        .range(from, to)
-        .order('created_at', { ascending: false });
-
-      // Aplicar filtros apenas se não for 'todos'
-      if (periodFilter !== 'todos') {
-        if (dateStart) {
-          query = query.gte('created_at', dateStart);
-        }
-        if (dateEnd) {
-          query = query.lte('created_at', dateEnd + 'T23:59:59');
-        }
-      }
+      const query = aplicarOrdenacaoServidor(
+        aplicarFiltrosServidor(
+          supabase.from('vw_faturas_completas').select(selectFields)
+        )
+      ).range(from, to);
 
       const { data, error: fetchError } = await query;
 
@@ -363,7 +432,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
 
       // Mapear para interface FaturaComDetalhes
       const faturasComDetalhes: FaturaComDetalhes[] = (data || []).map(
-        (fatura) => {
+        (fatura: unknown) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const f = fatura as any;
           return {
@@ -384,20 +453,84 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       );
 
       setFaturas(faturasComDetalhes);
+    } catch (err) {
+      console.error('Erro ao buscar faturas:', err);
+      setError('Erro ao carregar faturas');
+    } finally {
+      setIsLoading(false);
+      setHasLoadedOnce(true);
+    }
+  }, [
+    currentPage,
+    periodFilter,
+    aplicarFiltrosServidor,
+    aplicarOrdenacaoServidor,
+  ]);
 
-      // Extrair listas únicas para filtros
+  // AI dev note: opções dos filtros de Profissional/Empresa vêm do conjunto
+  // COMPLETO do período (antes vinham só da página de 100 atual, escondendo
+  // profissionais das outras páginas). Só o período entra aqui — aplicar os
+  // demais filtros colapsaria as opções na já selecionada.
+  const fetchOpcoesFiltros = useCallback(async () => {
+    try {
+      const { dateStart, dateEnd } = computeDateRange(
+        periodFilter,
+        startDate,
+        endDate
+      );
+      const buildQuery = () => {
+        let q = supabase
+          .from('vw_faturas_completas')
+          .select(
+            'empresa_id, empresa_razao_social, empresa_nome_fantasia, profissionais_envolvidos'
+          )
+          .order('created_at', { ascending: false });
+        if (periodFilter !== 'todos') {
+          if (dateStart) q = q.gte('created_at', dateStart);
+          if (dateEnd) q = q.lte('created_at', dateEnd + 'T23:59:59');
+        }
+        return q;
+      };
+
+      type LinhaOpcoes = {
+        empresa_id: string | null;
+        empresa_razao_social: string | null;
+        empresa_nome_fantasia: string | null;
+        profissionais_envolvidos: string[] | null;
+      };
+      const linhas: LinhaOpcoes[] = [];
+      let offset = 0;
+      const size = 1000;
+      let hasMoreRows = true;
+      while (hasMoreRows) {
+        const { data, error: batchErr } = await buildQuery().range(
+          offset,
+          offset + size - 1
+        );
+        if (batchErr) throw batchErr;
+        if (data && data.length > 0) {
+          linhas.push(...(data as unknown as LinhaOpcoes[]));
+          offset += size;
+          hasMoreRows = data.length === size;
+        } else {
+          hasMoreRows = false;
+        }
+      }
+
       const uniqueProfessionals = Array.from(
         new Set(
-          faturasComDetalhes
+          linhas
             .flatMap((f) => f.profissionais_envolvidos || [])
             .filter(Boolean)
         )
-      ).map((nome, idx) => ({ id: `prof_${idx}`, nome }));
+      )
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+        .map((nome, idx) => ({ id: `prof_${idx}`, nome }));
       setProfessionals(uniqueProfessionals);
 
       const uniqueEmpresas = Array.from(
         new Map(
-          faturasComDetalhes
+          linhas
             .filter(
               (f) =>
                 f.empresa_id &&
@@ -417,95 +550,13 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       );
       setEmpresas([...uniqueEmpresas]);
     } catch (err) {
-      console.error('Erro ao buscar faturas:', err);
-      setError('Erro ao carregar faturas');
-    } finally {
-      setIsLoading(false);
+      console.error('Erro ao carregar opções de filtros:', err);
     }
-  }, [periodFilter, startDate, endDate, currentPage]);
+  }, [periodFilter, startDate, endDate]);
 
-  // Aplicar filtros locais e ordenação
   useEffect(() => {
-    let filtered = [...faturas];
-
-    // Filtro de status
-    if (statusFilter !== 'todos') {
-      filtered = filtered.filter((f) => f.status === statusFilter);
-    }
-
-    // Filtro de profissional
-    if (professionalFilter !== 'todos') {
-      filtered = filtered.filter((f) =>
-        f.profissionais_envolvidos?.includes(professionalFilter)
-      );
-    }
-
-    // Filtro de empresa
-    if (empresaFilter !== 'todos') {
-      filtered = filtered.filter((f) => f.empresa_id === empresaFilter);
-    }
-
-    // AI dev note: Filtro por status da NFe. 'nao_emitida' considera só faturas
-    // PAGAS sem nota (as que deveriam ter), não pendentes/canceladas sem nota.
-    if (nfeFilter !== 'todos') {
-      filtered = filtered.filter((f) => {
-        const ns = statusNfe(f.link_nfe);
-        if (nfeFilter === 'pendente_acao') return nfePendenteDeAcao(f);
-        if (nfeFilter === 'nao_emitida') {
-          return f.status === 'pago' && ns === 'nao_emitida';
-        }
-        return ns === nfeFilter;
-      });
-    }
-
-    // Filtro de busca
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((f) =>
-        f.responsavel_nome?.toLowerCase().includes(query)
-      );
-    }
-
-    // Ordenação
-    filtered.sort((a, b) => {
-      switch (sortOption) {
-        case 'responsavel_asc':
-          return (a.responsavel_nome || '').localeCompare(
-            b.responsavel_nome || '',
-            'pt-BR'
-          );
-        case 'responsavel_desc':
-          return (b.responsavel_nome || '').localeCompare(
-            a.responsavel_nome || '',
-            'pt-BR'
-          );
-        case 'data_asc':
-          return (
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          );
-        case 'data_desc':
-          return (
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-        case 'valor_asc':
-          return a.valor_total - b.valor_total;
-        case 'valor_desc':
-          return b.valor_total - a.valor_total;
-        default:
-          return 0;
-      }
-    });
-
-    setFilteredFaturas(filtered);
-  }, [
-    faturas,
-    statusFilter,
-    professionalFilter,
-    empresaFilter,
-    nfeFilter,
-    searchQuery,
-    sortOption,
-  ]);
+    fetchOpcoesFiltros();
+  }, [fetchOpcoesFiltros]);
 
   // Carregar faturas ao montar ou mudar filtros
   useEffect(() => {
@@ -608,32 +659,22 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     }
   };
 
-  // AI dev note: busca TODAS as faturas do período + aplica os MESMOS filtros locais
-  // da lista. Extraído porque agora tem dois consumidores (Exportar PDF e Emitir NFe
-  // em massa) e eles PRECISAM enxergar exatamente o mesmo conjunto — se divergirem, o
-  // PDF diz uma coisa e a emissão faz outra.
+  // AI dev note: busca TODAS as faturas do filtro atual (não só a página), usando
+  // os MESMOS filtros/ordenação de servidor da lista paginada (aplicarFiltrosServidor
+  // + aplicarOrdenacaoServidor). Três consumidores — lista, Exportar PDF e Emitir NFe
+  // em massa — PRECISAM enxergar exatamente o mesmo conjunto; a fonte agora é uma só.
   const fetchFaturasDoFiltro = useCallback(async (): Promise<
     FaturaComDetalhes[]
   > => {
-    const { dateStart, dateEnd } = computeDateRange(
-      periodFilter,
-      startDate,
-      endDate
-    );
     const campos =
       'id, created_at, status, valor_total, link_nfe, responsavel_nome, empresa_id, empresa_razao_social, empresa_nome_fantasia, pacientes_atendidos, profissionais_envolvidos';
 
-    const buildQuery = () => {
-      let q = supabase
-        .from('vw_faturas_completas')
-        .select(campos)
-        .order('created_at', { ascending: false });
-      if (periodFilter !== 'todos') {
-        if (dateStart) q = q.gte('created_at', dateStart);
-        if (dateEnd) q = q.lte('created_at', dateEnd + 'T23:59:59');
-      }
-      return q;
-    };
+    const buildQuery = () =>
+      aplicarOrdenacaoServidor(
+        aplicarFiltrosServidor(
+          supabase.from('vw_faturas_completas').select(campos)
+        )
+      );
 
     const todas: Array<Record<string, unknown>> = [];
     let offset = 0;
@@ -654,43 +695,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       }
     }
 
-    let rows = todas as unknown as FaturaComDetalhes[];
-    if (statusFilter !== 'todos') {
-      rows = rows.filter((f) => f.status === statusFilter);
-    }
-    if (empresaFilter !== 'todos') {
-      rows = rows.filter((f) => f.empresa_id === empresaFilter);
-    }
-    if (professionalFilter !== 'todos') {
-      rows = rows.filter((f) =>
-        f.profissionais_envolvidos?.includes(professionalFilter)
-      );
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      rows = rows.filter((f) => f.responsavel_nome?.toLowerCase().includes(q));
-    }
-    if (nfeFilter !== 'todos') {
-      rows = rows.filter((f) => {
-        const ns = statusNfe(f.link_nfe);
-        if (nfeFilter === 'pendente_acao') return nfePendenteDeAcao(f);
-        if (nfeFilter === 'nao_emitida') {
-          return f.status === 'pago' && ns === 'nao_emitida';
-        }
-        return ns === nfeFilter;
-      });
-    }
-    return rows;
-  }, [
-    periodFilter,
-    startDate,
-    endDate,
-    statusFilter,
-    empresaFilter,
-    professionalFilter,
-    searchQuery,
-    nfeFilter,
-  ]);
+    return todas as unknown as FaturaComDetalhes[];
+  }, [aplicarFiltrosServidor, aplicarOrdenacaoServidor]);
 
   // AI dev note: abre a emissão em massa sobre o conjunto do filtro, já reduzido ao
   // que é elegível (paga + sem nota ou em erro) — mesmo que o filtro de NFe esteja
@@ -760,7 +766,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       }
       if (professionalFilter !== 'todos')
         partes.push(`Profissional: ${professionalFilter}`);
-      if (searchQuery) partes.push(`Busca: "${searchQuery}"`);
+      if (debouncedSearchQuery) partes.push(`Busca: "${debouncedSearchQuery}"`);
 
       gerarRelatorioNfePdf(rows as FaturaNfeRow[], {
         periodoLabel: PERIOD_LABELS[periodFilter],
@@ -789,7 +795,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     empresaFilter,
     professionalFilter,
     nfeFilter,
-    searchQuery,
+    debouncedSearchQuery,
     empresas,
     toast,
   ]);
@@ -948,8 +954,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     };
   };
 
-  // Loading state
-  if (isLoading && currentPage === 0) {
+  // Loading state (apenas na primeira carga; depois a lista fica montada)
+  if (isLoading && !hasLoadedOnce) {
     return (
       <Card className={className}>
         <CardHeader>
@@ -993,9 +999,11 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           <CardTitle className="flex items-center justify-between gap-2">
             <span>Faturas</span>
             <div className="flex items-center gap-2">
+              {/* AI dev note: contagem do conjunto FILTRADO completo (mesma
+                  fonte do "Mostrando X-Y de N"), não apenas da página atual */}
               <Badge variant="outline">
-                {filteredFaturas.length} fatura
-                {filteredFaturas.length !== 1 ? 's' : ''}
+                {totalCount} fatura
+                {totalCount !== 1 ? 's' : ''}
               </Badge>
               {/* AI dev note: exporta TODAS as faturas do período+filtros em PDF
                   (útil p/ caçar NFe não emitida / com erro em lote). */}
@@ -1058,7 +1066,10 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
             {/* Filtro de Status */}
             <Select
               value={statusFilter}
-              onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+              onValueChange={(value) => {
+                setStatusFilter(value as StatusFilter);
+                setCurrentPage(0);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Status" />
@@ -1076,7 +1087,10 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
             {/* Filtro de Profissional */}
             <Select
               value={professionalFilter}
-              onValueChange={setProfessionalFilter}
+              onValueChange={(value) => {
+                setProfessionalFilter(value);
+                setCurrentPage(0);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Profissional" />
@@ -1092,7 +1106,13 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
             </Select>
 
             {/* Filtro de Empresa */}
-            <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+            <Select
+              value={empresaFilter}
+              onValueChange={(value) => {
+                setEmpresaFilter(value);
+                setCurrentPage(0);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Empresa" />
               </SelectTrigger>
@@ -1109,7 +1129,10 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
             {/* Filtro de NFe */}
             <Select
               value={nfeFilter}
-              onValueChange={(value) => setNfeFilter(value as NfeFilter)}
+              onValueChange={(value) => {
+                setNfeFilter(value as NfeFilter);
+                setCurrentPage(0);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="NFe" />
@@ -1129,7 +1152,10 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
             {/* Ordenação */}
             <Select
               value={sortOption}
-              onValueChange={(value) => setSortOption(value as SortOption)}
+              onValueChange={(value) => {
+                setSortOption(value as SortOption);
+                setCurrentPage(0);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Ordenar por" />
@@ -1152,12 +1178,18 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
               <Input
                 placeholder="Buscar responsável..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(0);
+                }}
                 className="pl-9"
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(0);
+                  }}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2"
                 >
                   <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
@@ -1190,25 +1222,24 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           )}
 
           {/* Lista de Faturas */}
-          {filteredFaturas.length === 0 ? (
+          {faturas.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>Nenhuma fatura encontrada com os filtros aplicados.</p>
             </div>
           ) : (
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {filteredFaturas.map((fatura) => {
+              {faturas.map((fatura) => {
                 const nfeConfig = getNfeButtonConfig(fatura);
                 const NfeIcon = nfeConfig?.icon;
 
                 return (
+                  // AI dev note: o card é um CONTÊINER, não um botão — clicar nele
+                  // não navega mais para o ASAAS sem aviso. As ações ficam nos
+                  // botões explícitos abaixo ("Ver no ASAAS", NFe, Ajustar).
                   <div
                     key={fatura.id}
-                    className={cn(
-                      'group relative border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer bg-card',
-                      onFaturaClick && 'hover:border-primary'
-                    )}
-                    onClick={() => onFaturaClick?.(fatura)}
+                    className="group relative border rounded-lg p-4 hover:shadow-md transition-all bg-card"
                   >
                     {/* Header */}
                     <div className="flex items-start justify-between mb-3">
@@ -1292,30 +1323,40 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                     )}
 
                     {/* Ações */}
-                    <div className="flex items-center gap-2 pt-3 border-t">
+                    <div className="flex flex-wrap items-center gap-2 pt-3 border-t">
                       {fatura.url_asaas && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(fatura.url_asaas, '_blank');
-                          }}
+                          onClick={() =>
+                            window.open(fatura.url_asaas, '_blank')
+                          }
                           className="text-blue-600 hover:text-blue-800"
+                          aria-label={`Ver fatura de ${fatura.responsavel_nome || 'sem responsável'} no ASAAS (abre em nova aba)`}
                         >
                           <ExternalLink className="h-4 w-4 mr-2" />
                           Ver no ASAAS
                         </Button>
                       )}
 
+                      {/* AI dev note: recuperação de webhook a 1 CLIQUE — 41 faturas
+                          pagas já ficaram presas como pendentes por webhook falho.
+                          Abre o mesmo diálogo de re-sync/ajuste da página do paciente. */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setFaturaParaAjuste(fatura)}
+                        aria-label={`Ajustar ou sincronizar com o ASAAS a fatura de ${fatura.responsavel_nome || 'sem responsável'}`}
+                      >
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Ajustar/Sincronizar
+                      </Button>
+
                       {nfeConfig && NfeIcon && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            nfeConfig.action?.();
-                          }}
+                          onClick={() => nfeConfig.action?.()}
                           disabled={nfeConfig.disabled}
                           className={nfeConfig.className}
                         >
@@ -1331,7 +1372,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           )}
 
           {/* Resumo - Totais de TODOS os registros do filtro */}
-          {!isLoading && !error && filteredFaturas.length > 0 && (
+          {!isLoading && !error && faturas.length > 0 && (
             <div className="mt-4 p-4 bg-muted/30 rounded-lg">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
@@ -1409,6 +1450,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                   onClick={() => setCurrentPage(0)}
                   disabled={currentPage === 0}
                   title="Primeira página"
+                  aria-label="Primeira página"
                 >
                   <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
                   <ChevronRight className="h-4 w-4 rotate-180 -ml-3" />
@@ -1443,6 +1485,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                   }
                   disabled={!hasMore}
                   title="Última página"
+                  aria-label="Última página"
                 >
                   <ChevronRight className="h-4 w-4 ml-1" />
                   <ChevronRight className="h-4 w-4 -ml-3" />
@@ -1509,6 +1552,19 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           if (!open) setFaturasParaEmissaoMassa(null);
         }}
         onConcluido={fetchFaturas}
+      />
+
+      {/* AI dev note: Ajustar/Sincronizar fatura (recuperação de webhook falho).
+          Ao abrir, tenta re-sync automático com o ASAAS; edição manual é o
+          fallback. onSaved recarrega a lista para refletir o status corrigido. */}
+      <FaturaAjusteManualDialog
+        fatura={faturaParaAjuste}
+        open={!!faturaParaAjuste}
+        onOpenChange={(open) => {
+          if (!open) setFaturaParaAjuste(null);
+        }}
+        userId={user?.pessoa?.id || 'system'}
+        onSaved={fetchFaturas}
       />
     </>
   );

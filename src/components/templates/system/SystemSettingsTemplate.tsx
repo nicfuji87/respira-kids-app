@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Tabs,
   TabsContent,
@@ -14,7 +14,6 @@ import {
   EnderecoManagement,
   ContractTemplateManagement,
 } from '@/components/domain/system';
-import { IntegrationsTemplate } from '@/components/templates/integrations';
 import {
   Users,
   CheckSquare,
@@ -23,13 +22,12 @@ import {
   Wrench,
   FileText,
   Home,
-  Plug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { checkAdminRole } from '@/lib/integrations-api';
 
 // AI dev note: SystemSettingsTemplate é o template principal para configurações do sistema
 // Organiza todas as entidades em abas usando componentes Domain
+// Integrações NÃO fica aqui: existe como aba de 1º nível em ConfigurationTabs
 
 interface TabConfig {
   id: string;
@@ -48,15 +46,6 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
   className,
 }) => {
   const [activeTab, setActiveTab] = useState('pessoa-tipos');
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    const checkRole = async () => {
-      const adminResult = await checkAdminRole();
-      setIsAdmin(adminResult.success && adminResult.data === true);
-    };
-    checkRole();
-  }, []);
 
   const tabsConfig: TabConfig[] = [
     {
@@ -116,24 +105,9 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       content: <ContractTemplateManagement />,
       implemented: true,
     },
-    ...(isAdmin
-      ? [
-          {
-            id: 'integracoes',
-            label: 'Integrações',
-            icon: Plug,
-            description: 'Configurar integrações com outros sistemas',
-            content: <IntegrationsTemplate />,
-            implemented: true,
-          },
-        ]
-      : []),
   ];
 
-  // Filtrar abas visíveis baseado no role
-  const visibleTabs = tabsConfig.filter(
-    (tab) => tab.id !== 'integracoes' || isAdmin
-  );
+  const visibleTabs = tabsConfig;
 
   return (
     <div className={cn('w-full space-y-6', className)}>
@@ -166,8 +140,9 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
         </TabsList>
 
         {visibleTabs.map((tab) => (
-          <TabsContent key={tab.id} value={tab.id} className="mt-6">
-            {/* Tab content */}
+          <TabsContent key={tab.id} value={tab.id} className="mt-6 space-y-3">
+            {/* Descrição da seção ativa */}
+            <p className="text-sm text-muted-foreground">{tab.description}</p>
             {tab.content}
           </TabsContent>
         ))}

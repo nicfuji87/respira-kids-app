@@ -21,12 +21,7 @@ export interface DesktopLayoutProps {
   breadcrumbItems: DashboardTopBarProps['breadcrumbItems'];
   onBreadcrumbClick?: DashboardTopBarProps['onBreadcrumbClick'];
 
-  // Notifications
-  notificationCount?: number;
-  onNotificationClick?: () => void;
-
   // Actions
-  onProfileClick?: () => void;
   onSettingsClick?: () => void;
   onLogout?: () => void;
 
@@ -45,9 +40,6 @@ export const DesktopLayout = React.memo<DesktopLayoutProps>(
     onNavigate,
     breadcrumbItems,
     onBreadcrumbClick,
-    notificationCount,
-    onNotificationClick,
-    onProfileClick,
     onSettingsClick,
     onLogout,
     children,
@@ -77,9 +69,6 @@ export const DesktopLayout = React.memo<DesktopLayoutProps>(
             userAvatar={userAvatar}
             breadcrumbItems={breadcrumbItems}
             onBreadcrumbClick={onBreadcrumbClick}
-            notificationCount={notificationCount}
-            onNotificationClick={onNotificationClick}
-            onProfileClick={onProfileClick}
             onSettingsClick={onSettingsClick}
             onLogout={onLogout}
             className="hidden md:flex"

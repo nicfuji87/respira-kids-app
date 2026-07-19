@@ -5,6 +5,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/primitives/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import { Progress } from '@/components/primitives/progress';
 import { AdminWhatsAppValidationStep } from './AdminWhatsAppValidationStep';
 import { ResponsibleDataStep } from './ResponsibleDataStep';
@@ -16,6 +26,7 @@ import {
 } from './FinancialResponsibleStep';
 import { PediatricianStep } from './PediatricianStep';
 import { AuthorizationsStep } from './AuthorizationsStep';
+import { AdminReviewStep } from './AdminReviewStep';
 import { AdminContractGenerationStep } from './AdminContractGenerationStep';
 import {
   createPatientAdmin,
@@ -41,6 +52,7 @@ type StepType =
   | 'financial-responsible'
   | 'pediatrician'
   | 'authorizations'
+  | 'review'
   | 'contract'
   | 'creating';
 
@@ -52,6 +64,7 @@ const STEP_TITLES: Record<StepType, string> = {
   'financial-responsible': 'Responsável Financeiro',
   pediatrician: 'Pediatra',
   authorizations: 'Autorizações',
+  review: 'Revisão',
   contract: 'Contrato',
   creating: 'Criando Paciente...',
 };
@@ -72,6 +85,9 @@ export const AdminPatientRegistrationDialog: React.FC<
   const [createdPatientId, setCreatedPatientId] = useState<string | null>(null);
   const [contractVariables, setContractVariables] =
     useState<ContractVariables | null>(null);
+  // AI dev note: Proteção contra perda de trabalho — fechar o dialog (Esc / X)
+  // pede confirmação antes de descartar as 8 etapas. Clique fora é bloqueado.
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // Calcular progresso
   const steps: StepType[] = [
@@ -82,6 +98,7 @@ export const AdminPatientRegistrationDialog: React.FC<
     'financial-responsible',
     'pediatrician',
     'authorizations',
+    'review',
     'contract',
   ];
 
@@ -103,6 +120,7 @@ export const AdminPatientRegistrationDialog: React.FC<
       'financial-responsible',
       'pediatrician',
       'authorizations',
+      'review',
       'contract',
     ];
     const currentIndex = allSteps.indexOf(currentStep);
@@ -132,6 +150,7 @@ export const AdminPatientRegistrationDialog: React.FC<
       'financial-responsible',
       'pediatrician',
       'authorizations',
+      'review',
       'contract',
     ];
     const currentIndex = allSteps.indexOf(currentStep);
@@ -320,8 +339,9 @@ export const AdminPatientRegistrationDialog: React.FC<
       },
     }));
 
-    // Criar paciente antes de gerar contrato
-    createPatient();
+    // AI dev note: NÃO criar o paciente aqui — antes há a etapa de revisão.
+    // A criação só acontece após "Confirmar cadastro" no AdminReviewStep.
+    goToNextStep();
   };
 
   // Criar paciente no banco
@@ -350,8 +370,8 @@ export const AdminPatientRegistrationDialog: React.FC<
         variant: 'destructive',
       });
 
-      // Voltar para etapa anterior
-      setCurrentStep('authorizations');
+      // Voltar para a revisão (dados preservados para tentar de novo)
+      setCurrentStep('review');
     }
   };
 
@@ -455,7 +475,7 @@ export const AdminPatientRegistrationDialog: React.FC<
   };
 
   const handleClose = () => {
-    // Resetar estado ao fechar
+    // Resetar estado ao fechar (só após confirmação ou sucesso)
     setCurrentStep('whatsapp');
     setFormData({
       autorizacoes: {
@@ -467,12 +487,43 @@ export const AdminPatientRegistrationDialog: React.FC<
     });
     setCreatedPatientId(null);
     setContractVariables(null);
+    setShowDiscardConfirm(false);
     onClose();
   };
 
+  // AI dev note: Esc e o botão X NÃO fecham direto — abrem confirmação de
+  // descarte. Se ainda não há nada preenchido (1ª etapa sem dados), fecha direto.
+  const hasProgress =
+    currentStep !== 'whatsapp' ||
+    !!formData.whatsappResponsavel ||
+    !!createdPatientId;
+
+  const requestClose = () => {
+    // Durante a criação no banco, não permitir fechar
+    if (currentStep === 'creating') return;
+    if (!hasProgress) {
+      handleClose();
+      return;
+    }
+    setShowDiscardConfirm(true);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) requestClose();
+      }}
+    >
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        // Clique fora não fecha (padrão PinValidationDialog) — evita perder as 8 etapas
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+          requestClose();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             Novo Paciente
@@ -499,7 +550,7 @@ export const AdminPatientRegistrationDialog: React.FC<
           {currentStep === 'whatsapp' && (
             <AdminWhatsAppValidationStep
               onContinue={handleWhatsAppContinue}
-              onBack={handleClose}
+              onBack={requestClose}
               initialValue={formData.whatsappResponsavel}
             />
           )}
@@ -595,6 +646,15 @@ export const AdminPatientRegistrationDialog: React.FC<
             />
           )}
 
+          {currentStep === 'review' && (
+            <AdminReviewStep
+              data={formData}
+              onConfirm={createPatient}
+              onBack={goToPreviousStep}
+              onEdit={(step) => setCurrentStep(step)}
+            />
+          )}
+
           {currentStep === 'creating' && (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -616,6 +676,27 @@ export const AdminPatientRegistrationDialog: React.FC<
               />
             )}
         </div>
+
+        {/* Confirmação de descarte do cadastro em andamento */}
+        <AlertDialog
+          open={showDiscardConfirm}
+          onOpenChange={setShowDiscardConfirm}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Descartar cadastro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Os dados preenchidos serão perdidos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Continuar preenchendo</AlertDialogCancel>
+              <AlertDialogAction onClick={handleClose}>
+                Descartar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

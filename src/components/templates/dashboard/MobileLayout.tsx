@@ -18,12 +18,7 @@ export interface MobileLayoutProps {
   currentPath: string;
   onNavigate: (path: string) => void;
 
-  // Notifications
-  notificationCount?: number;
-  onNotificationClick?: () => void;
-
   // Actions
-  onProfileClick?: () => void;
   onSettingsClick?: () => void;
   onLogout?: () => void;
 
@@ -40,9 +35,6 @@ export const MobileLayout = React.memo<MobileLayoutProps>(
     userAvatar,
     currentPath,
     onNavigate,
-    notificationCount,
-    onNotificationClick,
-    onProfileClick,
     onSettingsClick,
     onLogout,
     children,
@@ -63,9 +55,6 @@ export const MobileLayout = React.memo<MobileLayoutProps>(
           userAvatar={userAvatar}
           currentPath={currentPath}
           onNavigate={onNavigate}
-          notificationCount={notificationCount}
-          onNotificationClick={onNotificationClick}
-          onProfileClick={onProfileClick}
           onSettingsClick={onSettingsClick}
           onLogout={onLogout}
         />

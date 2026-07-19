@@ -178,7 +178,7 @@ export const SecretariaDashboard = React.memo<SecretariaDashboardProps>(
         {/* AI dev note: Header personalizado para secretaria */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo respira-text-gradient">
+            <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo dark:text-foreground">
               {getGreeting()}, {firstName}!
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -284,15 +284,15 @@ export const SecretariaDashboard = React.memo<SecretariaDashboardProps>(
             </Card>
 
             {/* Profissionais Autorizados */}
-            <Card className="bg-purple-50 border-purple-200">
+            <Card className="bg-roxo-titulo/5 border-roxo-titulo/20">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-purple-700 flex items-center gap-2">
+                <CardTitle className="text-sm font-medium text-roxo-titulo flex items-center gap-2">
                   <Stethoscope className="h-4 w-4" />
                   Profissionais
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-purple-700">
+                <div className="text-2xl font-bold text-roxo-titulo">
                   {metrics.profissionaisAutorizados}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">

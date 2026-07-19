@@ -142,7 +142,7 @@ export const PesquisaCorrelacaoCard = React.memo<PesquisaCorrelacaoCardProps>(
                   );
                 })}
               </svg>
-              <div className="flex justify-between w-full text-[10px] text-muted-foreground/80 px-1">
+              <div className="flex justify-between w-full text-[11px] text-muted-foreground/80 px-1">
                 <span>{xLabel} (1) →</span>
                 <span>{xLabel} (10)</span>
               </div>

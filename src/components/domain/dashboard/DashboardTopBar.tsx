@@ -5,12 +5,11 @@ import {
   type BreadcrumbItem,
 } from '@/components/composed/BreadcrumbNav';
 import { UserProfileDropdown } from '@/components/composed/UserProfileDropdown';
-import { NotificationBadge } from '@/components/composed/NotificationBadge';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/lib/navigation';
 
-// AI dev note: DashboardTopBar combina BreadcrumbNav, UserProfileDropdown e NotificationBadge
+// AI dev note: DashboardTopBar combina BreadcrumbNav e UserProfileDropdown
 // Header responsivo para desktop com navegação breadcrumb
 
 export interface DashboardTopBarProps {
@@ -24,16 +23,11 @@ export interface DashboardTopBarProps {
   breadcrumbItems: BreadcrumbItem[];
   onBreadcrumbClick?: (item: BreadcrumbItem, index: number) => void;
 
-  // Notifications
-  notificationCount?: number;
-  onNotificationClick?: () => void;
-
   // Mobile menu
   onMobileMenuClick?: () => void;
   showMobileMenu?: boolean;
 
   // Actions
-  onProfileClick?: () => void;
   onSettingsClick?: () => void;
   onLogout?: () => void;
 
@@ -48,11 +42,8 @@ export const DashboardTopBar = React.memo<DashboardTopBarProps>(
     userAvatar,
     breadcrumbItems,
     onBreadcrumbClick,
-    notificationCount,
-    onNotificationClick,
     onMobileMenuClick,
     showMobileMenu = false,
-    onProfileClick,
     onSettingsClick,
     onLogout,
     className,
@@ -91,19 +82,13 @@ export const DashboardTopBar = React.memo<DashboardTopBarProps>(
           )}
         </div>
 
-        {/* Right side - Notifications + Profile */}
+        {/* Right side - Profile */}
         <div className="flex items-center space-x-2">
-          <NotificationBadge
-            count={notificationCount}
-            onClick={onNotificationClick}
-          />
-
           <UserProfileDropdown
             name={userName}
             email={userEmail}
             role={userRole}
             avatar={userAvatar}
-            onProfileClick={onProfileClick}
             onSettingsClick={onSettingsClick}
             onLogout={onLogout}
           />

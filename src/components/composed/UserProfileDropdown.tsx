@@ -14,7 +14,7 @@ import {
 } from '@/components/primitives/dropdown-menu';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
-import { LogOut, Settings, User } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 
 // AI dev note: UserProfileDropdown combina Avatar e DropdownMenu primitives
 // Usado no header tanto mobile quanto desktop
@@ -24,7 +24,6 @@ export interface UserProfileProps {
   email: string;
   role: 'admin' | 'profissional' | 'secretaria';
   avatar?: string;
-  onProfileClick?: () => void;
   onSettingsClick?: () => void;
   onLogout?: () => void;
 }
@@ -58,15 +57,7 @@ const getRoleColor = (
 };
 
 export const UserProfileDropdown = React.memo<UserProfileProps>(
-  ({
-    name,
-    email,
-    role,
-    avatar,
-    onProfileClick,
-    onSettingsClick,
-    onLogout,
-  }) => {
+  ({ name, email, role, avatar, onSettingsClick, onLogout }) => {
     const initials = name
       .split(' ')
       .map((word) => word[0])
@@ -77,7 +68,9 @@ export const UserProfileDropdown = React.memo<UserProfileProps>(
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 rounded-full">
+          {/* AI dev note: botão h-10 w-10 (40px) para touch target adequado;
+              avatar mantém h-8 w-8 (visual inalterado) */}
+          <Button variant="ghost" className="h-10 w-10 rounded-full p-0">
             <Avatar className="h-8 w-8">
               <AvatarImage src={avatar} alt={name} />
               <AvatarFallback className="text-xs">{initials}</AvatarFallback>
@@ -100,11 +93,6 @@ export const UserProfileDropdown = React.memo<UserProfileProps>(
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-
-          <DropdownMenuItem onClick={onProfileClick}>
-            <User className="mr-2 h-4 w-4" />
-            <span>Perfil</span>
-          </DropdownMenuItem>
 
           {(role === 'admin' || onSettingsClick) && (
             <DropdownMenuItem onClick={onSettingsClick}>

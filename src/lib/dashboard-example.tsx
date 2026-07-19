@@ -30,7 +30,6 @@ export const DashboardExample: React.FC<DashboardExampleProps> = ({
 
   const handleNavigation = (path: string) => {
     setCurrentPath(path);
-    
   };
 
   const breadcrumbItems = [{ label: 'Dashboard', href: '/dashboard' }];
@@ -44,9 +43,6 @@ export const DashboardExample: React.FC<DashboardExampleProps> = ({
       currentPath={currentPath}
       onNavigate={handleNavigation}
       breadcrumbItems={breadcrumbItems}
-      notificationCount={3}
-      onNotificationClick={() => {}}
-      onProfileClick={() => {}}
       onSettingsClick={() => {}}
       onLogout={onLogout}
     >

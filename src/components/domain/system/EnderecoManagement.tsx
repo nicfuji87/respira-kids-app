@@ -188,14 +188,6 @@ export const EnderecoManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: Endereco) => {
-    if (
-      !confirm(
-        `Tem certeza que deseja excluir o endereço "${item.logradouro}, ${item.cidade}"?`
-      )
-    ) {
-      return;
-    }
-
     const result = await deleteEndereco(item.id);
 
     if (result.success) {
@@ -255,6 +247,8 @@ export const EnderecoManagement: React.FC = () => {
           onDelete={() => handleDelete(item)}
           ativo={true}
           canToggleStatus={false}
+          confirmDeleteTitle={`Excluir o endereço "${item.logradouro}, ${item.cidade}"?`}
+          confirmDeleteDescription="Esta ação não pode ser desfeita."
         />
       ),
       className: 'w-16',

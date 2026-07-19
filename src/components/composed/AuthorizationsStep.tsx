@@ -102,9 +102,17 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                 científicos, estudos e pesquisas. Os dados serão anonimizados e
                 sua identidade será protegida.
               </p>
-              <div className="flex gap-3">
+              {/* AI dev note: semântica de radiogroup para leitores de tela */}
+              <div
+                className="flex gap-3"
+                role="radiogroup"
+                aria-label="Autorização para uso científico"
+                aria-required="true"
+              >
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={usoCientifico === true}
                   onClick={() => {
                     setUsoCientifico(true);
                     setError('');
@@ -123,6 +131,8 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={usoCientifico === false}
                   onClick={() => {
                     setUsoCientifico(false);
                     setError('');
@@ -152,9 +162,16 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                 Autorizo o uso de imagens e vídeos em redes sociais e materiais
                 de divulgação da clínica, respeitando os direitos de imagem.
               </p>
-              <div className="flex gap-3">
+              <div
+                className="flex gap-3"
+                role="radiogroup"
+                aria-label="Autorização para uso em redes sociais"
+                aria-required="true"
+              >
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={usoRedesSociais === true}
                   onClick={() => {
                     setUsoRedesSociais(true);
                     setError('');
@@ -173,6 +190,8 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={usoRedesSociais === false}
                   onClick={() => {
                     setUsoRedesSociais(false);
                     setError('');
@@ -202,9 +221,16 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                 Autorizo o uso do nome do paciente em publicações, depoimentos e
                 materiais de divulgação, quando aplicável.
               </p>
-              <div className="flex gap-3">
+              <div
+                className="flex gap-3"
+                role="radiogroup"
+                aria-label="Autorização para uso do nome"
+                aria-required="true"
+              >
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={usoNome === true}
                   onClick={() => {
                     setUsoNome(true);
                     setError('');
@@ -223,6 +249,8 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={usoNome === false}
                   onClick={() => {
                     setUsoNome(false);
                     setError('');

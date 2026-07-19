@@ -40,7 +40,6 @@ export const AdminDashboardTemplate = React.memo<AdminDashboardTemplateProps>(
     const handleNavigation = (path: string) => {
       setCurrentPath(path);
       // Aqui você implementaria a navegação real
-      
     };
 
     const breadcrumbItems = [{ label: 'Dashboard', href: '/dashboard' }];
@@ -54,9 +53,6 @@ export const AdminDashboardTemplate = React.memo<AdminDashboardTemplateProps>(
         currentPath={currentPath}
         onNavigate={handleNavigation}
         breadcrumbItems={breadcrumbItems}
-        notificationCount={8} // Aprovações pendentes
-        onNotificationClick={() => {}}
-        onProfileClick={() => {}}
         onSettingsClick={() => {}}
         onLogout={onLogout}
         className={className}

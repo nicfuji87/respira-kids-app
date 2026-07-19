@@ -121,6 +121,11 @@ export const CreateMetaDialog: React.FC<CreateMetaDialogProps> = ({
     );
   }, [tipos, lockedRoleAlvo]);
 
+  // Datas em formato ISO (yyyy-mm-dd): comparação de string equivale à cronológica
+  const periodoInvalido = Boolean(
+    periodoInicio && periodoFim && periodoFim < periodoInicio
+  );
+
   const handleSubmit = async () => {
     if (!titulo.trim() || !tipoMetaId || !valorMeta) {
       toast({
@@ -134,6 +139,14 @@ export const CreateMetaDialog: React.FC<CreateMetaDialogProps> = ({
       toast({
         title: 'Selecione a pessoa',
         description: 'Metas individuais precisam de uma pessoa atribuída.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (periodoInvalido) {
+      toast({
+        title: 'Período inválido',
+        description: 'O fim do período deve ser igual ou posterior ao início.',
         variant: 'destructive',
       });
       return;
@@ -311,8 +324,19 @@ export const CreateMetaDialog: React.FC<CreateMetaDialogProps> = ({
                 type="date"
                 value={periodoFim}
                 onChange={(e) => setPeriodoFim(e.target.value)}
+                aria-invalid={periodoInvalido}
+                className={
+                  periodoInvalido
+                    ? 'border-destructive focus-visible:ring-destructive'
+                    : undefined
+                }
               />
             </div>
+            {periodoInvalido && (
+              <p className="col-span-2 text-xs text-destructive">
+                O fim do período deve ser igual ou posterior ao início.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -329,7 +353,11 @@ export const CreateMetaDialog: React.FC<CreateMetaDialogProps> = ({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={saving} className="gap-2">
+          <Button
+            onClick={handleSubmit}
+            disabled={saving || periodoInvalido}
+            className="gap-2"
+          >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

@@ -307,6 +307,8 @@ export const ApiKeysManagement = React.memo<ApiKeysManagementProps>(
             onToggleStatus={() => handleToggleStatus(item)}
             ativo={item.is_active}
             canToggleStatus={true}
+            confirmDeleteTitle={`Excluir a chave de API "${item.label || SUPPORTED_SERVICES[item.service_name]?.label || item.service_name}"?`}
+            confirmDeleteDescription="A integração que usa esta chave deixará de funcionar. Esta ação não pode ser desfeita."
           />
         ),
         className: 'w-16',

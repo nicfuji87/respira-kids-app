@@ -38,6 +38,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/primitives/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import { useToast } from '@/components/primitives/use-toast';
 import { cn, formatDateBR } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -72,6 +82,8 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
     const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+    // AI dev note: confirmação antes de remover a foto (AlertDialog)
+    const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
     const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(
       patient.foto_perfil || null
     );
@@ -830,19 +842,49 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                       </Button>
                     )}
 
-                    {/* Botão: Remover foto - só aparece se tiver foto */}
+                    {/* Botão: Remover foto - só aparece se tiver foto.
+                        Abre confirmação (AlertDialog) antes de remover. */}
                     {currentPhotoUrl && (
                       <Button
                         type="button"
                         variant="ghost"
                         className="w-full gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={handleRemovePhoto}
+                        onClick={() => setShowRemovePhotoConfirm(true)}
                         disabled={isUploadingPhoto || isUpdatingPhoto}
                       >
                         <Trash2 className="h-4 w-4" />
                         Remover foto
                       </Button>
                     )}
+
+                    {/* Confirmação de remoção da foto */}
+                    <AlertDialog
+                      open={showRemovePhotoConfirm}
+                      onOpenChange={setShowRemovePhotoConfirm}
+                    >
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Remover foto de perfil?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            A foto atual será removida do cadastro. Você poderá
+                            enviar outra a qualquer momento.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => {
+                              setShowRemovePhotoConfirm(false);
+                              handleRemovePhoto();
+                            }}
+                          >
+                            Remover
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
 
                     {/* Texto informativo */}
                     <p className="text-xs text-muted-foreground text-center mt-2">

@@ -6,13 +6,12 @@ import {
   SheetTrigger,
 } from '@/components/primitives/sheet';
 import { UserProfileDropdown } from '@/components/composed/UserProfileDropdown';
-import { NotificationBadge } from '@/components/composed/NotificationBadge';
 import { NavigationItem } from '@/components/composed/NavigationItem';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getNavigationForRole, type UserRole } from '@/lib/navigation';
 
-// AI dev note: MobileHeader combina Sheet, UserProfileDropdown e NotificationBadge
+// AI dev note: MobileHeader combina Sheet e UserProfileDropdown
 // Header mobile com hamburger menu e navegação lateral
 
 export interface MobileHeaderProps {
@@ -26,12 +25,7 @@ export interface MobileHeaderProps {
   currentPath: string;
   onNavigate: (path: string) => void;
 
-  // Notifications
-  notificationCount?: number;
-  onNotificationClick?: () => void;
-
   // Actions
-  onProfileClick?: () => void;
   onSettingsClick?: () => void;
   onLogout?: () => void;
 
@@ -46,14 +40,14 @@ export const MobileHeader = React.memo<MobileHeaderProps>(
     userAvatar,
     currentPath,
     onNavigate,
-    notificationCount,
-    onNotificationClick,
-    onProfileClick,
     onSettingsClick,
     onLogout,
     className,
   }) => {
     const navigationItems = getNavigationForRole(userRole);
+
+    // AI dev note: Sheet controlado para fechar o drawer ao navegar
+    const [menuOpen, setMenuOpen] = React.useState(false);
 
     return (
       <header
@@ -66,10 +60,11 @@ export const MobileHeader = React.memo<MobileHeaderProps>(
         <div className="flex items-center justify-between h-full">
           {/* Left side - Menu + Logo */}
           <div className="flex items-center space-x-3">
-            <Sheet>
+            <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <Menu className="h-4 w-4" />
+                {/* AI dev note: h-10 w-10 (40px) para touch target adequado em tablet */}
+                <Button variant="ghost" size="sm" className="h-10 w-10 p-0">
+                  <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64 p-0">
@@ -93,7 +88,10 @@ export const MobileHeader = React.memo<MobileHeaderProps>(
                           icon={<item.icon className="h-4 w-4" />}
                           label={item.label}
                           isActive={currentPath === item.href}
-                          onClick={() => onNavigate(item.href)}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            onNavigate(item.href);
+                          }}
                           badge={item.badge}
                           variant="desktop"
                         />
@@ -121,19 +119,13 @@ export const MobileHeader = React.memo<MobileHeaderProps>(
             </div>
           </div>
 
-          {/* Right side - Notifications + Profile */}
+          {/* Right side - Profile */}
           <div className="flex items-center space-x-2">
-            <NotificationBadge
-              count={notificationCount}
-              onClick={onNotificationClick}
-            />
-
             <UserProfileDropdown
               name={userName}
               email={userEmail}
               role={userRole}
               avatar={userAvatar}
-              onProfileClick={onProfileClick}
               onSettingsClick={onSettingsClick}
               onLogout={onLogout}
             />

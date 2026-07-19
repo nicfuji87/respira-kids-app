@@ -23,12 +23,7 @@ export interface ResponsiveLayoutProps {
   breadcrumbItems: DesktopLayoutProps['breadcrumbItems'];
   onBreadcrumbClick?: DesktopLayoutProps['onBreadcrumbClick'];
 
-  // Notifications
-  notificationCount?: number;
-  onNotificationClick?: () => void;
-
   // Actions
-  onProfileClick?: () => void;
   onSettingsClick?: () => void;
   onLogout?: () => void;
 
@@ -47,9 +42,6 @@ export const ResponsiveLayout = React.memo<ResponsiveLayoutProps>(
     onNavigate,
     breadcrumbItems,
     onBreadcrumbClick,
-    notificationCount,
-    onNotificationClick,
-    onProfileClick,
     onSettingsClick,
     onLogout,
     children,
@@ -62,9 +54,6 @@ export const ResponsiveLayout = React.memo<ResponsiveLayoutProps>(
       userAvatar,
       currentPath,
       onNavigate,
-      notificationCount,
-      onNotificationClick,
-      onProfileClick,
       onSettingsClick,
       onLogout,
       children,

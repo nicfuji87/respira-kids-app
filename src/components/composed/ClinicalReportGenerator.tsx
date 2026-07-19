@@ -33,6 +33,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/primitives/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import { Button } from '@/components/primitives/button';
 import { Label } from '@/components/primitives/label';
 import { Input } from '@/components/primitives/input';
@@ -213,6 +223,8 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     // AI dev note: Agora usa um único campo de texto em vez de 3 seções separadas
     const [editableContent, setEditableContent] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    // AI dev note: relatório aguardando confirmação de exclusão (AlertDialog)
+    const [reportToDelete, setReportToDelete] = useState<string | null>(null);
 
     const userRole = user?.pessoa?.role as
       | 'admin'
@@ -1404,6 +1416,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
     };
 
     // AI dev note: Função para excluir relatório - APENAS ADMIN pode executar
+    // A confirmação acontece via AlertDialog (reportToDelete), não window.confirm
     const handleDeleteReport = async (reportId: string) => {
       if (!isAdmin) {
         toast({
@@ -1411,10 +1424,6 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
           description: 'Apenas administradores podem excluir relatórios',
           variant: 'destructive',
         });
-        return;
-      }
-
-      if (!window.confirm('Tem certeza que deseja excluir este relatório?')) {
         return;
       }
 
@@ -1648,9 +1657,10 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                             <Button
                               variant="destructive"
                               size="sm"
-                              onClick={() => handleDeleteReport(report.id)}
+                              onClick={() => setReportToDelete(report.id)}
+                              aria-label="Excluir relatório"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
                             </Button>
                           )}
                         </>
@@ -2013,6 +2023,36 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Confirmação de exclusão de relatório (antes: window.confirm) */}
+        <AlertDialog
+          open={!!reportToDelete}
+          onOpenChange={(open) => {
+            if (!open) setReportToDelete(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir relatório?</AlertDialogTitle>
+              <AlertDialogDescription>
+                O relatório deixará de aparecer na lista do paciente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (reportToDelete) {
+                    handleDeleteReport(reportToDelete);
+                  }
+                  setReportToDelete(null);
+                }}
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* AI dev note: Modal do Relatório Manual (componente separado).
             Reaproveita a mesma lista de relatórios deste componente, recarregando após salvar. */}

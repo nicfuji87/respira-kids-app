@@ -156,10 +156,6 @@ export const PagamentoStatusManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: PagamentoStatus) => {
-    if (!confirm(`Tem certeza que deseja excluir "${item.descricao}"?`)) {
-      return;
-    }
-
     const result = await deletePagamentoStatus(item.id);
 
     if (result.success) {
@@ -217,6 +213,8 @@ export const PagamentoStatusManagement: React.FC = () => {
           onEdit={() => handleEdit(item)}
           onDelete={() => handleDelete(item)}
           canToggleStatus={false}
+          confirmDeleteTitle={`Excluir o status de pagamento "${item.descricao}"?`}
+          confirmDeleteDescription="Esta ação não pode ser desfeita."
         />
       ),
       className: 'w-16',

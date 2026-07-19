@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { WhatsAppValidationStep } from '@/components/composed/WhatsAppValidationStep';
 import { ResponsibleIdentificationStep } from '@/components/composed/ResponsibleIdentificationStep';
 import {
@@ -28,6 +28,8 @@ import {
 import { ReviewStep } from '@/components/composed/ReviewStep';
 import { ContractReviewStep } from '@/components/composed/ContractReviewStep';
 import { ProgressIndicator } from '@/components/composed/ProgressIndicator';
+import { Button } from '@/components/primitives/button';
+import { AlertCircle, Check, Copy, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { cleanCPF } from '@/lib/cpf-validator';
 import {
@@ -49,6 +51,7 @@ import type { RegistrationStepName } from '@/lib/registration-logger';
 export type RegistrationStep =
   | 'whatsapp'
   | 'responsible-identification'
+  | 'not-responsible'
   | 'responsible-data'
   | 'address'
   | 'financial-responsible'
@@ -137,16 +140,237 @@ export interface PatientRegistrationStepsProps {
   className?: string;
 }
 
+// AI dev note: Persistência do progresso em sessionStorage — o fluxo obriga a
+// trocar de app no celular (código do WhatsApp) e o navegador pode descartar a
+// aba; sem isso o usuário perdia as 10 etapas. sessionStorage (e NUNCA
+// localStorage) porque os dados contêm PII (CPF/endereço) e devem morrer com a
+// aba. Nunca logar o conteúdo do rascunho no console.
+const DRAFT_STORAGE_KEY = 'rk-cadastro-paciente-draft';
+
+const VALID_REGISTRATION_STEPS: RegistrationStep[] = [
+  'whatsapp',
+  'responsible-identification',
+  'not-responsible',
+  'responsible-data',
+  'address',
+  'financial-responsible',
+  'patient-data',
+  'pediatrician',
+  'authorizations',
+  'review',
+  'contract',
+];
+
+interface RegistrationDraft {
+  currentStep: RegistrationStep;
+  registrationData: Partial<PatientRegistrationData>;
+  savedAt: string;
+}
+
+function loadRegistrationDraft(): RegistrationDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<RegistrationDraft> | null;
+    // Validação mínima de shape antes de reidratar
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      typeof parsed.currentStep !== 'string' ||
+      !VALID_REGISTRATION_STEPS.includes(
+        parsed.currentStep as RegistrationStep
+      ) ||
+      !parsed.registrationData ||
+      typeof parsed.registrationData !== 'object' ||
+      typeof parsed.registrationData.whatsappValidated !== 'boolean'
+    ) {
+      return null;
+    }
+    return parsed as RegistrationDraft;
+  } catch {
+    // Rascunho corrompido/indisponível: começa do zero (sem logar conteúdo)
+    return null;
+  }
+}
+
+function clearRegistrationDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    // sessionStorage indisponível: nada a limpar
+  }
+}
+
+// AI dev note: WhatsApp de contato da clínica (mesmo número usado em
+// SharedSchedulePage). Se mudar, atualizar nos dois lugares.
+const CLINIC_WHATSAPP_URL = 'https://wa.me/556181446666';
+
+// AI dev note: Tela intermediária quando a pessoa indica que NÃO é o
+// responsável legal. Antes o fluxo resetava as etapas na hora, sem aviso;
+// agora explica, oferece copiar o link para enviar ao responsável e só
+// recomeça após confirmação explícita ("Voltar" preserva os dados).
+const NotResponsibleNotice: React.FC<{
+  onBack: () => void;
+  onRestart: () => void;
+}> = ({ onBack, onRestart }) => {
+  const [copied, setCopied] = useState(false);
+  const registrationLink = `${window.location.origin}/#/cadastro-paciente`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(registrationLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Clipboard indisponível: o link continua visível para cópia manual
+    }
+  };
+
+  return (
+    <div className="w-full max-w-md mx-auto px-4 space-y-6">
+      <div className="space-y-2 text-center">
+        <h2 className="text-2xl font-semibold text-foreground">
+          O cadastro deve ser feito pelo responsável legal
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Sem problemas! Envie este link para o responsável legal do paciente
+          fazer o cadastro:
+        </p>
+      </div>
+
+      <div className="p-3 bg-muted rounded-lg border text-sm break-all text-center">
+        {registrationLink}
+      </div>
+
+      <Button
+        type="button"
+        onClick={handleCopy}
+        size="lg"
+        className="w-full h-12 gap-2"
+      >
+        {copied ? (
+          <>
+            <Check className="w-4 h-4" />
+            Link copiado!
+          </>
+        ) : (
+          <>
+            <Copy className="w-4 h-4" />
+            Copiar link
+          </>
+        )}
+      </Button>
+
+      <div className="space-y-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onBack}
+          size="lg"
+          className="w-full h-12"
+        >
+          Voltar (meus dados continuam preenchidos)
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onRestart}
+          size="lg"
+          className="w-full h-12 text-destructive hover:text-destructive"
+        >
+          Entendi, recomeçar
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// AI dev note: Card de erro amigável no lugar do alert() técnico. NUNCA
+// exibir error.message cru para o responsável — detalhes ficam só no console
+// (sem PII). Os dados preenchidos são preservados para tentar de novo.
+const RegistrationErrorCard: React.FC<{ onRetry: () => void }> = ({
+  onRetry,
+}) => (
+  <div className="w-full max-w-md mx-auto px-4 space-y-6">
+    <div className="space-y-2 text-center">
+      <AlertCircle
+        className="w-12 h-12 text-destructive mx-auto"
+        aria-hidden="true"
+      />
+      <h2 className="text-2xl font-semibold text-foreground">
+        Não conseguimos concluir seu cadastro
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        Algo deu errado do nosso lado. Seus dados continuam preenchidos — você
+        pode tentar novamente agora ou falar com a clínica.
+      </p>
+    </div>
+
+    <Button type="button" onClick={onRetry} size="lg" className="w-full h-12">
+      Tentar novamente
+    </Button>
+
+    <a
+      href={CLINIC_WHATSAPP_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-center gap-2 p-3 rounded-lg border hover:bg-accent transition-colors"
+    >
+      <MessageCircle className="w-4 h-4 text-green-600" aria-hidden="true" />
+      <span className="text-sm font-medium">
+        Falar com a clínica no WhatsApp
+      </span>
+    </a>
+  </div>
+);
+
 export const PatientRegistrationSteps =
   React.memo<PatientRegistrationStepsProps>(({ className }) => {
-    const [currentStep, setCurrentStep] =
-      useState<RegistrationStep>('whatsapp');
+    // Reidrata rascunho salvo (se houver) — inicializador lazy roda 1x no mount
+    const [initialDraft] = useState<RegistrationDraft | null>(
+      loadRegistrationDraft
+    );
+    const [currentStep, setCurrentStep] = useState<RegistrationStep>(
+      initialDraft?.currentStep ?? 'whatsapp'
+    );
     const [registrationData, setRegistrationData] = useState<
       Partial<PatientRegistrationData>
-    >({
-      whatsappValidated: false,
-    });
+    >(
+      initialDraft?.registrationData ?? {
+        whatsappValidated: false,
+      }
+    );
     const [isLoadingContract, setIsLoadingContract] = useState(false);
+    // AI dev note: erro fatal de submissão ('contract' = geração do contrato
+    // falhou na review; 'finalization' = Edge Function falhou no aceite).
+    // Mostra card amigável no wizard em vez de alert() com mensagem técnica.
+    const [submissionError, setSubmissionError] = useState<
+      'contract' | 'finalization' | null
+    >(null);
+
+    // AI dev note: Autosave do progresso. Os dados só mudam em transição de
+    // etapa (cada step guarda estado local e sobe no "continuar"), então salvar
+    // imediato é barato — e evita perder o save quando o usuário troca de app
+    // logo em seguida (timers de debounce ficam suspensos em aba de background).
+    useEffect(() => {
+      const hasProgress =
+        currentStep !== 'whatsapp' || !!registrationData.whatsappValidated;
+      try {
+        if (!hasProgress) {
+          // Sem progresso (início ou reset explícito do fluxo): remove o rascunho
+          sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+          return;
+        }
+        const draft: RegistrationDraft = {
+          currentStep,
+          registrationData,
+          savedAt: new Date().toISOString(),
+        };
+        sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      } catch {
+        // Quota/indisponibilidade: segue sem persistir (nunca logar os dados)
+      }
+    }, [currentStep, registrationData]);
 
     // Hook de logging para rastreamento do processo
     const logger = useRegistrationLogger();
@@ -168,6 +392,7 @@ export const PatientRegistrationSteps =
         const stepMapping: Record<string, RegistrationStepName> = {
           whatsapp: 'whatsapp',
           'responsible-identification': 'responsible',
+          'not-responsible': 'responsible',
           'responsible-data': 'responsible',
           address: 'address',
           'financial-responsible': 'responsible',
@@ -214,12 +439,9 @@ export const PatientRegistrationSteps =
     // Handler para conclusão da etapa de WhatsApp (pessoa nova)
     const handleWhatsAppContinue = useCallback(
       (data: { phoneNumber: string; personId?: string }) => {
+        // AI dev note: nunca logar telefone/PII no console
         console.log(
           '🆕 [PatientRegistrationSteps] handleWhatsAppContinue - Usuário NOVO'
-        );
-        console.log(
-          '📞 [PatientRegistrationSteps] Telefone:',
-          data.phoneNumber
         );
 
         // Log de conclusão da etapa WhatsApp
@@ -343,16 +565,14 @@ export const PatientRegistrationSteps =
             setCurrentStep('responsible-data');
           }
         } else {
-          // Pessoa NÃO é responsável - voltar para validar WhatsApp do responsável legal
+          // AI dev note: Pessoa NÃO é responsável — NÃO resetar nada ainda.
+          // Mostrar tela de orientação (enviar link ao responsável); o reset
+          // só acontece se a pessoa confirmar "Entendi, recomeçar".
           console.log(
-            '🔄 [PatientRegistrationSteps] Não é responsável → volta para whatsapp'
+            '🔄 [PatientRegistrationSteps] Não é responsável → tela de orientação'
           );
-          log('step_started', 'whatsapp');
-          setCurrentStep('whatsapp');
-          setRegistrationData({
-            whatsappValidated: false,
-            isSelfResponsible: false,
-          });
+          log('step_started', 'not-responsible');
+          setCurrentStep('not-responsible');
         }
       },
       [
@@ -365,10 +585,8 @@ export const PatientRegistrationSteps =
     // Handler para dados do responsável
     const handleResponsibleData = useCallback(
       (data: ResponsibleData) => {
-        console.log(
-          '✅ [PatientRegistrationSteps] handleResponsibleData:',
-          data
-        );
+        // AI dev note: não logar o payload (nome/CPF/e-mail = PII)
+        console.log('✅ [PatientRegistrationSteps] handleResponsibleData');
 
         // Log de conclusão da etapa de dados do responsável
         log('step_completed', 'responsible-data', data);
@@ -393,7 +611,8 @@ export const PatientRegistrationSteps =
     // Handler para endereço
     const handleAddress = useCallback(
       (data: AddressData) => {
-        console.log('✅ [PatientRegistrationSteps] handleAddress:', data);
+        // AI dev note: não logar o payload (endereço = PII)
+        console.log('✅ [PatientRegistrationSteps] handleAddress');
 
         // Log de conclusão da etapa de endereço
         log('step_completed', 'address', data);
@@ -422,10 +641,8 @@ export const PatientRegistrationSteps =
     // Handler para responsável financeiro
     const handleFinancialResponsible = useCallback(
       (data: FinancialResponsibleData) => {
-        console.log(
-          '✅ [PatientRegistrationSteps] handleFinancialResponsible:',
-          data
-        );
+        // AI dev note: não logar o payload (pode conter nome/CPF/telefone = PII)
+        console.log('✅ [PatientRegistrationSteps] handleFinancialResponsible');
 
         // Log de conclusão da etapa
         log('step_completed', 'financial-responsible', data);
@@ -448,7 +665,8 @@ export const PatientRegistrationSteps =
     // Handler para dados do paciente
     const handlePatientData = useCallback(
       (data: PatientData) => {
-        console.log('✅ [PatientRegistrationSteps] handlePatientData:', data);
+        // AI dev note: não logar o payload (nome/CPF/nascimento = PII)
+        console.log('✅ [PatientRegistrationSteps] handlePatientData');
 
         // Log de conclusão da etapa
         log('step_completed', 'patient', data);
@@ -473,7 +691,7 @@ export const PatientRegistrationSteps =
     // Handler para pediatra
     const handlePediatrician = useCallback(
       (data: PediatricianData) => {
-        console.log('✅ [PatientRegistrationSteps] handlePediatrician:', data);
+        console.log('✅ [PatientRegistrationSteps] handlePediatrician');
 
         // Log de conclusão da etapa
         log('step_completed', 'pediatrician', data);
@@ -498,10 +716,7 @@ export const PatientRegistrationSteps =
     // Handler para autorizações
     const handleAuthorizations = useCallback(
       (data: AuthorizationsData) => {
-        console.log(
-          '✅ [PatientRegistrationSteps] handleAuthorizations:',
-          data
-        );
+        console.log('✅ [PatientRegistrationSteps] handleAuthorizations');
 
         // Log de conclusão da etapa
         log('step_completed', 'authorizations', data);
@@ -561,9 +776,9 @@ export const PatientRegistrationSteps =
           registrationData.responsavelLegal?.email ||
           '';
 
+        // AI dev note: não logar nome do contratante (PII)
         console.log(
-          '✅ [PatientRegistrationSteps] Contratante (Responsável Legal):',
-          responsavelLegalNome
+          '✅ [PatientRegistrationSteps] Contratante (Responsável Legal) definido'
         );
 
         // Determinar se precisa mencionar responsável financeiro separadamente
@@ -617,9 +832,9 @@ export const PatientRegistrationSteps =
 
 **Parágrafo único:** Os pagamentos referentes aos serviços prestados serão realizados por **${financeiroNome}**, CPF nº ${formatarCpf(financeiroCpf)}, telefone ${financeiroTelefone}, email ${financeiroEmail}, na qualidade de **RESPONSÁVEL FINANCEIRO**.`;
 
+            // AI dev note: não logar nome do responsável financeiro (PII)
             console.log(
-              '✅ [PatientRegistrationSteps] Responsável Financeiro DIFERENTE:',
-              financeiroNome
+              '✅ [PatientRegistrationSteps] Responsável Financeiro DIFERENTE do legal'
             );
           }
         }
@@ -785,7 +1000,8 @@ export const PatientRegistrationSteps =
             error instanceof Error ? error.message : 'Erro ao gerar contrato',
         });
 
-        alert('Erro ao gerar contrato. Por favor, tente novamente.');
+        // AI dev note: sem alert() técnico — card amigável no próprio wizard
+        setSubmissionError('contract');
       } finally {
         setIsLoadingContract(false);
       }
@@ -934,33 +1150,25 @@ export const PatientRegistrationSteps =
           contractVariables: contractVariables,
         };
 
+        // AI dev note: NUNCA logar o payload de finalização (contém CPFs,
+        // telefone, endereço e nomes). Apenas flags booleanas, sem valores.
         console.log('📋 [PatientRegistrationSteps] Dados preparados:', {
           hasWhatsappJid: !!finalizationData.whatsappJid,
-          phoneNumber: finalizationData.phoneNumber,
-          existingPersonId: finalizationData.existingPersonId,
+          hasPhoneNumber: !!finalizationData.phoneNumber,
+          hasExistingPersonId: !!finalizationData.existingPersonId,
           hasExistingUserData: !!finalizationData.existingUserData,
           hasResponsavelLegal: !!finalizationData.responsavelLegal,
-          enderecoCep: finalizationData.endereco.cep,
+          hasEndereco: !!finalizationData.endereco.cep,
           responsavelFinanceiroMesmoQueLegal:
             finalizationData.responsavelFinanceiroMesmoQueLegal,
-          responsavelFinanceiroExistingId:
-            finalizationData.responsavelFinanceiroExistingId,
           hasNewPersonData: !!finalizationData.newPersonData,
-          pacienteNome: finalizationData.paciente.nome,
-          pacienteSexo: finalizationData.paciente.sexo,
           hasPacienteCpf: !!finalizationData.paciente.cpf,
-          pediatraId: finalizationData.pediatra.id,
-          pediatraNome: finalizationData.pediatra.nome,
-          autorizacoes: finalizationData.autorizacoes,
+          hasPediatra: !!finalizationData.pediatra.nome,
           hasContractVariables: !!finalizationData.contractVariables,
         });
 
         console.log(
           '📤 [PatientRegistrationSteps] PASSO 3: Enviando dados para Edge Function...'
-        );
-        console.log(
-          '📋 [PatientRegistrationSteps] Dados completos a serem enviados:',
-          JSON.stringify(finalizationData, null, 2)
         );
         console.log(
           '⏱️ [PatientRegistrationSteps] Timestamp:',
@@ -998,6 +1206,8 @@ export const PatientRegistrationSteps =
             console.log(
               '⚠️ [PatientRegistrationSteps] Erro de comunicação mas cadastro pode ter funcionado - redirecionando'
             );
+            // Cadastro persistido no backend: limpar rascunho antes de sair
+            clearRegistrationDraft();
             // Redirecionar com dados básicos disponíveis
             const params = new URLSearchParams({
               patient_name: registrationData.paciente!.nome,
@@ -1036,6 +1246,9 @@ export const PatientRegistrationSteps =
           pacienteId: result.pacienteId,
           contratoId: result.contratoId,
         });
+
+        // Sucesso: limpar rascunho salvo antes de redirecionar
+        clearRegistrationDraft();
 
         // Redirecionar para página de sucesso
         const params = new URLSearchParams({
@@ -1090,6 +1303,8 @@ export const PatientRegistrationSteps =
               contratoVerificacao.pessoa_id
             );
 
+            // Cadastro confirmado no banco: limpar rascunho antes de sair
+            clearRegistrationDraft();
             // Redirecionar para sucesso
             const params = new URLSearchParams({
               patient_name: registrationData.paciente!.nome,
@@ -1106,9 +1321,9 @@ export const PatientRegistrationSteps =
           );
         }
 
-        alert(
-          `Erro ao finalizar cadastro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
-        );
+        // AI dev note: NUNCA mostrar error.message cru para o responsável —
+        // card amigável no wizard; detalhes já foram logados no console.
+        setSubmissionError('finalization');
       } finally {
         setIsLoadingContract(false);
       }
@@ -1175,6 +1390,7 @@ export const PatientRegistrationSteps =
       > = {
         whatsapp: { baseStep: 1, total: 10 },
         'responsible-identification': { baseStep: 2, total: 10 },
+        'not-responsible': { baseStep: 2, total: 10 },
         'responsible-data': { baseStep: 3, total: 10 },
         address: { baseStep: 4, total: 10 },
         'financial-responsible': { baseStep: 5, total: 10 },
@@ -1257,6 +1473,22 @@ export const PatientRegistrationSteps =
               onContinue={handleResponsibleIdentification}
               onBack={handleBack}
               defaultValue={registrationData.isSelfResponsible}
+            />
+          );
+
+        case 'not-responsible':
+          return (
+            <NotResponsibleNotice
+              onBack={() => setCurrentStep('responsible-identification')}
+              onRestart={() => {
+                // Reset explícito (confirmado pela pessoa): limpa dados e
+                // volta para a validação do WhatsApp do responsável legal
+                setRegistrationData({
+                  whatsappValidated: false,
+                  isSelfResponsible: false,
+                });
+                setCurrentStep('whatsapp');
+              }}
             />
           );
 
@@ -1418,8 +1650,14 @@ export const PatientRegistrationSteps =
           <ProgressIndicator currentStep={stepNumber} totalSteps={totalSteps} />
         </div>
 
-        {/* Etapa atual */}
-        <div className="w-full">{renderCurrentStep()}</div>
+        {/* Etapa atual (ou card de erro amigável, se a submissão falhou) */}
+        <div className="w-full">
+          {submissionError ? (
+            <RegistrationErrorCard onRetry={() => setSubmissionError(null)} />
+          ) : (
+            renderCurrentStep()
+          )}
+        </div>
       </div>
     );
   });

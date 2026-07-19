@@ -22,6 +22,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/primitives/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { Progress } from '@/components/primitives/progress';
@@ -105,6 +115,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   // Estado do autosave
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // AI dev note: rascunho encontrado ao abrir — decidido via AlertDialog
+  // (antes era window.confirm); Escape mantém o rascunho para depois
+  const [pendingDraft, setPendingDraft] = useState<AutosaveData | null>(null);
+  // Confirmação de saída com alterações não salvas (antes window.confirm)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   // Determinar tipo de evolução baseado no serviço
   const determinarTipoEvolucao = useCallback((): TipoEvolucao => {
     if (existingData?.tipo_evolucao) return existingData.tipo_evolucao;
@@ -230,8 +245,10 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   }, [autosaveKey]);
 
   // Autosave com debounce quando dados mudam
+  // AI dev note: pendingDraft pausa o autosave — sem isso o formulário vazio
+  // sobrescreveria o rascunho salvo enquanto o dialog de recuperação está aberto
   useEffect(() => {
-    if (!isOpen || isReadOnly) return;
+    if (!isOpen || isReadOnly || pendingDraft) return;
 
     // Limpar timer anterior
     if (autosaveTimerRef.current) {
@@ -251,6 +268,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   }, [
     isOpen,
     isReadOnly,
+    pendingDraft,
     mode,
     tipoEvolucao,
     evolucaoRespiratoria,
@@ -264,39 +282,13 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       const tipoInicial = determinarTipoEvolucao();
       setLastSaved(null);
 
-      // Se estamos criando (não editando), verificar rascunho
+      // AI dev note: Se estamos criando e há rascunho, abrir AlertDialog para
+      // o profissional decidir (recuperar/descartar). O formulário inicializa
+      // vazio; se recuperar, o rascunho é aplicado por cima.
       if (mode === 'create' && autosaveKey) {
         const draft = loadDraft();
         if (draft) {
-          // Há um rascunho salvo - perguntar ao usuário
-          const savedDate = new Date(draft.savedAt);
-          const timeAgo = Math.round(
-            (Date.now() - savedDate.getTime()) / 1000 / 60
-          );
-          const timeLabel =
-            timeAgo < 60
-              ? `${timeAgo} minuto${timeAgo !== 1 ? 's' : ''}`
-              : `${Math.round(timeAgo / 60)} hora${Math.round(timeAgo / 60) !== 1 ? 's' : ''}`;
-
-          const shouldRecover = window.confirm(
-            `Encontramos um rascunho salvo há ${timeLabel}. Deseja recuperá-lo?`
-          );
-
-          if (shouldRecover) {
-            setTipoEvolucao(draft.tipo_evolucao);
-            if (draft.evolucao_respiratoria) {
-              setEvolucaoRespiratoria(draft.evolucao_respiratoria);
-            }
-            if (draft.evolucao_motora_assimetria) {
-              setEvolucaoMotora(draft.evolucao_motora_assimetria);
-            }
-            setLastSaved(savedDate);
-            setCurrentSection(0);
-            return;
-          } else {
-            // Usuário não quer recuperar - limpar rascunho
-            clearDraft();
-          }
+          setPendingDraft(draft);
         }
       }
 
@@ -310,6 +302,9 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
           criarEvolucaoMotoraAssimetriaVazia()
       );
       setCurrentSection(0);
+    } else {
+      setPendingDraft(null);
+      setShowCloseConfirm(false);
     }
   }, [
     isOpen,
@@ -318,8 +313,33 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     mode,
     autosaveKey,
     loadDraft,
-    clearDraft,
   ]);
+
+  // Aplicar o rascunho pendente (ação "Recuperar" do AlertDialog)
+  const applyPendingDraft = useCallback(() => {
+    if (!pendingDraft) return;
+    setTipoEvolucao(pendingDraft.tipo_evolucao);
+    if (pendingDraft.evolucao_respiratoria) {
+      setEvolucaoRespiratoria(pendingDraft.evolucao_respiratoria);
+    }
+    if (pendingDraft.evolucao_motora_assimetria) {
+      setEvolucaoMotora(pendingDraft.evolucao_motora_assimetria);
+    }
+    setLastSaved(new Date(pendingDraft.savedAt));
+    setCurrentSection(0);
+    setPendingDraft(null);
+  }, [pendingDraft]);
+
+  // Rótulo "há X minutos/horas" do rascunho pendente
+  const pendingDraftTimeLabel = useMemo(() => {
+    if (!pendingDraft) return '';
+    const timeAgo = Math.round(
+      (Date.now() - new Date(pendingDraft.savedAt).getTime()) / 1000 / 60
+    );
+    return timeAgo < 60
+      ? `${timeAgo} minuto${timeAgo !== 1 ? 's' : ''}`
+      : `${Math.round(timeAgo / 60)} hora${Math.round(timeAgo / 60) !== 1 ? 's' : ''}`;
+  }, [pendingDraft]);
 
   // Handler para atualização de campos respiratórios
   const handleRespiratoriaChange = useCallback(
@@ -393,6 +413,16 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
   const progresso = calcularProgresso();
 
+  // AI dev note: Status textual da seção para aria-label das bolinhas
+  const getStatusLabel = (secaoId: string): string => {
+    const dados =
+      tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : evolucaoMotora;
+    const status = verificarSecaoEvolucaoCompleta(tipoEvolucao, secaoId, dados);
+    if (status === 'completo') return 'completa';
+    if (status === 'parcial') return 'parcial';
+    return 'vazia';
+  };
+
   // Obter ícone de status da seção
   const getStatusIcon = (secaoId: string, className?: string) => {
     const dados =
@@ -417,13 +447,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       : '🦴 Evolução Motora/Assimetria';
   };
 
-  // Handler para fechar com confirmação se houver alterações
+  // Handler para fechar com confirmação se houver alterações (AlertDialog)
   const handleClose = useCallback(() => {
     if (lastSaved && !isReadOnly) {
-      const shouldClose = window.confirm(
-        'Você tem alterações não salvas. O rascunho foi salvo automaticamente e poderá ser recuperado ao reabrir. Deseja sair?'
-      );
-      if (!shouldClose) return;
+      setShowCloseConfirm(true);
+      return;
     }
     onClose();
   }, [lastSaved, isReadOnly, onClose]);
@@ -528,7 +556,12 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
+                        type="button"
                         onClick={() => setCurrentSection(index)}
+                        aria-label={`Seção ${index + 1}: ${secao.titulo} — ${getStatusLabel(secao.id)}`}
+                        aria-current={
+                          currentSection === index ? 'step' : undefined
+                        }
                         className={cn(
                           'flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all shrink-0',
                           currentSection === index
@@ -664,6 +697,62 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Confirmação de recuperação de rascunho (antes: window.confirm) */}
+        <AlertDialog
+          open={!!pendingDraft}
+          onOpenChange={(open) => {
+            // Escape/clique fora: mantém o rascunho salvo para depois
+            if (!open) setPendingDraft(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Recuperar rascunho?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Encontramos um rascunho desta evolução salvo há{' '}
+                {pendingDraftTimeLabel}. Deseja recuperá-lo?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => {
+                  clearDraft();
+                  setPendingDraft(null);
+                }}
+              >
+                Descartar rascunho
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={applyPendingDraft}>
+                Recuperar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Confirmação de saída com alterações não salvas (antes: window.confirm) */}
+        <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Sair da evolução?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Você tem alterações não salvas. O rascunho foi salvo
+                automaticamente e poderá ser recuperado ao reabrir.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Continuar editando</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setShowCloseConfirm(false);
+                  onClose();
+                }}
+              >
+                Sair
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

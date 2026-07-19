@@ -83,7 +83,7 @@ export const UserMetrics = React.memo<UserMetricsProps>(
         value: metrics.novos_ultimo_mes,
         description: 'Cadastros recentes',
         icon: Shield,
-        className: 'text-purple-600 border-purple-200 bg-purple-50',
+        className: 'text-roxo-titulo border-roxo-titulo/20 bg-roxo-titulo/5',
       },
     ];
 
@@ -94,10 +94,7 @@ export const UserMetrics = React.memo<UserMetricsProps>(
           {cards.map((card) => {
             const Icon = card.icon;
             return (
-              <Card
-                key={card.title}
-                className={cn('border-l-4', card.className)}
-              >
+              <Card key={card.title} className={cn(card.className)}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     {card.title}

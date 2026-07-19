@@ -25,7 +25,6 @@ import { useCalendarFormData } from '@/hooks/useCalendarData';
 import { useNavigate } from 'react-router-dom';
 import { fetchAgendamentoById } from '@/lib/calendar-services';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
-import type { FaturaComDetalhes } from '@/types/faturas';
 import { useToast } from '@/components/primitives/use-toast';
 
 // AI dev note: Interfaces para tipos da página financeira
@@ -69,6 +68,16 @@ export const FinanceiroPage: React.FC = () => {
   const [activeTabAdmin, setActiveTabAdmin] = useState<
     'consultas' | 'faturas' | 'grafico' | 'profissionais'
   >('consultas');
+  // AI dev note: o TabsContent do Radix DESMONTA o conteúdo ao trocar de aba —
+  // filtros, seleção em massa e dados carregados se perdiam entre Consultas↔
+  // Faturas. Cada aba fica MONTADA depois da primeira visita (forceMount +
+  // hidden): trocar de aba preserva o estado sem refazer queries. A montagem
+  // continua lazy (só monta quando visitada) para o primeiro load não disparar
+  // as queries das 4 abas de uma vez. Efeitos de polling de abas ocultas seguem
+  // rodando — desejável (ex.: acompanhar lote de cobranças/NFe em background).
+  const [visitedAdminTabs, setVisitedAdminTabs] = useState<Set<string>>(
+    () => new Set(['consultas'])
+  );
   const [activeTabProfessional, setActiveTabProfessional] = useState<
     'resumo' | 'consultas' | 'grafico'
   >('resumo');
@@ -188,13 +197,9 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  // Handler para clique em fatura
-  const handleFaturaClick = async (fatura: FaturaComDetalhes) => {
-    // Abrir link do ASAAS se existir
-    if (fatura.url_asaas) {
-      window.open(fatura.url_asaas, '_blank');
-    }
-  };
+  // AI dev note: o clique no card da fatura NÃO abre mais o site do ASAAS —
+  // navegar para fora sem indicação confundia; a lista agora tem botões
+  // explícitos por card ("Ver no ASAAS" e "Ajustar/Sincronizar").
 
   // Handler para fechar modal de detalhes
   const handleAppointmentDetailsClose = () => {
@@ -299,15 +304,21 @@ export const FinanceiroPage: React.FC = () => {
                   {/* Abas antigas de comissões */}
                   <Tabs
                     value={activeTabAdmin}
-                    onValueChange={(value) =>
+                    onValueChange={(value) => {
                       setActiveTabAdmin(
                         value as
                           | 'consultas'
                           | 'faturas'
                           | 'grafico'
                           | 'profissionais'
-                      )
-                    }
+                      );
+                      setVisitedAdminTabs((prev) => {
+                        if (prev.has(value)) return prev;
+                        const next = new Set(prev);
+                        next.add(value);
+                        return next;
+                      });
+                    }}
                   >
                     <TabsList className="grid w-full grid-cols-4 h-auto">
                       <TabsTrigger value="consultas">Consultas</TabsTrigger>
@@ -318,28 +329,67 @@ export const FinanceiroPage: React.FC = () => {
                       </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="consultas" className="space-y-4">
-                      <FinancialConsultationsList
-                        onConsultationClick={handleConsultationClick}
-                        onIrParaFaturas={() => setActiveTabAdmin('faturas')}
-                      />
-                    </TabsContent>
+                    {/* AI dev note: forceMount + hidden preserva filtros/seleção/
+                        dados ao trocar de aba; o gate visitedAdminTabs mantém a
+                        primeira montagem lazy. Ver nota em visitedAdminTabs. */}
+                    {visitedAdminTabs.has('consultas') && (
+                      <TabsContent
+                        value="consultas"
+                        forceMount
+                        hidden={activeTabAdmin !== 'consultas'}
+                        className="space-y-4"
+                      >
+                        <FinancialConsultationsList
+                          onConsultationClick={handleConsultationClick}
+                          onIrParaFaturas={() => {
+                            setActiveTabAdmin('faturas');
+                            setVisitedAdminTabs((prev) => {
+                              if (prev.has('faturas')) return prev;
+                              const next = new Set(prev);
+                              next.add('faturas');
+                              return next;
+                            });
+                          }}
+                        />
+                      </TabsContent>
+                    )}
 
-                    <TabsContent value="faturas" className="space-y-4">
-                      <FinancialPreCobrancasReport />
-                      <FinancialCicloPagamento />
-                      <FinancialDisparosLog />
-                      <FinancialPreFaturasList />
-                      <FinancialFaturasList onFaturaClick={handleFaturaClick} />
-                    </TabsContent>
+                    {visitedAdminTabs.has('faturas') && (
+                      <TabsContent
+                        value="faturas"
+                        forceMount
+                        hidden={activeTabAdmin !== 'faturas'}
+                        className="space-y-4"
+                      >
+                        <FinancialPreCobrancasReport />
+                        <FinancialCicloPagamento />
+                        <FinancialDisparosLog />
+                        <FinancialPreFaturasList />
+                        <FinancialFaturasList />
+                      </TabsContent>
+                    )}
 
-                    <TabsContent value="grafico" className="space-y-4">
-                      <FaturamentoChart />
-                    </TabsContent>
+                    {visitedAdminTabs.has('grafico') && (
+                      <TabsContent
+                        value="grafico"
+                        forceMount
+                        hidden={activeTabAdmin !== 'grafico'}
+                        className="space-y-4"
+                      >
+                        <FaturamentoChart />
+                      </TabsContent>
+                    )}
 
-                    <TabsContent value="profissionais" className="space-y-4">
-                      <FinancialProfessionalReport />
-                    </TabsContent>
+                    {visitedAdminTabs.has('profissionais') && (
+                      <TabsContent
+                        value="profissionais"
+                        forceMount
+                        hidden={activeTabAdmin !== 'profissionais'}
+                        className="space-y-4"
+                      >
+                        <FinancialProfessionalReport />
+                      </TabsContent>
+                    )}
                   </Tabs>
                 </TabsContent>
 

@@ -147,12 +147,13 @@ export const UserManagement = React.memo<UserManagementProps>(
       loadData();
     }, [filters, currentPage, loadData]);
 
-    // Reset página quando filtros mudam (mas não quando currentPage muda)
+    // AI dev note: Reset página SÓ quando filtros mudam. Com currentPage nas
+    // deps, o efeito desfazia qualquer navegação (página 2 voltava para 1 na
+    // hora), deixando usuários do 11º em diante inalcançáveis. Setar 1 quando
+    // já é 1 é no-op (React ignora setState com valor idêntico).
     useEffect(() => {
-      if (currentPage !== 1) {
-        setCurrentPage(1);
-      }
-    }, [filters, currentPage]);
+      setCurrentPage(1);
+    }, [filters]);
 
     const handleEditUser = async (usuario: Usuario) => {
       // Se for paciente, buscar o responsavel_cobranca_id diretamente da tabela pessoas
@@ -473,15 +474,31 @@ export const UserManagement = React.memo<UserManagementProps>(
 
         {/* Busca e Filtros */}
         <div className="flex flex-col md:flex-row gap-4">
+          {/* AI dev note: resetar a página junto com o filtro (no mesmo evento)
+              faz o React agrupar os dois setState num único render — evita um
+              fetch intermediário com filtros novos + página antiga */}
           <UserSearch
             value={filters.busca || ''}
-            onChange={(value) => setFilters({ ...filters, busca: value })}
+            onChange={(value) => {
+              setFilters({ ...filters, busca: value });
+              setCurrentPage(1);
+            }}
             className="flex-1"
           />
-          <UserFilters filters={filters} onChange={setFilters} />
+          <UserFilters
+            filters={filters}
+            onChange={(newFilters) => {
+              setFilters(newFilters);
+              setCurrentPage(1);
+            }}
+          />
         </div>
 
         {/* Tabela - SEM campo de busca interno */}
+        {/* AI dev note: itemsPerPage = limit do servidor para a GenericTable
+            NUNCA re-fatiar client-side a página que já veio paginada do banco
+            (nem exibir a paginação interna dela — a paginação real é a de
+            baixo, server-side) */}
         <GenericTable
           title="Usuários do Sistema"
           description="Gerencie todos os usuários cadastrados na plataforma"
@@ -490,7 +507,44 @@ export const UserManagement = React.memo<UserManagementProps>(
           loading={loading}
           emptyMessage="Nenhum usuário encontrado"
           showSearch={false}
+          itemsPerPage={usuarios?.limit || 10}
         />
+
+        {/* AI dev note: Paginação SERVER-SIDE — fetchUsuarios sempre paginou no
+            servidor (10 por página), mas nenhum controle era renderizado:
+            usuários do 11º em diante eram inalcançáveis pela UI */}
+        {usuarios && usuarios.totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Mostrando {(usuarios.page - 1) * usuarios.limit + 1} -{' '}
+              {Math.min(usuarios.page * usuarios.limit, usuarios.total)} de{' '}
+              {usuarios.total} usuários
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={loading || currentPage <= 1}
+              >
+                Anterior
+              </Button>
+              <div className="px-3 py-1 text-sm font-medium bg-muted rounded">
+                Página {usuarios.page} de {usuarios.totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(usuarios.totalPages, p + 1))
+                }
+                disabled={loading || currentPage >= usuarios.totalPages}
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Modal de Edição Detalhado */}
         <Dialog open={showEditModal} onOpenChange={setShowEditModal}>

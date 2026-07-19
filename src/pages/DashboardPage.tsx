@@ -22,7 +22,8 @@ import {
   SecretariaDashboard,
 } from '@/components/domain';
 import { AppointmentDetailsManager } from '@/components/domain/calendar';
-import { fetchAgendamentoById, updateNfeLink } from '@/lib/calendar-services';
+import { fetchAgendamentoById } from '@/lib/calendar-services';
+import { toast } from '@/components/primitives/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
@@ -184,29 +185,16 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const handleNfeAction = async (appointmentId: string, linkNfe?: string) => {
-    try {
-      if (linkNfe) {
-        // Se já tem NFe, visualizar
-
-        window.open(linkNfe, '_blank');
-      } else {
-        // Se não tem NFe, emitir
-
-        // TODO: Implementar integração com sistema de NFe
-        // Por enquanto, simular um link de NFe
-        const mockNfeLink = `https://nfe.exemplo.com/${appointmentId}`;
-
-        await updateNfeLink(appointmentId, mockNfeLink);
-
-        // Recarregar dados do agendamento se necessário
-        if (selectedAppointmentData?.id === appointmentId) {
-          const updatedAppointment = await fetchAgendamentoById(appointmentId);
-          setSelectedAppointmentData(updatedAppointment);
-        }
-      }
-    } catch (error) {
-      console.error('Erro na ação de NFe:', error);
+  // AI dev note: A emissão de NFe é feita pelo módulo Financeiro (fatura).
+  // Aqui só visualizamos o link quando existir — nunca gravar link falso.
+  const handleNfeAction = async (_appointmentId: string, linkNfe?: string) => {
+    if (linkNfe) {
+      window.open(linkNfe, '_blank');
+    } else {
+      toast({
+        title: 'Emissão indisponível nesta tela',
+        description: 'Emita a NFS-e pela fatura no módulo Financeiro.',
+      });
     }
   };
 
@@ -368,8 +356,8 @@ export const DashboardPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
-            Bem-vindo, {user?.pessoa?.nome || 'Usuário'} (
-            {userRole || 'role não definida'})
+            Bem-vindo, {user?.pessoa?.nome || 'Usuário'}
+            {userRole ? ` (${userRole})` : ''}
           </p>
         </div>
         <Button onClick={handleNavigateToAgenda}>

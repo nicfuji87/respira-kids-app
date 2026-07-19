@@ -19,13 +19,13 @@ interface PesquisaComentariosListProps {
   title: string;
   emptyLabel?: string;
   className?: string;
-  /** Cor do destaque lateral. */
+  /** Cor do destaque (tint de fundo + borda fina). */
   accent?: 'verde' | 'amarelo';
 }
 
 const ACCENT_MAP = {
-  verde: 'border-l-verde-pipa',
-  amarelo: 'border-l-amarelo-pipa',
+  verde: 'bg-verde-pipa/10 border-verde-pipa/20',
+  amarelo: 'bg-amarelo-pipa/10 border-amarelo-pipa/20',
 };
 
 const INITIAL_LIMIT = 5;
@@ -78,7 +78,7 @@ export const PesquisaComentariosList = React.memo<PesquisaComentariosListProps>(
                   <li
                     key={c.id}
                     className={cn(
-                      'rounded-lg bg-muted/40 px-4 py-3 border-l-4',
+                      'rounded-lg border px-4 py-3',
                       ACCENT_MAP[accent]
                     )}
                   >

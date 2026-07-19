@@ -127,7 +127,7 @@ export const PesquisaNpsSegmentado = React.memo<PesquisaNpsSegmentadoProps>(
                         >
                           {total > 0 ? nps : '—'}
                           {isAmostraPequena && total > 0 && (
-                            <span className="text-[10px] text-muted-foreground/70 font-normal ml-1">
+                            <span className="text-[11px] text-muted-foreground/70 font-normal ml-1">
                               *
                             </span>
                           )}
@@ -137,7 +137,7 @@ export const PesquisaNpsSegmentado = React.memo<PesquisaNpsSegmentadoProps>(
                   })}
                 </tbody>
               </table>
-              <p className="text-[10px] text-muted-foreground/70 px-6 py-2 italic">
+              <p className="text-[11px] text-muted-foreground/70 px-6 py-2 italic">
                 * amostra menor que {minRespostas} — interpretar com cuidado
               </p>
             </div>

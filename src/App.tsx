@@ -40,7 +40,6 @@ function App() {
         hash.startsWith('#/pagamento/') ||
         hash.startsWith('#/experiencia') ||
         hash.startsWith('#/vaga-estagio');
-      console.log('🔍 [App] Verificando rota pública:', hash, '→', isPublic);
       setIsPublicRoute(isPublic);
     };
 
@@ -88,14 +87,8 @@ function App() {
   // AI dev note: Renderizar rotas públicas SEM autenticação
   // Cadastro de paciente é público e não requer login
   if (isPublicRoute) {
-    console.log(
-      '✅ [App] Renderizando PublicRouter para rota:',
-      window.location.hash
-    );
     return <PublicRouter />;
   }
-
-  console.log('🔒 [App] Rota privada detectada, verificando autenticação...');
 
   // Loading state
   if (loading) {
@@ -119,7 +112,6 @@ function App() {
     !needsProfileCompletion
   ) {
     if (canAccessDashboard && user?.pessoa?.role) {
-      console.log('✅ App: Renderizando AppRouter com role:', user.pessoa.role);
       return (
         <HashRouter>
           <AppRouter />
@@ -128,7 +120,6 @@ function App() {
       );
     } else if (canAccessDashboard && user?.pessoa && !user?.pessoa?.role) {
       // Estado transitório: pessoa existe mas role ainda não
-      console.log('⏳ App: Aguardando role estar disponível...');
       return (
         <div className="min-h-screen bg-gradient-to-br from-bege-fundo to-background flex items-center justify-center p-4">
           <div className="text-center space-y-4">
@@ -156,10 +147,6 @@ function App() {
 
   // Roteamento principal baseado no status real do usuário
   if (canAccessDashboard && user?.pessoa?.role) {
-    console.log(
-      '✅ App: Renderizando AppRouter com role (check 2):',
-      user.pessoa.role
-    );
     return (
       <HashRouter>
         <AppRouter />

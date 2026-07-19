@@ -52,7 +52,7 @@ export const PesquisaSuccessScreen = React.memo<PesquisaSuccessScreenProps>(
           <Button
             size="lg"
             onClick={handleInstagram}
-            className="w-full sm:w-auto min-w-[260px] h-14 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+            className="w-full sm:w-auto min-w-[260px] h-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
           >
             <Instagram className="w-5 h-5 mr-2" />
             Acompanhe @respira.kids

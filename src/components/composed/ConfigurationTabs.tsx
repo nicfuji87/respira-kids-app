@@ -19,8 +19,6 @@ import {
   Building,
   Settings,
   Zap,
-  DollarSign,
-  Package,
   Users,
   Shield,
   ScrollText,
@@ -88,32 +86,6 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
         roles: ['admin'],
         icon: Zap,
         content: <IntegrationsTemplate />,
-      },
-      {
-        id: 'financial',
-        label: 'Financeiro',
-        roles: ['admin'],
-        icon: DollarSign,
-        content: (
-          <DevelopmentPlaceholder
-            title="Financeiro"
-            description="Configurações de pagamento, comissões, impostos e relatórios financeiros."
-            icon={<DollarSign className="h-12 w-12 text-primary/50" />}
-          />
-        ),
-      },
-      {
-        id: 'inventory',
-        label: 'Estoque',
-        roles: ['admin'],
-        icon: Package,
-        content: (
-          <DevelopmentPlaceholder
-            title="Estoque"
-            description="Gerenciar materiais, fornecedores e controle de estoque."
-            icon={<Package className="h-12 w-12 text-primary/50" />}
-          />
-        ),
       },
       {
         id: 'users',

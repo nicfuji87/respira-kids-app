@@ -691,7 +691,7 @@ const DistribuicaoNotasCard = React.memo<DistribuicaoNotasCardProps>(
                   key={n}
                   className="flex-1 flex flex-col items-center justify-end h-full gap-1"
                 >
-                  <span className="text-[10px] font-semibold text-muted-foreground">
+                  <span className="text-[11px] font-semibold text-muted-foreground">
                     {count > 0 ? count : ''}
                   </span>
                   <div className="w-full bg-muted/40 rounded-md overflow-hidden flex-1 flex items-end">
@@ -703,7 +703,7 @@ const DistribuicaoNotasCard = React.memo<DistribuicaoNotasCardProps>(
                       style={{ height: `${heightPct}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-muted-foreground/70 font-medium">
+                  <span className="text-[11px] text-muted-foreground/70 font-medium">
                     {n}
                   </span>
                 </div>

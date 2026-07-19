@@ -221,10 +221,7 @@ const EstoqueRow: React.FC<{ produto: Produto; onMovimentar: () => void }> = ({
             </Badge>
           )}
           {baixo && (
-            <Badge
-              variant="secondary"
-              className="text-xs bg-amarelo-pipa/20 text-amarelo-pipa border-amarelo-pipa/30"
-            >
+            <Badge variant="warning" className="text-xs">
               Estoque baixo
             </Badge>
           )}
@@ -238,7 +235,7 @@ const EstoqueRow: React.FC<{ produto: Produto; onMovimentar: () => void }> = ({
         <div
           className={cn(
             'text-xl font-bold',
-            baixo ? 'text-amarelo-pipa' : 'text-foreground'
+            baixo ? 'text-roxo-titulo' : 'text-foreground'
           )}
         >
           {p.estoque_atual}

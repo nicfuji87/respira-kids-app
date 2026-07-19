@@ -215,7 +215,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
       {/* AI dev note: Header dinâmico com saudação personalizada */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo respira-text-gradient">
+          <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo dark:text-foreground">
             {getGreeting()}, {firstName}!
           </h1>
         </div>

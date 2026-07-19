@@ -154,10 +154,6 @@ export const PersonTypesManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: PessoaTipo) => {
-    if (!confirm(`Tem certeza que deseja excluir "${item.nome}"?`)) {
-      return;
-    }
-
     const result = await deletePessoaTipo(item.id);
 
     if (result.success) {
@@ -240,6 +236,8 @@ export const PersonTypesManagement: React.FC = () => {
           onDelete={() => handleDelete(item)}
           ativo={item.ativo}
           canToggleStatus={false}
+          confirmDeleteTitle={`Excluir o tipo de pessoa "${item.nome}"?`}
+          confirmDeleteDescription="Esta ação não pode ser desfeita."
         />
       ),
       className: 'w-16',

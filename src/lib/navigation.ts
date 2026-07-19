@@ -23,6 +23,10 @@ export interface NavigationConfig {
   href: string;
   roles: UserRole[];
   badge?: string | number; // Opcional para exibir badges
+  // AI dev note: Agrupamento visual do sidebar (headings de seção).
+  // principal = dia a dia | gestao = operação/análise | sistema = administração.
+  // Itens sem section caem em 'principal'.
+  section?: 'principal' | 'gestao' | 'sistema';
 }
 
 export type UserRole = 'admin' | 'profissional' | 'secretaria';
@@ -34,24 +38,28 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Dashboard',
     href: '/dashboard',
     roles: ['admin', 'profissional', 'secretaria'],
+    section: 'principal',
   },
   {
     icon: Calendar,
     label: 'Agenda',
     href: '/agenda',
     roles: ['admin', 'profissional', 'secretaria'],
+    section: 'principal',
   },
   {
     icon: Users,
     label: 'Pacientes',
     href: '/pacientes',
     roles: ['admin', 'secretaria'],
+    section: 'principal',
   },
   {
     icon: Target,
     label: 'Metas',
     href: '/metas',
     roles: ['admin', 'profissional', 'secretaria'],
+    section: 'gestao',
   },
   // Pessoa foi removido do sidebar - função disponível em Configurações > Usuarios
   // AI dev note: Produtos = catálogo do que a clínica vende (cadastro).
@@ -62,24 +70,28 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Produtos',
     href: '/produtos',
     roles: ['admin', 'secretaria'],
+    section: 'gestao',
   },
   {
     icon: Package,
     label: 'Estoque',
     href: '/estoque',
     roles: ['admin', 'secretaria'],
+    section: 'gestao',
   },
   {
     icon: DollarSign,
     label: 'Financeiro',
     href: '/financeiro',
     roles: ['admin', 'profissional', 'secretaria'], // Admin e secretaria: completo | Profissional: apenas comissões
+    section: 'principal',
   },
   {
     icon: Settings,
     label: 'Configurações',
     href: '/configuracoes',
     roles: ['admin', 'profissional', 'secretaria'],
+    section: 'sistema',
   },
   // AI dev note: Análise de Conversas (WhatsApp) - acesso admin + secretaria.
   // Profissionais NÃO têm acesso (gestão de atendimento/relacionamento).
@@ -88,6 +100,7 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Conversas',
     href: '/conversas',
     roles: ['admin', 'secretaria'],
+    section: 'gestao',
   },
   // Admin only
   {
@@ -95,18 +108,21 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Relatórios',
     href: '/relatorios',
     roles: ['admin'],
+    section: 'gestao',
   },
   {
     icon: Webhook,
     label: 'Webhooks',
     href: '/webhooks',
     roles: ['admin'],
+    section: 'sistema',
   },
   {
     icon: HeartHandshake,
     label: 'Pesquisa Experiência',
     href: '/pesquisa-experiencia',
     roles: ['admin'],
+    section: 'gestao',
   },
   // AI dev note: Processo seletivo de estagiários — admin + secretaria.
   {
@@ -114,6 +130,7 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Estagiários',
     href: '/processo-seletivo',
     roles: ['admin', 'secretaria'],
+    section: 'gestao',
   },
 ];
 
@@ -159,12 +176,8 @@ export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
       href: '/agenda',
       roles: ['profissional'],
     },
-    {
-      icon: Users,
-      label: 'Pacientes',
-      href: '/pacientes',
-      roles: ['profissional'],
-    },
+    // AI dev note: Pacientes removido - a rota /pacientes é admin/secretaria;
+    // manter o item aqui gerava um toque morto. Conceder acesso é decisão de produto.
     {
       icon: Settings,
       label: 'Config',

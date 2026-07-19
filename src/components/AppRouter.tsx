@@ -6,6 +6,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { ResponsiveLayout } from '@/components/templates/dashboard/ResponsiveLayout';
 import { hasAccessToRoute, type UserRole } from '@/lib/navigation';
 import { signOut } from '@/lib/auth';
+import { toast } from '@/components/primitives/use-toast';
 import {
   DashboardPage,
   AgendaPage,
@@ -43,22 +44,26 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   path,
 }) => {
   // AI dev note: Simplificado - apenas verifica role, não canAccessDashboard (já verificado em App.tsx)
-  if (!currentUserRole || !hasAccessToRoute(path, currentUserRole)) {
-    console.log(
-      '🚫 ProtectedRoute: Acesso negado para',
-      path,
-      'com role',
-      currentUserRole
-    );
+  // Toast só quando o role é conhecido e não tem acesso (evita falso positivo no boot);
+  // ref de guarda evita duplicata no StrictMode/duplo render
+  const accessDenied =
+    !!currentUserRole && !hasAccessToRoute(path, currentUserRole);
+  const deniedToastShown = React.useRef(false);
+
+  React.useEffect(() => {
+    if (accessDenied && !deniedToastShown.current) {
+      deniedToastShown.current = true;
+      toast({
+        title: 'Acesso restrito',
+        description: 'Você não tem permissão para acessar esta área.',
+      });
+    }
+  }, [accessDenied]);
+
+  if (!currentUserRole || accessDenied) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  console.log(
-    '✅ ProtectedRoute: Acesso permitido para',
-    path,
-    'com role',
-    currentUserRole
-  );
   return <>{children}</>;
 };
 
@@ -101,8 +106,6 @@ export const AppRouter: React.FC = () => {
     );
   }
 
-  // AI dev note: Log adicional para debug de navegação
-
   const handleLogout = async () => {
     try {
       // AI dev note: Logout real do Supabase + cleanup de cache local
@@ -130,9 +133,6 @@ export const AppRouter: React.FC = () => {
       currentPath={currentPath}
       onNavigate={navigateTo}
       breadcrumbItems={breadcrumbItems}
-      notificationCount={3}
-      onNotificationClick={() => {}}
-      onProfileClick={() => {}}
       onSettingsClick={() => navigateTo('/configuracoes')}
       onLogout={handleLogout}
     >

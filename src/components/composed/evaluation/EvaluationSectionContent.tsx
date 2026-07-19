@@ -5595,7 +5595,7 @@ export const EvaluationSectionContent: React.FC<
               </summary>
               <div className="p-4 pt-0 space-y-3 text-sm">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border-l-4 border-green-500">
+                  <div className="bg-green-500/10 p-3 rounded-lg border border-green-500/40">
                     <h5 className="font-semibold text-green-700 dark:text-green-300">
                       ✅ Normal (P {'>'} 10%)
                     </h5>
@@ -5604,7 +5604,7 @@ export const EvaluationSectionContent: React.FC<
                       Manter estimulação e acompanhamento de rotina.
                     </p>
                   </div>
-                  <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border-l-4 border-yellow-500">
+                  <div className="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/40">
                     <h5 className="font-semibold text-yellow-700 dark:text-yellow-300">
                       ⚡ Suspeito (P 6-10%)
                     </h5>
@@ -5613,7 +5613,7 @@ export const EvaluationSectionContent: React.FC<
                       estimulação motora mais intensiva em casa.
                     </p>
                   </div>
-                  <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border-l-4 border-red-500">
+                  <div className="bg-red-500/10 p-3 rounded-lg border border-red-500/40">
                     <h5 className="font-semibold text-red-700 dark:text-red-300">
                       ⚠️ Atípico (P ≤ 5%)
                     </h5>
@@ -6293,7 +6293,7 @@ export const EvaluationSectionContent: React.FC<
                     return (
                       <div
                         key={key}
-                        className="p-2 bg-white dark:bg-gray-700 rounded border-l-4 border-emerald-500"
+                        className="p-2 bg-emerald-500/10 rounded border border-emerald-500/40"
                       >
                         <p className="font-medium text-emerald-700 dark:text-emerald-300 text-xs mb-1">
                           {labels[key] || key}

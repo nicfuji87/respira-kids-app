@@ -39,31 +39,29 @@ export const EstagioDadosForm = React.memo<EstagioDadosFormProps>(
     const cepDigits = (value.cep || '').replace(/\D/g, '');
     const cpfValid = isValidCPF(cpfDigits);
 
-    const isValid = useMemo(() => {
-      const nomeOk = (value.nome || '').trim().length >= 3;
-      const emailOk = EMAIL_RE.test((value.email || '').trim());
-      const telOk =
-        (value.telefone || '').trim().replace(/\D/g, '').length >= 10;
-      const cpfOk = isValidCPF((value.cpf || '').replace(/\D/g, ''));
-      const cepOk = (value.cep || '').replace(/\D/g, '').length === 8;
-      const logradouroOk = (value.logradouro || '').trim().length > 0;
-      const numeroOk = (value.numero || '').trim().length > 0;
-      const bairroOk = (value.bairro || '').trim().length > 0;
-      const cidadeOk = (value.cidade || '').trim().length > 0;
-      const ufOk = (value.uf || '').trim().length === 2;
-      return (
-        nomeOk &&
-        emailOk &&
-        telOk &&
-        cpfOk &&
-        cepOk &&
-        logradouroOk &&
-        numeroOk &&
-        bairroOk &&
-        cidadeOk &&
-        ufOk
-      );
+    // AI dev note: além de validar, lista o que falta — o botão "Continuar"
+    // desabilitado sem explicação deixava o candidato sem saber o porquê.
+    const missingFields = useMemo(() => {
+      const missing: string[] = [];
+      if ((value.nome || '').trim().length < 3) missing.push('nome completo');
+      if (!EMAIL_RE.test((value.email || '').trim()))
+        missing.push('e-mail válido');
+      if ((value.telefone || '').trim().replace(/\D/g, '').length < 10)
+        missing.push('WhatsApp');
+      if (!isValidCPF((value.cpf || '').replace(/\D/g, '')))
+        missing.push('CPF válido');
+      if ((value.cep || '').replace(/\D/g, '').length !== 8)
+        missing.push('CEP');
+      if ((value.logradouro || '').trim().length === 0)
+        missing.push('endereço');
+      if ((value.numero || '').trim().length === 0) missing.push('número');
+      if ((value.bairro || '').trim().length === 0) missing.push('bairro');
+      if ((value.cidade || '').trim().length === 0) missing.push('cidade');
+      if ((value.uf || '').trim().length !== 2) missing.push('UF');
+      return missing;
     }, [value]);
+
+    const isValid = missingFields.length === 0;
 
     const toggleMulti = useCallback(
       (field: keyof CandidatoDados, optValue: string) => {
@@ -390,7 +388,7 @@ export const EstagioDadosForm = React.memo<EstagioDadosFormProps>(
           <p className="text-sm text-vermelho-kids -mb-2">{waError}</p>
         )}
 
-        <div className="flex justify-end pt-2">
+        <div className="flex flex-col items-end gap-2 pt-2">
           <Button
             size="lg"
             onClick={handleContinue}
@@ -406,6 +404,11 @@ export const EstagioDadosForm = React.memo<EstagioDadosFormProps>(
               'Continuar'
             )}
           </Button>
+          {!isValid && (
+            <p className="w-full text-xs text-muted-foreground text-center sm:text-right">
+              Para continuar, falta preencher: {missingFields.join(', ')}.
+            </p>
+          )}
         </div>
       </div>
     );

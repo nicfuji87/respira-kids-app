@@ -158,10 +158,6 @@ export const TipoServicosManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: TipoServico) => {
-    if (!confirm(`Tem certeza que deseja excluir "${item.nome}"?`)) {
-      return;
-    }
-
     const result = await deleteTipoServico(item.id);
 
     if (result.success) {
@@ -269,6 +265,8 @@ export const TipoServicosManagement: React.FC = () => {
           onDelete={() => handleDelete(item)}
           ativo={item.ativo}
           canToggleStatus={false}
+          confirmDeleteTitle={`Excluir o tipo de serviço "${item.nome}"?`}
+          confirmDeleteDescription="Esta ação não pode ser desfeita."
         />
       ),
       className: 'w-16',

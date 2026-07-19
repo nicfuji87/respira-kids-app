@@ -10,10 +10,10 @@ import {
 } from '@/components/composed';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
-import type { 
-  ContractTemplate, 
+import type {
+  ContractTemplate,
   ContractTemplateCreateInput,
-  SystemEntityFilters 
+  SystemEntityFilters,
 } from '@/types/system-config';
 import {
   fetchContractTemplates,
@@ -35,7 +35,7 @@ export const ContractTemplateManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filters] = useState<SystemEntityFilters>({
     page: 1,
-    limit: 10
+    limit: 10,
   });
 
   // Modal states
@@ -51,15 +51,15 @@ export const ContractTemplateManagement: React.FC = () => {
       conteudo_template: '',
       variaveis_disponiveis: [],
       versao: 1,
-      ativo: true
-    }
+      ativo: true,
+    },
   });
 
   // === FETCH DATA ===
   const loadData = useCallback(async () => {
     setLoading(true);
     const result = await fetchContractTemplates(filters);
-    
+
     if (result.success && result.data) {
       setData(result.data.data);
     } else {
@@ -84,9 +84,9 @@ export const ContractTemplateManagement: React.FC = () => {
       conteudo_template: '',
       variaveis_disponiveis: [],
       versao: 1,
-      ativo: true
+      ativo: true,
     };
-    
+
     form.reset(defaultValues);
     setEditingItem(null);
     setIsFormOpen(true);
@@ -99,9 +99,9 @@ export const ContractTemplateManagement: React.FC = () => {
       conteudo_template: item.conteudo_template || '',
       variaveis_disponiveis: item.variaveis_disponiveis || [],
       versao: item.versao || 1,
-      ativo: item.ativo ?? true
+      ativo: item.ativo ?? true,
     };
-    
+
     form.reset(editValues);
     setEditingItem(item);
     setIsFormOpen(true);
@@ -124,10 +124,13 @@ export const ContractTemplateManagement: React.FC = () => {
 
       if (editingItem) {
         // Edição
-        result = await updateContractTemplate({
-          id: editingItem.id,
-          ...data
-        }, user.pessoa.id);
+        result = await updateContractTemplate(
+          {
+            id: editingItem.id,
+            ...data,
+          },
+          user.pessoa.id
+        );
       } else {
         // Criação - gerar código automaticamente
         result = await createContractTemplate(data, user.pessoa.id);
@@ -136,7 +139,9 @@ export const ContractTemplateManagement: React.FC = () => {
       if (result.success) {
         toast({
           title: 'Sucesso',
-          description: editingItem ? 'Modelo atualizado com sucesso' : 'Modelo criado com sucesso',
+          description: editingItem
+            ? 'Modelo atualizado com sucesso'
+            : 'Modelo criado com sucesso',
         });
         setIsFormOpen(false);
         setEditingItem(null);
@@ -161,12 +166,8 @@ export const ContractTemplateManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: ContractTemplate) => {
-    if (!confirm(`Tem certeza que deseja excluir "${item.nome}"?`)) {
-      return;
-    }
-
     const result = await deleteContractTemplate(item.id, user?.pessoa?.id);
-    
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -183,8 +184,12 @@ export const ContractTemplateManagement: React.FC = () => {
   };
 
   const handleToggleStatus = async (item: ContractTemplate) => {
-    const result = await toggleContractTemplateStatus(item.id, !item.ativo, user?.pessoa?.id);
-    
+    const result = await toggleContractTemplateStatus(
+      item.id,
+      !item.ativo,
+      user?.pessoa?.id
+    );
+
     if (result.success) {
       toast({
         title: 'Sucesso',
@@ -217,7 +222,7 @@ export const ContractTemplateManagement: React.FC = () => {
         descricao: item.descricao,
         conteudo_template: item.conteudo_template,
         variaveis_disponiveis: item.variaveis_disponiveis,
-        ativo: true
+        ativo: true,
       },
       user.pessoa.id
     );
@@ -252,7 +257,7 @@ export const ContractTemplateManagement: React.FC = () => {
           )}
         </div>
       ),
-      className: 'min-w-[200px]'
+      className: 'min-w-[200px]',
     },
     {
       key: 'versao',
@@ -262,17 +267,19 @@ export const ContractTemplateManagement: React.FC = () => {
           v{item.versao}
         </Badge>
       ),
-      className: 'w-20'
+      className: 'w-20',
     },
     {
       key: 'variaveis_disponiveis',
       label: 'Variáveis',
       render: (item) => (
         <Badge variant="secondary" className="w-fit">
-          {Array.isArray(item.variaveis_disponiveis) ? item.variaveis_disponiveis.length : 0}
+          {Array.isArray(item.variaveis_disponiveis)
+            ? item.variaveis_disponiveis.length
+            : 0}
         </Badge>
       ),
-      className: 'w-24'
+      className: 'w-24',
     },
     {
       key: 'ativo',
@@ -286,7 +293,7 @@ export const ContractTemplateManagement: React.FC = () => {
           <StatusBadge ativo={item.ativo} />
         </button>
       ),
-      className: 'w-20'
+      className: 'w-20',
     },
     {
       key: 'created_at',
@@ -296,7 +303,7 @@ export const ContractTemplateManagement: React.FC = () => {
           {new Date(item.created_at).toLocaleDateString('pt-BR')}
         </div>
       ),
-      className: 'w-32'
+      className: 'w-32',
     },
     {
       key: 'actions',
@@ -318,11 +325,13 @@ export const ContractTemplateManagement: React.FC = () => {
             onDelete={() => handleDelete(item)}
             onToggleStatus={() => handleToggleStatus(item)}
             canToggleStatus={true}
+            confirmDeleteTitle={`Excluir o modelo de contrato "${item.nome}"?`}
+            confirmDeleteDescription="Esta ação não pode ser desfeita."
           />
         </div>
       ),
-      className: 'w-40'
-    }
+      className: 'w-40',
+    },
   ];
 
   return (
@@ -371,4 +380,4 @@ export const ContractTemplateManagement: React.FC = () => {
   );
 };
 
-ContractTemplateManagement.displayName = 'ContractTemplateManagement'; 
+ContractTemplateManagement.displayName = 'ContractTemplateManagement';

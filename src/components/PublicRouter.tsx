@@ -14,11 +14,6 @@ import { Toaster } from '@/components/primitives/toaster';
 // Inclui rota de agenda compartilhada via token
 
 export const PublicRouter: React.FC = () => {
-  console.log(
-    '🌐 [PublicRouter] Inicializado. Hash atual:',
-    window.location.hash
-  );
-
   return (
     <HashRouter>
       <Routes>

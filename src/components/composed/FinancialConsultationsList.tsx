@@ -16,6 +16,7 @@ import {
   List,
   Users,
   Check,
+  CheckCircle2,
   Copy,
   AlertTriangle,
 } from 'lucide-react';
@@ -39,6 +40,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/primitives/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
+import { ScrollArea } from '@/components/primitives/scroll-area';
 import { Checkbox } from '@/components/primitives/checkbox';
 import { Input } from '@/components/primitives/input';
 import { useToast } from '@/components/primitives/use-toast';
@@ -135,6 +145,38 @@ const motivoBloqueioCobranca = (
   return null;
 };
 
+// AI dev note: Cores do badge de status de pagamento — fonte única para as DUAS
+// visualizações (agrupada e lista). Vermelho (destructive) é RESERVADO a
+// erro/destrutivo (regra do DS): 'cobranca_gerada' é etapa NORMAL do funil (link
+// pendente aguardando o cliente) e fica num teal suave informativo; 'cancelado' é
+// neutro (cinza). Código desconhecido cai em outline (neutro), nunca em vermelho.
+// O realce de "concluído" continua só para 'pago'.
+const paymentStatusBadge = (
+  codigo: string
+): {
+  variant: 'default' | 'secondary' | 'outline' | 'destructive';
+  className?: string;
+} => {
+  switch (codigo) {
+    case 'pago':
+      return { variant: 'default' };
+    case 'pendente':
+      return { variant: 'secondary' };
+    case 'aberto':
+      return { variant: 'outline' };
+    case 'cobranca_gerada':
+      return {
+        variant: 'outline',
+        className:
+          'border-teal-300 bg-teal-500/10 text-teal-700 dark:border-teal-800 dark:text-teal-300',
+      };
+    case 'cancelado':
+      return { variant: 'outline', className: 'text-muted-foreground' };
+    default:
+      return { variant: 'outline' };
+  }
+};
+
 type PeriodFilter =
   | 'mes_atual'
   | 'mes_anterior'
@@ -219,14 +261,31 @@ const MultiSelectFilter = React.memo<MultiSelectFilterProps>(
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[250px] p-0" align="start">
-          <div className="max-h-[300px] overflow-y-auto">
+          {/* AI dev note: Itens operáveis por TECLADO (role=option + tabIndex +
+              Enter/Espaço). O Checkbox interno é só visual (pointer-events-none e
+              fora da ordem de tabulação) — quem recebe foco é a linha inteira. */}
+          <div
+            className="max-h-[300px] overflow-y-auto"
+            role="listbox"
+            aria-multiselectable="true"
+            aria-label={placeholder || allLabel}
+          >
             {/* Opção "Todos" */}
             <div
+              role="option"
+              aria-selected={isAllSelected}
+              tabIndex={0}
               className={cn(
-                'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer',
+                'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer focus-visible:outline-none focus-visible:bg-accent',
                 isAllSelected && 'bg-accent'
               )}
               onClick={selectAll}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  selectAll();
+                }
+              }}
             >
               <div
                 className={cn(
@@ -247,16 +306,26 @@ const MultiSelectFilter = React.memo<MultiSelectFilterProps>(
               return (
                 <div
                   key={item.id}
+                  role="option"
+                  aria-selected={isSelected}
+                  tabIndex={0}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer',
+                    'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer focus-visible:outline-none focus-visible:bg-accent',
                     isSelected && 'bg-accent/50'
                   )}
                   onClick={() => toggleItem(item.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleItem(item.id);
+                    }
+                  }}
                 >
                   <Checkbox
                     checked={isSelected}
                     onCheckedChange={() => toggleItem(item.id)}
                     className="pointer-events-none"
+                    tabIndex={-1}
                   />
                   <span className="text-sm">{item.label}</span>
                 </div>
@@ -320,10 +389,25 @@ export const FinancialConsultationsList: React.FC<
     total: number;
   } | null>(null);
   const cancelGenerationRef = React.useRef(false);
-  // Diálogo de confirmação antes de gerar em massa (>1 paciente)
+  // Diálogo de confirmação antes de gerar em massa (>1 paciente, ou quando parte
+  // da seleção ficou fora do filtro atual e o usuário precisa ser avisado).
+  // AI dev note: além das contagens, carrega o VALOR TOTAL e a lista de grupos
+  // (paciente+empresa) com valor — é a ação mais arriscada do app (dispara
+  // WhatsApp real), então o dono confere quem entra e quanto ANTES do disparo.
   const [confirmGenerate, setConfirmGenerate] = useState<{
     pacientes: number;
     consultas: number;
+    valorTotal: number;
+    grupos: Array<{
+      chave: string;
+      nome: string;
+      empresa?: string;
+      qtd: number;
+      valor: number;
+    }>;
+    // IDs selecionados que NÃO estão no fetch atual (filtro/período mudou depois
+    // da seleção) — seriam ignorados em silêncio; agora são avisados no diálogo.
+    idsForaDoFiltro: string[];
   } | null>(null);
   // AI dev note: Lote em processamento no SERVIDOR (edge function generate-payment-
   // links-bulk). Quando setado, um efeito de polling lê pagamento_link_geracao_log
@@ -332,6 +416,20 @@ export const FinancialConsultationsList: React.FC<
     loteId: string;
     dryRun: boolean;
     total: number;
+    // Falhas de validação da FASE 1 (nem entraram no lote) — entram no resumo final
+    preFalhas: Array<{ nome: string; erro: string }>;
+  } | null>(null);
+  // AI dev note: Resumo PERSISTENTE do lote (Dialog), no padrão do
+  // FinancialNfeEmissaoMassa: sucessos/falhas agrupadas por causa, com nomes.
+  // O toast continua como sinal transitório; o DETALHE (quem falhou e por quê)
+  // vive aqui e não some sozinho da tela.
+  const [loteResumo, setLoteResumo] = useState<{
+    dryRun: boolean;
+    // true = polling estourou o teto; o worker segue gerando em segundo plano
+    emSegundoPlano: boolean;
+    sucessos: number;
+    falhas: Array<{ nome: string; erro: string }>;
+    totalLote: number;
   } | null>(null);
   // AI dev note: Links públicos de pagamento gerados (para copiar/abrir manualmente)
   const [generatedLinks, setGeneratedLinks] = useState<
@@ -783,17 +881,10 @@ export const FinancialConsultationsList: React.FC<
     sortOption,
   ]);
 
-  // Limpar quando filtros mudarem
-  useEffect(() => {
-    // Resetar seleções se necessário
-  }, [
-    periodFilter,
-    startDate,
-    endDate,
-    professionalFilter,
-    serviceTypeFilter,
-    paymentStatusFilter,
-  ]);
+  // AI dev note: A seleção NÃO é resetada quando os filtros mudam (de propósito —
+  // permite compor a seleção entre períodos/páginas). IDs selecionados que saírem
+  // do fetch atual são detectados na montagem do lote (handleGenerateClick) e
+  // AVISADOS no diálogo de confirmação — nunca descartados em silêncio.
 
   // AI dev note: Calcular totais a partir das consultas FILTRADAS
   // BUGFIX: Antes usava query separada no banco que ignorava filtros locais
@@ -1314,13 +1405,27 @@ export const FinancialConsultationsList: React.FC<
       }
 
       if (itens.length === 0) {
+        // AI dev note: o detalhe (quem falhou e por quê) vai para o Dialog de
+        // resumo persistente — um toast com N linhas some antes de dar para ler.
         toast({
           title: 'Nenhuma cobrança pôde ser preparada',
           description: preFailures.length
-            ? preFailures.map((f) => `${f.patientName}: ${f.error}`).join('\n')
+            ? 'Nenhum paciente passou na validação — veja o detalhe no resumo.'
             : 'Verifique as consultas selecionadas.',
           variant: 'destructive',
         });
+        if (preFailures.length > 0) {
+          setLoteResumo({
+            dryRun,
+            emSegundoPlano: false,
+            sucessos: 0,
+            falhas: preFailures.map((f) => ({
+              nome: f.patientName,
+              erro: f.error,
+            })),
+            totalLote: preFailures.length,
+          });
+        }
         return;
       }
 
@@ -1335,15 +1440,15 @@ export const FinancialConsultationsList: React.FC<
         );
       }
 
+      // AI dev note: toast curto = sinal; o detalhe das que NÃO entraram (nomes +
+      // causa) aparece no Dialog de resumo persistente ao final do lote.
       toast({
         title: dryRun ? 'Simulação iniciada' : 'Geração iniciada',
         description: `${itens.length} ${
           dryRun ? 'em simulação' : 'sendo gerada(s)'
         } em segundo plano.${
           preFailures.length
-            ? `\n⚠️ ${preFailures.length} não entraram: ${preFailures
-                .map((f) => f.patientName)
-                .join(', ')}`
+            ? `\n⚠️ ${preFailures.length} não entraram (detalhe no resumo ao final).`
             : ''
         }${
           !dryRun && itens.length > 1
@@ -1356,7 +1461,15 @@ export const FinancialConsultationsList: React.FC<
       setSelectedConsultations([]);
       setIsSelectionMode(false);
       setGenerationProgress({ atual: 0, total: itens.length });
-      setGenerationLote({ loteId: resp.loteId, dryRun, total: itens.length });
+      setGenerationLote({
+        loteId: resp.loteId,
+        dryRun,
+        total: itens.length,
+        preFalhas: preFailures.map((f) => ({
+          nome: f.patientName,
+          erro: f.error,
+        })),
+      });
       disparou = true;
     } catch (err) {
       console.error('Erro crítico ao gerar cobranças:', err);
@@ -1376,29 +1489,65 @@ export const FinancialConsultationsList: React.FC<
     }
   };
 
-  // Simular (dry-run) roda direto (0 risco). Gerar real: confirma se >1 paciente.
+  // Simular (dry-run) roda direto (0 risco). Gerar real: confirma se >1 paciente
+  // OU se parte da seleção está fora do filtro atual (aviso, nunca descarte mudo).
   const handleGenerateClick = (dryRun: boolean) => {
     if (dryRun) {
       handleGeneratePaymentLinks(true);
       return;
     }
-    // AI dev note: conta os GRUPOS (paciente + empresa), que é 1:1 com as cobranças
-    // geradas — um paciente com consultas de 2 empresas vira 2 cobranças. Contar só
-    // pacientes faria o diálogo prometer menos cobranças do que realmente sairiam.
-    const gruposUnicos = new Set(
-      selectedConsultations
-        .map((id) => {
-          const c = consultations.find((x) => x.id === id);
-          return c
-            ? `${c.paciente_id}::${c.empresa_fatura_id || 'sem-empresa'}`
-            : null;
-        })
-        .filter(Boolean)
+    // AI dev note: agrega por GRUPO (paciente + empresa), que é 1:1 com as
+    // cobranças geradas — um paciente com consultas de 2 empresas vira 2 cobranças.
+    // Além da contagem, soma o VALOR por grupo para o diálogo mostrar quem entra e
+    // quanto. IDs selecionados que não estão no fetch atual (o filtro/período mudou
+    // depois da seleção) NÃO entram no lote (a montagem usa consultations.find) —
+    // em vez de sumirem em silêncio, o diálogo avisa e oferece limpar.
+    const grupos = new Map<
+      string,
+      {
+        chave: string;
+        nome: string;
+        empresa?: string;
+        qtd: number;
+        valor: number;
+      }
+    >();
+    const idsForaDoFiltro: string[] = [];
+    const vistos = new Set<string>();
+    selectedConsultations.forEach((id) => {
+      if (vistos.has(id)) return;
+      vistos.add(id);
+      const c = consultations.find((x) => x.id === id);
+      if (!c) {
+        idsForaDoFiltro.push(id);
+        return;
+      }
+      const chave = `${c.paciente_id}::${c.empresa_fatura_id || 'sem-empresa'}`;
+      const g = grupos.get(chave);
+      if (g) {
+        g.qtd += 1;
+        g.valor += c.valor_servico || 0;
+      } else {
+        grupos.set(chave, {
+          chave,
+          nome: c.paciente_nome,
+          empresa: c.empresa_fatura_razao_social,
+          qtd: 1,
+          valor: c.valor_servico || 0,
+        });
+      }
+    });
+    const listaGrupos = Array.from(grupos.values()).sort((a, b) =>
+      a.nome.localeCompare(b.nome, 'pt-BR')
     );
-    if (gruposUnicos.size > 1) {
+
+    if (listaGrupos.length > 1 || idsForaDoFiltro.length > 0) {
       setConfirmGenerate({
-        pacientes: gruposUnicos.size,
-        consultas: selectedConsultations.length,
+        pacientes: listaGrupos.length,
+        consultas: vistos.size - idsForaDoFiltro.length,
+        valorTotal: listaGrupos.reduce((s, g) => s + g.valor, 0),
+        grupos: listaGrupos,
+        idsForaDoFiltro,
       });
     } else {
       handleGeneratePaymentLinks(false);
@@ -1432,7 +1581,9 @@ export const FinancialConsultationsList: React.FC<
       ).length;
       setGenerationProgress({ atual: total - naoTerminais, total });
 
-      // Teto: para de EXIBIR se demorar demais (o worker segue no servidor)
+      // Teto: para de EXIBIR se demorar demais (o worker segue no servidor).
+      // AI dev note: além do toast (sinal), abre o Dialog de resumo persistente
+      // dizendo que o lote CONTINUA em segundo plano — com o parcial até aqui.
       tentativas += 1;
       if (naoTerminais > 0 && tentativas >= MAX_TENTATIVAS) {
         parou = true;
@@ -1440,6 +1591,23 @@ export const FinancialConsultationsList: React.FC<
           title: 'Geração em andamento',
           description:
             'Continua rodando em segundo plano no servidor (pode levar alguns minutos). Atualize a lista depois para ver todas.',
+        });
+        setLoteResumo({
+          dryRun: generationLote.dryRun,
+          emSegundoPlano: true,
+          sucessos: data.filter(
+            (r) => r.status === 'sucesso' || r.status === 'simulado'
+          ).length,
+          falhas: [
+            ...generationLote.preFalhas,
+            ...data
+              .filter((r) => r.status === 'erro')
+              .map((r) => ({
+                nome: r.paciente_nome || 'Paciente',
+                erro: r.erro || 'Erro desconhecido',
+              })),
+          ],
+          totalLote: total + generationLote.preFalhas.length,
         });
         setGenerationLote(null);
         setGenerationProgress(null);
@@ -1452,21 +1620,34 @@ export const FinancialConsultationsList: React.FC<
       const sucessos = data.filter((r) => r.status === 'sucesso');
       const simulados = data.filter((r) => r.status === 'simulado');
       const erros = data.filter((r) => r.status === 'erro');
-      const detalheErros = erros.length
-        ? `\n❌ ${erros.length} com problema: ${erros
-            .map((e) => `${e.paciente_nome} (${e.erro})`)
-            .join(', ')}`
-        : '';
+      // Falhas do servidor + as que nem entraram no lote (validação da FASE 1)
+      const falhasDetalhe = [
+        ...generationLote.preFalhas,
+        ...erros.map((e) => ({
+          nome: e.paciente_nome || 'Paciente',
+          erro: e.erro || 'Erro desconhecido',
+        })),
+      ];
 
+      // AI dev note: toast curto como SINAL; o detalhe (nomes + causas agrupadas)
+      // fica no Dialog de resumo persistente aberto logo abaixo.
       if (generationLote.dryRun) {
         toast({
           title: 'Simulação concluída',
-          description: `✅ ${simulados.length} seriam geradas${detalheErros}`,
+          description: `✅ ${simulados.length} seriam geradas${
+            falhasDetalhe.length
+              ? ` · ${falhasDetalhe.length} com problema`
+              : ''
+          }`,
         });
       } else {
         toast({
           title: 'Geração concluída',
-          description: `✅ ${sucessos.length} cobrança(s) gerada(s)${detalheErros}`,
+          description: `✅ ${sucessos.length} cobrança(s) gerada(s)${
+            falhasDetalhe.length
+              ? ` · ${falhasDetalhe.length} com problema`
+              : ''
+          }`,
         });
         setGeneratedLinks(
           sucessos
@@ -1478,6 +1659,14 @@ export const FinancialConsultationsList: React.FC<
             }))
         );
       }
+
+      setLoteResumo({
+        dryRun: generationLote.dryRun,
+        emSegundoPlano: false,
+        sucessos: generationLote.dryRun ? simulados.length : sucessos.length,
+        falhas: falhasDetalhe,
+        totalLote: total + generationLote.preFalhas.length,
+      });
 
       setGenerationLote(null);
       setGenerationProgress(null);
@@ -1492,6 +1681,20 @@ export const FinancialConsultationsList: React.FC<
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generationLote]);
+
+  // AI dev note: Agrupa as falhas do lote por CAUSA (mesmo padrão do
+  // FinancialNfeEmissaoMassa): 30 falhas com a mesma mensagem são UM problema
+  // sistêmico, não 30 — a linha "30× <causa>" manda direto para a correção certa.
+  const falhasLoteAgrupadas = React.useMemo(() => {
+    if (!loteResumo) return [];
+    const mapa = new Map<string, { erro: string; nomes: string[] }>();
+    for (const f of loteResumo.falhas) {
+      const g = mapa.get(f.erro);
+      if (g) g.nomes.push(f.nome);
+      else mapa.set(f.erro, { erro: f.erro, nomes: [f.nome] });
+    }
+    return [...mapa.values()].sort((a, b) => b.nomes.length - a.nomes.length);
+  }, [loteResumo]);
 
   // AI dev note: Função para formatar data SEM conversão de timezone
   // Mantém exatamente como vem do Supabase
@@ -2038,13 +2241,16 @@ export const FinancialConsultationsList: React.FC<
                         </div>
 
                         {/* Valores principais */}
+                        {/* AI dev note: total do grupo em ROXO (neutro) — verde é
+                            reservado a 'pago', e este total mistura consultas pagas
+                            e não pagas (verde aqui sugeria "tudo quitado"). */}
                         <div className="flex flex-wrap gap-4 text-sm">
                           <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-verde-pipa" />
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
                             <span className="text-muted-foreground">
                               Total:
                             </span>
-                            <span className="font-semibold text-verde-pipa">
+                            <span className="font-semibold text-roxo-titulo dark:text-foreground">
                               {formatCurrency(patientGroup.total_valor)}
                             </span>
                           </div>
@@ -2080,6 +2286,9 @@ export const FinancialConsultationsList: React.FC<
                           : null;
                         const canSelect =
                           isSelectionMode && podeGerarCobranca(consultation);
+                        const statusBadge = paymentStatusBadge(
+                          consultation.status_pagamento_codigo
+                        );
 
                         return (
                           <div
@@ -2116,12 +2325,33 @@ export const FinancialConsultationsList: React.FC<
                               />
                             )}
 
+                            {/* AI dev note: área clicável operável por teclado
+                                (role=button + tabIndex + Enter/Espaço) quando
+                                fora do modo de seleção. */}
                             <div
-                              className="flex-1 space-y-1 cursor-pointer"
+                              className={cn(
+                                'flex-1 space-y-1',
+                                !isSelectionMode &&
+                                  'cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                              )}
+                              role={!isSelectionMode ? 'button' : undefined}
+                              tabIndex={!isSelectionMode ? 0 : undefined}
+                              aria-label={
+                                !isSelectionMode
+                                  ? `Abrir detalhes da consulta de ${consultation.paciente_nome} em ${formatDate(consultation.data_hora)}`
+                                  : undefined
+                              }
                               onClick={() =>
                                 !isSelectionMode &&
                                 onConsultationClick?.(consultation)
                               }
+                              onKeyDown={(e) => {
+                                if (isSelectionMode) return;
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  onConsultationClick?.(consultation);
+                                }
+                              }}
                             >
                               {/* Linha 1: Data, Horário e Valor */}
                               <div className="flex items-center justify-between text-sm">
@@ -2150,19 +2380,11 @@ export const FinancialConsultationsList: React.FC<
                                     )}
                                   </span>
                                   <Badge
-                                    variant={
-                                      consultation.status_pagamento_codigo ===
-                                      'pago'
-                                        ? 'default'
-                                        : consultation.status_pagamento_codigo ===
-                                            'pendente'
-                                          ? 'secondary'
-                                          : consultation.status_pagamento_codigo ===
-                                              'aberto'
-                                            ? 'outline'
-                                            : 'destructive'
-                                    }
-                                    className="text-xs"
+                                    variant={statusBadge.variant}
+                                    className={cn(
+                                      'text-xs',
+                                      statusBadge.className
+                                    )}
                                   >
                                     {consultation.status_pagamento_nome}
                                   </Badge>
@@ -2255,6 +2477,9 @@ export const FinancialConsultationsList: React.FC<
               // AI dev note: Pode selecionar só se ainda pode gerar cobrança (ver podeGerarCobranca)
               const canSelect =
                 isSelectionMode && podeGerarCobranca(consultation);
+              const statusBadge = paymentStatusBadge(
+                consultation.status_pagamento_codigo
+              );
 
               return (
                 <div
@@ -2293,11 +2518,31 @@ export const FinancialConsultationsList: React.FC<
                       />
                     )}
 
+                    {/* AI dev note: área clicável operável por teclado (role=button
+                        + tabIndex + Enter/Espaço) quando fora do modo de seleção. */}
                     <div
-                      className="space-y-2 flex-1 cursor-pointer"
+                      className={cn(
+                        'space-y-2 flex-1',
+                        !isSelectionMode &&
+                          'cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                      )}
+                      role={!isSelectionMode ? 'button' : undefined}
+                      tabIndex={!isSelectionMode ? 0 : undefined}
+                      aria-label={
+                        !isSelectionMode
+                          ? `Abrir detalhes da consulta de ${consultation.paciente_nome} em ${formatDate(consultation.data_hora)}`
+                          : undefined
+                      }
                       onClick={() =>
                         !isSelectionMode && onConsultationClick?.(consultation)
                       }
+                      onKeyDown={(e) => {
+                        if (isSelectionMode) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onConsultationClick?.(consultation);
+                        }
+                      }}
                     >
                       {/* Primeira linha: Paciente e Valor */}
                       <div className="flex items-center justify-between">
@@ -2312,17 +2557,8 @@ export const FinancialConsultationsList: React.FC<
                             {formatCurrency(consultation.valor_servico || 0)}
                           </span>
                           <Badge
-                            variant={
-                              consultation.status_pagamento_codigo === 'pago'
-                                ? 'default'
-                                : consultation.status_pagamento_codigo ===
-                                    'pendente'
-                                  ? 'secondary'
-                                  : consultation.status_pagamento_codigo ===
-                                      'aberto'
-                                    ? 'outline'
-                                    : 'destructive'
-                            }
+                            variant={statusBadge.variant}
+                            className={statusBadge.className}
                           >
                             {consultation.status_pagamento_nome}
                           </Badge>
@@ -2494,11 +2730,87 @@ export const FinancialConsultationsList: React.FC<
                 <div className="space-y-2 text-sm">
                   <p>
                     Você vai gerar{' '}
-                    <strong>{confirmGenerate?.pacientes} cobranças</strong> (
-                    {confirmGenerate?.consultas} consultas) e enviar o link de
-                    pagamento por WhatsApp. Paciente com consultas de empresas
-                    diferentes recebe <strong>uma cobrança por empresa</strong>.
+                    <strong>
+                      {confirmGenerate?.pacientes} cobrança
+                      {(confirmGenerate?.pacientes ?? 0) !== 1 ? 's' : ''}
+                    </strong>{' '}
+                    ({confirmGenerate?.consultas} consultas), somando{' '}
+                    <strong>
+                      {formatCurrency(confirmGenerate?.valorTotal ?? 0)}
+                    </strong>
+                    , e enviar o link de pagamento por WhatsApp. Paciente com
+                    consultas de empresas diferentes recebe{' '}
+                    <strong>uma cobrança por empresa</strong>.
                   </p>
+
+                  {/* AI dev note: quem entra no lote, com valor por cobrança —
+                      conferível ANTES do disparo (WhatsApp real sai daqui). */}
+                  {(confirmGenerate?.grupos.length ?? 0) > 0 && (
+                    <details className="rounded-md border bg-muted/30 p-2">
+                      <summary className="cursor-pointer text-sm font-medium">
+                        Ver quem recebe ({confirmGenerate?.grupos.length}{' '}
+                        cobrança
+                        {(confirmGenerate?.grupos.length ?? 0) !== 1 ? 's' : ''}
+                        )
+                      </summary>
+                      <div className="mt-2 max-h-48 space-y-1 overflow-y-auto pr-1">
+                        {confirmGenerate?.grupos.map((g) => (
+                          <div
+                            key={g.chave}
+                            className="flex items-center justify-between gap-2 text-xs"
+                          >
+                            <span className="truncate">
+                              {g.nome}
+                              {g.empresa ? ` · ${g.empresa}` : ''}{' '}
+                              <span className="text-muted-foreground">
+                                ({g.qtd} consulta{g.qtd !== 1 ? 's' : ''})
+                              </span>
+                            </span>
+                            <span className="font-medium whitespace-nowrap">
+                              {formatCurrency(g.valor)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                  {/* AI dev note: seleções que ficaram FORA do fetch atual (filtro/
+                      período mudou depois de selecionar). Antes eram descartadas em
+                      silêncio na montagem do lote; agora o dono decide. */}
+                  {(confirmGenerate?.idsForaDoFiltro.length ?? 0) > 0 && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                      <div className="space-y-2 text-amber-900 dark:text-amber-200">
+                        <p>
+                          <strong>
+                            {confirmGenerate?.idsForaDoFiltro.length}
+                          </strong>{' '}
+                          consulta(s) selecionada(s) estão fora do filtro atual
+                          e <strong>serão ignoradas</strong> neste lote.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const fora = new Set(
+                              confirmGenerate?.idsForaDoFiltro ?? []
+                            );
+                            setSelectedConsultations((prev) =>
+                              prev.filter((id) => !fora.has(id))
+                            );
+                            setConfirmGenerate((prev) =>
+                              prev ? { ...prev, idsForaDoFiltro: [] } : prev
+                            );
+                          }}
+                        >
+                          Limpar essas seleções
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   <p>
                     Para proteger o número, os envios saem no{' '}
                     <strong>ritmo automático</strong>: espaçados 5–9 min, só
@@ -2527,16 +2839,102 @@ export const FinancialConsultationsList: React.FC<
             <AlertDialogFooter>
               <AlertDialogCancel>Voltar</AlertDialogCancel>
               <AlertDialogAction
+                disabled={(confirmGenerate?.pacientes ?? 0) === 0}
                 onClick={() => {
                   setConfirmGenerate(null);
                   handleGeneratePaymentLinks(false);
                 }}
               >
-                Gerar {confirmGenerate?.pacientes} cobranças
+                Gerar {confirmGenerate?.pacientes} cobrança
+                {(confirmGenerate?.pacientes ?? 0) !== 1 ? 's' : ''}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* AI dev note: Resumo PERSISTENTE do lote (padrão FinancialNfeEmissaoMassa):
+            abre ao final do lote (ou ao estourar o teto de polling, avisando que
+            continua em segundo plano). Falhas agrupadas por causa, com nomes —
+            o toast é só o sinal curto; o registro consultável vive aqui. */}
+        <Dialog
+          open={!!loteResumo}
+          onOpenChange={(open) => {
+            if (!open) setLoteResumo(null);
+          }}
+        >
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {loteResumo?.emSegundoPlano ||
+                (loteResumo?.falhas.length ?? 0) > 0 ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                )}
+                {loteResumo?.dryRun
+                  ? 'Resultado da simulação'
+                  : 'Resultado da geração de cobranças'}
+              </DialogTitle>
+              <DialogDescription>
+                {loteResumo?.emSegundoPlano
+                  ? `${loteResumo.sucessos} de ${loteResumo.totalLote} concluída(s) até agora — o lote continua em segundo plano no servidor.`
+                  : `${loteResumo?.sucessos ?? 0} ${
+                      loteResumo?.dryRun
+                        ? 'seriam gerada(s)'
+                        : 'cobrança(s) gerada(s)'
+                    }${
+                      (loteResumo?.falhas.length ?? 0) > 0
+                        ? ` · ${loteResumo?.falhas.length} falha(s)`
+                        : ''
+                    }`}
+              </DialogDescription>
+            </DialogHeader>
+
+            {loteResumo?.emSegundoPlano && (
+              <p className="text-sm text-muted-foreground">
+                O servidor segue gerando (pode levar alguns minutos). Atualize a
+                lista mais tarde para ver todas; os envios de WhatsApp saem no
+                ritmo automático (8h–20h, até 80/dia).
+              </p>
+            )}
+
+            {!loteResumo?.dryRun &&
+              !loteResumo?.emSegundoPlano &&
+              (loteResumo?.sucessos ?? 0) > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Os links gerados aparecem no aviso verde no topo da lista
+                  (copiar/abrir) e os envios de WhatsApp saem no ritmo
+                  automático.
+                </p>
+              )}
+
+            {falhasLoteAgrupadas.length > 0 && (
+              <ScrollArea className="max-h-64 pr-3">
+                <div className="space-y-3">
+                  {falhasLoteAgrupadas.map((g) => (
+                    <div
+                      key={g.erro}
+                      className="rounded-md border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900 dark:bg-red-950/30"
+                    >
+                      <p className="font-semibold text-red-800 dark:text-red-300">
+                        {g.nomes.length}× {g.erro}
+                      </p>
+                      <p className="mt-1 text-xs text-red-700 dark:text-red-400">
+                        {g.nomes.slice(0, 10).join(', ')}
+                        {g.nomes.length > 10 &&
+                          ` e mais ${g.nomes.length - 10}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+
+            <DialogFooter>
+              <Button onClick={() => setLoteResumo(null)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

@@ -33,7 +33,7 @@ export interface MetaCardProps {
 const CATEGORIA_COLORS: Record<string, string> = {
   atendimento: 'bg-azul-respira/10 text-azul-respira border-azul-respira/30',
   qualidade: 'bg-roxo-titulo/10 text-roxo-titulo border-roxo-titulo/30',
-  produtividade: 'bg-amarelo-pipa/10 text-amarelo-pipa border-amarelo-pipa/30',
+  produtividade: 'bg-amarelo-pipa text-roxo-titulo border-transparent',
   reativacao: 'bg-rosa-suave/10 text-rosa-suave border-rosa-suave/30',
   relacionamento:
     'bg-vermelho-kids/10 text-vermelho-kids border-vermelho-kids/30',
@@ -59,7 +59,7 @@ export const MetaCard: React.FC<MetaCardProps> = ({
       ? 'text-green-600'
       : meta.status_atingimento === 'atrasada'
         ? 'text-destructive'
-        : 'text-amarelo-pipa';
+        : 'text-roxo-titulo';
 
   const formatMesAno = () => {
     const meses = [

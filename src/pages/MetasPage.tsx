@@ -28,6 +28,7 @@ import {
 import { MetaCard } from '@/components/composed/MetaCard';
 import { MetasOverview } from '@/components/composed/MetasOverview';
 import { CreateMetaDialog } from '@/components/composed/CreateMetaDialog';
+import { ConfirmActionDialog } from '@/components/composed/ConfirmActionDialog';
 import { useToast } from '@/components/primitives/use-toast';
 import {
   Plus,
@@ -57,8 +58,10 @@ export const MetasPage: React.FC = () => {
 
   const [metas, setMetas] = useState<MetaDashboard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [metaToDelete, setMetaToDelete] = useState<MetaDashboard | null>(null);
   const [tab, setTab] = useState<'minhas' | 'equipe' | 'clinica'>('minhas');
 
   const now = new Date();
@@ -67,12 +70,18 @@ export const MetasPage: React.FC = () => {
 
   const loadMetas = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const filtros: MetasFilters = { mes, ano };
       const data = await fetchMetasDashboard(filtros);
       setMetas(data);
     } catch (err) {
       console.error('Erro ao carregar metas:', err);
+      setError(
+        err instanceof Error
+          ? `Erro ao carregar metas: ${err.message}`
+          : 'Erro ao carregar metas. Verifique sua conexão e tente novamente.'
+      );
     } finally {
       setLoading(false);
     }
@@ -102,8 +111,14 @@ export const MetasPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (meta: MetaDashboard) => {
-    if (!window.confirm(`Remover a meta "${meta.titulo}"?`)) return;
+  const handleDelete = (meta: MetaDashboard) => {
+    setMetaToDelete(meta);
+  };
+
+  const confirmDeleteMeta = async () => {
+    if (!metaToDelete) return;
+    const meta = metaToDelete;
+    setMetaToDelete(null);
     try {
       await deleteMeta(meta.id);
       toast({ title: 'Meta removida' });
@@ -222,6 +237,18 @@ export const MetasPage: React.FC = () => {
         </div>
       </div>
 
+      {error && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
+            <p className="flex-1 text-sm text-foreground">{error}</p>
+            <Button variant="ghost" size="sm" onClick={() => void loadMetas()}>
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <MetasOverview metas={visibleMetas} loading={loading} />
 
       <Tabs
@@ -282,7 +309,7 @@ export const MetasPage: React.FC = () => {
         )}
       </Tabs>
 
-      {!loading && metas.length === 0 && (
+      {!loading && !error && metas.length === 0 && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
@@ -316,6 +343,18 @@ export const MetasPage: React.FC = () => {
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
         onSuccess={loadMetas}
+      />
+
+      <ConfirmActionDialog
+        open={!!metaToDelete}
+        onOpenChange={(open) => {
+          if (!open) setMetaToDelete(null);
+        }}
+        title={`Remover a meta "${metaToDelete?.titulo || ''}"?`}
+        description="O progresso registrado para esta meta será perdido. Esta ação não pode ser desfeita."
+        confirmLabel="Remover"
+        variant="destructive"
+        onConfirm={confirmDeleteMeta}
       />
     </div>
   );

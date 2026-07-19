@@ -39,14 +39,34 @@ import {
   fetchAgendamentoById,
   updateAgendamentoDetails,
   fetchLocaisAtendimento,
-  updateNfeLink,
 } from '@/lib/calendar-services';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/components/primitives/use-toast';
 import { useNavigate } from 'react-router-dom';
 import type { PatientDetails, PersonDetails } from '@/types/patient-details';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
 import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
-import { cn } from '@/lib/utils';
+import { cn, formatDateBR } from '@/lib/utils';
+
+// AI dev note: Idade compacta para o cabeçalho clínico (anos, ou meses para bebês)
+function formatCompactAge(birthDate: string | null | undefined): string | null {
+  if (!birthDate) return null;
+  const today = new Date();
+  const birth = new Date(`${birthDate}T00:00:00`);
+  if (Number.isNaN(birth.getTime())) return null;
+
+  let months =
+    (today.getFullYear() - birth.getFullYear()) * 12 +
+    (today.getMonth() - birth.getMonth());
+  if (today.getDate() < birth.getDate()) months--;
+  months = Math.max(0, months);
+
+  if (months < 24) {
+    return `${months} ${months === 1 ? 'mês' : 'meses'}`;
+  }
+  const years = Math.floor(months / 12);
+  return `${years} ${years === 1 ? 'ano' : 'anos'}`;
+}
 
 // AI dev note: PatientDetailsManager - Component Domain expandido para gerenciar detalhes completos do paciente
 // Atualizado para usar PatientCompleteInfo que une todas as informações pessoais em um único card
@@ -96,6 +116,7 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
 
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { toast } = useToast();
 
     useEffect(() => {
       const loadPatientDetails = async () => {
@@ -229,30 +250,19 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
       }
     };
 
-    const handleNfeAction = async (appointmentId: string, linkNfe?: string) => {
-      try {
-        if (linkNfe) {
-          // Se já tem NFe, visualizar
-
-          window.open(linkNfe, '_blank');
-        } else {
-          // Se não tem NFe, emitir
-
-          // TODO: Implementar integração com sistema de NFe
-          // Por enquanto, simular um link de NFe
-          const mockNfeLink = `https://nfe.exemplo.com/${appointmentId}`;
-
-          await updateNfeLink(appointmentId, mockNfeLink);
-
-          // Recarregar dados do agendamento se necessário
-          if (selectedAppointment?.id === appointmentId) {
-            const updatedAppointment =
-              await fetchAgendamentoById(appointmentId);
-            setSelectedAppointment(updatedAppointment);
-          }
-        }
-      } catch (error) {
-        console.error('Erro na ação de NFe:', error);
+    // AI dev note: A emissão de NFe é feita pelo módulo Financeiro (fatura).
+    // Aqui só visualizamos o link quando existir — nunca gravar link falso.
+    const handleNfeAction = async (
+      _appointmentId: string,
+      linkNfe?: string
+    ) => {
+      if (linkNfe) {
+        window.open(linkNfe, '_blank');
+      } else {
+        toast({
+          title: 'Emissão indisponível nesta tela',
+          description: 'Emita a NFS-e pela fatura no módulo Financeiro.',
+        });
       }
     };
 
@@ -286,6 +296,13 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
         </div>
       );
     }
+
+    // AI dev note: Ordem das seções por papel — profissional atende com o
+    // prontuário aberto, então o bloco clínico (consultas, anamnese,
+    // avaliações, evoluções/relatórios) vem PRIMEIRO; admin/secretaria mantém
+    // a ordem cadastral original. Reordenação escolhida no lugar de tabs por
+    // ser a menor mudança (mesmos componentes, só a ordem de render muda).
+    const isProfissional = user?.pessoa?.role === 'profissional';
 
     // Error state
     if (error || !patient) {
@@ -322,9 +339,19 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
                 <span className="hidden md:inline">Voltar</span>
               </Button>
             )}
-            <h1 className="text-xl md:text-2xl font-bold truncate">
-              {patient.nome}
-            </h1>
+            <div className="min-w-0">
+              <h1 className="text-xl md:text-2xl font-bold truncate">
+                {patient.nome}
+              </h1>
+              {/* Cabeçalho compacto de identificação p/ o fluxo clínico */}
+              {isProfissional && patient.data_nascimento && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {formatCompactAge(patient.data_nascimento)}
+                  {' • Nascimento: '}
+                  {formatDateBR(patient.data_nascimento)}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Botões de ação - apenas para pacientes */}
@@ -375,111 +402,130 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
           )}
         </div>
 
-        {/* Informações Completas do Paciente - usando component PatientCompleteInfo unificado */}
-        <PatientCompleteInfo
-          patient={patient}
-          userRole={
-            (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
-            null
-          }
-          onResponsibleClick={(responsibleId) => {
-            console.log(
-              '🔍 [DEBUG] PatientDetailsManager - onResponsibleClick chamado:',
-              {
-                responsibleId,
-              }
-            );
-            handlePersonClick(responsibleId);
-          }}
-          onPatientUpdated={() => setReloadKey((k) => k + 1)}
-        />
+        {/* AI dev note: Blocos de seções — 'cadastro' (dados pessoais/adm) e
+            'clínico'. A ordem de render muda por papel (ver isProfissional). */}
+        {(() => {
+          const isPatientEntity =
+            !personId || (patient as PersonDetails)?.tipo_pessoa === 'paciente';
 
-        {/* Conversas no WhatsApp (análise + conciliação) - admin/secretaria */}
-        <PatientConversasSection
-          patientId={actualId}
-          userRole={
-            (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
-            null
-          }
-        />
+          const cadastroSections = (
+            <>
+              {/* Informações Completas do Paciente - usando component PatientCompleteInfo unificado */}
+              <PatientCompleteInfo
+                patient={patient}
+                userRole={
+                  (user?.pessoa?.role as
+                    | 'admin'
+                    | 'profissional'
+                    | 'secretaria') || null
+                }
+                onResponsibleClick={handlePersonClick}
+                onPatientUpdated={() => setReloadKey((k) => k + 1)}
+              />
 
-        {/* Contrato do Paciente - apenas para pacientes */}
-        {(!personId ||
-          (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
-          <PatientContractSection
-            patientId={actualId}
-            userRole={
-              (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
-              null
-            }
-          />
-        )}
+              {/* Conversas no WhatsApp (análise + conciliação) - admin/secretaria */}
+              <PatientConversasSection
+                patientId={actualId}
+                userRole={
+                  (user?.pessoa?.role as
+                    | 'admin'
+                    | 'profissional'
+                    | 'secretaria') || null
+                }
+              />
 
-        {/* Produtos (venda + carrinho) - apenas pacientes, admin/secretaria */}
-        {(!personId ||
-          (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
-          <PatientProdutosSection
-            patientId={actualId}
-            userRole={
-              (user?.pessoa?.role as 'admin' | 'profissional' | 'secretaria') ||
-              null
-            }
-          />
-        )}
+              {/* Contrato do Paciente - apenas para pacientes */}
+              {isPatientEntity && (
+                <PatientContractSection
+                  patientId={actualId}
+                  userRole={
+                    (user?.pessoa?.role as
+                      | 'admin'
+                      | 'profissional'
+                      | 'secretaria') || null
+                  }
+                />
+              )}
 
-        {/* Seções específicas apenas para pacientes */}
-        {(!personId ||
-          (patient as PersonDetails)?.tipo_pessoa === 'paciente') && (
-          <>
-            {/* Métricas do Paciente com Lista de Consultas - unificado */}
-            <PatientMetricsWithConsultations
-              patientId={actualId}
-              onConsultationClick={handleConsultationClick}
-              userRole={
-                (user?.pessoa?.role as
-                  | 'admin'
-                  | 'profissional'
-                  | 'secretaria') || null
-              }
-            />
+              {/* Produtos (venda + carrinho) - apenas pacientes, admin/secretaria */}
+              {isPatientEntity && (
+                <PatientProdutosSection
+                  patientId={actualId}
+                  userRole={
+                    (user?.pessoa?.role as
+                      | 'admin'
+                      | 'profissional'
+                      | 'secretaria') || null
+                  }
+                />
+              )}
+            </>
+          );
 
-            {/* Anamnese e Observações do Paciente (com abas) */}
-            <PatientAnamnesisWithObservations
-              patientId={personId ? undefined : actualId}
-              personId={personId}
-              initialAnamnese={anamnesis}
-              initialObservations={observations}
-              onUpdateAnamnese={handleAnamnesisUpdate}
-              onUpdateObservations={handleObservationsUpdate}
-            />
+          const clinicalSections = isPatientEntity ? (
+            <>
+              {/* Métricas do Paciente com Lista de Consultas - unificado */}
+              <PatientMetricsWithConsultations
+                patientId={actualId}
+                onConsultationClick={handleConsultationClick}
+                userRole={
+                  (user?.pessoa?.role as
+                    | 'admin'
+                    | 'profissional'
+                    | 'secretaria') || null
+                }
+              />
 
-            {/* Avaliações Clínicas TM/AC */}
-            <PatientClinicalEvaluations
-              patientId={actualId}
-              patientName={patient.nome}
-              patientBirthDate={patient.data_nascimento}
-              userRole={
-                (user?.pessoa?.role as
-                  | 'admin'
-                  | 'profissional'
-                  | 'secretaria') || null
-              }
-              currentUserId={user?.pessoa?.id}
-            />
+              {/* Anamnese e Observações do Paciente (com abas) */}
+              <PatientAnamnesisWithObservations
+                patientId={personId ? undefined : actualId}
+                personId={personId}
+                initialAnamnese={anamnesis}
+                initialObservations={observations}
+                onUpdateAnamnese={handleAnamnesisUpdate}
+                onUpdateObservations={handleObservationsUpdate}
+              />
 
-            {/* Relatórios Clínicos do Paciente */}
-            <ClinicalReportGenerator
-              patientId={actualId}
-              patientName={patient.nome}
-            />
+              {/* Avaliações Clínicas TM/AC */}
+              <PatientClinicalEvaluations
+                patientId={actualId}
+                patientName={patient.nome}
+                patientBirthDate={patient.data_nascimento}
+                userRole={
+                  (user?.pessoa?.role as
+                    | 'admin'
+                    | 'profissional'
+                    | 'secretaria') || null
+                }
+                currentUserId={user?.pessoa?.id}
+              />
 
-            {/* Histórico Compilado com IA */}
-            <PatientHistory patientId={actualId} />
+              {/* Relatórios Clínicos do Paciente */}
+              <ClinicalReportGenerator
+                patientId={actualId}
+                patientName={patient.nome}
+              />
 
-            {/* Galeria de Mídias */}
-            <MediaGallery patientId={actualId} />
-          </>
-        )}
+              {/* Histórico Compilado com IA */}
+              <PatientHistory patientId={actualId} />
+
+              {/* Galeria de Mídias */}
+              <MediaGallery patientId={actualId} />
+            </>
+          ) : null;
+
+          return isProfissional ? (
+            <>
+              {clinicalSections}
+              {cadastroSections}
+            </>
+          ) : (
+            <>
+              {cadastroSections}
+              {clinicalSections}
+            </>
+          );
+        })()}
 
         {/* Modal de Detalhes do Agendamento */}
         <AppointmentDetailsManager

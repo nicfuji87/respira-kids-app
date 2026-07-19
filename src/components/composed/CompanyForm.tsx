@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/primitives/select';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
+import { ConfirmActionDialog } from './ConfirmActionDialog';
 import { useCompany } from '@/hooks/useCompany';
 import { useToast } from '@/components/primitives/use-toast';
 import { REGIMES_TRIBUTARIOS } from '@/types/company';
@@ -75,6 +76,8 @@ export const CompanyForm = React.memo<CompanyFormProps>(({ className }) => {
     message?: string;
   } | null>(null);
   const [isValidatingToken, setIsValidatingToken] = useState(false);
+  const [isConfirmDesassociarOpen, setIsConfirmDesassociarOpen] =
+    useState(false);
 
   const form = useForm<CompanyFormData>({
     resolver: zodResolver(companyFormSchema),
@@ -424,7 +427,7 @@ export const CompanyForm = React.memo<CompanyFormProps>(({ className }) => {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={handleRemoveAssociation}
+                    onClick={() => setIsConfirmDesassociarOpen(true)}
                     disabled={isLoading}
                     className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
                   >
@@ -458,6 +461,16 @@ export const CompanyForm = React.memo<CompanyFormProps>(({ className }) => {
           </form>
         </Form>
       </Card>
+
+      <ConfirmActionDialog
+        open={isConfirmDesassociarOpen}
+        onOpenChange={setIsConfirmDesassociarOpen}
+        title={`Desassociar a empresa "${company?.razao_social || ''}"?`}
+        description="A empresa deixará de estar vinculada ao seu perfil. Você poderá associá-la novamente depois."
+        confirmLabel="Desassociar"
+        variant="destructive"
+        onConfirm={handleRemoveAssociation}
+      />
     </div>
   );
 });

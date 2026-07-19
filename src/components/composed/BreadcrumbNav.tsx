@@ -71,7 +71,9 @@ export const BreadcrumbNav = React.memo<BreadcrumbNavProps>(
               onClick={() => onItemClick?.(item, index)}
               disabled={!item.href && index === items.length - 1}
             >
-              <div className="mr-1">{getIconForLabel(item.label)}</div>
+              <div className="mr-1">
+                {item.icon ?? getIconForLabel(item.label)}
+              </div>
               {item.label}
             </Button>
           </React.Fragment>

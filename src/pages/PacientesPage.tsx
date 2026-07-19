@@ -28,13 +28,6 @@ export const PacientesPage: React.FC = () => {
     userRole && ['admin', 'secretaria'].includes(userRole);
 
   const handleNewPatient = () => {
-    console.log('🔍 Debug - Auth:', {
-      hasUser: !!auth.user,
-      hasPessoa: !!auth.user?.pessoa,
-      role: auth.user?.pessoa?.role,
-      canCreate: canCreatePatient,
-    });
-
     if (!auth.user) {
       toast({
         title: 'Não autenticado',

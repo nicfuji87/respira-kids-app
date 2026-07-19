@@ -3,6 +3,7 @@ import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { checkUserStatus, getCurrentUser } from '@/lib/auth';
 import type { UserStatus } from '@/lib/auth';
+import { toast } from '@/components/primitives/use-toast';
 
 export function useAuth() {
   const [userStatus, setUserStatus] = useState<UserStatus>({
@@ -27,6 +28,10 @@ export function useAuth() {
 
   // AI dev note: Debounce para evitar múltiplos eventos onAuthStateChange em sequência
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // AI dev note: Marca se já houve usuário logado nesta sessão do app,
+  // para avisar quando a sessão expirar (sem toast no boot deslogado)
+  const hadAuthenticatedUser = useRef(false);
 
   // Função para atualizar status do usuário
   const updateUserStatus = async (user: User | null) => {
@@ -154,6 +159,10 @@ export function useAuth() {
         }
 
         debounceTimeout.current = setTimeout(async () => {
+          if (session?.user) {
+            hadAuthenticatedUser.current = true;
+          }
+
           if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
             if (session?.user) {
               await updateUserStatus(session.user);
@@ -176,6 +185,14 @@ export function useAuth() {
               await updateUserStatus(session.user);
             } else {
               // Logout ou token expirado - limpar cache
+              // AI dev note: Avisar apenas se havia usuário logado antes (não no boot)
+              if (hadAuthenticatedUser.current) {
+                hadAuthenticatedUser.current = false;
+                toast({
+                  title: 'Sessão expirada',
+                  description: 'Sua sessão expirou. Faça login novamente.',
+                });
+              }
 
               authCache.current = { userId: null, status: null };
               setUserStatus({

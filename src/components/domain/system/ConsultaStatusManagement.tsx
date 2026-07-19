@@ -156,10 +156,6 @@ export const ConsultaStatusManagement: React.FC = () => {
   };
 
   const handleDelete = async (item: ConsultaStatus) => {
-    if (!confirm(`Tem certeza que deseja excluir "${item.descricao}"?`)) {
-      return;
-    }
-
     const result = await deleteConsultaStatus(item.id);
 
     if (result.success) {
@@ -217,6 +213,8 @@ export const ConsultaStatusManagement: React.FC = () => {
           onEdit={() => handleEdit(item)}
           onDelete={() => handleDelete(item)}
           canToggleStatus={false}
+          confirmDeleteTitle={`Excluir o status de consulta "${item.descricao}"?`}
+          confirmDeleteDescription="Esta ação não pode ser desfeita."
         />
       ),
       className: 'w-16',
