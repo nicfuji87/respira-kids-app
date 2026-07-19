@@ -1024,7 +1024,7 @@ export const FinancialConsultationsList: React.FC<
     let disparou = false;
 
     try {
-      // Agrupar consultas por paciente
+      // Agrupar consultas por paciente + empresa de faturamento
       const consultationsByPatient = new Map<
         string,
         ConsultationWithPatient[]
@@ -1034,17 +1034,26 @@ export const FinancialConsultationsList: React.FC<
       // agrupar. Se o mesmo id aparecer 2x na seleção, NÃO pode entrar 2x no grupo,
       // senão valor (reduce), descrição e agendamentoIds dobram (bug que gerou
       // cobrança de R$520 para 1 sessão de R$260).
+      // AI dev note: agrupa por PACIENTE + EMPRESA de faturamento (chave composta).
+      // O mesmo paciente pode ter consultas de empresas diferentes (BC e FS) no
+      // período, e cada empresa emite a SUA cobrança (a conta Asaas é por empresa).
+      // Antes agrupávamos só por paciente e, ao encontrar 2 empresas, o lote INTEIRO
+      // daquele paciente era rejeitado ("empresas de faturamento diferentes"),
+      // travando a geração em massa. Agora sai uma cobrança por (paciente, empresa) —
+      // mesmo resultado da geração individual.
       const idsProcessados = new Set<string>();
       selectedConsultations.forEach((id) => {
         if (idsProcessados.has(id)) return;
         idsProcessados.add(id);
         const consultation = consultations.find((c) => c.id === id);
         if (consultation) {
-          const patientId = consultation.paciente_id;
-          if (!consultationsByPatient.has(patientId)) {
-            consultationsByPatient.set(patientId, []);
+          const grupoKey = `${consultation.paciente_id}::${
+            consultation.empresa_fatura_id || 'sem-empresa'
+          }`;
+          if (!consultationsByPatient.has(grupoKey)) {
+            consultationsByPatient.set(grupoKey, []);
           }
-          consultationsByPatient.get(patientId)!.push(consultation);
+          consultationsByPatient.get(grupoKey)!.push(consultation);
         }
       });
 
@@ -1081,7 +1090,15 @@ export const FinancialConsultationsList: React.FC<
         return out;
       };
 
-      const patientIds = Array.from(consultationsByPatient.keys());
+      // AI dev note: as chaves do mapa agora são "pacienteId::empresaId", então o id
+      // do paciente vem das próprias consultas (e sem repetir entre grupos).
+      const patientIds = Array.from(
+        new Set(
+          Array.from(consultationsByPatient.values()).map(
+            (cs) => cs[0].paciente_id
+          )
+        )
+      );
       const allSelected = Array.from(consultationsByPatient.values()).flat();
       const serviceIds = allSelected
         .map((c) => c.tipo_servico_id)
@@ -1133,13 +1150,15 @@ export const FinancialConsultationsList: React.FC<
 
       // Preparar paciente por paciente (validação + descrição, sem Asaas nem N queries)
       let indice = 0;
-      for (const [patientId, patientConsultations] of Array.from(
+      for (const [, patientConsultations] of Array.from(
         consultationsByPatient.entries()
       )) {
         // Cancelamento: para após o paciente atual, mantém o que já foi gerado
         if (cancelGenerationRef.current) break;
         indice += 1;
         setGenerationProgress({ atual: indice, total: totalPacientes });
+        // A chave do grupo é composta (paciente::empresa) — id/nome vêm das consultas
+        const patientId = patientConsultations[0].paciente_id;
         const patientName = patientConsultations[0].paciente_nome;
 
         try {
@@ -1340,14 +1359,22 @@ export const FinancialConsultationsList: React.FC<
       handleGeneratePaymentLinks(true);
       return;
     }
-    const pacientesUnicos = new Set(
+    // AI dev note: conta os GRUPOS (paciente + empresa), que é 1:1 com as cobranças
+    // geradas — um paciente com consultas de 2 empresas vira 2 cobranças. Contar só
+    // pacientes faria o diálogo prometer menos cobranças do que realmente sairiam.
+    const gruposUnicos = new Set(
       selectedConsultations
-        .map((id) => consultations.find((c) => c.id === id)?.paciente_id)
+        .map((id) => {
+          const c = consultations.find((x) => x.id === id);
+          return c
+            ? `${c.paciente_id}::${c.empresa_fatura_id || 'sem-empresa'}`
+            : null;
+        })
         .filter(Boolean)
     );
-    if (pacientesUnicos.size > 1) {
+    if (gruposUnicos.size > 1) {
       setConfirmGenerate({
-        pacientes: pacientesUnicos.size,
+        pacientes: gruposUnicos.size,
         consultas: selectedConsultations.length,
       });
     } else {
@@ -2420,10 +2447,11 @@ export const FinancialConsultationsList: React.FC<
               <AlertDialogDescription asChild>
                 <div className="space-y-2 text-sm">
                   <p>
-                    Você vai gerar cobrança para{' '}
-                    <strong>{confirmGenerate?.pacientes} pacientes</strong> (
+                    Você vai gerar{' '}
+                    <strong>{confirmGenerate?.pacientes} cobranças</strong> (
                     {confirmGenerate?.consultas} consultas) e enviar o link de
-                    pagamento por WhatsApp.
+                    pagamento por WhatsApp. Paciente com consultas de empresas
+                    diferentes recebe <strong>uma cobrança por empresa</strong>.
                   </p>
                   <p>
                     Para proteger o número, os envios saem no{' '}
