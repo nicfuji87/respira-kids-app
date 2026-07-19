@@ -159,10 +159,10 @@ export const EventCard = React.memo<EventCardProps>(
       return (
         <div
           className={cn(
-            'flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity py-0.5 px-1 rounded',
+            'flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity py-0.5 px-1.5 rounded',
             focusRingClasses,
-            // AI dev note: Aplicar background cinza translúcido para cancelados
-            isCancelado && 'bg-gray-200/60',
+            // AI dev note: DS — cancelados usam token muted, não gray genérico
+            isCancelado && 'bg-muted/60',
             className
           )}
           onClick={(e) => handleClick(e)}
@@ -173,7 +173,7 @@ export const EventCard = React.memo<EventCardProps>(
           {/* Bolinha do tipo de serviço (evento) */}
           <div
             className={cn(
-              'w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white shadow-sm',
+              'w-2.5 h-2.5 rounded-full flex-shrink-0 border border-background',
               // AI dev note: Reduzir opacidade da bolinha se cancelado
               isCancelado && 'opacity-40'
             )}
@@ -201,9 +201,9 @@ export const EventCard = React.memo<EventCardProps>(
           {!event.allDay && (
             <span
               className={cn(
-                'text-xs font-medium flex-shrink-0',
-                // AI dev note: Texto cinza se cancelado
-                isCancelado ? 'text-gray-500' : 'text-gray-700'
+                'text-xs font-medium flex-shrink-0 tabular-nums',
+                // AI dev note: DS — tokens muted/foreground no lugar de gray
+                isCancelado ? 'text-muted-foreground' : 'text-muted-foreground'
               )}
             >
               {formatTime(event.start)}
@@ -214,8 +214,10 @@ export const EventCard = React.memo<EventCardProps>(
           <span
             className={cn(
               'text-xs truncate flex-1 font-medium',
-              // AI dev note: Texto cinza com line-through se cancelado
-              isCancelado ? 'text-gray-500 line-through' : 'text-gray-900'
+              // AI dev note: DS — line-through + muted se cancelado
+              isCancelado
+                ? 'text-muted-foreground line-through'
+                : 'text-foreground'
             )}
           >
             {pacienteNome}
@@ -259,7 +261,7 @@ export const EventCard = React.memo<EventCardProps>(
       return (
         <div
           className={cn(
-            'w-full h-full rounded-sm cursor-pointer hover:opacity-90 transition-opacity overflow-hidden',
+            'w-full h-full rounded-md cursor-pointer hover:opacity-90 transition-opacity overflow-hidden',
             // AI dev note: Regra do DS — texto âncora roxo-titulo (#47184E) sobre
             // fundo suavizado (cor do tipo + alpha), nunca branco 10px sobre hex cheio.
             'text-roxo-titulo',
@@ -276,8 +278,10 @@ export const EventCard = React.memo<EventCardProps>(
           aria-label={buildAriaLabel(pacienteNome)}
           {...keyboardProps}
         >
-          {/* Conteúdo simplificado: paciente + profissional */}
-          <div className="h-full flex flex-col justify-start p-1 overflow-hidden">
+          {/* Conteúdo simplificado: paciente + profissional.
+              AI dev note: py-0.5 (não py-1.5) para o bloco de 30min continuar
+              legível com 1 linha truncada */}
+          <div className="h-full flex flex-col justify-start px-1.5 py-0.5 overflow-hidden">
             {/* Nome do paciente com ícone de status pagamento */}
             <div className="flex items-start gap-1 min-w-0">
               {!isCancelado && (
@@ -358,10 +362,10 @@ export const EventCard = React.memo<EventCardProps>(
       return (
         <Card
           className={cn(
-            'cursor-pointer border-l-4 hover:shadow-md transition-shadow p-4',
+            // AI dev note: DS flat — sem sombra; feedback de hover via cor
+            'cursor-pointer border-l-4 hover:bg-muted/40 transition-colors p-4',
             focusRingClasses,
-            // AI dev note: Background cinza claro para cancelados
-            isCancelado && 'bg-gray-100/80',
+            isCancelado && 'bg-muted/60',
             className
           )}
           onClick={(e) => handleClick(e)}
@@ -381,8 +385,10 @@ export const EventCard = React.memo<EventCardProps>(
             <div
               className={cn(
                 'text-lg font-bold leading-tight',
-                // AI dev note: Line-through e cinza se cancelado
-                isCancelado ? 'text-gray-500 line-through' : 'text-foreground'
+                // AI dev note: Line-through e muted se cancelado
+                isCancelado
+                  ? 'text-muted-foreground line-through'
+                  : 'text-roxo-titulo'
               )}
             >
               {pacienteNome}
@@ -397,7 +403,9 @@ export const EventCard = React.memo<EventCardProps>(
                   <div
                     className={cn(
                       'text-sm italic',
-                      isCancelado ? 'text-gray-400' : 'text-muted-foreground'
+                      isCancelado
+                        ? 'text-muted-foreground/70'
+                        : 'text-muted-foreground'
                     )}
                   >
                     ({responsavelLegalNome})
@@ -411,7 +419,9 @@ export const EventCard = React.memo<EventCardProps>(
             <div
               className={cn(
                 'text-sm font-medium',
-                isCancelado ? 'text-gray-500' : 'text-muted-foreground'
+                isCancelado
+                  ? 'text-muted-foreground/70'
+                  : 'text-muted-foreground'
               )}
             >
               {tipoServicoNome}
@@ -513,10 +523,10 @@ export const EventCard = React.memo<EventCardProps>(
       return (
         <Card
           className={cn(
-            'cursor-pointer border-l-4 hover:shadow-md transition-shadow',
+            // AI dev note: DS flat — card com borda, sem sombra em repouso
+            'cursor-pointer border-l-4 hover:bg-muted/40 transition-colors',
             focusRingClasses,
-            // AI dev note: Background cinza claro para cancelados
-            isCancelado && 'bg-gray-100/80',
+            isCancelado && 'bg-muted/60',
             className
           )}
           onClick={(e) => handleClick(e)}
@@ -534,107 +544,134 @@ export const EventCard = React.memo<EventCardProps>(
           }}
         >
           <CardContent className="p-3 md:p-4">
-            <div className="space-y-1.5 md:space-y-2">
-              <div className="flex items-start justify-between gap-2">
+            {/* AI dev note: Hora em destaque à esquerda (vista agenda) */}
+            <div className="flex gap-3">
+              {showTime && (
+                <div className="flex flex-col items-end flex-shrink-0 w-12 pt-0.5 tabular-nums">
+                  {event.allDay ? (
+                    <span className="text-xs font-semibold text-roxo-titulo text-right leading-tight">
+                      Dia inteiro
+                    </span>
+                  ) : (
+                    <>
+                      <span
+                        className={cn(
+                          'text-sm font-bold leading-tight',
+                          isCancelado
+                            ? 'text-muted-foreground line-through'
+                            : 'text-roxo-titulo'
+                        )}
+                      >
+                        {formatTime(event.start)}
+                      </span>
+                      <span className="text-xs text-muted-foreground leading-tight">
+                        {formatTime(event.end)}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="min-w-0 flex-1 space-y-1.5 md:space-y-2">
                 <h3
                   className={cn(
-                    'font-semibold text-sm flex-1',
-                    // AI dev note: Line-through e cinza se cancelado
-                    isCancelado && 'line-through text-gray-500'
+                    'font-semibold text-sm',
+                    // AI dev note: Line-through e muted se cancelado
+                    isCancelado && 'line-through text-muted-foreground'
                   )}
                 >
                   {event.title}
                 </h3>
-                {showTime && (
-                  <Badge variant="outline" className="text-xs flex-shrink-0">
-                    {formatDuration()}
-                  </Badge>
-                )}
-              </div>
 
-              {/* Responsável legal (se houver) */}
-              {responsavelLegalNome && (
-                <p
-                  className={cn(
-                    'text-xs md:text-sm italic',
-                    isCancelado ? 'text-gray-400' : 'text-muted-foreground'
-                  )}
-                >
-                  ({responsavelLegalNome})
-                </p>
-              )}
-
-              {/* Profissional (somente o nome, sem "Atendimento com...") */}
-              {profissionalNome && (
-                <div className="flex items-center gap-1.5 text-xs md:text-sm text-muted-foreground">
-                  <Users className="h-3 w-3 flex-shrink-0" />
-                  <span
-                    className={cn('truncate', isCancelado && 'text-gray-500')}
+                {/* Responsável legal (se houver) */}
+                {responsavelLegalNome && (
+                  <p
+                    className={cn(
+                      'text-xs md:text-sm italic',
+                      isCancelado
+                        ? 'text-muted-foreground/70'
+                        : 'text-muted-foreground'
+                    )}
                   >
-                    {profissionalNome}
-                  </span>
-                </div>
-              )}
-
-              {/* Status badges com cores corretas */}
-              <div className="flex flex-wrap gap-1.5 md:gap-2">
-                {statusConsulta && (
-                  <Badge
-                    className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
-                    style={{
-                      backgroundColor: isValidHexColor(statusConsultaCor)
-                        ? statusConsultaCor
-                        : EVENT_FALLBACK_HEX,
-                      color: '#FFFFFF',
-                      border: 'none',
-                    }}
-                  >
-                    {statusConsulta}
-                  </Badge>
+                    ({responsavelLegalNome})
+                  </p>
                 )}
 
-                {statusPagamento && (
-                  <Badge
-                    className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
-                    style={{
-                      backgroundColor: isValidHexColor(statusPagamentoCor)
-                        ? statusPagamentoCor
-                        : EVENT_FALLBACK_HEX,
-                      color: '#FFFFFF',
-                      border: 'none',
-                    }}
-                  >
-                    {statusPagamento}
-                  </Badge>
-                )}
-
-                {/* AI dev note: Badge de evolução pendente - exibir quando não tem evolução e não está cancelado */}
-                {possuiEvolucao === 'não' && !isCancelado && (
-                  <Badge
-                    variant="destructive"
-                    className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
-                  >
-                    Evoluir
-                  </Badge>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 md:gap-4 text-xs text-muted-foreground flex-wrap">
-                {showLocation && event.location && (
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3 flex-shrink-0" />
-                    <span className="truncate">{event.location}</span>
+                {/* Profissional (somente o nome, sem "Atendimento com...") */}
+                {profissionalNome && (
+                  <div className="flex items-center gap-1.5 text-xs md:text-sm text-muted-foreground">
+                    <Users className="h-3 w-3 flex-shrink-0" />
+                    <span
+                      className={cn(
+                        'truncate',
+                        isCancelado && 'text-muted-foreground/70'
+                      )}
+                    >
+                      {profissionalNome}
+                    </span>
                   </div>
                 )}
 
-                {showAttendees &&
-                  event.attendees &&
-                  event.attendees.length > 0 && (
+                {/* Status badges com cores corretas */}
+                <div className="flex flex-wrap gap-1.5 md:gap-2">
+                  {statusConsulta && (
+                    <Badge
+                      className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
+                      style={{
+                        backgroundColor: isValidHexColor(statusConsultaCor)
+                          ? statusConsultaCor
+                          : EVENT_FALLBACK_HEX,
+                        color: '#FFFFFF',
+                        border: 'none',
+                      }}
+                    >
+                      {statusConsulta}
+                    </Badge>
+                  )}
+
+                  {statusPagamento && (
+                    <Badge
+                      className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
+                      style={{
+                        backgroundColor: isValidHexColor(statusPagamentoCor)
+                          ? statusPagamentoCor
+                          : EVENT_FALLBACK_HEX,
+                        color: '#FFFFFF',
+                        border: 'none',
+                      }}
+                    >
+                      {statusPagamento}
+                    </Badge>
+                  )}
+
+                  {/* AI dev note: Badge de evolução pendente - exibir quando não tem evolução e não está cancelado */}
+                  {possuiEvolucao === 'não' && !isCancelado && (
+                    <Badge
+                      variant="destructive"
+                      className="text-xs px-1.5 py-0.5 md:px-2 md:py-1"
+                    >
+                      Evoluir
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 md:gap-4 text-xs text-muted-foreground flex-wrap">
+                  {showLocation && event.location && (
                     <div className="flex items-center gap-1">
-                      <Users className="h-3 w-3 flex-shrink-0" />
-                      <span>{event.attendees.length} participantes</span>
+                      <MapPin className="h-3 w-3 flex-shrink-0" />
+                      <span className="truncate">{event.location}</span>
                     </div>
                   )}
+
+                  {showAttendees &&
+                    event.attendees &&
+                    event.attendees.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Users className="h-3 w-3 flex-shrink-0" />
+                        <span>{event.attendees.length} participantes</span>
+                      </div>
+                    )}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -646,7 +683,8 @@ export const EventCard = React.memo<EventCardProps>(
     return (
       <Card
         className={cn(
-          'cursor-pointer border transition-all hover:shadow-sm',
+          // AI dev note: DS flat — sem sombra; hover via cor
+          'cursor-pointer border transition-colors hover:bg-muted/40',
           getColorClasses(event.color),
           focusRingClasses,
           className

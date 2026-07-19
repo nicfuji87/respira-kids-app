@@ -413,7 +413,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
         {/* Tabs: Agenda vs Agenda Compartilhada */}
         {showSharedSchedulesTab && profissionalId && userId ? (
           <Tabs defaultValue="calendar" className="w-full">
-            <TabsList className="mb-4">
+            <TabsList className="mb-3 md:mb-4">
               <TabsTrigger value="calendar">Agenda</TabsTrigger>
               <TabsTrigger value="shared-schedules">
                 Agenda Compartilhada
@@ -422,7 +422,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
 
             <TabsContent value="calendar" className="mt-0">
               {/* Calendar Header */}
-              <div className="mb-4">
+              <div className="mb-3 md:mb-4">
                 <CalendarHeader
                   currentDate={currentDate}
                   currentView={currentView}
@@ -452,7 +452,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
         ) : (
           <>
             {/* Calendar Header */}
-            <div className="mb-4">
+            <div className="mb-3 md:mb-4">
               <CalendarHeader
                 currentDate={currentDate}
                 currentView={currentView}

@@ -10,6 +10,7 @@ import type { CalendarHeaderProps } from '@/types/calendar';
 
 // AI dev note: CalendarHeader combina componentes Composed (DatePicker, ViewToggle)
 // Header principal do calendário com navegação, seletor de vista e ações
+// Hierarquia: título do período > navegação temporal > vista > CTA primário
 
 export const CalendarHeader = React.memo<CalendarHeaderProps>(
   ({
@@ -54,96 +55,84 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
     };
 
     return (
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border-b bg-background">
-        {/* Seção de navegação e data */}
-        <div className="flex items-center gap-3">
-          {/* Botões de navegação */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onPrevious}
-              className="h-8 w-8 p-0"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        {/* Título do período — headline da toolbar */}
+        <h1 className="w-full sm:w-auto min-w-0 text-xl md:text-2xl font-bold text-roxo-titulo capitalize [text-wrap:balance] truncate">
+          {getDateLabel()}
+        </h1>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onNext}
-              className="h-8 w-8 p-0"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        {/* Grupo de navegação temporal — segmentado, bordas colapsadas */}
+        <div className="inline-flex items-center rounded-md -space-x-px">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onPrevious}
+            aria-label="Período anterior"
+            className="h-9 w-9 p-0 rounded-r-none focus-visible:z-10"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onToday}
-              className="h-8 px-3 text-sm"
-            >
-              Hoje
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onToday}
+            className="h-9 px-3 text-sm rounded-none focus-visible:z-10"
+          >
+            Hoje
+          </Button>
 
-          {/* Título da data */}
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-semibold capitalize">
-              {getDateLabel()}
-            </h1>
-
-            {/* DatePicker para seleção rápida */}
-            <DatePicker
-              value={formatDateForPicker(currentDate)}
-              onChange={handleDateSelect}
-              className="hidden sm:block w-auto"
-              inputClassName="h-8 w-32 text-xs"
-              placeholder="Ir para..."
-            />
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onNext}
+            aria-label="Próximo período"
+            className="h-9 w-9 p-0 rounded-l-none focus-visible:z-10"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
 
-        {/* Seção de controles */}
-        <div className="flex items-center gap-3">
-          {/* Seletor de vista */}
-          <ViewToggle
-            currentView={currentView}
-            onViewChange={onViewChange}
-            variant="compact"
-            className="hidden sm:flex"
-          />
+        {/* DatePicker para seleção rápida (desktop) */}
+        <DatePicker
+          value={formatDateForPicker(currentDate)}
+          onChange={handleDateSelect}
+          className="hidden sm:block w-auto"
+          inputClassName="h-9 w-36 text-xs"
+          placeholder="Ir para..."
+        />
 
-          {/* Seletor de vista mobile */}
-          <ViewToggle
-            currentView={currentView}
-            onViewChange={onViewChange}
-            variant="compact"
-            className="sm:hidden"
-          />
+        {/* Empurra os controles de vista/ações para a direita */}
+        <div className="flex-1" />
 
-          {/* Botão de bloquear agenda */}
-          {onBlockAgenda && (
-            <Button
-              variant="outline"
-              onClick={onBlockAgenda}
-              className="h-8 px-3 text-sm"
-              title="Bloquear agenda"
-            >
-              <Ban className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Bloquear</span>
-            </Button>
-          )}
+        {/* Seletor de vista — segmented control no desktop */}
+        <ViewToggle
+          currentView={currentView}
+          onViewChange={onViewChange}
+          className="hidden lg:inline-flex"
+        />
 
-          {/* Botão de novo evento */}
-          {onNewEvent && (
-            <Button onClick={onNewEvent} className="h-8 px-3 text-sm">
-              <Plus className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Novo Evento</span>
-              <span className="sm:hidden">Novo</span>
-            </Button>
-          )}
-        </div>
+        {/* Seletor de vista — dropdown compacto em telas menores */}
+        <ViewToggle
+          currentView={currentView}
+          onViewChange={onViewChange}
+          variant="compact"
+          className="lg:hidden"
+        />
+
+        {/* Ação secundária: bloquear agenda */}
+        {onBlockAgenda && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBlockAgenda}
+            className="h-9 px-3 text-sm"
+            title="Bloquear agenda"
+          >
+            <Ban className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Bloquear</span>
+          </Button>
+        )}
 
         {/* DatePicker mobile */}
         <div className="w-full sm:hidden">
@@ -152,8 +141,20 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
             onChange={handleDateSelect}
             placeholder="Selecionar data"
             className="w-full"
+            inputClassName="h-9"
           />
         </div>
+
+        {/* CTA primário — único botão sólido da toolbar */}
+        {onNewEvent && (
+          <Button
+            onClick={onNewEvent}
+            className="order-last sm:order-none w-full sm:w-auto h-9 px-4 text-sm font-semibold"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Novo Agendamento
+          </Button>
+        )}
       </div>
     );
   }

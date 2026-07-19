@@ -25,17 +25,17 @@ export const TimeSlot = React.memo<TimeSlotProps>(
       <div
         className={cn(
           'relative min-h-[60px] border-b border-border/50 group',
-          'hover:bg-muted/20 transition-colors',
+          'hover:bg-primary/5 transition-colors',
           className
         )}
       >
-        {/* Time label */}
-        <div className="absolute left-0 top-0 w-16 text-xs text-muted-foreground font-medium p-2">
+        {/* Time label — coluna estreita, alinhada à direita */}
+        <div className="absolute left-0 top-0 w-12 md:w-14 text-xs text-muted-foreground tabular-nums text-right p-2 pr-2.5">
           {time}
         </div>
 
         {/* Slot content area */}
-        <div className="ml-16 p-1 min-h-[58px] relative">
+        <div className="ml-12 md:ml-14 p-1 min-h-[58px] relative">
           {/* Add event button - visible on hover */}
           {!hasEvents && onSlotClick && (
             <Button

@@ -227,11 +227,11 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
         <Card className={cn('w-full max-w-none overflow-hidden', className)}>
           <CardContent className="p-0 w-full">
             {/* Header com dias da semana - responsivo */}
-            <div className="grid grid-cols-7 border-b">
+            <div className="grid grid-cols-7 border-b border-border/60">
               {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => (
                 <div
                   key={day}
-                  className="p-1.5 md:p-3 lg:p-4 text-center font-medium bg-muted/50 border-r last:border-r-0 text-[10px] md:text-xs lg:text-sm"
+                  className="p-1.5 md:p-2 text-center text-[10px] md:text-xs font-medium text-muted-foreground bg-muted/30 border-r border-border/60 last:border-r-0"
                 >
                   <span className="hidden md:inline">{day}</span>
                   <span className="md:hidden">{day.charAt(0)}</span>
@@ -252,6 +252,8 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
                   const isCurrentMonth =
                     day.getMonth() === currentDate.getMonth();
                   const isToday = isSameDay(day, new Date());
+                  // AI dev note: Apenas apresentação — fim de semana com fundo sutil
+                  const isWeekend = day.getDay() === 0 || day.getDay() === 6;
 
                   // Quantos eventos mostrar no mobile (estilo Google Calendar)
                   const mobileMaxEvents = 3;
@@ -268,42 +270,39 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
                           : ', sem agendamentos'
                       }`}
                       className={cn(
-                        'border-r border-b last:border-r-0 p-0.5 md:p-1.5 lg:p-2 cursor-pointer',
+                        'border-r border-b border-border/60 last:border-r-0 p-1 md:p-1.5 cursor-pointer',
                         'hover:bg-muted/50 transition-colors group',
                         'flex flex-col',
                         'min-h-[70px] md:min-h-[80px] lg:min-h-[100px]',
                         focusRingClasses,
                         {
-                          'bg-muted/20': !isCurrentMonth,
-                          'bg-primary/10': isToday,
+                          'bg-muted/30': isWeekend && !isToday,
+                          'bg-primary/5': isToday,
                         }
                       )}
                       onClick={() => handleDateClick(day)}
                       onKeyDown={onEnterOrSpace(() => handleDateClick(day))}
                     >
-                      {/* Número do dia */}
-                      <div
-                        className={cn(
-                          'text-[11px] md:text-xs lg:text-sm font-medium flex-shrink-0 text-center mb-0.5',
-                          {
-                            'text-muted-foreground': !isCurrentMonth,
-                            'text-primary font-bold': isToday,
-                          }
-                        )}
-                      >
-                        {isToday ? (
-                          <span className="inline-flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary text-primary-foreground text-[10px] md:text-xs">
-                            {format(day, 'd')}
-                          </span>
-                        ) : (
-                          format(day, 'd')
-                        )}
+                      {/* Número do dia — chip de 24-28px */}
+                      <div className="flex-shrink-0 flex justify-center mb-0.5">
+                        <span
+                          className={cn(
+                            'h-6 w-6 md:h-7 md:w-7 flex items-center justify-center rounded-full text-xs md:text-sm',
+                            isToday
+                              ? 'bg-primary text-primary-foreground font-semibold'
+                              : !isCurrentMonth
+                                ? 'text-muted-foreground/60 font-medium'
+                                : 'text-foreground font-medium'
+                          )}
+                        >
+                          {format(day, 'd')}
+                        </span>
                       </div>
 
                       {/* Eventos do dia - estilo Google Calendar */}
-                      <div className="flex-1 flex flex-col gap-px overflow-hidden">
+                      <div className="flex-1 flex flex-col gap-0.5 overflow-hidden">
                         {/* Mobile: barras coloridas com texto truncado */}
-                        <div className="md:hidden flex flex-col gap-px">
+                        <div className="md:hidden flex flex-col gap-0.5">
                           {dayEvents.slice(0, mobileMaxEvents).map((event) => {
                             const corEventoHex = event.color
                               ? eventColorHexMap[event.color] ||
@@ -330,7 +329,7 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
                                 // AI dev note: DS — texto roxo-titulo sobre fundo
                                 // suavizado (cor + alpha), não branco sobre hex cheio
                                 className={cn(
-                                  'flex items-center gap-1 px-1 py-px rounded-sm text-[10px] font-medium text-roxo-titulo leading-tight cursor-pointer hover:opacity-80',
+                                  'flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-roxo-titulo leading-tight truncate cursor-pointer hover:opacity-80',
                                   focusRingClasses
                                 )}
                                 style={{
@@ -364,7 +363,7 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
                               tabIndex={0}
                               aria-label={`Ver todos os ${dayEvents.length} agendamentos do dia`}
                               className={cn(
-                                'text-[10px] text-muted-foreground cursor-pointer hover:text-primary hover:underline text-center font-medium py-0.5',
+                                'text-[11px] text-muted-foreground cursor-pointer hover:text-roxo-titulo text-center font-medium py-0.5 transition-colors',
                                 focusRingClasses
                               )}
                               onClick={(e) => {
@@ -398,7 +397,7 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
                               tabIndex={0}
                               aria-label={`Ver todos os ${dayEvents.length} agendamentos do dia`}
                               className={cn(
-                                'text-[11px] lg:text-xs text-muted-foreground cursor-pointer hover:text-primary hover:underline transition-colors truncate',
+                                'text-[11px] text-muted-foreground cursor-pointer hover:text-roxo-titulo transition-colors truncate',
                                 focusRingClasses
                               )}
                               onClick={(e) => {

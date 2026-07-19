@@ -10,7 +10,6 @@ import { ptBR } from 'date-fns/locale';
 
 import { Card, CardContent } from '@/components/primitives/card';
 import { ScrollArea } from '@/components/primitives/scroll-area';
-import { Separator } from '@/components/primitives/separator';
 import { EventCard } from '@/components/composed';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent } from '@/types/calendar';
@@ -72,8 +71,8 @@ export const AgendaView = React.memo<AgendaViewProps>(
       <Card className={cn('w-full', className)}>
         <CardContent className="p-0">
           <ScrollArea className="h-[calc(100vh-10rem)] w-full">
-            <div className="p-3 md:p-4 space-y-4 md:space-y-6">
-              {daysWithEvents.map((day, dayIndex) => {
+            <div className="p-3 md:p-4 space-y-5">
+              {daysWithEvents.map((day) => {
                 const isToday = isSameDay(day.date, today);
                 const dayLabel = format(day.date, "EEEE, dd 'de' MMMM", {
                   locale: ptBR,
@@ -87,24 +86,18 @@ export const AgendaView = React.memo<AgendaViewProps>(
                 else if (relativeDays === 1) relativeLabel = 'Amanhã';
 
                 return (
-                  <div
-                    key={day.date.toISOString()}
-                    className="space-y-2 md:space-y-3"
-                  >
-                    {/* Cabeçalho do dia */}
+                  <div key={day.date.toISOString()} className="space-y-2">
+                    {/* Cabeçalho do dia.
+                        AI dev note: DS — heading roxo-titulo; teal nunca como
+                        cor de texto ("Hoje" é chip de superfície teal) */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3
-                        className={cn(
-                          'text-base md:text-lg font-semibold capitalize',
-                          isToday && 'text-primary'
-                        )}
-                      >
+                      <h3 className="text-sm font-semibold capitalize text-roxo-titulo">
                         {dayLabel}
                       </h3>
                       {relativeLabel && (
                         <span
                           className={cn(
-                            'text-xs md:text-sm px-2 py-0.5 md:py-1 rounded-full',
+                            'text-xs px-2 py-0.5 rounded-full font-medium',
                             isToday
                               ? 'bg-primary text-primary-foreground'
                               : 'bg-muted text-muted-foreground'
@@ -129,11 +122,6 @@ export const AgendaView = React.memo<AgendaViewProps>(
                         />
                       ))}
                     </div>
-
-                    {/* Separador entre dias (não no último) */}
-                    {dayIndex < daysWithEvents.length - 1 && (
-                      <Separator className="my-3 md:my-4" />
-                    )}
                   </div>
                 );
               })}

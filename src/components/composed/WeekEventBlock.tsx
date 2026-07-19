@@ -129,13 +129,15 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
           e.currentTarget.style.zIndex = String(zIndex);
         }}
       >
+        {/* AI dev note: p-0.5 = 2px de respiro entre blocos adjacentes; DS flat,
+            sem sombra em repouso — profundidade via contraste de cor */}
         <div className="w-full h-full p-0.5">
           <EventCard
             event={event}
             variant="week"
             onClick={handleClick}
             userRole={userRole}
-            className="h-full w-full shadow-sm hover:shadow-md transition-shadow"
+            className="h-full w-full"
           />
         </div>
       </div>

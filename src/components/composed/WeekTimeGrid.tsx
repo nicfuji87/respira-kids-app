@@ -196,28 +196,28 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
         {/* Grid semanal - estrutura igual ao CalendarGrid */}
         <Card className={cn('overflow-hidden', className)}>
           <CardContent className="p-0">
-            {/* Header com dias da semana - responsivo */}
-            <div className="w-full grid grid-cols-8 border-b bg-muted/30">
-              <div className="p-1 md:p-2 lg:p-3 border-r bg-muted/50 text-center">
-                <div className="text-[10px] md:text-xs lg:text-sm font-medium">
-                  Horário
-                </div>
-              </div>
+            {/* Header com dias da semana - responsivo.
+                AI dev note: Coluna de horas estreita (w-12/w-14) — as colunas
+                dos dias ganham o espaço que a coluna "Horário" desperdiçava. */}
+            <div className="w-full grid grid-cols-[3rem_repeat(7,minmax(0,1fr))] md:grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-border/60 bg-muted/30">
+              <div className="border-r border-border/50" aria-hidden="true" />
               {weekDays.map((day) => {
                 const isCurrentDay = isToday(day);
                 return (
                   <div
                     key={day.toISOString()}
                     className={cn(
-                      'p-1 md:p-2 lg:p-3 border-r last:border-r-0 text-center',
+                      'p-1.5 md:p-2 border-r border-border/50 last:border-r-0 text-center',
                       isCurrentDay && 'bg-primary/15'
                     )}
                   >
                     <div className="text-center">
+                      {/* AI dev note: DS — hoje é chip teal (superfície), nunca
+                          teal como cor de texto */}
                       <div
                         className={cn(
-                          'text-[10px] md:text-xs lg:text-sm font-medium capitalize',
-                          isCurrentDay && 'text-primary font-semibold'
+                          'text-[10px] md:text-xs font-medium capitalize text-muted-foreground',
+                          isCurrentDay && 'text-roxo-titulo font-semibold'
                         )}
                       >
                         <span className="md:hidden">
@@ -227,17 +227,18 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                           {format(day, 'EEE', { locale: ptBR })}
                         </span>
                       </div>
-                      <div
-                        className={cn(
-                          'text-sm md:text-base lg:text-lg font-bold mt-0.5 md:mt-1',
-                          isCurrentDay && 'text-primary'
-                        )}
-                      >
-                        {format(day, 'd')}
+                      <div className="mt-0.5 flex justify-center">
+                        <span
+                          className={cn(
+                            'h-6 w-6 md:h-7 md:w-7 flex items-center justify-center rounded-full text-sm md:text-base font-semibold',
+                            isCurrentDay
+                              ? 'bg-primary text-primary-foreground'
+                              : 'text-foreground'
+                          )}
+                        >
+                          {format(day, 'd')}
+                        </span>
                       </div>
-                      {isCurrentDay && (
-                        <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-primary rounded-full mx-auto mt-0.5 md:mt-1" />
-                      )}
                     </div>
                   </div>
                 );
@@ -245,15 +246,24 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
             </div>
 
             {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
-            <div className="w-full grid grid-cols-8 relative h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">
-              {/* Coluna de horários - altura fixa para consistência com posicionamento de eventos */}
-              <div className="border-r bg-muted/10">
-                {timeSlots.map((time) => (
+            <div className="w-full grid grid-cols-[3rem_repeat(7,minmax(0,1fr))] md:grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] relative h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">
+              {/* Coluna de horários - altura fixa para consistência com posicionamento de eventos.
+                  AI dev note: Rótulo alinhado à direita e deslocado (-translate-y-1/2)
+                  para "sentar" sobre a linha da hora, estilo Google Agenda. */}
+              <div className="border-r border-border/50">
+                {timeSlots.map((time, index) => (
                   <div
                     key={time}
-                    className="h-12 border-b p-1 text-[9px] md:text-[10px] text-muted-foreground font-medium text-center flex items-center justify-center"
+                    className="relative h-12 border-b border-border/50"
                   >
-                    {time}
+                    <span
+                      className={cn(
+                        'absolute right-1.5 text-xs text-muted-foreground tabular-nums',
+                        index === 0 ? 'top-0.5' : 'top-0 -translate-y-1/2'
+                      )}
+                    >
+                      {time}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -273,7 +283,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                       <div
                         key={day.toISOString()}
                         className={cn(
-                          'border-r last:border-r-0 relative',
+                          'border-r border-border/50 last:border-r-0 relative',
                           isCurrentDay && 'bg-primary/5'
                         )}
                         style={{
@@ -289,7 +299,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                             role="button"
                             tabIndex={0}
                             aria-label={`Agendar ${format(day, "EEEE, d 'de' MMMM", { locale: ptBR })} às ${time}`}
-                            className="h-12 border-b hover:bg-muted/20 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                            className="h-12 border-b border-border/50 hover:bg-primary/5 focus-visible:bg-primary/5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                             onClick={() => handleTimeSlotClick(time, day)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' || e.key === ' ') {
