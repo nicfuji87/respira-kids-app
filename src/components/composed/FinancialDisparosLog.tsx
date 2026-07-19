@@ -35,6 +35,7 @@ import {
   TableRow,
 } from '@/components/primitives/table';
 import { useToast } from '@/components/primitives/use-toast';
+import { useNavigate } from 'react-router-dom';
 import { DatePicker } from './DatePicker';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -67,6 +68,7 @@ interface DisparoRow {
   empresa_nome: string | null;
   responsavel_nome: string | null;
   responsavel_telefone: string | number | null;
+  paciente_id: string | null;
   paciente_nome: string | null;
   lote_id: string | null;
   geracao_erro: string | null;
@@ -112,6 +114,7 @@ export const FinancialDisparosLog: React.FC<FinancialDisparosLogProps> = ({
   className,
 }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [rows, setRows] = useState<DisparoRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -135,7 +138,7 @@ export const FinancialDisparosLog: React.FC<FinancialDisparosLogProps> = ({
         endDate
       );
       const campos =
-        'linha_id, origem, pagamento_link_id, token, criado_em, link_status, valor_base, empresa_id, empresa_nome, responsavel_nome, responsavel_telefone, paciente_nome, lote_id, geracao_erro, envio_detalhe, envio_em, fila_erro, disparo_status';
+        'linha_id, origem, pagamento_link_id, token, criado_em, link_status, valor_base, empresa_id, empresa_nome, responsavel_nome, responsavel_telefone, paciente_id, paciente_nome, lote_id, geracao_erro, envio_detalhe, envio_em, fila_erro, disparo_status';
 
       const buildQuery = () => {
         let q = supabase
@@ -502,8 +505,21 @@ export const FinancialDisparosLog: React.FC<FinancialDisparosLogProps> = ({
                         ? String(r.responsavel_telefone)
                         : '—'}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {r.paciente_nome || '—'}
+                    <TableCell>
+                      {r.paciente_id ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/pessoa/${r.paciente_id}`)}
+                          className="text-left text-primary hover:underline"
+                          title="Ver detalhes do paciente"
+                        >
+                          {r.paciente_nome || '—'}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {r.paciente_nome || '—'}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {r.empresa_nome || '—'}
