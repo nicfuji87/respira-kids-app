@@ -1153,6 +1153,27 @@ export async function excluirFatura(
       };
     }
 
+    // AI dev note: se a fatura nasceu de um link de pagamento, cancelar o
+    // pagamento_links órfão. Senão ele fica 'confirmado' apontando para a fatura
+    // excluída e reaparece como "aguardando pagamento" no funil de pré-cobranças
+    // (vw_pre_cobrancas_completa), além de sumir dos detalhes do paciente. As
+    // consultas já foram soltas acima, então o link não tem mais função.
+    const { error: linkOrfaoError } = await supabase
+      .from('pagamento_links')
+      .update({
+        status: 'cancelado',
+        ativo: false,
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq('fatura_id', faturaId)
+      .eq('ativo', true);
+    if (linkOrfaoError) {
+      console.warn(
+        '⚠️ Fatura excluída, mas falha ao cancelar o link de pagamento órfão:',
+        linkOrfaoError
+      );
+    }
+
     console.log('🎉 Fatura excluída com sucesso');
 
     // AI dev note: Dispara webhook de manipulação (cobrança cancelada) para o n8n.
@@ -1398,6 +1419,19 @@ export async function ajustarFaturaManual(
           unlinkError
         );
       }
+
+      // AI dev note: cancelar também o link de pagamento órfão (mesma razão do
+      // excluirFatura) — evita link 'confirmado' apontando para fatura excluída,
+      // que reaparece como "aguardando" no funil de pré-cobranças.
+      await supabase
+        .from('pagamento_links')
+        .update({
+          status: 'cancelado',
+          ativo: false,
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq('fatura_id', faturaId)
+        .eq('ativo', true);
     }
 
     // Dispara webhook de manipulação (ajuste manual) para o n8n
