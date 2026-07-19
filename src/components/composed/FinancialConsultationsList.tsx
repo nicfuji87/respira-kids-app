@@ -55,6 +55,7 @@ import {
   PopoverTrigger,
 } from '@/components/primitives/popover';
 import { DatePicker } from './DatePicker';
+import { FinancialPendenciasAlert } from './FinancialPendenciasAlert';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { generateChargeDescription } from '@/lib/charge-description';
@@ -142,7 +143,10 @@ type PeriodFilter =
   | 'ultimos_90'
   | 'ultimo_ano'
   | 'personalizado'
-  | 'todos';
+  | 'todos'
+  // AI dev note: tudo ANTES do mês corrente — usado pelo banner de pendências para
+  // achar consultas que ficaram para trás (a janela "Mês Anterior" nunca as revisita).
+  | 'nao_cobradas';
 
 type SortOption =
   | 'data_desc'
@@ -400,6 +404,14 @@ export const FinancialConsultationsList: React.FC<
             .toISOString()
             .split('T')[0];
           // Último dia do mês anterior
+          endDateFilter = new Date(today.getFullYear(), today.getMonth(), 0)
+            .toISOString()
+            .split('T')[0];
+          break;
+        case 'nao_cobradas':
+          // AI dev note: sem limite inferior — pega TUDO que é anterior ao mês
+          // corrente (é justamente o histórico que a janela mensal deixou para trás).
+          startDateFilter = '';
           endDateFilter = new Date(today.getFullYear(), today.getMonth(), 0)
             .toISOString()
             .split('T')[0];
@@ -1648,6 +1660,13 @@ export const FinancialConsultationsList: React.FC<
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* AI dev note: rede de segurança — a janela "Mês Anterior" do disparo mensal
+            nunca revisita o que ficou para trás. O banner só aparece se houver
+            pendência e o botão joga o filtro para o histórico não cobrado. */}
+        <FinancialPendenciasAlert
+          onVerNaoCobradas={() => setPeriodFilter('nao_cobradas')}
+        />
+
         {/* Links de pagamento gerados (copiar/abrir manualmente) */}
         {generatedLinks.length > 0 && (
           <Alert className="bg-verde-pipa/10 border-verde-pipa">
@@ -1744,6 +1763,9 @@ export const FinancialConsultationsList: React.FC<
               <SelectContent>
                 <SelectItem value="mes_atual">Mês Atual</SelectItem>
                 <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
+                <SelectItem value="nao_cobradas">
+                  Não cobradas (meses anteriores)
+                </SelectItem>
                 <SelectItem value="ultimos_30">Últimos 30 dias</SelectItem>
                 <SelectItem value="ultimos_60">Últimos 60 dias</SelectItem>
                 <SelectItem value="ultimos_90">Últimos 90 dias</SelectItem>
