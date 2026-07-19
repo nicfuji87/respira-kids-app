@@ -18,6 +18,8 @@ export interface ProfissionalCalendarTemplateProps {
   currentUser: ProfissionalUser;
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
+  // AI dev note: Refresh dos eventos após criar/editar consulta (repassado ao CalendarTemplate)
+  onRefreshNeeded?: () => void;
   initialView?: 'month' | 'week' | 'day' | 'agenda';
   initialDate?: Date;
   className?: string;
@@ -46,6 +48,7 @@ export const ProfissionalCalendarTemplate =
       currentUser,
       events,
       onEventSave,
+      onRefreshNeeded,
       initialView = 'day', // Profissional typically prefers day view
       initialDate = new Date(),
       className,
@@ -258,6 +261,7 @@ export const ProfissionalCalendarTemplate =
             <CalendarTemplate
               events={getFilteredEvents}
               onEventSave={handleEventSave}
+              onRefreshNeeded={onRefreshNeeded}
               initialView={initialView}
               initialDate={initialDate}
               externalCurrentDate={externalCurrentDate}

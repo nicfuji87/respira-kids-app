@@ -2,11 +2,19 @@
 // Combina CalendarTemplate com hooks de dados e integração completa
 
 import React, { useCallback } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { CalendarTemplate } from './CalendarTemplate';
 import { AdminCalendarTemplate } from './AdminCalendarTemplate';
 import { ProfissionalCalendarTemplate } from './ProfissionalCalendarTemplate';
 import { SecretariaCalendarTemplate } from './SecretariaCalendarTemplate';
 import { ResponsiveCalendarTemplate } from './ResponsiveCalendarTemplate';
+import { Skeleton } from '@/components/primitives/skeleton';
+import {
+  Alert,
+  AlertTitle,
+  AlertDescription,
+} from '@/components/primitives/alert';
+import { Button } from '@/components/primitives/button';
 import type { CalendarView, CalendarEvent } from '@/types/calendar';
 import {
   useCalendarData,
@@ -50,6 +58,8 @@ export const CalendarTemplateWithData =
         currentView,
         currentDate,
         events,
+        loading,
+        error,
         setCurrentDate,
         setCurrentView,
         refresh: refreshEvents,
@@ -125,6 +135,28 @@ export const CalendarTemplateWithData =
         );
       }
 
+      // AI dev note: [P0] Skeleton do grid no carregamento inicial (ainda sem
+      // eventos em memória). Em refreshes com dados já na tela, o calendário
+      // continua visível para evitar flicker.
+      if (loading && events.length === 0 && !error) {
+        return (
+          <div className={cn('calendar-with-data w-full space-y-4', className)}>
+            <div className="flex items-center justify-between gap-4">
+              <Skeleton className="h-9 w-56" />
+              <Skeleton className="h-9 w-40" />
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 7 }, (_, i) => (
+                <Skeleton key={`dia-${i}`} className="h-5 w-full" />
+              ))}
+              {Array.from({ length: 35 }, (_, i) => (
+                <Skeleton key={`celula-${i}`} className="h-20 w-full" />
+              ))}
+            </div>
+          </div>
+        );
+      }
+
       // AI dev note: Props comuns para todos os templates
       const commonTemplateProps = {
         events,
@@ -132,6 +164,9 @@ export const CalendarTemplateWithData =
         onEventEdit: handleEventEdit,
         onEventDelete: handleEventDelete,
         onEventClick: handleEventClick,
+        // AI dev note: [P0] Refresh pós-salvar — propagado até CalendarTemplate,
+        // que chama após criar/editar/mudar status de consulta.
+        onRefreshNeeded: refreshEvents,
         onPatientClick,
         onProfessionalClick,
         initialView: currentView,
@@ -148,40 +183,10 @@ export const CalendarTemplateWithData =
         showEventManager: true,
       };
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: CalendarTemplateWithData - COMMON PROPS', {
-          currentDate: currentDate?.toISOString(),
-          currentView: currentView,
-          externalCurrentDate:
-            commonTemplateProps.externalCurrentDate?.toISOString(),
-          externalCurrentView: commonTemplateProps.externalCurrentView,
-          'setCurrentDate existe': !!setCurrentDate,
-          'setCurrentView existe': !!setCurrentView,
-          'onExternalDateChange existe':
-            !!commonTemplateProps.onExternalDateChange,
-          'onExternalViewChange existe':
-            !!commonTemplateProps.onExternalViewChange,
-          userRole: user.pessoa.role,
-        });
-      }
-
       // AI dev note: Mock user data for templates (using user.pessoa directly)
-      const userRole = user.pessoa.role as
-        | 'admin'
-        | 'profissional'
-        | 'secretaria';
-
-      // AI dev note: Debug para verificar o que está vindo do user.pessoa
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 [CalendarTemplateWithData] user.pessoa completo:', {
-          id: user.pessoa.id,
-          nome: user.pessoa.nome,
-          role: user.pessoa.role,
-          pode_atender: user.pessoa.pode_atender,
-          'tipo de pode_atender': typeof user.pessoa.pode_atender,
-          'todas as chaves': Object.keys(user.pessoa),
-        });
-      }
+      // Captura em const para o narrowing valer dentro de renderTemplate()
+      const pessoa = user.pessoa;
+      const userRole = pessoa.role as 'admin' | 'profissional' | 'secretaria';
 
       const mockUserData = {
         id: user.pessoa.id,
@@ -193,120 +198,123 @@ export const CalendarTemplateWithData =
         podeAtender: user.pessoa.pode_atender === true, // AI dev note: Comparação estrita
       };
 
+      // AI dev note: [P0] Banner de erro com botão de retry — antes o `error`
+      // do hook era ignorado e o usuário via apenas um grid vazio sem aviso.
+      const errorBanner = error ? (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Erro ao carregar a agenda</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{error}</span>
+            <Button variant="outline" size="sm" onClick={refreshEvents}>
+              Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null;
+
       // AI dev note: Renderização responsiva baseada no role
-      if (responsive) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            '🚨 DEBUG: CalendarTemplateWithData - USANDO MODO RESPONSIVO',
-            {
-              responsive,
-              userRole,
-              'vai renderizar': 'ResponsiveCalendarTemplate',
-              'pode_atender do banco': user.pessoa.pode_atender,
-              'mockUserData.podeAtender': mockUserData.podeAtender,
-            }
+      // (embrulhada em função para o errorBanner aparecer acima de qualquer template)
+      const renderTemplate = () => {
+        if (responsive) {
+          const userForResponsive =
+            userRole === 'admin'
+              ? {
+                  ...mockUserData,
+                  role: 'admin' as const,
+                  podeAtender: pessoa.pode_atender === true,
+                }
+              : userRole === 'profissional'
+                ? {
+                    ...mockUserData,
+                    role: 'profissional' as const,
+                    specialization: 'Fisioterapeuta',
+                    registrationNumber: '',
+                  }
+                : {
+                    ...mockUserData,
+                    role: 'secretaria' as const,
+                    authorizedProfessionals: permissions.allowedProfessionals,
+                  };
+
+          return (
+            <ResponsiveCalendarTemplate
+              {...commonTemplateProps}
+              currentUser={userForResponsive}
+              availableProfessionals={formData.profissionais.map((p) => ({
+                id: p.id,
+                name: p.nome,
+                specialization: p.especialidade || undefined,
+              }))}
+              canManageAllEvents={permissions.canViewAllEvents}
+            />
           );
         }
-        const userForResponsive =
-          userRole === 'admin'
-            ? {
-                ...mockUserData,
-                role: 'admin' as const,
-                podeAtender: user.pessoa.pode_atender === true,
-              }
-            : userRole === 'profissional'
-              ? {
+
+        // AI dev note: Renderização específica por role (não responsivo)
+        switch (userRole) {
+          case 'admin':
+            return (
+              <AdminCalendarTemplate
+                {...commonTemplateProps}
+                currentUser={{
+                  ...mockUserData,
+                  role: 'admin' as const,
+                  podeAtender: pessoa.pode_atender === true,
+                }}
+                showAllProfessionals={true}
+                showSystemEvents={true}
+              />
+            );
+
+          case 'profissional':
+            return (
+              <ProfissionalCalendarTemplate
+                {...commonTemplateProps}
+                currentUser={{
                   ...mockUserData,
                   role: 'profissional' as const,
                   specialization: 'Fisioterapeuta',
                   registrationNumber: '',
-                }
-              : {
+                }}
+                showOnlyMyEvents={true}
+              />
+            );
+
+          case 'secretaria':
+            return (
+              <SecretariaCalendarTemplate
+                {...commonTemplateProps}
+                currentUser={{
                   ...mockUserData,
                   role: 'secretaria' as const,
                   authorizedProfessionals: permissions.allowedProfessionals,
-                };
-
-        return (
-          <ResponsiveCalendarTemplate
-            {...commonTemplateProps}
-            currentUser={userForResponsive}
-            availableProfessionals={formData.profissionais.map((p) => ({
-              id: p.id,
-              name: p.nome,
-              specialization: p.especialidade || undefined,
-            }))}
-            canManageAllEvents={permissions.canViewAllEvents}
-          />
-        );
-      }
-
-      // AI dev note: Renderização específica por role (não responsivo)
-      switch (userRole) {
-        case 'admin':
-          if (process.env.NODE_ENV === 'development') {
-            console.log(
-              '🔍 DEBUG: CalendarTemplateWithData - PASSANDO PARA AdminCalendarTemplate',
-              {
-                'commonTemplateProps tem externalCurrentDate':
-                  !!commonTemplateProps.externalCurrentDate,
-                'externalCurrentDate valor':
-                  commonTemplateProps.externalCurrentDate?.toISOString(),
-                'todas as props': Object.keys(commonTemplateProps),
-              }
+                }}
+                availableProfessionals={formData.profissionais
+                  .map((p) => ({
+                    id: p.id,
+                    name: p.nome,
+                    specialization: p.especialidade || undefined,
+                  }))
+                  .filter((p) =>
+                    permissions.allowedProfessionals.includes(p.id)
+                  )}
+                showSharedSchedulesTab={true}
+              />
             );
-          }
-          return (
-            <AdminCalendarTemplate
-              {...commonTemplateProps}
-              currentUser={{
-                ...mockUserData,
-                role: 'admin' as const,
-                podeAtender: user.pessoa.pode_atender === true,
-              }}
-              showAllProfessionals={true}
-              showSystemEvents={true}
-            />
-          );
 
-        case 'profissional':
-          return (
-            <ProfissionalCalendarTemplate
-              {...commonTemplateProps}
-              currentUser={{
-                ...mockUserData,
-                role: 'profissional' as const,
-                specialization: 'Fisioterapeuta',
-                registrationNumber: '',
-              }}
-              showOnlyMyEvents={true}
-            />
-          );
+          default:
+            // Fallback para template base
+            return <CalendarTemplate {...commonTemplateProps} />;
+        }
+      };
 
-        case 'secretaria':
-          return (
-            <SecretariaCalendarTemplate
-              {...commonTemplateProps}
-              currentUser={{
-                ...mockUserData,
-                role: 'secretaria' as const,
-                authorizedProfessionals: permissions.allowedProfessionals,
-              }}
-              availableProfessionals={formData.profissionais
-                .map((p) => ({
-                  id: p.id,
-                  name: p.nome,
-                  specialization: p.especialidade || undefined,
-                }))
-                .filter((p) => permissions.allowedProfessionals.includes(p.id))}
-              showSharedSchedulesTab={true}
-            />
-          );
-
-        default:
-          // Fallback para template base
-          return <CalendarTemplate {...commonTemplateProps} />;
-      }
+      return (
+        <>
+          {errorBanner}
+          {renderTemplate()}
+        </>
+      );
     }
   );
 

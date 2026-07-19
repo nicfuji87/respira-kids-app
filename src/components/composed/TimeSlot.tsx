@@ -42,8 +42,12 @@ export const TimeSlot = React.memo<TimeSlotProps>(
               variant="ghost"
               size="sm"
               onClick={handleSlotClick}
+              aria-label={`Adicionar evento às ${time}`}
               className={cn(
+                // AI dev note: Affordance não pode ser hover-only — visível também
+                // com foco de teclado e em telas de toque (pointer coarse)
                 'absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100',
+                'focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100',
                 'transition-opacity border-dashed border-2 border-transparent',
                 'hover:border-primary/20 hover:bg-primary/5',
                 'flex items-center justify-center'
@@ -78,8 +82,10 @@ export const TimeSlot = React.memo<TimeSlotProps>(
               variant="ghost"
               size="sm"
               onClick={handleSlotClick}
+              aria-label={`Adicionar evento às ${time}`}
               className={cn(
                 'absolute inset-x-0 bottom-0 h-6 opacity-0 group-hover:opacity-100',
+                'focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100',
                 'transition-opacity border-dashed border-t-2 border-transparent',
                 'hover:border-primary/20 hover:bg-primary/5',
                 'flex items-center justify-center rounded-none rounded-b-md'

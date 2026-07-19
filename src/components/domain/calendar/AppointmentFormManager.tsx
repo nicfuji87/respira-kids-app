@@ -1,6 +1,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Save, X, AlertTriangle, Calendar } from 'lucide-react';
+import {
+  Save,
+  X,
+  AlertTriangle,
+  Calendar,
+  CalendarPlus,
+  Sparkles,
+} from 'lucide-react';
 
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -123,7 +130,19 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     const [conflictDetails, setConflictDetails] = useState<string>('');
     const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
     const [futureWeekConfirmed, setFutureWeekConfirmed] = useState(false);
-    const [shouldRetry, setShouldRetry] = useState(false);
+    // AI dev note: Retry após confirmação do toast precisa lembrar QUAL fluxo
+    // disparou o save ('salvar' fecha o modal, 'proxima' mantém aberto com +7 dias)
+    const [retryMode, setRetryMode] = useState<'salvar' | 'proxima' | null>(
+      null
+    );
+
+    // AI dev note: Campos pré-preenchidos com base na última consulta do paciente
+    // (query read-only). Guardamos quais foram aplicados para o "Ignorar" reverter.
+    type PrefillField =
+      | 'profissional_id'
+      | 'tipo_servico_id'
+      | 'empresa_fatura';
+    const [prefilledFields, setPrefilledFields] = useState<PrefillField[]>([]);
 
     // AI dev note: Armazenar nome do serviço para validação de valor zero apenas para serviços SOCIAL
     const [selectedServiceName, setSelectedServiceName] = useState<string>('');
@@ -197,6 +216,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setConflictDetails('');
         setPastDateConfirmed(false);
         setFutureWeekConfirmed(false);
+        setPrefilledFields([]);
         // AI dev note: Resetar nome do serviço ao abrir o formulário
         setSelectedServiceName('');
         // AI dev note: Zerar a duração também — senão fica grudada de um serviço
@@ -386,184 +406,343 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       ]
     );
 
-    // Validar e salvar agendamento
-    const handleSave = useCallback(async () => {
-      // Validar formulário inline para evitar dependência desnecessária
-      const newErrors: FormErrors = {};
+    // AI dev note: Ao selecionar o paciente, buscar a última consulta dele
+    // (read-only) e pré-preencher profissional, tipo de serviço e empresa de
+    // faturamento — APENAS nos campos ainda vazios. Usuário pode alterar/ignorar.
+    const handlePatientChange = useCallback(
+      async (patientId: string) => {
+        updateField('paciente_id', patientId);
+        setPrefilledFields([]);
 
-      if (!formData.data_hora)
-        newErrors.data_hora = 'Data e hora são obrigatórios';
-      if (!formData.paciente_id)
-        newErrors.paciente_id = 'Paciente é obrigatório';
-      if (!formData.profissional_id)
-        newErrors.profissional_id = 'Profissional é obrigatório';
-      if (!formData.tipo_servico_id)
-        newErrors.tipo_servico_id = 'Tipo de serviço é obrigatório';
-      if (!formData.status_consulta_id)
-        newErrors.status_consulta_id = 'Status da consulta é obrigatório';
-      if (!formData.status_pagamento_id)
-        newErrors.status_pagamento_id = 'Status do pagamento é obrigatório';
+        if (!patientId) return;
 
-      // AI dev note: Validação de valor - permitir zero APENAS para serviços que contenham "SOCIAL" no nome
-      console.log('🔍 DEBUG Validação:', {
-        valor: formData.valor_servico,
-        serviceName: selectedServiceName,
-        includes: selectedServiceName.toUpperCase().includes('SOCIAL'),
+        try {
+          const { data: ultimo, error } = await supabase
+            .from('agendamentos')
+            .select(
+              'profissional_id, tipo_servico_id, empresa_fatura, tipo_servico:tipo_servicos (id, nome, valor, duracao_minutos)'
+            )
+            .eq('paciente_id', patientId)
+            .eq('ativo', true)
+            .order('data_hora', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (error || !ultimo) return;
+
+          const tipoServico = (
+            Array.isArray(ultimo.tipo_servico)
+              ? ultimo.tipo_servico[0]
+              : ultimo.tipo_servico
+          ) as {
+            id: string;
+            nome: string;
+            valor: number;
+            duracao_minutos: number;
+          } | null;
+
+          const applied: PrefillField[] = [];
+          const patch: Partial<AppointmentFormData> = {};
+
+          if (!formData.profissional_id && ultimo.profissional_id) {
+            patch.profissional_id = ultimo.profissional_id;
+            applied.push('profissional_id');
+          }
+          if (!formData.tipo_servico_id && ultimo.tipo_servico_id) {
+            patch.tipo_servico_id = ultimo.tipo_servico_id;
+            applied.push('tipo_servico_id');
+            if (tipoServico && !formData.valor_servico) {
+              patch.valor_servico = tipoServico.valor;
+            }
+          }
+          if (!formData.empresa_fatura && ultimo.empresa_fatura) {
+            patch.empresa_fatura = ultimo.empresa_fatura;
+            applied.push('empresa_fatura');
+          }
+
+          if (applied.length === 0) return;
+
+          setFormData((prev) => ({ ...prev, ...patch }));
+          setPrefilledFields(applied);
+
+          // Manter validações coerentes com o serviço pré-preenchido
+          if (patch.tipo_servico_id && tipoServico) {
+            setSelectedServiceName(tipoServico.nome || '');
+            setSelectedServiceDuration(tipoServico.duracao_minutos || 0);
+          }
+
+          // Revalidar disponibilidade com o profissional/duração pré-preenchidos
+          const profissionalFinal =
+            patch.profissional_id || formData.profissional_id;
+          const duracaoFinal =
+            patch.tipo_servico_id && tipoServico
+              ? tipoServico.duracao_minutos || 0
+              : selectedServiceDuration;
+          if (formData.data_hora && profissionalFinal) {
+            checkScheduleConflicts(
+              formData.data_hora,
+              profissionalFinal,
+              duracaoFinal
+            );
+          }
+        } catch (err) {
+          // Pré-preenchimento é conveniência: falha não pode travar o formulário
+          console.error('Erro ao buscar última consulta do paciente:', err);
+        }
+      },
+      [
+        updateField,
+        formData.profissional_id,
+        formData.tipo_servico_id,
+        formData.empresa_fatura,
+        formData.valor_servico,
+        formData.data_hora,
+        selectedServiceDuration,
+        checkScheduleConflicts,
+      ]
+    );
+
+    // AI dev note: "Ignorar" — reverte somente os campos que o pré-preenchimento aplicou
+    const handleUndoPrefill = useCallback(() => {
+      setFormData((prev) => {
+        const next = { ...prev };
+        if (prefilledFields.includes('profissional_id'))
+          next.profissional_id = '';
+        if (prefilledFields.includes('tipo_servico_id')) {
+          next.tipo_servico_id = '';
+          next.valor_servico = 0;
+        }
+        if (prefilledFields.includes('empresa_fatura'))
+          next.empresa_fatura = '';
+        return next;
       });
-
-      if (
-        formData.valor_servico === undefined ||
-        formData.valor_servico === null
-      ) {
-        newErrors.valor_servico = 'Valor é obrigatório';
-      } else if (formData.valor_servico < 0) {
-        newErrors.valor_servico = 'Valor não pode ser negativo';
-      } else if (formData.valor_servico === 0) {
-        // Permitir valor zero SOMENTE se o nome do serviço contém "SOCIAL"
-        const isSocialService = selectedServiceName
-          .toUpperCase()
-          .includes('SOCIAL');
-        if (!isSocialService) {
-          newErrors.valor_servico =
-            'Valor zero só é permitido para atendimentos SOCIAL';
-        }
+      if (prefilledFields.includes('tipo_servico_id')) {
+        setSelectedServiceName('');
+        setSelectedServiceDuration(0);
       }
+      setHasConflict(false);
+      setConflictDetails('');
+      setPrefilledFields([]);
+    }, [prefilledFields]);
 
-      if (!formData.empresa_fatura)
-        newErrors.empresa_fatura = 'Empresa para faturamento é obrigatória';
+    // Validar e salvar agendamento.
+    // AI dev note: scheduleNext=true ("Criar e agendar próxima") salva e mantém o
+    // modal aberto com os mesmos dados e a data avançada em +7 dias (mesmo horário).
+    const handleSave = useCallback(
+      async (scheduleNext: boolean = false) => {
+        // Validar formulário inline para evitar dependência desnecessária
+        const newErrors: FormErrors = {};
 
-      // Validar data no passado ou futuro distante
-      if (formData.data_hora) {
-        const appointmentDate = parseSupabaseDatetime(formData.data_hora);
-        const now = new Date();
-        const oneWeekFromNow = new Date();
-        oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+        if (!formData.data_hora)
+          newErrors.data_hora = 'Data e hora são obrigatórios';
+        if (!formData.paciente_id)
+          newErrors.paciente_id = 'Paciente é obrigatório';
+        if (!formData.profissional_id)
+          newErrors.profissional_id = 'Profissional é obrigatório';
+        if (!formData.tipo_servico_id)
+          newErrors.tipo_servico_id = 'Tipo de serviço é obrigatório';
+        if (!formData.status_consulta_id)
+          newErrors.status_consulta_id = 'Status da consulta é obrigatório';
+        if (!formData.status_pagamento_id)
+          newErrors.status_pagamento_id = 'Status do pagamento é obrigatório';
 
-        // Verificar se é data passada
-        if (appointmentDate < now && !pastDateConfirmed) {
-          const { dismiss } = toast({
-            title: 'Data anterior à data atual',
-            description:
-              'Você está agendando para uma data anterior à data atual. Deseja confirmar este agendamento?',
-            variant: 'default',
-            duration: 10000, // Toast visível por 10 segundos
-            action: (
-              <ToastAction
-                altText="Confirmar agendamento"
-                onClick={async () => {
-                  dismiss(); // Dismiss imediatamente
-                  setPastDateConfirmed(true);
-                  setShouldRetry(true);
-                }}
-              >
-                Confirmar
-              </ToastAction>
-            ),
-          });
+        // AI dev note: Validação de valor - permitir zero APENAS para serviços que contenham "SOCIAL" no nome
+        console.log('🔍 DEBUG Validação:', {
+          valor: formData.valor_servico,
+          serviceName: selectedServiceName,
+          includes: selectedServiceName.toUpperCase().includes('SOCIAL'),
+        });
+
+        if (
+          formData.valor_servico === undefined ||
+          formData.valor_servico === null
+        ) {
+          newErrors.valor_servico = 'Valor é obrigatório';
+        } else if (formData.valor_servico < 0) {
+          newErrors.valor_servico = 'Valor não pode ser negativo';
+        } else if (formData.valor_servico === 0) {
+          // Permitir valor zero SOMENTE se o nome do serviço contém "SOCIAL"
+          const isSocialService = selectedServiceName
+            .toUpperCase()
+            .includes('SOCIAL');
+          if (!isSocialService) {
+            newErrors.valor_servico =
+              'Valor zero só é permitido para atendimentos SOCIAL';
+          }
+        }
+
+        if (!formData.empresa_fatura)
+          newErrors.empresa_fatura = 'Empresa para faturamento é obrigatória';
+
+        // Validar data no passado ou futuro distante
+        if (formData.data_hora) {
+          const appointmentDate = parseSupabaseDatetime(formData.data_hora);
+          const now = new Date();
+          const oneWeekFromNow = new Date();
+          oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+
+          // Verificar se é data passada
+          if (appointmentDate < now && !pastDateConfirmed) {
+            const { dismiss } = toast({
+              title: 'Data anterior à data atual',
+              description:
+                'Você está agendando para uma data anterior à data atual. Deseja confirmar este agendamento?',
+              variant: 'default',
+              duration: 10000, // Toast visível por 10 segundos
+              action: (
+                <ToastAction
+                  altText="Confirmar agendamento"
+                  onClick={async () => {
+                    dismiss(); // Dismiss imediatamente
+                    setPastDateConfirmed(true);
+                    setRetryMode(scheduleNext ? 'proxima' : 'salvar');
+                  }}
+                >
+                  Confirmar
+                </ToastAction>
+              ),
+            });
+            return false;
+          }
+
+          // Verificar se é mais de 1 semana no futuro
+          if (appointmentDate > oneWeekFromNow && !futureWeekConfirmed) {
+            const { dismiss } = toast({
+              title: 'Agendamento para mais de 1 semana',
+              description:
+                'Você está agendando para mais de 1 semana após a data atual. Deseja confirmar este agendamento?',
+              variant: 'default',
+              duration: 10000, // Toast visível por 10 segundos
+              action: (
+                <ToastAction
+                  altText="Confirmar agendamento"
+                  onClick={async () => {
+                    dismiss(); // Dismiss imediatamente
+                    setFutureWeekConfirmed(true);
+                    setRetryMode(scheduleNext ? 'proxima' : 'salvar');
+                  }}
+                >
+                  Confirmar
+                </ToastAction>
+              ),
+            });
+            return false;
+          }
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+          setErrors(newErrors);
           return false;
         }
 
-        // Verificar se é mais de 1 semana no futuro
-        if (appointmentDate > oneWeekFromNow && !futureWeekConfirmed) {
-          const { dismiss } = toast({
-            title: 'Agendamento para mais de 1 semana',
-            description:
-              'Você está agendando para mais de 1 semana após a data atual. Deseja confirmar este agendamento?',
-            variant: 'default',
-            duration: 10000, // Toast visível por 10 segundos
-            action: (
-              <ToastAction
-                altText="Confirmar agendamento"
-                onClick={async () => {
-                  dismiss(); // Dismiss imediatamente
-                  setFutureWeekConfirmed(true);
-                  setShouldRetry(true);
-                }}
-              >
-                Confirmar
-              </ToastAction>
-            ),
-          });
-          return false;
+        setErrors({});
+
+        if (!user?.pessoa?.id) {
+          setErrors({ general: 'Usuário não encontrado' });
+          return;
         }
-      }
 
-      if (Object.keys(newErrors).length > 0) {
-        setErrors(newErrors);
-        return false;
-      }
+        setIsLoading(true);
 
-      setErrors({});
+        try {
+          const appointmentData: CreateAgendamento = {
+            data_hora: formData.data_hora,
+            paciente_id: formData.paciente_id,
+            profissional_id: formData.profissional_id,
+            tipo_servico_id: formData.tipo_servico_id,
+            local_id: formData.local_id || undefined,
+            status_consulta_id: formData.status_consulta_id,
+            status_pagamento_id: formData.status_pagamento_id,
+            valor_servico: formData.valor_servico,
+            observacao: formData.observacao || undefined,
+            agendado_por: user.pessoa.id,
+            empresa_fatura: formData.empresa_fatura,
+          };
 
-      if (!user?.pessoa?.id) {
-        setErrors({ general: 'Usuário não encontrado' });
-        return;
-      }
+          const newAppointment = await createAgendamento(appointmentData);
 
-      setIsLoading(true);
+          onSave?.(newAppointment.id);
+          // Reset estados de confirmação
+          setPastDateConfirmed(false);
+          setFutureWeekConfirmed(false);
+          setPrefilledFields([]);
 
-      try {
-        const appointmentData: CreateAgendamento = {
-          data_hora: formData.data_hora,
-          paciente_id: formData.paciente_id,
-          profissional_id: formData.profissional_id,
-          tipo_servico_id: formData.tipo_servico_id,
-          local_id: formData.local_id || undefined,
-          status_consulta_id: formData.status_consulta_id,
-          status_pagamento_id: formData.status_pagamento_id,
-          valor_servico: formData.valor_servico,
-          observacao: formData.observacao || undefined,
-          agendado_por: user.pessoa.id,
-          empresa_fatura: formData.empresa_fatura,
-        };
+          if (scheduleNext) {
+            // AI dev note: Mantém o modal aberto com o MESMO paciente/profissional/
+            // serviço/empresa e avança a data em +7 dias (mesmo horário). data_hora é
+            // hora de parede (naïve) — manipular só a parte da data, NUNCA toISOString().
+            const [datePart, timePart = '09:00'] =
+              formData.data_hora.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const nextDate = new Date(year, month - 1, day + 7);
+            const nextDataHora = `${format(nextDate, 'yyyy-MM-dd')}T${timePart}`;
 
-        const newAppointment = await createAgendamento(appointmentData);
+            setFormData((prev) => ({
+              ...prev,
+              data_hora: nextDataHora,
+              observacao: '',
+            }));
 
-        toast({
-          title: 'Agendamento criado',
-          description: 'O agendamento foi criado com sucesso.',
-        });
+            toast({
+              title: 'Agendamento criado',
+              description: `Próxima consulta pré-preenchida para ${format(nextDate, 'dd/MM/yyyy')} às ${timePart}. Confira e confirme.`,
+            });
 
-        onSave?.(newAppointment.id);
-        // Reset estados de confirmação ao fechar
-        setPastDateConfirmed(false);
-        setFutureWeekConfirmed(false);
-        onClose();
-      } catch (error: unknown) {
-        console.error('Erro ao criar agendamento:', error);
+            // Revalidar disponibilidade na nova data
+            if (formData.profissional_id) {
+              checkScheduleConflicts(
+                nextDataHora,
+                formData.profissional_id,
+                selectedServiceDuration
+              );
+            }
+          } else {
+            toast({
+              title: 'Agendamento criado',
+              description: 'O agendamento foi criado com sucesso.',
+            });
+            onClose();
+          }
+        } catch (error: unknown) {
+          console.error('Erro ao criar agendamento:', error);
 
-        const errorMessage = mapAgendamentoError(error);
+          const errorMessage = mapAgendamentoError(error);
 
-        setErrors({
-          general: errorMessage,
-        });
+          setErrors({
+            general: errorMessage,
+          });
 
-        toast({
-          title: 'Erro',
-          description: errorMessage,
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    }, [
-      formData,
-      toast,
-      pastDateConfirmed,
-      futureWeekConfirmed,
-      selectedServiceName,
-      user,
-      onSave,
-      onClose,
-    ]);
+          toast({
+            title: 'Erro',
+            description: errorMessage,
+            variant: 'destructive',
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      },
+      [
+        formData,
+        toast,
+        pastDateConfirmed,
+        futureWeekConfirmed,
+        selectedServiceName,
+        selectedServiceDuration,
+        checkScheduleConflicts,
+        user,
+        onSave,
+        onClose,
+      ]
+    );
 
-    // AI dev note: Retry handleSave após confirmação do toast
+    // AI dev note: Retry handleSave após confirmação do toast, preservando o fluxo
     useEffect(() => {
-      if (shouldRetry) {
-        setShouldRetry(false);
-        handleSave();
+      if (retryMode) {
+        const mode = retryMode;
+        setRetryMode(null);
+        handleSave(mode === 'proxima');
       }
-    }, [shouldRetry, handleSave]);
+    }, [retryMode, handleSave]);
 
     // Helper para verificar se a data selecionada é passada
     const isDateInPast = useCallback(() => {
@@ -625,6 +804,16 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
               </Alert>
             )}
 
+            {/* AI dev note: Aviso informativo NÃO bloqueante (hasConflict=false mas
+                há detalhe, ex.: horário presente em agenda pública). Antes esse
+                aviso nunca aparecia porque só o Alert de conflito era renderizado. */}
+            {!hasConflict && conflictDetails && (
+              <Alert className="border-amber-500/50 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-600">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{conflictDetails}</AlertDescription>
+              </Alert>
+            )}
+
             {/* Data e Hora */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -680,10 +869,40 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
               <Label>Paciente *</Label>
               <PatientSelect
                 value={formData.paciente_id}
-                onValueChange={(value) => updateField('paciente_id', value)}
+                onValueChange={handlePatientChange}
                 error={errors.paciente_id}
                 required
               />
+              {/* AI dev note: Indicação sutil do pré-preenchimento, com opção de ignorar */}
+              {prefilledFields.length > 0 && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                  <Sparkles
+                    className="h-3 w-3 text-azul-respira flex-shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {prefilledFields
+                      .map(
+                        (f) =>
+                          ({
+                            profissional_id: 'Profissional',
+                            tipo_servico_id: 'Tipo de serviço',
+                            empresa_fatura: 'Empresa de faturamento',
+                          })[f]
+                      )
+                      .join(', ')}{' '}
+                    preenchido(s) com base na última consulta — você pode
+                    alterar.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleUndoPrefill}
+                    className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                  >
+                    Ignorar
+                  </button>
+                </p>
+              )}
             </div>
 
             {/* Profissional */}
@@ -821,13 +1040,23 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-wrap gap-2 sm:gap-2">
             <Button variant="outline" onClick={onClose} disabled={isLoading}>
               <X className="h-4 w-4 mr-2" />
               Cancelar
             </Button>
+            {/* AI dev note: Fluxo recorrência semanal — salva e mantém o modal
+                aberto com os mesmos dados e a data +7 dias, pronto para confirmar */}
             <Button
-              onClick={handleSave}
+              variant="secondary"
+              onClick={() => handleSave(true)}
+              disabled={isLoading || hasConflict}
+            >
+              <CalendarPlus className="h-4 w-4 mr-2" />
+              {isLoading ? 'Salvando...' : 'Criar e agendar próxima'}
+            </Button>
+            <Button
+              onClick={() => handleSave(false)}
               disabled={isLoading || hasConflict}
               className="min-w-24"
             >

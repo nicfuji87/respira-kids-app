@@ -51,13 +51,31 @@ export interface CalendarHeaderProps {
   onBlockAgenda?: () => void;
 }
 
-// Mapeamento de cores para o tema do projeto
+// AI dev note: Mapeamento de cores para a paleta Respira Kids (design system).
+// Fundos claros (tint dos tokens) + texto roxo-titulo (#47184E), que mantém
+// contraste >= 4.5:1 sobre toda a paleta clara RK. Nunca usar cores Tailwind default.
 export const eventColorMap: Record<EventColor, string> = {
-  blue: 'bg-blue-100 text-blue-900 border-blue-200',
-  green: 'bg-green-100 text-green-900 border-green-200',
-  orange: 'bg-orange-100 text-orange-900 border-orange-200',
-  red: 'bg-red-100 text-red-900 border-red-200',
-  purple: 'bg-purple-100 text-purple-900 border-purple-200',
-  pink: 'bg-pink-100 text-pink-900 border-pink-200',
-  gray: 'bg-gray-100 text-gray-900 border-gray-200',
+  blue: 'bg-azul-respira/25 text-roxo-titulo border-azul-respira',
+  green: 'bg-verde-pipa/30 text-roxo-titulo border-verde-pipa',
+  orange: 'bg-amarelo-pipa/25 text-roxo-titulo border-amarelo-pipa',
+  red: 'bg-vermelho-kids/30 text-roxo-titulo border-vermelho-kids',
+  purple: 'bg-roxo-titulo/15 text-roxo-titulo border-roxo-titulo/40',
+  pink: 'bg-vermelho-kids/15 text-roxo-titulo border-vermelho-kids/40',
+  gray: 'bg-cinza-secundario/15 text-roxo-titulo border-cinza-secundario/40',
 };
+
+// AI dev note: Versão hex da paleta RK para uso em style inline (dots, fundos
+// suavizados com alpha). Fonte única — substitui os colorToHex locais que usavam
+// azul/rosa/roxo Tailwind default (#3B82F6 etc.), fora do design system.
+export const eventColorHexMap: Record<EventColor, string> = {
+  blue: '#7DCFC7', // azul-respira (teal primário)
+  green: '#C3DFA0', // verde-pipa
+  orange: '#FED920', // amarelo-pipa
+  red: '#F4A28B', // vermelho-kids (salmão da marca)
+  purple: '#47184E', // roxo-titulo
+  pink: '#F9C7B9', // vermelho-kids clareado
+  gray: '#737373', // cinza-secundario
+};
+
+// Fallback dentro do design system (antes era #3B82F6, azul Tailwind default)
+export const EVENT_FALLBACK_HEX = '#7DCFC7';

@@ -38,6 +38,8 @@ export interface SecretariaCalendarTemplateProps {
   // Events data
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
+  // AI dev note: Refresh dos eventos após criar/editar consulta (repassado ao CalendarTemplate)
+  onRefreshNeeded?: () => void;
 
   // View configuration
   initialView?: CalendarView;
@@ -79,6 +81,7 @@ export const SecretariaCalendarTemplate =
       currentUser,
       events,
       onEventSave,
+      onRefreshNeeded,
       initialView = 'week', // Secretaria typically prefers week view
       initialDate = new Date(),
       availableProfessionals = [],
@@ -310,6 +313,7 @@ export const SecretariaCalendarTemplate =
             <CalendarTemplate
               events={getFilteredEvents}
               onEventSave={handleEventSave}
+              onRefreshNeeded={onRefreshNeeded}
               initialView={initialView}
               initialDate={initialDate}
               externalCurrentDate={externalCurrentDate}

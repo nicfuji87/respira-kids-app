@@ -48,6 +48,10 @@ export interface CalendarTemplateProps {
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
 
+  // AI dev note: Recarrega os eventos no hook useCalendarData (propagado desde
+  // CalendarTemplateWithData). Chamado após criar/editar/mudar status de consulta.
+  onRefreshNeeded?: () => void;
+
   // View configuration
   initialView?: CalendarView;
   initialDate?: Date;
@@ -96,6 +100,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
   ({
     events,
     // onEventSave, // AI dev note: Temporariamente comentado para evitar double update
+    onRefreshNeeded,
 
     initialView = 'month',
     initialDate = new Date(), // AI dev note: Sempre abre na data atual
@@ -125,16 +130,6 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     userId,
     showSharedSchedulesTab = false,
   }) => {
-    // AI dev note: Debug log para verificar shared schedules props
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 [CalendarTemplate] Shared Schedules Props:', {
-        profissionalId,
-        userId,
-        showSharedSchedulesTab,
-        'mostrará tabs?': showSharedSchedulesTab && profissionalId && userId,
-      });
-    }
-
     // AI dev note: These permissions are received but will be used in future implementations
     void canDeleteEvents;
     void canViewAllEvents;
@@ -186,16 +181,8 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           newDate = currentDate;
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 DEBUG: CalendarTemplate.handlePreviousClick', {
-          'usando estado externo': !!onExternalDateChange,
-          oldDate: currentDate.toISOString(),
-          newDate: newDate.toISOString(),
-          view: currentView,
-        });
-      }
       setCurrentDate(newDate);
-    }, [currentView, currentDate, setCurrentDate, onExternalDateChange]);
+    }, [currentView, currentDate, setCurrentDate]);
 
     const handleNextClick = useCallback(() => {
       let newDate: Date;
@@ -216,56 +203,25 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           newDate = currentDate;
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 DEBUG: CalendarTemplate.handleNextClick', {
-          'usando estado externo': !!onExternalDateChange,
-          oldDate: currentDate.toISOString(),
-          newDate: newDate.toISOString(),
-          view: currentView,
-        });
-      }
       setCurrentDate(newDate);
-    }, [currentView, currentDate, setCurrentDate, onExternalDateChange]);
+    }, [currentView, currentDate, setCurrentDate]);
 
     const handleTodayClick = useCallback(() => {
-      const today = new Date();
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 DEBUG: CalendarTemplate.handleTodayClick', {
-          'usando estado externo': !!onExternalDateChange,
-          today: today.toISOString(),
-        });
-      }
-      setCurrentDate(today);
-    }, [setCurrentDate, onExternalDateChange]);
+      setCurrentDate(new Date());
+    }, [setCurrentDate]);
 
     const handleDateChange = useCallback(
       (date: Date) => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔄 DEBUG: CalendarTemplate.handleDateChange', {
-            'usando estado externo': !!onExternalDateChange,
-            oldDate: currentDate.toISOString(),
-            newDate: date.toISOString(),
-            oldMonth: currentDate.getMonth(),
-            newMonth: date.getMonth(),
-          });
-        }
         setCurrentDate(date);
       },
-      [setCurrentDate, currentDate, onExternalDateChange]
+      [setCurrentDate]
     );
 
     const handleViewChange = useCallback(
       (view: CalendarView) => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔄 DEBUG: CalendarTemplate.handleViewChange', {
-            'usando estado externo': !!onExternalViewChange,
-            oldView: currentView,
-            newView: view,
-          });
-        }
         setCurrentView(view);
       },
-      [setCurrentView, currentView, onExternalViewChange]
+      [setCurrentView]
     );
 
     // Event handlers
@@ -335,38 +291,16 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       setNewEventTime(undefined);
     }, []);
 
-    const handleAppointmentFormSave = useCallback((appointmentId: string) => {
-      console.log('Novo agendamento criado:', appointmentId);
-      // Callback para refresh ou outras ações após criação
-      // O refresh será gerenciado pelo componente pai
-    }, []);
+    const handleAppointmentFormSave = useCallback(() => {
+      // AI dev note: Recarrega os eventos do calendário para o novo
+      // agendamento aparecer sem precisar de F5 (bug P0 corrigido).
+      onRefreshNeeded?.();
+    }, [onRefreshNeeded]);
 
     // Filter events based on current view and date
+    // AI dev note: Mesmo filtro em dev e produção — o que se testa é o que roda.
     const getFilteredEvents = useCallback(() => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: CalendarTemplate.getFilteredEvents - ENTRADA', {
-          'events.length': events?.length || 0,
-          currentView: currentView,
-          currentDate: currentDate.toISOString(),
-          'currentDate.getMonth()': currentDate.getMonth(),
-          'currentDate.getFullYear()': currentDate.getFullYear(),
-          'primeiros 3 eventos':
-            events?.slice(0, 3).map((e) => ({
-              id: e.id,
-              title: e.title,
-              start: e.start.toISOString(),
-              'start.getMonth()': new Date(e.start).getMonth(),
-              'start.getFullYear()': new Date(e.start).getFullYear(),
-            })) || [],
-        });
-      }
-
       if (!events || events.length === 0) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            '🔍 DEBUG: CalendarTemplate.getFilteredEvents - SEM EVENTOS'
-          );
-        }
         return [];
       }
 
@@ -374,87 +308,53 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
 
       switch (currentView) {
         case 'month':
-          // AI dev note: SIMPLIFICAÇÃO TEMPORÁRIA - useCalendarData já busca range correto
-          // Remover filtro duplo que pode estar causando perda de eventos
-          if (process.env.NODE_ENV === 'development') {
-            console.log(
-              '🔧 DEBUG: FILTRO SIMPLIFICADO - useCalendarData já filtrou por range, passando eventos direto'
-            );
-            filteredEvents = events; // Passar todos os eventos que chegaram do useCalendarData
-          } else {
-            // Manter filtro original em produção até confirmar que funciona
-            filteredEvents = events.filter((event) => {
-              const eventDate = new Date(event.start);
-              const sameMonth = eventDate.getMonth() === currentDate.getMonth();
-              const sameYear =
-                eventDate.getFullYear() === currentDate.getFullYear();
-              return sameMonth && sameYear;
-            });
-          }
+          filteredEvents = events.filter((event) => {
+            const eventDate = new Date(event.start);
+            const sameMonth = eventDate.getMonth() === currentDate.getMonth();
+            const sameYear =
+              eventDate.getFullYear() === currentDate.getFullYear();
+            return sameMonth && sameYear;
+          });
           break;
         case 'week': {
-          if (process.env.NODE_ENV === 'development') {
-            filteredEvents = events; // Simplificado para debug
-          } else {
-            const weekStart = startOfWeek(currentDate, {
-              weekStartsOn: 1,
-              locale: ptBR,
-            });
-            const weekEnd = endOfWeek(currentDate, {
-              weekStartsOn: 1,
-              locale: ptBR,
-            });
-            filteredEvents = events.filter((event) => {
-              const eventDate = new Date(event.start);
-              return eventDate >= weekStart && eventDate <= weekEnd;
-            });
-          }
+          const weekStart = startOfWeek(currentDate, {
+            weekStartsOn: 1,
+            locale: ptBR,
+          });
+          const weekEnd = endOfWeek(currentDate, {
+            weekStartsOn: 1,
+            locale: ptBR,
+          });
+          filteredEvents = events.filter((event) => {
+            const eventDate = new Date(event.start);
+            return eventDate >= weekStart && eventDate <= weekEnd;
+          });
           break;
         }
         case 'day':
-          if (process.env.NODE_ENV === 'development') {
-            filteredEvents = events; // Simplificado para debug
-          } else {
-            filteredEvents = events.filter((event) => {
-              const eventDate = new Date(event.start);
-              return eventDate.toDateString() === currentDate.toDateString();
-            });
-          }
+          filteredEvents = events.filter((event) => {
+            const eventDate = new Date(event.start);
+            return eventDate.toDateString() === currentDate.toDateString();
+          });
           break;
         case 'agenda': {
-          if (process.env.NODE_ENV === 'development') {
-            filteredEvents = events; // Simplificado para debug
-          } else {
-            // AI dev note: Mostrar o dia inteiro a partir do INÍCIO do dia atual
-            // (startOfDay), não do horário atual. Usar currentDate cru escondia as
-            // consultas já passadas de hoje (ex.: manhã sumia após o meio-dia).
-            const inicioDoDia = startOfDay(currentDate);
-            filteredEvents = events
-              .filter((event) => {
-                const eventDate = new Date(event.start);
-                return eventDate >= inicioDoDia;
-              })
-              .sort(
-                (a, b) =>
-                  new Date(a.start).getTime() - new Date(b.start).getTime()
-              );
-          }
+          // AI dev note: Mostrar o dia inteiro a partir do INÍCIO do dia atual
+          // (startOfDay), não do horário atual. Usar currentDate cru escondia as
+          // consultas já passadas de hoje (ex.: manhã sumia após o meio-dia).
+          const inicioDoDia = startOfDay(currentDate);
+          filteredEvents = events
+            .filter((event) => {
+              const eventDate = new Date(event.start);
+              return eventDate >= inicioDoDia;
+            })
+            .sort(
+              (a, b) =>
+                new Date(a.start).getTime() - new Date(b.start).getTime()
+            );
           break;
         }
         default:
           filteredEvents = events;
-      }
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: CalendarTemplate.getFilteredEvents - SAÍDA', {
-          'filteredEvents.length': filteredEvents.length,
-          'eventos filtrados': filteredEvents.slice(0, 3).map((e) => ({
-            id: e.id,
-            title: e.title,
-            start: e.start.toISOString(),
-          })),
-          view: currentView,
-        });
       }
 
       return filteredEvents;
@@ -589,15 +489,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
             onSave={async (data: AppointmentUpdateData) => {
               // AI dev note: Bypass específico para AppointmentDetailsManager - usar updateAgendamentoDetails diretamente
               try {
-                console.log(
-                  '[DEBUG] CalendarTemplate - AppointmentDetailsManager onSave:',
-                  data
-                );
-                const updatedAppointment = await updateAgendamentoDetails(data);
-                console.log(
-                  '[DEBUG] CalendarTemplate - Agendamento atualizado:',
-                  updatedAppointment
-                );
+                await updateAgendamentoDetails(data);
 
                 // Show success toast
                 toast({
@@ -607,8 +499,10 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                 });
 
                 // AI dev note: Não trigger handleEventSave para evitar double update
-                // O updateAgendamentoDetails já salvou tudo necessário
-                // Apenas fechar o modal e refresh será feito pelo parent
+                // O updateAgendamentoDetails já salvou tudo necessário.
+                // Recarregar os eventos para refletir edição/mudança de status
+                // no calendário sem F5 (bug P0 corrigido).
+                onRefreshNeeded?.();
                 handleEventManagerClose();
               } catch (error) {
                 console.error(

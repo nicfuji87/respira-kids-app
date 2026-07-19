@@ -70,8 +70,9 @@ export const CurrentTimeIndicator = React.memo<CurrentTimeIndicatorProps>(
             {/* Círculo na lateral esquerda */}
             <div className="absolute -left-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full shadow-sm" />
 
-            {/* Label com horário atual na lateral direita */}
-            <div className="absolute -right-16 top-1/2 transform -translate-y-1/2 px-2 py-1 bg-red-500 text-white text-xs font-medium rounded shadow-sm">
+            {/* AI dev note: label DENTRO do grid (right-0) — com -right-16 o
+                rótulo vazava do container e era cortado pelo overflow */}
+            <div className="absolute right-0 top-1/2 transform -translate-y-1/2 px-1.5 py-0.5 bg-red-500 text-white text-xs font-medium rounded shadow-sm">
               {currentTimeLabel}
             </div>
           </div>

@@ -21,6 +21,8 @@ export interface AdminCalendarTemplateProps {
   currentUser: AdminUser;
   events: CalendarEvent[];
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
+  // AI dev note: Refresh dos eventos após criar/editar consulta (repassado ao CalendarTemplate)
+  onRefreshNeeded?: () => void;
   initialView?: 'month' | 'week' | 'day' | 'agenda';
   initialDate?: Date;
   className?: string;
@@ -49,6 +51,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     currentUser,
     events,
     onEventSave,
+    onRefreshNeeded,
     initialView = 'month',
     initialDate = new Date(),
     className,
@@ -66,16 +69,6 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     onPatientClick,
     onProfessionalClick,
   }) => {
-    // AI dev note: Debug log para verificar se podeAtender está chegando
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 [AdminCalendarTemplate] currentUser:', {
-        id: currentUser.id,
-        name: currentUser.name,
-        role: currentUser.role,
-        podeAtender: currentUser.podeAtender,
-        'showSharedSchedulesTab será': currentUser.podeAtender === true,
-      });
-    }
     // AI dev note: Estados para filtros do admin - suporta multi-seleção
     const [selectedProfessional, setSelectedProfessional] =
       useState<string>('all');
@@ -193,21 +186,6 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
         );
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DEBUG: AdminCalendarTemplate - EVENTOS FILTRADOS', {
-          'eventos antes': events.length,
-          'eventos depois': filteredEvents.length,
-          filtros: {
-            selectedProfessional,
-            selectedPatient,
-            selectedTipoServico,
-            selectedStatusConsulta,
-            selectedStatusPagamento,
-            selectedEmpresa,
-          },
-        });
-      }
-
       return filteredEvents;
     }, [
       events,
@@ -312,6 +290,7 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
             <CalendarTemplate
               events={getFilteredEvents}
               onEventSave={handleEventSave}
+              onRefreshNeeded={onRefreshNeeded}
               initialView={initialView}
               initialDate={initialDate}
               externalCurrentDate={externalCurrentDate}

@@ -52,15 +52,6 @@ export const AgendaView = React.memo<AgendaViewProps>(
     // Filtrar apenas dias que têm eventos
     const daysWithEvents = eventsByDay.filter((day) => day.events.length > 0);
 
-    // AI dev note: Debug - verificar se className h-full foi passada
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🎨 AgendaView - Renderização:', {
-        className,
-        'tem h-full': className?.includes('h-full'),
-        daysWithEvents: daysWithEvents.length,
-      });
-    }
-
     if (daysWithEvents.length === 0) {
       return (
         <Card className={cn('w-full', className)}>
@@ -89,10 +80,11 @@ export const AgendaView = React.memo<AgendaViewProps>(
                 });
                 const relativeDays = differenceInDays(day.date, today);
 
+                // AI dev note: sem caso "Ontem" — a view agenda só lista
+                // eventos a partir de hoje, dia anterior nunca aparece
                 let relativeLabel = '';
                 if (relativeDays === 0) relativeLabel = 'Hoje';
                 else if (relativeDays === 1) relativeLabel = 'Amanhã';
-                else if (relativeDays === -1) relativeLabel = 'Ontem';
 
                 return (
                   <div

@@ -13,6 +13,21 @@ import { cn } from '@/lib/utils';
 import { EventCard } from './EventCard';
 import { EventListModal } from '../domain/calendar';
 import type { CalendarEvent } from '@/types/calendar';
+import { eventColorHexMap, EVENT_FALLBACK_HEX } from '@/types/calendar';
+
+// AI dev note: Acessibilidade — classes de foco visível para elementos clicáveis
+const focusRingClasses =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset';
+
+// Helper para ativar clique via teclado (Enter/Espaço)
+const onEnterOrSpace =
+  (action: () => void) => (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      action();
+    }
+  };
 
 // AI dev note: CalendarGrid combina Card e EventCard
 // Estrutura básica do grid do calendário para diferentes vistas - CSS responsivo otimizado
@@ -155,11 +170,16 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
                     return (
                       <div
                         key={hour}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Agendar ${format(day, "EEEE, d 'de' MMMM", { locale: ptBR })} às ${hour.toString().padStart(2, '0')}:00`}
                         className={cn(
                           'h-16 border-b p-1 hover:bg-muted/20 cursor-pointer',
-                          'transition-colors group relative'
+                          'transition-colors group relative',
+                          focusRingClasses
                         )}
                         onClick={() => handleDateClick(day)}
+                        onKeyDown={onEnterOrSpace(() => handleDateClick(day))}
                       >
                         {slotEvents.map((event) => (
                           <EventCard
@@ -219,142 +239,186 @@ export const CalendarGrid = React.memo<CalendarGridProps>(
               ))}
             </div>
 
-            {/* Grid do calendário - altura adaptativa à tela */}
-            <div className="grid grid-cols-7 h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] lg:h-[calc(100vh-8rem)] overflow-hidden">
-              {calendarDays.map((day) => {
-                const dayEvents = getEventsForDate(day);
-                const isCurrentMonth =
-                  day.getMonth() === currentDate.getMonth();
-                const isToday = isSameDay(day, new Date());
+            {/* Grid do calendário - altura adaptativa à tela.
+                AI dev note: Linhas minmax(70px, 1fr) + wrapper com scroll — a 6ª
+                semana não é mais cortada pelo overflow-hidden com altura fixa. */}
+            <div className="h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] lg:h-[calc(100vh-8rem)] overflow-y-auto">
+              <div
+                className="grid grid-cols-7 min-h-full"
+                style={{ gridAutoRows: 'minmax(70px, 1fr)' }}
+              >
+                {calendarDays.map((day) => {
+                  const dayEvents = getEventsForDate(day);
+                  const isCurrentMonth =
+                    day.getMonth() === currentDate.getMonth();
+                  const isToday = isSameDay(day, new Date());
 
-                // Cores para os eventos
-                const colorToHex: Record<string, string> = {
-                  blue: '#3B82F6',
-                  green: '#22C55E',
-                  orange: '#F97316',
-                  red: '#EF4444',
-                  purple: '#8B5CF6',
-                  pink: '#EC4899',
-                  gray: '#6B7280',
-                };
+                  // Quantos eventos mostrar no mobile (estilo Google Calendar)
+                  const mobileMaxEvents = 3;
+                  const desktopMaxEvents = 2;
 
-                // Quantos eventos mostrar no mobile (estilo Google Calendar)
-                const mobileMaxEvents = 3;
-                const desktopMaxEvents = 2;
-
-                return (
-                  <div
-                    key={day.toISOString()}
-                    className={cn(
-                      'border-r border-b last:border-r-0 p-0.5 md:p-1.5 lg:p-2 cursor-pointer',
-                      'hover:bg-muted/50 transition-colors group',
-                      'flex flex-col',
-                      'min-h-[70px] md:min-h-[80px] lg:min-h-[100px]',
-                      {
-                        'bg-muted/20': !isCurrentMonth,
-                        'bg-primary/10': isToday,
-                      }
-                    )}
-                    onClick={() => handleDateClick(day)}
-                  >
-                    {/* Número do dia */}
+                  return (
                     <div
+                      key={day.toISOString()}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${format(day, "EEEE, d 'de' MMMM", { locale: ptBR })}${
+                        dayEvents.length > 0
+                          ? `, ${dayEvents.length} agendamento${dayEvents.length > 1 ? 's' : ''}`
+                          : ', sem agendamentos'
+                      }`}
                       className={cn(
-                        'text-[11px] md:text-xs lg:text-sm font-medium flex-shrink-0 text-center mb-0.5',
+                        'border-r border-b last:border-r-0 p-0.5 md:p-1.5 lg:p-2 cursor-pointer',
+                        'hover:bg-muted/50 transition-colors group',
+                        'flex flex-col',
+                        'min-h-[70px] md:min-h-[80px] lg:min-h-[100px]',
+                        focusRingClasses,
                         {
-                          'text-muted-foreground': !isCurrentMonth,
-                          'text-primary font-bold': isToday,
+                          'bg-muted/20': !isCurrentMonth,
+                          'bg-primary/10': isToday,
                         }
                       )}
+                      onClick={() => handleDateClick(day)}
+                      onKeyDown={onEnterOrSpace(() => handleDateClick(day))}
                     >
-                      {isToday ? (
-                        <span className="inline-flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary text-primary-foreground text-[10px] md:text-xs">
-                          {format(day, 'd')}
-                        </span>
-                      ) : (
-                        format(day, 'd')
-                      )}
-                    </div>
+                      {/* Número do dia */}
+                      <div
+                        className={cn(
+                          'text-[11px] md:text-xs lg:text-sm font-medium flex-shrink-0 text-center mb-0.5',
+                          {
+                            'text-muted-foreground': !isCurrentMonth,
+                            'text-primary font-bold': isToday,
+                          }
+                        )}
+                      >
+                        {isToday ? (
+                          <span className="inline-flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary text-primary-foreground text-[10px] md:text-xs">
+                            {format(day, 'd')}
+                          </span>
+                        ) : (
+                          format(day, 'd')
+                        )}
+                      </div>
 
-                    {/* Eventos do dia - estilo Google Calendar */}
-                    <div className="flex-1 flex flex-col gap-px overflow-hidden">
-                      {/* Mobile: barras coloridas com texto truncado */}
-                      <div className="md:hidden flex flex-col gap-px">
-                        {dayEvents.slice(0, mobileMaxEvents).map((event) => {
-                          const corEventoHex = event.color
-                            ? colorToHex[event.color] || '#3B82F6'
-                            : '#3B82F6';
-                          const pacienteNome =
-                            (event.metadata?.pacienteNome as string) ||
-                            event.title.split(' - ').pop() ||
-                            event.title;
-                          // Cor do status de pagamento
-                          const corPagamentoHex =
-                            (event.metadata?.statusPagamentoCor as string) ||
-                            '#6B7280';
+                      {/* Eventos do dia - estilo Google Calendar */}
+                      <div className="flex-1 flex flex-col gap-px overflow-hidden">
+                        {/* Mobile: barras coloridas com texto truncado */}
+                        <div className="md:hidden flex flex-col gap-px">
+                          {dayEvents.slice(0, mobileMaxEvents).map((event) => {
+                            const corEventoHex = event.color
+                              ? eventColorHexMap[event.color] ||
+                                EVENT_FALLBACK_HEX
+                              : EVENT_FALLBACK_HEX;
+                            const pacienteNome =
+                              (event.metadata?.pacienteNome as string) ||
+                              event.title.split(' - ').pop() ||
+                              event.title;
+                            // Cor do status de pagamento
+                            const corPagamentoHex =
+                              (event.metadata?.statusPagamentoCor as string) ||
+                              '#737373';
+                            const statusPagamento =
+                              (event.metadata?.statusPagamento as string) ||
+                              'Pagamento não definido';
 
-                          return (
+                            return (
+                              <div
+                                key={event.id}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Consulta de ${pacienteNome} às ${format(event.start, 'HH:mm', { locale: ptBR })}, pagamento ${statusPagamento}`}
+                                // AI dev note: DS — texto roxo-titulo sobre fundo
+                                // suavizado (cor + alpha), não branco sobre hex cheio
+                                className={cn(
+                                  'flex items-center gap-1 px-1 py-px rounded-sm text-[10px] font-medium text-roxo-titulo leading-tight cursor-pointer hover:opacity-80',
+                                  focusRingClasses
+                                )}
+                                style={{
+                                  backgroundColor: `${corEventoHex}33`,
+                                  borderLeft: `3px solid ${corEventoHex}`,
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEventClick(event);
+                                }}
+                                onKeyDown={onEnterOrSpace(() =>
+                                  handleEventClick(event)
+                                )}
+                                title={`${event.title} - ${statusPagamento}`}
+                              >
+                                {/* Bolinha do status de pagamento */}
+                                <div
+                                  className="w-2 h-2 rounded-full flex-shrink-0 border border-roxo-titulo/20"
+                                  style={{ backgroundColor: corPagamentoHex }}
+                                />
+                                <span className="sr-only">
+                                  Pagamento: {statusPagamento}
+                                </span>
+                                <span className="truncate">{pacienteNome}</span>
+                              </div>
+                            );
+                          })}
+                          {dayEvents.length > mobileMaxEvents && (
                             <div
-                              key={event.id}
-                              className="flex items-center gap-1 px-1 py-px rounded-sm text-[9px] font-medium text-white leading-tight cursor-pointer hover:opacity-80"
-                              style={{ backgroundColor: corEventoHex }}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Ver todos os ${dayEvents.length} agendamentos do dia`}
+                              className={cn(
+                                'text-[10px] text-muted-foreground cursor-pointer hover:text-primary hover:underline text-center font-medium py-0.5',
+                                focusRingClasses
+                              )}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleEventClick(event);
+                                handleShowMoreEvents(day, dayEvents);
                               }}
-                              title={`${event.title} - ${event.metadata?.statusPagamento || 'Pagamento não definido'}`}
+                              onKeyDown={onEnterOrSpace(() =>
+                                handleShowMoreEvents(day, dayEvents)
+                              )}
+                              title={`Ver todos os ${dayEvents.length} agendamentos`}
                             >
-                              {/* Bolinha do status de pagamento */}
-                              <div
-                                className="w-2 h-2 rounded-full flex-shrink-0 border border-white/50"
-                                style={{ backgroundColor: corPagamentoHex }}
-                              />
-                              <span className="truncate">{pacienteNome}</span>
+                              +{dayEvents.length - mobileMaxEvents} mais
                             </div>
-                          );
-                        })}
-                        {dayEvents.length > mobileMaxEvents && (
-                          <div
-                            className="text-[9px] text-muted-foreground cursor-pointer hover:text-primary hover:underline text-center font-medium py-0.5"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleShowMoreEvents(day, dayEvents);
-                            }}
-                            title={`Ver todos os ${dayEvents.length} agendamentos`}
-                          >
-                            +{dayEvents.length - mobileMaxEvents} mais
-                          </div>
-                        )}
-                      </div>
+                          )}
+                        </div>
 
-                      {/* Desktop: mostrar EventCards */}
-                      <div className="hidden md:flex md:flex-col gap-0.5">
-                        {dayEvents.slice(0, desktopMaxEvents).map((event) => (
-                          <EventCard
-                            key={event.id}
-                            event={event}
-                            variant="month"
-                            onClick={handleEventClick}
-                            className="text-xs"
-                          />
-                        ))}
-                        {dayEvents.length > desktopMaxEvents && (
-                          <div
-                            className="text-[10px] lg:text-xs text-muted-foreground cursor-pointer hover:text-primary hover:underline transition-colors truncate"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleShowMoreEvents(day, dayEvents);
-                            }}
-                            title="Clique para ver todos os eventos do dia"
-                          >
-                            +{dayEvents.length - desktopMaxEvents} eventos
-                          </div>
-                        )}
+                        {/* Desktop: mostrar EventCards */}
+                        <div className="hidden md:flex md:flex-col gap-0.5">
+                          {dayEvents.slice(0, desktopMaxEvents).map((event) => (
+                            <EventCard
+                              key={event.id}
+                              event={event}
+                              variant="month"
+                              onClick={handleEventClick}
+                              className="text-xs"
+                            />
+                          ))}
+                          {dayEvents.length > desktopMaxEvents && (
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Ver todos os ${dayEvents.length} agendamentos do dia`}
+                              className={cn(
+                                'text-[11px] lg:text-xs text-muted-foreground cursor-pointer hover:text-primary hover:underline transition-colors truncate',
+                                focusRingClasses
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleShowMoreEvents(day, dayEvents);
+                              }}
+                              onKeyDown={onEnterOrSpace(() =>
+                                handleShowMoreEvents(day, dayEvents)
+                              )}
+                              title="Clique para ver todos os eventos do dia"
+                            >
+                              +{dayEvents.length - desktopMaxEvents} eventos
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </CardContent>
         </Card>

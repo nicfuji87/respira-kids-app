@@ -280,12 +280,23 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                           minHeight: `${timeSlots.length * 48}px`, // 48px no mobile (h-12)
                         }}
                       >
-                        {/* Slots de horário clicáveis - altura fixa para consistência */}
+                        {/* Slots de horário clicáveis - altura fixa para consistência.
+                            AI dev note: Acessibilidade — slots operáveis por teclado
+                            (role, tabIndex, Enter/Espaço) com foco visível. */}
                         {timeSlots.map((time) => (
                           <div
                             key={time}
-                            className="h-12 border-b hover:bg-muted/20 cursor-pointer transition-colors"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Agendar ${format(day, "EEEE, d 'de' MMMM", { locale: ptBR })} às ${time}`}
+                            className="h-12 border-b hover:bg-muted/20 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                             onClick={() => handleTimeSlotClick(time, day)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleTimeSlotClick(time, day);
+                              }
+                            }}
                           />
                         ))}
 

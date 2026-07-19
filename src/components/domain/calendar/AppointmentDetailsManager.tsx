@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   MapPin,
   Edit,
@@ -33,6 +33,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/primitives/dialog';
+import { Alert, AlertDescription } from '@/components/primitives/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/primitives/alert-dialog';
 import {
   DatePicker,
   StatusPaymentDisplay,
@@ -50,6 +61,7 @@ import type {
 import { RichTextEditor } from '@/components/primitives/rich-text-editor';
 import { cn, formatDateBR, formatDateTimeBR } from '@/lib/utils';
 import {
+  checkHorarioDisponivel,
   fetchConsultaStatus,
   fetchTiposServico,
   fetchRelatoriosEvolucao,
@@ -280,6 +292,18 @@ export const AppointmentDetailsManager =
       // Estados para confirmação de datas
       const [pastDateConfirmed, setPastDateConfirmed] = useState(false);
       const [futureWeekConfirmed, setFutureWeekConfirmed] = useState(false);
+
+      // AI dev note: [P1] Confirmação ao mudar status PARA cancelado/faltou.
+      // pendingCriticalStatus abre o AlertDialog; o ref evita reabrir o diálogo
+      // nas re-entradas do handleSaveAll (ex.: retry após confirmar data passada).
+      const [pendingCriticalStatus, setPendingCriticalStatus] = useState<
+        'cancelado' | 'faltou' | null
+      >(null);
+      const statusCriticoConfirmadoRef = useRef(false);
+
+      // AI dev note: [P1] Conflito de horário detectado ao salvar (consulta
+      // movida para horário ocupado/bloqueado) — mesma checagem da criação.
+      const [conflitoAgenda, setConflitoAgenda] = useState('');
 
       // AI dev note: Regra de negócio - bloquear edição de data/hora quando:
       // 1. Status da consulta = 'finalizado' OU 'cancelado'
@@ -605,6 +629,9 @@ export const AppointmentDetailsManager =
           setIsEdited(false);
           setPastDateConfirmed(false);
           setFutureWeekConfirmed(false);
+          setPendingCriticalStatus(null);
+          setConflitoAgenda('');
+          statusCriticoConfirmadoRef.current = false;
         }
       }, [appointment, isOpen]);
 
@@ -637,6 +664,22 @@ export const AppointmentDetailsManager =
       const handleInputChange = (field: keyof FormData, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
         setIsEdited(true);
+
+        // AI dev note: Trocou o status de novo -> exigir nova confirmação de
+        // cancelado/faltou no próximo salvar.
+        if (field === 'statusConsultaId') {
+          statusCriticoConfirmadoRef.current = false;
+        }
+
+        // AI dev note: Mudou data/hora/profissional -> o aviso de conflito
+        // anterior não vale mais (será re-checado no salvar).
+        if (
+          field === 'dataHora' ||
+          field === 'timeHora' ||
+          field === 'profissionalId'
+        ) {
+          setConflitoAgenda('');
+        }
       };
 
       // AI dev note: Ao trocar o tipo de serviço na edição, o valor deve
@@ -1608,6 +1651,22 @@ export const AppointmentDetailsManager =
       const handleSaveAll = async () => {
         if (!appointment || !user) return;
 
+        // AI dev note: [P1] Mudar o status PARA cancelado/faltou exige
+        // confirmação explícita (cancelado bloqueia a edição depois — erro caro).
+        const novoStatus = consultaStatusOptions.find(
+          (s) => s.id === formData.statusConsultaId
+        );
+        const codigoNovoStatus = novoStatus?.codigo?.toLowerCase() || '';
+        const mudandoParaCritico =
+          formData.statusConsultaId !== appointment.status_consulta_id &&
+          (codigoNovoStatus === 'cancelado' || codigoNovoStatus === 'faltou');
+
+        if (mudandoParaCritico && !statusCriticoConfirmadoRef.current) {
+          setPendingCriticalStatus(codigoNovoStatus as 'cancelado' | 'faltou');
+          return;
+        }
+
+        setConflitoAgenda('');
         setIsSavingEvolucao(true);
 
         try {
@@ -1677,6 +1736,50 @@ export const AppointmentDetailsManager =
                 ),
               });
               return;
+            }
+          }
+
+          // AI dev note: [P1] Re-checar disponibilidade ao MOVER a consulta
+          // (data/hora ou profissional mudou). Mesma fonte da criação
+          // (fn_horario_disponivel via checkHorarioDisponivel), ignorando o
+          // próprio agendamento para não conflitar consigo mesmo.
+          const profissionalAlvo =
+            (userRole === 'admin' && formData.profissionalId) ||
+            appointment.profissional_id;
+          const profissionalMudou =
+            profissionalAlvo !== appointment.profissional_id;
+
+          if (dateTimeChanged || profissionalMudou) {
+            const duracaoMinutos =
+              tipoServicoOptions.find((t) => t.id === formData.tipoServicoId)
+                ?.duracao_minutos || 0;
+
+            // AI dev note: data_hora é "hora de parede" (naïve). Ancorar a
+            // janela como UTC-de-parede (Date.UTC) — NUNCA Date local +
+            // .toISOString(), que aplica o offset do navegador e gera falso
+            // conflito (mesmo tratamento do AppointmentFormManager).
+            if (duracaoMinutos > 0) {
+              const [ano, mes, dia] = formData.dataHora.split('-').map(Number);
+              const [hora, minuto] = formData.timeHora.split(':').map(Number);
+              const inicioMs = Date.UTC(ano, mes - 1, dia, hora, minuto, 0);
+              const inicioIso = new Date(inicioMs).toISOString();
+              const fimIso = new Date(
+                inicioMs + duracaoMinutos * 60 * 1000
+              ).toISOString();
+
+              const disponivel = await checkHorarioDisponivel(
+                profissionalAlvo,
+                inicioIso,
+                fimIso,
+                appointment.id
+              );
+
+              if (!disponivel) {
+                setConflitoAgenda(
+                  'Este horário não está disponível para o profissional (já há consulta nesse período ou um bloqueio de agenda).'
+                );
+                return;
+              }
             }
           }
 
@@ -2405,6 +2508,15 @@ export const AppointmentDetailsManager =
                 </div>
               </ScrollArea>
 
+              {/* AI dev note: [P1] Conflito de horário detectado no salvar —
+                  fica fora do ScrollArea para estar sempre visível */}
+              {conflitoAgenda && (
+                <Alert variant="destructive" className="mx-4 mt-3 w-auto">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{conflitoAgenda}</AlertDescription>
+                </Alert>
+              )}
+
               {/* Footer fixo com botão Salvar - SEMPRE VISÍVEL */}
               <div className="border-t p-4 flex justify-between gap-2 bg-background">
                 <Button
@@ -2434,6 +2546,41 @@ export const AppointmentDetailsManager =
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* AI dev note: [P1] Confirmação ao mudar status para cancelado/faltou */}
+          <AlertDialog
+            open={pendingCriticalStatus !== null}
+            onOpenChange={(open) => {
+              if (!open) setPendingCriticalStatus(null);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {pendingCriticalStatus === 'cancelado'
+                    ? 'Cancelar esta consulta?'
+                    : 'Marcar falta nesta consulta?'}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {pendingCriticalStatus === 'cancelado'
+                    ? 'Ela ficará bloqueada para edição.'
+                    : 'Confirme apenas se o paciente realmente não compareceu a esta consulta.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Voltar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    statusCriticoConfirmadoRef.current = true;
+                    setPendingCriticalStatus(null);
+                    handleSaveAll();
+                  }}
+                >
+                  Confirmar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* Modal de Evolução Estruturada */}
           <EvolutionFormModal

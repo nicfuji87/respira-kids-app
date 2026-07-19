@@ -1,7 +1,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MapPin, Clock, Users } from 'lucide-react';
+import { MapPin, Clock, Users, Check, AlertCircle } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/primitives/card';
 import { Badge } from '@/components/primitives/badge';
@@ -9,7 +9,21 @@ import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent, EventColor } from '@/types/calendar';
 
-import { eventColorMap } from '@/types/calendar';
+import {
+  eventColorMap,
+  eventColorHexMap,
+  EVENT_FALLBACK_HEX,
+} from '@/types/calendar';
+
+// AI dev note: Canal não-cromático para status de pagamento (nunca status só
+// por cor): Check = pago, AlertCircle = atrasado/vencido, Clock = pendente.
+const getPagamentoIcon = (status: string) => {
+  const s = status.toLowerCase();
+  if (s.includes('atras') || s.includes('vencid')) return AlertCircle;
+  if (s.includes('não pago') || s.includes('nao pago')) return Clock;
+  if (s.includes('pago') || s.includes('recebido')) return Check;
+  return Clock;
+};
 
 // AI dev note: EventCard combina Card e Badge primitives
 // Componente reutilizável para exibir eventos em diferentes vistas do calendário
@@ -44,6 +58,33 @@ export const EventCard = React.memo<EventCardProps>(
       onClick?.(event);
     };
 
+    // AI dev note: Acessibilidade — elementos clicáveis viram botões de verdade
+    // (role/tabIndex/Enter/Espaço). Usado em todas as variantes clicáveis.
+    const keyboardProps = {
+      role: 'button' as const,
+      tabIndex: 0,
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick?.(event);
+        }
+      },
+    };
+
+    const focusRingClasses =
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1';
+
+    const buildAriaLabel = (pacienteNome: string) => {
+      const statusConsulta = (event.metadata?.statusConsulta as string) || '';
+      const statusPagamento = (event.metadata?.statusPagamento as string) || '';
+      return `Consulta de ${pacienteNome} às ${format(event.start, 'HH:mm', {
+        locale: ptBR,
+      })}${statusConsulta ? `, status ${statusConsulta}` : ''}${
+        statusPagamento ? `, pagamento ${statusPagamento}` : ''
+      }`;
+    };
+
     const getColorClasses = (color: EventColor = 'blue') => {
       return eventColorMap[color];
     };
@@ -71,10 +112,15 @@ export const EventCard = React.memo<EventCardProps>(
             'cursor-pointer truncate text-xs font-medium border',
             getColorClasses(event.color),
             'hover:opacity-80 transition-opacity',
+            focusRingClasses,
             className
           )}
           onClick={(e) => handleClick(e)}
           title={event.title}
+          aria-label={buildAriaLabel(
+            (event.metadata?.pacienteNome as string) || event.title
+          )}
+          {...keyboardProps}
         >
           {showTime && !event.allDay && (
             <span className="mr-1">{formatTime(event.start)}</span>
@@ -98,36 +144,31 @@ export const EventCard = React.memo<EventCardProps>(
       const statusConsulta = (event.metadata?.statusConsulta as string) || '';
       const isCancelado = statusConsulta.toLowerCase() === 'cancelado';
 
-      // Mapa de cores para hex
-      const colorToHex: Record<string, string> = {
-        blue: '#3B82F6',
-        green: '#22C55E',
-        orange: '#F97316',
-        red: '#EF4444',
-        purple: '#8B5CF6',
-        pink: '#EC4899',
-        gray: '#6B7280',
-      };
-
-      // Cor do tipo de serviço (evento)
+      // Cor do tipo de serviço (evento) — paleta RK centralizada
       const corEventoHex = event.color
-        ? colorToHex[event.color] || '#3B82F6'
-        : '#3B82F6';
+        ? eventColorHexMap[event.color] || EVENT_FALLBACK_HEX
+        : EVENT_FALLBACK_HEX;
 
       // Cor do status de pagamento vinda do metadata
       const corPagamentoHex =
-        (event.metadata?.statusPagamentoCor as string) || '#6B7280';
+        (event.metadata?.statusPagamentoCor as string) || '#737373';
+      const statusPagamento =
+        (event.metadata?.statusPagamento as string) || 'Não definido';
+      const PagamentoIcon = getPagamentoIcon(statusPagamento);
 
       return (
         <div
           className={cn(
             'flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity py-0.5 px-1 rounded',
+            focusRingClasses,
             // AI dev note: Aplicar background cinza translúcido para cancelados
             isCancelado && 'bg-gray-200/60',
             className
           )}
           onClick={(e) => handleClick(e)}
           title={`${event.title} - ${event.metadata?.statusPagamento || 'Status não definido'}`}
+          aria-label={buildAriaLabel(pacienteNome)}
+          {...keyboardProps}
         >
           {/* Bolinha do tipo de serviço (evento) */}
           <div
@@ -140,13 +181,20 @@ export const EventCard = React.memo<EventCardProps>(
             title={`Tipo: ${event.metadata?.statusConsulta || 'Não definido'}`}
           />
 
-          {/* Bolinha do status de pagamento - Ocultar se cancelado */}
+          {/* Status de pagamento: ícone (canal não-cromático) + cor - Ocultar se cancelado */}
           {!isCancelado && (
-            <div
-              className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white shadow-sm"
-              style={{ backgroundColor: corPagamentoHex }}
-              title={`Pagamento: ${event.metadata?.statusPagamento || 'Não definido'}`}
-            />
+            <span
+              className="flex-shrink-0 inline-flex items-center justify-center"
+              title={`Pagamento: ${statusPagamento}`}
+            >
+              <PagamentoIcon
+                className="h-3 w-3"
+                strokeWidth={3}
+                style={{ color: corPagamentoHex }}
+                aria-hidden="true"
+              />
+              <span className="sr-only">Pagamento: {statusPagamento}</span>
+            </span>
           )}
 
           {/* Horário */}
@@ -195,25 +243,15 @@ export const EventCard = React.memo<EventCardProps>(
 
       const isCancelado = statusConsulta.toLowerCase() === 'cancelado';
 
-      // Mapa de cores para hex
-      const colorToHex: Record<string, string> = {
-        blue: '#3B82F6',
-        green: '#22C55E',
-        orange: '#F97316',
-        red: '#EF4444',
-        purple: '#8B5CF6',
-        pink: '#EC4899',
-        gray: '#6B7280',
-      };
-
       const corEventoHex = isCancelado
         ? '#9CA3AF'
         : event.color
-          ? colorToHex[event.color] || '#3B82F6'
-          : '#3B82F6';
+          ? eventColorHexMap[event.color] || EVENT_FALLBACK_HEX
+          : EVENT_FALLBACK_HEX;
 
       const corPagamentoHex =
-        (event.metadata?.statusPagamentoCor as string) || '#6B7280';
+        (event.metadata?.statusPagamentoCor as string) || '#737373';
+      const PagamentoIcon = getPagamentoIcon(statusPagamento);
 
       // Tooltip com todas as informações para quando clicar/hover
       const tooltipContent = `${pacienteNome}\n${tipoServicoNome}\n${formatTime(event.start)} - ${formatTime(event.end)}\nStatus: ${statusConsulta}\nPagamento: ${statusPagamento}\nProfissional: ${profissionalNome}\nLocal: ${event.location}`;
@@ -222,35 +260,46 @@ export const EventCard = React.memo<EventCardProps>(
         <div
           className={cn(
             'w-full h-full rounded-sm cursor-pointer hover:opacity-90 transition-opacity overflow-hidden',
-            'text-white border border-white/10',
+            // AI dev note: Regra do DS — texto âncora roxo-titulo (#47184E) sobre
+            // fundo suavizado (cor do tipo + alpha), nunca branco 10px sobre hex cheio.
+            'text-roxo-titulo',
+            focusRingClasses,
             isCancelado && 'opacity-70',
             className
           )}
-          style={{ backgroundColor: corEventoHex }}
+          style={{
+            backgroundColor: `${corEventoHex}33`,
+            borderLeft: `3px solid ${corEventoHex}`,
+          }}
           onClick={(e) => handleClick(e)}
           title={tooltipContent}
+          aria-label={buildAriaLabel(pacienteNome)}
+          {...keyboardProps}
         >
           {/* Conteúdo simplificado: paciente + profissional */}
           <div className="h-full flex flex-col justify-start p-1 overflow-hidden">
-            {/* Nome do paciente com bolinha de status pagamento */}
+            {/* Nome do paciente com ícone de status pagamento */}
             <div className="flex items-start gap-1 min-w-0">
               {!isCancelado && (
-                <div
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5"
-                  style={{ backgroundColor: corPagamentoHex }}
-                />
+                <span
+                  className="flex-shrink-0 mt-0.5 inline-flex"
+                  title={`Pagamento: ${statusPagamento}`}
+                >
+                  <PagamentoIcon
+                    className="h-2.5 w-2.5"
+                    strokeWidth={3}
+                    style={{ color: corPagamentoHex }}
+                    aria-hidden="true"
+                  />
+                  <span className="sr-only">Pagamento: {statusPagamento}</span>
+                </span>
               )}
               <div
                 className={cn(
-                  'font-medium text-[10px] leading-tight break-words',
+                  // AI dev note: 11px mínimo + truncate para caber no bloco de 30min (~24px)
+                  'font-medium text-[11px] leading-tight truncate min-w-0 flex-1',
                   isCancelado && 'line-through opacity-75'
                 )}
-                style={{
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }}
               >
                 {pacienteNome}
               </div>
@@ -260,7 +309,7 @@ export const EventCard = React.memo<EventCardProps>(
             {profissionalNome && (
               <div
                 className={cn(
-                  'text-[8px] leading-tight opacity-80 truncate mt-0.5',
+                  'text-[11px] leading-tight opacity-80 truncate mt-0.5',
                   isCancelado && 'opacity-50'
                 )}
               >
@@ -280,13 +329,13 @@ export const EventCard = React.memo<EventCardProps>(
       const statusConsulta = (event.metadata?.statusConsulta as string) || '';
       const statusPagamento = (event.metadata?.statusPagamento as string) || '';
       const statusConsultaCor =
-        (event.metadata?.statusConsultaCor as string) || '#3B82F6';
+        (event.metadata?.statusConsultaCor as string) || EVENT_FALLBACK_HEX;
       const statusPagamentoCor =
-        (event.metadata?.statusPagamentoCor as string) || '#3B82F6';
+        (event.metadata?.statusPagamentoCor as string) || EVENT_FALLBACK_HEX;
       const possuiEvolucao =
         (event.metadata?.possuiEvolucao as string) || 'não';
       const tipoServicoCor =
-        (event.metadata?.tipoServicoCor as string) || '#3B82F6';
+        (event.metadata?.tipoServicoCor as string) || EVENT_FALLBACK_HEX;
 
       // AI dev note: Detectar se agendamento está cancelado
       const isCancelado = statusConsulta.toLowerCase() === 'cancelado';
@@ -310,18 +359,21 @@ export const EventCard = React.memo<EventCardProps>(
         <Card
           className={cn(
             'cursor-pointer border-l-4 hover:shadow-md transition-shadow p-4',
+            focusRingClasses,
             // AI dev note: Background cinza claro para cancelados
             isCancelado && 'bg-gray-100/80',
             className
           )}
           onClick={(e) => handleClick(e)}
+          aria-label={buildAriaLabel(pacienteNome)}
+          {...keyboardProps}
           style={{
             // AI dev note: Borda cinza para cancelados, cor do serviço para demais
             borderLeftColor: isCancelado
               ? '#9CA3AF'
               : isValidHexColor(tipoServicoCor)
                 ? tipoServicoCor
-                : '#3B82F6',
+                : EVENT_FALLBACK_HEX,
           }}
         >
           <div className="space-y-3">
@@ -383,7 +435,7 @@ export const EventCard = React.memo<EventCardProps>(
                 style={{
                   backgroundColor: isValidHexColor(statusConsultaCor)
                     ? statusConsultaCor
-                    : '#3B82F6',
+                    : EVENT_FALLBACK_HEX,
                   color: '#FFFFFF',
                   border: 'none',
                 }}
@@ -397,7 +449,7 @@ export const EventCard = React.memo<EventCardProps>(
                 style={{
                   backgroundColor: isValidHexColor(statusPagamentoCor)
                     ? statusPagamentoCor
-                    : '#3B82F6',
+                    : EVENT_FALLBACK_HEX,
                   color: '#FFFFFF',
                   border: 'none',
                 }}
@@ -445,11 +497,11 @@ export const EventCard = React.memo<EventCardProps>(
       const responsavelLegalNome =
         (event.metadata?.responsavelLegalNome as string) || '';
       const statusConsultaCor =
-        (event.metadata?.statusConsultaCor as string) || '#3B82F6';
+        (event.metadata?.statusConsultaCor as string) || EVENT_FALLBACK_HEX;
       const statusPagamentoCor =
-        (event.metadata?.statusPagamentoCor as string) || '#3B82F6';
+        (event.metadata?.statusPagamentoCor as string) || EVENT_FALLBACK_HEX;
       const tipoServicoCor =
-        (event.metadata?.tipoServicoCor as string) || '#3B82F6';
+        (event.metadata?.tipoServicoCor as string) || EVENT_FALLBACK_HEX;
       const possuiEvolucao =
         (event.metadata?.possuiEvolucao as string) || 'não';
 
@@ -462,18 +514,23 @@ export const EventCard = React.memo<EventCardProps>(
         <Card
           className={cn(
             'cursor-pointer border-l-4 hover:shadow-md transition-shadow',
+            focusRingClasses,
             // AI dev note: Background cinza claro para cancelados
             isCancelado && 'bg-gray-100/80',
             className
           )}
           onClick={(e) => handleClick(e)}
+          aria-label={buildAriaLabel(
+            (event.metadata?.pacienteNome as string) || event.title
+          )}
+          {...keyboardProps}
           style={{
             // AI dev note: Borda cinza para cancelados, cor do serviço para demais
             borderLeftColor: isCancelado
               ? '#9CA3AF'
               : isValidHexColor(tipoServicoCor)
                 ? tipoServicoCor
-                : '#3B82F6',
+                : EVENT_FALLBACK_HEX,
           }}
         >
           <CardContent className="p-3 md:p-4">
@@ -527,7 +584,7 @@ export const EventCard = React.memo<EventCardProps>(
                     style={{
                       backgroundColor: isValidHexColor(statusConsultaCor)
                         ? statusConsultaCor
-                        : '#3B82F6',
+                        : EVENT_FALLBACK_HEX,
                       color: '#FFFFFF',
                       border: 'none',
                     }}
@@ -542,7 +599,7 @@ export const EventCard = React.memo<EventCardProps>(
                     style={{
                       backgroundColor: isValidHexColor(statusPagamentoCor)
                         ? statusPagamentoCor
-                        : '#3B82F6',
+                        : EVENT_FALLBACK_HEX,
                       color: '#FFFFFF',
                       border: 'none',
                     }}
@@ -591,9 +648,14 @@ export const EventCard = React.memo<EventCardProps>(
         className={cn(
           'cursor-pointer border transition-all hover:shadow-sm',
           getColorClasses(event.color),
+          focusRingClasses,
           className
         )}
         onClick={(e) => handleClick(e)}
+        aria-label={buildAriaLabel(
+          (event.metadata?.pacienteNome as string) || event.title
+        )}
+        {...keyboardProps}
       >
         <CardContent className="p-2">
           <div className="space-y-1">

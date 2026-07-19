@@ -26,6 +26,8 @@ export interface ResponsiveCalendarTemplateProps {
   onEventSave: (event: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
   onEventEdit?: (event: CalendarEvent) => void;
   onEventDelete: (eventId: string) => void;
+  // AI dev note: Refresh dos eventos após criar/editar consulta (repassado ao CalendarTemplate)
+  onRefreshNeeded?: () => void;
 
   // View configuration
   initialView?: CalendarView;
@@ -67,6 +69,7 @@ export const ResponsiveCalendarTemplate =
       onEventSave,
       onEventEdit,
       onEventDelete,
+      onRefreshNeeded,
       initialView,
       initialDate = new Date(),
       // AI dev note: External state control - CRÍTICO
@@ -160,23 +163,12 @@ export const ResponsiveCalendarTemplate =
 
       // Render appropriate template based on role
       const renderRoleTemplate = () => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            '🔍 DEBUG: ResponsiveCalendarTemplate - PROPS RECEBIDAS',
-            {
-              externalCurrentDate: externalCurrentDate?.toISOString(),
-              externalCurrentView: externalCurrentView,
-              'onExternalDateChange existe': !!onExternalDateChange,
-              'onExternalViewChange existe': !!onExternalViewChange,
-              'currentUser.role': currentUser.role,
-            }
-          );
-        }
         const baseProps = {
           events,
           onEventSave,
           onEventEdit,
           onEventDelete,
+          onRefreshNeeded,
           initialView: getInitialViewForRole(),
           initialDate,
           // AI dev note: Repassar props de estado externo - CRÍTICO
@@ -231,25 +223,7 @@ export const ResponsiveCalendarTemplate =
       };
 
       return (
-        <div className={getResponsiveClasses()}>
-          {/* Responsive info banner */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="fixed top-4 right-4 bg-black/80 text-white px-2 py-1 rounded text-xs z-50">
-              {isMobile ? 'Mobile' : 'Desktop'} • {currentUser.role} •{' '}
-              {getInitialViewForRole()}
-            </div>
-          )}
-
-          {/* Main template */}
-          {renderRoleTemplate()}
-
-          {/* Mobile swipe hints */}
-          {isMobile && (
-            <div className="swipe-hint text-muted-foreground">
-              Deslize para navegar • Toque para detalhes
-            </div>
-          )}
-        </div>
+        <div className={getResponsiveClasses()}>{renderRoleTemplate()}</div>
       );
     }
   );
