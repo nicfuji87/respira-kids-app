@@ -56,8 +56,10 @@ import {
 // chamar fn_registrar_disparo_cobranca). Serve para achar "erro" e "faltou disparar".
 
 interface DisparoRow {
-  pagamento_link_id: string;
-  token: string;
+  linha_id: string;
+  origem: 'link' | 'asaas';
+  pagamento_link_id: string | null;
+  token: string | null;
   criado_em: string;
   link_status: string;
   valor_base: number;
@@ -133,7 +135,7 @@ export const FinancialDisparosLog: React.FC<FinancialDisparosLogProps> = ({
         endDate
       );
       const campos =
-        'pagamento_link_id, token, criado_em, link_status, valor_base, empresa_id, empresa_nome, responsavel_nome, responsavel_telefone, paciente_nome, lote_id, geracao_erro, envio_detalhe, envio_em, fila_erro, disparo_status';
+        'linha_id, origem, pagamento_link_id, token, criado_em, link_status, valor_base, empresa_id, empresa_nome, responsavel_nome, responsavel_telefone, paciente_nome, lote_id, geracao_erro, envio_detalhe, envio_em, fila_erro, disparo_status';
 
       const buildQuery = () => {
         let q = supabase
@@ -480,9 +482,20 @@ export const FinancialDisparosLog: React.FC<FinancialDisparosLogProps> = ({
               </TableHeader>
               <TableBody>
                 {filtered.map((r) => (
-                  <TableRow key={r.pagamento_link_id}>
+                  <TableRow key={r.linha_id}>
                     <TableCell className="font-medium">
-                      {r.responsavel_nome || '—'}
+                      <div className="flex items-center gap-2">
+                        <span>{r.responsavel_nome || '—'}</span>
+                        {r.origem === 'asaas' && (
+                          <Badge
+                            variant="outline"
+                            className="border-blue-200 px-1 text-[10px] text-blue-600"
+                            title="Cobrança gerada direto no Asaas (sem pré-cobrança por link)"
+                          >
+                            Asaas
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {r.responsavel_telefone
