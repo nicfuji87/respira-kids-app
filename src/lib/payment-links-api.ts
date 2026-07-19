@@ -480,6 +480,10 @@ export interface PreFaturaResumo {
   expirado: boolean;
   qtd_consultas: number;
   agendamentos: PreFaturaAgendamento[];
+  // AI dev note: contador da régua de inadimplência das pré-cobranças (cron ter/sex).
+  // Incrementado por fn_enqueue_lembretes_pre_cobranca a cada aviso enviado.
+  lembretes_enviados: number;
+  ultimo_lembrete_em: string | null;
 }
 
 // === LISTAR PRÉ-FATURAS (não geradas no Asaas) ===
@@ -493,7 +497,8 @@ export async function fetchPreFaturas(filtros?: {
       .from('pagamento_links')
       .select(
         `id, token, paciente_id, empresa_id, responsavel_cobranca_id,
-         valor_base, descricao, vencimento, expira_em, criado_em, status`
+         valor_base, descricao, vencimento, expira_em, criado_em, status,
+         lembretes_enviados, ultimo_lembrete_em`
       )
       .eq('ativo', true)
       .in('status', ['pendente', 'expirado'])
@@ -619,6 +624,8 @@ export async function fetchPreFaturas(filtros?: {
           (!!l.expira_em && new Date(l.expira_em) < new Date()),
         qtd_consultas: ags.length,
         agendamentos: ags,
+        lembretes_enviados: l.lembretes_enviados ?? 0,
+        ultimo_lembrete_em: l.ultimo_lembrete_em ?? null,
       };
     });
 

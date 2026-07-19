@@ -8,6 +8,7 @@ import {
   FileClock,
   AlertCircle,
   Loader2,
+  Bell,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -232,6 +233,25 @@ export const FinancialPreFaturasList: React.FC<
                       <span className="text-xs text-muted-foreground">
                         #{pf.id.slice(0, 8)}
                       </span>
+                      {/* AI dev note: contador da régua de inadimplência (cron ter/sex).
+                          Deixa visível quantos avisos o responsável já recebeu. */}
+                      {pf.lembretes_enviados > 0 && (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-orange-300 text-orange-700"
+                          title={
+                            pf.ultimo_lembrete_em
+                              ? `Último lembrete em ${formatDate(pf.ultimo_lembrete_em)}`
+                              : undefined
+                          }
+                        >
+                          <Bell className="h-3 w-3" />
+                          {pf.lembretes_enviados}{' '}
+                          {pf.lembretes_enviados === 1
+                            ? 'lembrete'
+                            : 'lembretes'}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <User className="h-3 w-3" />

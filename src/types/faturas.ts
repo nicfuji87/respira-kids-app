@@ -45,6 +45,11 @@ export interface Fatura {
   link_nfe?: string | null; // URL da NFe ou estados: 'sincronizando', 'erro'
   status_nfe?: string | null; // Detalhes do erro quando link_nfe = 'erro'
 
+  // AI dev note: contador de lembretes de inadimplência desta cobrança ASAAS.
+  // Preenchido pelo fluxo n8n do dono via RPC fn_registrar_lembrete_fatura.
+  lembretes_enviados?: number | null;
+  ultimo_lembrete_em?: string | null;
+
   // Controle padrão
   ativo: boolean;
   created_at: string;

@@ -11,6 +11,8 @@ import {
   AlertCircle,
   RefreshCw,
   ChevronRight,
+  Bell,
+  Download,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -44,22 +46,22 @@ import {
 import { DatePicker } from './DatePicker';
 import { cn } from '@/lib/utils';
 import { emitirNfeFatura } from '@/lib/faturas-api';
+import {
+  gerarRelatorioNfePdf,
+  statusNfe,
+  type FaturaNfeRow,
+} from '@/lib/pdf/relatorio-nfe';
+import {
+  computeDateRange,
+  PERIOD_LABELS,
+  type PeriodFilter,
+} from '@/lib/date-range';
 import type { FaturaComDetalhes } from '@/types/faturas';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 
 // AI dev note: Lista de faturas para área financeira com otimizações de performance
 // Mesmos filtros e paginação da lista de consultas
-
-type PeriodFilter =
-  | 'mes_atual'
-  | 'mes_anterior'
-  | 'ultimos_30'
-  | 'ultimos_60'
-  | 'ultimos_90'
-  | 'ultimo_ano'
-  | 'personalizado'
-  | 'todos';
 
 type StatusFilter =
   | 'todos'
@@ -68,6 +70,10 @@ type StatusFilter =
   | 'atrasado'
   | 'cancelado'
   | 'estornado';
+
+// AI dev note: filtro por status da NFe. 'nao_emitida' significa FATURA PAGA sem
+// nota (as que deveriam ter nota) — não inclui pendentes/canceladas sem nota.
+type NfeFilter = 'todos' | 'emitida' | 'erro' | 'nao_emitida' | 'sincronizando';
 
 type SortOption =
   | 'data_desc'
@@ -117,6 +123,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   const [sortOption, setSortOption] = useState<SortOption>('data_desc');
   const [professionalFilter, setProfessionalFilter] = useState<string>('todos');
   const [empresaFilter, setEmpresaFilter] = useState<string>('todos');
+  const [nfeFilter, setNfeFilter] = useState<NfeFilter>('todos');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Estados de paginação
   const [currentPage, setCurrentPage] = useState(0);
@@ -149,74 +157,13 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     setError(null);
 
     try {
-      // AI dev note: Determinar datas baseadas no filtro
-      const today = new Date();
-      let dateStart = '';
-      let dateEnd = '';
-
-      switch (periodFilter) {
-        case 'mes_atual':
-          // Primeiro dia do mês atual
-          dateStart = new Date(today.getFullYear(), today.getMonth(), 1)
-            .toISOString()
-            .split('T')[0];
-          dateEnd = today.toISOString().split('T')[0];
-          break;
-        case 'mes_anterior': {
-          // Primeiro dia do mês anterior
-          const firstDayLastMonth = new Date(
-            today.getFullYear(),
-            today.getMonth() - 1,
-            1
-          );
-          const lastDayLastMonth = new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            0
-          );
-          dateStart = firstDayLastMonth.toISOString().split('T')[0];
-          dateEnd = lastDayLastMonth.toISOString().split('T')[0];
-          console.log('🗓️ Filtro Mês Anterior:', {
-            dateStart,
-            dateEnd,
-            periodFilter,
-          });
-          break;
-        }
-        case 'ultimos_30':
-          dateStart = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0];
-          dateEnd = today.toISOString().split('T')[0];
-          break;
-        case 'ultimos_60':
-          dateStart = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0];
-          dateEnd = today.toISOString().split('T')[0];
-          break;
-        case 'ultimos_90':
-          dateStart = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0];
-          dateEnd = today.toISOString().split('T')[0];
-          break;
-        case 'ultimo_ano':
-          dateStart = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0];
-          dateEnd = today.toISOString().split('T')[0];
-          break;
-        case 'personalizado':
-          if (startDate) dateStart = startDate;
-          if (endDate) dateEnd = endDate;
-          break;
-        case 'todos':
-          // Sem filtros de data
-          dateStart = '';
-          dateEnd = '';
-          break;
-      }
+      // AI dev note: intervalo de datas centralizado em computeDateRange (mesma
+      // regra reaproveitada pela exportação PDF).
+      const { dateStart, dateEnd } = computeDateRange(
+        periodFilter,
+        startDate,
+        endDate
+      );
 
       // AI dev note: Select apenas campos necessários para performance
       const selectFields = [
@@ -239,6 +186,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         'periodo_fim',
         'profissionais_envolvidos',
         'pacientes_atendidos',
+        'lembretes_enviados',
+        'ultimo_lembrete_em',
       ].join(',');
 
       // AI dev note: Buscar count COM OS MESMOS FILTROS aplicados
@@ -472,6 +421,18 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       filtered = filtered.filter((f) => f.empresa_id === empresaFilter);
     }
 
+    // AI dev note: Filtro por status da NFe. 'nao_emitida' considera só faturas
+    // PAGAS sem nota (as que deveriam ter), não pendentes/canceladas sem nota.
+    if (nfeFilter !== 'todos') {
+      filtered = filtered.filter((f) => {
+        const ns = statusNfe(f.link_nfe);
+        if (nfeFilter === 'nao_emitida') {
+          return f.status === 'pago' && ns === 'nao_emitida';
+        }
+        return ns === nfeFilter;
+      });
+    }
+
     // Filtro de busca
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -516,6 +477,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     statusFilter,
     professionalFilter,
     empresaFilter,
+    nfeFilter,
     searchQuery,
     sortOption,
   ]);
@@ -620,6 +582,142 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       setIsEmitingNfe(null);
     }
   };
+
+  // AI dev note: Exporta em PDF TODAS as faturas do período + filtros ativos (não
+  // só a página de 100). Busca em lotes na view e aplica os MESMOS filtros locais
+  // da lista antes de gerar. Reusa o gerador em src/lib/pdf/relatorio-nfe.ts.
+  const handleExportPdf = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const { dateStart, dateEnd } = computeDateRange(
+        periodFilter,
+        startDate,
+        endDate
+      );
+      const campos =
+        'created_at, status, valor_total, link_nfe, responsavel_nome, empresa_id, empresa_razao_social, empresa_nome_fantasia, pacientes_atendidos, profissionais_envolvidos';
+
+      const buildQuery = () => {
+        let q = supabase
+          .from('vw_faturas_completas')
+          .select(campos)
+          .order('created_at', { ascending: false });
+        if (periodFilter !== 'todos') {
+          if (dateStart) q = q.gte('created_at', dateStart);
+          if (dateEnd) q = q.lte('created_at', dateEnd + 'T23:59:59');
+        }
+        return q;
+      };
+
+      // Buscar TODAS as faturas do período em lotes (evita o limite de 1000)
+      const todas: Array<Record<string, unknown>> = [];
+      let offset = 0;
+      const size = 1000;
+      let hasMoreRows = true;
+      while (hasMoreRows) {
+        const { data, error: batchErr } = await buildQuery().range(
+          offset,
+          offset + size - 1
+        );
+        if (batchErr) throw batchErr;
+        if (data && data.length > 0) {
+          todas.push(...(data as Array<Record<string, unknown>>));
+          offset += size;
+          hasMoreRows = data.length === size;
+        } else {
+          hasMoreRows = false;
+        }
+      }
+
+      // Aplicar os MESMOS filtros locais da lista
+      let rows = todas as unknown as FaturaComDetalhes[];
+      if (statusFilter !== 'todos') {
+        rows = rows.filter((f) => f.status === statusFilter);
+      }
+      if (empresaFilter !== 'todos') {
+        rows = rows.filter((f) => f.empresa_id === empresaFilter);
+      }
+      if (professionalFilter !== 'todos') {
+        rows = rows.filter((f) =>
+          f.profissionais_envolvidos?.includes(professionalFilter)
+        );
+      }
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        rows = rows.filter((f) =>
+          f.responsavel_nome?.toLowerCase().includes(q)
+        );
+      }
+      if (nfeFilter !== 'todos') {
+        rows = rows.filter((f) => {
+          const ns = statusNfe(f.link_nfe);
+          if (nfeFilter === 'nao_emitida') {
+            return f.status === 'pago' && ns === 'nao_emitida';
+          }
+          return ns === nfeFilter;
+        });
+      }
+
+      if (rows.length === 0) {
+        toast({
+          title: 'Nada para exportar',
+          description: 'Nenhuma fatura corresponde aos filtros selecionados.',
+        });
+        return;
+      }
+
+      // Rótulo dos filtros ativos para o cabeçalho do PDF
+      const partes: string[] = [];
+      if (statusFilter !== 'todos') partes.push(`Status: ${statusFilter}`);
+      if (nfeFilter !== 'todos') {
+        const nfeLabels: Record<Exclude<NfeFilter, 'todos'>, string> = {
+          emitida: 'emitida',
+          erro: 'com erro',
+          nao_emitida: 'não emitida',
+          sincronizando: 'sincronizando',
+        };
+        partes.push(`NFe: ${nfeLabels[nfeFilter]}`);
+      }
+      if (empresaFilter !== 'todos') {
+        const emp = empresas.find((e) => e.id === empresaFilter);
+        if (emp) partes.push(`Empresa: ${emp.nome}`);
+      }
+      if (professionalFilter !== 'todos')
+        partes.push(`Profissional: ${professionalFilter}`);
+      if (searchQuery) partes.push(`Busca: "${searchQuery}"`);
+
+      gerarRelatorioNfePdf(rows as FaturaNfeRow[], {
+        periodoLabel: PERIOD_LABELS[periodFilter],
+        filtrosLabel: partes.length ? partes.join(' · ') : undefined,
+        geradoEm: new Date(),
+      });
+
+      toast({
+        title: 'PDF gerado',
+        description: `${rows.length} fatura(s) exportada(s).`,
+      });
+    } catch (err) {
+      console.error('Erro ao exportar PDF:', err);
+      toast({
+        title: 'Erro ao exportar PDF',
+        description: 'Não foi possível gerar o relatório.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [
+    periodFilter,
+    startDate,
+    endDate,
+    statusFilter,
+    empresaFilter,
+    professionalFilter,
+    nfeFilter,
+    searchQuery,
+    empresas,
+    toast,
+  ]);
 
   // AI dev note: Função para formatar data SEM conversão de timezone
   // Mantém exatamente como vem do Supabase
@@ -817,17 +915,31 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     <>
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between gap-2">
             <span>Faturas</span>
-            <Badge variant="outline" className="ml-2">
-              {filteredFaturas.length} fatura
-              {filteredFaturas.length !== 1 ? 's' : ''}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">
+                {filteredFaturas.length} fatura
+                {filteredFaturas.length !== 1 ? 's' : ''}
+              </Badge>
+              {/* AI dev note: exporta TODAS as faturas do período+filtros em PDF
+                  (útil p/ caçar NFe não emitida / com erro em lote). */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPdf}
+                disabled={isExporting || isLoading}
+                title="Exporta as faturas do período e filtros atuais em PDF"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {isExporting ? 'Gerando...' : 'Exportar PDF'}
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Filtros */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
             {/* Filtro de Período */}
             <Select
               value={periodFilter}
@@ -899,6 +1011,23 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                     {emp.nome}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            {/* Filtro de NFe */}
+            <Select
+              value={nfeFilter}
+              onValueChange={(value) => setNfeFilter(value as NfeFilter)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="NFe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">NFe: todas</SelectItem>
+                <SelectItem value="emitida">NFe emitida</SelectItem>
+                <SelectItem value="erro">NFe com erro</SelectItem>
+                <SelectItem value="nao_emitida">NFe não emitida</SelectItem>
+                <SelectItem value="sincronizando">NFe sincronizando</SelectItem>
               </SelectContent>
             </Select>
 
@@ -995,6 +1124,22 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                             Fatura #{fatura.id.slice(0, 8)}
                           </span>
                           {getStatusBadge(fatura.status)}
+                          {/* AI dev note: contador de lembretes desta cobrança ASAAS,
+                              preenchido pelo fluxo n8n via fn_registrar_lembrete_fatura. */}
+                          {(fatura.lembretes_enviados ?? 0) > 0 && (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-orange-300 text-orange-700"
+                              title={
+                                fatura.ultimo_lembrete_em
+                                  ? `Último lembrete em ${formatDateTime(fatura.ultimo_lembrete_em)}`
+                                  : undefined
+                              }
+                            >
+                              <Bell className="h-3 w-3" />
+                              {fatura.lembretes_enviados}
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <User className="h-3 w-3" />

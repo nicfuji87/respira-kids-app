@@ -146,6 +146,8 @@ export { PinValidationDialog } from './PinValidationDialog';
 export { FinancialConsultationsList } from './FinancialConsultationsList';
 export { FinancialFaturasList } from './FinancialFaturasList';
 export { FinancialPreFaturasList } from './FinancialPreFaturasList';
+export { FinancialPreCobrancasReport } from './FinancialPreCobrancasReport';
+export { FinancialDisparosLog } from './FinancialDisparosLog';
 export { PreFaturaEditDialog } from './PreFaturaEditDialog';
 export { FinancialProfessionalReport } from './FinancialProfessionalReport';
 export { FaturasList } from './FaturasList';
