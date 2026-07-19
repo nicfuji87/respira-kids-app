@@ -35,6 +35,7 @@ import {
   TableRow,
 } from '@/components/primitives/table';
 import { useToast } from '@/components/primitives/use-toast';
+import { useNavigate } from 'react-router-dom';
 import { DatePicker } from './DatePicker';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +64,7 @@ interface PreCobrancaRow {
   empresa_id: string | null;
   empresa_nome: string | null;
   responsavel_nome: string | null;
+  paciente_id: string | null;
   paciente_nome: string | null;
   lembretes_enviados: number;
   ultimo_lembrete_em: string | null;
@@ -105,6 +107,7 @@ export const FinancialPreCobrancasReport: React.FC<
   FinancialPreCobrancasReportProps
 > = ({ className }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [rows, setRows] = useState<PreCobrancaRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,7 +133,7 @@ export const FinancialPreCobrancasReport: React.FC<
         endDate
       );
       const campos =
-        'id, criado_em, vencimento, valor_base, empresa_id, empresa_nome, responsavel_nome, paciente_nome, lembretes_enviados, ultimo_lembrete_em, desfecho, qtd_consultas';
+        'id, criado_em, vencimento, valor_base, empresa_id, empresa_nome, responsavel_nome, paciente_id, paciente_nome, lembretes_enviados, ultimo_lembrete_em, desfecho, qtd_consultas';
 
       const buildQuery = () => {
         let q = supabase
@@ -285,12 +288,12 @@ export const FinancialPreCobrancasReport: React.FC<
       className: 'text-green-600',
     },
     {
-      label: 'Aguardando pagamento',
+      label: 'Cobrança gerada',
       value: String(resumo.aguardando_pagamento),
       className: 'text-amber-600',
     },
     {
-      label: 'Pendentes',
+      label: 'Pré-cobrança',
       value: String(resumo.pendente),
       className: 'text-orange-600',
     },
@@ -369,9 +372,9 @@ export const FinancialPreCobrancasReport: React.FC<
               <SelectItem value="todos">Todos os desfechos</SelectItem>
               <SelectItem value="paga">Paga</SelectItem>
               <SelectItem value="aguardando_pagamento">
-                Aguardando pagamento
+                Cobrança Asaas gerada
               </SelectItem>
-              <SelectItem value="pendente">Pendente</SelectItem>
+              <SelectItem value="pendente">Pré-cobrança</SelectItem>
               <SelectItem value="expirada">Expirada</SelectItem>
               <SelectItem value="cancelada">Cancelada</SelectItem>
               <SelectItem value="estornada">Estornada</SelectItem>
@@ -479,8 +482,21 @@ export const FinancialPreCobrancasReport: React.FC<
                     <TableCell className="font-medium">
                       {r.responsavel_nome || '—'}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {r.paciente_nome || '—'}
+                    <TableCell>
+                      {r.paciente_id ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/pessoa/${r.paciente_id}`)}
+                          className="text-left text-primary hover:underline"
+                          title="Ver detalhes do paciente"
+                        >
+                          {r.paciente_nome || '—'}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {r.paciente_nome || '—'}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {r.empresa_nome || '—'}

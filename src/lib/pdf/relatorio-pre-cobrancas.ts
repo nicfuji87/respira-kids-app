@@ -14,10 +14,13 @@ export type Desfecho =
   | 'cancelada'
   | 'estornada';
 
+// AI dev note: 'pendente' = pré-cobrança pura (link enviado, cliente ainda NÃO
+// escolheu forma -> nenhuma cobrança no Asaas). 'aguardando_pagamento' = cliente já
+// escolheu PIX/cartão -> cobrança GERADA no Asaas (fatura), aguardando o pagamento.
 export const DESFECHO_LABEL: Record<Desfecho, string> = {
   paga: 'Paga',
-  aguardando_pagamento: 'Aguardando pagamento',
-  pendente: 'Pendente',
+  aguardando_pagamento: 'Cobrança Asaas gerada',
+  pendente: 'Pré-cobrança',
   expirada: 'Expirada',
   cancelada: 'Cancelada',
   estornada: 'Estornada',
