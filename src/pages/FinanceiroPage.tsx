@@ -6,6 +6,7 @@ import { FinancialFaturasList } from '@/components/composed/FinancialFaturasList
 import { FinancialPreFaturasList } from '@/components/composed/FinancialPreFaturasList';
 import { FinancialPreCobrancasReport } from '@/components/composed/FinancialPreCobrancasReport';
 import { FinancialDisparosLog } from '@/components/composed/FinancialDisparosLog';
+import { FinancialCicloPagamento } from '@/components/composed/FinancialCicloPagamento';
 import { FaturamentoChart } from '@/components/composed/FaturamentoChart';
 import { FinancialProfessionalReport } from '@/components/composed/FinancialProfessionalReport';
 import { ProfessionalFinancialSummary } from '@/components/composed/ProfessionalFinancialSummary';
@@ -325,6 +326,7 @@ export const FinanceiroPage: React.FC = () => {
 
                     <TabsContent value="faturas" className="space-y-4">
                       <FinancialPreCobrancasReport />
+                      <FinancialCicloPagamento />
                       <FinancialDisparosLog />
                       <FinancialPreFaturasList />
                       <FinancialFaturasList onFaturaClick={handleFaturaClick} />
