@@ -36,15 +36,21 @@ const dataBR = (iso?: string | null) => {
   }
 };
 
+// AI dev note: dois botões porque são duas coisas de natureza diferente e que se
+// resolvem em telas diferentes — "não cobradas" são CONSULTAS (a ação é aqui mesmo:
+// filtra e gera a cobrança) e "vencidas" são COBRANÇAS já emitidas (a ação é lembrar/
+// renegociar, na aba Faturas). Um botão só levaria a um dos dois e esconderia o outro.
 interface FinancialPendenciasAlertProps {
   // Aplica o filtro de período "não cobradas" na lista (meses anteriores)
   onVerNaoCobradas?: () => void;
+  // Leva para a aba Faturas, onde as cobranças vencidas são acompanhadas
+  onVerAtrasadas?: () => void;
   className?: string;
 }
 
 export const FinancialPendenciasAlert: React.FC<
   FinancialPendenciasAlertProps
-> = ({ onVerNaoCobradas, className }) => {
+> = ({ onVerNaoCobradas, onVerAtrasadas, className }) => {
   const [dados, setDados] = useState<Pendencias | null>(null);
 
   useEffect(() => {
@@ -111,18 +117,27 @@ export const FinancialPendenciasAlert: React.FC<
           )}
 
           {temAtrasadas && (
-            <p className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
-              <Clock className="h-4 w-4 shrink-0 text-amber-600" />
-              <span>
-                <strong>{dados.atrasadas_qtd} cobrança(s)</strong> já emitidas
-                estão <strong>vencidas e não pagas</strong> —{' '}
-                <strong>{brl(Number(dados.atrasadas_valor))}</strong>
-                <span className="text-amber-700 dark:text-amber-300">
-                  {' '}
-                  (acompanhe na aba Faturas)
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
+                <Clock className="h-4 w-4 shrink-0 text-amber-600" />
+                <span>
+                  <strong>{dados.atrasadas_qtd} cobrança(s)</strong> já emitidas
+                  estão <strong>vencidas e não pagas</strong> —{' '}
+                  <strong>{brl(Number(dados.atrasadas_valor))}</strong>
                 </span>
-              </span>
-            </p>
+              </p>
+              {onVerAtrasadas && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onVerAtrasadas}
+                  className="border-amber-400 bg-white text-amber-900 hover:bg-amber-100"
+                >
+                  Ver na aba Faturas
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              )}
+            </div>
           )}
         </div>
       </div>

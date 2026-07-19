@@ -158,6 +158,8 @@ type SortOption =
 
 interface FinancialConsultationsListProps {
   onConsultationClick?: (consultation: ConsultationWithPatient) => void;
+  // Leva para a aba Faturas (usado pelo banner de pendências, nas cobranças vencidas)
+  onIrParaFaturas?: () => void;
   className?: string;
 }
 
@@ -271,7 +273,7 @@ MultiSelectFilter.displayName = 'MultiSelectFilter';
 
 export const FinancialConsultationsList: React.FC<
   FinancialConsultationsListProps
-> = ({ onConsultationClick, className }) => {
+> = ({ onConsultationClick, onIrParaFaturas, className }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [consultations, setConsultations] = useState<ConsultationWithPatient[]>(
@@ -522,6 +524,15 @@ export const FinancialConsultationsList: React.FC<
         if (endDateFilter && periodFilter !== 'todos' && !isSearchMode) {
           // AI dev note: Incluir fim do dia para garantir que todo o último dia seja contabilizado
           q = q.lte('data_hora', endDateFilter + 'T23:59:59');
+        }
+
+        // AI dev note: "não cobradas" NÃO é só uma janela de data — significa "o que
+        // ficou para trás": consulta ainda pendente e sem fatura. Sem estes dois
+        // filtros o período traria TODAS as consultas antigas (inclusive as já pagas),
+        // que foi o bug relatado. 'pendente' já exclui as reservadas num link (viram
+        // 'cobranca_gerada'), espelhando o critério de vw_pendencias_financeiras.
+        if (periodFilter === 'nao_cobradas' && !isSearchMode) {
+          q = q.is('fatura_id', null).eq('status_pagamento_codigo', 'pendente');
         }
         return q;
       };
@@ -1664,7 +1675,20 @@ export const FinancialConsultationsList: React.FC<
             nunca revisita o que ficou para trás. O banner só aparece se houver
             pendência e o botão joga o filtro para o histórico não cobrado. */}
         <FinancialPendenciasAlert
-          onVerNaoCobradas={() => setPeriodFilter('nao_cobradas')}
+          onVerNaoCobradas={() => {
+            // AI dev note: limpa os demais filtros junto. Sem isso um filtro de
+            // profissional/empresa/status ativo escondia parte (ou tudo) do que o
+            // banner acabou de prometer, e a impressão era de "não fez nada".
+            setPeriodFilter('nao_cobradas');
+            setProfessionalFilter([]);
+            setServiceTypeFilter([]);
+            setEmpresaFilter('todos');
+            setPaymentStatusFilter([]);
+            setSearchQuery('');
+            setStartDate('');
+            setEndDate('');
+          }}
+          onVerAtrasadas={onIrParaFaturas}
         />
 
         {/* Links de pagamento gerados (copiar/abrir manualmente) */}

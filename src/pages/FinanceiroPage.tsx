@@ -321,6 +321,7 @@ export const FinanceiroPage: React.FC = () => {
                     <TabsContent value="consultas" className="space-y-4">
                       <FinancialConsultationsList
                         onConsultationClick={handleConsultationClick}
+                        onIrParaFaturas={() => setActiveTabAdmin('faturas')}
                       />
                     </TabsContent>
 
