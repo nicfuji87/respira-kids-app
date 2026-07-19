@@ -12,7 +12,7 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-} from '@/components/ui/card';
+} from '@/components/primitives/card';
 import { Calendar, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 

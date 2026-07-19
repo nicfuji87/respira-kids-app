@@ -29,17 +29,25 @@ export const NavigationItem = React.memo<NavigationItemProps>(
     variant = 'desktop',
     className,
   }) => {
+    // AI dev note: item ativo usa fundo teal suave + texto roxo (WCAG AA);
+    // teal nunca como cor de texto sobre fundo claro (contraste 1.66:1)
+    // AI dev note: variante mobile ocupa a altura do bottom bar (h-full, mínimo
+    // 44px) para garantir touch target adequado em tablet — Button size="sm"
+    // sozinho renderiza h-8 (32px), pequeno demais para toque
     const baseClasses = cn(
       'relative flex items-center gap-2 transition-colors',
       variant === 'desktop' && 'justify-start w-full h-10 px-3',
-      variant === 'mobile' && 'flex-col gap-1 p-2 min-w-0',
+      variant === 'mobile' && 'flex-col gap-1 p-2 min-w-0 h-full min-h-11',
+      isActive && 'bg-primary/10 hover:bg-primary/20',
       className
     );
 
     const textClasses = cn(
       variant === 'desktop' && 'text-sm font-medium',
       variant === 'mobile' && 'text-xs font-medium truncate',
-      isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+      isActive
+        ? 'text-roxo-titulo dark:text-foreground'
+        : 'text-muted-foreground hover:text-foreground'
     );
 
     const iconClasses = cn(
@@ -47,7 +55,7 @@ export const NavigationItem = React.memo<NavigationItemProps>(
       variant === 'desktop' && 'w-4 h-4',
       variant === 'mobile' && 'w-5 h-5',
       isActive
-        ? 'text-primary'
+        ? 'text-roxo-titulo dark:text-foreground'
         : 'text-muted-foreground group-hover:text-foreground'
     );
 

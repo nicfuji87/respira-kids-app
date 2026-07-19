@@ -13,18 +13,18 @@
     --popover: 0 0% 100%; /* Branco */
     --popover-foreground: 292 53% 20%; /* Roxo Título */
     --primary: 174 46% 65%; /* Azul Respira */
-    --primary-foreground: 0 0% 100%; /* Branco */
+    --primary-foreground: 292 53% 20%; /* Roxo Título (7.7:1 sobre Azul Respira - WCAG AA) */
     --secondary: 44 93% 93%; /* Bege Fundo */
     --secondary-foreground: 292 53% 20%; /* Roxo Título */
     --muted: 44 93% 93%; /* Bege Fundo */
-    --muted-foreground: 0 0% 45%; /* Cinza Secundário */
+    --muted-foreground: 0 0% 40%; /* Cinza Secundário escurecido (>=4.5:1 sobre bege) */
     --accent: 86 49% 75%; /* Verde Pipa */
     --accent-foreground: 292 53% 20%; /* Roxo Título */
-    --destructive: 0 84% 60%; /* Vermelho Erro */
+    --destructive: 0 72% 51%; /* Vermelho Erro escurecido (~#DC2626, >=4.5:1 sobre branco) */
     --destructive-foreground: 0 0% 100%; /* Branco */
     --border: 44 30% 88%; /* Bege mais escuro para bordas */
     --input: 44 30% 88%; /* Bege mais escuro para inputs */
-    --ring: 174 46% 65%; /* Azul Respira */
+    --ring: 174 46% 40%; /* Azul Respira escurecido p/ foco (>=3:1 sobre branco e bege) */
     --radius: 0.65rem; /* Radius do tema fornecido */
     --chart-1: 174 46% 65%; /* Azul Respira */
     --chart-2: 13 83% 75%; /* Vermelho Kids */
@@ -86,10 +86,6 @@
     @apply bg-gradient-to-r from-azul-respira to-verde-pipa;
   }
 
-  .respira-text-gradient {
-    @apply bg-gradient-to-r from-azul-respira to-roxo-titulo bg-clip-text text-transparent;
-  }
-
   .theme-transition {
     @apply transition-colors duration-300 ease-in-out;
   }
@@ -98,10 +94,11 @@
     animation: respira-pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
+  /* Sombra roxa — EXCLUSIVA de elementos flutuantes (modais, dropdowns, tooltips) */
   .respira-shadow {
     box-shadow:
-      0 4px 6px -1px rgba(174, 46, 70, 0.1),
-      0 2px 4px -1px rgba(174, 46, 70, 0.06);
+      0 4px 12px rgba(71, 24, 78, 0.1),
+      0 1px 3px rgba(71, 24, 78, 0.06);
   }
 }
 
@@ -117,15 +114,14 @@
   }
 }
 
-/* Grid utilities para layouts personalizados */
-@layer utilities {
-  .grid-cols-7 {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-  }
-
-  @screen lg {
-    .lg\:grid-cols-7 {
-      grid-template-columns: repeat(7, minmax(0, 1fr));
-    }
+/* Acessibilidade: respeita preferência do usuário por menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

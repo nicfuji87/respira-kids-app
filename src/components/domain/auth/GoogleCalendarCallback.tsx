@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/primitives/card';
 
 export const GoogleCalendarCallback: React.FC = () => {
   const navigate = useNavigate();

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/primitives/card';
 import { AlertTriangle, CheckCircle, Loader2, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { validateWhatsAppAndGetJID } from '@/lib/patient-registration-api';

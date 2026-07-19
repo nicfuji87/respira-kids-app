@@ -4,7 +4,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/primitives/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from '@/components/primitives/card';
 
 export const GoogleOAuthDebugPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,9 +37,13 @@ export const GoogleOAuthDebugPage: React.FC = () => {
           )}
 
           <div className="bg-gray-50 border rounded p-4">
-            <h3 className="font-bold mb-2">📋 Logs Completos ({logs.length}):</h3>
+            <h3 className="font-bold mb-2">
+              📋 Logs Completos ({logs.length}):
+            </h3>
             {logs.length === 0 ? (
-              <p className="text-gray-500">Nenhum log encontrado. Tente conectar novamente.</p>
+              <p className="text-gray-500">
+                Nenhum log encontrado. Tente conectar novamente.
+              </p>
             ) : (
               <pre className="text-xs bg-white p-4 rounded overflow-auto max-h-96">
                 {logs.join('\n')}
@@ -49,7 +58,10 @@ export const GoogleOAuthDebugPage: React.FC = () => {
             <Button onClick={clearLogs} variant="outline">
               Limpar Logs
             </Button>
-            <Button onClick={() => navigate('/configuracoes?conectar=google')} variant="outline">
+            <Button
+              onClick={() => navigate('/configuracoes?conectar=google')}
+              variant="outline"
+            >
               Tentar Conectar Novamente
             </Button>
           </div>

@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/primitives/card';
 import { Button } from '@/components/primitives/button';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { ScrollArea } from '@/components/primitives/scroll-area';

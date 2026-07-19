@@ -116,7 +116,7 @@ export const UserApprovalCard = React.memo<UserApprovalCardProps>(
     return (
       <Card
         className={cn(
-          'w-full max-w-md mx-auto theme-transition respira-shadow',
+          'w-full max-w-md mx-auto theme-transition',
           'border-border/20 bg-card/95 backdrop-blur-sm',
           className
         )}

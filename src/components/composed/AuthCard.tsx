@@ -25,7 +25,7 @@ export const AuthCard = React.memo<AuthCardProps>(
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-bege-fundo to-background">
         <Card
           className={cn(
-            'w-full max-w-md mx-auto theme-transition respira-shadow',
+            'w-full max-w-md mx-auto theme-transition',
             'border-border/20 bg-card/95 backdrop-blur-sm',
             className
           )}
@@ -64,7 +64,7 @@ export const AuthCard = React.memo<AuthCardProps>(
             <div className="space-y-2">
               <CardTitle
                 id="auth-title"
-                className="text-2xl font-bold text-roxo-titulo respira-text-gradient"
+                className="text-2xl font-bold text-roxo-titulo dark:text-foreground"
               >
                 {title}
               </CardTitle>
