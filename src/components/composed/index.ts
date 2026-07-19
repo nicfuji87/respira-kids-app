@@ -150,6 +150,7 @@ export { FinancialPreCobrancasReport } from './FinancialPreCobrancasReport';
 export { FinancialDisparosLog } from './FinancialDisparosLog';
 export { FinancialCicloPagamento } from './FinancialCicloPagamento';
 export { FinancialPendenciasAlert } from './FinancialPendenciasAlert';
+export { FinancialNfeEmissaoMassa } from './FinancialNfeEmissaoMassa';
 export { PreFaturaEditDialog } from './PreFaturaEditDialog';
 export { FinancialProfessionalReport } from './FinancialProfessionalReport';
 export { FaturasList } from './FaturasList';

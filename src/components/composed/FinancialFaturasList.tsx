@@ -58,6 +58,10 @@ import {
 } from '@/lib/date-range';
 import type { FaturaComDetalhes } from '@/types/faturas';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  FinancialNfeEmissaoMassa,
+  type FaturaParaNfe,
+} from './FinancialNfeEmissaoMassa';
 import { supabase } from '@/lib/supabase';
 
 // AI dev note: Lista de faturas para área financeira com otimizações de performance
@@ -73,7 +77,22 @@ type StatusFilter =
 
 // AI dev note: filtro por status da NFe. 'nao_emitida' significa FATURA PAGA sem
 // nota (as que deveriam ter nota) — não inclui pendentes/canceladas sem nota.
-type NfeFilter = 'todos' | 'emitida' | 'erro' | 'nao_emitida' | 'sincronizando';
+// AI dev note: 'pendente_acao' = paga sem nota OU nota em erro. É o conjunto que o
+// dono precisa resolver no fechamento do mês, e o alvo da emissão em massa — junta
+// num filtro só os dois casos que a mesma ação (emitirNfeFatura) já sabe tratar.
+type NfeFilter =
+  | 'todos'
+  | 'emitida'
+  | 'erro'
+  | 'nao_emitida'
+  | 'pendente_acao'
+  | 'sincronizando';
+
+// Fonte única de "esta fatura precisa de emissão?" — usada no filtro da lista, no
+// PDF e na emissão em massa, para os três nunca divergirem.
+const nfePendenteDeAcao = (f: { status: string; link_nfe?: string | null }) =>
+  f.status === 'pago' &&
+  (statusNfe(f.link_nfe) === 'nao_emitida' || statusNfe(f.link_nfe) === 'erro');
 
 type SortOption =
   | 'data_desc'
@@ -125,6 +144,11 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   const [empresaFilter, setEmpresaFilter] = useState<string>('todos');
   const [nfeFilter, setNfeFilter] = useState<NfeFilter>('todos');
   const [isExporting, setIsExporting] = useState(false);
+  // Emissão de NFe em massa: null = diálogo fechado
+  const [isCarregandoMassa, setIsCarregandoMassa] = useState(false);
+  const [faturasParaEmissaoMassa, setFaturasParaEmissaoMassa] = useState<
+    FaturaParaNfe[] | null
+  >(null);
 
   // Estados de paginação
   const [currentPage, setCurrentPage] = useState(0);
@@ -426,6 +450,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     if (nfeFilter !== 'todos') {
       filtered = filtered.filter((f) => {
         const ns = statusNfe(f.link_nfe);
+        if (nfeFilter === 'pendente_acao') return nfePendenteDeAcao(f);
         if (nfeFilter === 'nao_emitida') {
           return f.status === 'pago' && ns === 'nao_emitida';
         }
@@ -583,80 +608,130 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     }
   };
 
-  // AI dev note: Exporta em PDF TODAS as faturas do período + filtros ativos (não
-  // só a página de 100). Busca em lotes na view e aplica os MESMOS filtros locais
-  // da lista antes de gerar. Reusa o gerador em src/lib/pdf/relatorio-nfe.ts.
+  // AI dev note: busca TODAS as faturas do período + aplica os MESMOS filtros locais
+  // da lista. Extraído porque agora tem dois consumidores (Exportar PDF e Emitir NFe
+  // em massa) e eles PRECISAM enxergar exatamente o mesmo conjunto — se divergirem, o
+  // PDF diz uma coisa e a emissão faz outra.
+  const fetchFaturasDoFiltro = useCallback(async (): Promise<
+    FaturaComDetalhes[]
+  > => {
+    const { dateStart, dateEnd } = computeDateRange(
+      periodFilter,
+      startDate,
+      endDate
+    );
+    const campos =
+      'id, created_at, status, valor_total, link_nfe, responsavel_nome, empresa_id, empresa_razao_social, empresa_nome_fantasia, pacientes_atendidos, profissionais_envolvidos';
+
+    const buildQuery = () => {
+      let q = supabase
+        .from('vw_faturas_completas')
+        .select(campos)
+        .order('created_at', { ascending: false });
+      if (periodFilter !== 'todos') {
+        if (dateStart) q = q.gte('created_at', dateStart);
+        if (dateEnd) q = q.lte('created_at', dateEnd + 'T23:59:59');
+      }
+      return q;
+    };
+
+    const todas: Array<Record<string, unknown>> = [];
+    let offset = 0;
+    const size = 1000;
+    let hasMoreRows = true;
+    while (hasMoreRows) {
+      const { data, error: batchErr } = await buildQuery().range(
+        offset,
+        offset + size - 1
+      );
+      if (batchErr) throw batchErr;
+      if (data && data.length > 0) {
+        todas.push(...(data as Array<Record<string, unknown>>));
+        offset += size;
+        hasMoreRows = data.length === size;
+      } else {
+        hasMoreRows = false;
+      }
+    }
+
+    let rows = todas as unknown as FaturaComDetalhes[];
+    if (statusFilter !== 'todos') {
+      rows = rows.filter((f) => f.status === statusFilter);
+    }
+    if (empresaFilter !== 'todos') {
+      rows = rows.filter((f) => f.empresa_id === empresaFilter);
+    }
+    if (professionalFilter !== 'todos') {
+      rows = rows.filter((f) =>
+        f.profissionais_envolvidos?.includes(professionalFilter)
+      );
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      rows = rows.filter((f) => f.responsavel_nome?.toLowerCase().includes(q));
+    }
+    if (nfeFilter !== 'todos') {
+      rows = rows.filter((f) => {
+        const ns = statusNfe(f.link_nfe);
+        if (nfeFilter === 'pendente_acao') return nfePendenteDeAcao(f);
+        if (nfeFilter === 'nao_emitida') {
+          return f.status === 'pago' && ns === 'nao_emitida';
+        }
+        return ns === nfeFilter;
+      });
+    }
+    return rows;
+  }, [
+    periodFilter,
+    startDate,
+    endDate,
+    statusFilter,
+    empresaFilter,
+    professionalFilter,
+    searchQuery,
+    nfeFilter,
+  ]);
+
+  // AI dev note: abre a emissão em massa sobre o conjunto do filtro, já reduzido ao
+  // que é elegível (paga + sem nota ou em erro) — mesmo que o filtro de NFe esteja
+  // em 'todos', nunca tentamos emitir sobre fatura não paga ou que já tem nota.
+  const handleAbrirEmissaoMassa = useCallback(async () => {
+    setIsCarregandoMassa(true);
+    try {
+      const rows = await fetchFaturasDoFiltro();
+      const elegiveis = rows.filter(nfePendenteDeAcao);
+      if (elegiveis.length === 0) {
+        toast({
+          title: 'Nenhuma nota a emitir',
+          description:
+            'Nenhuma fatura paga sem nota (ou com erro) no filtro atual.',
+        });
+        return;
+      }
+      setFaturasParaEmissaoMassa(
+        elegiveis.map((f) => ({
+          id: f.id,
+          responsavel_nome: f.responsavel_nome,
+          valor_total: f.valor_total,
+          link_nfe: f.link_nfe,
+        }))
+      );
+    } catch (err) {
+      console.error('Erro ao carregar faturas para emissão em massa:', err);
+      toast({
+        title: 'Erro ao carregar faturas',
+        description: 'Não foi possível montar a lista de emissão.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCarregandoMassa(false);
+    }
+  }, [fetchFaturasDoFiltro, toast]);
+
   const handleExportPdf = useCallback(async () => {
     setIsExporting(true);
     try {
-      const { dateStart, dateEnd } = computeDateRange(
-        periodFilter,
-        startDate,
-        endDate
-      );
-      const campos =
-        'created_at, status, valor_total, link_nfe, responsavel_nome, empresa_id, empresa_razao_social, empresa_nome_fantasia, pacientes_atendidos, profissionais_envolvidos';
-
-      const buildQuery = () => {
-        let q = supabase
-          .from('vw_faturas_completas')
-          .select(campos)
-          .order('created_at', { ascending: false });
-        if (periodFilter !== 'todos') {
-          if (dateStart) q = q.gte('created_at', dateStart);
-          if (dateEnd) q = q.lte('created_at', dateEnd + 'T23:59:59');
-        }
-        return q;
-      };
-
-      // Buscar TODAS as faturas do período em lotes (evita o limite de 1000)
-      const todas: Array<Record<string, unknown>> = [];
-      let offset = 0;
-      const size = 1000;
-      let hasMoreRows = true;
-      while (hasMoreRows) {
-        const { data, error: batchErr } = await buildQuery().range(
-          offset,
-          offset + size - 1
-        );
-        if (batchErr) throw batchErr;
-        if (data && data.length > 0) {
-          todas.push(...(data as Array<Record<string, unknown>>));
-          offset += size;
-          hasMoreRows = data.length === size;
-        } else {
-          hasMoreRows = false;
-        }
-      }
-
-      // Aplicar os MESMOS filtros locais da lista
-      let rows = todas as unknown as FaturaComDetalhes[];
-      if (statusFilter !== 'todos') {
-        rows = rows.filter((f) => f.status === statusFilter);
-      }
-      if (empresaFilter !== 'todos') {
-        rows = rows.filter((f) => f.empresa_id === empresaFilter);
-      }
-      if (professionalFilter !== 'todos') {
-        rows = rows.filter((f) =>
-          f.profissionais_envolvidos?.includes(professionalFilter)
-        );
-      }
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        rows = rows.filter((f) =>
-          f.responsavel_nome?.toLowerCase().includes(q)
-        );
-      }
-      if (nfeFilter !== 'todos') {
-        rows = rows.filter((f) => {
-          const ns = statusNfe(f.link_nfe);
-          if (nfeFilter === 'nao_emitida') {
-            return f.status === 'pago' && ns === 'nao_emitida';
-          }
-          return ns === nfeFilter;
-        });
-      }
+      const rows = await fetchFaturasDoFiltro();
 
       if (rows.length === 0) {
         toast({
@@ -674,6 +749,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           emitida: 'emitida',
           erro: 'com erro',
           nao_emitida: 'não emitida',
+          pendente_acao: 'pendente de emissão',
           sincronizando: 'sincronizando',
         };
         partes.push(`NFe: ${nfeLabels[nfeFilter]}`);
@@ -707,9 +783,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       setIsExporting(false);
     }
   }, [
+    fetchFaturasDoFiltro,
     periodFilter,
-    startDate,
-    endDate,
     statusFilter,
     empresaFilter,
     professionalFilter,
@@ -934,6 +1009,23 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                 <Download className="h-4 w-4 mr-2" />
                 {isExporting ? 'Gerando...' : 'Exportar PDF'}
               </Button>
+              {/* AI dev note: emissão em massa age sobre TODO o conjunto do filtro
+                  (não só a página), reduzido ao que é elegível. Só aparece quando o
+                  filtro de NFe isola algo acionável, para não virar um botão de
+                  "emitir tudo" clicável por engano no meio da lista completa. */}
+              {(nfeFilter === 'pendente_acao' ||
+                nfeFilter === 'nao_emitida' ||
+                nfeFilter === 'erro') && (
+                <Button
+                  size="sm"
+                  onClick={handleAbrirEmissaoMassa}
+                  disabled={isCarregandoMassa || isLoading}
+                  title="Emite as notas das faturas pagas do filtro atual (as com erro são canceladas e reemitidas)"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  {isCarregandoMassa ? 'Carregando...' : 'Emitir NFe em massa'}
+                </Button>
+              )}
             </div>
           </CardTitle>
         </CardHeader>
@@ -1024,6 +1116,9 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">NFe: todas</SelectItem>
+                <SelectItem value="pendente_acao">
+                  NFe pendente (emitir)
+                </SelectItem>
                 <SelectItem value="emitida">NFe emitida</SelectItem>
                 <SelectItem value="erro">NFe com erro</SelectItem>
                 <SelectItem value="nao_emitida">NFe não emitida</SelectItem>
@@ -1406,6 +1501,15 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <FinancialNfeEmissaoMassa
+        faturas={faturasParaEmissaoMassa || []}
+        open={!!faturasParaEmissaoMassa}
+        onOpenChange={(open) => {
+          if (!open) setFaturasParaEmissaoMassa(null);
+        }}
+        onConcluido={fetchFaturas}
+      />
     </>
   );
 };
