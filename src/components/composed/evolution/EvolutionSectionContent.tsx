@@ -1791,11 +1791,15 @@ export const EvolutionSectionContent: React.FC<
                       value={intervencao.aspiracao_consistencia}
                       onChange={(v) =>
                         updateIntervencao({
-                          aspiracao_consistencia: v as 'fluida' | 'espessa',
+                          aspiracao_consistencia: v as
+                            | 'fluida'
+                            | 'semi_espessa'
+                            | 'espessa',
                         })
                       }
                       options={[
                         { valor: 'fluida', label: 'Fluida' },
+                        { valor: 'semi_espessa', label: 'Semi Espessa' },
                         { valor: 'espessa', label: 'Espessa' },
                       ]}
                       disabled={disabled}

@@ -1128,11 +1128,19 @@ export const AppointmentDetailsManager =
               conteudoResumo += `   • Tipo: ${tipoMap[ev.intervencao.aspiracao_tipo || ''] || 'Realizada'}\n`;
               if (ev.intervencao.aspiracao_quantidade) {
                 const qtdMap: Record<string, string> = {
-                  pequena: 'Pequena',
+                  pouca: 'Pouca',
                   moderada: 'Moderada',
-                  grande: 'Grande',
+                  abundante: 'Abundante',
                 };
                 conteudoResumo += `   • Quantidade: ${qtdMap[ev.intervencao.aspiracao_quantidade] || ev.intervencao.aspiracao_quantidade}\n`;
+              }
+              if (ev.intervencao.aspiracao_consistencia) {
+                const consistenciaMap: Record<string, string> = {
+                  fluida: 'Fluida',
+                  semi_espessa: 'Semi Espessa',
+                  espessa: 'Espessa',
+                };
+                conteudoResumo += `   • Consistência: ${consistenciaMap[ev.intervencao.aspiracao_consistencia] || ev.intervencao.aspiracao_consistencia}\n`;
               }
               if (ev.intervencao.aspiracao_aspecto) {
                 const aspectoMap: Record<string, string> = {

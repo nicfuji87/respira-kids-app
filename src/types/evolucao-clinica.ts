@@ -185,7 +185,7 @@ export interface IntervencaoRespiratoria {
   aspiracao: boolean;
   aspiracao_tipo?: 'invasiva' | 'nao_invasiva' | 'ambas' | null;
   aspiracao_quantidade?: 'pouca' | 'moderada' | 'abundante' | null;
-  aspiracao_consistencia?: 'fluida' | 'espessa' | null;
+  aspiracao_consistencia?: 'fluida' | 'semi_espessa' | 'espessa' | null;
   aspiracao_aspecto?: 'clara' | 'amarelada' | 'esverdeada' | 'purulenta' | null;
   aspiracao_sangramento?: 'nao' | 'rajas_sangue' | 'sangramento_ativo' | null;
 
