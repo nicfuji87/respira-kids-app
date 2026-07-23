@@ -1131,10 +1131,14 @@ export const PatientRegistrationSteps =
           },
 
           // Pediatra
+          // AI dev note: noPediatrician PRECISA trafegar. Sem ele a Edge Function
+          // recebia nome "Não Informado" sem id e criava uma pessoa médico real a
+          // cada cadastro sem pediatra (45 cópias acumuladas até jul/2026)
           pediatra: {
             id: registrationData.pediatra?.id,
             nome: registrationData.pediatra!.nome,
             crm: registrationData.pediatra?.crm,
+            noPediatrician: registrationData.pediatra?.noPediatrician,
           },
 
           // Autorizações

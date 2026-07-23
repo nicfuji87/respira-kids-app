@@ -138,13 +138,18 @@ export const PediatricianStep = React.memo<PediatricianStepProps>(
       if (!nome.trim()) {
         newErrors.nome =
           'Nome do pediatra é obrigatório ou selecione "Não possui pediatra"';
+      } else if (startsWithDoctor) {
+        // AI dev note: sem esta checagem o setErrors abaixo limpava o erro que o
+        // debounce havia setado, e "Dr. Fulano" era salvo como pediatra separado de "Fulano"
+        newErrors.nome =
+          'Não é necessário colocar "Dr." ou "Dra.". Digite apenas o nome do pediatra.';
       } else if (nome.trim().length < 3) {
         newErrors.nome = 'Nome deve ter pelo menos 3 caracteres';
       }
 
       setErrors(newErrors);
       return Object.keys(newErrors).length === 0;
-    }, [nome, noPediatrician]);
+    }, [nome, noPediatrician, startsWithDoctor]);
 
     const handleContinue = useCallback(() => {
       if (!validateForm()) {

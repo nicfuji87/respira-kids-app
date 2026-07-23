@@ -71,6 +71,7 @@ interface PatientRegistrationData {
     id?: string;
     nome: string;
     crm?: string;
+    noPediatrician?: boolean;
   };
   autorizacoes: {
     usoCientifico: boolean;
@@ -84,6 +85,31 @@ interface PatientRegistrationData {
 
 function extractPhoneFromJid(jid: string): string {
   return jid.split('@')[0];
+}
+
+// AI dev note: Nome canônico do pediatra-sentinela. Usado quando o responsável marca
+// "não possui pediatra" — é informação afirmativa (criança sem pediatra fixo, atendida
+// em posto), então vira vínculo normal apontando SEMPRE para o mesmo registro.
+const PEDIATRA_NAO_INFORMADO = 'Não Informado';
+
+// AI dev note: Normaliza nome de pediatra para deduplicação. Sem isto,
+// "Dr. Carlos Zaconeta", "carlos zaconeta" e "Carlos  Zaconeta" viravam três
+// pediatras distintos.
+// PRECISA continuar equivalente a fn_normalizar_nome_profissional() no banco
+// (migration dedup_pediatra_obstetra.sql), que é o que alimenta o índice único
+// idx_pessoas_pediatra_nome_unico. Se as duas divergirem, esta busca não acha o
+// registro que o índice depois recusa, e o cadastro cai no tratamento de corrida
+// à toa. O separador do prefixo é "ponto + espaços opcionais" OU "espaços" —
+// exigir um dos dois evita decepar nomes como "Drauzio" em "auzio".
+function normalizarNomePediatra(nome: string): string {
+  return nome
+    .trim()
+    .replace(/^(dr|dra)(\.\s*|\s+)/i, '')
+    .normalize('NFD') // Decompor caracteres acentuados
+    .replace(/\p{M}/gu, '') // Remover diacríticos (marcas combinantes)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 // AI dev note: Formata data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
@@ -674,16 +700,75 @@ Deno.serve(async (req: Request) => {
     // STEP 5: Criar ou Usar PEDIATRA
     // ============================================
     console.log('📋 [STEP 5] Processando pediatra...');
-    let pediatraId: string;
+    let pediatraId: string | null = null;
+
+    // AI dev note: "Não Informado" é resposta afirmativa do responsável (a criança
+    // não tem pediatra, só posto de saúde) — precisa virar vínculo, não ausência.
+    // O que estava errado era criar uma pessoa NOVA a cada cadastro; agora cai no
+    // mesmo lookup por nome e reutiliza o registro canônico único.
+    const nomeAlvo = data.pediatra.noPediatrician
+      ? PEDIATRA_NAO_INFORMADO
+      : data.pediatra.nome;
+    const nomeNormalizado = normalizarNomePediatra(nomeAlvo);
+
+    // AI dev note: chamado duas vezes — no lookup inicial e de novo se o insert
+    // colidir com o índice único (corrida com outro cadastro simultâneo).
+    // Volume baixo (~300), filtro em memória porque o PostgREST não compara sem acento.
+    const buscarPediatraExistente = async (): Promise<string | null> => {
+      const { data: candidatos, error: errorBusca } = await supabase
+        .from('pessoas')
+        .select('id, nome, pessoa_pediatra!inner(id, ativo)')
+        .eq('ativo', true)
+        .eq('pessoa_pediatra.ativo', true)
+        // Ordem fixa: o match cai sempre no registro mais antigo (o canônico)
+        .order('created_at', { ascending: true });
+
+      if (errorBusca) {
+        // Não aborta o cadastro: segue para o fluxo de criação
+        console.error(
+          '⚠️ [STEP 5] Erro ao buscar pediatras existentes:',
+          errorBusca
+        );
+        return null;
+      }
+
+      const achado = (candidatos || []).find(
+        (p) => normalizarNomePediatra(p.nome) === nomeNormalizado
+      );
+
+      if (!achado) return null;
+
+      const vinculo = Array.isArray(achado.pessoa_pediatra)
+        ? achado.pessoa_pediatra[0]
+        : achado.pessoa_pediatra;
+
+      console.log(
+        '✅ [STEP 5] Pediatra já cadastrado, reutilizando:',
+        achado.nome,
+        vinculo.id
+      );
+      return vinculo.id;
+    };
 
     if (data.pediatra.id) {
       // Usar pediatra existente
       pediatraId = data.pediatra.id;
       console.log('✅ [STEP 5] Usando pediatra existente:', pediatraId);
     } else {
+      // AI dev note: procurar antes de criar. O front só manda id quando o usuário
+      // CLICA na sugestão; digitando o nome inteiro vinha sem id e duplicava
+      // (9x "Flavia Querubim" acumuladas até jul/2026).
+      console.log(
+        '🔍 [STEP 5] Procurando pediatra existente:',
+        nomeNormalizado
+      );
+      pediatraId = await buscarPediatraExistente();
+    }
+
+    if (!pediatraId) {
       // Criar novo pediatra
       console.log('📋 [STEP 5] Criando novo pediatra...');
-      console.log('📋 [STEP 5] Nome:', data.pediatra.nome);
+      console.log('📋 [STEP 5] Nome:', nomeAlvo);
       console.log('📋 [STEP 5] CRM:', data.pediatra.crm || 'não fornecido');
 
       // Buscar tipo 'medico' para pediatra
@@ -704,12 +789,19 @@ Deno.serve(async (req: Request) => {
       }
 
       // Criar pessoa do tipo médico
+      // AI dev note: grava o nome limpo (sem prefixo Dr./Dra., sem espaço duplicado)
+      // preservando a capitalização — assim o lookup acima casa nos próximos cadastros
+      const nomeParaGravar = nomeAlvo
+        .trim()
+        .replace(/^(dr|dra)(\.\s*|\s+)/i, '')
+        .replace(/\s+/g, ' ');
+
       const tempPedId = crypto.randomUUID();
       const { data: novoPediatra, error: errorPediatra } = await supabase
         .from('pessoas')
         .insert({
           id: tempPedId,
-          nome: data.pediatra.nome,
+          nome: nomeParaGravar,
           id_tipo_pessoa: tipoPediatra.id,
           responsavel_cobranca_id: tempPedId, // Auto-referência
           ativo: true,
@@ -718,40 +810,76 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (errorPediatra || !novoPediatra) {
-        console.error(
-          '❌ [STEP 5] Erro ao criar pessoa pediatra:',
-          errorPediatra
-        );
-        throw new Error('Erro ao criar pediatra');
+        // AI dev note: o índice idx_pessoas_pediatra_nome_unico barra duplicata por
+        // nome. Cair aqui com 23505 significa corrida: outro cadastro simultâneo
+        // criou este mesmo pediatra entre o lookup acima e este insert. Reaproveita
+        // o registro dele em vez de derrubar o cadastro do paciente inteiro.
+        if (errorPediatra?.code === '23505') {
+          console.log(
+            '🔁 [STEP 5] Pediatra criado em paralelo, refazendo busca:',
+            nomeNormalizado
+          );
+          pediatraId = await buscarPediatraExistente();
+        }
+
+        if (!pediatraId) {
+          console.error(
+            '❌ [STEP 5] Erro ao criar pessoa pediatra:',
+            errorPediatra
+          );
+          throw new Error('Erro ao criar pediatra');
+        }
+      } else {
+        // Só entra aqui quando a pessoa foi realmente criada. Se a corrida acima
+        // resolveu o pediatraId, não há pessoa nova para vincular.
+        const pediatraPessoaId = novoPediatra.id;
+        console.log('✅ [STEP 5] Pessoa pediatra criada:', pediatraPessoaId);
+
+        // Criar registro na tabela pessoa_pediatra
+        console.log('📋 [STEP 5] Criando registro pessoa_pediatra...');
+        const { data: pessoaPediatra, error: errorPessoaPediatra } =
+          await supabase
+            .from('pessoa_pediatra')
+            .insert({
+              pessoa_id: pediatraPessoaId,
+              crm: data.pediatra.crm || null,
+              especialidade: 'Pediatria',
+              ativo: true,
+            })
+            .select('id')
+            .single();
+
+        if (errorPessoaPediatra || !pessoaPediatra) {
+          console.error(
+            '❌ [STEP 5] Erro ao criar pessoa_pediatra:',
+            errorPessoaPediatra
+          );
+
+          // AI dev note: estes 2 inserts não são atômicos (não é RPC). Sem desfazer o
+          // primeiro, a pessoa fica órfã: existe como médico mas sem pessoa_pediatra,
+          // então nunca aparece no autocomplete e nunca é reaproveitada — só engorda a
+          // lista. Foi assim que 20 registros vazaram entre set/2025 e jan/2026.
+          const { error: errorRollback } = await supabase
+            .from('pessoas')
+            .delete()
+            .eq('id', pediatraPessoaId);
+
+          if (errorRollback) {
+            console.error(
+              '⚠️ [STEP 5] Falha ao desfazer a pessoa órfã:',
+              pediatraPessoaId,
+              errorRollback
+            );
+          } else {
+            console.log('↩️ [STEP 5] Pessoa órfã removida:', pediatraPessoaId);
+          }
+
+          throw new Error('Erro ao criar registro de pediatra');
+        }
+
+        pediatraId = pessoaPediatra.id;
+        console.log('✅ [STEP 5] Registro pessoa_pediatra criado:', pediatraId);
       }
-
-      const pediatraPessoaId = novoPediatra.id;
-      console.log('✅ [STEP 5] Pessoa pediatra criada:', pediatraPessoaId);
-
-      // Criar registro na tabela pessoa_pediatra
-      console.log('📋 [STEP 5] Criando registro pessoa_pediatra...');
-      const { data: pessoaPediatra, error: errorPessoaPediatra } =
-        await supabase
-          .from('pessoa_pediatra')
-          .insert({
-            pessoa_id: pediatraPessoaId,
-            crm: data.pediatra.crm || null,
-            especialidade: 'Pediatria',
-            ativo: true,
-          })
-          .select('id')
-          .single();
-
-      if (errorPessoaPediatra || !pessoaPediatra) {
-        console.error(
-          '❌ [STEP 5] Erro ao criar pessoa_pediatra:',
-          errorPessoaPediatra
-        );
-        throw new Error('Erro ao criar registro de pediatra');
-      }
-
-      pediatraId = pessoaPediatra.id;
-      console.log('✅ [STEP 5] Registro pessoa_pediatra criado:', pediatraId);
     }
 
     // ============================================
@@ -1002,46 +1130,53 @@ Deno.serve(async (req: Request) => {
     // STEP 9: Criar relacionamento paciente ↔ pediatra
     // ============================================
     console.log('📋 [STEP 9] Criando relacionamento paciente ↔ pediatra...');
-    const { data: relPediatraExistente, error: errorRelPediatraSearch } =
-      await supabase
-        .from('paciente_pediatra')
-        .select('id')
-        .eq('paciente_id', pacienteId)
-        .eq('pediatra_id', pediatraId)
-        .eq('ativo', true)
-        .limit(1)
-        .maybeSingle();
-
-    if (errorRelPediatraSearch) {
-      console.error(
-        '❌ [STEP 9] Erro ao verificar relacionamento pediatra:',
-        errorRelPediatraSearch
-      );
-      throw new Error('Erro ao verificar relacionamento com pediatra');
-    }
-
-    if (relPediatraExistente) {
-      console.log(
-        '✅ [STEP 9] Relacionamento pediatra já existe (reutilizando):',
-        relPediatraExistente.id
-      );
+    if (!pediatraId) {
+      // AI dev note: inalcançável — STEP 5 sempre resolve um pediatraId (reutilizado
+      // ou criado, inclusive o "Não Informado"). Guarda só para não inserir nulo.
+      console.error('❌ [STEP 9] pediatraId não resolvido no STEP 5');
+      throw new Error('Erro ao resolver pediatra do paciente');
     } else {
-      const { error: errorRelPediatra } = await supabase
-        .from('paciente_pediatra')
-        .insert({
-          paciente_id: pacienteId,
-          pediatra_id: pediatraId,
-          ativo: true,
-        });
+      const { data: relPediatraExistente, error: errorRelPediatraSearch } =
+        await supabase
+          .from('paciente_pediatra')
+          .select('id')
+          .eq('paciente_id', pacienteId)
+          .eq('pediatra_id', pediatraId)
+          .eq('ativo', true)
+          .limit(1)
+          .maybeSingle();
 
-      if (errorRelPediatra) {
+      if (errorRelPediatraSearch) {
         console.error(
-          '❌ [STEP 9] Erro ao criar relacionamento pediatra:',
-          errorRelPediatra
+          '❌ [STEP 9] Erro ao verificar relacionamento pediatra:',
+          errorRelPediatraSearch
         );
-        throw new Error('Erro ao criar relacionamento com pediatra');
+        throw new Error('Erro ao verificar relacionamento com pediatra');
       }
-      console.log('✅ [STEP 9] Relacionamento pediatra criado');
+
+      if (relPediatraExistente) {
+        console.log(
+          '✅ [STEP 9] Relacionamento pediatra já existe (reutilizando):',
+          relPediatraExistente.id
+        );
+      } else {
+        const { error: errorRelPediatra } = await supabase
+          .from('paciente_pediatra')
+          .insert({
+            paciente_id: pacienteId,
+            pediatra_id: pediatraId,
+            ativo: true,
+          });
+
+        if (errorRelPediatra) {
+          console.error(
+            '❌ [STEP 9] Erro ao criar relacionamento pediatra:',
+            errorRelPediatra
+          );
+          throw new Error('Erro ao criar relacionamento com pediatra');
+        }
+        console.log('✅ [STEP 9] Relacionamento pediatra criado');
+      }
     }
 
     // ============================================

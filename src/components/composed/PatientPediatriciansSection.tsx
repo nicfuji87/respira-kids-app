@@ -120,7 +120,12 @@ export const PatientPediatriciansSection: React.FC<
       let pediatraId: string;
 
       // Se é novo, criar pediatra completo usando função RPC
-      if (data.isNew && !data.noPediatrician) {
+      // AI dev note: noPediatrician entra aqui também. Antes ele caía no else final
+      // e estourava "Dados do pediatra inválidos", porque não é novo nem tem id.
+      // "Não Informado" é resposta afirmativa (criança sem pediatra fixo, atendida em
+      // posto), então vira vínculo normal — e a RPC reaproveita o registro canônico
+      // em vez de criar um novo a cada vez.
+      if (data.isNew || data.noPediatrician) {
         console.log('🆕 [PatientPediatricians] Criando novo pediatra via RPC');
 
         // AI dev note: Usar função RPC que bypassa RLS de forma segura
@@ -129,8 +134,8 @@ export const PatientPediatriciansSection: React.FC<
           'create_and_link_pediatrician',
           {
             p_paciente_id: patientId,
-            p_nome: data.nome,
-            p_crm: data.crm || null,
+            p_nome: data.noPediatrician ? 'Não Informado' : data.nome,
+            p_crm: data.noPediatrician ? null : data.crm || null,
           }
         );
 

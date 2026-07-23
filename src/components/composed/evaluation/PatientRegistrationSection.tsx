@@ -877,69 +877,30 @@ export const PatientRegistrationSection: React.FC<
 
     setIsSaving(true);
     try {
-      const { data: tipoPessoa } = await supabase
-        .from('pessoa_tipos')
-        .select('id')
-        .eq('codigo', 'prof_externo')
-        .maybeSingle();
+      // AI dev note: usa a RPC em vez de inserir direto. Antes esta tela gravava
+      // pessoas com tipo 'prof_externo' (divergindo de todos os outros caminhos de
+      // pediatra, que usam 'medico') e sem procurar por nome — o padrão que gerou 97
+      // pediatras duplicados. A RPC reaproveita quem já existe, faz pessoa +
+      // pessoa_pediatra + vínculo numa transação e valida permissão no servidor.
+      const { data: result, error: rpcError } = await supabase.rpc(
+        'create_and_link_pediatrician',
+        {
+          p_paciente_id: patientId,
+          p_nome: novoMedico.nome,
+          p_crm: novoMedico.crm || null,
+        }
+      );
 
-      let tipoPessoaId = tipoPessoa?.id;
-      if (!tipoPessoaId) {
-        const { data: novoTipo, error: novoTipoError } = await supabase
-          .from('pessoa_tipos')
-          .insert({
-            codigo: 'prof_externo',
-            nome: 'Profissional Externo',
-            descricao: 'Profissionais externos como pediatras e obstetras',
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (novoTipoError) throw novoTipoError;
-        tipoPessoaId = novoTipo.id;
+      if (rpcError) throw rpcError;
+      if (!result || result.length === 0 || !result[0].success) {
+        throw new Error(
+          result?.[0]?.message || 'Não foi possível cadastrar o pediatra.'
+        );
       }
-
-      const { data: novaPessoa, error: pessoaError } = await supabase
-        .from('pessoas')
-        .insert({
-          nome: novoMedico.nome,
-          especialidade: novoMedico.especialidade || 'Pediatria',
-          registro_profissional: novoMedico.crm || null,
-          id_tipo_pessoa: tipoPessoaId,
-          ativo: true,
-        })
-        .select()
-        .single();
-
-      if (pessoaError) throw pessoaError;
-
-      const { data: novoPediatra, error: pediatraError } = await supabase
-        .from('pessoa_pediatra')
-        .insert({
-          pessoa_id: novaPessoa.id,
-          crm: novoMedico.crm || null,
-          especialidade: novoMedico.especialidade || 'Pediatria',
-          ativo: true,
-        })
-        .select()
-        .single();
-
-      if (pediatraError) throw pediatraError;
-
-      const { error: vinculoError } = await supabase
-        .from('paciente_pediatra')
-        .insert({
-          paciente_id: patientId,
-          pediatra_id: novoPediatra.id,
-          ativo: true,
-        });
-
-      if (vinculoError) throw vinculoError;
 
       toast({
         title: 'Sucesso',
-        description: 'Pediatra cadastrado e associado ao paciente.',
+        description: result[0].message,
       });
 
       setNovoMedico({ nome: '', crm: '', especialidade: '' });
@@ -949,7 +910,12 @@ export const PatientRegistrationSection: React.FC<
       console.error('Erro ao cadastrar pediatra:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível cadastrar o pediatra.',
+        // AI dev note: propaga a mensagem do servidor — "Sem permissão para criar
+        // pediatras" precisa chegar ao usuário, senão o erro fica indistinguível
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível cadastrar o pediatra.',
         variant: 'destructive',
       });
     } finally {
@@ -970,63 +936,30 @@ export const PatientRegistrationSection: React.FC<
 
     setIsSaving(true);
     try {
-      const { data: tipoPessoa } = await supabase
-        .from('pessoa_tipos')
-        .select('id')
-        .eq('codigo', 'prof_externo')
-        .maybeSingle();
+      // AI dev note: mesma troca feita no pediatra — a RPC reaproveita obstetra já
+      // cadastrado em vez de criar outro. Retorna os dois ids porque o schema é
+      // assimétrico: avaliacoes_clinicas.obstetra_id referencia pessoas(id), não
+      // pessoa_obstetra(id). Por isso o onObstetraChange recebe pessoa_id.
+      const { data: result, error: rpcError } = await supabase.rpc(
+        'create_or_get_obstetrician',
+        {
+          p_nome: novoMedico.nome,
+          p_crm: novoMedico.crm || null,
+        }
+      );
 
-      let tipoPessoaId = tipoPessoa?.id;
-      if (!tipoPessoaId) {
-        const { data: novoTipo, error: novoTipoError } = await supabase
-          .from('pessoa_tipos')
-          .insert({
-            codigo: 'prof_externo',
-            nome: 'Profissional Externo',
-            descricao: 'Profissionais externos como pediatras e obstetras',
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (novoTipoError) throw novoTipoError;
-        tipoPessoaId = novoTipo.id;
+      if (rpcError) throw rpcError;
+      if (!result || result.length === 0 || !result[0].success) {
+        throw new Error(
+          result?.[0]?.message || 'Não foi possível cadastrar o obstetra.'
+        );
       }
 
-      const { data: novaPessoa, error: pessoaError } = await supabase
-        .from('pessoas')
-        .insert({
-          nome: novoMedico.nome,
-          especialidade:
-            novoMedico.especialidade || 'Ginecologia e Obstetrícia',
-          registro_profissional: novoMedico.crm || null,
-          id_tipo_pessoa: tipoPessoaId,
-          ativo: true,
-        })
-        .select()
-        .single();
-
-      if (pessoaError) throw pessoaError;
-
-      const { error: obstetraError } = await supabase
-        .from('pessoa_obstetra')
-        .insert({
-          pessoa_id: novaPessoa.id,
-          crm: novoMedico.crm || null,
-          especialidade:
-            novoMedico.especialidade || 'Ginecologia e Obstetrícia',
-          ativo: true,
-        })
-        .select()
-        .single();
-
-      if (obstetraError) throw obstetraError;
-
-      onObstetraChange(novaPessoa.id);
+      onObstetraChange(result[0].pessoa_id);
 
       toast({
         title: 'Sucesso',
-        description: 'Obstetra cadastrado e associado à avaliação.',
+        description: result[0].message,
       });
 
       setNovoMedico({ nome: '', crm: '', especialidade: '' });
@@ -1036,7 +969,10 @@ export const PatientRegistrationSection: React.FC<
       console.error('Erro ao cadastrar obstetra:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível cadastrar o obstetra.',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível cadastrar o obstetra.',
         variant: 'destructive',
       });
     } finally {

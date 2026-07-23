@@ -50,6 +50,7 @@ export interface FinalizationData {
     id?: string;
     nome: string;
     crm?: string;
+    noPediatrician?: boolean;
   };
 
   autorizacoes: {
