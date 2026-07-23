@@ -103,10 +103,11 @@ export type QuestionType =
   | 'short-text'
   | 'pediatra-search';
 
+// AI dev note: opções são intencionalmente sem emoji/ícone — qualquer ornamento
+// em parte das alternativas cria viés de resposta (a mãe clica na que "brilha").
 export interface QuestionOption {
   value: string;
   label: string;
-  emoji?: string;
 }
 
 export interface SurveyQuestion {

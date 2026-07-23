@@ -54,17 +54,6 @@ export const PesquisaSingleChoice = React.memo<PesquisaSingleChoiceProps>(
                   : 'border-border/60'
               )}
             >
-              {opt.emoji && (
-                <span
-                  className={cn(
-                    'text-2xl shrink-0 transition-transform duration-300',
-                    isSelected && 'scale-110'
-                  )}
-                  aria-hidden
-                >
-                  {opt.emoji}
-                </span>
-              )}
               <span
                 className={cn(
                   'flex-1 text-base md:text-lg font-medium leading-snug',

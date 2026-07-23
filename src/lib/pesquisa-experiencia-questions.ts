@@ -16,14 +16,14 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     type: 'single-choice',
     title: 'Como você conheceu a Respira Kids?',
     options: [
-      { value: 'pediatra', label: 'Pediatra', emoji: '👩\u200d⚕️' },
-      { value: 'instagram', label: 'Instagram', emoji: '📸' },
-      { value: 'google', label: 'Google', emoji: '🔎' },
-      { value: 'tiktok', label: 'TikTok', emoji: '🎵' },
-      { value: 'outra_mae', label: 'Outra mãe ou família', emoji: '💞' },
-      { value: 'grupo_whatsapp', label: 'Grupo de WhatsApp', emoji: '💬' },
-      { value: 'hospital', label: 'Hospital', emoji: '🏥' },
-      { value: 'outro', label: 'Outro', emoji: '✨' },
+      { value: 'pediatra', label: 'Pediatra' },
+      { value: 'instagram', label: 'Instagram' },
+      { value: 'google', label: 'Google' },
+      { value: 'tiktok', label: 'TikTok' },
+      { value: 'outra_mae', label: 'Outra mãe ou família' },
+      { value: 'grupo_whatsapp', label: 'Grupo de WhatsApp' },
+      { value: 'hospital', label: 'Hospital' },
+      { value: 'outro', label: 'Outro' },
     ],
   },
   // Quando "Pediatra" foi escolhido: busca + opção "Outro"
@@ -40,7 +40,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     id: 'profissional_indicou',
     type: 'short-text',
     title: 'Qual profissional indicou a Respira Kids?',
-    subtitle: 'Pode ser o nome de um especialista do hospital, por exemplo. 💙',
+    subtitle: 'Pode ser o nome de um especialista do hospital, por exemplo.',
     helper: 'Se preferir não responder, é só seguir.',
     optional: true,
     ctaLabel: 'Continuar',
@@ -68,12 +68,12 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     type: 'single-choice',
     title: 'Há quanto tempo sua família é acompanhada pela Respira Kids?',
     options: [
-      { value: 'primeira_consulta', label: 'Primeira consulta', emoji: '🌱' },
+      { value: 'primeira_consulta', label: 'Primeira consulta' },
       { value: 'menos_1_mes', label: 'Menos de 1 mês' },
       { value: '1_a_3_meses', label: '1 a 3 meses' },
       { value: '3_a_6_meses', label: '3 a 6 meses' },
       { value: 'mais_6_meses', label: 'Mais de 6 meses' },
-      { value: 'mais_1_ano', label: 'Mais de 1 ano', emoji: '⭐' },
+      { value: 'mais_1_ano', label: 'Mais de 1 ano' },
     ],
   },
   {
@@ -81,7 +81,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     type: 'single-choice',
     title: 'Qual a idade do seu filho(a)?',
     options: [
-      { value: '0_3_meses', label: '0 a 3 meses', emoji: '👶' },
+      { value: '0_3_meses', label: '0 a 3 meses' },
       { value: '4_6_meses', label: '4 a 6 meses' },
       { value: '7_12_meses', label: '7 a 12 meses' },
       { value: '1_2_anos', label: '1 a 2 anos' },
@@ -95,7 +95,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     title: 'O que trouxe vocês até a Respira Kids?',
     subtitle: 'O motivo principal que fez você procurar a clínica.',
     options: [
-      { value: 'respiratorio', label: 'Questão respiratória', emoji: '🫁' },
+      { value: 'respiratorio', label: 'Questão respiratória' },
       { value: 'assimetria_craniana', label: 'Assimetria craniana' },
       { value: 'torcicolo', label: 'Torcicolo' },
       { value: 'desenvolvimento_motor', label: 'Desenvolvimento motor' },
@@ -166,11 +166,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     subtitle: 'Pode escolher até 2.',
     maxSelections: 2,
     options: [
-      {
-        value: 'atendimento_humanizado',
-        label: 'Atendimento humanizado',
-        emoji: '💛',
-      },
+      { value: 'atendimento_humanizado', label: 'Atendimento humanizado' },
       { value: 'explicacoes_claras', label: 'Explicações claras' },
       { value: 'especializacao_infantil', label: 'Especialização infantil' },
       { value: 'resultados', label: 'Resultados' },
@@ -185,7 +181,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     id: 'como_se_sente',
     type: 'multi-choice',
     title: 'Como a Respira Kids faz você se sentir?',
-    subtitle: 'Pode marcar mais de uma. 💙',
+    subtitle: 'Pode marcar mais de uma.',
     options: [
       { value: 'acolhida', label: 'Acolhida' },
       { value: 'segura', label: 'Segura' },
@@ -234,7 +230,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     title: 'O que mais te surpreendeu positivamente na Respira Kids?',
     subtitle: 'Pode marcar mais de uma.',
     options: [
-      { value: 'equipe', label: 'A equipe', emoji: '👥' },
+      { value: 'equipe', label: 'A equipe' },
       { value: 'ambiente', label: 'O ambiente' },
       { value: 'comunicacao', label: 'A comunicação' },
       { value: 'resultados', label: 'Os resultados' },
@@ -250,7 +246,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     type: 'single-choice',
     title: 'O conteúdo das nossas redes sociais ajuda você?',
     options: [
-      { value: 'muito', label: 'Muito', emoji: '💯' },
+      { value: 'muito', label: 'Muito' },
       { value: 'as_vezes', label: 'Às vezes' },
       { value: 'pouco', label: 'Pouco' },
       { value: 'nao_acompanho', label: 'Não acompanho' },
@@ -270,7 +266,6 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
       {
         value: 'lugar_especial',
         label: 'Um lugar realmente especial para famílias',
-        emoji: '💙',
       },
     ],
   },
@@ -283,11 +278,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     type: 'single-choice',
     title: 'Hoje você sente que o atendimento da Respira Kids entrega:',
     options: [
-      {
-        value: 'muito_mais',
-        label: 'Muito mais do que eu esperava',
-        emoji: '✨',
-      },
+      { value: 'muito_mais', label: 'Muito mais do que eu esperava' },
       { value: 'mais', label: 'Mais do que eu esperava' },
       { value: 'exatamente', label: 'Exatamente o que eu esperava' },
       { value: 'menos', label: 'Menos do que eu esperava' },
@@ -319,7 +310,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     title:
       'Comparando com outras experiências na área da saúde infantil, a Respira Kids parece:',
     options: [
-      { value: 'muito_acima', label: 'Muito acima da média', emoji: '⭐' },
+      { value: 'muito_acima', label: 'Muito acima da média' },
       { value: 'acima', label: 'Acima da média' },
       { value: 'dentro_esperado', label: 'Dentro do esperado' },
       { value: 'abaixo_esperado', label: 'Abaixo do esperado' },
@@ -331,11 +322,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     title:
       'Você sente que o acompanhamento da Respira Kids traz tranquilidade para sua família?',
     options: [
-      {
-        value: 'muita_tranquilidade',
-        label: 'Sim, muita tranquilidade',
-        emoji: '🌿',
-      },
+      { value: 'muita_tranquilidade', label: 'Sim, muita tranquilidade' },
       { value: 'sim', label: 'Sim' },
       { value: 'mais_ou_menos', label: 'Mais ou menos' },
       { value: 'nao_sinto', label: 'Não sinto diferença' },
@@ -347,7 +334,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     title:
       'De forma geral, como você percebe o custo-benefício da Respira Kids?',
     options: [
-      { value: 'excelente', label: 'Excelente', emoji: '⭐' },
+      { value: 'excelente', label: 'Excelente' },
       { value: 'muito_bom', label: 'Muito bom' },
       { value: 'bom', label: 'Bom' },
       { value: 'regular', label: 'Regular' },
@@ -377,7 +364,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     id: 'o_que_mais_ama',
     type: 'short-text',
     title: 'O que você mais ama na Respira Kids?',
-    subtitle: 'Sua resposta nos ajuda a continuar fazendo o que importa. 💙',
+    subtitle: 'Sua resposta nos ajuda a continuar fazendo o que importa.',
     optional: true,
     ctaLabel: 'Continuar',
   },

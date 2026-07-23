@@ -266,7 +266,6 @@ export const PesquisaPediatraSearch = React.memo<PesquisaPediatraSearchProps>(
           onClick={handleEscolherOutro}
           className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-azul-respira/40 bg-azul-respira/5 hover:bg-azul-respira/10 transition-colors"
         >
-          <span className="text-2xl">✨</span>
           <div className="flex-1">
             <p className="font-medium text-foreground">Outro</p>
             <p className="text-xs text-muted-foreground">

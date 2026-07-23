@@ -49,7 +49,7 @@ export const PesquisaShortText = React.memo<PesquisaShortTextProps>(
           autoFocus
         />
         <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-          <span>{optional ? 'Resposta opcional 💙' : ' '}</span>
+          <span>{optional ? 'Resposta opcional' : ' '}</span>
           <span>
             {(value || '').length}/{maxLength}
           </span>
