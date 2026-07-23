@@ -37,8 +37,19 @@ export function nfeStatusLabel(status: NfeStatus): string {
 // Linha mínima que o relatório precisa de cada fatura (subconjunto da view).
 export interface FaturaNfeRow {
   created_at: string;
+  // AI dev note: id_asaas + pago_em + período de atendimento existem para
+  // IDENTIFICAR a cobrança. Sem eles, quem fatura por sessão (uma cobrança por
+  // atendimento, criadas todas no mesmo lote) via linhas idênticas no PDF —
+  // mesmo responsável, mesmo created_at, mesmo paciente, mesmo valor — e o
+  // relatório parecia estar duplicando registros.
+  id_asaas?: string | null;
+  pago_em?: string | null;
+  periodo_inicio?: string | null;
+  periodo_fim?: string | null;
+  qtd_consultas?: number | null;
   responsavel_nome?: string | null;
   pacientes_atendidos?: string[] | null;
+  paciente_nome?: string | null;
   empresa_razao_social?: string | null;
   empresa_nome_fantasia?: string | null;
   valor_total: number;
@@ -57,16 +68,60 @@ const brl = (v: number) =>
     v || 0
   );
 
-// created_at vem em ISO (UTC). Mostramos só a data, em horário de Brasília.
+// AI dev note: lê a string SEM converter fuso. Usado onde o valor é hora de
+// parede (data_hora dos agendamentos, gravada com offset +00 por acidente do
+// tipo) ou data pura — converter nesses casos joga a sessão das 21h pro dia
+// seguinte, e a data de pagamento pro dia anterior.
+const parede = (v: string) => {
+  const [datePart, timePart = ''] = String(v).split(/[T ]/);
+  const [y, m, d] = datePart.split('-');
+  const ok = Boolean(y && m && d);
+  return {
+    data: ok ? `${d}/${m}/${y}` : datePart,
+    dataCurta: ok ? `${d}/${m}/${y.slice(2)}` : datePart,
+    diaMes: ok ? `${d}/${m}` : datePart,
+    hora: timePart.slice(0, 5),
+  };
+};
+
+// created_at é instante real (default now() do banco). Mostramos só a data, em
+// horário de Brasília. Se a string vier num formato que o Date não entende, cai
+// no fatiamento — num relatório fiscal "Invalid Date" não pode vazar.
 const dataBR = (iso: string) => {
   if (!iso) return '--/--/----';
-  try {
-    return new Date(iso).toLocaleDateString('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-    });
-  } catch {
-    return iso.split('T')[0];
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return parede(iso).data;
+  return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+};
+
+// AI dev note: pago_em é AMBÍGUO. Metade vem do webhook (instante real, com
+// hora); a outra metade (~48% das faturas) vem do paymentDate do Asaas, que é
+// uma DATA pura gravada como meia-noite UTC. Converter esse segundo caso para
+// America/Sao_Paulo joga a data pro dia ANTERIOR (00:00Z = 21h em Brasília) e
+// erra o dia do pagamento — inaceitável num relatório fiscal. Heurística:
+// meia-noite UTC cravada => data pura, lê-se fatiando; qualquer outra hora =>
+// instante real, converte o fuso.
+const dataPagamentoBR = (iso?: string | null) => {
+  if (!iso) return '—';
+  const s = String(iso);
+  return /T00:00:00(\.0+)?(Z|\+00:00)$/.test(s) ? parede(s).data : dataBR(s);
+};
+
+// "23/05/26 13:30" · "17/06 a 20/06/26 (2)" — o que separa uma cobrança da
+// outra quando o faturamento é por sessão. No mesmo dia a HORA é o único
+// discriminador humano (ex.: duas sessões em 17/05, 10h e 17h, cobradas
+// separadamente), então ela aparece sempre que a fatura tem uma consulta só.
+const atendimentoLabel = (f: FaturaNfeRow): string => {
+  if (!f.periodo_inicio) return '—';
+  const ini = parede(f.periodo_inicio);
+  const fim = f.periodo_fim ? parede(f.periodo_fim) : ini;
+  const qtd = f.qtd_consultas || 0;
+  if (ini.dataCurta === fim.dataCurta) {
+    return qtd > 1
+      ? `${ini.dataCurta} (${qtd})`
+      : `${ini.dataCurta} ${ini.hora}`.trim();
   }
+  return `${ini.diaMes} a ${fim.dataCurta}${qtd > 1 ? ` (${qtd})` : ''}`;
 };
 
 const fatStatusLabel = (s: string) =>
@@ -135,11 +190,14 @@ export function gerarRelatorioNfePdf(
     margin: { left: marginX, right: marginX },
     head: [
       [
-        'Data',
+        'Criada',
+        'Pago em',
+        'Atendimento',
         'Responsável',
         'Paciente(s)',
         'Empresa',
         'Valor',
+        'Cobrança',
         'Status',
         'NFe',
       ],
@@ -148,28 +206,44 @@ export function gerarRelatorioNfePdf(
       const ns = statusNfe(f.link_nfe);
       return [
         dataBR(f.created_at),
+        dataPagamentoBR(f.pago_em),
+        atendimentoLabel(f),
         f.responsavel_nome || '—',
-        (f.pacientes_atendidos || []).join(', ') || '—',
+        (f.pacientes_atendidos || []).join(', ') || f.paciente_nome || '—',
         f.empresa_razao_social || f.empresa_nome_fantasia || '—',
         brl(f.valor_total),
+        f.id_asaas || '—',
         fatStatusLabel(f.status),
         nfeStatusLabel(ns),
       ];
     }),
-    styles: { fontSize: 8, cellPadding: 1.6, overflow: 'linebreak' },
-    headStyles: { fillColor: [64, 106, 128], textColor: 255, fontSize: 8 },
+    styles: { fontSize: 7, cellPadding: 1.4, overflow: 'linebreak' },
+    headStyles: { fillColor: [64, 106, 128], textColor: 255, fontSize: 7 },
+    // AI dev note: a soma TEM que dar 273 = 297 (A4 paisagem) - 2x12 de margem.
+    // Com largura fixa em todas as colunas o autoTable não tem o que redistribuir
+    // e loga "N units width could not fit page" — que, apesar do nome, é o espaço
+    // SOBRANDO (resizeWidth = disponível - soma). Mexeu numa, compense em outra.
     columnStyles: {
-      0: { cellWidth: 20 },
-      1: { cellWidth: 55 },
-      2: { cellWidth: 62 },
-      3: { cellWidth: 45 },
-      4: { cellWidth: 26, halign: 'right' },
-      5: { cellWidth: 22 },
-      6: { cellWidth: 25 },
+      0: { cellWidth: 16 },
+      1: { cellWidth: 16 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 42 },
+      4: { cellWidth: 44 },
+      // fonte 6 porque a razão social mais longa em uso ("F.S PACHECO
+      // FISIOTERAPIA LTDA") precisa de 43mm a 7pt e só 37 a 6pt. Como a empresa
+      // se repete em toda linha, deixá-la quebrar dobrava a altura do relatório
+      // inteiro. Encurtar para nome_fantasia não serve: em nota fiscal quem
+      // emite é a razão social.
+      5: { cellWidth: 38, fontSize: 6 },
+      6: { cellWidth: 21, halign: 'right' },
+      // id_asaas é longo (pay_ + 16 chars); fonte menor evita quebrar em 2 linhas
+      7: { cellWidth: 27, fontSize: 6 },
+      8: { cellWidth: 18 },
+      9: { cellWidth: 21 },
     },
     // Colore a célula da coluna NFe conforme o status
     didParseCell: (data) => {
-      if (data.section === 'body' && data.column.index === 6) {
+      if (data.section === 'body' && data.column.index === 9) {
         const ns = statusNfe(faturas[data.row.index]?.link_nfe);
         data.cell.styles.textColor = cores[ns];
         data.cell.styles.fontStyle = 'bold';

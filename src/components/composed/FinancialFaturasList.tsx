@@ -666,8 +666,11 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   const fetchFaturasDoFiltro = useCallback(async (): Promise<
     FaturaComDetalhes[]
   > => {
+    // AI dev note: id_asaas/pago_em/periodo_*/qtd_consultas entram por causa do
+    // PDF — sem eles duas cobranças da mesma pessoa criadas no mesmo lote saem
+    // como linhas idênticas no relatório (ver relatorio-nfe.ts).
     const campos =
-      'id, created_at, status, valor_total, link_nfe, responsavel_nome, empresa_id, empresa_razao_social, empresa_nome_fantasia, pacientes_atendidos, profissionais_envolvidos';
+      'id, id_asaas, created_at, pago_em, periodo_inicio, periodo_fim, qtd_consultas, status, valor_total, link_nfe, responsavel_nome, empresa_id, empresa_razao_social, empresa_nome_fantasia, paciente_nome, pacientes_atendidos, profissionais_envolvidos';
 
     const buildQuery = () =>
       aplicarOrdenacaoServidor(
