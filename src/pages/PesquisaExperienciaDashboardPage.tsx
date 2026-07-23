@@ -420,7 +420,7 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
                   barColor="amarelo"
                 />
                 <PesquisaDistribuicaoBarras
-                  title="Conteúdo nas redes sociais"
+                  title="Utilidade do conteúdo nas redes"
                   items={stats.distribuicaoConteudoRedes}
                   barColor="verde"
                 />
@@ -440,7 +440,7 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
                   barColor="verde"
                 />
                 <PesquisaDistribuicaoBarras
-                  title="O que faz valer a pena"
+                  title="O que mais importa no atendimento"
                   subtitle="Até 2 por respondente"
                   items={stats.distribuicaoOQueValePena}
                   barColor="azul"
@@ -451,7 +451,7 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
                   barColor="roxo"
                 />
                 <PesquisaDistribuicaoBarras
-                  title="Tranquilidade para a família"
+                  title="Efeito na tranquilidade da família"
                   items={stats.distribuicaoTrazTranquilidade}
                   barColor="verde"
                 />
@@ -489,7 +489,7 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
                   barColor="roxo"
                 />
                 <PesquisaDistribuicaoBarras
-                  title="O que mais surpreendeu positivamente"
+                  title="O que mais chamou atenção"
                   subtitle="Múltipla escolha"
                   items={stats.distribuicaoSurpresaPositiva}
                   barColor="amarelo"
@@ -517,7 +517,7 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
                 <PesquisaComentariosList
                   rows={filteredRows}
                   field="o_que_mais_ama"
-                  title="O que mais amam"
+                  title="O que funcionou bem"
                   accent="verde"
                 />
                 <PesquisaComentariosList
@@ -544,7 +544,7 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Cruzamentos para entender padrões de satisfação, fontes de
-                    aquisição mais eficazes e perfil de quem mais ama (e de quem
+                    aquisição mais eficazes e perfil de quem promove (e de quem
                     reclama).
                   </p>
                 </div>

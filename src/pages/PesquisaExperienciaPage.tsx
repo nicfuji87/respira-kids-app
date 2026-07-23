@@ -3,7 +3,7 @@
 // Fluxo: welcome -> N perguntas (uma por tela) -> tela final.
 // Não persiste localStorage entre sessões (deve sentir sempre como conversa nova).
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/primitives/use-toast';
 import {
   PesquisaProgress,
@@ -89,8 +89,15 @@ export const PesquisaExperienciaPage: React.FC = () => {
     []
   );
 
+  // handleAdvance dispara o submit de dentro do updater do setResposta, que o
+  // StrictMode invoca duas vezes — e um duplo toque em "Finalizar pesquisa"
+  // teria o mesmo efeito. Ref de guarda evita gravar a resposta em duplicata.
+  const submittedRef = useRef(false);
+
   const submitFinal = useCallback(
     async (finalResposta: PesquisaExperienciaResposta) => {
+      if (submittedRef.current) return;
+      submittedRef.current = true;
       setStage('submitting');
       try {
         await submitPesquisaExperiencia(finalResposta);
@@ -105,6 +112,7 @@ export const PesquisaExperienciaPage: React.FC = () => {
             'Verifique sua conexão e tente novamente em instantes. 💙',
           variant: 'destructive',
         });
+        submittedRef.current = false;
         setStage('question');
       }
     },

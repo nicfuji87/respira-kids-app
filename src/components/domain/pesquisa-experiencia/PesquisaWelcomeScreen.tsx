@@ -1,9 +1,11 @@
-// AI dev note: Tela inicial humanizada da pesquisa.
-// Mensagem acolhedora + aviso de anonimato + botão "Começar".
+// AI dev note: Tela inicial da pesquisa.
+// Aviso de anonimato + botão "Começar". Sem coração/emoji e sem frase de afeto:
+// o que aparece antes da 1ª pergunta define o clima em que ela é respondida
+// (priming). Aqui a mensagem é a neutralidade — "não existe resposta certa".
 
 import React from 'react';
 import { Button } from '@/components/primitives/button';
-import { Heart, Lock, Clock } from 'lucide-react';
+import { Lock, Clock } from 'lucide-react';
 
 interface PesquisaWelcomeScreenProps {
   onStart: () => void;
@@ -31,13 +33,11 @@ export const PesquisaWelcomeScreen = React.memo<PesquisaWelcomeScreenProps>(
         {/* Mensagem principal */}
         <div className="space-y-3">
           <h1 className="text-3xl md:text-4xl font-bold text-foreground leading-tight">
-            Queremos conhecer melhor sua família{' '}
-            <span className="inline-block">
-              <Heart className="inline-block w-8 h-8 text-vermelho-kids fill-vermelho-kids align-middle" />
-            </span>
+            Queremos conhecer melhor sua família
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground">
-            Sua experiência é muito importante para nós.
+            Não existe resposta certa nem errada — o que ajuda é a sua opinião
+            sincera.
           </p>
         </div>
 

@@ -196,7 +196,7 @@ export const PesquisaPerfilGrupoCard = React.memo<PesquisaPerfilGrupoCardProps>(
               {perfil.comentariosAma.length > 0 && (
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80 font-semibold mb-2">
-                    O que mais amam
+                    O que funcionou bem
                   </p>
                   <ul className="space-y-1.5">
                     {perfil.comentariosAma.slice(0, 3).map((c, i) => (
