@@ -157,8 +157,8 @@ export interface EstadoGeralAntes {
   // 6️⃣ Sintomas Respiratórios - Tosse
   tosse?: 'ausente' | 'seca' | 'produtiva' | null;
   // Se produtiva: eficácia
-  tosse_eficacia?: 'eficaz' | 'ineficaz' | null;
-  // Se eficaz: destino da secreção
+  tosse_eficacia?: 'eficaz' | 'pouco_eficaz' | 'ineficaz' | null;
+  // Se eficaz: destino da secreção (não abre para "pouco eficaz" nem "ineficaz")
   tosse_destino?: 'degluticao' | 'expectoracao' | null;
   // Se expectoração: cor e quantidade
   secrecao_cor?: 'clara' | 'amarelada' | 'esverdeada' | null;

@@ -935,7 +935,12 @@ export const AppointmentDetailsManager =
                 ev.estado_geral_antes.tosse === 'produtiva' &&
                 ev.estado_geral_antes.tosse_eficacia
               ) {
-                tosseInfo += ` → ${ev.estado_geral_antes.tosse_eficacia === 'eficaz' ? 'Eficaz' : 'Ineficaz'}`;
+                const eficaciaMap: Record<string, string> = {
+                  eficaz: 'Eficaz',
+                  pouco_eficaz: 'Pouco eficaz',
+                  ineficaz: 'Ineficaz',
+                };
+                tosseInfo += ` → ${eficaciaMap[ev.estado_geral_antes.tosse_eficacia] || ev.estado_geral_antes.tosse_eficacia}`;
                 if (
                   ev.estado_geral_antes.tosse_eficacia === 'eficaz' &&
                   ev.estado_geral_antes.tosse_destino

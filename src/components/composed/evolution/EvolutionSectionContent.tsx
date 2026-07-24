@@ -714,7 +714,7 @@ export const EvolutionSectionContent: React.FC<
                     <RadioButtonGroup
                       value={estado.tosse_eficacia}
                       onChange={(v) => {
-                        const val = v as 'eficaz' | 'ineficaz';
+                        const val = v as 'eficaz' | 'pouco_eficaz' | 'ineficaz';
                         updateEstado({
                           tosse_eficacia: val,
                           // Limpa campos dependentes se não for eficaz
@@ -734,6 +734,7 @@ export const EvolutionSectionContent: React.FC<
                       }}
                       options={[
                         { valor: 'eficaz', label: '✅ Eficaz' },
+                        { valor: 'pouco_eficaz', label: '🟡 Pouco eficaz' },
                         { valor: 'ineficaz', label: '❌ Ineficaz' },
                       ]}
                       disabled={disabled}
