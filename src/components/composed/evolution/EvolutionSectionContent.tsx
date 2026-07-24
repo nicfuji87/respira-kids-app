@@ -1002,12 +1002,19 @@ export const EvolutionSectionContent: React.FC<
                 <RadioButtonGroup
                   value={avaliacao.padrao_respiratorio.tipo}
                   onChange={(v) =>
-                    updatePadrao({ tipo: v as 'nasal' | 'oral' | 'misto' })
+                    updatePadrao({
+                      tipo: v as
+                        | 'nasal'
+                        | 'oral'
+                        | 'misto'
+                        | 'traqueostomizado',
+                    })
                   }
                   options={[
                     { valor: 'nasal', label: 'Nasal' },
                     { valor: 'oral', label: 'Oral' },
                     { valor: 'misto', label: 'Misto' },
+                    { valor: 'traqueostomizado', label: 'Traqueostomizado' },
                   ]}
                   disabled={disabled}
                 />

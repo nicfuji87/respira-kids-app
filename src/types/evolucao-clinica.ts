@@ -38,7 +38,7 @@ export type ClassificacaoClinicaRespiratoria =
   | null;
 
 export interface PadraoRespiratorio {
-  tipo: 'nasal' | 'oral' | 'misto' | null;
+  tipo: 'nasal' | 'oral' | 'misto' | 'traqueostomizado' | null;
   ritmo_respiratorio: RitmoRespiratorio; // Eupneico, Bradipneico, Taquipneico
   dispneia: boolean; // Presença de dispneia (sinais de esforço)
   // Classificação automática derivada

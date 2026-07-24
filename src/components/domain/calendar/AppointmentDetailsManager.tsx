@@ -978,6 +978,15 @@ export const AppointmentDetailsManager =
 
             const padrao = ev.avaliacao_antes.padrao_respiratorio;
             conteudoResumo += `🫁 Padrão Respiratório\n`;
+            if (padrao.tipo) {
+              const tipoMap: Record<string, string> = {
+                nasal: 'Nasal',
+                oral: 'Oral',
+                misto: 'Misto',
+                traqueostomizado: 'Traqueostomizado',
+              };
+              conteudoResumo += `   • Tipo: ${tipoMap[padrao.tipo] || padrao.tipo}\n`;
+            }
             if (padrao.ritmo_respiratorio) {
               const ritmoMap: Record<string, string> = {
                 eupneico: 'Eupneico',
