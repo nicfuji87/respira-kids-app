@@ -1288,6 +1288,10 @@ export const AppointmentDetailsManager =
                   conteudoResumo += `   ✓ Técnica demonstrada\n`;
                 if (ev.orientacoes.higiene_nasal_frequencia_orientada)
                   conteudoResumo += `   ✓ Frequência orientada conforme idade\n`;
+                if (
+                  ev.orientacoes.higiene_nasal_frequencia_conforme_necessidade
+                )
+                  conteudoResumo += `   ✓ Frequência orientada conforme necessidade\n`;
               }
               if (ev.orientacoes.posicionamento_dormir) {
                 conteudoResumo += `\n🛏️ Posicionamento para Dormir e Repouso\n`;

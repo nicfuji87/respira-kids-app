@@ -1042,7 +1042,20 @@ export const EvolutionSectionContent: React.FC<
               <BooleanField
                 label="Presença de Dispneia (Sinais de Esforço)"
                 value={avaliacao.padrao_respiratorio.dispneia}
-                onChange={(checked) => updatePadrao({ dispneia: checked })}
+                onChange={(checked) => {
+                  updatePadrao({ dispneia: checked });
+                  // Sem esforço respiratório não há melhora de padrão nem
+                  // redução de desconforto a avaliar depois - limpa respostas
+                  if (!checked) {
+                    onRespiratoriaChange({
+                      avaliacao_depois: {
+                        ...evolucao.avaliacao_depois,
+                        melhora_padrao_respiratorio: false,
+                        reducao_desconforto: false,
+                      },
+                    });
+                  }
+                }}
                 disabled={disabled}
               />
             </div>
@@ -1882,6 +1895,9 @@ export const EvolutionSectionContent: React.FC<
       // -----------------------------------------------------------------
       case 'avaliacao_depois': {
         const depois = evolucao.avaliacao_depois;
+        // Itens de esforço respiratório só fazem sentido se havia dispneia antes
+        const tinhaDispneia =
+          evolucao.avaliacao_antes.padrao_respiratorio.dispneia;
 
         const updateDepois = (
           updates: Partial<AvaliacaoRespiratoriaDepois>
@@ -1893,15 +1909,22 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <BooleanField
-                value={depois.melhora_padrao_respiratorio}
-                onChange={(checked) =>
-                  updateDepois({ melhora_padrao_respiratorio: checked })
-                }
-                label="Melhora do Padrão Respiratório"
-                disabled={disabled}
-              />
+            <div
+              className={cn(
+                'grid grid-cols-1 gap-4',
+                tinhaDispneia ? 'md:grid-cols-3' : 'md:grid-cols-1'
+              )}
+            >
+              {tinhaDispneia && (
+                <BooleanField
+                  value={depois.melhora_padrao_respiratorio}
+                  onChange={(checked) =>
+                    updateDepois({ melhora_padrao_respiratorio: checked })
+                  }
+                  label="Melhora do Padrão Respiratório"
+                  disabled={disabled}
+                />
+              )}
               <BooleanField
                 value={depois.eliminacao_secrecao}
                 onChange={(checked) =>
@@ -1910,15 +1933,23 @@ export const EvolutionSectionContent: React.FC<
                 label="Eliminação de Secreção"
                 disabled={disabled}
               />
-              <BooleanField
-                value={depois.reducao_desconforto}
-                onChange={(checked) =>
-                  updateDepois({ reducao_desconforto: checked })
-                }
-                label="Redução de Sinais de Desconforto"
-                disabled={disabled}
-              />
+              {tinhaDispneia && (
+                <BooleanField
+                  value={depois.reducao_desconforto}
+                  onChange={(checked) =>
+                    updateDepois({ reducao_desconforto: checked })
+                  }
+                  label="Redução de Sinais de Desconforto"
+                  disabled={disabled}
+                />
+              )}
             </div>
+            {!tinhaDispneia && (
+              <p className="text-sm text-muted-foreground -mt-4">
+                Sem dispneia na avaliação inicial: melhora do padrão
+                respiratório e redução de sinais de desconforto não se aplicam.
+              </p>
+            )}
 
             {/* Tolerância e Comportamento Durante a Sessão */}
             <div className="border rounded-lg p-4 space-y-4">
@@ -2057,51 +2088,47 @@ export const EvolutionSectionContent: React.FC<
               <h4 className="font-medium text-green-700">
                 🌡️ Sinais Vitais Após Intervenção
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="SpO₂ (%)">
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={100}
-                    value={depois.saturacao_o2 || ''}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9]/g, '');
-                      updateDepois({
-                        saturacao_o2: value ? Number(value) : undefined,
-                      });
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        [
-                          'Backspace',
-                          'Delete',
-                          'Tab',
-                          'Escape',
-                          'Enter',
-                        ].includes(e.key) ||
-                        (e.ctrlKey &&
-                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
-                        [
-                          'ArrowLeft',
-                          'ArrowRight',
-                          'ArrowUp',
-                          'ArrowDown',
-                        ].includes(e.key)
-                      ) {
-                        return;
-                      }
-                      if (!/[0-9]/.test(e.key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="98"
-                    disabled={disabled}
-                    className="w-full"
-                  />
-                </Field>
+              {/* SpO₂ com chips de atalho + campo p/ valores fora da faixa */}
+              <Field label="SpO₂ (%) (pós-atendimento)">
+                <RadioButtonGroup
+                  value={
+                    depois.saturacao_o2 != null
+                      ? String(depois.saturacao_o2)
+                      : null
+                  }
+                  onChange={(v) => updateDepois({ saturacao_o2: Number(v) })}
+                  options={[
+                    { valor: '94', label: '94' },
+                    { valor: '95', label: '95' },
+                    { valor: '96', label: '96' },
+                    { valor: '97', label: '97' },
+                    { valor: '98', label: '98' },
+                    { valor: '99', label: '99' },
+                    { valor: '100', label: '100' },
+                  ]}
+                  size="sm"
+                  disabled={disabled}
+                />
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100}
+                  value={depois.saturacao_o2 || ''}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    updateDepois({
+                      saturacao_o2: value ? Number(value) : undefined,
+                    });
+                  }}
+                  placeholder="Outro valor"
+                  disabled={disabled}
+                  className="w-full sm:w-40"
+                />
+              </Field>
 
-                <Field label="FC (bpm)">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="FC (bpm) (pós-atendimento)">
                   <Input
                     type="number"
                     inputMode="numeric"
@@ -2241,6 +2268,19 @@ export const EvolutionSectionContent: React.FC<
                     onChange={(checked) =>
                       updateOrientacoes({
                         higiene_nasal_frequencia_orientada: checked,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <CheckboxField
+                    label="Frequência orientada conforme necessidade"
+                    checked={
+                      orientacoes.higiene_nasal_frequencia_conforme_necessidade ||
+                      false
+                    }
+                    onChange={(checked) =>
+                      updateOrientacoes({
+                        higiene_nasal_frequencia_conforme_necessidade: checked,
                       })
                     }
                     disabled={disabled}

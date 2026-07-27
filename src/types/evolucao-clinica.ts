@@ -225,6 +225,7 @@ export interface OrientacoesRespiratoria {
   higiene_nasal: boolean;
   higiene_nasal_tecnica_demonstrada?: boolean;
   higiene_nasal_frequencia_orientada?: boolean;
+  higiene_nasal_frequencia_conforme_necessidade?: boolean;
 
   // Posicionamento para Dormir e Repouso
   posicionamento_dormir: boolean;
