@@ -712,28 +712,82 @@ export function getAvaliacaoRespiratoriaNormal(): AvaliacaoRespiratoriaAntes {
 }
 
 /**
+ * Seções que o carry-forward preenche e que precisam de revisão explícita
+ * antes de salvar. `avaliacao_depois` fica de fora de propósito: a resposta ao
+ * tratamento é o resultado desta sessão e nunca pode vir pronta.
+ */
+export const SECOES_REAPROVEITAVEIS_RESPIRATORIA = [
+  'estado_geral_antes',
+  'avaliacao_antes',
+  'intervencao',
+  'orientacoes',
+  'conduta',
+] as const;
+
+/**
  * Cria uma nova evolução respiratória reaproveitando a última do paciente.
- * Copia apenas o que é estável entre sessões (contexto clínico, conduta e
- * orientações). Exame, intervenção e resposta começam em branco — devem ser
- * refeitos a cada atendimento (evita documentar achados/condutas que não
- * ocorreram nesta sessão).
+ *
+ * Copia o quadro clínico, o exame, as técnicas aplicadas, as orientações e a
+ * conduta — tudo o que serve de ponto de partida numa sessão de seguimento.
+ * NÃO copia:
+ * - valores medidos nesta sessão (temperatura, FC, SpO₂) — teriam que ser
+ *   remedidos e um número herdado vira dado falso no prontuário;
+ * - o que a aspiração produziu (quantidade, aspecto, consistência, sangramento);
+ * - a resposta ao tratamento (`avaliacao_depois`), que só existe depois de
+ *   atender;
+ * - observações em texto livre, que descrevem aquela sessão específica.
+ *
+ * Quem chama deve marcar as seções copiadas como pendentes de revisão
+ * (ver SECOES_REAPROVEITAVEIS_RESPIRATORIA) — o objetivo é encurtar o
+ * preenchimento, não documentar achado que ninguém examinou.
  */
 export function criarEvolucaoRespiratoriaDeAnterior(
   anterior: EvolucaoRespiratoria
 ): EvolucaoRespiratoria {
   const nova = criarEvolucaoRespiratoriaVazia();
   const ant = anterior.estado_geral_antes || ({} as EstadoGeralAntes);
+
+  // Estado geral: copia tudo menos os vitais medidos e as observações
   nova.estado_geral_antes = {
     ...nova.estado_geral_antes,
-    // Contexto clínico (estável entre sessões)
-    infeccao_recente: ant.infeccao_recente,
-    episodios_recorrentes_sibilancia: ant.episodios_recorrentes_sibilancia,
-    contato_pessoas_sintomaticas: ant.contato_pessoas_sintomaticas,
-    uso_medicacao_respiratoria: ant.uso_medicacao_respiratoria,
-    inicio_sintomas_dias: ant.inicio_sintomas_dias,
-    quadro_compativel_com: ant.quadro_compativel_com || [],
-    origem_informacao_quadro: ant.origem_informacao_quadro || [],
+    ...ant,
+    temperatura_aferida: undefined,
+    temperatura_nao_aferida: undefined,
+    frequencia_cardiaca: undefined,
+    saturacao_o2: undefined,
+    saturacao_nao_aferida: undefined,
+    saturacao_com_suporte: undefined,
+    observacoes: undefined,
   };
+
+  // Exame respiratório (padrão, sinais de esforço e ausculta)
+  if (anterior.avaliacao_antes) {
+    nova.avaliacao_antes = {
+      padrao_respiratorio: { ...anterior.avaliacao_antes.padrao_respiratorio },
+      sinais_dispneia: { ...anterior.avaliacao_antes.sinais_dispneia },
+      ausculta: {
+        hemitorax_direito: {
+          ...anterior.avaliacao_antes.ausculta.hemitorax_direito,
+        },
+        hemitorax_esquerdo: {
+          ...anterior.avaliacao_antes.ausculta.hemitorax_esquerdo,
+        },
+      },
+    };
+  }
+
+  // Intervenção: mantém as técnicas, zera o que a aspiração produziu
+  if (anterior.intervencao) {
+    nova.intervencao = {
+      ...anterior.intervencao,
+      aspiracao_quantidade: null,
+      aspiracao_consistencia: null,
+      aspiracao_aspecto: null,
+      aspiracao_sangramento: null,
+      observacoes: undefined,
+    };
+  }
+
   // Plano terapêutico (estável)
   if (anterior.conduta) nova.conduta = { ...anterior.conduta };
   if (anterior.orientacoes) nova.orientacoes = { ...anterior.orientacoes };

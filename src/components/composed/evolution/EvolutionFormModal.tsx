@@ -53,6 +53,7 @@ import {
   criarEvolucaoRespiratoriaDeAnterior,
   criarEvolucaoMotoraAssimetriaVazia,
   verificarSecaoEvolucaoCompleta,
+  SECOES_REAPROVEITAVEIS_RESPIRATORIA,
 } from '@/types/evolucao-clinica';
 import { EvolutionSectionContent } from './EvolutionSectionContent';
 
@@ -92,6 +93,10 @@ interface AutosaveData {
   evolucao_respiratoria?: EvolucaoRespiratoria;
   evolucao_motora_assimetria?: EvolucaoMotoraAssimetria;
   savedAt: string;
+  // AI dev note: a pendência de revisão viaja no rascunho — sem isso, fechar e
+  // reabrir o modal faria os dados reaproveitados passarem sem conferência
+  secoes_pendentes_revisao?: string[];
+  reaproveitado_de?: string | null;
 }
 
 export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
@@ -157,21 +162,44 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
   const isReadOnly = mode === 'view';
 
-  // AI dev note: carry-forward — reaproveita a última evolução do paciente
-  // (contexto clínico, conduta e orientações) como ponto de partida.
+  // AI dev note: carry-forward — repete a última evolução do paciente como
+  // ponto de partida. As seções copiadas ficam pendentes de revisão até serem
+  // editadas ou confirmadas; salvar com pendência é bloqueado (ver handleSave).
   const [carryApplied, setCarryApplied] = useState(false);
+  const [secoesPendentesRevisao, setSecoesPendentesRevisao] = useState<
+    string[]
+  >([]);
+  const [reaproveitadoDe, setReaproveitadoDe] = useState<string | null>(null);
+  const [showRevisaoPendente, setShowRevisaoPendente] = useState(false);
+
   const podeReaproveitar =
     mode === 'create' &&
     tipoEvolucao === 'respiratoria' &&
     !!previousData?.evolucao_respiratoria &&
     !carryApplied;
+
   const aplicarReaproveitamento = useCallback(() => {
     if (!previousData?.evolucao_respiratoria) return;
     setEvolucaoRespiratoria(
       criarEvolucaoRespiratoriaDeAnterior(previousData.evolucao_respiratoria)
     );
     setCarryApplied(true);
-  }, [previousData]);
+    setSecoesPendentesRevisao([...SECOES_REAPROVEITAVEIS_RESPIRATORIA]);
+    setReaproveitadoDe(previousDate ?? null);
+    setCurrentSection(0);
+  }, [previousData, previousDate]);
+
+  const marcarSecaoRevisada = useCallback((secaoId: string) => {
+    setSecoesPendentesRevisao((prev) => prev.filter((s) => s !== secaoId));
+  }, []);
+
+  const dataReaproveitadaLabel = useMemo(
+    () =>
+      reaproveitadoDe
+        ? new Date(reaproveitadoDe).toLocaleDateString('pt-BR')
+        : null,
+    [reaproveitadoDe]
+  );
 
   // Scroll to top when section changes
   useEffect(() => {
@@ -219,6 +247,8 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
         evolucao_motora_assimetria:
           tipoEvolucao === 'motora_assimetria' ? evolucaoMotora : undefined,
         savedAt: new Date().toISOString(),
+        secoes_pendentes_revisao: secoesPendentesRevisao,
+        reaproveitado_de: reaproveitadoDe,
       };
       localStorage.setItem(autosaveKey, JSON.stringify(data));
       setLastSaved(new Date());
@@ -231,6 +261,8 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     evolucaoRespiratoria,
     evolucaoMotora,
     isReadOnly,
+    secoesPendentesRevisao,
+    reaproveitadoDe,
   ]);
 
   // Função para limpar rascunho
@@ -302,9 +334,15 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
           criarEvolucaoMotoraAssimetriaVazia()
       );
       setCurrentSection(0);
+      // AI dev note: sem este reset o carry-forward de um atendimento vazaria
+      // para o próximo (o modal não desmonta entre aberturas)
+      setCarryApplied(false);
+      setSecoesPendentesRevisao([]);
+      setReaproveitadoDe(null);
     } else {
       setPendingDraft(null);
       setShowCloseConfirm(false);
+      setShowRevisaoPendente(false);
     }
   }, [
     isOpen,
@@ -327,6 +365,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     }
     setLastSaved(new Date(pendingDraft.savedAt));
     setCurrentSection(0);
+    if (pendingDraft.secoes_pendentes_revisao?.length) {
+      setSecoesPendentesRevisao(pendingDraft.secoes_pendentes_revisao);
+      setReaproveitadoDe(pendingDraft.reaproveitado_de ?? null);
+      setCarryApplied(true);
+    }
     setPendingDraft(null);
   }, [pendingDraft]);
 
@@ -346,6 +389,14 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     (updates: Partial<EvolucaoRespiratoria>) => {
       if (isReadOnly) return;
       setEvolucaoRespiratoria((prev) => ({ ...prev, ...updates }));
+      // As chaves de EvolucaoRespiratoria são os próprios ids das seções:
+      // mexeu na seção, considera revisada
+      const secoesTocadas = Object.keys(updates);
+      setSecoesPendentesRevisao((prev) =>
+        prev.some((s) => secoesTocadas.includes(s))
+          ? prev.filter((s) => !secoesTocadas.includes(s))
+          : prev
+      );
     },
     [isReadOnly]
   );
@@ -361,6 +412,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
   // Salvar
   const handleSave = async () => {
+    // Bloqueia salvar enquanto houver seção reaproveitada sem conferência
+    if (secoesPendentesRevisao.length > 0) {
+      setShowRevisaoPendente(true);
+      return;
+    }
     setIsSaving(true);
     try {
       await onSave({
@@ -558,7 +614,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setCurrentSection(index)}
-                        aria-label={`Seção ${index + 1}: ${secao.titulo} — ${getStatusLabel(secao.id)}`}
+                        aria-label={`Seção ${index + 1}: ${secao.titulo} — ${getStatusLabel(secao.id)}${
+                          secoesPendentesRevisao.includes(secao.id)
+                            ? ', copiada da evolução anterior, aguardando conferência'
+                            : ''
+                        }`}
                         aria-current={
                           currentSection === index ? 'step' : undefined
                         }
@@ -566,7 +626,9 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                           'flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all shrink-0',
                           currentSection === index
                             ? 'bg-primary text-primary-foreground scale-110'
-                            : 'bg-muted hover:bg-accent'
+                            : 'bg-muted hover:bg-accent',
+                          secoesPendentesRevisao.includes(secao.id) &&
+                            'ring-2 ring-amber-400 ring-offset-1'
                         )}
                       >
                         {getStatusIcon(secao.id, 'h-3 w-3 sm:h-4 sm:w-4')}
@@ -584,18 +646,19 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
           {/* Conteúdo da seção */}
           <ScrollArea className="flex-1" ref={scrollAreaRef}>
             <div className="p-4 sm:p-6">
-              {podeReaproveitar && currentSection === 0 && (
+              {podeReaproveitar && (
                 <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-blue-800">
-                      Reaproveitar última evolução
+                      Repetir última evolução
                     </p>
                     <p className="text-xs text-blue-700">
                       {previousDate
                         ? `Última em ${new Date(previousDate).toLocaleDateString('pt-BR')}. `
                         : ''}
-                      Copia contexto clínico, conduta e orientações. O exame, a
-                      intervenção e a resposta começam em branco.
+                      Traz quadro, exame, técnicas, orientações e conduta como
+                      ponto de partida. Sinais vitais e resposta ao tratamento
+                      seguem em branco — e você confere seção por seção.
                     </p>
                   </div>
                   <Button
@@ -604,10 +667,37 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                     onClick={aplicarReaproveitamento}
                     className="flex-shrink-0"
                   >
-                    Usar
+                    Repetir
                   </Button>
                 </div>
               )}
+
+              {/* Seção veio da última evolução e ainda não foi conferida */}
+              {currentSectionData &&
+                secoesPendentesRevisao.includes(currentSectionData.id) && (
+                  <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-amber-900">
+                        Copiado da evolução anterior
+                        {dataReaproveitadaLabel
+                          ? ` de ${dataReaproveitadaLabel}`
+                          : ''}
+                      </p>
+                      <p className="text-xs text-amber-800">
+                        Confira se ainda descreve a criança hoje. Qualquer
+                        ajuste já marca esta seção como conferida.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => marcarSecaoRevisada(currentSectionData.id)}
+                      className="flex-shrink-0 border-amber-400 text-amber-900 hover:bg-amber-100"
+                    >
+                      Conferi
+                    </Button>
+                  </div>
+                )}
               <EvolutionSectionContent
                 tipoEvolucao={tipoEvolucao}
                 secaoId={currentSectionData?.id || ''}
@@ -725,6 +815,52 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
               </AlertDialogCancel>
               <AlertDialogAction onClick={applyPendingDraft}>
                 Recuperar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Bloqueio de salvamento com seções copiadas ainda não conferidas */}
+        <AlertDialog
+          open={showRevisaoPendente}
+          onOpenChange={setShowRevisaoPendente}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confira antes de salvar</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div>
+                  <p>
+                    Estas seções vieram da evolução anterior
+                    {dataReaproveitadaLabel
+                      ? ` de ${dataReaproveitadaLabel}`
+                      : ''}{' '}
+                    e ainda não foram conferidas:
+                  </p>
+                  <ul className="mt-2 list-disc pl-5">
+                    {secoes
+                      .filter((s) => secoesPendentesRevisao.includes(s.id))
+                      .map((s) => (
+                        <li key={s.id}>
+                          {s.icone} {s.titulo}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Voltar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  const primeira = secoes.findIndex((s) =>
+                    secoesPendentesRevisao.includes(s.id)
+                  );
+                  if (primeira >= 0) setCurrentSection(primeira);
+                  setShowRevisaoPendente(false);
+                }}
+              >
+                Ir para a primeira
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
