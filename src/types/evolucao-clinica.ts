@@ -180,6 +180,7 @@ export interface IntervencaoRespiratoria {
   posicionamentos_terapeuticos: boolean;
   estimulo_tosse: boolean;
   nebulizacao: boolean;
+  ambu: boolean; // Hiperinsuflação manual com reanimador (Ambu)
 
   // Aspiração
   aspiracao: boolean;
@@ -636,6 +637,7 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       posicionamentos_terapeuticos: false,
       estimulo_tosse: false,
       nebulizacao: false,
+      ambu: false,
       aspiracao: false,
     },
     avaliacao_depois: {
@@ -986,7 +988,8 @@ export function verificarSecaoEvolucaoCompleta(
           i.posicionamentos_terapeuticos ||
           i.estimulo_tosse ||
           i.aspiracao ||
-          i.nebulizacao;
+          i.nebulizacao ||
+          i.ambu;
         return temTecnica ? 'completo' : 'vazio';
       }
       case 'avaliacao_depois': {

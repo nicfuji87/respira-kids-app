@@ -1726,6 +1726,12 @@ export const EvolutionSectionContent: React.FC<
                   }
                   disabled={disabled}
                 />
+                <CheckboxField
+                  label="Ambu (Hiperinsuflação Manual)"
+                  checked={intervencao.ambu || false}
+                  onChange={(checked) => updateIntervencao({ ambu: checked })}
+                  disabled={disabled}
+                />
               </div>
 
               {/* PEEP - aparece se usar EPAP ou EPAP selo d'água */}

@@ -1125,6 +1125,8 @@ export const AppointmentDetailsManager =
             if (ev.intervencao.estimulo_tosse)
               tecnicas.push('Estímulo à Tosse');
             if (ev.intervencao.nebulizacao) tecnicas.push('Nebulização');
+            if (ev.intervencao.ambu)
+              tecnicas.push('Ambu (hiperinsuflação manual)');
             if (tecnicas.length > 0) {
               conteudoResumo += `🔧 Técnicas Utilizadas\n`;
               conteudoResumo += `   • ${tecnicas.join(', ')}\n`;
