@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Diagnóstico de teclado — Respira Kids</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font:
+          15px/1.4 system-ui,
+          sans-serif;
+        margin: 0;
+        padding: 12px;
+        background: #fafafa;
+        color: #111;
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0 0 4px;
+      }
+      p.sub {
+        margin: 0 0 16px;
+        color: #555;
+        font-size: 13px;
+      }
+      section {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      h2 {
+        font-size: 14px;
+        margin: 0 0 2px;
+      }
+      .hint {
+        font-size: 12px;
+        color: #666;
+        margin: 0 0 8px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 62px;
+        font-size: 16px;
+        padding: 8px;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+      }
+      .val {
+        font:
+          12px/1.4 ui-monospace,
+          monospace;
+        color: #0a7;
+        word-break: break-all;
+        margin-top: 6px;
+      }
+      #log {
+        font:
+          11px/1.35 ui-monospace,
+          monospace;
+        white-space: pre-wrap;
+        background: #111;
+        color: #0f0;
+        padding: 8px;
+        border-radius: 6px;
+        height: 260px;
+        overflow: auto;
+      }
+      button {
+        font-size: 14px;
+        padding: 8px 12px;
+        margin-right: 8px;
+        border-radius: 6px;
+        border: 1px solid #bbb;
+        background: #fff;
+      }
+      .ok {
+        color: #087;
+      }
+      .bad {
+        color: #c00;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Diagnóstico de teclado (dead key / acento)</h1>
+    <p class="sub">
+      Em cada campo abaixo digite <b>olá</b> e depois <b>ollllllá</b>. Anote em
+      qual deles o acento apaga a palavra. Depois toque em "copiar log".
+    </p>
+
+    <section>
+      <h2>A — textarea puro</h2>
+      <p class="hint">Nenhum JavaScript altera este campo. Só HTML.</p>
+      <textarea id="a" rows="2"></textarea>
+      <div class="val" id="a-val"></div>
+    </section>
+
+    <section>
+      <h2>B — textarea puro, sem correção/predição</h2>
+      <p class="hint">spellcheck/autocorrect/autocapitalize/autocomplete off.</p>
+      <textarea
+        id="b"
+        rows="2"
+        spellcheck="false"
+        autocorrect="off"
+        autocapitalize="off"
+        autocomplete="off"
+      ></textarea>
+      <div class="val" id="b-val"></div>
+    </section>
+
+    <section>
+      <h2>C — textarea puro, com a tela travando</h2>
+      <p class="hint">
+        Simula o formulário pesado: trava a thread 60ms a cada 120ms enquanto o
+        campo está focado.
+      </p>
+      <textarea id="c" rows="2"></textarea>
+      <div class="val" id="c-val"></div>
+    </section>
+
+    <section>
+      <h2>D — campo reescrito por JS a cada tecla</h2>
+      <p class="hint">
+        Imita o input controlado (comportamento antigo do app).
+      </p>
+      <textarea id="d" rows="2"></textarea>
+      <div class="val" id="d-val"></div>
+    </section>
+
+    <section>
+      <h2>Log de eventos</h2>
+      <button id="copiar">copiar log</button>
+      <button id="limpar">limpar</button>
+      <div class="val" id="ua"></div>
+      <div id="log"></div>
+    </section>
+
+    <script>
+      var logEl = document.getElementById('log');
+      var linhas = [];
+      document.getElementById('ua').textContent = navigator.userAgent;
+      linhas.push('UA: ' + navigator.userAgent);
+
+      function log(campo, evt, extra) {
+        var l = '[' + campo + '] ' + evt + (extra ? ' ' + extra : '');
+        linhas.push(l);
+        logEl.textContent += l + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function espiar(id) {
+        var el = document.getElementById(id);
+        var out = document.getElementById(id + '-val');
+        function snap() {
+          out.textContent = 'value = ' + JSON.stringify(el.value);
+        }
+        ['keydown', 'keyup'].forEach(function (t) {
+          el.addEventListener(t, function (e) {
+            log(id, t, 'key=' + JSON.stringify(e.key) + ' code=' + e.code);
+          });
+        });
+        ['beforeinput', 'input'].forEach(function (t) {
+          el.addEventListener(t, function (e) {
+            log(
+              id,
+              t,
+              'type=' +
+                e.inputType +
+                ' data=' +
+                JSON.stringify(e.data) +
+                ' composing=' +
+                e.isComposing +
+                ' value=' +
+                JSON.stringify(el.value)
+            );
+            snap();
+          });
+        });
+        ['compositionstart', 'compositionupdate', 'compositionend'].forEach(
+          function (t) {
+            el.addEventListener(t, function (e) {
+              log(
+                id,
+                t,
+                'data=' +
+                  JSON.stringify(e.data) +
+                  ' value=' +
+                  JSON.stringify(el.value)
+              );
+              snap();
+            });
+          }
+        );
+        el.addEventListener('focus', function () {
+          log(id, 'focus');
+        });
+        el.addEventListener('blur', function () {
+          log(id, 'blur', 'value=' + JSON.stringify(el.value));
+        });
+        return el;
+      }
+
+      espiar('a');
+      espiar('b');
+
+      // C: trava a thread periodicamente enquanto o campo esta focado
+      var c = espiar('c');
+      var travaTimer = null;
+      c.addEventListener('focus', function () {
+        travaTimer = setInterval(function () {
+          var fim = performance.now() + 60;
+          while (performance.now() < fim) {
+            /* trava */
+          }
+        }, 120);
+      });
+      c.addEventListener('blur', function () {
+        clearInterval(travaTimer);
+      });
+
+      // D: reescreve o value a cada input (padrao "controlado")
+      var d = espiar('d');
+      d.addEventListener('input', function () {
+        var v = d.value;
+        var pos = d.selectionStart;
+        d.value = v;
+        try {
+          d.setSelectionRange(pos, pos);
+        } catch (e) {
+          /* noop */
+        }
+      });
+
+      document.getElementById('limpar').onclick = function () {
+        linhas = ['UA: ' + navigator.userAgent];
+        logEl.textContent = '';
+        ['a', 'b', 'c', 'd'].forEach(function (id) {
+          document.getElementById(id).value = '';
+          document.getElementById(id + '-val').textContent = '';
+        });
+      };
+
+      document.getElementById('copiar').onclick = function () {
+        var txt = linhas.join('\n');
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(txt).then(
+            function () {
+              alert('Log copiado.');
+            },
+            function () {
+              alert('Falhou. Selecione o texto do log manualmente.');
+            }
+          );
+        } else {
+          alert('Selecione o texto do log manualmente.');
+        }
+      };
+    </script>
+  </body>
+</html>
