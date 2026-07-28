@@ -1802,7 +1802,7 @@ export const AppointmentDetailsManager =
 
               if (!disponivel) {
                 setConflitoAgenda(
-                  'Este horário não está disponível para o profissional (já há consulta nesse período ou um bloqueio de agenda).'
+                  'Horário indisponível: o profissional já tem consulta começando a menos de 20 minutos daqui, ou há um bloqueio de agenda no período.'
                 );
                 return;
               }

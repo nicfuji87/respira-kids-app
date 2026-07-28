@@ -558,9 +558,10 @@ export const checkHorarioDisponivel = async (
 };
 
 // AI dev note: Traduz erros de conflito de agenda vindos do banco em mensagens
-// amigáveis. A constraint agendamentos_sem_sobreposicao (appt×appt) e o trigger de
-// bloqueio (appt×block) usam ambos o SQLSTATE 23P01 (exclusion_violation);
-// distinguimos pelo conteúdo da mensagem.
+// amigáveis. A constraint agendamentos_intervalo_minimo (appt×appt — consultas do
+// mesmo profissional precisam começar com 20+ min de diferença; encaixe é
+// permitido, agendar em cima não) e o trigger de bloqueio (appt×block) usam ambos
+// o SQLSTATE 23P01 (exclusion_violation); distinguimos pelo conteúdo da mensagem.
 export const mapAgendamentoError = (error: unknown): string => {
   const message =
     error && typeof error === 'object' && 'message' in error
@@ -571,8 +572,11 @@ export const mapAgendamentoError = (error: unknown): string => {
       ? String((error as { code?: unknown }).code ?? '')
       : '';
 
-  if (message.includes('agendamentos_sem_sobreposicao')) {
-    return 'Já existe uma consulta nesse horário para este profissional.';
+  if (
+    message.includes('agendamentos_intervalo_minimo') ||
+    message.includes('agendamentos_sem_sobreposicao')
+  ) {
+    return 'Este profissional já tem uma consulta começando a menos de 20 minutos desse horário. Para encaixe, deixe pelo menos 20 minutos entre os inícios.';
   }
   if (message.toLowerCase().includes('bloqueio')) {
     return 'Este horário está bloqueado na agenda do profissional.';

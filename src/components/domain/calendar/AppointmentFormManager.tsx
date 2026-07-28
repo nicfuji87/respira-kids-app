@@ -261,7 +261,8 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             inicioMs + duracao_minutos * 60 * 1000
           ).toISOString();
 
-          // AI dev note: Fonte única — consultas ativas (agendado/confirmado) +
+          // AI dev note: Fonte única — consultas ativas (agendado/confirmado),
+          // com intervalo mínimo de 20 min entre inícios (encaixe permitido), +
           // bloqueios de agenda de clínica/profissional, por sobreposição real.
           const disponivel = await checkHorarioDisponivel(
             profissional_id,
@@ -272,7 +273,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           if (!disponivel) {
             setHasConflict(true);
             setConflictDetails(
-              'Este horário não está disponível para o profissional (já há consulta nesse período ou um bloqueio de agenda).'
+              'Horário indisponível: o profissional já tem consulta começando a menos de 20 minutos daqui, ou há um bloqueio de agenda no período.'
             );
             return;
           }
