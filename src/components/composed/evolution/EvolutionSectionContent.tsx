@@ -1735,6 +1735,20 @@ export const EvolutionSectionContent: React.FC<
                   onChange={(checked) => updateIntervencao({ ambu: checked })}
                   disabled={disabled}
                 />
+                <CheckboxField
+                  label="Acapella"
+                  checked={intervencao.acapella || false}
+                  onChange={(checked) =>
+                    updateIntervencao({ acapella: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Shaker"
+                  checked={intervencao.shaker || false}
+                  onChange={(checked) => updateIntervencao({ shaker: checked })}
+                  disabled={disabled}
+                />
               </div>
 
               {/* PEEP - aparece se usar EPAP ou EPAP selo d'água */}

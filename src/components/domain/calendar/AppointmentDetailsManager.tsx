@@ -1127,6 +1127,8 @@ export const AppointmentDetailsManager =
             if (ev.intervencao.nebulizacao) tecnicas.push('Nebulização');
             if (ev.intervencao.ambu)
               tecnicas.push('Ambu (hiperinsuflação manual)');
+            if (ev.intervencao.acapella) tecnicas.push('Acapella');
+            if (ev.intervencao.shaker) tecnicas.push('Shaker');
             if (tecnicas.length > 0) {
               conteudoResumo += `🔧 Técnicas Utilizadas\n`;
               conteudoResumo += `   • ${tecnicas.join(', ')}\n`;

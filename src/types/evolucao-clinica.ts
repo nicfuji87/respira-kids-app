@@ -181,6 +181,8 @@ export interface IntervencaoRespiratoria {
   estimulo_tosse: boolean;
   nebulizacao: boolean;
   ambu: boolean; // Hiperinsuflação manual com reanimador (Ambu)
+  acapella: boolean; // Dispositivo de PEP oscilatório
+  shaker: boolean; // Dispositivo de PEP oscilatório
 
   // Aspiração
   aspiracao: boolean;
@@ -638,6 +640,8 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       estimulo_tosse: false,
       nebulizacao: false,
       ambu: false,
+      acapella: false,
+      shaker: false,
       aspiracao: false,
     },
     avaliacao_depois: {
@@ -989,7 +993,9 @@ export function verificarSecaoEvolucaoCompleta(
           i.estimulo_tosse ||
           i.aspiracao ||
           i.nebulizacao ||
-          i.ambu;
+          i.ambu ||
+          i.acapella ||
+          i.shaker;
         return temTecnica ? 'completo' : 'vazio';
       }
       case 'avaliacao_depois': {
