@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/primitives/dialog';
 import { Button } from '@/components/primitives/button';
+import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { Textarea } from '@/components/primitives/textarea';
 import { Badge } from '@/components/primitives/badge';
@@ -295,11 +296,11 @@ export const ContactInactivePatientDialog: React.FC<
               {resultado === 'retornar_depois' && (
                 <div className="space-y-1.5">
                   <Label className="text-xs">Retornar em</Label>
-                  <input
+                  <Input
                     type="date"
                     value={proximoContato}
                     onChange={(e) => setProximoContato(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="h-10 w-full bg-background px-3 py-2 text-sm"
                   />
                 </div>
               )}

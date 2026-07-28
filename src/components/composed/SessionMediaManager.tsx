@@ -6,6 +6,7 @@ import {
   CardTitle,
 } from '@/components/primitives/card';
 import { Button } from '@/components/primitives/button';
+import { Input } from '@/components/primitives/input';
 import { Badge } from '@/components/primitives/badge';
 import {
   Select,
@@ -258,13 +259,13 @@ export const SessionMediaManager: React.FC<SessionMediaManagerProps> = ({
                     <label className="text-xs text-muted-foreground mb-1 block">
                       Descrição (opcional)
                     </label>
-                    <input
+                    <Input
                       type="text"
                       value={descricao}
                       onChange={(e) => setDescricao(e.target.value)}
                       placeholder="Ex: Evolução do tratamento"
                       disabled={isUploading}
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                      className="w-full h-10 px-3 bg-background text-sm"
                     />
                   </div>
                 </div>

@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/primitives/dialog';
 import { Button } from '@/components/primitives/button';
+import { Input } from '@/components/primitives/input';
 import { Badge } from '@/components/primitives/badge';
 import {
   Avatar,
@@ -343,12 +344,12 @@ export const PatientSelect = React.memo<PatientSelectProps>(
                 </DialogHeader>
 
                 <div className="px-4 py-3 border-b">
-                  <input
+                  <Input
                     type="text"
                     placeholder="Buscar por nome, email, telefone ou CPF..."
                     value={searchTerm}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    className="w-full p-2 border rounded-md outline-none text-sm"
+                    className="w-full h-auto p-2 text-sm"
                     autoFocus
                   />
                 </div>
@@ -402,12 +403,12 @@ export const PatientSelect = React.memo<PatientSelectProps>(
             >
               <div className="flex flex-col max-h-[400px]">
                 <div className="flex items-center border-b px-3 py-2">
-                  <input
+                  <Input
                     type="text"
                     placeholder="Buscar por nome, email, telefone ou CPF..."
                     value={searchTerm}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    className="flex-1 outline-none text-sm"
+                    className="flex-1 h-auto border-0 bg-transparent p-0 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
                     autoFocus
                   />
                   {isSearching && (
