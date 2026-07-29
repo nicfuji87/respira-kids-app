@@ -2,9 +2,10 @@
 // NÃO é base de conhecimento: a vigilância cobra a cadeia
 //   documento vigente -> equipe treinada naquela versão -> registro de execução.
 //
-// Etapa atual: só a aba Levantamento (coleta da rotina real, que é o insumo dos POPs).
-// As abas Documentos / Cronograma / Registros entram quando o levantamento fechar —
-// o schema delas já está proposto em supabase/migrations/qualidade_manual_pops.sql.
+// Etapa atual: Levantamento (coleta da rotina real) e Pendências (ações concretas
+// de adequação — licenciamento, tributário, estrutural, POPs a escrever, treinamento)
+// estão funcionais. Documentos / Cronograma / Registros entram depois — o schema
+// delas já está proposto em supabase/migrations/qualidade_manual_pops.sql.
 
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/primitives/card';
@@ -19,11 +20,17 @@ import {
   CalendarClock,
   ClipboardCheck,
   FileText,
+  ListTodo,
   Lock,
 } from 'lucide-react';
-import { LevantamentoTab } from '@/components/domain/qualidade';
+import { LevantamentoTab, PendenciasTab } from '@/components/domain/qualidade';
 
-type ManualTab = 'levantamento' | 'documentos' | 'cronograma' | 'registros';
+type ManualTab =
+  | 'levantamento'
+  | 'pendencias'
+  | 'documentos'
+  | 'cronograma'
+  | 'registros';
 
 export const ManualPage: React.FC = () => {
   const [tab, setTab] = useState<ManualTab>('levantamento');
@@ -46,6 +53,10 @@ export const ManualPage: React.FC = () => {
             <ClipboardCheck className="w-4 h-4" />
             Levantamento
           </TabsTrigger>
+          <TabsTrigger value="pendencias" className="gap-2">
+            <ListTodo className="w-4 h-4" />
+            Pendências
+          </TabsTrigger>
           <TabsTrigger value="documentos" className="gap-2">
             <FileText className="w-4 h-4" />
             Documentos
@@ -62,6 +73,10 @@ export const ManualPage: React.FC = () => {
 
         <TabsContent value="levantamento" className="mt-4">
           <LevantamentoTab />
+        </TabsContent>
+
+        <TabsContent value="pendencias" className="mt-4">
+          <PendenciasTab />
         </TabsContent>
 
         <TabsContent value="documentos" className="mt-4">
