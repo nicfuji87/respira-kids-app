@@ -63,3 +63,34 @@ export interface PendenciaRow {
   origem: string | null;
   ordem: number;
 }
+
+// ============================================================
+// Documentos do Manual (Manual de Boas Práticas + POPs versionados)
+// ============================================================
+
+export type DocumentoTipo = 'manual' | 'pop' | 'cronograma' | 'anexo';
+export type DocumentoStatus = 'rascunho' | 'vigente' | 'substituido';
+
+export interface DocumentoRow {
+  id: string;
+  created_at: string;
+  atualizado_em: string;
+  codigo: string;
+  versao: number;
+  titulo: string;
+  tipo: DocumentoTipo;
+  conteudo_md: string;
+  resumo: string | null;
+  status: DocumentoStatus;
+  vigente_desde: string | null;
+  proxima_revisao: string | null;
+  /** FK para rastreio. Nome/registro abaixo são SNAPSHOT — documento aprovado não muda. */
+  aprovado_por: string | null;
+  aprovado_por_nome: string | null;
+  aprovado_por_registro: string | null;
+  aprovado_em: string | null;
+  contexto_ancora: string[];
+  roles_alvo: string[];
+  ordem: number;
+  ativo: boolean;
+}
