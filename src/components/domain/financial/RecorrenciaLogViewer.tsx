@@ -114,15 +114,23 @@ export const RecorrenciaLogViewer = React.memo<RecorrenciaLogViewerProps>(
       try {
         setIsProcessing(true);
 
+        // AI dev note: até 29/07/2026 este botão chamava
+        // processar_lancamentos_recorrentes_manual, que referenciava colunas
+        // inexistentes (data_proxima_recorrencia, ajustar_fim_semana) e falhava em
+        // TODA execução — por isso as contas fixas ficaram paradas desde jan/2026.
+        // A função nova é idempotente: reprocessar não duplica competência.
         const { data, error } = await supabase.rpc(
-          'processar_lancamentos_recorrentes_manual'
+          'fn_gerar_lancamentos_recorrentes'
         );
 
         if (error) throw error;
 
         toast({
           title: 'Processamento concluído',
-          description: `${data.processados} lançamentos criados${data.erros > 0 ? `, ${data.erros} erros` : ''}`,
+          description:
+            data.criados > 0
+              ? `${data.criados} lançamento(s) criado(s)${data.erros > 0 ? `, ${data.erros} erro(s)` : ''}`
+              : 'Nenhuma competência pendente — tudo em dia.',
         });
 
         // Recarregar logs
