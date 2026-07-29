@@ -70,6 +70,35 @@ Relacionado: `document_storage_anon_crud` dá `ALL ... USING (true)` para `anon`
 
 Também no radar (advisory do Supabase): 4 tabelas sem RLS — `paciente_pediatra`, `_bkp_contract_pessoa_migration`, `_bkp_merge_pessoas_duplicadas`, `_bkp_consolidacao_pediatras`.
 
+### 🔴🔴 F0-bis — A família `*_anon_crud`: a anon key lê e escreve o banco inteiro
+
+Descoberto em 29/07/2026 ao varrer as policies depois de fechar `api_keys`. Existem ~14 policies no padrão `<tabela>_anon_crud`, todas `FOR ALL ... USING (true) WITH CHECK (true)` para o role `anon`, nas tabelas centrais do sistema:
+
+`pessoas`, `agendamentos`, `relatorio_evolucao`, `faturas`, `user_contracts`, `pessoa_responsaveis`, `pessoa_indicacoes`, `enderecos`, `session_media`, `midias_sessao`, `profissional_servicos`, `permissoes_agendamento`, `contract_templates`.
+
+**Confirmado na prática**, com a anon key que está no bundle público do site (contagem via `Prefer: count=exact`, sem baixar dado pessoal):
+
+| Tabela               | Acesso do anon                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `pessoas`            | lê as **3.424** pessoas (nome, CPF, telefone, e-mail, endereço de pacientes e responsáveis) |
+| `relatorio_evolucao` | lê as **812** evoluções clínicas                                                            |
+| `faturas`            | lê as **3.702** faturas                                                                     |
+| `pessoas` (escrita)  | `PATCH` aceito (**HTTP 204**) — testado com id inexistente, nada foi alterado               |
+
+Ou seja: qualquer pessoa que abra o site e copie a chave do bundle consegue **ler prontuário e cadastro de paciente e alterar/apagar registro**. É ordens de grandeza mais grave que a chave da OpenAI, e é exposição de dado de saúde (LGPD).
+
+**Por que não dá para simplesmente apagar as policies:** as páginas públicas consultam essas tabelas direto com a anon key —
+
+- `src/lib/shared-schedule-api.ts` (agenda pública) → `agendamentos`, `agenda_*`, `pessoa_empresas`, `tipo_servicos`
+- `src/lib/payment-links-api.ts` (página de pagamento) → `agendamentos`, `pessoas`, `pagamento_links`, `webhook_queue`
+- `PatientRegistrationSteps` (cadastro público) → `pessoa_responsaveis`, `user_contracts`, `agenda_slots`
+
+Derrubar as policies sem substituir esses acessos quebra cadastro de paciente, agenda compartilhada e página de pagamento — fluxos que envolvem dinheiro e captação.
+
+**Correção proposta** (mesmo padrão já aplicado em `pessoa_empresas` em jun/2026): trocar CRUD amplo por acesso estreito e escopado pelo token público — RPC `SECURITY DEFINER` (ou edge function) que recebe o token da agenda/link de pagamento e devolve **apenas** o que aquele token dá direito, e então revogar o `anon` da tabela. Uma tabela por vez, com teste do fluxo público a cada passo.
+
+**Prioridade: acima de tudo neste documento.** O financeiro pode esperar; isto não.
+
 ### 🔴 F1 — As contas fixas pararam de ser geradas em janeiro
 
 Três problemas encadeados:
@@ -222,14 +251,15 @@ A maior parte das notas chega por e-mail. Um endereço dedicado (ex.: `notas@res
 
 ### Fase 0 — Segurança (bloqueante, ~1 dia)
 
-| #   | Ação                                                                                                                                                                                                       | Onde                                                                              | Status             |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------ |
-| 0.1 | Fechar `api_keys`: dropar `api_keys_select_service_fixed` e a policy de secretaria; coluna gerada `chave_mascarada`; `REVOKE ALL` de anon e `SELECT` por coluna (sem `encrypted_key`) para authenticated   | migration `seguranca_api_keys_fecha_leitura_anon` + `src/lib/integrations-api.ts` | ✅ **29/07/2026**  |
-| 0.2 | Remover `document_storage_anon_crud` (era `ALL USING(true)` para anon) + `REVOKE ALL` de anon                                                                                                              | migration `seguranca_document_storage_remove_anon`                                | ✅ **29/07/2026**  |
-| 0.3 | Rotacionar a chave da OpenAI (esteve exposta)                                                                                                                                                              | painel OpenAI + `api_keys`                                                        | ⬜ decisão do dono |
-| 0.4 | Criar bucket **privado** `respira-financeiro` (PDF/XML/JPG/PNG, 10 MB) + policy admin/secretaria                                                                                                           | migration `bucket_privado_respira_financeiro`                                     | ✅ **29/07/2026**  |
-| 0.5 | Upload passa a ir para o bucket privado, `arquivo_url` guarda o caminho e a leitura usa URL assinada. Não havia arquivo a migrar (os anexos existentes apontavam para uchat.com.au; 2 valores-lixo limpos) | `src/lib/financeiro-storage.ts`, `LancamentoForm.tsx`, `LancamentoList.tsx`       | ✅ **29/07/2026**  |
-| 0.6 | Apresentar as 4 tabelas sem RLS para decisão (não habilitar às cegas — sem policy, quebra acesso)                                                                                                          | —                                                                                 | ⬜                 |
+| #   | Ação                                                                                                                                                                                                       | Onde                                                                              | Status                                        |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------- |
+| 0.1 | Fechar `api_keys`: dropar `api_keys_select_service_fixed` e a policy de secretaria; coluna gerada `chave_mascarada`; `REVOKE ALL` de anon e `SELECT` por coluna (sem `encrypted_key`) para authenticated   | migration `seguranca_api_keys_fecha_leitura_anon` + `src/lib/integrations-api.ts` | ✅ **29/07/2026**                             |
+| 0.2 | Remover `document_storage_anon_crud` (era `ALL USING(true)` para anon) + `REVOKE ALL` de anon                                                                                                              | migration `seguranca_document_storage_remove_anon`                                | ✅ **29/07/2026**                             |
+| 0.3 | Rotacionar a chave da OpenAI (esteve exposta)                                                                                                                                                              | painel OpenAI + `api_keys`                                                        | ⬜ decisão do dono                            |
+| 0.4 | Criar bucket **privado** `respira-financeiro` (PDF/XML/JPG/PNG, 10 MB) + policy admin/secretaria                                                                                                           | migration `bucket_privado_respira_financeiro`                                     | ✅ **29/07/2026**                             |
+| 0.5 | Upload passa a ir para o bucket privado, `arquivo_url` guarda o caminho e a leitura usa URL assinada. Não havia arquivo a migrar (os anexos existentes apontavam para uchat.com.au; 2 valores-lixo limpos) | `src/lib/financeiro-storage.ts`, `LancamentoForm.tsx`, `LancamentoList.tsx`       | ✅ **29/07/2026**                             |
+| 0.6 | 4 tabelas sem RLS: `paciente_pediatra` ganhou RLS + policy de staff e perdeu o `anon`; as 3 `_bkp_*` perderam todos os grants e ganharam RLS sem policy (bloqueio total, intencional)                      | migration `seguranca_rls_paciente_pediatra_e_backups`                             | ✅ **29/07/2026**                             |
+| 0.7 | **F0-bis** — família `*_anon_crud`: anon lê e escreve `pessoas`, `agendamentos`, `relatorio_evolucao`, `faturas`… Trocar por RPC escopada por token + revogar `anon`, uma tabela por vez                   | ~14 policies + `shared-schedule-api.ts`, `payment-links-api.ts`, cadastro público | 🔴 **aguardando decisão — prioridade máxima** |
 
 ### Fase 1 — Contas fixas voltam a rodar (~2–3 dias)
 
