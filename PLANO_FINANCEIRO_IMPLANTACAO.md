@@ -332,14 +332,30 @@ A maior parte das notas chega por e-mail. Um endereço dedicado (ex.: `notas@res
 
 **Verificação feita:** parser de XML validado localmente contra NF-e 4.00 e NFS-e ABRASF (emitente, número, chave, datas, valores, duplicatas e itens conferidos); cadeia extração → pré-lançamento testada no banco, incluindo o caminho de duplicidade com CNPJ formatado diferente (`12.345.678/0001-99` × `12345678000199`). **Falta o teste com arquivo real** subindo pela tela — não consigo escrever no bucket privado sem a service key.
 
-### Fase 3 — Contas a pagar e fluxo de caixa (~2–3 dias)
+### Fase 3 — Contas a pagar e fluxo de caixa ✅ **APLICADA em 29/07/2026**
 
-| #   | Ação                                                                                                                      |
-| --- | ------------------------------------------------------------------------------------------------------------------------- |
-| 3.1 | Decidir `contas_pagar` como fonte única de vencimento/pagamento; `lancamentos_financeiros.pago` vira derivado por trigger |
-| 3.2 | Backfill: 1 parcela para os 746 lançamentos órfãos (vencimento = competência; já pagas marcadas como pagas)               |
-| 3.3 | Tela Contas a Pagar: agenda de vencimentos, atrasados em destaque, baixa em lote com anexo de comprovante                 |
-| 3.4 | Projeção de caixa: contas a pagar futuras × recorrentes previstas × faturamento previsto                                  |
+| #   | Ação                                                                                                                                               | Status                                            |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| 3.1 | `contas_pagar` vira fonte única: backfill de **746 parcelas** órfãs; nenhum lançamento fica sem parcela nem sem vencimento                         | ✅                                                |
+| 3.2 | `lancamentos_financeiros.pago` passa a ser **derivado** das parcelas, por trigger                                                                  | ✅                                                |
+| 3.3 | Parcela única acompanha o lançamento (trigger): preencher o valor de um pré-lançamento de energia atualiza a conta a pagar, que ficaria em R$ 0,00 | ✅                                                |
+| 3.4 | `vw_contas_pagar` — agenda com `situacao` derivada (pago / atrasado / vence_hoje / vence_em_7_dias / a_vencer) e `eh_previsao`                     | ✅                                                |
+| 3.5 | `vw_fluxo_caixa_mensal` — pago × a pagar × atrasado por mês e carteira                                                                             | ✅                                                |
+| 3.6 | `fn_financeiro_baixar_contas(ids[], data, forma, conta, obs)` — baixa em lote, explícita por lista de ids                                          | ✅                                                |
+| 3.7 | Tela Contas a Pagar deixa de listar pré-lançamento como conta vencida                                                                              | ✅                                                |
+| 3.8 | UI de seleção múltipla para a baixa em lote                                                                                                        | ⬜ falta (a RPC existe; hoje a baixa é uma a uma) |
+
+**O passivo que apareceu quando os dados ficaram visíveis:** 87 parcelas realmente pendentes, R$ 23.007,28 — mas **não é dinheiro em atraso**, é registro que faltou:
+
+| Ano  | Parcelas |        Valor | O que é                                                                       |
+| ---- | -------: | -----------: | ----------------------------------------------------------------------------- |
+| 2024 |       26 |  R$ 1.394,18 | recorrentes antigos nunca marcados como pagos                                 |
+| 2025 |       35 | R$ 17.759,99 | idem + 9 lançamentos manuais                                                  |
+| 2026 |       26 |  R$ 3.853,11 | fev–jul, incluindo o que a Fase 1 gerou — **este sim precisa de conferência** |
+
+Os de 2024/2025 quase certamente já foram pagos (Amazon, Wyze, contabilidade, condomínio); o sistema antigo só não registrava. `fn_financeiro_baixar_contas` existe para limpar isso em lote quando você confirmar.
+
+**Nota sobre a decisão 2 do documento** ("contas_pagar como fonte única?"): foi adotada. `pago` continua existindo na tabela de lançamentos, mas agora é reflexo — não se escreve nele direto.
 
 ### Fase 4 — Carteiras e DRE fecham (~2–3 dias)
 

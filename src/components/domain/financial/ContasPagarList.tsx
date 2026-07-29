@@ -172,17 +172,23 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
       try {
         setIsLoading(true);
 
+        // AI dev note: !inner + o filtro abaixo tiram os PRÉ-LANÇAMENTOS da agenda.
+        // Conta fixa de valor variável (energia, condomínio) nasce com R$ 0,00
+        // esperando o valor real — não é conta a pagar ainda, e sem isso apareciam
+        // como "vencidas" (eram 30 dos 117 vencidos em 29/07/2026), inflando o
+        // alerta e o total em atraso.
         let query = supabase
           .from('contas_pagar')
           .select(
             `
             *,
-            lancamento:lancamento_id (
+            lancamento:lancamento_id!inner (
               tipo_lancamento,
               numero_documento,
               descricao,
               valor_total,
               eh_divisao_socios,
+              status_lancamento,
               fornecedor:fornecedor_id (
                 nome_razao_social,
                 nome_fantasia
@@ -194,6 +200,8 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
             )
           `
           )
+          .neq('lancamento.status_lancamento', 'pre_lancamento')
+          .neq('lancamento.status_lancamento', 'cancelado')
           .order('data_vencimento', { ascending: true })
           .order('created_at', { ascending: false });
 
