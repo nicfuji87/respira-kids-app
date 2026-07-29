@@ -12,6 +12,7 @@ import {
   HeartHandshake,
   MessagesSquare,
   GraduationCap,
+  BookOpenCheck,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -130,6 +131,17 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Estagiários',
     href: '/processo-seletivo',
     roles: ['admin', 'secretaria'],
+    section: 'gestao',
+  },
+  // AI dev note: Manual de Boas Práticas / conformidade sanitária — admin apenas
+  // por ora (decisão do dono). Quando o cronograma e os registros entrarem, a
+  // estagiária precisa acessar pra preencher o checklist pós-sessão — nessa hora
+  // abrir para 'profissional' aqui E nas policies da tabela de registros.
+  {
+    icon: BookOpenCheck,
+    label: 'Manual',
+    href: '/manual',
+    roles: ['admin'],
     section: 'gestao',
   },
 ];

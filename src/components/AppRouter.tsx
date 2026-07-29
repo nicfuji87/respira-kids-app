@@ -24,6 +24,7 @@ import {
   PesquisaExperienciaDashboardPage,
   ProcessoSeletivoDashboardPage,
   WhatsAppConversasDashboardPage,
+  ManualPage,
   GoogleOAuthDebugPage,
 } from '@/pages';
 import { GoogleCalendarCallback } from '@/components/domain/auth/GoogleCalendarCallback';
@@ -285,6 +286,16 @@ export const AppRouter: React.FC = () => {
               currentUserRole={validUserRole}
             >
               <ProcessoSeletivoDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Manual de Boas Práticas / conformidade sanitária - admin */}
+        <Route
+          path="/manual"
+          element={
+            <ProtectedRoute path="/manual" currentUserRole={validUserRole}>
+              <ManualPage />
             </ProtectedRoute>
           }
         />
