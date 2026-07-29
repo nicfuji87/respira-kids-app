@@ -307,19 +307,30 @@ A maior parte das notas chega por e-mail. Um endereço dedicado (ex.: `notas@res
 
 **Fica para depois:** expor os campos de carteira/natureza no `LancamentoRecorrenteForm` (hoje usam o default Clínica/compartilhado) e limpar as colunas duplicadas de `lancamentos_recorrentes` (`valor`/`valor_fixo`, `periodicidade`/`frequencia_recorrencia`, `proximo_lancamento`/`proxima_data_geracao`).
 
-### Fase 2 — Ingestão por IA (~5–8 dias) — o coração
+### Fase 2 — Ingestão por IA ✅ **APLICADA em 29/07/2026**
 
-| #   | Ação                                                                                                                                                    |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2.1 | Migration `documentos_fiscais` + RLS (admin/secretaria) + índice `hash_sha256`                                                                          |
-| 2.2 | Índice único em `fornecedores` sobre CNPJ normalizado (só dígitos) + função `fn_normalizar_cnpj`                                                        |
-| 2.3 | Edge function `parse-documento-fiscal`: download → detecção de tipo → parser XML **ou** LLM (texto/visão) → structured output → grava `dados_extraidos` |
-| 2.4 | Edge function (ou RPC) `criar-pre-lancamento-de-documento`: enriquecimento determinístico + criação do pré-lançamento + itens + dedupe                  |
-| 2.5 | Prompt `extrair_documento_fiscal` em `ai_prompts`                                                                                                       |
-| 2.6 | UI: dropzone múltipla na aba Pré-Lançamentos + fila de documentos com status/erro/retry                                                                 |
-| 2.7 | UI: no `PreLancamentoValidation`, preview do documento lado a lado, badge de confiança por campo, itens da nota, aprovação em lote                      |
-| 2.8 | Cron de retentativa para documentos em `erro` (máx. 3 tentativas)                                                                                       |
-| 2.9 | Compressão de imagem antes do upload (downscale + JPEG q0.5), como no resto do app                                                                      |
+| #   | Ação                                                                                                                                                                                                             | Status   |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 2.1 | Tabela `documentos_fiscais` (fila) com dedupe por `hash_sha256`, RLS admin/secretaria, sem acesso do anon                                                                                                        | ✅       |
+| 2.2 | Enriquecimento determinístico: `fn_financeiro_sugerir_fornecedor` (CNPJ exato → similaridade de nome via pg_trgm), `fn_financeiro_categoria_sugerida` (moda do fornecedor), `fn_financeiro_lancamento_duplicado` | ✅       |
+| 2.3 | Edge function `parse-documento-fiscal`: XML por parser determinístico, PDF/imagem por IA com structured output                                                                                                   | ✅       |
+| 2.4 | RPC `fn_financeiro_criar_prelancamento` — do documento extraído ao pré-lançamento, com itens                                                                                                                     | ✅       |
+| 2.5 | Prompt `extrair_documento_fiscal` em `ai_prompts` (editável pela UI, sem redeploy)                                                                                                                               | ✅       |
+| 2.6 | UI: `DocumentoFiscalUpload` (dropzone múltipla) no topo da aba Pré-Lançamentos                                                                                                                                   | ✅       |
+| 2.7 | Preview do documento lado a lado na tela de validação                                                                                                                                                            | ⬜ falta |
+| 2.8 | Cron de retentativa automática para documentos em `erro`                                                                                                                                                         | ⬜ falta |
+
+**Decisões que se firmaram na construção:**
+
+- **XML não passa por IA.** Layout fixo (NF-e 4.00 e NFS-e ABRASF) → parser determinístico, confiança 1.0, custo zero, zero alucinação. A UI orienta a preferir o XML.
+- **Nenhum fornecedor tem CNPJ cadastrado hoje** (0 de 137). Casar só por CNPJ não acharia nada, então a similaridade de nome é o caminho principal — e a base **se cura sozinha**: ao aprovar uma nota, o CNPJ do documento é gravado no fornecedor casado.
+- Sufixos societários (LTDA, S.A., ME, EIRELI) saem da comparação: sem isso "FORNECEDOR QUE NÃO EXISTE LTDA" casava com "Kabum S.A." só pelo "LTDA".
+- Fornecedor com score < 0.6 fica **em branco** — quem valida escolhe. Categoria sem histórico cai em "A classificar" (código 9.99), criada para isso.
+- Dedupe olha o CNPJ em `dados_ia`, não só o do fornecedor: como o pré-lançamento nasce sem fornecedor, casar só pela FK deixaria passar a mesma nota duas vezes.
+
+**Limitação conhecida:** PDF **escaneado** (sem camada de texto) não é lido — rasterizar PDF no edge runtime não é viável. A função devolve erro pedindo o XML ou uma foto do documento (foto vai por visão e funciona).
+
+**Verificação feita:** parser de XML validado localmente contra NF-e 4.00 e NFS-e ABRASF (emitente, número, chave, datas, valores, duplicatas e itens conferidos); cadeia extração → pré-lançamento testada no banco, incluindo o caminho de duplicidade com CNPJ formatado diferente (`12.345.678/0001-99` × `12345678000199`). **Falta o teste com arquivo real** subindo pela tela — não consigo escrever no bucket privado sem a service key.
 
 ### Fase 3 — Contas a pagar e fluxo de caixa (~2–3 dias)
 

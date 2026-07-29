@@ -32,6 +32,7 @@ import {
   LancamentoList,
   ContasPagarList,
   PreLancamentoValidation,
+  DocumentoFiscalUpload,
   LancamentoRecorrenteList,
   FinancialDashboard,
   RelatorioMensal,
@@ -66,6 +67,8 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
   ({ userRole, className }) => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = React.useState<string>('');
+    // Incrementado após cada ingestão, para remontar a lista de pré-lançamentos
+    const [preLancamentoVersao, setPreLancamentoVersao] = React.useState(0);
 
     const tabsConfig = React.useMemo<TabConfig[]>(
       () => [
@@ -107,7 +110,16 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           label: 'Pré-Lançamentos',
           icon: ClipboardCheck,
           roles: ['admin', 'secretaria'],
-          content: <PreLancamentoValidation />,
+          content: (
+            <div className="space-y-6">
+              <DocumentoFiscalUpload
+                onConcluido={() => setPreLancamentoVersao((v) => v + 1)}
+              />
+              {/* AI dev note: a lista não expõe handle de refresh — remontar pela key
+                  é o jeito mais simples de recarregar após a ingestão. */}
+              <PreLancamentoValidation key={preLancamentoVersao} />
+            </div>
+          ),
         },
         {
           id: 'recorrentes',
@@ -262,7 +274,7 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           content: <RelatorioMensal />,
         },
       ],
-      []
+      [preLancamentoVersao]
     );
 
     // Filtrar tabs baseadas no role

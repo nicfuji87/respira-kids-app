@@ -4,6 +4,7 @@ export { DivisaoSociosModal } from './DivisaoSociosModal';
 export { ContasPagarList } from './ContasPagarList';
 export { PagamentoForm } from './PagamentoForm';
 export { PreLancamentoValidation } from './PreLancamentoValidation';
+export { DocumentoFiscalUpload } from './DocumentoFiscalUpload';
 export { LancamentoRecorrenteForm } from './LancamentoRecorrenteForm';
 export { LancamentoRecorrenteList } from './LancamentoRecorrenteList';
 export { FinancialDashboard } from './FinancialDashboard';
