@@ -1291,12 +1291,13 @@ export const PatientRegistrationSteps =
             throw error; // Re-lançar o erro original
           }
 
-          const { data: contratoVerificacao } = await supabase
-            .from('user_contracts')
-            .select('id, status_contrato, pessoa_id')
-            .eq('id', registrationData.contrato.contractId)
-            .in('status_contrato', ['gerado', 'assinado'])
-            .single();
+          // AI dev note: fluxo público (anon key) — vai por RPC, não lê
+          // user_contracts direto. A RPC já filtra gerado/assinado.
+          const { data: contratoLinhas } = await supabase.rpc(
+            'fn_public_status_contrato',
+            { p_contrato_id: registrationData.contrato.contractId }
+          );
+          const contratoVerificacao = contratoLinhas?.[0] ?? null;
 
           if (contratoVerificacao?.pessoa_id) {
             console.log(

@@ -135,31 +135,18 @@ export const SharedScheduleSelectorWizard =
       // Carregar pacientes do responsável
       const loadPacientes = useCallback(async (responsavelId: string) => {
         try {
-          const { data, error } = await supabase
-            .from('pessoa_responsaveis')
-            .select(
-              `
-            paciente:pessoas!pessoa_responsaveis_id_pessoa_fkey (
-              id,
-              nome,
-              ativo
-            )
-          `
-            )
-            .eq('id_responsavel', responsavelId)
-            .eq('ativo', true);
+          // AI dev note: wizard PÚBLICO (anon key) — usa a mesma RPC do fluxo de
+          // responsável financeiro em vez de ler pessoa_responsaveis/pessoas direto.
+          const { data, error } = await supabase.rpc(
+            'fn_public_pacientes_do_responsavel',
+            { p_responsavel_id: responsavelId }
+          );
 
           if (error) throw error;
 
-          const pacientes = (data || [])
-            .map((item: unknown) => (item as { paciente?: unknown })?.paciente)
-            .filter(
-              (p: unknown): p is { id: string; nome: string; ativo: boolean } =>
-                !!p &&
-                typeof (p as { ativo?: boolean }).ativo === 'boolean' &&
-                (p as { ativo: boolean }).ativo
-            )
-            .map((p) => ({ id: p.id, nome: p.nome }));
+          const pacientes = (
+            (data as { id: string; nome: string }[]) || []
+          ).map((p) => ({ id: p.id, nome: p.nome }));
 
           setPacientesDoResponsavel(pacientes);
           return pacientes;

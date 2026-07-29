@@ -133,13 +133,12 @@ export interface UserContract {
  * @returns Template de contrato ativo
  */
 export async function fetchContractTemplate(): Promise<ContractTemplate> {
-  const { data, error } = await supabase
-    .from('contract_templates')
-    .select('*')
-    .eq('ativo', true)
-    .order('versao', { ascending: false })
-    .limit(1)
-    .single();
+  // AI dev note: chamada também pelo cadastro PÚBLICO (com a anon key) via
+  // generateContractPreview — por isso vai por RPC, não por leitura da tabela.
+  const { data: linhas, error } = await supabase.rpc(
+    'fn_public_template_contrato_ativo'
+  );
+  const data = linhas?.[0] ?? null;
 
   if (error) {
     console.error('❌ Erro ao buscar template de contrato:', error);

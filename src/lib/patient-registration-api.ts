@@ -2,6 +2,11 @@ import { supabase } from './supabase';
 
 // AI dev note: API para cadastro público de pacientes
 // Valida WhatsApp via webhook externo e verifica cadastro prévio no Supabase
+//
+// SEGURANÇA (29/07/2026): roda com a anon key. Nenhuma leitura direta de `pessoas`,
+// `pessoa_responsaveis` ou `vw_usuarios_admin` — tudo passa por RPC `fn_public_*`
+// SECURITY DEFINER. A view vw_usuarios_admin é SECURITY DEFINER e ignora RLS, então
+// lê-la do cliente expunha as 3.424 pessoas. Ver PLANO_FINANCEIRO_IMPLANTACAO.md (F0-bis).
 
 export interface WhatsAppValidationResponse {
   isValid: boolean;
@@ -100,44 +105,26 @@ export async function validateWhatsAppAndCheckRegistration(
     // 8. Gerar variações de telefone (com e sem 9º dígito) para busca no banco
     // O sistema antigo salvava sem o 9º dígito, o novo salva com.
     // Ex: 5561981446666 (novo) vs 556181446666 (antigo)
-    const phoneVariations: string[] = [phoneNumberForDB];
-
-    // Se tem 13 dígitos (55 + 2 DDD + 9 numero), tentar versão de 12 (sem 9)
-    if (phoneNumberForDB.length === 13) {
-      // Remove o nono dígito (índice 4, considerando 55+DD+9...)
-      // 55 61 9 8144-6666 -> 55 61 8144-6666
-      const without9 = phoneNumberForDB.slice(0, 4) + phoneNumberForDB.slice(5);
-      phoneVariations.push(without9);
-    }
-    // Se tem 12 dígitos (55 + 2 DDD + 8 numero), tentar versão de 13 (com 9)
-    else if (phoneNumberForDB.length === 12) {
-      // Adiciona o nono dígito
-      // 55 61 8144-6666 -> 55 61 9 8144-6666
-      const with9 =
-        phoneNumberForDB.slice(0, 4) + '9' + phoneNumberForDB.slice(4);
-      phoneVariations.push(with9);
-    }
-
     console.log(
-      '🔍 [validateWhatsApp] Buscando telefone no banco (variações):',
-      phoneVariations
+      '🔍 [validateWhatsApp] Buscando telefone no banco:',
+      phoneNumberForDB
     );
 
-    // 9. Verificar se pessoa já está cadastrada
-    const { data: pessoa, error: pessoaError } = await supabase
-      .from('pessoas')
-      .select('id, nome')
-      .in('telefone', phoneVariations) // Busca qualquer variação
-      .eq('ativo', true)
-      .maybeSingle(); // Usar maybeSingle para evitar erro se não encontrar
+    // 9. Verificar se pessoa já está cadastrada.
+    // A RPC resolve tudo de uma vez: variações do 9º dígito, dependentes, tipo de
+    // responsabilidade e perfil com endereço. Ver nota de segurança no topo do arquivo.
+    const { data: perfil, error: perfilError } = await supabase.rpc(
+      'fn_public_perfil_responsavel_por_telefone',
+      { p_telefone: phoneNumberForDB, p_somente_legal: false }
+    );
 
-    if (pessoaError) {
-      console.error('Erro ao buscar pessoa por telefone:', pessoaError);
+    if (perfilError) {
+      console.error('Erro ao buscar pessoa por telefone:', perfilError);
       throw new Error('Erro ao verificar cadastro no sistema');
     }
 
     // 10. Se pessoa NÃO existe, retornar sucesso sem cadastro prévio
-    if (!pessoa) {
+    if (!perfil?.encontrado) {
       return {
         isValid: true,
         personExists: false,
@@ -146,111 +133,21 @@ export async function validateWhatsAppAndCheckRegistration(
       };
     }
 
-    // 11. Pessoa existe - buscar pacientes relacionados (responsáveis)
-    const { data: relatedPatients, error: patientsError } = await supabase
-      .from('pessoa_responsaveis')
-      .select(
-        `
-        id_pessoa,
-        pessoas:id_pessoa (
-          id,
-          nome
-        )
-      `
-      )
-      .eq('id_responsavel', pessoa.id)
-      .eq('ativo', true);
+    const patients = (perfil.pacientes || []).map(
+      (p: { id: string; nome: string }) => ({ id: p.id, nome: p.nome })
+    );
 
-    if (patientsError) {
-      console.error('Erro ao buscar pacientes relacionados:', patientsError);
-      // Não bloquear fluxo por erro aqui
-    }
+    const firstName = String(perfil.nome || '').split(' ')[0];
 
-    // 12. Extrair primeiro nome
-    const firstName = pessoa.nome.split(' ')[0];
-
-    // 13. Formatar lista de pacientes
-    const patients =
-      relatedPatients?.map(
-        (rel: {
-          id_pessoa: string;
-          pessoas:
-            | { id: string; nome: string }[]
-            | { id: string; nome: string };
-        }) => ({
-          id: Array.isArray(rel.pessoas) ? rel.pessoas[0]?.id : rel.pessoas?.id,
-          nome: Array.isArray(rel.pessoas)
-            ? rel.pessoas[0]?.nome
-            : rel.pessoas?.nome,
-        })
-      ) || [];
-
-    // AI dev note: Buscar dados completos do usuário na vw_usuarios_admin para incluir endereço
-    // Isso é necessário para que o cadastro de segundo filho tenha os dados de endereço preenchidos
-    const { data: usuarioCompleto, error: usuarioError } = await supabase
-      .from('vw_usuarios_admin')
-      .select('*')
-      .eq('id', pessoa.id)
-      .eq('ativo', true)
-      .maybeSingle();
-
-    if (usuarioError) {
-      console.error('Erro ao buscar dados completos do usuário:', usuarioError);
-      // Não bloquear fluxo por erro aqui, mas logar o problema
-    }
-
-    // Buscar tipo de responsabilidade
-    let tipoResponsabilidade: string | null = null;
-    if (relatedPatients && relatedPatients.length > 0) {
-      const { data: responsabilidades } = await supabase
-        .from('pessoa_responsaveis')
-        .select('tipo_responsabilidade')
-        .eq('id_responsavel', pessoa.id)
-        .eq('ativo', true);
-
-      if (responsabilidades && responsabilidades.length > 0) {
-        const tipos = [
-          ...new Set(responsabilidades.map((r) => r.tipo_responsabilidade)),
-        ];
-        if (tipos.includes('ambos')) {
-          tipoResponsabilidade = 'ambos';
-        } else if (tipos.length > 1) {
-          tipoResponsabilidade = 'ambos';
-        } else {
-          tipoResponsabilidade = tipos[0];
-        }
-      }
-    }
-
-    // Montar userData com dados completos incluindo endereço
-    const userData: ExistingUser | undefined = usuarioCompleto
-      ? {
-          id: usuarioCompleto.id,
-          nome: usuarioCompleto.nome,
-          cpf_cnpj: usuarioCompleto.cpf_cnpj,
-          email: usuarioCompleto.email,
-          telefone: usuarioCompleto.telefone,
-          data_nascimento: usuarioCompleto.data_nascimento,
-          sexo: usuarioCompleto.sexo,
-          is_pediatra: usuarioCompleto.is_pediatra,
-          tipo_pessoa_codigo: usuarioCompleto.tipo_pessoa_codigo,
-          tipo_pessoa_id: usuarioCompleto.tipo_pessoa_id,
-          pediatras_nomes: usuarioCompleto.pediatras_nomes,
-          total_pediatras: usuarioCompleto.total_pediatras,
-          cep: usuarioCompleto.cep,
-          logradouro: usuarioCompleto.logradouro,
-          numero_endereco: usuarioCompleto.numero_endereco,
-          complemento_endereco: usuarioCompleto.complemento_endereco,
-          bairro: usuarioCompleto.bairro,
-          cidade: usuarioCompleto.cidade,
-          estado: usuarioCompleto.estado,
-          tipo_responsabilidade: tipoResponsabilidade,
-        }
+    const userData: ExistingUser | undefined = perfil.usuario
+      ? ({
+          ...perfil.usuario,
+          tipo_responsabilidade: perfil.tipo_responsabilidade,
+        } as ExistingUser)
       : undefined;
 
     console.log('✅ [validateWhatsApp] Usuário existente encontrado:', {
-      id: pessoa.id,
-      nome: pessoa.nome,
+      id: perfil.pessoa_id,
       hasUserData: !!userData,
       estado: userData?.estado,
       cidade: userData?.cidade,
@@ -259,7 +156,7 @@ export async function validateWhatsAppAndCheckRegistration(
     return {
       isValid: true,
       personExists: true,
-      personId: pessoa.id,
+      personId: perfil.pessoa_id,
       personFirstName: firstName,
       relatedPatients: patients,
       phoneNumber: phoneNumberForDB, // Com código país (556181446666)
@@ -350,196 +247,39 @@ export async function findExistingUserByPhone(phoneNumber: string): Promise<{
     // - Ignora pacientes com telefone duplicado
     // - Ignora responsáveis financeiros
     // - Garante que é um responsável legal ativo com dependentes
+    //
+    // Tudo isso (mais as variações do 9º dígito e os pediatras de cada dependente)
+    // acontece dentro da RPC. Ver nota de segurança no topo do arquivo.
+    console.log('🔍 [findExistingUserByPhone] Buscando:', phoneNumber);
 
-    // Gerar variações de telefone (com e sem 9º dígito)
-    // O sistema antigo salvava sem o 9º dígito, o novo salva com.
-    const phoneVariations: string[] = [phoneNumber];
-
-    // Se tem 13 dígitos (55 + 2 DDD + 9 numero), tentar versão de 12 (sem 9)
-    if (phoneNumber.length === 13) {
-      const without9 = phoneNumber.slice(0, 4) + phoneNumber.slice(5);
-      phoneVariations.push(without9);
-    }
-    // Se tem 12 dígitos (55 + 2 DDD + 8 numero), tentar versão de 13 (com 9)
-    else if (phoneNumber.length === 12) {
-      const with9 = phoneNumber.slice(0, 4) + '9' + phoneNumber.slice(4);
-      phoneVariations.push(with9);
-    }
-
-    console.log(
-      '🔍 [findExistingUserByPhone] Buscando variações:',
-      phoneVariations
+    const { data: perfil, error } = await supabase.rpc(
+      'fn_public_perfil_responsavel_por_telefone',
+      { p_telefone: phoneNumber, p_somente_legal: true }
     );
 
-    // PASSO 1: Buscar responsáveis legais/ambos que têm dependentes ativos
-    const { data: responsaveis, error: respError } = await supabase
-      .from('pessoas')
-      .select(
-        `
-        id,
-        pessoa_responsaveis!pessoa_responsaveis_id_responsavel_fkey(
-          id,
-          tipo_responsabilidade,
-          ativo
-        )
-      `
-      )
-      .in('telefone', phoneVariations)
-      .eq('ativo', true)
-      .not('pessoa_responsaveis', 'is', null);
-
-    if (respError) {
-      console.error('Erro ao buscar responsáveis:', respError);
+    if (error) {
+      console.error('Erro ao buscar responsáveis:', error);
       return { exists: false };
     }
 
-    // Filtrar apenas responsáveis legais ou ambos (ignorar financeiros)
-    const responsaveisLegais = (responsaveis || []).filter(
-      (resp: {
-        id: string;
-        pessoa_responsaveis: Array<{
-          id: string;
-          tipo_responsabilidade: string;
-          ativo: boolean;
-        }>;
-      }) => {
-        const responsabilidadesAtivas = resp.pessoa_responsaveis.filter(
-          (r) => r.ativo
-        );
-        return responsabilidadesAtivas.some(
-          (r) =>
-            r.tipo_responsabilidade === 'legal' ||
-            r.tipo_responsabilidade === 'ambos'
-        );
-      }
-    );
-
-    console.log(
-      '🔍 [findExistingUserByPhone] Responsáveis legais encontrados:',
-      {
-        telefone: phoneNumber,
-        total: responsaveisLegais.length,
-      }
-    );
-
-    // Se não encontrou responsável legal com dependentes, retornar não existe
-    if (responsaveisLegais.length === 0) {
+    if (!perfil?.encontrado || !perfil.usuario) {
       console.log(
         '❌ [findExistingUserByPhone] Nenhum responsável legal encontrado'
       );
       return { exists: false };
     }
 
-    // Se encontrou mais de 1, pegar o primeiro (caso raro, mas previne erro)
-    if (responsaveisLegais.length > 1) {
-      console.warn(
-        '⚠️ [findExistingUserByPhone] Múltiplos responsáveis legais encontrados, usando o primeiro'
-      );
-    }
-
-    const responsavelId = responsaveisLegais[0].id;
-
-    // PASSO 2: Buscar dados completos do responsável na view
-    const { data: pessoa, error: pessoaError } = await supabase
-      .from('vw_usuarios_admin')
-      .select('*')
-      .eq('id', responsavelId)
-      .eq('ativo', true)
-      .maybeSingle();
-
-    if (pessoaError) {
-      console.error('Erro ao buscar dados do responsável:', pessoaError);
-      return { exists: false };
-    }
-
-    if (!pessoa) {
-      return { exists: false };
-    }
-
     console.log('✅ [findExistingUserByPhone] Responsável legal encontrado:', {
-      id: pessoa.id,
-      nome: pessoa.nome,
+      id: perfil.pessoa_id,
     });
-
-    // Buscar tipo de responsabilidade (legal, financeiro ou ambos)
-    const { data: responsabilidades } = await supabase
-      .from('pessoa_responsaveis')
-      .select('tipo_responsabilidade')
-      .eq('id_responsavel', pessoa.id)
-      .eq('ativo', true);
-
-    // Determinar o tipo de responsabilidade (se tiver múltiplos, considerar 'ambos')
-    let tipoResponsabilidade: string | null = null;
-    if (responsabilidades && responsabilidades.length > 0) {
-      const tipos = [
-        ...new Set(responsabilidades.map((r) => r.tipo_responsabilidade)),
-      ];
-      if (tipos.includes('ambos')) {
-        tipoResponsabilidade = 'ambos';
-      } else if (tipos.length > 1) {
-        tipoResponsabilidade = 'ambos'; // Se tem legal E financeiro
-      } else {
-        tipoResponsabilidade = tipos[0];
-      }
-    }
-
-    // Buscar pacientes relacionados (como responsável)
-    const { data: relatedPatients, error: patientsError } = await supabase
-      .from('pessoa_responsaveis')
-      .select(
-        `
-        id_pessoa,
-        pessoas:id_pessoa (
-          id,
-          nome
-        )
-      `
-      )
-      .eq('id_responsavel', pessoa.id)
-      .eq('ativo', true);
-
-    if (patientsError) {
-      console.error('Erro ao buscar pacientes:', patientsError);
-    }
-
-    // Buscar informações de pediatras para cada paciente
-    const pacientesComPediatras = await Promise.all(
-      (relatedPatients || []).map(
-        async (rel: {
-          id_pessoa: string;
-          pessoas:
-            | { id: string; nome: string }[]
-            | { id: string; nome: string };
-        }) => {
-          const pessoaId = Array.isArray(rel.pessoas)
-            ? rel.pessoas[0]?.id
-            : rel.pessoas?.id;
-          const pessoaNome = Array.isArray(rel.pessoas)
-            ? rel.pessoas[0]?.nome
-            : rel.pessoas?.nome;
-
-          const { data: pediatraInfo } = await supabase
-            .from('vw_usuarios_admin')
-            .select('pediatras_nomes')
-            .eq('id', pessoaId)
-            .maybeSingle();
-
-          return {
-            id: pessoaId,
-            nome: pessoaNome,
-            pediatras: pediatraInfo?.pediatras_nomes || null,
-          };
-        }
-      )
-    );
 
     return {
       exists: true,
       user: {
-        ...pessoa,
-        tipo_responsabilidade: tipoResponsabilidade,
+        ...perfil.usuario,
+        tipo_responsabilidade: perfil.tipo_responsabilidade,
       } as ExistingUser,
-      pacientes: pacientesComPediatras,
+      pacientes: perfil.pacientes || [],
     };
   } catch (error) {
     console.error('Erro ao buscar usuário existente:', error);
@@ -796,68 +536,14 @@ export async function searchPersonByCPF(
       };
     }
 
-    // Buscar pessoa por CPF (primeiro tentar sem formatação)
-    console.log('🔍 [searchPersonByCPF] Buscando por CPF limpo:', cpfLimpo);
-    let { data: pessoa, error: pessoaError } = await supabase
-      .from('vw_usuarios_admin')
-      .select(
-        `
-        id,
-        nome,
-        cpf_cnpj,
-        email,
-        telefone,
-        tipo_pessoa_codigo,
-        cep,
-        logradouro,
-        numero_endereco,
-        complemento_endereco,
-        bairro,
-        cidade,
-        estado
-      `
-      )
-      .eq('cpf_cnpj', cpfLimpo)
-      .eq('ativo', true)
-      .maybeSingle();
+    // AI dev note: a RPC normaliza o CPF no servidor e cobre as duas formas de
+    // gravação histórica (só dígitos e formatado) numa consulta só.
+    const { data: linhas, error: pessoaError } = await supabase.rpc(
+      'fn_public_perfil_por_cpf',
+      { p_cpf: cpfLimpo }
+    );
 
-    // Se não encontrou, tentar com formatação (XXX.XXX.XXX-XX)
-    if (!pessoa && !pessoaError) {
-      const cpfFormatado = cpfLimpo.replace(
-        /(\d{3})(\d{3})(\d{3})(\d{2})/,
-        '$1.$2.$3-$4'
-      );
-      console.log(
-        '🔍 [searchPersonByCPF] Não encontrou sem formatação, tentando com formatação:',
-        cpfFormatado
-      );
-
-      const result = await supabase
-        .from('vw_usuarios_admin')
-        .select(
-          `
-          id,
-          nome,
-          cpf_cnpj,
-          email,
-          telefone,
-          tipo_pessoa_codigo,
-          cep,
-          logradouro,
-          numero_endereco,
-          complemento_endereco,
-          bairro,
-          cidade,
-          estado
-        `
-        )
-        .eq('cpf_cnpj', cpfFormatado)
-        .eq('ativo', true)
-        .maybeSingle();
-
-      pessoa = result.data;
-      pessoaError = result.error;
-    }
+    const pessoa = linhas?.[0] ?? null;
 
     if (pessoaError) {
       console.error('❌ [searchPersonByCPF] Erro ao buscar:', pessoaError);
