@@ -37,3 +37,29 @@ export interface LevantamentoProgressoBloco {
   criticasTotal: number;
   criticasRespondidas: number;
 }
+
+export type PendenciaCategoria =
+  | 'licenciamento'
+  | 'tributario'
+  | 'estrutural'
+  | 'pop'
+  | 'treinamento';
+
+export type PendenciaStatus = 'pendente' | 'em_andamento' | 'concluido';
+export type PendenciaCriticidade = 'alta' | 'media' | 'baixa';
+
+export interface PendenciaRow {
+  id: string;
+  created_at: string;
+  atualizado_em: string;
+  titulo: string;
+  descricao: string | null;
+  categoria: PendenciaCategoria;
+  criticidade: PendenciaCriticidade;
+  responsavel_sugerido: string | null;
+  prazo: string | null;
+  status: PendenciaStatus;
+  concluido_em: string | null;
+  origem: string | null;
+  ordem: number;
+}
