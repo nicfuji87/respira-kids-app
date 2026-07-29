@@ -23,7 +23,11 @@ import {
   ListTodo,
   Lock,
 } from 'lucide-react';
-import { LevantamentoTab, PendenciasTab } from '@/components/domain/qualidade';
+import {
+  DocumentosTab,
+  LevantamentoTab,
+  PendenciasTab,
+} from '@/components/domain/qualidade';
 
 type ManualTab =
   | 'levantamento'
@@ -80,11 +84,7 @@ export const ManualPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="documentos" className="mt-4">
-          <EmBreve
-            titulo="Manual e POPs versionados"
-            descricao="Cada documento com código, versão vigente, RT que aprovou e data da próxima revisão — mais o PDF pra imprimir e deixar físico na clínica."
-            desbloqueio="Entra quando o levantamento fechar: é ele que dá o conteúdo dos POPs."
-          />
+          <DocumentosTab />
         </TabsContent>
 
         <TabsContent value="cronograma" className="mt-4">
