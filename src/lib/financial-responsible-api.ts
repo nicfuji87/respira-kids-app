@@ -2,6 +2,13 @@ import { supabase } from './supabase';
 
 // AI dev note: API para gerenciamento de responsáveis financeiros
 // Funções para buscar pacientes, validar dados e adicionar responsáveis financeiros
+//
+// SEGURANÇA (29/07/2026): este arquivo roda no fluxo PÚBLICO (/adicionar-responsavel-
+// financeiro), ou seja, com a anon key. Todas as leituras passam por RPC
+// `fn_public_*` SECURITY DEFINER — nunca `.from('pessoas')` nem
+// `.from('pacientes_com_responsaveis_view')` direto. Antes desta mudança o anon lia
+// as 3.424 pessoas inteiras; agora a busca devolve 1 registro e exige o CPF ou o
+// telefone exato. Ver PLANO_FINANCEIRO_IMPLANTACAO.md, seção F0-bis.
 
 export interface PatientSearchResult {
   id: string;
@@ -45,58 +52,19 @@ export async function fetchPatientsByResponsible(
       responsibleId
     );
 
-    const { data, error } = await supabase
-      .from('pessoa_responsaveis')
-      .select(
-        `
-        id_pessoa,
-        pessoas!pessoa_responsaveis_id_pessoa_fkey(
-          id,
-          nome,
-          data_nascimento
-        )
-      `
-      )
-      .eq('id_responsavel', responsibleId)
-      .eq('ativo', true)
-      .is('data_fim', null);
+    // AI dev note: a RPC já devolve o paciente junto dos nomes dos responsáveis —
+    // eliminou o N+1 que consultava a view uma vez por paciente.
+    const { data, error } = await supabase.rpc(
+      'fn_public_pacientes_do_responsavel',
+      { p_responsavel_id: responsibleId }
+    );
 
     if (error) {
       console.error('❌ [fetchPatientsByResponsible] Erro:', error);
       throw error;
     }
 
-    if (!data || data.length === 0) {
-      console.log('ℹ️ [fetchPatientsByResponsible] Nenhum paciente encontrado');
-      return [];
-    }
-
-    // Buscar informações dos responsáveis para cada paciente
-    const patientsWithResponsibles: PatientWithResponsible[] = [];
-
-    for (const item of data) {
-      if (!item.pessoas) continue;
-
-      const paciente = Array.isArray(item.pessoas)
-        ? item.pessoas[0]
-        : item.pessoas;
-
-      // Buscar responsável legal e financeiro via view
-      const { data: patientData } = await supabase
-        .from('pacientes_com_responsaveis_view')
-        .select('responsavel_legal_nome, responsavel_financeiro_nome')
-        .eq('id', paciente.id)
-        .single();
-
-      patientsWithResponsibles.push({
-        id: paciente.id,
-        nome: paciente.nome,
-        data_nascimento: paciente.data_nascimento,
-        responsavel_legal_nome: patientData?.responsavel_legal_nome || null,
-        responsavel_financeiro_nome:
-          patientData?.responsavel_financeiro_nome || null,
-      });
-    }
+    const patientsWithResponsibles: PatientWithResponsible[] = data || [];
 
     console.log(
       '✅ [fetchPatientsByResponsible] Encontrados:',
@@ -124,23 +92,11 @@ export async function searchPatientsByName(
 
     console.log('🔍 [searchPatientsByName] Buscando:', searchName);
 
-    // Buscar na view que já tem os dados consolidados
-    const { data, error } = await supabase
-      .from('pacientes_com_responsaveis_view')
-      .select(
-        `
-        id,
-        nome,
-        data_nascimento,
-        cidade,
-        responsavel_legal_nome,
-        responsavel_legal_id
-      `
-      )
-      .ilike('nome', `%${searchName}%`)
-      .eq('ativo', true)
-      .order('nome')
-      .limit(20);
+    // A RPC aplica o mínimo de 3 caracteres e o teto de 20 no servidor
+    const { data, error } = await supabase.rpc(
+      'fn_public_buscar_pacientes_por_nome',
+      { p_nome: searchName }
+    );
 
     if (error) {
       console.error('❌ [searchPatientsByName] Erro:', error);
@@ -238,28 +194,17 @@ export async function findPersonByCpf(
     const cleanCpf = cpf.replace(/\D/g, '');
     console.log('🔍 [findPersonByCpf] Buscando CPF:', cleanCpf);
 
-    const { data, error } = await supabase
-      .from('pessoas')
-      .select(
-        `
-        id,
-        nome,
-        cpf_cnpj,
-        email,
-        telefone,
-        id_endereco,
-        numero_endereco,
-        complemento_endereco
-      `
-      )
-      .eq('cpf_cnpj', cleanCpf)
-      .eq('ativo', true)
-      .maybeSingle();
+    const { data: rows, error } = await supabase.rpc(
+      'fn_public_buscar_pessoa_por_cpf',
+      { p_cpf: cleanCpf }
+    );
 
     if (error) {
       console.error('❌ [findPersonByCpf] Erro:', error);
       return null;
     }
+
+    const data: PersonBasicData | null = rows?.[0] ?? null;
 
     if (data) {
       console.log('✅ [findPersonByCpf] Pessoa encontrada:', data.nome);
@@ -288,32 +233,19 @@ export async function findPersonByPhone(
     const phoneForDB = cleanPhone.startsWith('55')
       ? cleanPhone
       : `55${cleanPhone}`;
-    const phoneBigInt = BigInt(phoneForDB);
-
     console.log('🔍 [findPersonByPhone] Buscando telefone:', phoneForDB);
 
-    const { data, error } = await supabase
-      .from('pessoas')
-      .select(
-        `
-        id,
-        nome,
-        cpf_cnpj,
-        email,
-        telefone,
-        id_endereco,
-        numero_endereco,
-        complemento_endereco
-      `
-      )
-      .eq('telefone', phoneBigInt)
-      .eq('ativo', true)
-      .maybeSingle();
+    const { data: rows, error } = await supabase.rpc(
+      'fn_public_buscar_pessoa_por_telefone',
+      { p_telefone: phoneForDB }
+    );
 
     if (error) {
       console.error('❌ [findPersonByPhone] Erro:', error);
       return null;
     }
+
+    const data: PersonBasicData | null = rows?.[0] ?? null;
 
     if (data) {
       console.log('✅ [findPersonByPhone] Pessoa encontrada:', data.nome);
@@ -340,23 +272,25 @@ export async function validatePersonCompleteness(personId: string): Promise<{
   try {
     console.log('✅ [validatePersonCompleteness] Validando pessoa:', personId);
 
-    const { data, error } = await supabase
-      .from('pessoas')
-      .select('telefone, email, id_endereco, numero_endereco')
-      .eq('id', personId)
-      .single();
+    // AI dev note: a RPC devolve só booleanos — nenhum dado pessoal sai do servidor.
+    const { data: rows, error } = await supabase.rpc(
+      'fn_public_validar_completude_pessoa',
+      { p_pessoa_id: personId }
+    );
 
-    if (error || !data) {
+    const data = rows?.[0];
+
+    if (error || !data || !data.encontrada) {
       console.error('❌ [validatePersonCompleteness] Erro:', error);
       return { isComplete: false, missingFields: ['Pessoa não encontrada'] };
     }
 
     const missingFields: string[] = [];
 
-    if (!data.telefone) missingFields.push('Telefone');
-    if (!data.email) missingFields.push('E-mail');
-    if (!data.id_endereco) missingFields.push('Endereço (CEP)');
-    if (!data.numero_endereco) missingFields.push('Número do endereço');
+    if (!data.tem_telefone) missingFields.push('Telefone');
+    if (!data.tem_email) missingFields.push('E-mail');
+    if (!data.tem_endereco) missingFields.push('Endereço (CEP)');
+    if (!data.tem_numero) missingFields.push('Número do endereço');
 
     const isComplete = missingFields.length === 0;
 

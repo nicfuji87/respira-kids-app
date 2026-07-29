@@ -20,61 +20,41 @@ export interface PediatricianSearchResult {
   especialidade?: string | null;
 }
 
+// AI dev note: SEGURANÇA (29/07/2026) — este arquivo roda no cadastro PÚBLICO, com a
+// anon key. As três funções faziam a mesma query em `pessoas` ⋈ `pessoa_pediatra`, o
+// que exigia deixar `pessoas` aberta ao anon. Agora todas passam pela RPC
+// `fn_public_listar_pediatras` (SECURITY DEFINER), que expõe apenas nome/CRM/
+// especialidade dos 312 pediatras ativos. Ver PLANO_FINANCEIRO_IMPLANTACAO.md (F0-bis).
+
+interface PediatraRpcRow {
+  pediatra_id: string;
+  pessoa_id: string;
+  nome: string;
+  crm: string | null;
+  especialidade: string | null;
+}
+
+async function listarPediatrasAtivos(): Promise<PediatraRpcRow[]> {
+  const { data, error } = await supabase.rpc('fn_public_listar_pediatras');
+  if (error) throw error;
+  return (data as PediatraRpcRow[]) || [];
+}
+
 /**
  * Buscar todos os pediatras ativos (para select/dropdown)
  * Usado por componentes internos do sistema
  */
 export async function fetchPediatras(): Promise<Pediatra[]> {
   try {
-    const { data, error } = await supabase
-      .from('pessoas')
-      .select(
-        `
-        id,
-        nome,
-        pessoa_pediatra!inner(
-          id,
-          crm,
-          especialidade,
-          ativo
-        )
-      `
-      )
-      .eq('ativo', true)
-      .eq('pessoa_pediatra.ativo', true)
-      .order('nome');
+    const rows = await listarPediatrasAtivos();
 
-    if (error) {
-      console.error('❌ [fetchPediatras] Erro:', error);
-      throw error;
-    }
-
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    // Mapear resultados
-    const pediatras: Pediatra[] = data
-      .filter((p) => {
-        return Array.isArray(p.pessoa_pediatra)
-          ? p.pessoa_pediatra.length > 0
-          : p.pessoa_pediatra !== null && p.pessoa_pediatra !== undefined;
-      })
-      .map((p) => {
-        const pediatraData = Array.isArray(p.pessoa_pediatra)
-          ? p.pessoa_pediatra[0]
-          : p.pessoa_pediatra;
-
-        return {
-          id: pediatraData.id,
-          pessoa_id: p.id,
-          nome: p.nome,
-          crm: pediatraData.crm,
-          especialidade: pediatraData.especialidade,
-        };
-      });
-
-    return pediatras;
+    return rows.map((r) => ({
+      id: r.pediatra_id,
+      pessoa_id: r.pessoa_id,
+      nome: r.nome,
+      crm: r.crm,
+      especialidade: r.especialidade,
+    }));
   } catch (error) {
     console.error('❌ [fetchPediatras] Erro ao buscar pediatras:', error);
     throw error;
@@ -99,65 +79,19 @@ export async function searchPediatricians(
     // Normalizar para busca (remover acentos)
     const normalizedSearch = normalizeText(cleanedSearch);
 
-    // Buscar pediatras ativos
-    // AI dev note: Usar pessoas e pessoa_pediatra (não vw_usuarios_admin por questões de RLS)
+    // Busca sem acento acontece no cliente: o Postgres não faz isso sem unaccent,
+    // e a lista de pediatras ativos é pequena (312).
+    const rows = await listarPediatrasAtivos();
 
-    // Buscar todos os pediatras ativos e filtrar no cliente
-    // (Supabase não suporta busca sem acento diretamente)
-    const { data, error } = await supabase
-      .from('pessoas')
-      .select(
-        `
-        id,
-        nome,
-        pessoa_pediatra!inner(
-          id,
-          crm,
-          especialidade,
-          ativo
-        )
-      `
-      )
-      .eq('ativo', true)
-      .eq('pessoa_pediatra.ativo', true)
-      .order('nome');
-
-    if (error) {
-      console.error('❌ [searchPediatricians] Erro:', error);
-      throw error;
-    }
-
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    // Mapear e filtrar resultados (incluindo normalização de acentos)
-    // AI dev note: Com !inner, pessoa_pediatra vem como array ou objeto
-    const results: PediatricianSearchResult[] = data
-      .filter((p) => {
-        const hasPediatra = Array.isArray(p.pessoa_pediatra)
-          ? p.pessoa_pediatra.length > 0
-          : p.pessoa_pediatra !== null && p.pessoa_pediatra !== undefined;
-
-        if (!hasPediatra) return false;
-
-        // Filtrar por nome normalizado (sem acentos)
-        const normalizedNome = normalizeText(p.nome);
-        return normalizedNome.includes(normalizedSearch);
-      })
-      .map((p) => {
-        const pediatraData = Array.isArray(p.pessoa_pediatra)
-          ? p.pessoa_pediatra[0]
-          : p.pessoa_pediatra;
-
-        return {
-          id: pediatraData.id, // ID da tabela pessoa_pediatra
-          pessoaId: p.id, // ID da tabela pessoas
-          nome: p.nome,
-          crm: pediatraData.crm,
-          especialidade: pediatraData.especialidade,
-        };
-      })
+    const results: PediatricianSearchResult[] = rows
+      .filter((r) => normalizeText(r.nome).includes(normalizedSearch))
+      .map((r) => ({
+        id: r.pediatra_id, // ID da tabela pessoa_pediatra
+        pessoaId: r.pessoa_id, // ID da tabela pessoas
+        nome: r.nome,
+        crm: r.crm,
+        especialidade: r.especialidade,
+      }))
       .slice(0, 10); // Limitar a 10 resultados
 
     return results;
@@ -178,44 +112,20 @@ export async function checkPediatricianExists(nome: string): Promise<{
     // Normalizar nome para comparação
     const normalizedNome = normalizeText(nome.trim());
 
-    const { data, error } = await supabase
-      .from('pessoas')
-      .select(
-        `
-        id,
-        nome,
-        pessoa_pediatra!inner(
-          id,
-          crm,
-          especialidade,
-          ativo
-        )
-      `
-      )
-      .eq('ativo', true)
-      .eq('pessoa_pediatra.ativo', true);
-
-    if (error) {
-      console.error('❌ [checkPediatricianExists] Erro:', error);
-      return { exists: false };
-    }
-
-    if (!data || data.length === 0) {
-      return { exists: false };
-    }
+    const rows = await listarPediatrasAtivos();
 
     // Buscar match exato por nome normalizado
-    const match = data.find((p) => normalizeText(p.nome) === normalizedNome);
+    const match = rows.find((r) => normalizeText(r.nome) === normalizedNome);
 
     if (match) {
       return {
         exists: true,
         pediatrician: {
-          id: match.pessoa_pediatra[0].id,
-          pessoaId: match.id,
+          id: match.pediatra_id,
+          pessoaId: match.pessoa_id,
           nome: match.nome,
-          crm: match.pessoa_pediatra[0].crm,
-          especialidade: match.pessoa_pediatra[0].especialidade,
+          crm: match.crm,
+          especialidade: match.especialidade,
         },
       };
     }
