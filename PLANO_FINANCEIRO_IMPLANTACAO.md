@@ -97,6 +97,34 @@ Derrubar as policies sem substituir esses acessos quebra cadastro de paciente, a
 
 **Correção proposta** (mesmo padrão já aplicado em `pessoa_empresas` em jun/2026): trocar CRUD amplo por acesso estreito e escopado pelo token público — RPC `SECURITY DEFINER` (ou edge function) que recebe o token da agenda/link de pagamento e devolve **apenas** o que aquele token dá direito, e então revogar o `anon` da tabela. Uma tabela por vez, com teste do fluxo público a cada passo.
 
+#### Método usado para separar o que é público de verdade
+
+Grafo de imports a partir de `src/components/PublicRouter.tsx`, **ignorando `import type`** (apagado no build). Sem esse filtro o grafo mente: `calendar-mappers.ts:15` faz `import type { AdminUser }` de `AdminCalendarTemplate`, o que arrastava todo o calendário admin (`patient-api`, `calendar-services`, `AppointmentDetailsManager`) para dentro do "alcance público" — código que nunca entra no bundle e nunca roda para um visitante anônimo.
+
+Resultado: **126 arquivos** compõem o bundle público de verdade.
+
+#### O que já foi fechado (lotes 1 e 2)
+
+`relatorio_evolucao`, `faturas`, `session_media`, `midias_sessao`, `profissional_servicos`, `permissoes_agendamento`, `pessoa_indicacoes` — zero uso público.
+
+Sobre `faturas`, havia uma dúvida legítima: o workflow n8n `[Sistema RK] Webhook Asaas` faz `PATCH /rest/v1/faturas` a cada poucos segundos. Inspecionado o nó `Credenciais`: ele manda `apikey: <anon>` mas `Authorization: Bearer <service_role>`. O PostgREST deriva o role do `Authorization`, então o workflow roda como service_role e ignora RLS — revogar o anon não o afeta. **Efeito colateral achado:** esse JWT de service_role está em texto plano num nó Set do n8n (e existe um workflow `[N8N] Backup` que exporta workflows).
+
+#### Lote 3 — o que falta, e por que exige RPC
+
+| Tabela                | Uso público real                                                                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pessoas`             | `findPersonByCpf`/`findPersonByPhone` (responsável financeiro), checagem de telefone já cadastrado, CPF dos responsáveis no contrato, autorizações, `link_contrato`, lista de pediatras |
+| `agendamentos`        | `shared-schedule-api.ts:64,151` — criar/reagendar consulta pela agenda compartilhada                                                                                                    |
+| `pessoa_responsaveis` | cadastro público e wizard da agenda                                                                                                                                                     |
+| `user_contracts`      | geração/assinatura do contrato no cadastro público                                                                                                                                      |
+| `enderecos`           | `AddressStep` — busca e criação por CEP                                                                                                                                                 |
+| `contract_templates`  | leitura do template ativo                                                                                                                                                               |
+
+RPCs a criar (todas `SECURITY DEFINER`, entrada estreita, saída só com o necessário):
+`fn_public_buscar_pessoa_por_cpf`, `fn_public_buscar_pessoa_por_telefone`, `fn_public_listar_pediatras`, `fn_public_salvar_autorizacoes`, `fn_public_registrar_link_contrato`, `fn_public_upsert_endereco`, mais as escopadas por token da agenda compartilhada. Depois de cada uma, revogar o `anon` da tabela correspondente e testar o fluxo público ponta a ponta.
+
+⚠️ Hoje qualquer um consegue **consultar uma pessoa pelo CPF** pela anon key. Mesmo depois da RPC isso continua possível por design (o fluxo público precisa), então a RPC deve ter rate limiting e devolver o mínimo — id e nome, nunca o registro inteiro.
+
 **Prioridade: acima de tudo neste documento.** O financeiro pode esperar; isto não.
 
 ### 🔴 F1 — As contas fixas pararam de ser geradas em janeiro
@@ -251,15 +279,16 @@ A maior parte das notas chega por e-mail. Um endereço dedicado (ex.: `notas@res
 
 ### Fase 0 — Segurança (bloqueante, ~1 dia)
 
-| #   | Ação                                                                                                                                                                                                       | Onde                                                                              | Status                                        |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------- |
-| 0.1 | Fechar `api_keys`: dropar `api_keys_select_service_fixed` e a policy de secretaria; coluna gerada `chave_mascarada`; `REVOKE ALL` de anon e `SELECT` por coluna (sem `encrypted_key`) para authenticated   | migration `seguranca_api_keys_fecha_leitura_anon` + `src/lib/integrations-api.ts` | ✅ **29/07/2026**                             |
-| 0.2 | Remover `document_storage_anon_crud` (era `ALL USING(true)` para anon) + `REVOKE ALL` de anon                                                                                                              | migration `seguranca_document_storage_remove_anon`                                | ✅ **29/07/2026**                             |
-| 0.3 | Rotacionar a chave da OpenAI (esteve exposta)                                                                                                                                                              | painel OpenAI + `api_keys`                                                        | ⬜ decisão do dono                            |
-| 0.4 | Criar bucket **privado** `respira-financeiro` (PDF/XML/JPG/PNG, 10 MB) + policy admin/secretaria                                                                                                           | migration `bucket_privado_respira_financeiro`                                     | ✅ **29/07/2026**                             |
-| 0.5 | Upload passa a ir para o bucket privado, `arquivo_url` guarda o caminho e a leitura usa URL assinada. Não havia arquivo a migrar (os anexos existentes apontavam para uchat.com.au; 2 valores-lixo limpos) | `src/lib/financeiro-storage.ts`, `LancamentoForm.tsx`, `LancamentoList.tsx`       | ✅ **29/07/2026**                             |
-| 0.6 | 4 tabelas sem RLS: `paciente_pediatra` ganhou RLS + policy de staff e perdeu o `anon`; as 3 `_bkp_*` perderam todos os grants e ganharam RLS sem policy (bloqueio total, intencional)                      | migration `seguranca_rls_paciente_pediatra_e_backups`                             | ✅ **29/07/2026**                             |
-| 0.7 | **F0-bis** — família `*_anon_crud`: anon lê e escreve `pessoas`, `agendamentos`, `relatorio_evolucao`, `faturas`… Trocar por RPC escopada por token + revogar `anon`, uma tabela por vez                   | ~14 policies + `shared-schedule-api.ts`, `payment-links-api.ts`, cadastro público | 🔴 **aguardando decisão — prioridade máxima** |
+| #    | Ação                                                                                                                                                                                                                                                                                                      | Onde                                                                              | Status             |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------ |
+| 0.1  | Fechar `api_keys`: dropar `api_keys_select_service_fixed` e a policy de secretaria; coluna gerada `chave_mascarada`; `REVOKE ALL` de anon e `SELECT` por coluna (sem `encrypted_key`) para authenticated                                                                                                  | migration `seguranca_api_keys_fecha_leitura_anon` + `src/lib/integrations-api.ts` | ✅ **29/07/2026**  |
+| 0.2  | Remover `document_storage_anon_crud` (era `ALL USING(true)` para anon) + `REVOKE ALL` de anon                                                                                                                                                                                                             | migration `seguranca_document_storage_remove_anon`                                | ✅ **29/07/2026**  |
+| 0.3  | Rotacionar a chave da OpenAI (esteve exposta)                                                                                                                                                                                                                                                             | painel OpenAI + `api_keys`                                                        | ⬜ decisão do dono |
+| 0.4  | Criar bucket **privado** `respira-financeiro` (PDF/XML/JPG/PNG, 10 MB) + policy admin/secretaria                                                                                                                                                                                                          | migration `bucket_privado_respira_financeiro`                                     | ✅ **29/07/2026**  |
+| 0.5  | Upload passa a ir para o bucket privado, `arquivo_url` guarda o caminho e a leitura usa URL assinada. Não havia arquivo a migrar (os anexos existentes apontavam para uchat.com.au; 2 valores-lixo limpos)                                                                                                | `src/lib/financeiro-storage.ts`, `LancamentoForm.tsx`, `LancamentoList.tsx`       | ✅ **29/07/2026**  |
+| 0.6  | 4 tabelas sem RLS: `paciente_pediatra` ganhou RLS + policy de staff e perdeu o `anon`; as 3 `_bkp_*` perderam todos os grants e ganharam RLS sem policy (bloqueio total, intencional)                                                                                                                     | migration `seguranca_rls_paciente_pediatra_e_backups`                             | ✅ **29/07/2026**  |
+| 0.7a | **F0-bis lote 1+2** — anon revogado de `relatorio_evolucao` (812 evoluções), `faturas` (3.702), `session_media`, `midias_sessao`, `profissional_servicos`, `permissoes_agendamento`, `pessoa_indicacoes`. Nenhum arquivo do bundle público toca essas tabelas; o n8n do ASAAS autentica como service_role | migrations `..._anon_crud_lote1_tabelas_internas` e `..._lote2_faturas`           | ✅ **29/07/2026**  |
+| 0.7b | **F0-bis lote 3** — `pessoas` (3.424 c/ CPF), `agendamentos`, `pessoa_responsaveis`, `user_contracts`, `enderecos`, `contract_templates`: o fluxo público usa essas tabelas de verdade. Exige RPC `SECURITY DEFINER` escopada antes de revogar                                                            | ver seção 4-bis                                                                   | 🔴 **pendente**    |
 
 ### Fase 1 — Contas fixas voltam a rodar (~2–3 dias)
 
