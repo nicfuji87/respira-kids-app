@@ -21,6 +21,7 @@ export { WebhooksPage } from './WebhooksPage';
 export { PesquisaExperienciaDashboardPage } from './PesquisaExperienciaDashboardPage';
 export { ProcessoSeletivoDashboardPage } from './ProcessoSeletivoDashboardPage';
 export { WhatsAppConversasDashboardPage } from './WhatsAppConversasDashboardPage';
+export { ManualPage } from './ManualPage';
 
 // Debug pages
 export { GoogleOAuthDebugPage } from './GoogleOAuthDebugPage';
