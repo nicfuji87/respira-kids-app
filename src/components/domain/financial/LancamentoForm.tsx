@@ -49,6 +49,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { normalizeSelectValue } from '@/lib/form-utils';
+import { uploadDocumentoFinanceiro } from '@/lib/financeiro-storage';
 import {
   ProdutoSelect,
   type ProdutoData,
@@ -143,7 +144,9 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
     const [socios, setSocios] = React.useState<{ id: string; nome: string }[]>(
       []
     );
-    const [uploadedFileUrl, setUploadedFileUrl] = React.useState<string | null>(
+    // AI dev note: guarda o CAMINHO no bucket privado respira-financeiro, não uma URL.
+    // Ver src/lib/financeiro-storage.ts.
+    const [arquivoAnexo, setArquivoAnexo] = React.useState<string | null>(
       lancamento?.arquivo_url || null
     );
     const { user } = useAuth();
@@ -352,23 +355,11 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
 
     const handleFileUpload = async (file: File) => {
       try {
-        // Upload para o bucket de documentos financeiros
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
-        const filePath = `financial-documents/${fileName}`;
+        // Bucket PRIVADO: nota fiscal tem CNPJ, valores e endereço — nada de URL
+        // pública que não expira. Guardamos o caminho; a leitura usa URL assinada.
+        const caminho = await uploadDocumentoFinanceiro(file, user?.pessoa?.id);
 
-        const { error: uploadError } = await supabase.storage
-          .from('respira-documents')
-          .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        // Obter URL pública
-        const { data: urlData } = supabase.storage
-          .from('respira-documents')
-          .getPublicUrl(filePath);
-
-        setUploadedFileUrl(urlData.publicUrl);
+        setArquivoAnexo(caminho);
 
         toast({
           title: 'Arquivo enviado',
@@ -404,7 +395,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
           pessoa_responsavel_id: data.eh_divisao_socios
             ? null
             : data.pessoa_responsavel_id || null,
-          arquivo_url: uploadedFileUrl,
+          arquivo_url: arquivoAnexo,
           empresa_fatura_id: data.empresa_fatura || null,
           atualizado_por: user?.pessoa?.id || null,
         };
@@ -1222,7 +1213,7 @@ export const LancamentoForm = React.memo<LancamentoFormProps>(
                       />
                     </FormControl>
                     <FormDescription>PDF, JPG ou PNG até 5MB</FormDescription>
-                    {uploadedFileUrl && (
+                    {arquivoAnexo && (
                       <div className="mt-2">
                         <Badge variant="secondary">Arquivo anexado</Badge>
                       </div>

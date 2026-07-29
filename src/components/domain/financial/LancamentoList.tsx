@@ -79,6 +79,7 @@ import {
 import { DatePicker } from '@/components/composed/DatePicker';
 import { LancamentoForm } from './LancamentoForm';
 import { useToast } from '@/components/primitives/use-toast';
+import { abrirDocumentoFinanceiro } from '@/lib/financeiro-storage';
 import { supabase } from '@/lib/supabase';
 
 // AI dev note: Lista de lançamentos financeiros com filtros avançados
@@ -213,6 +214,25 @@ export const LancamentoList = React.memo<LancamentoListProps>(
     const [isLoadingComparativo, setIsLoadingComparativo] =
       React.useState(false);
     const { toast } = useToast();
+
+    // AI dev note: o documento fica em bucket PRIVADO — abrir exige URL assinada.
+    // O helper também aceita as URLs legadas (http) dos lançamentos antigos.
+    const handleAbrirDocumento = React.useCallback(
+      async (arquivo?: string | null) => {
+        if (!arquivo) return;
+
+        const erro = await abrirDocumentoFinanceiro(arquivo);
+
+        if (erro) {
+          toast({
+            variant: 'destructive',
+            title: 'Não foi possível abrir o documento',
+            description: erro,
+          });
+        }
+      },
+      [toast]
+    );
 
     // Carregar categorias (separadas por nível) e fornecedores
     React.useEffect(() => {
@@ -1982,11 +2002,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                               {lancamento.arquivo_url && (
                                 <DropdownMenuItem
                                   onClick={() =>
-                                    lancamento.arquivo_url &&
-                                    window.open(
-                                      lancamento.arquivo_url,
-                                      '_blank'
-                                    )
+                                    handleAbrirDocumento(lancamento.arquivo_url)
                                   }
                                 >
                                   <FileText className="mr-2 h-4 w-4" />
@@ -2291,8 +2307,7 @@ export const LancamentoList = React.memo<LancamentoListProps>(
                       variant="outline"
                       className="w-full"
                       onClick={() =>
-                        selectedLancamento.arquivo_url &&
-                        window.open(selectedLancamento.arquivo_url, '_blank')
+                        handleAbrirDocumento(selectedLancamento.arquivo_url)
                       }
                     >
                       <FileText className="mr-2 h-4 w-4" />
