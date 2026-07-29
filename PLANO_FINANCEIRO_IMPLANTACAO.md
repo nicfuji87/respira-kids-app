@@ -357,14 +357,33 @@ Os de 2024/2025 quase certamente já foram pagos (Amazon, Wyze, contabilidade, c
 
 **Nota sobre a decisão 2 do documento** ("contas_pagar como fonte única?"): foi adotada. `pago` continua existindo na tabela de lançamentos, mas agora é reflexo — não se escreve nele direto.
 
-### Fase 4 — Carteiras e DRE fecham (~2–3 dias)
+### Fase 4 — Carteiras e DRE ✅ **APLICADA em 29/07/2026**
 
-| #   | Ação                                                                                                                                                                    |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.1 | Backfill `centro_financeiro_id` nos 119 lançamentos individuais a partir de `pessoa_responsavel_id`                                                                     |
-| 4.2 | Materializar `lancamento_divisao_socios` na validação (trigger ou passo do fluxo) + backfill dos 636 pendentes → destrava a policy do sócio                             |
-| 4.3 | View `vw_dre_mensal`: receita (`vw_faturamento_empresa_mes` / `vw_caixa_clinica_resumo`) − despesas (`vw_despesas_carteira_mes`), por carteira, competência **e** caixa |
-| 4.4 | Tela DRE mensal/anual com drill-down até o lançamento                                                                                                                   |
+| #   | Ação                                                                                                                    | Status                                                                       |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 4.1 | `centros_financeiros.pessoa_socio_id` — liga sócio ↔ carteira (não existia; `pessoa_empresas` não referencia a pessoa) | ✅                                                                           |
+| 4.2 | Os **119 custos individuais** (R$ 91.402,71) ganharam carteira                                                          | ✅                                                                           |
+| 4.3 | `lancamento_divisao_socios` materializada: 678 lançamentos rateados, com trigger que mantém em dia                      | ✅                                                                           |
+| 4.4 | `vw_dre_mensal` — receita × despesa × resultado por carteira e mês                                                      | ✅                                                                           |
+| 4.5 | `vw_rateio_socio_mes` — o 50/50 dos custos compartilhados, como informação                                              | ✅                                                                           |
+| 4.6 | Tela de DRE consumindo as views novas                                                                                   | ⬜ falta (as views existem; o `RelatorioMensal` ainda usa a consulta antiga) |
+
+**Carteiras depois do backfill:**
+
+| Carteira             | Lançamentos |         Total |
+| -------------------- | ----------: | ------------: |
+| Clínica Respira Kids |         688 | R$ 242.426,95 |
+| BC FISIO (Bruna)     |         119 |  R$ 91.402,71 |
+| F.S PACHECO (Flávia) |           0 |             — |
+
+🔴 **Isto precisa da sua conferência:** os 119 lançamentos de natureza individual estão **todos** com a Bruna como responsável (mar/2024 a out/2025) e a Flávia com zero. Ou os custos individuais realmente são todos dela, ou o preenchimento do responsável saiu com um valor padrão e a separação nunca foi feita. Mapear para a carteira não decide isso — só torna visível.
+
+**Dois bugs achados e corrigidos no caminho:**
+
+1. **O rateio somava um centavo a mais** em 138 lançamentos (R$ 58,81 virava 29,41 + 29,41 = R$ 58,82). O culpado não era o cálculo: o trigger legado `calculate_divisao_valor()` regravava `NEW.valor = valor_total × percentual / 100` em **todo** insert, descartando o valor informado. Duas implementações diferentes da função falharam de forma idêntica — foi o que apontou para fora dela. Agora o trigger só preenche quando o valor não foi informado, e o último sócio absorve a diferença.
+2. `lancamento_divisao_socios` vazia mantinha a policy `lancamentos_financeiros_select_socio` sem devolver nada — um sócio não-admin não enxergava despesa nenhuma. Materializar destravou isso.
+
+**Decisão de modelagem, deliberada:** o DRE **não** cobra o custo compartilhado das carteiras dos sócios. A regra do negócio é "a Clínica paga quando há caixa; rateia 50/50 quando não há" — isso depende do saldo e é decisão sua, não de uma view. Por isso BC e FS aparecem com despesa própria apenas; o rateio fica em `vw_rateio_socio_mes`. Regime do DRE: **caixa** (receita por `pago_em`, despesa por `data_competencia`).
 
 ### Fase 5 — Depois (não bloqueia)
 
