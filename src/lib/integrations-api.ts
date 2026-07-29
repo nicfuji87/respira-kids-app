@@ -19,6 +19,14 @@ import type { CompanyData } from '../types/company';
 
 const ITEMS_PER_PAGE = 10;
 
+// AI dev note: NUNCA use select('*') em api_keys — o SELECT da coluna encrypted_key
+// foi REVOGADO de anon/authenticated (migration seguranca_api_keys_fecha_leitura_anon,
+// 29/07/2026); só service_role (edge functions) lê o segredo. Qualquer '*' devolve
+// "permission denied for table api_keys". O frontend recebe apenas chave_mascarada
+// ("••••" + 4 últimos dígitos), apelidada de encrypted_key para manter o tipo ApiKey.
+const API_KEY_COLUMNS =
+  'id, service_name, label, service_url, instance_name, is_active, created_at, updated_at, created_by, updated_by, encrypted_key:chave_mascarada';
+
 // AI dev note: Verificar se o usuário atual é admin
 export async function checkAdminRole(): Promise<ApiResponse<boolean>> {
   try {
@@ -222,7 +230,7 @@ export async function fetchApiKeys(
     // Buscar chaves API tradicionais (Evolution API e OpenAI)
     const { data: apiKeysData, error: apiKeysError } = await supabase
       .from('api_keys')
-      .select('*')
+      .select(API_KEY_COLUMNS)
       .in('service_name', ['openai', 'evolution'])
       .order('service_name', { ascending: true });
 
@@ -362,7 +370,7 @@ export async function createApiKey(
         created_by: user?.id,
         updated_by: user?.id,
       })
-      .select()
+      .select(API_KEY_COLUMNS)
       .single();
 
     if (error) {
@@ -435,7 +443,7 @@ export async function updateApiKey(
         updated_by: user?.id,
       })
       .eq('id', id)
-      .select()
+      .select(API_KEY_COLUMNS)
       .single();
 
     if (error) {
@@ -520,7 +528,7 @@ export async function toggleApiKeyStatus(
         updated_by: user?.id,
       })
       .eq('id', id)
-      .select()
+      .select(API_KEY_COLUMNS)
       .single();
 
     if (error) {
