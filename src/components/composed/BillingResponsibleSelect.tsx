@@ -697,10 +697,16 @@ export const BillingResponsibleSelect: React.FC<
         .maybeSingle();
 
       // AI dev note: Usar o tipo selecionado pelo usuário no modal de busca
+      // AI dev note: O erro de cada escrita PRECISA ser checado. Enquanto ele era
+      // ignorado, um bloqueio de RLS derrubava o vínculo em silêncio e mesmo assim
+      // aparecia o toast "foi vinculado ao paciente" — o responsável então não existia
+      // em lugar nenhum (atestado de comparecimento, cobrança, contrato).
+      let vinculoError: { message: string } | null = null;
+
       if (existingAssoc) {
         if (!existingAssoc.ativo) {
           // Inativo - reativar com o tipo selecionado
-          await supabase
+          const { error } = await supabase
             .from('pessoa_responsaveis')
             .update({
               ativo: true,
@@ -710,26 +716,39 @@ export const BillingResponsibleSelect: React.FC<
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingAssoc.id);
+          vinculoError = error;
         } else if (
           existingAssoc.tipo_responsabilidade !== selectedTipoResponsabilidade
         ) {
           // Ativo mas tipo diferente - atualizar
-          await supabase
+          const { error } = await supabase
             .from('pessoa_responsaveis')
             .update({
               tipo_responsabilidade: selectedTipoResponsabilidade,
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingAssoc.id);
+          vinculoError = error;
         }
       } else {
         // Não existe - criar associação com o tipo selecionado
-        await supabase.from('pessoa_responsaveis').insert({
+        const { error } = await supabase.from('pessoa_responsaveis').insert({
           id_pessoa: effectivePatientId,
           id_responsavel: pessoa.id,
           tipo_responsabilidade: selectedTipoResponsabilidade,
           ativo: true,
         });
+        vinculoError = error;
+      }
+
+      if (vinculoError) {
+        console.error('Erro ao vincular responsável:', vinculoError);
+        toast({
+          title: 'Erro ao vincular responsável',
+          description: vinculoError.message,
+          variant: 'destructive',
+        });
+        return;
       }
 
       // Se o tipo inclui financeiro, definir como responsável de cobrança
