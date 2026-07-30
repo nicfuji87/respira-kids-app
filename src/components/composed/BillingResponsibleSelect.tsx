@@ -974,12 +974,24 @@ export const BillingResponsibleSelect: React.FC<
       }
 
       // 4. Adicionar como responsável na tabela pessoa_responsaveis com o tipo selecionado
-      await supabase.from('pessoa_responsaveis').insert({
-        id_pessoa: effectivePatientId,
-        id_responsavel: novaPessoa.id,
-        tipo_responsabilidade: selectedTipoResponsabilidade,
-        ativo: true,
-      });
+      // AI dev note: este é o vínculo em si — sem ele a pessoa fica órfã, criada mas
+      // ligada a ninguém, e não aparece no atestado de comparecimento nem na cobrança.
+      // Enquanto o erro era ignorado, o passo 3 (criar pessoa) passava, este falhava por
+      // RLS e o toast de sucesso saía mesmo assim. Tem que abortar, como os passos acima.
+      const { error: vinculoError } = await supabase
+        .from('pessoa_responsaveis')
+        .insert({
+          id_pessoa: effectivePatientId,
+          id_responsavel: novaPessoa.id,
+          tipo_responsabilidade: selectedTipoResponsabilidade,
+          ativo: true,
+        });
+
+      if (vinculoError) {
+        throw new Error(
+          `Pessoa criada, mas o vínculo com o paciente falhou: ${vinculoError.message}`
+        );
+      }
 
       // 5. Se inclui financeiro, definir como responsável de cobrança
       const tipoInclui =
