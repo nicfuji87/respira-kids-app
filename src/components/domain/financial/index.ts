@@ -9,6 +9,8 @@ export { LancamentoRecorrenteForm } from './LancamentoRecorrenteForm';
 export { LancamentoRecorrenteList } from './LancamentoRecorrenteList';
 export { FinancialDashboard } from './FinancialDashboard';
 export { RelatorioMensal } from './RelatorioMensal';
+export { ContaInterPanel } from './ContaInterPanel';
+export { ContaInterPagamento } from './ContaInterPagamento';
 export { RecorrenciaLogViewer } from './RecorrenciaLogViewer';
 export { ConfiguracaoDivisaoSocios } from './ConfiguracaoDivisaoSocios';
 export { RelatorioProfissionais } from './RelatorioProfissionais';

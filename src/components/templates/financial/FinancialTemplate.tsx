@@ -42,6 +42,8 @@ import {
   CaixaClinicaPanel,
   TributosEmpresaManager,
   ResumoCarteiras,
+  ContaInterPanel,
+  ContaInterPagamento,
 } from '@/components/domain/financial';
 import { ProdutoList } from '@/components/domain/produtos';
 import { useSearchParams } from 'react-router-dom';
@@ -104,6 +106,21 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           icon: CalendarDays,
           roles: ['admin', 'secretaria'],
           content: <ContasPagarList />,
+        },
+        {
+          // AI dev note: saldo/extrato é leitura e serve à conciliação diária,
+          // por isso secretaria vê. Pagar é só admin — o componente de pagamento
+          // só entra na aba quando o papel é admin, e o servidor recusa de novo.
+          id: 'conta_inter',
+          label: 'Conta Inter',
+          icon: Landmark,
+          roles: ['admin', 'secretaria'],
+          content: (
+            <div className="space-y-10">
+              <ContaInterPanel />
+              {userRole === 'admin' && <ContaInterPagamento />}
+            </div>
+          ),
         },
         {
           id: 'pre_lancamentos',
@@ -274,7 +291,9 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           content: <RelatorioMensal />,
         },
       ],
-      [preLancamentoVersao]
+      // userRole entra aqui porque a aba Conta Inter decide pelo papel se mostra
+      // o painel de pagamento — sem isso, trocar de usuário deixaria a aba antiga
+      [preLancamentoVersao, userRole]
     );
 
     // Filtrar tabs baseadas no role
