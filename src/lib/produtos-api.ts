@@ -17,10 +17,11 @@ import type {
   CobrancaPixProduto,
   VendaProdutoPublica,
   CredencialAVencer,
+  ProdutoCusto,
 } from '@/types/produtos';
 
 const PRODUTO_COLS =
-  'id, codigo, nome, descricao, unidade_medida, vendavel, controla_estoque, eh_kit, categoria_venda, preco_venda, estoque_minimo, estoque_atual, foto_url, ativo, created_at, updated_at';
+  'id, codigo, nome, descricao, unidade_medida, vendavel, controla_estoque, eh_kit, categoria_venda, preco_venda, preco_referencia, estoque_minimo, estoque_atual, foto_url, ativo, created_at, updated_at';
 
 export function formatBRL(v: number | null | undefined): string {
   return new Intl.NumberFormat('pt-BR', {
@@ -134,6 +135,7 @@ export async function criarProduto(
       eh_kit: input.eh_kit,
       categoria_venda: input.categoria_venda,
       preco_venda: input.preco_venda,
+      preco_referencia: input.preco_referencia ?? 0,
       estoque_minimo: input.estoque_minimo ?? 0,
       foto_url: input.foto_url ?? null,
       ativo: input.ativo ?? true,
@@ -161,6 +163,7 @@ export async function atualizarProduto(
       eh_kit: input.eh_kit,
       categoria_venda: input.categoria_venda,
       preco_venda: input.preco_venda,
+      preco_referencia: input.preco_referencia ?? 0,
       estoque_minimo: input.estoque_minimo ?? 0,
       foto_url: input.foto_url ?? null,
       ativo: input.ativo ?? true,
@@ -432,6 +435,14 @@ export async function fetchVendaProdutoPublica(
   );
   if (error) throw new Error(error.message);
   return (data as VendaProdutoPublica | null) ?? null;
+}
+
+// Custo unitário de cada produto vendável, para valorizar o estoque e calcular
+// margem. Produto sem custo informado vem com custo_efetivo null de propósito.
+export async function fetchProdutoCustos(): Promise<ProdutoCusto[]> {
+  const { data, error } = await supabase.from('vw_produto_custo').select('*');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ProdutoCusto[];
 }
 
 // Credenciais externas perto de vencer (hoje: certificado do Inter).

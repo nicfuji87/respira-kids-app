@@ -28,10 +28,15 @@ import {
 import {
   fetchProdutos,
   fetchMovimentos,
+  fetchProdutoCustos,
   isEstoqueBaixo,
   formatBRL,
 } from '@/lib/produtos-api';
-import { CATEGORIA_LABELS, type Produto } from '@/types/produtos';
+import {
+  CATEGORIA_LABELS,
+  type Produto,
+  type ProdutoCusto,
+} from '@/types/produtos';
 import type { EstoqueMovimento } from '@/types/produtos';
 
 export const EstoquePage: React.FC = () => {
@@ -46,17 +51,20 @@ export const EstoquePage: React.FC = () => {
 
   const [movOpen, setMovOpen] = useState(false);
   const [movProduto, setMovProduto] = useState<Produto | null>(null);
+  const [custos, setCustos] = useState<Map<string, ProdutoCusto>>(new Map());
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [prods, movs] = await Promise.all([
+      const [prods, movs, custosLista] = await Promise.all([
         fetchProdutos(),
         fetchMovimentos({ limit: 80 }),
+        fetchProdutoCustos(),
       ]);
       setProdutos(prods);
       setMovimentos(movs);
+      setCustos(new Map(custosLista.map((c) => [c.produto_id, c])));
     } catch (err) {
       console.error('[EstoquePage] erro ao carregar:', err);
       setError('Não conseguimos carregar o estoque. Tente novamente.');
@@ -75,17 +83,27 @@ export const EstoquePage: React.FC = () => {
     [produtos]
   );
 
+  // Estoque vale o que CUSTOU, não o que será vendido — usar preco_venda aqui
+  // inflava o ativo. Produto sem custo informado fica de fora da soma e é
+  // contado à parte, para o número não passar por completo quando não é.
   const kpis = useMemo(() => {
-    const valorEstoque = itensEstoque.reduce(
-      (acc, p) => acc + p.estoque_atual * (p.preco_venda ?? 0),
-      0
-    );
+    let valorCusto = 0;
+    let semCusto = 0;
+    for (const p of itensEstoque) {
+      const custo = custos.get(p.id)?.custo_efetivo ?? null;
+      if (custo === null) {
+        if (p.estoque_atual > 0) semCusto += 1;
+        continue;
+      }
+      valorCusto += p.estoque_atual * custo;
+    }
     return {
       itens: itensEstoque.length,
       baixo: itensEstoque.filter((p) => isEstoqueBaixo(p)).length,
-      valor: valorEstoque,
+      valor: valorCusto,
+      semCusto,
     };
-  }, [itensEstoque]);
+  }, [itensEstoque, custos]);
 
   const handleMovimentar = (p: Produto) => {
     setMovProduto(p);
@@ -134,10 +152,27 @@ export const EstoquePage: React.FC = () => {
         <StatCard
           icon={TrendingUp}
           tone="verde"
-          label="Valor em estoque"
+          label="Valor em estoque (custo)"
           value={loading ? '—' : formatBRL(kpis.valor)}
         />
       </div>
+
+      {!loading && kpis.semCusto > 0 && (
+        <Card className="border-amarelo-pipa/40 bg-amarelo-pipa/10">
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 shrink-0 text-amarelo-pipa mt-0.5" />
+            <p className="flex-1 text-sm text-foreground">
+              {kpis.semCusto === 1
+                ? '1 produto com saldo está sem custo informado, então fica de fora do valor acima e da margem.'
+                : `${kpis.semCusto} produtos com saldo estão sem custo informado, então ficam de fora do valor acima e da margem.`}{' '}
+              <span className="text-muted-foreground">
+                Informe o custo ao registrar uma entrada, ou no campo "Custo de
+                compra" do cadastro do produto.
+              </span>
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Card className="border-destructive/40 bg-destructive/5">

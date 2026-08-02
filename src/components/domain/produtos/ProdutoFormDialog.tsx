@@ -69,6 +69,9 @@ export const ProdutoFormDialog: React.FC<ProdutoFormDialogProps> = ({
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState<CategoriaVenda>('espacador');
   const [preco, setPreco] = useState<number | null>(null);
+  // custo de compra -> produtos_servicos.preco_referencia (fallback do CMV
+  // quando a entrada de estoque não informa custo)
+  const [custo, setCusto] = useState<number | null>(null);
   const [unidade, setUnidade] = useState('unidade');
   const [descricao, setDescricao] = useState('');
   const [controlaEstoque, setControlaEstoque] = useState(true);
@@ -102,6 +105,7 @@ export const ProdutoFormDialog: React.FC<ProdutoFormDialogProps> = ({
       setNome(produto.nome);
       setCategoria(produto.categoria_venda ?? 'outro');
       setPreco(produto.preco_venda);
+      setCusto(produto.preco_referencia ?? null);
       setUnidade(produto.unidade_medida || 'unidade');
       setDescricao(produto.descricao ?? '');
       setControlaEstoque(produto.controla_estoque);
@@ -127,6 +131,7 @@ export const ProdutoFormDialog: React.FC<ProdutoFormDialogProps> = ({
       setNome('');
       setCategoria('espacador');
       setPreco(null);
+      setCusto(null);
       setUnidade('unidade');
       setDescricao('');
       setControlaEstoque(true);
@@ -226,6 +231,8 @@ export const ProdutoFormDialog: React.FC<ProdutoFormDialogProps> = ({
         unidade_medida: unidade.trim() || 'unidade',
         categoria_venda: categoria,
         preco_venda: preco,
+        // kit não tem custo próprio: quem custa são os componentes
+        preco_referencia: ehKit ? null : custo,
         controla_estoque: controlaEstoque,
         eh_kit: ehKit,
         estoque_minimo: Number(estoqueMinimoStr.replace(',', '.')) || 0,
@@ -375,6 +382,25 @@ export const ProdutoFormDialog: React.FC<ProdutoFormDialogProps> = ({
               />
             </div>
           </div>
+
+          {!ehKit && (
+            <div className="space-y-1.5">
+              <Label htmlFor="produto-custo">
+                Custo de compra{' '}
+                <span className="text-muted-foreground">(opcional)</span>
+              </Label>
+              <CurrencyInput
+                id="produto-custo"
+                value={custo}
+                onChange={setCusto}
+              />
+              <p className="text-xs text-muted-foreground">
+                Quanto você paga por unidade. Sem isso não dá para calcular
+                margem nem o valor do estoque. Entradas com custo informado têm
+                prioridade sobre este valor.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="produto-desc">Descrição (opcional)</Label>

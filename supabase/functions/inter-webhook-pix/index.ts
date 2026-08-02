@@ -19,6 +19,55 @@ interface PixRecebido {
   horario?: string;
 }
 
+// Enfileira o aviso de pagamento confirmado para o n8n mandar no WhatsApp.
+// Best-effort de propósito: nunca lança. A venda já está paga e o estoque já
+// baixou — se o aviso falhar, o prejuízo é o cliente não receber um "obrigado",
+// e devolver erro aqui faria o Inter reenviar o callback inteiro sem necessidade.
+async function avisarPagamentoConfirmado(
+  admin: ReturnType<typeof createClient>,
+  vendaId: string
+): Promise<void> {
+  try {
+    const { data: venda } = await admin
+      .from('produto_vendas')
+      .select(
+        'id, paciente_id, responsavel_cobranca_id, valor_total, itens:produto_venda_itens (quantidade, produto:produto_id (nome))'
+      )
+      .eq('id', vendaId)
+      .single();
+    if (!venda) return;
+
+    const itens = (venda.itens ?? []) as unknown as {
+      quantidade: number;
+      produto: { nome?: string } | null;
+    }[];
+    const descricao = itens
+      .map((i) => `${i.quantidade}x ${i.produto?.nome ?? 'Produto'}`)
+      .join(', ');
+
+    await admin.from('webhook_queue').insert({
+      evento: 'venda_produto_paga',
+      payload: {
+        tipo: 'venda_produto_paga',
+        timestamp: new Date().toISOString(),
+        webhook_id: crypto.randomUUID(),
+        data: {
+          venda_id: venda.id,
+          paciente_id: venda.paciente_id,
+          responsavel_cobranca_id: venda.responsavel_cobranca_id,
+          valor_total: Number(venda.valor_total),
+          itens_descricao: descricao,
+        },
+      },
+      status: 'pendente',
+      tentativas: 0,
+      max_tentativas: 3,
+    });
+  } catch (e) {
+    console.warn('[inter-webhook-pix] falha ao enfileirar aviso:', e);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok');
@@ -76,6 +125,18 @@ serve(async (req: Request) => {
 
       console.log('[inter-webhook-pix] processado:', JSON.stringify(data));
       resultados.push(data);
+
+      // avisa o cliente que o Pix caiu — só na primeira vez (o Inter reenvia
+      // o mesmo evento) e nunca bloqueando: o estoque já baixou, e falhar em
+      // notificar não pode fazer o Inter reenviar tudo de novo.
+      const r = data as {
+        ok?: boolean;
+        ja_processado?: boolean;
+        venda_id?: string;
+      };
+      if (r?.ok && !r.ja_processado && r.venda_id) {
+        await avisarPagamentoConfirmado(admin, r.venda_id);
+      }
     }
 
     return new Response(JSON.stringify({ recebido: true, resultados }), {

@@ -21,6 +21,7 @@ export interface Produto {
   eh_kit: boolean;
   categoria_venda: CategoriaVenda | null;
   preco_venda: number | null;
+  preco_referencia: number | null;
   estoque_minimo: number;
   estoque_atual: number;
   foto_url: string | null;
@@ -79,6 +80,9 @@ export interface ProdutoInput {
   unidade_medida?: string;
   categoria_venda: CategoriaVenda;
   preco_venda: number | null;
+  // custo de compra por unidade; fallback do CMV quando a entrada de estoque
+  // não informa custo_unitario
+  preco_referencia?: number | null;
   controla_estoque: boolean;
   eh_kit: boolean;
   estoque_minimo?: number;
@@ -137,6 +141,20 @@ export interface VendaProdutoPublica {
   pix_expira_em: string | null;
   pago_em: string | null;
   itens: { nome: string; quantidade: number; preco_unitario: number }[];
+}
+
+// Custo unitário por produto (vw_produto_custo).
+// custo_efetivo null = nunca foi informado custo; a tela deve dizer isso em vez
+// de assumir zero, que faria a margem parecer 100%.
+export interface ProdutoCusto {
+  produto_id: string;
+  nome: string;
+  estoque_atual: number;
+  preco_venda: number | null;
+  custo_medio: number | null;
+  custo_referencia: number | null;
+  custo_efetivo: number | null;
+  custo_desconhecido: boolean;
 }
 
 export interface CredencialAVencer {

@@ -62,6 +62,12 @@ export const EstoqueMovimentoDialog: React.FC<EstoqueMovimentoDialogProps> = ({
     }
   }, [open]);
 
+  // Custo faz sentido em qualquer movimento que ACRESCENTA unidades: na prática
+  // o estoque inicial costuma ser lançado como ajuste, e sem custo aqui o CMV
+  // fica cego. Saída e perda não têm custo próprio — herdam o do lote.
+  const aceitaCusto =
+    tipo === 'entrada' || (tipo === 'ajuste' && ajusteSentido === 'add');
+
   const handleSave = async () => {
     if (!produto) return;
     const qtd = Number(quantidadeStr.replace(',', '.'));
@@ -75,7 +81,7 @@ export const EstoqueMovimentoDialog: React.FC<EstoqueMovimentoDialogProps> = ({
     if (tipo === 'perda') delta = -qtd;
     if (tipo === 'ajuste') delta = ajusteSentido === 'add' ? qtd : -qtd;
 
-    const custoFinal = tipo === 'entrada' ? custo : null;
+    const custoFinal = aceitaCusto ? custo : null;
 
     setSaving(true);
     try {
@@ -160,7 +166,7 @@ export const EstoqueMovimentoDialog: React.FC<EstoqueMovimentoDialogProps> = ({
                 placeholder="0"
               />
             </div>
-            {tipo === 'entrada' && (
+            {aceitaCusto && (
               <div className="space-y-1.5">
                 <Label htmlFor="mov-custo">Custo unit.</Label>
                 <CurrencyInput
