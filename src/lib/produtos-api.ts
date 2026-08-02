@@ -4,15 +4,9 @@
 // Funções lançam Error em falha (páginas tratam com try/catch).
 
 import { supabase } from './supabase';
-import {
-  determineApiKeyFromEmpresa,
-  getOrCreateAsaasCustomer,
-  disableNotifications,
-  createPayment,
-} from './asaas-api';
-import { criarFatura } from './faturas-api';
 import type {
   Produto,
+  ProdutoVendavel,
   ProdutoInput,
   KitComponente,
   KitComponenteInput,
@@ -20,6 +14,9 @@ import type {
   TipoMovimento,
   VendaProdutoResumo,
   StatusVenda,
+  CobrancaPixProduto,
+  VendaProdutoPublica,
+  CredencialAVencer,
 } from '@/types/produtos';
 
 const PRODUTO_COLS =
@@ -30,6 +27,15 @@ export function formatBRL(v: number | null | undefined): string {
     style: 'currency',
     currency: 'BRL',
   }).format(v ?? 0);
+}
+
+// Quanto ainda dá para adicionar ao carrinho. null = ilimitado.
+export function restanteParaAdicionar(
+  produto: { disponivel: number | null },
+  noCarrinho: number
+): number | null {
+  if (produto.disponivel === null) return null;
+  return Math.max(produto.disponivel - noCarrinho, 0);
 }
 
 // item controla estoque e está no mínimo ou abaixo
@@ -60,6 +66,56 @@ export async function fetchProdutos(opts?: {
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as Produto[];
+}
+
+// Catálogo da venda: produtos ativos + saldo vendável já resolvido.
+// Espelha fn_disponibilidade_produto (o servidor revalida em fn_criar_venda_produto);
+// aqui é só para a tela saber o que oferecer sem uma chamada por produto.
+export async function fetchProdutosParaVenda(): Promise<ProdutoVendavel[]> {
+  const produtos = await fetchProdutos();
+  const kits = produtos.filter((p) => p.eh_kit);
+
+  // um kit não tem saldo próprio: quem limita é o componente mais escasso
+  const dispPorKit = new Map<string, number>();
+  if (kits.length > 0) {
+    const { data, error } = await supabase
+      .from('produto_kit_componentes')
+      .select(
+        'kit_produto_id, quantidade, componente:componente_produto_id (estoque_atual, controla_estoque)'
+      )
+      .in(
+        'kit_produto_id',
+        kits.map((k) => k.id)
+      );
+    if (error) throw new Error(error.message);
+
+    type CompRow = {
+      kit_produto_id: string;
+      quantidade: number;
+      componente: { estoque_atual: number; controla_estoque: boolean } | null;
+    };
+    for (const row of (data ?? []) as unknown as CompRow[]) {
+      if (!row.componente?.controla_estoque || row.quantidade <= 0) continue;
+      const possivel = Math.floor(
+        row.componente.estoque_atual / row.quantidade
+      );
+      const atual = dispPorKit.get(row.kit_produto_id);
+      dispPorKit.set(
+        row.kit_produto_id,
+        atual === undefined ? possivel : Math.min(atual, possivel)
+      );
+    }
+  }
+
+  return produtos.map((p) => ({
+    ...p,
+    // kit sem composição fica em 0 de propósito: força configurar antes de vender
+    disponivel: p.eh_kit
+      ? (dispPorKit.get(p.id) ?? 0)
+      : p.controla_estoque
+        ? Math.max(p.estoque_atual, 0)
+        : null,
+  }));
 }
 
 export async function criarProduto(
@@ -275,6 +331,9 @@ interface VendaRow {
   valor_total: number;
   created_at: string;
   pago_em: string | null;
+  pix_copia_cola: string | null;
+  cobranca_token: string | null;
+  pix_expira_em: string | null;
   itens: { quantidade: number; produto: { nome: string } | null }[] | null;
 }
 
@@ -285,7 +344,7 @@ export async function fetchVendasPaciente(
   const { data, error } = await supabase
     .from('produto_vendas')
     .select(
-      'id, status, valor_total, created_at, pago_em, itens:produto_venda_itens (quantidade, produto:produto_id (nome))'
+      'id, status, valor_total, created_at, pago_em, pix_copia_cola, cobranca_token, pix_expira_em, itens:produto_venda_itens (quantidade, produto:produto_id (nome))'
     )
     .eq('paciente_id', patientId)
     .order('created_at', { ascending: false });
@@ -298,6 +357,9 @@ export async function fetchVendasPaciente(
     valor_total: Number(v.valor_total),
     created_at: v.created_at,
     pago_em: v.pago_em,
+    pix_copia_cola: v.pix_copia_cola,
+    cobranca_token: v.cobranca_token,
+    pix_expira_em: v.pix_expira_em,
     itens: (v.itens ?? []).map((i) => ({
       nome: i.produto?.nome ?? 'Produto',
       quantidade: i.quantidade,
@@ -305,112 +367,87 @@ export async function fetchVendasPaciente(
   }));
 }
 
-interface VendaReenvioRow {
-  id: string;
-  paciente_id: string | null;
-  responsavel_cobranca_id: string;
-  empresa_id: string | null;
-  valor_total: number;
-  observacoes: string | null;
-  fatura_id: string | null;
-  itens:
-    | {
-        quantidade: number;
-        preco_unitario: number;
-        produto: { id: string; nome: string } | null;
-      }[]
-    | null;
+// === COBRANÇA PIX (BANCO INTER) ===
+
+// Monta o link público da página de pagamento a partir do token da venda.
+export function linkPagamentoProduto(token: string): string {
+  return `${window.location.origin}/#/pagamento-produto/${token}`;
 }
 
-// Reenvia a cobrança da venda. Se ainda não há cobrança ASAAS (fatura), cria agora;
-// se já existe, reaproveita o link da fatura. Em ambos os casos enfileira o webhook
-// padrão com reenvio=true para o n8n reenviar ao cliente. Lança em falha.
-export async function reenviarCobrancaVenda(
-  vendaId: string,
-  userId: string
-): Promise<void> {
-  const { data, error } = await supabase
-    .from('produto_vendas')
-    .select(
-      'id, paciente_id, responsavel_cobranca_id, empresa_id, valor_total, observacoes, fatura_id, itens:produto_venda_itens (quantidade, preco_unitario, produto:produto_id (id, nome))'
-    )
-    .eq('id', vendaId)
-    .single();
-  if (error) throw new Error(error.message);
-
-  const venda = data as unknown as VendaReenvioRow;
-  const itens = (venda.itens ?? []).map((i) => ({
-    produto_id: i.produto?.id ?? null,
-    nome: i.produto?.nome ?? 'Produto',
-    quantidade: i.quantidade,
-    preco_unitario: Number(i.preco_unitario),
-    subtotal: Number(i.preco_unitario) * i.quantidade,
-  }));
-
-  let cobranca: CobrancaAsaasResultado | null = null;
-  if (venda.fatura_id) {
-    // cobrança já existe: reaproveita o link da fatura
-    const { data: fat } = await supabase
-      .from('faturas')
-      .select('id, id_asaas, dados_asaas')
-      .eq('id', venda.fatura_id)
-      .single();
-    const dados = (fat?.dados_asaas ?? {}) as Record<string, unknown>;
-    cobranca = {
-      asaasPaymentId: (fat?.id_asaas as string) ?? '',
-      invoiceUrl:
-        typeof dados.invoiceUrl === 'string' ? dados.invoiceUrl : null,
-      faturaId: (fat?.id as string) ?? null,
-    };
-  } else {
-    // sem cobrança ainda: cria agora (direto)
-    if (!venda.empresa_id) {
-      throw new Error(
-        'Venda sem empresa de faturamento. Refaça a venda pelo carrinho.'
-      );
-    }
-    cobranca = await criarCobrancaAsaasProduto(
-      {
-        vendaId: venda.id,
-        empresaId: venda.empresa_id,
-        responsavelId: venda.responsavel_cobranca_id,
-        pacienteId: venda.paciente_id ?? '',
-        valorTotal: Number(venda.valor_total),
-        descricao:
-          `Produtos: ${itens.map((i) => `${i.quantidade}x ${i.nome}`).join(', ')}`.slice(
-            0,
-            480
-          ),
-      },
-      userId
-    );
+// Cria (ou reaproveita) a cobrança Pix da venda no Banco Inter.
+// A edge function também enfileira o webhook que manda o link no WhatsApp.
+export async function criarCobrancaPixProduto(
+  vendaId: string
+): Promise<CobrancaPixProduto> {
+  const { data, error } = await supabase.functions.invoke(
+    'inter-criar-cobranca-produto',
+    { body: { venda_id: vendaId } }
+  );
+  if (error) {
+    // a edge function devolve {error} no corpo; a mensagem dela é mais útil
+    const detalhe = (data as { error?: string } | null)?.error;
+    throw new Error(detalhe || error.message);
   }
+  const resultado = data as CobrancaPixProduto & { error?: string };
+  if (resultado?.error) throw new Error(resultado.error);
+  return resultado;
+}
 
-  const { error: whErr } = await supabase.from('webhook_queue').insert({
-    evento: 'venda_produto_criada',
-    payload: {
-      tipo: 'venda_produto_criada',
-      timestamp: new Date().toISOString(),
-      webhook_id: crypto.randomUUID(),
-      data: {
-        venda_id: venda.id,
-        paciente_id: venda.paciente_id,
-        responsavel_cobranca_id: venda.responsavel_cobranca_id,
-        valor_total: Number(venda.valor_total),
-        observacoes: venda.observacoes,
-        usuario_id: userId || null,
-        reenvio: true,
-        asaas_payment_id: cobranca?.asaasPaymentId ?? null,
-        invoice_url: cobranca?.invoiceUrl ?? null,
-        fatura_id: cobranca?.faturaId ?? null,
-        itens,
+// Cancela a venda. `devolverPix` é opt-in e só admin pode: sem ele, o estoque
+// volta mas o dinheiro NÃO é estornado (evita transferência por engano).
+export async function cancelarVendaProduto(
+  vendaId: string,
+  opts?: { motivo?: string; devolverPix?: boolean }
+): Promise<{ era_paga?: boolean; avisos?: string[] }> {
+  const { data, error } = await supabase.functions.invoke(
+    'inter-cancelar-venda-produto',
+    {
+      body: {
+        venda_id: vendaId,
+        motivo: opts?.motivo ?? null,
+        devolver_pix: opts?.devolverPix ?? false,
       },
-    },
-    status: 'pendente',
-    tentativas: 0,
-    max_tentativas: 3,
-  });
-  if (whErr) throw new Error(whErr.message);
+    }
+  );
+  if (error) {
+    const detalhe = (data as { error?: string } | null)?.error;
+    throw new Error(detalhe || error.message);
+  }
+  const resultado = data as {
+    error?: string;
+    era_paga?: boolean;
+    avisos?: string[];
+  };
+  if (resultado?.error) throw new Error(resultado.error);
+  return resultado;
+}
+
+// Página pública: busca a venda só pelo token, sem login.
+export async function fetchVendaProdutoPublica(
+  token: string
+): Promise<VendaProdutoPublica | null> {
+  const { data, error } = await supabase.rpc(
+    'fn_public_venda_produto_por_token',
+    { p_token: token }
+  );
+  if (error) throw new Error(error.message);
+  return (data as VendaProdutoPublica | null) ?? null;
+}
+
+// Credenciais externas perto de vencer (hoje: certificado do Inter).
+export async function fetchCredenciaisAVencer(): Promise<CredencialAVencer[]> {
+  const { data, error } = await supabase
+    .from('vw_credenciais_a_vencer')
+    .select('*');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CredencialAVencer[];
+}
+
+// Reenvia a cobrança da venda. A edge function reaproveita a cobrança Pix que já
+// existe (ou cria, se ainda não houver) e reenfileira o webhook que manda o link
+// no WhatsApp. Lança em falha.
+export async function reenviarCobrancaVenda(vendaId: string): Promise<void> {
+  await criarCobrancaPixProduto(vendaId);
 }
 
 // === EMPRESAS DE FATURAMENTO (para a cobrança do produto) ===
@@ -434,238 +471,42 @@ export async function fetchEmpresasCobranca(): Promise<EmpresaCobranca[]> {
   }));
 }
 
-function montarDescricaoProdutos(
-  itens: { produto: Produto; quantidade: number }[]
-): string {
-  const partes = itens.map((i) => `${i.quantidade}x ${i.produto.nome}`);
-  return `Produtos: ${partes.join(', ')}`.slice(0, 480);
-}
-
-export interface CobrancaAsaasResultado {
-  asaasPaymentId: string;
-  invoiceUrl: string | null;
-  faturaId: string | null;
-}
-
-// Cria a cobrança ASAAS (PIX) da venda DIRETO (sem fila), igual à cobrança de
-// agendamento: getOrCreateAsaasCustomer + createPayment + criarFatura(origem='produto').
-// Vincula a fatura + empresa à venda. Lança em falha.
-export async function criarCobrancaAsaasProduto(
-  input: {
-    vendaId: string;
-    empresaId: string;
-    responsavelId: string;
-    pacienteId: string;
-    valorTotal: number;
-    descricao: string;
-  },
-  userId: string
-): Promise<CobrancaAsaasResultado> {
-  const apiConfig = await determineApiKeyFromEmpresa(input.empresaId);
-  if (!apiConfig) {
-    throw new Error(
-      'A empresa de faturamento não tem chave do Asaas configurada.'
-    );
-  }
-
-  const customer = await getOrCreateAsaasCustomer(
-    input.responsavelId,
-    apiConfig
-  );
-  if (!customer.success || !customer.asaasCustomerId) {
-    throw new Error(
-      customer.error || 'Não foi possível preparar o cliente no Asaas.'
-    );
-  }
-
-  // silencia notificações nativas do Asaas (best-effort, igual aos agendamentos)
-  try {
-    await disableNotifications(customer.asaasCustomerId, apiConfig);
-  } catch {
-    /* não bloqueia a cobrança */
-  }
-
-  const due = new Date();
-  due.setDate(due.getDate() + 2);
-  const dueDate = due.toISOString().split('T')[0];
-
-  const pay = await createPayment(
-    {
-      customer: customer.asaasCustomerId,
-      billingType: 'PIX',
-      value: input.valorTotal,
-      dueDate,
-      description: input.descricao,
-      externalReference: `produto-${input.vendaId}`,
-    },
-    apiConfig
-  );
-  if (!pay.success || !pay.asaasPaymentId) {
-    throw new Error(pay.error || 'Falha ao criar a cobrança no Asaas.');
-  }
-
-  const dadosAsaas = (pay.data ?? {}) as Record<string, unknown>;
-  const invoiceUrl =
-    typeof dadosAsaas.invoiceUrl === 'string' ? dadosAsaas.invoiceUrl : null;
-
-  const fatura = await criarFatura(
-    {
-      id_asaas: pay.asaasPaymentId,
-      valor_total: input.valorTotal,
-      descricao: input.descricao,
-      empresa_id: input.empresaId,
-      responsavel_cobranca_id: input.responsavelId,
-      tomador_nfe_id: input.responsavelId,
-      paciente_id: input.pacienteId,
-      vencimento: dueDate,
-      dados_asaas: dadosAsaas,
-      agendamento_ids: [],
-      origem: 'produto',
-    },
-    userId
-  );
-  const faturaId = fatura.success ? (fatura.data?.id ?? null) : null;
-
-  const { error: upErr } = await supabase
-    .from('produto_vendas')
-    .update({
-      fatura_id: faturaId,
-      empresa_id: input.empresaId,
-      status: 'aguardando_pagamento',
-    })
-    .eq('id', input.vendaId);
-  if (upErr) console.warn('⚠️ Falha ao vincular fatura à venda:', upErr);
-
-  return { asaasPaymentId: pay.asaasPaymentId, invoiceUrl, faturaId };
-}
-
-// Cria a venda (produto_vendas + itens), gera a cobrança ASAAS direto e enfileira o
-// webhook padrão (com o link) p/ o n8n enviar ao cliente + tocar o fluxo Nubank.
-// Quando a venda virar 'pago', o trigger baixa o estoque automaticamente.
-export async function finalizarVendaProduto(
-  input: {
-    paciente_id: string;
-    responsavel_cobranca_id: string;
-    empresa_id: string;
-    itens: CarrinhoItem[];
-    observacoes?: string | null;
-  },
-  userId: string
-): Promise<{ venda_id: string }> {
+// Cria a venda (produto_vendas + itens numa transação, com validação de estoque) e
+// em seguida a cobrança Pix no Banco Inter. A edge function grava o txid/copia-e-cola
+// na venda e enfileira o webhook que manda o link no WhatsApp.
+// Quando o Pix cair, o webhook do Inter marca a venda paga e o trigger baixa o estoque.
+export async function finalizarVendaProduto(input: {
+  paciente_id: string;
+  responsavel_cobranca_id: string;
+  empresa_id?: string | null;
+  itens: CarrinhoItem[];
+  observacoes?: string | null;
+}): Promise<{ venda_id: string; cobranca: CobrancaPixProduto }> {
   if (input.itens.length === 0) {
     throw new Error('O carrinho está vazio.');
   }
-  if (!input.empresa_id) {
-    throw new Error('Selecione a empresa de faturamento.');
-  }
 
-  const valorTotal = input.itens.reduce(
-    (acc, i) => acc + (i.produto.preco_venda ?? 0) * i.quantidade,
-    0
-  );
-
-  const { data: venda, error: vErr } = await supabase
-    .from('produto_vendas')
-    .insert({
-      paciente_id: input.paciente_id,
-      responsavel_cobranca_id: input.responsavel_cobranca_id,
-      empresa_id: input.empresa_id,
-      valor_total: valorTotal,
-      status: 'aguardando_pagamento',
-      observacoes: input.observacoes ?? null,
-      criado_por: userId || null,
-    })
-    .select('id')
-    .single();
-  if (vErr) throw new Error(vErr.message);
-
-  const vendaId = venda.id as string;
-
-  const { error: iErr } = await supabase.from('produto_venda_itens').insert(
-    input.itens.map((i) => ({
-      venda_id: vendaId,
-      produto_id: i.produto.id,
-      quantidade: i.quantidade,
-      preco_unitario: i.produto.preco_venda ?? 0,
-    }))
-  );
-  if (iErr) throw new Error(iErr.message);
-
-  // cria a cobrança ASAAS de verdade (direto, sem fila) — igual aos agendamentos
-  const cobranca = await criarCobrancaAsaasProduto(
+  const { data: novaVendaId, error: vErr } = await supabase.rpc(
+    'fn_criar_venda_produto',
     {
-      vendaId,
-      empresaId: input.empresa_id,
-      responsavelId: input.responsavel_cobranca_id,
-      pacienteId: input.paciente_id,
-      valorTotal,
-      descricao: montarDescricaoProdutos(input.itens),
-    },
-    userId
-  );
-
-  await enfileirarWebhookVendaProduto(
-    vendaId,
-    input,
-    valorTotal,
-    userId,
-    cobranca
-  );
-
-  return { venda_id: vendaId };
-}
-
-// Enfileira o webhook da venda. NUNCA lança: a venda já foi gravada, uma falha ao
-// enfileirar não pode quebrar a operação (pode ser reprocessada).
-async function enfileirarWebhookVendaProduto(
-  vendaId: string,
-  input: {
-    paciente_id: string;
-    responsavel_cobranca_id: string;
-    itens: CarrinhoItem[];
-    observacoes?: string | null;
-  },
-  valorTotal: number,
-  userId: string,
-  cobranca?: CobrancaAsaasResultado | null
-): Promise<void> {
-  try {
-    const { error } = await supabase.from('webhook_queue').insert({
-      evento: 'venda_produto_criada',
-      payload: {
-        tipo: 'venda_produto_criada',
-        timestamp: new Date().toISOString(),
-        webhook_id: crypto.randomUUID(),
-        data: {
-          venda_id: vendaId,
-          paciente_id: input.paciente_id,
-          responsavel_cobranca_id: input.responsavel_cobranca_id,
-          valor_total: valorTotal,
-          observacoes: input.observacoes ?? null,
-          usuario_id: userId || null,
-          asaas_payment_id: cobranca?.asaasPaymentId ?? null,
-          invoice_url: cobranca?.invoiceUrl ?? null,
-          fatura_id: cobranca?.faturaId ?? null,
-          itens: input.itens.map((i) => ({
-            produto_id: i.produto.id,
-            nome: i.produto.nome,
-            quantidade: i.quantidade,
-            preco_unitario: i.produto.preco_venda ?? 0,
-            subtotal: (i.produto.preco_venda ?? 0) * i.quantidade,
-          })),
-        },
-      },
-      status: 'pendente',
-      tentativas: 0,
-      max_tentativas: 3,
-    });
-    if (error) {
-      console.warn(
-        '⚠️ Falha ao enfileirar webhook de venda de produto:',
-        error
-      );
+      p_paciente_id: input.paciente_id,
+      p_responsavel_cobranca_id: input.responsavel_cobranca_id,
+      p_itens: input.itens.map((i) => ({
+        produto_id: i.produto.id,
+        quantidade: i.quantidade,
+      })),
+      p_empresa_id: input.empresa_id ?? null,
+      p_observacoes: input.observacoes ?? null,
     }
-  } catch (e) {
-    console.warn('⚠️ Erro inesperado ao enfileirar webhook de venda:', e);
-  }
+  );
+  if (vErr) throw new Error(vErr.message);
+  const vendaId = novaVendaId as string | null;
+  if (!vendaId) throw new Error('Não foi possível registrar a venda.');
+
+  // A venda nasce 'rascunho'. Se a cobrança falhar, ela fica assim e dá para
+  // tentar de novo pelo histórico — melhor que uma venda 'aguardando pagamento'
+  // que nunca teve cobrança.
+  const cobranca = await criarCobrancaPixProduto(vendaId);
+
+  return { venda_id: vendaId, cobranca };
 }

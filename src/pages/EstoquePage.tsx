@@ -23,6 +23,7 @@ import {
   EstoqueMovimentoDialog,
   StatCard,
   MovimentacoesList,
+  CredencialVencimentoAlert,
 } from '@/components/domain/produtos';
 import {
   fetchProdutos,
@@ -114,6 +115,8 @@ export const EstoquePage: React.FC = () => {
           Atualizar
         </Button>
       </div>
+
+      <CredencialVencimentoAlert />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard

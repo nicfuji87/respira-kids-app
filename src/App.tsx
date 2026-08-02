@@ -7,6 +7,23 @@ import { AppRouter } from '@/components/AppRouter';
 import { PublicRouter } from '@/components/PublicRouter';
 import { Toaster } from '@/components/primitives/toaster';
 
+// AI dev note: prefixos de rota que dispensam login. Ficam numa lista só porque a
+// checagem acontece em dois momentos (estado inicial + listener de hashchange) e,
+// duplicada, era fácil adicionar uma rota em um lugar e esquecer do outro.
+// Ao criar uma rota pública, registre aqui E em PublicRouter.
+const ROTAS_PUBLICAS = [
+  '#/cadastro-paciente',
+  '#/adicionar-responsavel-financeiro',
+  '#/agenda-publica/',
+  '#/pagamento/',
+  '#/pagamento-produto/',
+  '#/experiencia',
+  '#/vaga-estagio',
+];
+
+const ehRotaPublica = (hash: string): boolean =>
+  ROTAS_PUBLICAS.some((prefixo) => hash.startsWith(prefixo));
+
 type AuthMode = 'login' | 'signup' | 'forgot-password';
 type AuthStep =
   | 'signup'
@@ -17,30 +34,14 @@ type AuthStep =
 function App() {
   // AI dev note: Verificar rota pública dinamicamente (reage a mudanças na URL)
   // Rotas públicas (ex: /cadastro-paciente, /adicionar-responsavel-financeiro, /agenda-publica/:token) não requerem autenticação
-  const [isPublicRoute, setIsPublicRoute] = useState(() => {
-    const hash = window.location.hash;
-    return (
-      hash.startsWith('#/cadastro-paciente') ||
-      hash.startsWith('#/adicionar-responsavel-financeiro') ||
-      hash.startsWith('#/agenda-publica/') ||
-      hash.startsWith('#/pagamento/') ||
-      hash.startsWith('#/experiencia') ||
-      hash.startsWith('#/vaga-estagio')
-    );
-  });
+  const [isPublicRoute, setIsPublicRoute] = useState(() =>
+    ehRotaPublica(window.location.hash)
+  );
 
   // Monitorar mudanças no hash para atualizar isPublicRoute
   useEffect(() => {
     const checkPublicRoute = () => {
-      const hash = window.location.hash;
-      const isPublic =
-        hash.startsWith('#/cadastro-paciente') ||
-        hash.startsWith('#/adicionar-responsavel-financeiro') ||
-        hash.startsWith('#/agenda-publica/') ||
-        hash.startsWith('#/pagamento/') ||
-        hash.startsWith('#/experiencia') ||
-        hash.startsWith('#/vaga-estagio');
-      setIsPublicRoute(isPublic);
+      setIsPublicRoute(ehRotaPublica(window.location.hash));
     };
 
     // Verificar imediatamente

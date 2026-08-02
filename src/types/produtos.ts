@@ -29,6 +29,12 @@ export interface Produto {
   updated_at: string;
 }
 
+// Produto do catálogo já com o saldo vendável resolvido.
+// disponivel: null = ilimitado (não controla estoque); kit = mínimo entre componentes.
+export interface ProdutoVendavel extends Produto {
+  disponivel: number | null;
+}
+
 export interface KitComponenteRef {
   id: string;
   nome: string;
@@ -105,4 +111,39 @@ export interface VendaProdutoResumo {
   created_at: string;
   pago_em: string | null;
   itens: { nome: string; quantidade: number }[];
+  // cobrança Pix do Banco Inter (ver produtos_cobranca_inter.sql)
+  pix_copia_cola: string | null;
+  cobranca_token: string | null;
+  pix_expira_em: string | null;
+}
+
+// Retorno de inter-criar-cobranca-produto
+export interface CobrancaPixProduto {
+  txid: string;
+  pix_copia_cola: string;
+  token: string | null;
+  link_pagamento?: string;
+  expira_em?: string;
+  reaproveitada: boolean;
+}
+
+// Retorno de fn_public_venda_produto_por_token (página pública, sem login)
+export interface VendaProdutoPublica {
+  status: StatusVenda;
+  valor_total: number;
+  desconto: number;
+  paciente_primeiro_nome: string | null;
+  pix_copia_cola: string | null;
+  pix_expira_em: string | null;
+  pago_em: string | null;
+  itens: { nome: string; quantidade: number; preco_unitario: number }[];
+}
+
+export interface CredencialAVencer {
+  chave: string;
+  descricao: string;
+  vence_em: string;
+  dias_restantes: number;
+  vencida: boolean;
+  instrucao_renovacao: string | null;
 }

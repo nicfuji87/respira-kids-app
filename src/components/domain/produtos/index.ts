@@ -6,4 +6,7 @@ export { StatCard } from './StatCard';
 export type { StatTone, StatCardProps } from './StatCard';
 export { MovimentacoesList } from './MovimentacoesList';
 export { ProdutoThumb } from './ProdutoThumb';
+export { ProdutoPicker } from './ProdutoPicker';
+export { PixCobrancaCard } from './PixCobrancaCard';
+export { CredencialVencimentoAlert } from './CredencialVencimentoAlert';
 export { PatientProdutosSection } from './PatientProdutosSection';

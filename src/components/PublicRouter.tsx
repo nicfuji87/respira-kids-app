@@ -5,6 +5,7 @@ import { PatientRegistrationSuccessPage } from '@/pages/public/PatientRegistrati
 import { AddFinancialResponsiblePage } from '@/pages/AddFinancialResponsiblePage';
 import { SharedSchedulePage } from '@/pages/SharedSchedulePage';
 import { PagamentoPublicoPage } from '@/pages/PagamentoPublicoPage';
+import { PagamentoProdutoPublicoPage } from '@/pages/PagamentoProdutoPublicoPage';
 import { PesquisaExperienciaPage } from '@/pages/PesquisaExperienciaPage';
 import { ProcessoSeletivoPage } from '@/pages/ProcessoSeletivoPage';
 import { Toaster } from '@/components/primitives/toaster';
@@ -40,6 +41,12 @@ export const PublicRouter: React.FC = () => {
 
         {/* Rota pública de pagamento (PIX x Cartão via token) */}
         <Route path="/pagamento/:token" element={<PagamentoPublicoPage />} />
+
+        {/* Pagamento da venda de produto (Pix do Banco Inter, via token) */}
+        <Route
+          path="/pagamento-produto/:token"
+          element={<PagamentoProdutoPublicoPage />}
+        />
 
         {/* Pesquisa de Experiência pública e anônima */}
         <Route path="/experiencia" element={<PesquisaExperienciaPage />} />
