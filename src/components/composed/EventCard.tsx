@@ -37,6 +37,9 @@ export interface EventCardProps {
   showLocation?: boolean;
   showAttendees?: boolean;
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
+  // AI dev note: Coluna de ações à direita (variante 'detailed'). Quem renderiza
+  // é responsável pelo stopPropagation — o Card inteiro é clicável.
+  actions?: React.ReactNode;
 }
 
 export const EventCard = React.memo<EventCardProps>(
@@ -49,6 +52,7 @@ export const EventCard = React.memo<EventCardProps>(
     showLocation = false,
     showAttendees = false,
     userRole,
+    actions,
   }) => {
     // AI dev note: userRole será usado para controlar visualizações específicas por role no futuro
     void userRole;
@@ -673,6 +677,12 @@ export const EventCard = React.memo<EventCardProps>(
                     )}
                 </div>
               </div>
+
+              {/* AI dev note: Coluna de ações à direita. O conteúdo trunca
+                  (min-w-0 na coluna do meio), então flex-shrink-0 aqui é seguro. */}
+              {actions && (
+                <div className="flex-shrink-0 flex items-start">{actions}</div>
+              )}
             </div>
           </CardContent>
         </Card>

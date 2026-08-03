@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   format,
   isSameDay,
@@ -11,11 +11,20 @@ import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/primitives/card';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { EventCard } from '@/components/composed';
+import { LembreteWhatsAppButton } from '@/components/composed/LembreteWhatsAppButton';
 import { cn } from '@/lib/utils';
+import {
+  fetchLembretesManuais,
+  type ResumoLembreteManual,
+} from '@/lib/lembrete-agendamento-api';
 import type { CalendarEvent } from '@/types/calendar';
 
 // AI dev note: AgendaView combina EventCard Composed na variante 'detailed'
-// Lista cronológica de eventos agrupados por data
+// Lista cronológica de eventos agrupados por data.
+//
+// É aqui que fica o botão de lembrete manual pelo WhatsApp (canal alternativo
+// enquanto a API não oficial do n8n está fora). O histórico de envios é buscado
+// UMA vez para todos os eventos visíveis, não por card.
 
 export interface AgendaViewProps {
   currentDate: Date;
@@ -50,6 +59,36 @@ export const AgendaView = React.memo<AgendaViewProps>(
 
     // Filtrar apenas dias que têm eventos
     const daysWithEvents = eventsByDay.filter((day) => day.events.length > 0);
+
+    // AI dev note: Bloqueios de agenda entram na mesma lista (metadata.type ===
+    // 'bloqueio') e não têm paciente para lembrar — ficam de fora.
+    const agendamentoIds = useMemo(
+      () =>
+        daysWithEvents
+          .flatMap((day) => day.events)
+          .filter((event) => event.metadata?.type !== 'bloqueio')
+          .map((event) => event.id),
+      [daysWithEvents]
+    );
+
+    const [lembretes, setLembretes] = useState<
+      Map<string, ResumoLembreteManual>
+    >(new Map());
+
+    // Chave estável: sem isso o array novo a cada render reexecuta o efeito.
+    const idsKey = agendamentoIds.join(',');
+
+    const carregarLembretes = useCallback(async () => {
+      if (!idsKey) {
+        setLembretes(new Map());
+        return;
+      }
+      setLembretes(await fetchLembretesManuais(idsKey.split(',')));
+    }, [idsKey]);
+
+    useEffect(() => {
+      carregarLembretes();
+    }, [carregarLembretes]);
 
     if (daysWithEvents.length === 0) {
       return (
@@ -119,6 +158,15 @@ export const AgendaView = React.memo<AgendaViewProps>(
                           showTime={true}
                           showLocation={true}
                           showAttendees={true}
+                          actions={
+                            event.metadata?.type === 'bloqueio' ? undefined : (
+                              <LembreteWhatsAppButton
+                                event={event}
+                                resumo={lembretes.get(event.id)}
+                                onEnviado={carregarLembretes}
+                              />
+                            )
+                          }
                         />
                       ))}
                     </div>
