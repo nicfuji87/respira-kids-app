@@ -13,6 +13,7 @@ import {
   MessagesSquare,
   GraduationCap,
   BookOpenCheck,
+  Receipt,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -85,6 +86,16 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Financeiro',
     href: '/financeiro',
     roles: ['admin', 'profissional', 'secretaria'], // Admin e secretaria: completo | Profissional: apenas comissões
+    section: 'principal',
+  },
+  // AI dev note: Cobranças = canal MANUAL de cobrança pelo WhatsApp (admin +
+  // secretaria). Separada de Financeiro de propósito: aquela exige PIN e expõe
+  // receita/comissão; esta mostra só o necessário para cobrar, sem PIN.
+  {
+    icon: Receipt,
+    label: 'Cobranças',
+    href: '/cobrancas',
+    roles: ['admin', 'secretaria'],
     section: 'principal',
   },
   {

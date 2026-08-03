@@ -17,6 +17,7 @@ import {
   ProdutosPage,
   EstoquePage,
   FinanceiroPage,
+  CobrancasPage,
   ConfiguracoesPage,
   UsuariosPage,
   RelatoriosPage,
@@ -222,6 +223,16 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute path="/financeiro" currentUserRole={validUserRole}>
               <FinanceiroPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Cobranças - envio manual pelo WhatsApp (admin + secretaria, sem PIN) */}
+        <Route
+          path="/cobrancas"
+          element={
+            <ProtectedRoute path="/cobrancas" currentUserRole={validUserRole}>
+              <CobrancasPage />
             </ProtectedRoute>
           }
         />

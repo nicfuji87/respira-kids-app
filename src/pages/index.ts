@@ -12,6 +12,7 @@ export { default as PersonDetailsPage } from './PersonDetailsPage';
 export { ProdutosPage } from './ProdutosPage';
 export { EstoquePage } from './EstoquePage';
 export { FinanceiroPage } from './FinanceiroPage';
+export { CobrancasPage } from './CobrancasPage';
 export { ConfiguracoesPage } from './ConfiguracoesPage';
 
 // Admin only pages
