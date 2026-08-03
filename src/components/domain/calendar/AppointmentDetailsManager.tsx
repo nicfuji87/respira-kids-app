@@ -63,6 +63,7 @@ import { cn, formatDateBR, formatDateTimeBR } from '@/lib/utils';
 import {
   checkHorarioDisponivel,
   fetchConsultaStatus,
+  fetchPagamentoStatus,
   fetchTiposServico,
   fetchRelatoriosEvolucao,
   fetchUltimaEvolucaoRespiratoriaPaciente,
@@ -81,6 +82,7 @@ import {
 import type {
   SupabaseAgendamentoCompletoFlat,
   SupabaseConsultaStatus,
+  SupabasePagamentoStatus,
   SupabaseTipoServico,
   SupabaseRelatorioEvolucaoCompleto,
   SupabasePessoa,
@@ -166,9 +168,10 @@ export const AppointmentDetailsManager =
       >([]);
       const [isLoadingTipoServico, setIsLoadingTipoServico] = useState(false);
 
-      // Estados para status de pagamento
+      // AI dev note: pagamento_status não tem coluna `ativo` (nem consulta_status).
+      // Usar sempre fetchPagamentoStatus; filtrar por `ativo` derruba a query inteira.
       const [pagamentoStatusOptions, setPagamentoStatusOptions] = useState<
-        Array<{ id: string; codigo: string; descricao: string }>
+        SupabasePagamentoStatus[]
       >([]);
 
       // Estado para empresas de faturamento (NOVO)
@@ -465,18 +468,7 @@ export const AppointmentDetailsManager =
       useEffect(() => {
         const loadPagamentoStatus = async () => {
           try {
-            const { data, error } = await supabase
-              .from('pagamento_status')
-              .select('id, codigo, descricao')
-              .eq('ativo', true)
-              .order('descricao');
-
-            if (error) {
-              console.error('Erro ao carregar status de pagamento:', error);
-              return;
-            }
-
-            setPagamentoStatusOptions(data || []);
+            setPagamentoStatusOptions(await fetchPagamentoStatus());
           } catch (error) {
             console.error('Erro ao carregar status de pagamento:', error);
           }
