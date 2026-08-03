@@ -1,14 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   Bell,
   CalendarClock,
   CheckCircle2,
+  ExternalLink,
   Loader2,
   MessageCircle,
   RefreshCw,
   Search,
+  Stethoscope,
   User,
+  X,
 } from 'lucide-react';
 import {
   Card,
@@ -19,6 +23,14 @@ import {
 import { Badge } from '@/components/primitives/badge';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
+import { Label } from '@/components/primitives/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { useToast } from '@/components/primitives/use-toast';
@@ -40,9 +52,13 @@ import {
 // pelo WhatsApp. Junta os dois mundos numa lista só (pré-cobrança e fatura Asaas)
 // via vw_cobrancas_pendentes.
 //
-// O botão não envia nada: abre o WhatsApp Web já na conversa com a mensagem
-// escrita, e a secretária aperta enter. O clique fica registrado em
+// O botão não envia nada: confere o status no Asaas, e só então abre o WhatsApp
+// Web já na conversa com a mensagem escrita. O clique fica registrado em
 // cobranca_disparo_log com canal='whatsapp_manual'.
+//
+// NÃO existe botão separado de "conferir pagamento": a conferência é parte do
+// envio, sempre. Um botão à parte seria uma etapa que alguém esquece de fazer
+// justamente quando importa — e o custo de errar aqui é cobrar quem já pagou.
 
 const formatCurrency = (value: number | null) =>
   new Intl.NumberFormat('pt-BR', {
@@ -82,6 +98,8 @@ const FILTROS: { value: FiltroSituacao; label: string }[] = [
   { value: 'pendente', label: 'A vencer' },
 ];
 
+const TODOS = '__todos__';
+
 export interface CobrancasPendentesListProps {
   className?: string;
 }
@@ -90,14 +108,19 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
   className,
 }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [cobrancas, setCobrancas] = useState<CobrancaPendente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processando, setProcessando] = useState<string | null>(null);
+
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<FiltroSituacao>('todas');
-  const [processando, setProcessando] = useState<string | null>(null);
-  const [conferindo, setConferindo] = useState<string | null>(null);
+  const [vencDe, setVencDe] = useState('');
+  const [vencAte, setVencAte] = useState('');
+  const [empresaId, setEmpresaId] = useState(TODOS);
+  const [profissionalId, setProfissionalId] = useState(TODOS);
 
   const carregar = useCallback(async () => {
     setIsLoading(true);
@@ -121,34 +144,83 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
     carregar();
   }, [carregar]);
 
+  // Opções dos selects saem da própria lista — não há por que buscar empresas e
+  // profissionais que não têm nada em aberto.
+  const empresas = useMemo(() => {
+    const mapa = new Map<string, string>();
+    cobrancas.forEach((c) => {
+      if (c.empresa_id) mapa.set(c.empresa_id, c.empresa_nome || 'Sem nome');
+    });
+    return [...mapa.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [cobrancas]);
+
+  const profissionais = useMemo(() => {
+    const mapa = new Map<string, string>();
+    cobrancas.forEach((c) => {
+      (c.profissional_ids || []).forEach((id, i) => {
+        if (id) mapa.set(id, c.profissionais?.[i] || 'Sem nome');
+      });
+    });
+    return [...mapa.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [cobrancas]);
+
+  const filtrosAtivos =
+    busca.trim() !== '' ||
+    filtro !== 'todas' ||
+    vencDe !== '' ||
+    vencAte !== '' ||
+    empresaId !== TODOS ||
+    profissionalId !== TODOS;
+
+  const limparFiltros = () => {
+    setBusca('');
+    setFiltro('todas');
+    setVencDe('');
+    setVencAte('');
+    setEmpresaId(TODOS);
+    setProfissionalId(TODOS);
+  };
+
   const listaFiltrada = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return cobrancas.filter((c) => {
       if (filtro !== 'todas' && c.situacao !== filtro) return false;
+      if (empresaId !== TODOS && c.empresa_id !== empresaId) return false;
+      if (
+        profissionalId !== TODOS &&
+        !(c.profissional_ids || []).includes(profissionalId)
+      ) {
+        return false;
+      }
+      // Datas ISO comparam direto como string, sem risco de fuso.
+      if (vencDe && (!c.vencimento || c.vencimento < vencDe)) return false;
+      if (vencAte && (!c.vencimento || c.vencimento > vencAte)) return false;
       if (!termo) return true;
       return (
         (c.paciente_nome || '').toLowerCase().includes(termo) ||
         (c.responsavel_nome || '').toLowerCase().includes(termo)
       );
     });
-  }, [cobrancas, busca, filtro]);
+  }, [cobrancas, busca, filtro, empresaId, profissionalId, vencDe, vencAte]);
 
   const resumo = useMemo(() => {
-    const total = cobrancas.reduce((acc, c) => acc + (c.valor ?? 0), 0);
-    const atrasadas = cobrancas.filter((c) => c.situacao !== 'pendente').length;
-    return { total, atrasadas, quantidade: cobrancas.length };
-  }, [cobrancas]);
+    const total = listaFiltrada.reduce((acc, c) => acc + (c.valor ?? 0), 0);
+    const atrasadas = listaFiltrada.filter(
+      (c) => c.situacao !== 'pendente'
+    ).length;
+    return { total, atrasadas, quantidade: listaFiltrada.length };
+  }, [listaFiltrada]);
 
-  // AI dev note: Confere no Asaas se já foi paga. Só faturas têm o que conferir —
-  // pré-cobrança ainda nem existe lá. Retorna true se pode seguir com o envio.
+  // AI dev note: Confere no Asaas se já foi paga/excluída. Só faturas têm o que
+  // conferir — pré-cobrança ainda nem existe lá. Retorna true se pode cobrar.
   const podeCobrar = async (cobranca: CobrancaPendente): Promise<boolean> => {
     if (cobranca.origem !== 'fatura' || !cobranca.fatura_id) return true;
 
     const check = await conferirStatusAsaas(cobranca.fatura_id);
 
     if (!check.success || !check.data) {
-      // Falha ao consultar não bloqueia a cobrança: o status local continua
-      // valendo e travar aqui deixaria a secretária sem ação nenhuma.
+      // Falha ao consultar não bloqueia: o status local continua valendo e
+      // travar aqui deixaria a secretária sem ação nenhuma.
       toast({
         title: 'Não deu para conferir no Asaas',
         description: `${check.error || 'Erro na consulta'}. Confira o pagamento antes de enviar.`,
@@ -157,20 +229,20 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
       return true;
     }
 
-    const { status, mudou, requerAjusteManual } = check.data;
+    const { status, requerAjusteManual } = check.data;
 
     if (requerAjusteManual) {
       toast({
         title: 'Cobrança excluída no Asaas',
         description:
-          'Essa cobrança não existe mais no Asaas. Faça o ajuste manual no Financeiro.',
+          'O link está morto, não dá para cobrar. Marquei como cancelada e tirei da lista — as sessões precisam ser refaturadas no Financeiro.',
         variant: 'destructive',
       });
       await carregar();
       return false;
     }
 
-    if (mudou && status === 'pago') {
+    if (status === 'pago') {
       toast({
         title: 'Essa já foi paga',
         description:
@@ -180,7 +252,7 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
       return false;
     }
 
-    if (mudou && status !== 'pendente' && status !== 'atrasado') {
+    if (status !== 'pendente' && status !== 'atrasado') {
       toast({
         title: `Cobrança agora está como "${status}"`,
         description: 'Atualizei o status. Confira antes de cobrar.',
@@ -235,7 +307,6 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
       if (janela) {
         janela.location.href = url;
       } else {
-        // Pop-up bloqueado: tenta o caminho direto.
         window.open(url, '_blank', 'noopener,noreferrer');
       }
 
@@ -262,37 +333,6 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
     }
   };
 
-  const handleConferir = async (cobranca: CobrancaPendente) => {
-    if (!cobranca.fatura_id) return;
-    setConferindo(cobranca.cobranca_id);
-    try {
-      const check = await conferirStatusAsaas(cobranca.fatura_id);
-      if (!check.success || !check.data) {
-        toast({
-          title: 'Não deu para conferir',
-          description: check.error || 'Erro na consulta ao Asaas',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      if (check.data.mudou) {
-        toast({
-          title: `Status atualizado: ${check.data.status}`,
-          description: 'A lista foi recarregada.',
-        });
-        await carregar();
-      } else {
-        toast({
-          title: 'Continua em aberto',
-          description: 'O Asaas confirma que essa cobrança não foi paga.',
-        });
-      }
-    } finally {
-      setConferindo(null);
-    }
-  };
-
   if (isLoading) {
     return (
       <div className={cn('space-y-3', className)}>
@@ -305,7 +345,7 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
 
   return (
     <div className={cn('space-y-4', className)}>
-      {/* Resumo */}
+      {/* Resumo — acompanha o filtro, senão o número da tela não bate com a lista */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
           <CardContent className="pt-4">
@@ -332,37 +372,108 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por paciente ou responsável..."
-            className="pl-9"
-          />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {FILTROS.map((f) => (
-            <Button
-              key={f.value}
-              size="sm"
-              variant={filtro === f.value ? 'default' : 'outline'}
-              onClick={() => setFiltro(f.value)}
-            >
-              {f.label}
-            </Button>
-          ))}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={carregar}
-            title="Recarregar lista"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="pt-4 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por paciente ou responsável..."
+                className="pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {FILTROS.map((f) => (
+                <Button
+                  key={f.value}
+                  size="sm"
+                  variant={filtro === f.value ? 'default' : 'outline'}
+                  onClick={() => setFiltro(f.value)}
+                >
+                  {f.label}
+                </Button>
+              ))}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={carregar}
+                title="Recarregar lista"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Vencimento de</Label>
+              <Input
+                type="date"
+                value={vencDe}
+                onChange={(e) => setVencDe(e.target.value)}
+                className="h-10 w-full bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">até</Label>
+              <Input
+                type="date"
+                value={vencAte}
+                onChange={(e) => setVencAte(e.target.value)}
+                className="h-10 w-full bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Empresa</Label>
+              <Select value={empresaId} onValueChange={setEmpresaId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS}>Todas</SelectItem>
+                  {empresas.map(([id, nome]) => (
+                    <SelectItem key={id} value={id}>
+                      {nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Profissional</Label>
+              <Select value={profissionalId} onValueChange={setProfissionalId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS}>Todos</SelectItem>
+                  {profissionais.map(([id, nome]) => (
+                    <SelectItem key={id} value={id}>
+                      {nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {filtrosAtivos && (
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={limparFiltros}
+                className="gap-1.5 text-xs"
+              >
+                <X className="h-3.5 w-3.5" />
+                Limpar filtros
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {error && (
         <Alert variant="destructive">
@@ -378,7 +489,7 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
             <p className="font-medium">Nenhuma cobrança em aberto por aqui</p>
             <p className="text-sm text-muted-foreground">
               {cobrancas.length > 0
-                ? 'Nenhuma cobrança bate com o filtro atual.'
+                ? 'Nenhuma cobrança bate com os filtros atuais.'
                 : 'Tudo em dia.'}
             </p>
           </CardContent>
@@ -397,7 +508,18 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
               <CardHeader className="pb-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <CardTitle className="text-base">
-                    {c.paciente_nome || 'Paciente sem nome'}
+                    {c.paciente_id ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/pacientes/${c.paciente_id}`)}
+                        className="text-left hover:text-rosa-suave hover:underline transition-colors"
+                        title="Abrir detalhes do paciente"
+                      >
+                        {c.paciente_nome || 'Paciente sem nome'}
+                      </button>
+                    ) : (
+                      (c.paciente_nome ?? 'Paciente sem nome')
+                    )}
                   </CardTitle>
                   <div className="flex flex-wrap gap-1.5">
                     <Badge
@@ -412,6 +534,11 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                     <Badge variant="secondary" className="text-xs">
                       {c.origem === 'fatura' ? 'Asaas' : 'Pré-cobrança'}
                     </Badge>
+                    {c.empresa_nome && (
+                      <Badge variant="outline" className="text-xs">
+                        {c.empresa_nome}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -433,6 +560,15 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                   </div>
                 </div>
 
+                {c.profissionais?.length > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Stethoscope className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
+                      {c.profissionais.join(', ')}
+                    </span>
+                  </div>
+                )}
+
                 {c.descricao && (
                   <p className="text-xs text-muted-foreground line-clamp-2">
                     {c.descricao.replace(/\s*\n\s*/g, ' ')}
@@ -442,7 +578,7 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                 {(c.envios_manuais > 0 || c.lembretes_enviados > 0) && (
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <Bell className="h-3.5 w-3.5" />
-                    {c.envios_manuais > 0 && (
+                    {c.envios_manuais > 0 ? (
                       <span>
                         Enviada {c.envios_manuais}x pela secretaria
                         {c.ultimo_envio_manual_em
@@ -452,8 +588,7 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                           ? ` por ${c.ultimo_envio_manual_por}`
                           : ''}
                       </span>
-                    )}
-                    {c.envios_manuais === 0 && c.lembretes_enviados > 0 && (
+                    ) : (
                       <span>
                         {c.lembretes_enviados} lembrete(s) automático(s)
                       </span>
@@ -491,23 +626,30 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                     ) : (
                       <MessageCircle className="h-4 w-4" />
                     )}
-                    {ocupado ? 'Conferindo...' : 'Enviar cobrança'}
+                    {ocupado ? 'Conferindo no Asaas...' : 'Enviar cobrança'}
                   </Button>
 
-                  {c.origem === 'fatura' && (
+                  {c.link_pagamento && (
                     <Button
                       variant="outline"
-                      onClick={() => handleConferir(c)}
-                      disabled={conferindo === c.cobranca_id}
-                      title="Conferir no Asaas se já foi paga"
                       className="gap-2"
+                      onClick={() =>
+                        window.open(
+                          c.link_pagamento as string,
+                          '_blank',
+                          'noopener,noreferrer'
+                        )
+                      }
+                      title={
+                        c.origem === 'fatura'
+                          ? 'Abrir a fatura no Asaas'
+                          : 'Abrir a página de pagamento'
+                      }
                     >
-                      {conferindo === c.cobranca_id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                      Conferir pagamento
+                      <ExternalLink className="h-4 w-4" />
+                      {c.origem === 'fatura'
+                        ? 'Ver fatura'
+                        : 'Ver link de pagamento'}
                     </Button>
                   )}
                 </div>

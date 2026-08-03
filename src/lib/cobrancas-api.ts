@@ -26,6 +26,10 @@ export interface CobrancaPendente {
   responsavel_cobranca_id: string | null;
   responsavel_nome: string | null;
   responsavel_telefone: number | null;
+  empresa_id: string | null;
+  empresa_nome: string | null;
+  profissional_ids: string[];
+  profissionais: string[];
   descricao: string | null;
   valor: number | null;
   vencimento: string | null;
@@ -44,7 +48,8 @@ export interface CobrancaPendente {
 const CAMPOS_COBRANCA =
   'origem, cobranca_id, pagamento_link_id, fatura_id, token, id_asaas, ' +
   'paciente_id, paciente_nome, responsavel_cobranca_id, responsavel_nome, ' +
-  'responsavel_telefone, descricao, valor, vencimento, dias_atraso, situacao, ' +
+  'responsavel_telefone, empresa_id, empresa_nome, profissional_ids, profissionais, ' +
+  'descricao, valor, vencimento, dias_atraso, situacao, ' +
   'link_pagamento, link_expirado, lembretes_enviados, ultimo_lembrete_em, ' +
   'criado_em, envios_manuais, ultimo_envio_manual_em, ultimo_envio_manual_por';
 

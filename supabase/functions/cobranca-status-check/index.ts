@@ -8,9 +8,12 @@
 // para mais um perfil. Aqui o token é resolvido no servidor, com service_role,
 // e nunca sai daqui.
 //
-// Escopo deliberadamente estreito: atualiza status/pago_em/vencimento e mais nada.
-// Cancelamento no Asaas (404) tem cascata (desvincular consultas) que pertence ao
-// "Ajuste manual" do Financeiro — aqui só sinalizamos com `requerAjusteManual`.
+// Escopo deliberadamente estreito: grava status/pago_em/vencimento e mais nada.
+// Cobrança excluída no Asaas (`deleted: true` ou 404) VIRA 'cancelado' aqui, para
+// sair da lista — o link está morto, não há como cobrar. O que NÃO fazemos é a
+// cascata do "Ajuste manual" do Financeiro (ativo=false + desvincular consultas):
+// ela é que devolve as sessões para o pool de faturamento, e é decisão de admin.
+// Sinalizamos com `requerAjusteManual` para a tela avisar que falta refaturar.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
@@ -155,15 +158,21 @@ serve(async (req: Request) => {
       clearTimeout(timeoutId);
     }
 
-    // 404 = cobrança excluída no Asaas. A baixa completa (desvincular consultas)
-    // é do "Ajuste manual" no Financeiro — não fazemos cascata aqui.
+    // 404 = cobrança sumiu do Asaas. Mesmo desfecho de `deleted: true`.
     if (asaasResponse.status === 404) {
+      const mudou404 = fatura.status !== 'cancelado';
+      if (mudou404) {
+        await supabase
+          .from('faturas')
+          .update({ status: 'cancelado' })
+          .eq('id', faturaId);
+      }
       return json({
         success: true,
         statusAnterior: fatura.status,
         status: 'cancelado',
-        mudou: true,
-        atualizado: false,
+        mudou: mudou404,
+        atualizado: mudou404,
         requerAjusteManual: true,
       });
     }
@@ -180,9 +189,7 @@ serve(async (req: Request) => {
 
     const novoStatus = mapAsaasStatus(payment.status, payment.deleted);
     const mudou = novoStatus !== fatura.status;
-
-    // Cancelado tem cascata; deixamos para o Ajuste manual do Financeiro.
-    const podeAtualizar = mudou && novoStatus !== 'cancelado';
+    const podeAtualizar = mudou;
 
     if (podeAtualizar) {
       const updateData: Record<string, unknown> = { status: novoStatus };
@@ -215,7 +222,7 @@ serve(async (req: Request) => {
       status: novoStatus,
       mudou,
       atualizado: podeAtualizar,
-      requerAjusteManual: mudou && novoStatus === 'cancelado',
+      requerAjusteManual: novoStatus === 'cancelado',
       asaasStatus: payment.status ?? null,
     });
   } catch (error) {
