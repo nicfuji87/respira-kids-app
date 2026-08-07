@@ -43,6 +43,11 @@ export interface CobrancaPendente {
   envios_manuais: number;
   ultimo_envio_manual_em: string | null;
   ultimo_envio_manual_por: string | null;
+  // Só existem para alimentar a busca da tela (igual à de Pacientes: nome,
+  // e-mail, telefone ou CPF). Não são exibidos no card.
+  paciente_cpf: string | null;
+  responsavel_cpf: string | null;
+  responsavel_email: string | null;
 }
 
 const CAMPOS_COBRANCA =
@@ -51,7 +56,8 @@ const CAMPOS_COBRANCA =
   'responsavel_telefone, empresa_id, empresa_nome, profissional_ids, profissionais, ' +
   'descricao, valor, vencimento, dias_atraso, situacao, ' +
   'link_pagamento, link_expirado, lembretes_enviados, ultimo_lembrete_em, ' +
-  'criado_em, envios_manuais, ultimo_envio_manual_em, ultimo_envio_manual_por';
+  'criado_em, envios_manuais, ultimo_envio_manual_em, ultimo_envio_manual_por, ' +
+  'paciente_cpf, responsavel_cpf, responsavel_email';
 
 export async function fetchCobrancasPendentes(): Promise<
   ApiResponse<CobrancaPendente[]>

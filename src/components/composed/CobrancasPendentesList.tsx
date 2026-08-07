@@ -34,7 +34,7 @@ import {
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { useToast } from '@/components/primitives/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, normalizeText } from '@/lib/utils';
 import {
   buildWhatsAppUrl,
   conferirStatusAsaas,
@@ -81,6 +81,24 @@ const formatDateTime = (value: string | null) => {
     day: '2-digit',
     month: '2-digit',
   });
+};
+
+// AI dev note: `pessoas.telefone` é o JID — 55 + DDD + número, e boa parte dos
+// cadastros antigos está sem o nono dígito. Quem busca digita do jeito que vê no
+// celular: com ou sem DDI, com ou sem o 9. Em vez de adivinhar o formato do que
+// foi digitado, geramos as variações do número guardado e batemos contra todas.
+const variacoesTelefone = (telefone: number | null): string[] => {
+  const digitos = String(telefone ?? '').replace(/\D/g, '');
+  if (digitos.length < 10) return digitos ? [digitos] : [];
+
+  const semDdi = digitos.startsWith('55') ? digitos.slice(2) : digitos;
+  const ddd = semDdi.slice(0, 2);
+  const numero = semDdi.slice(2);
+  // Nono dígito é por tamanho, não pelo primeiro dígito: 91892869 (8) vira
+  // 991892869, mas 991892869 (9) já está completo.
+  const comNove = numero.length === 8 ? `9${numero}` : numero;
+
+  return [digitos, semDdi, `${ddd}${comNove}`, `55${ddd}${comNove}`];
 };
 
 const SITUACAO_STYLES: Record<SituacaoCobranca, string> = {
@@ -181,8 +199,29 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
     setProfissionalId(TODOS);
   };
 
+  // AI dev note: A busca acompanha a de Pacientes — acha por nome, e-mail,
+  // telefone ou CPF, ignorando acento e maiúscula ("jose" acha "José"). Lá é
+  // server-side (fn_search_pacientes_paginado, com unaccent); aqui a lista
+  // inteira já está em memória, então filtra no cliente com as MESMAS regras:
+  //
+  // - várias palavras precisam casar todas DENTRO DO MESMO campo (o bool_and da
+  //   RPC), senão "maria couto" não acharia "Mariana Graça Couto Miziara";
+  // - contato (e-mail/telefone/CPF) só entra com termo de uma palavra só —
+  //   senão o "61" de "maria 61" casaria com meia lista.
+  //
+  // Termo essencialmente numérico vai direto pela via de telefone/CPF, comparado
+  // só por dígitos, para a máscara digitada ((61) 99189-2869) não atrapalhar.
   const listaFiltrada = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+    const termo = normalizeText(busca);
+    const palavras = termo.split(/\s+/).filter(Boolean);
+    const digitos = busca.replace(/\D/g, '');
+    const buscaNumerica = digitos.length >= 3 && !/[a-z@]/.test(termo);
+
+    const casaTodasAsPalavras = (valor: string | null) => {
+      const alvo = normalizeText(valor || '');
+      return alvo !== '' && palavras.every((p) => alvo.includes(p));
+    };
+
     return cobrancas.filter((c) => {
       if (filtro !== 'todas' && c.situacao !== filtro) return false;
       if (empresaId !== TODOS && c.empresa_id !== empresaId) return false;
@@ -195,10 +234,20 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
       // Datas ISO comparam direto como string, sem risco de fuso.
       if (vencDe && (!c.vencimento || c.vencimento < vencDe)) return false;
       if (vencAte && (!c.vencimento || c.vencimento > vencAte)) return false;
-      if (!termo) return true;
+      if (palavras.length === 0) return true;
+
+      if (buscaNumerica) {
+        return [
+          ...variacoesTelefone(c.responsavel_telefone),
+          (c.responsavel_cpf ?? '').replace(/\D/g, ''),
+          (c.paciente_cpf ?? '').replace(/\D/g, ''),
+        ].some((valor) => valor.includes(digitos));
+      }
+
       return (
-        (c.paciente_nome || '').toLowerCase().includes(termo) ||
-        (c.responsavel_nome || '').toLowerCase().includes(termo)
+        casaTodasAsPalavras(c.paciente_nome) ||
+        casaTodasAsPalavras(c.responsavel_nome) ||
+        (palavras.length === 1 && casaTodasAsPalavras(c.responsavel_email))
       );
     });
   }, [cobrancas, busca, filtro, empresaId, profissionalId, vencDe, vencAte]);
@@ -380,7 +429,7 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
               <Input
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por paciente ou responsável..."
+                placeholder="Buscar por nome, e-mail, telefone ou CPF..."
                 className="pl-9"
               />
             </div>
