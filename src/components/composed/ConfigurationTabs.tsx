@@ -75,8 +75,11 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       },
       {
         id: 'security',
+        // AI dev note: secretaria também é barrada pelo PIN em /financeiro
+        // (ver FinanceiroPage), então precisa desta aba para criar/alterar o PIN.
+        // Sem ela, uma secretaria sem PIN não tinha onde cadastrar.
         label: 'Segurança',
-        roles: ['admin'],
+        roles: ['admin', 'secretaria'],
         icon: Shield,
         content: <PinConfiguration showCard={true} />,
       },

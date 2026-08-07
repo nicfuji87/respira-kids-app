@@ -23,11 +23,16 @@ import { useToast } from '@/components/primitives/use-toast';
 interface PinConfigurationProps {
   onSuccess?: () => void;
   showCard?: boolean;
+  // AI dev note: equivale ao ?action= da URL, para quem embute o componente fora
+  // da página de configurações (ex.: PinValidationDialog abre já no "Criar PIN"
+  // em vez de exigir um clique a mais no passo informativo).
+  initialAction?: 'create-pin' | 'reset-pin';
 }
 
 export const PinConfiguration: React.FC<PinConfigurationProps> = ({
   onSuccess,
   showCard = true,
+  initialAction,
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -49,8 +54,8 @@ export const PinConfiguration: React.FC<PinConfigurationProps> = ({
   useEffect(() => {
     checkExistingPin();
 
-    // Verificar parâmetros da URL
-    const action = searchParams.get('action');
+    // Verificar parâmetros da URL (ou a ação passada por prop)
+    const action = initialAction ?? searchParams.get('action');
     if (action === 'create-pin' && !hasExistingPin) {
       // Iniciar fluxo de criação de PIN
       setStep('new');
@@ -73,7 +78,7 @@ export const PinConfiguration: React.FC<PinConfigurationProps> = ({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, searchParams]); // AI dev note: checkExistingPin usa user, mas não precisa re-executar a cada mudança
+  }, [user?.id, searchParams, initialAction]); // AI dev note: checkExistingPin usa user, mas não precisa re-executar a cada mudança
 
   const checkExistingPin = async () => {
     if (!user?.id) return;

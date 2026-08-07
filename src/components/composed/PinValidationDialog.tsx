@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
 import { Button } from '@/components/primitives/button';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { PinInput } from '@/components/primitives/pin-input';
+import { PinConfiguration } from './PinConfiguration';
 import { Shield, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -18,6 +20,14 @@ import { supabase } from '@/lib/supabase';
 // Inclui opção de recuperação de PIN
 // IMPORTANTE: O controle de abertura/fechamento é feito EXCLUSIVAMENTE pela prop isOpen
 // O componente NÃO deve tentar fechar a si mesmo - apenas chama onSuccess e o pai fecha
+//
+// AI dev note: quem ainda não tem PIN cadastra AQUI DENTRO (mode='create'),
+// não é mais redirecionado para /configuracoes. O redirect antigo usava
+// window.location.href='/configuracoes?...' — path, não hash — e o app roda em
+// HashRouter: recarregava a página com hash vazio, caía na rota "/" e o
+// AppRouter mandava para /dashboard. O usuário via o PIN piscar e voltava pro
+// dashboard, sem nunca conseguir cadastrar. Ao navegar daqui, sempre use
+// navigate() do react-router (nunca window.location.href com path).
 
 interface PinValidationDialogProps {
   isOpen: boolean;
@@ -34,11 +44,16 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
   title = 'Área Restrita',
   description = 'Digite seu PIN de 4 dígitos para acessar esta área.',
 }) => {
+  const navigate = useNavigate();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [loading, setLoading] = useState(false);
+  // 'checking' enquanto lê o metadata; 'create' quando ainda não há PIN
+  const [mode, setMode] = useState<'checking' | 'validate' | 'create'>(
+    'checking'
+  );
 
   // Ref para evitar chamadas duplicadas de onSuccess
   const successCalledRef = useRef(false);
@@ -52,6 +67,7 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
       setPin('');
       setError('');
       setLoading(false);
+      setMode('checking');
       successCalledRef.current = false;
       checkBlockStatus();
       checkPinExists();
@@ -65,21 +81,27 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
         data: { user: currentUser },
       } = await supabase.auth.getUser();
 
-      if (!currentUser) return;
+      if (!currentUser) {
+        setMode('validate');
+        return;
+      }
 
       const userMetadata = currentUser.user_metadata || {};
-      const storedPin = userMetadata.financial_pin;
-
-      if (!storedPin) {
-        // Redirecionar para configuração de PIN
-        setTimeout(() => {
-          window.location.href =
-            '/configuracoes?tab=seguranca&action=create-pin';
-        }, 500);
-      }
+      setMode(userMetadata.financial_pin ? 'validate' : 'create');
     } catch (error) {
       console.error('Erro ao verificar PIN:', error);
+      // Na dúvida, pedir o PIN: quem não tem cai no "PIN não cadastrado" da
+      // validação e o fluxo de criação abre pelo mesmo caminho.
+      setMode('validate');
     }
+  };
+
+  // Acabou de cadastrar o PIN: já está autenticado (acabou de provar que é o
+  // dono da sessão), então libera o acesso em vez de pedir o PIN de novo.
+  const handlePinCreated = () => {
+    if (successCalledRef.current) return;
+    successCalledRef.current = true;
+    onSuccess();
   };
 
   const checkBlockStatus = () => {
@@ -130,9 +152,10 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
       const storedPin = userMetadata.financial_pin;
 
       if (!storedPin) {
-        // Redirecionar para configuração de PIN
+        // Sem PIN cadastrado: abrir o cadastro aqui mesmo
         setLoading(false);
-        window.location.href = '/configuracoes?tab=seguranca&action=create-pin';
+        setPin('');
+        setMode('create');
         return;
       }
 
@@ -183,8 +206,8 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
   };
 
   const handleForgotPin = () => {
-    // Redirecionar para configurações para redefinir o PIN
-    window.location.href = '/configuracoes?tab=seguranca&action=reset-pin';
+    // Redefinir o PIN em Configurações > Segurança (id da aba é "security")
+    navigate('/configuracoes?tab=security&action=reset-pin');
   };
 
   // Handler para quando o dialog tenta fechar (pelo X ou clicando fora)
@@ -206,61 +229,92 @@ export const PinValidationDialog: React.FC<PinValidationDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-roxo-titulo" />
-            {title}
+            {mode === 'create' ? 'Cadastre seu PIN' : title}
           </DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogDescription>
+            {mode === 'create'
+              ? 'Você ainda não tem um PIN. Crie um de 4 dígitos para acessar esta área.'
+              : description}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col items-center space-y-6 py-4">
-          <PinInput
-            value={pin}
-            onChange={setPin}
-            onComplete={handlePinComplete}
-            disabled={loading || isBlocked}
-            error={!!error}
-            autoFocus
-          />
+        {mode === 'checking' && (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            Verificando acesso...
+          </div>
+        )}
 
-          {error && (
-            <Alert variant="destructive" className="w-full">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+        {mode === 'create' && (
+          <>
+            <div className="py-2">
+              <PinConfiguration
+                showCard={false}
+                initialAction="create-pin"
+                onSuccess={handlePinCreated}
+              />
+            </div>
+            <DialogFooter className="flex-col sm:flex-col gap-2">
+              <Button variant="outline" onClick={onClose} className="w-full">
+                Cancelar
+              </Button>
+            </DialogFooter>
+          </>
+        )}
 
-          {!isBlocked && attempts > 0 && attempts < maxAttempts && (
-            <p className="text-sm text-muted-foreground">
-              {maxAttempts - attempts} tentativas restantes
-            </p>
-          )}
-        </div>
+        {mode === 'validate' && (
+          <>
+            <div className="flex flex-col items-center space-y-6 py-4">
+              <PinInput
+                value={pin}
+                onChange={setPin}
+                onComplete={handlePinComplete}
+                disabled={loading || isBlocked}
+                error={!!error}
+                autoFocus
+              />
 
-        <DialogFooter className="flex-col sm:flex-col gap-2">
-          <Button
-            onClick={() => validatePin(pin)}
-            disabled={loading || isBlocked || pin.length !== 4}
-            className="w-full"
-          >
-            {loading ? 'Validando...' : 'Validar PIN'}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleForgotPin}
-            disabled={loading}
-            className="w-full"
-          >
-            Esqueceu seu PIN?
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={loading}
-            className="w-full"
-          >
-            Cancelar
-          </Button>
-        </DialogFooter>
+              {error && (
+                <Alert variant="destructive" className="w-full">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {!isBlocked && attempts > 0 && attempts < maxAttempts && (
+                <p className="text-sm text-muted-foreground">
+                  {maxAttempts - attempts} tentativas restantes
+                </p>
+              )}
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-col gap-2">
+              <Button
+                onClick={() => validatePin(pin)}
+                disabled={loading || isBlocked || pin.length !== 4}
+                className="w-full"
+              >
+                {loading ? 'Validando...' : 'Validar PIN'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleForgotPin}
+                disabled={loading}
+                className="w-full"
+              >
+                Esqueceu seu PIN?
+              </Button>
+              <Button
+                variant="outline"
+                onClick={onClose}
+                disabled={loading}
+                className="w-full"
+              >
+                Cancelar
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
