@@ -12,10 +12,13 @@ import {
   trackRegistrationAttempt,
   type WhatsAppValidationResponse,
 } from '@/lib/patient-registration-api';
+import { WHATSAPP_CODE_VALIDATION_ENABLED } from '@/lib/feature-flags';
 
 // AI dev note: WhatsAppValidationStep - Etapa 1 do cadastro público de paciente
 // Fluxo: 1) Valida WhatsApp 2) Envia código 3) Valida código
 // Validação de código via Edge Function (hash SHA-256, rate limiting por IP)
+// Com WHATSAPP_CODE_VALIDATION_ENABLED = false, as etapas 2 e 3 são puladas:
+// o número é apenas verificado e o cadastro segue direto
 
 export interface ExistingUserFullData {
   id: string;
@@ -180,6 +183,64 @@ export const WhatsAppValidationStep = React.memo<WhatsAppValidationStepProps>(
       }
     }, [validationResult, onExistingPersonContinue]);
 
+    // Prossegue depois que o número foi confirmado (com ou sem código)
+    const proceedAfterPhoneConfirmed = useCallback(async () => {
+      if (!validationResult?.whatsappJid || !validationResult?.phoneNumber)
+        return;
+
+      console.log(
+        '🔍 [WhatsAppValidationStep] Buscando usuário existente para JID:',
+        validationResult.whatsappJid
+      );
+      const existingUser = await findExistingUserByPhone(
+        validationResult.whatsappJid
+      );
+      console.log(
+        '🔍 [WhatsAppValidationStep] Resultado da busca:',
+        existingUser
+      );
+
+      if (existingUser.exists && existingUser.user) {
+        // Usuário EXISTE - atualizar validationResult e voltar para mostrar boas-vindas
+        console.log(
+          '✅ [WhatsAppValidationStep] Usuário EXISTE - mostrando boas-vindas'
+        );
+        const firstName = existingUser.user.nome.split(' ')[0];
+
+        setValidationResult({
+          isValid: true,
+          personExists: true,
+          personId: existingUser.user.id,
+          personFirstName: firstName,
+          relatedPatients:
+            existingUser.pacientes?.map((p) => ({
+              id: p.id,
+              nome: p.nome,
+            })) || [],
+          phoneNumber: validationResult.phoneNumber,
+          whatsappJid: validationResult.whatsappJid,
+          userData: existingUser.user, // Incluir dados completos do usuário
+        });
+
+        // Voltar para phone-input para mostrar a mensagem de boas-vindas
+        // NÃO chamar onContinue - usuário deve escolher o que fazer
+        setValidationState('phone-input');
+        setCodeError('');
+        setUserCode('');
+      } else {
+        // Novo usuário - prosseguir com cadastro
+        console.log(
+          '🆕 [WhatsAppValidationStep] Usuário NOVO - prosseguindo com cadastro'
+        );
+        setValidationState('code-validated');
+        setCodeError('');
+
+        onContinue({
+          phoneNumber: validationResult.phoneNumber,
+        });
+      }
+    }, [validationResult, onContinue]);
+
     // Handler para enviar código de validação (novo usuário)
     const handleSendCode = useCallback(async () => {
       if (!validationResult?.isValid || !validationResult.whatsappJid) return;
@@ -188,6 +249,12 @@ export const WhatsAppValidationStep = React.memo<WhatsAppValidationStepProps>(
       setCodeError('');
 
       try {
+        // Envio de código suspenso: número verificado já é suficiente
+        if (!WHATSAPP_CODE_VALIDATION_ENABLED) {
+          await proceedAfterPhoneConfirmed();
+          return;
+        }
+
         const result = await sendValidationCode(validationResult.whatsappJid);
 
         if (result.success && result.expiresAt) {
@@ -203,7 +270,7 @@ export const WhatsAppValidationStep = React.memo<WhatsAppValidationStepProps>(
       } finally {
         setIsSendingCode(false);
       }
-    }, [validationResult]);
+    }, [validationResult, proceedAfterPhoneConfirmed]);
 
     // Handler para validar código inserido
     const handleValidateCode = useCallback(async () => {
@@ -238,65 +305,15 @@ export const WhatsAppValidationStep = React.memo<WhatsAppValidationStepProps>(
           return;
         }
 
-        // Código válido - buscar usuário existente na vw_usuarios_admin
-        console.log(
-          '🔍 [WhatsAppValidationStep] Buscando usuário existente para JID:',
-          validationResult.whatsappJid
-        );
-        const existingUser = await findExistingUserByPhone(
-          validationResult.whatsappJid
-        );
-        console.log(
-          '🔍 [WhatsAppValidationStep] Resultado da busca:',
-          existingUser
-        );
-
-        if (existingUser.exists && existingUser.user) {
-          // Usuário EXISTE - atualizar validationResult e voltar para mostrar boas-vindas
-          console.log(
-            '✅ [WhatsAppValidationStep] Usuário EXISTE - mostrando boas-vindas'
-          );
-          const firstName = existingUser.user.nome.split(' ')[0];
-
-          setValidationResult({
-            isValid: true,
-            personExists: true,
-            personId: existingUser.user.id,
-            personFirstName: firstName,
-            relatedPatients:
-              existingUser.pacientes?.map((p) => ({
-                id: p.id,
-                nome: p.nome,
-              })) || [],
-            phoneNumber: validationResult.phoneNumber,
-            whatsappJid: validationResult.whatsappJid,
-            userData: existingUser.user, // Incluir dados completos do usuário
-          });
-
-          // Voltar para phone-input para mostrar a mensagem de boas-vindas
-          // NÃO chamar onContinue - usuário deve escolher o que fazer
-          setValidationState('phone-input');
-          setCodeError('');
-          setUserCode('');
-        } else {
-          // Novo usuário - prosseguir com cadastro
-          console.log(
-            '🆕 [WhatsAppValidationStep] Usuário NOVO - prosseguindo com cadastro'
-          );
-          setValidationState('code-validated');
-          setCodeError('');
-
-          onContinue({
-            phoneNumber: validationResult.phoneNumber,
-          });
-        }
+        // Código válido - buscar usuário existente e seguir
+        await proceedAfterPhoneConfirmed();
       } catch (error) {
         console.error('Erro ao validar código:', error);
         setCodeError('Erro ao validar código. Tente novamente.');
       } finally {
         setIsValidatingCode(false);
       }
-    }, [userCode, validationResult, onContinue]);
+    }, [userCode, validationResult, proceedAfterPhoneConfirmed]);
 
     // Handler para reenviar código
     const handleResendCode = useCallback(() => {
@@ -356,8 +373,9 @@ export const WhatsAppValidationStep = React.memo<WhatsAppValidationStepProps>(
                   ✅ WhatsApp válido!
                 </p>
                 <p className="text-xs text-green-700 dark:text-green-300">
-                  Clique no botão abaixo para receber um código de validação no
-                  seu WhatsApp.
+                  {WHATSAPP_CODE_VALIDATION_ENABLED
+                    ? 'Clique no botão abaixo para receber um código de validação no seu WhatsApp.'
+                    : 'Clique no botão abaixo para continuar com o cadastro.'}
                 </p>
               </div>
             )}
@@ -405,9 +423,7 @@ export const WhatsAppValidationStep = React.memo<WhatsAppValidationStepProps>(
                     size="lg"
                     className="w-full h-12 text-base"
                   >
-                    {isSendingCode
-                      ? 'Enviando código...'
-                      : 'Cadastrar novo paciente'}
+                    {isSendingCode ? 'Aguarde...' : 'Cadastrar novo paciente'}
                   </Button>
                 </div>
               </div>
@@ -421,7 +437,13 @@ export const WhatsAppValidationStep = React.memo<WhatsAppValidationStepProps>(
                 size="lg"
                 className="w-full h-12 text-base font-semibold"
               >
-                {isSendingCode ? 'Enviando código...' : 'Verificar número'}
+                {isSendingCode
+                  ? WHATSAPP_CODE_VALIDATION_ENABLED
+                    ? 'Enviando código...'
+                    : 'Verificando...'
+                  : WHATSAPP_CODE_VALIDATION_ENABLED
+                    ? 'Verificar número'
+                    : 'Continuar'}
               </Button>
             )}
 

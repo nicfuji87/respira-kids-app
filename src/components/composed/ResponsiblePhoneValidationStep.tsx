@@ -10,10 +10,12 @@ import {
   validateCode,
   type WhatsAppValidationResponse,
 } from '@/lib/patient-registration-api';
+import { WHATSAPP_CODE_VALIDATION_ENABLED } from '@/lib/feature-flags';
 
 // AI dev note: ResponsiblePhoneValidationStep - Validação de telefone do responsável
 // Reutiliza lógica do WhatsAppValidationStep com foco em identificar responsável
 // Fluxo: 1) Valida WhatsApp 2) Envia código 3) Valida código 4) Identifica pessoa
+// Com WHATSAPP_CODE_VALIDATION_ENABLED = false, as etapas 2 e 3 são puladas
 
 export interface ResponsibleData {
   id?: string; // Se pessoa já existe
@@ -109,6 +111,23 @@ export const ResponsiblePhoneValidationStep =
         return () => clearInterval(interval);
       }, [validationState, codeExpiresAt]);
 
+      // Segue para a próxima etapa depois que o número foi confirmado
+      const proceedAfterPhoneConfirmed = useCallback(() => {
+        if (!validationResult?.whatsappJid) return;
+
+        setValidationState('code-validated');
+
+        const responsibleData: ResponsibleData = {
+          id: validationResult.personId,
+          nome: validationResult.personFirstName,
+          telefone: validationResult.phoneNumber || '',
+          whatsappJid: validationResult.whatsappJid,
+          exists: validationResult.personExists,
+        };
+
+        onContinue(responsibleData);
+      }, [validationResult, onContinue]);
+
       // Handler para enviar código
       const handleSendCode = useCallback(async () => {
         if (!validationResult?.whatsappJid) return;
@@ -117,6 +136,12 @@ export const ResponsiblePhoneValidationStep =
         setCodeError('');
 
         try {
+          // Envio de código suspenso: número verificado já é suficiente
+          if (!WHATSAPP_CODE_VALIDATION_ENABLED) {
+            proceedAfterPhoneConfirmed();
+            return;
+          }
+
           const result = await sendValidationCode(validationResult.whatsappJid);
 
           if (result.success && result.expiresAt) {
@@ -132,7 +157,7 @@ export const ResponsiblePhoneValidationStep =
         } finally {
           setIsSendingCode(false);
         }
-      }, [validationResult]);
+      }, [validationResult, proceedAfterPhoneConfirmed]);
 
       // Handler para validar código
       const handleValidateCode = useCallback(async () => {
@@ -148,19 +173,10 @@ export const ResponsiblePhoneValidationStep =
           );
 
           if (result.valid) {
-            setValidationState('code-validated');
             console.log('✅ Código validado com sucesso');
 
             // Prosseguir para próxima etapa
-            const responsibleData: ResponsibleData = {
-              id: validationResult.personId,
-              nome: validationResult.personFirstName,
-              telefone: validationResult.phoneNumber || '',
-              whatsappJid: validationResult.whatsappJid,
-              exists: validationResult.personExists,
-            };
-
-            onContinue(responsibleData);
+            proceedAfterPhoneConfirmed();
           } else {
             setCodeError(result.error || 'Código inválido. Tente novamente.');
             setAttemptsRemaining(result.attemptsRemaining || 0);
@@ -177,7 +193,7 @@ export const ResponsiblePhoneValidationStep =
         } finally {
           setIsValidatingCode(false);
         }
-      }, [validationResult, userCode, onContinue]);
+      }, [validationResult, userCode, proceedAfterPhoneConfirmed]);
 
       // Renderização
       return (
@@ -235,7 +251,13 @@ export const ResponsiblePhoneValidationStep =
                 disabled={!validationResult?.isValid || isSendingCode}
                 className="w-full"
               >
-                {isSendingCode ? 'Enviando código...' : 'Verificar número'}
+                {isSendingCode
+                  ? WHATSAPP_CODE_VALIDATION_ENABLED
+                    ? 'Enviando código...'
+                    : 'Verificando...'
+                  : WHATSAPP_CODE_VALIDATION_ENABLED
+                    ? 'Verificar número'
+                    : 'Continuar'}
               </Button>
             </div>
           )}

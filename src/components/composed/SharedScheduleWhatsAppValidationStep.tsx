@@ -13,11 +13,14 @@ import {
   type WhatsAppValidationResponse,
 } from '@/lib/patient-registration-api';
 import type { ExistingUserFullData } from './WhatsAppValidationStep';
+import { WHATSAPP_CODE_VALIDATION_ENABLED } from '@/lib/feature-flags';
 
 // AI dev note: SharedScheduleWhatsAppValidationStep - Validação para Agenda Compartilhada
 // Fluxo diferente do cadastro de paciente:
 // 1) Se NÃO cadastrado → chama onAccessDenied (mostra mensagem)
 // 2) Se cadastrado → envia código → valida → chama onValidated
+// Com WHATSAPP_CODE_VALIDATION_ENABLED = false, o passo do código é pulado:
+// número cadastrado já libera a agenda
 // NÃO altera o componente WhatsAppValidationStep usado no cadastro
 
 export interface SharedScheduleWhatsAppValidationStepProps {
@@ -121,6 +124,51 @@ export const SharedScheduleWhatsAppValidationStep =
         return () => clearInterval(interval);
       }, [validationState, codeExpiresAt]);
 
+      // Busca os dados completos e libera a agenda (com ou sem código)
+      const proceedAfterPhoneConfirmed = useCallback(async () => {
+        if (!validationResult?.whatsappJid) return;
+
+        console.log(
+          '🔍 [SharedScheduleWhatsAppValidation] Buscando usuário para JID:',
+          validationResult.whatsappJid
+        );
+        const existingUser = await findExistingUserByPhone(
+          validationResult.whatsappJid
+        );
+
+        if (existingUser.exists && existingUser.user) {
+          console.log(
+            '✅ [SharedScheduleWhatsAppValidation] Usuário validado - continuando para agenda'
+          );
+
+          // Montar dados completos do usuário
+          const userData: ExistingUserFullData = {
+            id: existingUser.user.id,
+            nome: existingUser.user.nome,
+            cpf_cnpj: existingUser.user.cpf_cnpj || undefined,
+            telefone: existingUser.user.telefone?.toString(),
+            email: existingUser.user.email || undefined,
+            data_nascimento: existingUser.user.data_nascimento || undefined,
+            sexo: existingUser.user.sexo || undefined,
+            id_tipo_pessoa: existingUser.user.tipo_pessoa_id || undefined,
+            tipo_responsabilidade:
+              existingUser.user.tipo_responsabilidade || undefined,
+            cep: existingUser.user.cep || undefined,
+            logradouro: existingUser.user.logradouro || undefined,
+            numero_endereco: existingUser.user.numero_endereco || undefined,
+            complemento_endereco:
+              existingUser.user.complemento_endereco || undefined,
+            bairro: existingUser.user.bairro || undefined,
+            cidade: existingUser.user.cidade || undefined,
+            estado: existingUser.user.estado || undefined,
+          };
+
+          onValidated(existingUser.user.id, userData);
+        } else {
+          setCodeError('Erro ao buscar dados do usuário');
+        }
+      }, [validationResult, onValidated]);
+
       // Handler para enviar código de validação (usuário cadastrado)
       const handleSendCode = useCallback(async () => {
         if (!validationResult?.isValid || !validationResult.whatsappJid) return;
@@ -129,6 +177,12 @@ export const SharedScheduleWhatsAppValidationStep =
         setCodeError('');
 
         try {
+          // Envio de código suspenso: número cadastrado já libera a agenda
+          if (!WHATSAPP_CODE_VALIDATION_ENABLED) {
+            await proceedAfterPhoneConfirmed();
+            return;
+          }
+
           const result = await sendValidationCode(validationResult.whatsappJid);
 
           if (result.success && result.expiresAt) {
@@ -144,7 +198,7 @@ export const SharedScheduleWhatsAppValidationStep =
         } finally {
           setIsSendingCode(false);
         }
-      }, [validationResult]);
+      }, [validationResult, proceedAfterPhoneConfirmed]);
 
       // Handler para validar código inserido
       const handleValidateCode = useCallback(async () => {
@@ -180,52 +234,14 @@ export const SharedScheduleWhatsAppValidationStep =
           }
 
           // Código válido - buscar dados completos do usuário
-          console.log(
-            '🔍 [SharedScheduleWhatsAppValidation] Buscando usuário para JID:',
-            validationResult.whatsappJid
-          );
-          const existingUser = await findExistingUserByPhone(
-            validationResult.whatsappJid
-          );
-
-          if (existingUser.exists && existingUser.user) {
-            console.log(
-              '✅ [SharedScheduleWhatsAppValidation] Usuário validado - continuando para agenda'
-            );
-
-            // Montar dados completos do usuário
-            const userData: ExistingUserFullData = {
-              id: existingUser.user.id,
-              nome: existingUser.user.nome,
-              cpf_cnpj: existingUser.user.cpf_cnpj || undefined,
-              telefone: existingUser.user.telefone?.toString(),
-              email: existingUser.user.email || undefined,
-              data_nascimento: existingUser.user.data_nascimento || undefined,
-              sexo: existingUser.user.sexo || undefined,
-              id_tipo_pessoa: existingUser.user.tipo_pessoa_id || undefined,
-              tipo_responsabilidade:
-                existingUser.user.tipo_responsabilidade || undefined,
-              cep: existingUser.user.cep || undefined,
-              logradouro: existingUser.user.logradouro || undefined,
-              numero_endereco: existingUser.user.numero_endereco || undefined,
-              complemento_endereco:
-                existingUser.user.complemento_endereco || undefined,
-              bairro: existingUser.user.bairro || undefined,
-              cidade: existingUser.user.cidade || undefined,
-              estado: existingUser.user.estado || undefined,
-            };
-
-            onValidated(existingUser.user.id, userData);
-          } else {
-            setCodeError('Erro ao buscar dados do usuário');
-          }
+          await proceedAfterPhoneConfirmed();
         } catch (error) {
           console.error('Erro ao validar código:', error);
           setCodeError('Erro ao validar código. Tente novamente.');
         } finally {
           setIsValidatingCode(false);
         }
-      }, [userCode, validationResult, onValidated]);
+      }, [userCode, validationResult, proceedAfterPhoneConfirmed]);
 
       // Handler para reenviar código
       const handleResendCode = useCallback(() => {
@@ -283,8 +299,9 @@ export const SharedScheduleWhatsAppValidationStep =
                   </div>
 
                   <p className="text-sm text-green-800 dark:text-green-200">
-                    Clique no botão abaixo para receber um código de validação e
-                    continuar com o agendamento.
+                    {WHATSAPP_CODE_VALIDATION_ENABLED
+                      ? 'Clique no botão abaixo para receber um código de validação e continuar com o agendamento.'
+                      : 'Clique no botão abaixo para continuar com o agendamento.'}
                   </p>
 
                   <Button
@@ -294,7 +311,9 @@ export const SharedScheduleWhatsAppValidationStep =
                     className="w-full h-12 text-base"
                   >
                     {isSendingCode
-                      ? 'Enviando código...'
+                      ? WHATSAPP_CODE_VALIDATION_ENABLED
+                        ? 'Enviando código...'
+                        : 'Aguarde...'
                       : 'Continuar para o agendamento'}
                   </Button>
                 </div>
