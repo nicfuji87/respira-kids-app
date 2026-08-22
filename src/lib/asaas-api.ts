@@ -19,6 +19,8 @@ import type {
   CreatePaymentRequest,
   UpdatePaymentRequest,
   ScheduleInvoiceRequest,
+  UpdateInvoiceRequest,
+  AsaasInvoiceSummary,
   AsaasIntegrationResult,
   ProcessPaymentData,
 } from '@/types/asaas';
@@ -33,7 +35,7 @@ export async function determineApiKeyFromEmpresa(
     // Busca API key da empresa de faturamento
     const { data: empresaData, error: empresaError } = await supabase
       .from('pessoa_empresas')
-      .select('api_token_externo, razao_social')
+      .select('api_token_externo, razao_social, regime_tributario')
       .eq('id', empresaId)
       .eq('ativo', true)
       .single();
@@ -56,6 +58,7 @@ export async function determineApiKeyFromEmpresa(
       apiKey: empresaData.api_token_externo,
       isGlobal: false,
       baseUrl: 'https://api.asaas.com/v3',
+      regimeTributario: empresaData.regime_tributario,
     };
   } catch (error) {
     console.error('Erro ao determinar API key da empresa:', error);
@@ -908,11 +911,109 @@ export async function authorizeAsaasInvoice(
   }
 }
 
-// AI dev note: Cancela (ou exclui como fallback) TODAS as notas fiscais
-// associadas a um payment no Asaas. Usado quando a NFe ficou em erro
-// (ex: erro de RPS) e precisa ser reemitida do zero.
-// A Edge Function internamente tenta POST /invoices/{id}/cancel e, se falhar,
-// faz DELETE /invoices/{id} como fallback.
+// AI dev note: Lista as notas fiscais já existentes para um payment no Asaas.
+// É o primeiro passo da emissão: uma nota em SCHEDULED ou ERROR deve ser
+// REAPROVEITADA via updateAsaasInvoice, nunca duplicada — o Asaas recusa um
+// segundo agendamento para a mesma cobrança.
+export async function listAsaasInvoicesByPayment(
+  paymentId: string,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-list-invoices',
+      {
+        body: {
+          apiConfig,
+          paymentId,
+        },
+      }
+    );
+
+    if (error) {
+      console.error('Erro ao chamar Edge Function asaas-list-invoices:', error);
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de consulta de NFe',
+      };
+    }
+
+    if (!data?.success) {
+      return {
+        success: false,
+        error: data?.error || 'Erro desconhecido ao listar notas fiscais',
+      };
+    }
+
+    return {
+      success: true,
+      data: (data.invoices || []) as AsaasInvoiceSummary[],
+    };
+  } catch (error) {
+    console.error('Erro ao listar notas fiscais no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao listar notas fiscais',
+    };
+  }
+}
+
+// AI dev note: Atualiza uma nota fiscal existente (PUT /invoices/{id}).
+// O Asaas só aceita atualização quando a nota está em SCHEDULED ou ERROR —
+// é justamente o caminho de reemissão depois de uma rejeição da prefeitura.
+// Não existe DELETE de invoice na API do Asaas, então corrigir + reautorizar
+// é a ÚNICA forma de reemitir uma nota que voltou com erro.
+export async function updateAsaasInvoice(
+  invoiceId: string,
+  invoiceData: UpdateInvoiceRequest,
+  apiConfig: AsaasApiConfig
+): Promise<AsaasIntegrationResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      'asaas-update-invoice',
+      {
+        body: {
+          apiConfig,
+          invoiceId,
+          invoiceData,
+        },
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao chamar Edge Function asaas-update-invoice:',
+        error
+      );
+      return {
+        success: false,
+        error: 'Erro na comunicação com o serviço de atualização de NFe',
+      };
+    }
+
+    if (!data?.success) {
+      return {
+        success: false,
+        error: data?.error || 'Erro desconhecido ao atualizar nota fiscal',
+      };
+    }
+
+    return {
+      success: true,
+      data: data.invoice,
+    };
+  } catch (error) {
+    console.error('Erro ao atualizar nota fiscal no Asaas:', error);
+    return {
+      success: false,
+      error: 'Erro inesperado ao atualizar nota fiscal',
+    };
+  }
+}
+
+// AI dev note: Cancela as notas fiscais AUTORIZADAS de um payment no Asaas.
+// Só serve para nota que virou documento fiscal (AUTHORIZED) — nota em
+// SCHEDULED/ERROR não se cancela, se corrige com updateAsaasInvoice.
 export async function cancelAsaasInvoicesByPayment(
   paymentId: string,
   apiConfig: AsaasApiConfig

@@ -1,14 +1,19 @@
-// AI dev note: Edge Function para agendar nota fiscal no Asaas
+// AI dev note: Edge Function para atualizar uma nota fiscal no Asaas (PUT /invoices/{id}).
+// O Asaas só permite atualizar notas em SCHEDULED ou ERROR. Como a API NÃO tem
+// DELETE de invoice e nota em erro também não pode ser cancelada, este é o único
+// caminho de reemissão: corrigir os dados da nota rejeitada e reautorizá-la.
+// ATENÇÃO: desde 31/03/2026 o objeto `taxes` tem semântica de PUT no Asaas —
+// campo ausente vira null/zero. Sempre enviar o objeto de impostos completo.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
-interface ScheduleInvoiceRequest {
+interface UpdateInvoiceRequest {
   apiConfig: {
     apiKey: string;
     isGlobal: boolean;
     baseUrl: string;
   };
+  invoiceId: string;
   invoiceData: {
-    payment: string;
     serviceDescription: string;
     observations: string;
     value: number;
@@ -17,9 +22,6 @@ interface ScheduleInvoiceRequest {
     municipalServiceId: string;
     municipalServiceName: string;
     updatePayment?: boolean;
-    // AI dev note: os 4 campos de classificação formam o grupo IBSCBS da Reforma
-    // Tributária. Sem eles, prefeituras que já exigem o grupo rejeitam a nota
-    // (Brasília-DF: erro EM061). Enviados só para empresas do Regime Normal.
     taxes: {
       retainIss: boolean;
       iss?: number;
@@ -36,14 +38,13 @@ interface ScheduleInvoiceRequest {
   };
 }
 
-interface ScheduleInvoiceResponse {
+interface UpdateInvoiceResponse {
   success: boolean;
   invoice?: Record<string, unknown>;
   error?: string;
 }
 
 Deno.serve(async (req: Request) => {
-  // Configurar CORS
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers':
@@ -51,7 +52,6 @@ Deno.serve(async (req: Request) => {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
-  // Handle preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -67,19 +67,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { apiConfig, invoiceData }: ScheduleInvoiceRequest = await req.json();
+    const { apiConfig, invoiceId, invoiceData }: UpdateInvoiceRequest =
+      await req.json();
 
-    // Validar dados obrigatórios
-    if (
-      !apiConfig?.apiKey ||
-      !invoiceData?.payment ||
-      !invoiceData?.serviceDescription ||
-      !invoiceData?.value
-    ) {
+    if (!apiConfig?.apiKey || !invoiceId || !invoiceData) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Dados obrigatórios não informados',
+          error: 'API key, invoiceId e invoiceData são obrigatórios',
         }),
         {
           status: 400,
@@ -88,10 +83,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // AI dev note: Esta validação é CORRETA - ASAAS não aceita notas fiscais com valor zero
-    // Consultas gratuitas podem existir no sistema, mas não devem gerar NFe
-    // Validar valor mínimo
-    if (invoiceData.value <= 0) {
+    if (!invoiceData.value || invoiceData.value <= 0) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -105,7 +97,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Validar formato da data (YYYY-MM-DD)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(invoiceData.effectiveDate)) {
       return new Response(
@@ -120,9 +111,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Preparar dados para API do Asaas
     const asaasPayload = {
-      payment: invoiceData.payment,
       serviceDescription: invoiceData.serviceDescription,
       observations: invoiceData.observations,
       value: invoiceData.value,
@@ -135,73 +124,77 @@ Deno.serve(async (req: Request) => {
     };
 
     console.log(
-      '📄 Agendando nota fiscal no Asaas:',
+      `📝 Atualizando nota fiscal ${invoiceId} no Asaas:`,
       JSON.stringify(asaasPayload, null, 2)
     );
 
-    // Chamada para API do Asaas - POST para agendar
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    const asaasResponse = await fetch(`${apiConfig.baseUrl}/invoices`, {
-      method: 'POST',
-      headers: {
-        access_token: apiConfig.apiKey,
-        'Content-Type': 'application/json',
-        'User-Agent': 'RespiraKids/1.0',
-      },
-      body: JSON.stringify(asaasPayload),
-      signal: controller.signal,
-    });
+    const asaasResponse = await fetch(
+      `${apiConfig.baseUrl}/invoices/${invoiceId}`,
+      {
+        method: 'PUT',
+        headers: {
+          access_token: apiConfig.apiKey,
+          'Content-Type': 'application/json',
+          'User-Agent': 'RespiraKids/1.0',
+        },
+        body: JSON.stringify(asaasPayload),
+        signal: controller.signal,
+      }
+    );
 
     clearTimeout(timeoutId);
 
     const asaasData = await asaasResponse.json();
 
     if (asaasResponse.ok) {
-      console.log('✅ Nota fiscal agendada com sucesso:', asaasData.id);
+      console.log('✅ Nota fiscal atualizada:', asaasData.id);
 
-      const response: ScheduleInvoiceResponse = {
-        success: true,
-        invoice: asaasData,
-      };
+      return new Response(
+        JSON.stringify({
+          success: true,
+          invoice: asaasData,
+        } satisfies UpdateInvoiceResponse),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    } else {
-      console.error('❌ Erro da API Asaas:', asaasData);
+    const errorMessage =
+      asaasData?.errors?.[0]?.description ||
+      `Erro ${asaasResponse.status} ao atualizar nota fiscal no Asaas`;
+    console.error('❌ Erro da API Asaas:', asaasData);
 
-      const errorMessage =
-        asaasData.errors?.length > 0
-          ? asaasData.errors[0].description
-          : `Erro ${asaasResponse.status} ao agendar nota fiscal no Asaas`;
-
-      const response: ScheduleInvoiceResponse = {
+    return new Response(
+      JSON.stringify({
         success: false,
         error: errorMessage,
-      };
-
-      return new Response(JSON.stringify(response), {
+      } satisfies UpdateInvoiceResponse),
+      {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+      }
+    );
   } catch (error) {
-    console.error('❌ Erro na Edge Function asaas-schedule-invoice:', error);
+    console.error('❌ Erro na Edge Function asaas-update-invoice:', error);
 
-    const response: ScheduleInvoiceResponse = {
-      success: false,
-      error:
-        error.name === 'AbortError'
+    const isAbortError = error instanceof Error && error.name === 'AbortError';
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: isAbortError
           ? 'Timeout ao comunicar com API do Asaas'
-          : 'Erro interno ao agendar nota fiscal',
-    };
-
-    return new Response(JSON.stringify(response), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+          : 'Erro interno ao atualizar nota fiscal',
+      } satisfies UpdateInvoiceResponse),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });

@@ -566,7 +566,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   // AI dev note: Enquanto houver alguma fatura com NFe em 'sincronizando',
   // recarregamos periodicamente. O link_nfe é atualizado de forma assíncrona
   // por webhook (ASAAS -> n8n -> Supabase), então fazemos polling para o botão
-  // transicionar sozinho de "Gerando NFe" para "Ver NFe" / "Cancelar e reemitir"
+  // transicionar sozinho de "Gerando NFe" para "Ver NFe" / "Corrigir e reemitir"
   // sem o usuário precisar atualizar a página.
   useEffect(() => {
     const temNfeSincronizando = faturas.some(
@@ -583,7 +583,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
 
   // AI dev note: Quando o link_nfe de uma fatura aguardada chega a um estado
   // terminal (URL real da NFe ou 'erro'), removemos do set para o botão refletir
-  // o resultado final ("Ver NFe" ou "Cancelar e reemitir"). Estados intermediários
+  // o resultado final ("Ver NFe" ou "Corrigir e reemitir"). Estados intermediários
   // (''/null/'sincronizando') mantêm a fatura aguardando.
   useEffect(() => {
     if (awaitingNfe.size === 0) return;
@@ -644,7 +644,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         });
         // AI dev note: Recarregar também no erro — emitirNfeFatura marca a fatura
         // como 'erro', então a lista precisa atualizar para o botão passar a
-        // oferecer "Cancelar e reemitir NFe".
+        // oferecer "Corrigir e reemitir NFe".
         fetchFaturas();
       }
     } catch (err) {
@@ -930,7 +930,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
 
     if (linkNfe === 'erro') {
       return {
-        text: 'Erro. Cancelar e reemitir NFe',
+        text: 'Erro. Corrigir e reemitir NFe',
         icon: RefreshCw,
         className: 'text-red-600 hover:text-red-800',
         disabled: false,
@@ -1509,13 +1509,13 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancelar e reemitir NFe?</AlertDialogTitle>
+            <AlertDialogTitle>Corrigir e reemitir NFe?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>
-                  A nota fiscal anterior está com erro e será{' '}
-                  <strong>cancelada (ou excluída) no ASAAS</strong> antes de
-                  emitir uma nova.
+                  A nota fiscal anterior foi rejeitada pela prefeitura e será{' '}
+                  <strong>corrigida no ASAAS</strong> antes de ser emitida de
+                  novo.
                 </p>
                 {faturaToCancelReissue?.status_nfe ? (
                   <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
@@ -1524,8 +1524,8 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                   </p>
                 ) : null}
                 <p>
-                  Essa ação tem efeito fiscal caso a nota já tenha sido
-                  autorizada pela prefeitura. Deseja continuar?
+                  A emissão gera documento fiscal na prefeitura. Deseja
+                  continuar?
                 </p>
               </div>
             </AlertDialogDescription>
@@ -1542,7 +1542,7 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
               }}
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
             >
-              Cancelar e reemitir
+              Corrigir e reemitir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

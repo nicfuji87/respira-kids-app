@@ -5,6 +5,14 @@ export interface AsaasApiConfig {
   apiKey: string;
   isGlobal: boolean; // true se for API global, false se for de empresa individual
   baseUrl?: string; // default: https://api.asaas.com/v3
+  // AI dev note: regime tributário da empresa emissora (pessoa_empresas.regime_tributario).
+  // Decide se a NFS-e leva o grupo IBS/CBS da Reforma Tributária — ver IBS_CBS_SERVICOS_SAUDE
+  // em faturas-api.ts. As Edge Functions ignoram este campo.
+  regimeTributario?:
+    | 'simples_nacional'
+    | 'lucro_presumido'
+    | 'lucro_real'
+    | null;
 }
 
 export interface AsaasCustomer {
@@ -176,6 +184,24 @@ export interface CancelPaymentRequest {
   paymentId: string;
 }
 
+// AI dev note: Objeto `taxes` da NFS-e no Asaas. ATENÇÃO: desde 31/03/2026 ele tem
+// semântica de PUT — campo ausente vira null/zero, não é preservado. Sempre montar o
+// objeto completo (ver breaking change "Atualização de configurações de Notas Fiscais").
+// Os 4 campos de classificação abaixo formam o grupo IBSCBS da Reforma Tributária.
+export interface AsaasInvoiceTaxes {
+  retainIss: boolean;
+  iss?: number;
+  cofins?: number;
+  csll?: number;
+  inss?: number;
+  ir?: number;
+  pis?: number;
+  nbsCode?: string; // Nomenclatura Brasileira de Serviços
+  taxSituationCode?: string; // CST do IBS/CBS
+  taxClassificationCode?: string; // cClassTrib do IBS/CBS
+  operationIndicatorCode?: string; // Código indicador de operação
+}
+
 export interface ScheduleInvoiceRequest {
   payment: string; // ID da cobrança no Asaas
   serviceDescription: string;
@@ -186,15 +212,26 @@ export interface ScheduleInvoiceRequest {
   municipalServiceId: string;
   municipalServiceName: string;
   updatePayment?: boolean;
-  taxes: {
-    retainIss: boolean;
-    iss?: number;
-    cofins?: number;
-    csll?: number;
-    inss?: number;
-    ir?: number;
-    pis?: number;
-  };
+  taxes: AsaasInvoiceTaxes;
+}
+
+// AI dev note: Payload aceito no PUT /invoices/{id}. Só notas em SCHEDULED ou ERROR
+// podem ser atualizadas — é o caminho de reemissão (não existe DELETE de invoice).
+export type UpdateInvoiceRequest = Omit<ScheduleInvoiceRequest, 'payment'>;
+
+export type AsaasInvoiceStatus =
+  | 'SCHEDULED'
+  | 'SYNCHRONIZED'
+  | 'AUTHORIZED'
+  | 'PROCESSING_CANCELLATION'
+  | 'CANCELED'
+  | 'CANCELLATION_DENIED'
+  | 'ERROR';
+
+export interface AsaasInvoiceSummary {
+  id: string;
+  status: AsaasInvoiceStatus;
+  statusDescription?: string | null;
 }
 
 export interface AuthorizeInvoiceRequest {

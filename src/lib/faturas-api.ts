@@ -8,7 +8,8 @@ import {
   getAsaasPayment,
   scheduleAsaasInvoice,
   authorizeAsaasInvoice,
-  cancelAsaasInvoicesByPayment,
+  listAsaasInvoicesByPayment,
+  updateAsaasInvoice,
   determineApiKeyFromEmpresa,
 } from './asaas-api';
 import { generateChargeDescription } from './charge-description';
@@ -21,7 +22,11 @@ import type {
   FaturaFiltros,
   FaturaMetricas,
 } from '@/types/faturas';
-import type { UpdatePaymentRequest } from '@/types/asaas';
+import type {
+  UpdatePaymentRequest,
+  AsaasInvoiceTaxes,
+  AsaasInvoiceSummary,
+} from '@/types/asaas';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -1654,6 +1659,34 @@ export async function ressincronizarFaturaAsaas(
   }
 }
 
+// AI dev note: Data de emissão da NFS-e no fuso de Brasília, NÃO em UTC.
+// toISOString() joga a data pro dia seguinte a partir das 21h local — emitir
+// dia 31 às 22h datava a nota no dia 1º, mudando a competência de mês.
+const hojeBRT = (): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+  }).format(new Date()); // YYYY-MM-DD
+
+// AI dev note: Grupo IBSCBS da Reforma Tributária (LC 214/2025) na NFS-e.
+// Brasília-DF passou a REJEITAR nota sem esses códigos em 03/08/2026 (erro EM061:
+// "É obrigatório declarar informações de IBS/CBS na versão 1.01"), antes do prazo
+// nacional de 01/10/2026. Sem eles, toda emissão do Regime Normal volta em erro.
+//
+// Só vai para empresa do Regime Normal: Simples Nacional só é obrigado em
+// 01/01/2027 e enviar o grupo antes disso gera inconsistência fiscal.
+//
+// Os códigos podem ser reconferidos na própria API do Asaas:
+//   GET /v3/fiscalInfo/nbsCodes | taxSituationCodes
+//   GET /v3/fiscalInfo/taxClassificationCodes | operationIndicatorCodes
+// Se a clínica passar a prestar serviço fora do enquadramento de saúde humana,
+// esses códigos precisam ser revistos com a contabilidade.
+const IBS_CBS_SERVICOS_SAUDE = {
+  nbsCode: '1.2301.92.00', // Serviços de fisioterapia
+  taxSituationCode: '200', // CST: alíquota reduzida
+  taxClassificationCode: '200029', // Serviços de saúde humana do Anexo III (redução de 60%)
+  operationIndicatorCode: '030101', // Serviço prestado fisicamente sobre a pessoa
+} as const;
+
 // === EMITIR NFE PARA FATURA ===
 export async function emitirNfeFatura(
   faturaId: string,
@@ -1727,11 +1760,6 @@ export async function emitirNfeFatura(
       };
     }
 
-    // AI dev note: Quando a fatura está em estado de erro (ex: erro de RPS),
-    // precisamos limpar as invoices antigas no ASAAS antes de reemitir, caso
-    // contrário ficariam invoices órfãs/duplicadas no ASAAS.
-    const isRetryAfterError = fatura.link_nfe === 'erro';
-
     // 3. Marcar como sincronizando
     await supabase
       .from('faturas')
@@ -1760,27 +1788,80 @@ export async function emitirNfeFatura(
       };
     }
 
-    // 4.1. Se está reemitindo após erro, cancelar invoices antigas no ASAAS
-    if (isRetryAfterError && fatura.id_asaas) {
-      console.log(
-        '♻️ Reemissão após erro: cancelando invoices antigas no ASAAS para payment',
-        fatura.id_asaas
-      );
-      const cancelResult = await cancelAsaasInvoicesByPayment(
+    try {
+      // 5. Montar o payload da nota fiscal
+      // AI dev note: o mesmo payload serve para agendar (POST) e para corrigir uma
+      // nota rejeitada (PUT). O objeto `taxes` precisa ir COMPLETO: desde
+      // 31/03/2026 o Asaas trata `taxes` como substituição — campo ausente vira
+      // null/zero, não é preservado.
+      const taxes: AsaasInvoiceTaxes = {
+        retainIss: false,
+        iss: 2, // 2% ISS
+        cofins: 0,
+        csll: 0,
+        inss: 0,
+        ir: 0,
+        pis: 0,
+        // Grupo IBSCBS: exigido de quem está no Regime Normal (ver constante acima)
+        ...(apiConfig.regimeTributario === 'simples_nacional'
+          ? {}
+          : IBS_CBS_SERVICOS_SAUDE),
+      };
+
+      const invoicePayload = {
+        serviceDescription: fatura.descricao || 'Serviços de fisioterapia',
+        observations: '',
+        value: fatura.valor_total,
+        deductions: 0,
+        effectiveDate: hojeBRT(),
+        municipalServiceId: '290448',
+        municipalServiceName:
+          'Terapia ocupacional, fisioterapia e fonoaudiologia.',
+        updatePayment: false,
+        taxes,
+      };
+
+      // 5.1. Descobrir o que já existe no ASAAS para esta cobrança
+      // AI dev note: o ASAAS recusa um segundo agendamento para o mesmo payment
+      // ("Já existe uma nota fiscal agendada para essa cobrança") e NÃO tem
+      // DELETE de invoice. Nota em SCHEDULED/ERROR se corrige com PUT e se
+      // reautoriza — é isso que torna a reemissão auto-curável em um clique.
+      const listResult = await listAsaasInvoicesByPayment(
         fatura.id_asaas,
         apiConfig
       );
 
-      if (!cancelResult.success) {
-        console.error(
-          '❌ Falha ao cancelar invoices antigas no ASAAS:',
-          cancelResult.error
+      if (!listResult.success) {
+        throw new Error(
+          listResult.error || 'Erro ao consultar notas fiscais no ASAAS'
         );
+      }
+
+      const invoicesExistentes = (listResult.data ||
+        []) as AsaasInvoiceSummary[];
+
+      // Nota que já virou (ou está virando) documento fiscal: não reemitir.
+      const notaJaEmitida = invoicesExistentes.find((invoice) =>
+        [
+          'AUTHORIZED',
+          'SYNCHRONIZED',
+          'PROCESSING_CANCELLATION',
+          'CANCELLATION_DENIED',
+        ].includes(invoice.status)
+      );
+
+      if (notaJaEmitida) {
+        console.warn(
+          '⚠️ Já existe nota fiscal no ASAAS para esta cobrança:',
+          notaJaEmitida.id,
+          notaJaEmitida.status
+        );
+
         await supabase
           .from('faturas')
           .update({
-            link_nfe: 'erro',
-            status_nfe: `Falha ao cancelar NFe anterior: ${cancelResult.error || 'erro desconhecido'}`,
+            link_nfe: 'sincronizando',
+            status_nfe: `Nota ${notaJaEmitida.status} no ASAAS - aguardando link`,
             atualizado_por: userId === 'system' ? null : userId,
           })
           .eq('id', faturaId);
@@ -1788,102 +1869,60 @@ export async function emitirNfeFatura(
         return {
           success: false,
           error:
-            cancelResult.error ||
-            'Não foi possível cancelar a nota fiscal anterior para reemissão',
+            'Esta cobrança já possui nota fiscal no ASAAS. Aguarde a sincronização do link.',
         };
       }
 
-      const cancelData = cancelResult.data as
-        | { results?: unknown[]; totalProcessed?: number }
-        | undefined;
-      console.log(
-        '✅ Invoices antigas tratadas no ASAAS:',
-        cancelData?.totalProcessed ?? 0
-      );
-    }
-
-    try {
-      // 5. Agendar nota fiscal
-      // AI dev note: invoicePayload fica em uma const para podermos reaproveitar
-      // numa eventual nova tentativa após limpar invoices órfãs no ASAAS.
-      const invoicePayload = {
-        serviceDescription: fatura.descricao || 'Serviços de fisioterapia',
-        observations: '',
-        value: fatura.valor_total,
-        deductions: 0,
-        effectiveDate: new Date().toISOString().split('T')[0],
-        municipalServiceId: '290448',
-        municipalServiceName:
-          'Terapia ocupacional, fisioterapia e fonoaudiologia.',
-        updatePayment: false,
-        taxes: {
-          retainIss: false,
-          iss: 2, // 2% ISS
-          cofins: 0,
-          csll: 0,
-          inss: 0,
-          ir: 0,
-          pis: 0,
-        },
-      };
-
-      console.log('📋 Agendando nota fiscal...');
-      let scheduleResult = await scheduleAsaasInvoice(
-        fatura.id_asaas,
-        invoicePayload,
-        apiConfig
+      // Nota agendada ou rejeitada pela prefeitura: corrigir e reautorizar.
+      const notaReaproveitavel = invoicesExistentes.find((invoice) =>
+        ['SCHEDULED', 'ERROR'].includes(invoice.status)
       );
 
-      // AI dev note: O ASAAS rejeita o agendamento quando JÁ EXISTE uma invoice
-      // para o payment ("Já existe uma nota fiscal agendada para essa cobrança").
-      // Isso acontece com invoices órfãs (ex: webhook de NFe que nunca chegou e
-      // deixou o link_nfe defasado, ou emissão anterior interrompida). Mesmo que
-      // a fatura não esteja marcada como 'erro', limpamos as invoices existentes
-      // no ASAAS e tentamos agendar novamente UMA vez, deixando o botão
-      // "Emitir NFe" auto-curável em um único clique.
-      const invoiceAlreadyExists =
-        !scheduleResult.success &&
-        /j[áa]\s*existe|already\s*exist|agendada para essa cobran/i.test(
-          scheduleResult.error || ''
-        );
+      let invoiceId: string;
 
-      if (invoiceAlreadyExists && !isRetryAfterError && fatura.id_asaas) {
+      if (notaReaproveitavel) {
         console.log(
-          '♻️ Já existe NFe para essa cobrança. Limpando invoices órfãs e reagendando...'
+          '♻️ Corrigindo nota existente no ASAAS:',
+          notaReaproveitavel.id,
+          notaReaproveitavel.status
         );
-        const autoCancelResult = await cancelAsaasInvoicesByPayment(
-          fatura.id_asaas,
+
+        const updateResult = await updateAsaasInvoice(
+          notaReaproveitavel.id,
+          invoicePayload,
           apiConfig
         );
 
-        if (!autoCancelResult.success) {
+        if (!updateResult.success) {
           throw new Error(
-            autoCancelResult.error ||
-              'Não foi possível cancelar a nota fiscal existente para reemissão'
+            updateResult.error || 'Erro ao corrigir nota fiscal existente'
           );
         }
 
-        console.log('✅ Invoices órfãs tratadas. Reagendando nota fiscal...');
-        scheduleResult = await scheduleAsaasInvoice(
+        invoiceId = notaReaproveitavel.id;
+        console.log('✅ Nota fiscal corrigida:', invoiceId);
+      } else {
+        console.log('📋 Agendando nota fiscal...');
+
+        const scheduleResult = await scheduleAsaasInvoice(
           fatura.id_asaas,
           invoicePayload,
           apiConfig
         );
-      }
 
-      if (!scheduleResult.success) {
-        throw new Error(scheduleResult.error || 'Erro ao agendar nota fiscal');
-      }
+        if (!scheduleResult.success) {
+          throw new Error(
+            scheduleResult.error || 'Erro ao agendar nota fiscal'
+          );
+        }
 
-      const scheduleData = scheduleResult.data as { id: string };
-      console.log('✅ Nota fiscal agendada:', scheduleData.id);
+        invoiceId = (scheduleResult.data as { id: string }).id;
+        console.log('✅ Nota fiscal agendada:', invoiceId);
+      }
 
       // 6. Emitir nota fiscal
       console.log('📤 Emitindo nota fiscal...');
-      const authorizeResult = await authorizeAsaasInvoice(
-        scheduleData.id,
-        apiConfig
-      );
+      const authorizeResult = await authorizeAsaasInvoice(invoiceId, apiConfig);
 
       if (!authorizeResult.success) {
         throw new Error(authorizeResult.error || 'Erro ao emitir nota fiscal');
@@ -1908,7 +1947,7 @@ export async function emitirNfeFatura(
       return {
         success: true,
         data: {
-          invoiceId: scheduleData.id,
+          invoiceId,
           link_nfe: authorizeData.pdfUrl || authorizeData.linkToVisualize,
         },
       };

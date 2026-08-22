@@ -1,11 +1,13 @@
-// AI dev note: Edge Function para cancelar/excluir notas fiscais no Asaas
-// Usado quando uma NFe fica em erro (ex: erro de RPS) e precisa ser reemitida.
+// AI dev note: Edge Function para cancelar notas fiscais no Asaas.
+// Só faz sentido para nota que virou documento fiscal (AUTHORIZED): o cancelamento
+// é pedido à prefeitura. Nota em SCHEDULED/ERROR NÃO se cancela e NÃO se exclui
+// — a API do Asaas não tem DELETE /invoices/{id} — ela se corrige via
+// PUT /invoices/{id} (asaas-update-invoice) e se reautoriza.
 // Estratégia:
 //   1. Lista as invoices associadas ao paymentId (id_asaas do pagamento).
-//   2. Para cada invoice tenta POST /invoices/{id}/cancel (nota autorizada).
-//   3. Se o cancel falhar (ex: nota nunca foi autorizada fiscalmente), faz
-//      DELETE /invoices/{id} como fallback (apenas remove a invoice no ASAAS).
-// Retorna o total de invoices tratadas e eventuais erros individuais.
+//   2. Ignora as que já estão canceladas ou em cancelamento.
+//   3. Chama POST /invoices/{id}/cancel nas demais e devolve o motivo REAL
+//      de cada falha — a mensagem da prefeitura é o que explica o problema.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 interface CancelInvoiceRequest {
@@ -19,8 +21,8 @@ interface CancelInvoiceRequest {
 
 interface InvoiceResult {
   invoiceId: string;
-  status: 'cancelled' | 'deleted' | 'error';
-  method?: 'cancel' | 'delete';
+  status: 'cancelled' | 'skipped' | 'error';
+  previousStatus?: string;
   error?: string;
 }
 
@@ -30,6 +32,9 @@ interface CancelInvoiceResponse {
   totalProcessed?: number;
   error?: string;
 }
+
+// Notas nesses status não precisam (nem aceitam) nova tentativa de cancelamento.
+const ALREADY_DONE_STATUSES = ['CANCELED', 'PROCESSING_CANCELLATION'];
 
 Deno.serve(async (req: Request) => {
   const corsHeaders = {
@@ -135,18 +140,23 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 2. Tentar cancelar (ou excluir) cada invoice
+    // 2. Cancelar cada invoice que ainda não está cancelada
     const results: InvoiceResult[] = [];
 
     for (const invoice of invoices) {
       const invoiceId = invoice.id;
+      const previousStatus = invoice.status || 'UNKNOWN';
 
-      // 2a. Tentar POST /cancel primeiro
+      if (ALREADY_DONE_STATUSES.includes(previousStatus)) {
+        console.log(
+          `⏭️ Invoice ${invoiceId} já está em ${previousStatus}, nada a cancelar`
+        );
+        results.push({ invoiceId, status: 'skipped', previousStatus });
+        continue;
+      }
+
       const cancelController = new AbortController();
       const cancelTimeout = setTimeout(() => cancelController.abort(), 30000);
-
-      let cancelledOk = false;
-      let cancelErrorMessage: string | undefined;
 
       try {
         const cancelResponse = await fetch(
@@ -163,99 +173,50 @@ Deno.serve(async (req: Request) => {
         const cancelData = await cancelResponse.json().catch(() => ({}));
 
         if (cancelResponse.ok) {
-          cancelledOk = true;
           console.log(`✅ Invoice cancelada: ${invoiceId}`);
-          results.push({
-            invoiceId,
-            status: 'cancelled',
-            method: 'cancel',
-          });
+          results.push({ invoiceId, status: 'cancelled', previousStatus });
         } else {
-          cancelErrorMessage =
+          const errorMessage =
             cancelData?.errors?.[0]?.description ||
             `HTTP ${cancelResponse.status}`;
-          console.warn(
-            `⚠️ Falha no cancel da invoice ${invoiceId}: ${cancelErrorMessage}. Tentando DELETE como fallback.`
-          );
-        }
-      } catch (err) {
-        clearTimeout(cancelTimeout);
-        cancelErrorMessage =
-          err instanceof Error ? err.message : 'Erro desconhecido no cancel';
-        console.warn(
-          `⚠️ Exceção no cancel da invoice ${invoiceId}: ${cancelErrorMessage}. Tentando DELETE como fallback.`
-        );
-      }
-
-      if (cancelledOk) {
-        continue;
-      }
-
-      // 2b. Fallback: DELETE /invoices/{id}
-      const deleteController = new AbortController();
-      const deleteTimeout = setTimeout(() => deleteController.abort(), 30000);
-
-      try {
-        const deleteResponse = await fetch(
-          `${apiConfig.baseUrl}/invoices/${invoiceId}`,
-          {
-            method: 'DELETE',
-            headers: baseHeaders,
-            signal: deleteController.signal,
-          }
-        );
-
-        clearTimeout(deleteTimeout);
-
-        const deleteData = await deleteResponse.json().catch(() => ({}));
-
-        if (deleteResponse.ok) {
-          console.log(`🗑️ Invoice excluída: ${invoiceId}`);
-          results.push({
-            invoiceId,
-            status: 'deleted',
-            method: 'delete',
-          });
-        } else {
-          const deleteErrorMessage =
-            deleteData?.errors?.[0]?.description ||
-            `HTTP ${deleteResponse.status}`;
           console.error(
-            `❌ Falha no delete da invoice ${invoiceId}: ${deleteErrorMessage}`
+            `❌ Falha ao cancelar invoice ${invoiceId} (${previousStatus}): ${errorMessage}`
           );
           results.push({
             invoiceId,
             status: 'error',
-            error: cancelErrorMessage
-              ? `cancel: ${cancelErrorMessage}; delete: ${deleteErrorMessage}`
-              : `delete: ${deleteErrorMessage}`,
+            previousStatus,
+            error: errorMessage,
           });
         }
       } catch (err) {
-        clearTimeout(deleteTimeout);
-        const deleteErrorMessage =
-          err instanceof Error ? err.message : 'Erro desconhecido no delete';
+        clearTimeout(cancelTimeout);
+        const errorMessage =
+          err instanceof Error ? err.message : 'Erro desconhecido no cancel';
         console.error(
-          `❌ Exceção no delete da invoice ${invoiceId}: ${deleteErrorMessage}`
+          `❌ Exceção ao cancelar invoice ${invoiceId}: ${errorMessage}`
         );
         results.push({
           invoiceId,
           status: 'error',
-          error: cancelErrorMessage
-            ? `cancel: ${cancelErrorMessage}; delete: ${deleteErrorMessage}`
-            : `delete: ${deleteErrorMessage}`,
+          previousStatus,
+          error: errorMessage,
         });
       }
     }
 
-    const hasError = results.some((r) => r.status === 'error');
+    const failures = results.filter((r) => r.status === 'error');
 
+    // AI dev note: o motivo real (mensagem da prefeitura / do Asaas) vai no `error`.
+    // A mensagem genérica anterior escondia a causa e travava o diagnóstico.
     const response: CancelInvoiceResponse = {
-      success: !hasError,
+      success: failures.length === 0,
       results,
       totalProcessed: results.length,
-      error: hasError
-        ? 'Uma ou mais invoices não puderam ser canceladas/excluídas'
+      error: failures.length
+        ? failures
+            .map((f) => `${f.invoiceId} (${f.previousStatus}): ${f.error}`)
+            .join(' | ')
         : undefined,
     };
 

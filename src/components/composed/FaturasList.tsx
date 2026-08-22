@@ -310,11 +310,11 @@ const FaturaItem = React.memo<{
       }
 
       if (linkNfe === 'erro') {
-        // AI dev note: Em caso de erro (ex: erro de RPS), permitir cancelar a NFe
-        // em erro no ASAAS e emitir uma nova. O clique mostra toast com o erro
-        // real vindo do ASAAS e abre diálogo de confirmação.
+        // AI dev note: nota rejeitada pela prefeitura é CORRIGIDA (PUT) e
+        // reautorizada — o ASAAS não permite cancelar nem excluir invoice em
+        // erro. O clique mostra toast com o erro real e abre confirmação.
         return {
-          text: 'Erro. Cancelar e reemitir NFe',
+          text: 'Erro. Corrigir e reemitir NFe',
           icon: RefreshCw,
           className: 'text-red-600 hover:text-red-800',
           disabled: false,
@@ -618,13 +618,13 @@ const FaturaItem = React.memo<{
         >
           <AlertDialogContent onClick={(e) => e.stopPropagation()}>
             <AlertDialogHeader>
-              <AlertDialogTitle>Cancelar e reemitir NFe?</AlertDialogTitle>
+              <AlertDialogTitle>Corrigir e reemitir NFe?</AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-2 text-sm">
                   <p>
-                    A nota fiscal anterior está com erro e será{' '}
-                    <strong>cancelada (ou excluída) no ASAAS</strong> antes de
-                    emitir uma nova.
+                    A nota fiscal anterior foi rejeitada pela prefeitura e será{' '}
+                    <strong>corrigida no ASAAS</strong> antes de ser emitida de
+                    novo.
                   </p>
                   {fatura.status_nfe ? (
                     <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
@@ -632,8 +632,8 @@ const FaturaItem = React.memo<{
                     </p>
                   ) : null}
                   <p>
-                    Essa ação tem efeito fiscal caso a nota já tenha sido
-                    autorizada pela prefeitura. Deseja continuar?
+                    A emissão gera documento fiscal na prefeitura. Deseja
+                    continuar?
                   </p>
                 </div>
               </AlertDialogDescription>
@@ -649,7 +649,7 @@ const FaturaItem = React.memo<{
                 }}
                 className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
               >
-                Cancelar e reemitir
+                Corrigir e reemitir
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
