@@ -38,6 +38,10 @@ import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { Input } from '@/components/primitives/input';
 import { useToast } from '@/components/primitives/use-toast';
 import {
+  useMotivoErroNfe,
+  MOTIVO_ERRO_NFE_DESCONHECIDO,
+} from '@/hooks/useMotivoErroNfe';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -135,6 +139,11 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
   // "cancelar e reemitir NFe". Quando null, o diálogo fica fechado.
   const [faturaToCancelReissue, setFaturaToCancelReissue] =
     useState<FaturaComDetalhes | null>(null);
+  const {
+    motivo: motivoErro,
+    buscando: buscandoMotivo,
+    resolverMotivo,
+  } = useMotivoErroNfe();
   // AI dev note: Fatura com o diálogo de Ajustar/Sincronizar aberto (recuperação
   // de webhook falho — 41 faturas pagas já ficaram presas como pendentes). Reusa
   // o FaturaAjusteManualDialog da página do paciente, agora a 1 clique daqui.
@@ -935,15 +944,19 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
         className: 'text-red-600 hover:text-red-800',
         disabled: false,
         action: () => {
-          // AI dev note: Mostrar toast com o erro real do ASAAS antes da confirmação
-          toast({
-            title: 'Erro na emissão da NFe',
-            description:
-              fatura.status_nfe ||
-              'A emissão da nota fiscal falhou. Clique em confirmar para cancelar a NFe anterior e emitir novamente.',
-            variant: 'destructive',
-          });
+          // AI dev note: status_nfe quase nunca traz o motivo — o webhook grava
+          // link_nfe='erro' sem tocar nele. resolverMotivo só usa o texto
+          // guardado quando ele explica a falha; senão pergunta ao ASAAS.
           setFaturaToCancelReissue(fatura);
+          void resolverMotivo(fatura.status_nfe, fatura.id_asaas).then(
+            (texto) => {
+              toast({
+                title: 'Erro na emissão da NFe',
+                description: texto,
+                variant: 'destructive',
+              });
+            }
+          );
         },
       };
     }
@@ -1517,12 +1530,12 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
                   <strong>corrigida no ASAAS</strong> antes de ser emitida de
                   novo.
                 </p>
-                {faturaToCancelReissue?.status_nfe ? (
-                  <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                    <strong>Erro anterior:</strong>{' '}
-                    {faturaToCancelReissue.status_nfe}
-                  </p>
-                ) : null}
+                <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                  <strong>Motivo da rejeição:</strong>{' '}
+                  {buscandoMotivo
+                    ? 'consultando o ASAAS...'
+                    : (motivoErro ?? MOTIVO_ERRO_NFE_DESCONHECIDO)}
+                </p>
                 <p>
                   A emissão gera documento fiscal na prefeitura. Deseja
                   continuar?

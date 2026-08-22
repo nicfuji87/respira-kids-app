@@ -5,6 +5,10 @@ import { ExternalLink, FileText, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/primitives/use-toast';
 import {
+  useMotivoErroNfe,
+  MOTIVO_ERRO_NFE_DESCONHECIDO,
+} from '@/hooks/useMotivoErroNfe';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -63,6 +67,12 @@ export const StatusPaymentDisplay = React.memo<StatusPaymentDisplayProps>(
     // AI dev note: Controla o diálogo de confirmação de "cancelar e reemitir NFe"
     const [showCancelReissueDialog, setShowCancelReissueDialog] =
       React.useState(false);
+
+    const {
+      motivo: motivoErro,
+      buscando: buscandoMotivo,
+      resolverMotivo,
+    } = useMotivoErroNfe();
 
     // Função para determinar estado do botão NFe (baseado na lógica do FaturasList)
     const getNfeButtonConfig = () => {
@@ -127,16 +137,17 @@ export const StatusPaymentDisplay = React.memo<StatusPaymentDisplayProps>(
       e.stopPropagation();
 
       if (linkNfe === 'erro') {
-        // AI dev note: Mostrar toast com o erro real do ASAAS e abrir confirmação
-        // antes de cancelar+reemitir.
-        toast({
-          title: 'Erro na emissão da NFe',
-          description:
-            statusNfe ||
-            'A emissão da nota fiscal falhou. Clique em confirmar para cancelar a NFe anterior e emitir novamente.',
-          variant: 'destructive',
-        });
+        // AI dev note: statusNfe quase nunca traz o motivo — o webhook grava
+        // link_nfe='erro' sem tocar nele. resolverMotivo só usa o texto
+        // guardado quando ele explica a falha; senão pergunta ao ASAAS.
         setShowCancelReissueDialog(true);
+        void resolverMotivo(statusNfe, idAsaas).then((texto) => {
+          toast({
+            title: 'Erro na emissão da NFe',
+            description: texto,
+            variant: 'destructive',
+          });
+        });
       } else if (linkNfe && linkNfe !== 'sincronizando' && linkNfe !== 'erro') {
         // Link válido - abrir NFe
         window.open(linkNfe, '_blank');
@@ -266,11 +277,12 @@ export const StatusPaymentDisplay = React.memo<StatusPaymentDisplayProps>(
                     <strong>corrigida no ASAAS</strong> antes de ser emitida de
                     novo.
                   </p>
-                  {statusNfe ? (
-                    <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                      <strong>Erro anterior:</strong> {statusNfe}
-                    </p>
-                  ) : null}
+                  <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                    <strong>Motivo da rejeição:</strong>{' '}
+                    {buscandoMotivo
+                      ? 'consultando o ASAAS...'
+                      : (motivoErro ?? MOTIVO_ERRO_NFE_DESCONHECIDO)}
+                  </p>
                   <p>
                     A emissão gera documento fiscal na prefeitura. Deseja
                     continuar?

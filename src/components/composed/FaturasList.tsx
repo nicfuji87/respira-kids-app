@@ -22,6 +22,10 @@ import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { useToast } from '@/components/primitives/use-toast';
 import {
+  useMotivoErroNfe,
+  MOTIVO_ERRO_NFE_DESCONHECIDO,
+} from '@/hooks/useMotivoErroNfe';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -75,6 +79,12 @@ const FaturaItem = React.memo<{
     // AI dev note: Controla o diálogo de confirmação de "cancelar e reemitir NFe"
     const [showCancelReissueDialog, setShowCancelReissueDialog] =
       useState(false);
+
+    const {
+      motivo: motivoErro,
+      buscando: buscandoMotivo,
+      resolverMotivo,
+    } = useMotivoErroNfe();
     // AI dev note: Controla o diálogo de "refazer cobrança" (trocar forma de pagamento).
     const [showRefazerDialog, setShowRefazerDialog] = useState(false);
     const [refazendo, setRefazendo] = useState(false);
@@ -220,16 +230,19 @@ const FaturaItem = React.memo<{
       const linkNfe = fatura.link_nfe;
 
       if (linkNfe === 'erro') {
-        // AI dev note: Mostrar toast com o erro real do ASAAS e abrir confirmação
-        // antes de cancelar+reemitir.
-        toast({
-          title: 'Erro na emissão da NFe',
-          description:
-            fatura.status_nfe ||
-            'A emissão da nota fiscal falhou. Clique em confirmar para cancelar a NFe anterior e emitir novamente.',
-          variant: 'destructive',
-        });
+        // AI dev note: status_nfe quase nunca traz o motivo — o webhook grava
+        // link_nfe='erro' sem tocar nele. resolverMotivo só usa o texto
+        // guardado quando ele explica a falha; senão pergunta ao ASAAS.
         setShowCancelReissueDialog(true);
+        void resolverMotivo(fatura.status_nfe, fatura.id_asaas).then(
+          (texto) => {
+            toast({
+              title: 'Erro na emissão da NFe',
+              description: texto,
+              variant: 'destructive',
+            });
+          }
+        );
       } else if (linkNfe && linkNfe !== 'sincronizando' && linkNfe !== 'erro') {
         // Link válido - abrir/baixar NFe
         console.log('📄 Abrindo NFe:', linkNfe);
@@ -626,11 +639,12 @@ const FaturaItem = React.memo<{
                     <strong>corrigida no ASAAS</strong> antes de ser emitida de
                     novo.
                   </p>
-                  {fatura.status_nfe ? (
-                    <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                      <strong>Erro anterior:</strong> {fatura.status_nfe}
-                    </p>
-                  ) : null}
+                  <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                    <strong>Motivo da rejeição:</strong>{' '}
+                    {buscandoMotivo
+                      ? 'consultando o ASAAS...'
+                      : (motivoErro ?? MOTIVO_ERRO_NFE_DESCONHECIDO)}
+                  </p>
                   <p>
                     A emissão gera documento fiscal na prefeitura. Deseja
                     continuar?

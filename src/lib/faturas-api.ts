@@ -1659,6 +1659,90 @@ export async function ressincronizarFaturaAsaas(
   }
 }
 
+// AI dev note: `status_nfe` NÃO é fonte confiável do motivo do erro. Quem grava
+// link_nfe='erro' é o webhook de NFe (n8n), e ele não mexe em status_nfe — então
+// a coluna fica com o que o app escreveu por último, normalmente um marcador de
+// sucesso ou de progresso. Resultado: a tela anunciava "Erro na emissão da NFe:
+// Emitida com sucesso". Estes padrões são do próprio app e nunca explicam falha.
+const STATUS_NFE_SEM_MOTIVO = [
+  /^Emitida com sucesso/i,
+  /^Nota .* no ASAAS/i,
+  /^sincronizando$/i,
+  /^Falha ao cancelar NFe anterior/i,
+  /não puderam ser canceladas/i,
+];
+
+/** Devolve `status_nfe` apenas quando ele de fato explica a falha. */
+export function motivoErroNfeArmazenado(
+  statusNfe?: string | null
+): string | null {
+  const texto = statusNfe?.trim();
+  if (!texto) return null;
+  if (STATUS_NFE_SEM_MOTIVO.some((padrao) => padrao.test(texto))) return null;
+  return texto;
+}
+
+/**
+ * Busca no ASAAS o motivo real da rejeição — a mensagem da prefeitura vive no
+ * `statusDescription` da invoice, não no nosso banco. Grava o resultado em
+ * `status_nfe` para a fatura parar de mentir nas próximas leituras.
+ */
+export async function fetchMotivoErroNfe(
+  idAsaas: string
+): Promise<ApiResponse<string | null>> {
+  try {
+    const { data: fatura, error } = await supabase
+      .from('faturas')
+      .select('id, empresa_id, status_nfe')
+      .eq('id_asaas', idAsaas)
+      .maybeSingle();
+
+    if (error || !fatura) {
+      return { success: false, error: 'Fatura não encontrada' };
+    }
+
+    const apiConfig = await determineApiKeyFromEmpresa(fatura.empresa_id);
+    if (!apiConfig) {
+      return {
+        success: false,
+        error: 'Empresa não possui API key do ASAAS configurada',
+      };
+    }
+
+    const listResult = await listAsaasInvoicesByPayment(idAsaas, apiConfig);
+    if (!listResult.success) {
+      return {
+        success: false,
+        error: listResult.error || 'Erro ao consultar a nota no ASAAS',
+      };
+    }
+
+    const invoices = (listResult.data || []) as AsaasInvoiceSummary[];
+    const comErro =
+      invoices.find((invoice) => invoice.status === 'ERROR') ?? invoices[0];
+
+    // O ASAAS manda a mensagem da prefeitura com quebras de linha; achatamos.
+    const motivo = comErro?.statusDescription?.replace(/\s+/g, ' ').trim();
+
+    if (!motivo) {
+      return {
+        success: true,
+        data: motivoErroNfeArmazenado(fatura.status_nfe),
+      };
+    }
+
+    await supabase
+      .from('faturas')
+      .update({ status_nfe: motivo })
+      .eq('id', fatura.id);
+
+    return { success: true, data: motivo };
+  } catch (err) {
+    console.error('❌ Erro ao buscar motivo do erro da NFe:', err);
+    return { success: false, error: 'Erro inesperado ao consultar o ASAAS' };
+  }
+}
+
 // AI dev note: Data de emissão da NFS-e no fuso de Brasília, NÃO em UTC.
 // toISOString() joga a data pro dia seguinte a partir das 21h local — emitir
 // dia 31 às 22h datava a nota no dia 1º, mudando a competência de mês.
