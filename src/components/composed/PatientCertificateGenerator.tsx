@@ -21,6 +21,7 @@ import {
 } from '@/components/primitives/select';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
+import { openPrintWindow } from '@/lib/print-document';
 
 export interface PatientCertificateGeneratorProps {
   isOpen: boolean;
@@ -52,6 +53,28 @@ const PROFESSIONALS = [
     crefito: '', // Adicionar CREFITO se disponível
   },
 ];
+
+// AI dev note: o nome do paciente e interpolado direto no HTML gerado
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+// AI dev note: a faixa rosa do fundo tem ~670px uteis na folha A4 paisagem (1122px de largura).
+// A fonte Caveat ocupa ~0.38 x o font-size por caractere, entao reduzimos o corpo quando o nome
+// e longo - antes o `white-space: nowrap` fazia nomes grandes estourarem a faixa.
+const FIT_NAME_MAX_WIDTH_PX = 670;
+const FIT_NAME_CHAR_RATIO = 0.38;
+
+const fitNameFontSize = (name: string): number => {
+  const length = Math.max(name.trim().length, 1);
+  const ideal = Math.floor(
+    FIT_NAME_MAX_WIDTH_PX / (length * FIT_NAME_CHAR_RATIO)
+  );
+  return Math.max(24, Math.min(46, ideal));
+};
 
 // Formatar data brasileira
 const formatDateBR = (date: Date): string => {
@@ -91,57 +114,84 @@ export const PatientCertificateGenerator: React.FC<
 
     const signatureUrl = `${SUPABASE_STORAGE_URL}/${encodeURIComponent(professional.signatureFile)}`;
     const hoje = formatDateBR(new Date());
+    const safeName = escapeHtml(patientName);
+    const nameFontSize = fitNameFontSize(patientName);
 
     // AI dev note: Template HTML do certificado - apenas posiciona nome, assinatura e data
-    // O fundo (certificado.png) já contém todo o texto estático
+    // O fundo (certificado.png) ja contem todo o texto estatico
     return `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Certificado de Conquista - ${patientName}</title>
+  <meta name="viewport" content="width=1123">
+  <title>Certificado de Conquista - ${safeName}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');
-    
+    /* AI dev note: a folha tem medida fisica fixa (A4 paisagem) na tela E na impressao.
+       A versao anterior trocava para height:100vh dentro de @media print - a altura da
+       viewport nao bate com a da folha, entao o certificado vazava para uma segunda pagina
+       e o fundo esticado empurrava assinatura e data para fora do lugar. */
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
+    html,
     body {
-      background: white;
-    }
-    
-    .page {
       width: 297mm;
       height: 210mm;
-      margin: 0 auto;
-      position: relative;
-      background-image: url('${BACKGROUND_IMAGE_URL}');
-      background-size: 100% 100%;
-      background-position: center;
-      background-repeat: no-repeat;
+      background: #fff;
     }
-    
-    /* Nome do paciente - posicionado sobre a faixa rosa do fundo */
+
+    .page {
+      position: relative;
+      width: 297mm;
+      height: 210mm;
+      overflow: hidden;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    /* AI dev note: fundo como <img> e nao background-image - o Chrome so imprime background
+       quando "Graficos de plano de fundo" esta marcado no dialogo, e a nota saia em branco. */
+    .page-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+    }
+
+    /* Nome do paciente - centralizado na faixa rosa do fundo */
     .patient-name {
       position: absolute;
-      top: 28%;
+      top: 34.5%;
       left: 50%;
-      transform: translateX(-50%);
-      font-family: 'Caveat', cursive;
-      font-size: 46px;
+      transform: translate(-50%, -50%);
+      width: 60%;
+      font-family: 'Caveat', 'Segoe Script', cursive;
+      font-size: ${nameFontSize}px;
+      line-height: 1.1;
       font-weight: 600;
       color: #1a365d;
       text-align: center;
       white-space: nowrap;
     }
-    
-    /* Assinatura - posicionada no centro inferior */
+
+    /* Assinatura - centro inferior, logo abaixo do texto do fundo */
     .signature-section {
       position: absolute;
-      bottom: 12%;
+      bottom: 9%;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
@@ -149,58 +199,47 @@ export const PatientCertificateGenerator: React.FC<
       align-items: center;
       text-align: center;
     }
-    
+
     .signature-image {
-      max-width: 280px;
-      max-height: 120px;
+      width: 240px;
+      height: 110px;
       object-fit: contain;
     }
-    
-    /* Data - posicionada abaixo do carimbo */
+
+    /* Data - abaixo do carimbo */
     .date-section {
       position: absolute;
-      bottom: 5%;
+      bottom: 4.5%;
       left: 50%;
       transform: translateX(-50%);
-      font-family: 'Caveat', cursive;
-      font-size: 18px;
+      font-family: 'Caveat', 'Segoe Script', cursive;
+      font-size: 20px;
       color: #40C4AA;
     }
-    
+
     @media print {
-      @page {
-        size: A4 landscape;
-        margin: 0;
-      }
-      
+      html,
       body {
+        overflow: hidden;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        margin: 0;
-        padding: 0;
-      }
-      
-      .page {
-        width: 100%;
-        height: 100vh;
-        background-image: url('${BACKGROUND_IMAGE_URL}');
-        background-size: 100% 100%;
-        background-position: center;
-        background-repeat: no-repeat;
       }
     }
   </style>
 </head>
 <body>
   <div class="page">
+    <!-- Fundo -->
+    <img src="${BACKGROUND_IMAGE_URL}" alt="" class="page-bg" />
+
     <!-- Nome do paciente -->
-    <div class="patient-name">${patientName}</div>
-    
+    <div class="patient-name">${safeName}</div>
+
     <!-- Assinatura/Carimbo -->
     <div class="signature-section">
-      <img src="${signatureUrl}" alt="Assinatura ${professional.name}" class="signature-image" />
+      <img src="${signatureUrl}" alt="Assinatura ${escapeHtml(professional.name)}" class="signature-image" />
     </div>
-    
+
     <!-- Data -->
     <div class="date-section">${hoje}</div>
   </div>
@@ -239,16 +278,10 @@ export const PatientCertificateGenerator: React.FC<
       });
 
       // Abrir nova janela para impressão/PDF
-      const printWindow = window.open('', '_blank');
+      // AI dev note: openPrintWindow só chama print() depois que fundo, assinatura e fontes
+      // terminaram de carregar - o setTimeout fixo de 1s imprimia com as imagens em branco.
+      const printWindow = openPrintWindow(htmlContent);
       if (printWindow) {
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-
-        // Aguardar carregamento das fontes e imagens antes de imprimir
-        setTimeout(() => {
-          printWindow.print();
-        }, 1000);
-
         toast({
           title: 'Certificado gerado',
           description: 'O certificado foi aberto para impressão/download',

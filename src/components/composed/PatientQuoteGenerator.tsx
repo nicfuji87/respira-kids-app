@@ -24,6 +24,7 @@ import {
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
+import { openPrintWindow } from '@/lib/print-document';
 import type { SupabaseTipoServico } from '@/types/supabase-calendar';
 
 export interface PatientQuoteGeneratorProps {
@@ -47,6 +48,14 @@ interface QuoteItem {
   valorUnitario: number;
   subtotal: number;
 }
+
+// AI dev note: nome do paciente e descricoes de servico sao interpolados direto no HTML gerado
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 
 // Formatar CPF: 000.000.000-00
 const formatCPF = (cpf: string | null | undefined): string => {
@@ -216,14 +225,16 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     const hoje = formatDateBR(new Date());
 
     // Gerar linhas de serviços
-    // AI dev note: Usar apenas a descrição se disponível, senão o nome do serviço
+    // AI dev note: Usar apenas a descrição se disponível, senão o nome do serviço.
+    // Cada item é um bloco solto (sem wrapper) para o paginador poder quebrá-los entre folhas.
     const servicosHTML = itensCalc
       .map((item) => {
         // Usar descrição se disponível, senão o nome
         const servicoTexto = item.descricao || item.nome;
         // Primeira letra minúscula para fluir melhor na frase
-        const servicoFormatado =
-          servicoTexto.charAt(0).toLowerCase() + servicoTexto.slice(1);
+        const servicoFormatado = escapeHtml(
+          servicoTexto.charAt(0).toLowerCase() + servicoTexto.slice(1)
+        );
 
         return `
         <div class="service-item">
@@ -235,137 +246,152 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       })
       .join('');
 
-    // AI dev note: Template HTML do orçamento usando imagem de fundo do Supabase Storage
+    const safeName = escapeHtml(patientName);
+    const safeCpf = escapeHtml(formatCPF(patientCpf));
+
+    // AI dev note: Template HTML do orçamento usando o papel timbrado do Supabase Storage
     return `
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-print-wait>
 <head>
   <meta charset="utf-8">
-  <title>Orçamento - ${patientName}</title>
+  <meta name="viewport" content="width=794">
+  <title>Orçamento - ${safeName}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-    
+    /* AI dev note: folha em medida fisica fixa (A4 retrato) na tela E na impressao.
+       A versao anterior trocava para height:100vh dentro de @media print - a altura da
+       viewport nao bate com a da folha, entao sobrava uma pagina em branco e o timbrado
+       esticado saia fora de lugar. */
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
+    html {
+      background: #fff;
+    }
+
     body {
-      font-family: 'Poppins', sans-serif;
-      background: white;
+      width: 210mm;
+      font-family: 'Poppins', Arial, sans-serif;
       color: #333;
       line-height: 1.6;
     }
-    
+
     .page {
+      position: relative;
       width: 210mm;
       height: 297mm;
-      margin: 0 auto;
-      position: relative;
-      background-image: url('${BACKGROUND_IMAGE_URL}');
-      background-size: 100% 100%;
-      background-position: top left;
-      background-repeat: no-repeat;
+      overflow: hidden;
     }
-    
-    /* Conteúdo principal - posicionado sobre a imagem de fundo */
+
+    /* AI dev note: timbrado como <img> e nao background-image - o Chrome so imprime background
+       quando "Graficos de plano de fundo" esta marcado no dialogo, e o orcamento saia em branco. */
+    .page-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+    }
+
+    /* AI dev note: area util do timbrado - o logo do topo termina em 12,8% e o rodape com
+       CNPJ/telefones comeca em 88,3% da folha. O paginador usa a altura desta caixa para
+       decidir quando abrir uma folha nova. */
     .content {
       position: absolute;
-      top: 180px;
-      left: 60px;
-      right: 60px;
-      padding: 20px;
+      top: 15.5%;
+      left: 9.5%;
+      right: 9.5%;
+      bottom: 13.5%;
     }
-    
-    /* Título */
+
     .title {
       text-align: center;
       font-size: 16px;
       font-weight: 700;
-      color: #333;
-      margin-bottom: 30px;
       letter-spacing: 1px;
+      margin-bottom: 30px;
     }
-    
-    /* Seção de texto */
+
     .greeting {
-      margin-bottom: 15px;
       font-size: 14px;
+      margin-bottom: 15px;
     }
-    
+
     .intro-text {
-      margin-bottom: 20px;
+      font-size: 14px;
       color: #444;
-      font-size: 14px;
+      margin-bottom: 20px;
     }
-    
-    /* Detalhes do serviço */
-    .services-container {
-      margin-bottom: 15px;
-    }
-    
+
     .service-item {
-      margin-bottom: 15px;
       font-size: 14px;
+      margin-bottom: 15px;
     }
-    
+
     .service-label {
       font-weight: 600;
       color: #333;
     }
-    
+
     .service-detail {
       margin-left: 15px;
       margin-top: 2px;
       font-size: 13px;
     }
-    
+
     .service-detail::before {
       content: "•";
       color: #40C4AA;
       font-weight: bold;
       margin-right: 8px;
     }
-    
-    /* Total */
+
+    /* Fecho do orcamento: total + paciente + pagamento + validade + assinatura.
+       Vai junto para a folha seguinte se nao couber, em vez de se partir no meio. */
+    .closing-block {
+      margin-top: 10px;
+    }
+
     .total-container {
       margin: 15px 0;
       font-size: 14px;
     }
-    
-    .total-label {
-      font-weight: 600;
-      color: #333;
-    }
-    
+
     .total-value {
       font-weight: 700;
       color: #333;
     }
-    
-    /* Informações do paciente */
+
     .patient-info {
       margin: 20px 0;
       font-size: 14px;
     }
-    
-    /* Informações de pagamento */
+
     .payment-info {
       margin: 15px 0;
       color: #444;
       font-size: 14px;
     }
-    
-    /* Validade */
+
     .validity {
       font-style: italic;
       color: #666;
       margin: 20px 0;
       font-size: 13px;
     }
-    
-    /* Assinatura */
+
     .signature {
       margin-top: 40px;
       display: flex;
@@ -373,81 +399,166 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       align-items: flex-end;
       font-size: 14px;
     }
-    
-    .signature-text {
-      color: #333;
-    }
-    
+
     .signature-date {
       font-weight: 600;
       color: #333;
     }
-    
-    @media print {
-      @page {
-        size: A4;
-        margin: 0;
+
+    @media screen {
+      html {
+        background: #e9e9e9;
       }
-      
+
+      body {
+        padding: 16px 0;
+      }
+
+      .page {
+        margin: 0 auto 16px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+      }
+    }
+
+    @media print {
+      html,
       body {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        margin: 0;
-        padding: 0;
       }
-      
+
       .page {
-        width: 100%;
-        height: 100vh;
-        background-image: url('${BACKGROUND_IMAGE_URL}');
-        background-size: 100% 100%;
-        background-position: top left;
-        background-repeat: no-repeat;
+        margin: 0;
+        box-shadow: none;
+        break-after: page;
+        page-break-after: always;
+      }
+
+      .page:last-child {
+        break-after: auto;
+        page-break-after: auto;
       }
     }
   </style>
 </head>
 <body>
-  <div class="page">
-    <div class="content">
-      <h1 class="title">ORÇAMENTO DE SERVIÇOS DE FISIOTERAPIA</h1>
-      
-      <p class="greeting">Prezados,</p>
-      
-      <p class="intro-text">
-        Apresentamos abaixo o orçamento referente aos atendimentos fisioterapêuticos:
-      </p>
-      
-      <div class="services-container">
+  <div id="doc">
+    <section class="page">
+      <img src="${BACKGROUND_IMAGE_URL}" alt="" class="page-bg" />
+
+      <div class="content">
+        <h1 class="title">ORÇAMENTO DE SERVIÇOS DE FISIOTERAPIA</h1>
+
+        <p class="greeting">Prezados,</p>
+
+        <p class="intro-text">
+          Apresentamos abaixo o orçamento referente aos atendimentos fisioterapêuticos:
+        </p>
+
         ${servicosHTML}
-      </div>
-      
-      <div class="total-container">
-        <span class="total-label">Valor total estimado: </span>
-        <span class="total-value">${formatCurrency(valorTotalCalc)}</span>
-      </div>
-      
-      <div class="patient-info">
-        <p><span class="service-label">Paciente:</span> ${patientName} — CPF ${formatCPF(patientCpf)}</p>
-      </div>
-      
-      <p class="payment-info">
-        O pagamento poderá ser efetuado por meio de transferência bancária ou PIX.
-      </p>
-      
-      <p class="validity">
-        <em>Este orçamento tem validade de 7 dias a contar da data de envio.</em>
-      </p>
-      
-      <div class="signature">
-        <div class="signature-text">
-          Atenciosamente,<br>
-          <strong>Equipe Respira Kids</strong>
+
+        <div class="closing-block">
+          <div class="total-container">
+            <span class="service-label">Valor total estimado: </span>
+            <span class="total-value">${formatCurrency(valorTotalCalc)}</span>
+          </div>
+
+          <div class="patient-info">
+            <p><span class="service-label">Paciente:</span> ${safeName} — CPF ${safeCpf}</p>
+          </div>
+
+          <p class="payment-info">
+            O pagamento poderá ser efetuado por meio de transferência bancária ou PIX.
+          </p>
+
+          <p class="validity">
+            <em>Este orçamento tem validade de 7 dias a contar da data de envio.</em>
+          </p>
+
+          <div class="signature">
+            <div class="signature-text">
+              Atenciosamente,<br>
+              <strong>Equipe Respira Kids</strong>
+            </div>
+            <div class="signature-date">${hoje}</div>
+          </div>
         </div>
-        <div class="signature-date">${hoje}</div>
       </div>
-    </div>
+    </section>
   </div>
+
+  <script>
+    // AI dev note: paginador. O orcamento pode ter ate 13 servicos - antes o conteudo
+    // simplesmente invadia o rodape do timbrado e vazava da folha. Aqui os blocos sao
+    // redistribuidos por medicao: enche a area util da folha, abre outra e continua.
+    (function () {
+      var root = document.documentElement;
+      var doc = document.getElementById('doc');
+      var BG = ${JSON.stringify(BACKGROUND_IMAGE_URL)};
+      var MAX_PAGES = 20;
+
+      function markReady() {
+        root.setAttribute('data-print-ready', '1');
+      }
+
+      function newPageContent() {
+        var page = document.createElement('section');
+        page.className = 'page';
+        var bg = document.createElement('img');
+        bg.className = 'page-bg';
+        bg.src = BG;
+        bg.alt = '';
+        var content = document.createElement('div');
+        content.className = 'content';
+        page.appendChild(bg);
+        page.appendChild(content);
+        doc.appendChild(page);
+        return content;
+      }
+
+      function paginate() {
+        var target = doc.querySelector('.content');
+        if (!target) return;
+        var blocks = [].slice.call(target.children);
+        blocks.forEach(function (block) {
+          target.removeChild(block);
+        });
+        var pages = 1;
+        blocks.forEach(function (block) {
+          target.appendChild(block);
+          var estourou = target.scrollHeight > target.clientHeight;
+          if (estourou && target.children.length > 1 && pages < MAX_PAGES) {
+            target.removeChild(block);
+            target = newPageContent();
+            pages++;
+            target.appendChild(block);
+          }
+        });
+      }
+
+      function start() {
+        try {
+          paginate();
+        } catch (e) {
+          // documento continua legivel sem paginacao
+        }
+        markReady();
+      }
+
+      function whenLoaded(fn) {
+        if (document.readyState === 'complete') fn();
+        else window.addEventListener('load', fn, { once: true });
+      }
+
+      whenLoaded(function () {
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(start, start);
+        } else {
+          start();
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
     `;
@@ -482,16 +593,10 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       });
 
       // Abrir nova janela para impressão/PDF
-      const printWindow = window.open('', '_blank');
+      // AI dev note: openPrintWindow espera timbrado, fontes e a paginação terminarem antes
+      // de chamar print() - o setTimeout fixo imprimia com o papel timbrado em branco.
+      const printWindow = openPrintWindow(htmlContent);
       if (printWindow) {
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-
-        // Aguardar carregamento das fontes antes de imprimir
-        setTimeout(() => {
-          printWindow.print();
-        }, 500);
-
         toast({
           title: 'Orçamento gerado',
           description: 'O orçamento foi aberto para impressão/download',

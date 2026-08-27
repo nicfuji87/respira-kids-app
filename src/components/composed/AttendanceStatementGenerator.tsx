@@ -22,6 +22,7 @@ import {
 } from '@/components/primitives/select';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
+import { openPrintWindow } from '@/lib/print-document';
 
 export interface AttendanceStatementGeneratorProps {
   isOpen: boolean;
@@ -71,6 +72,14 @@ const PROFESSIONALS = [
     crefito: '',
   },
 ];
+
+// AI dev note: nomes de paciente/responsavel sao interpolados direto no HTML gerado
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 
 // Formatar data brasileira completa
 const formatDateBR = (date: Date): string => {
@@ -223,152 +232,154 @@ export const AttendanceStatementGenerator: React.FC<
     const appointmentDateFormatted = formatDateBR_UTC(appointmentDateObj);
     const shift = getShift(appointmentDate);
     const hoje = formatDateBR(new Date());
+    const safePatientName = escapeHtml(patientName);
+    const safeResponsibleName = escapeHtml(responsible.name);
 
     // AI dev note: Template HTML do atestado usando imagem de fundo do Supabase Storage
-    // Todo o texto é gerado dinamicamente, o fundo é apenas decorativo
+    // Todo o texto e gerado dinamicamente, o fundo e apenas decorativo
     return `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Atestado de Comparecimento - ${patientName}</title>
+  <meta name="viewport" content="width=1123">
+  <title>Atestado de Comparecimento - ${safePatientName}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-    
+    /* AI dev note: a folha tem medida fisica fixa (A4 paisagem) na tela E na impressao.
+       A versao anterior trocava para height:100vh dentro de @media print - a altura da
+       viewport nao bate com a da folha, entao sobrava uma segunda pagina em branco e o
+       fundo esticado deslocava assinatura e data. */
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
+    html,
     body {
-      font-family: 'Poppins', sans-serif;
-      background: white;
-      color: #333;
-      line-height: 1.8;
-    }
-    
-    .page {
       width: 297mm;
       height: 210mm;
-      margin: 0 auto;
-      position: relative;
-      background-image: url('${BACKGROUND_IMAGE_URL}');
-      background-size: 100% 100%;
-      background-position: center;
-      background-repeat: no-repeat;
+      background: #fff;
+      font-family: 'Poppins', Arial, sans-serif;
+      color: #333;
     }
-    
-    /* Conteúdo principal */
+
+    .page {
+      position: relative;
+      width: 297mm;
+      height: 210mm;
+      overflow: hidden;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    /* AI dev note: fundo como <img> e nao background-image - o Chrome so imprime background
+       quando "Graficos de plano de fundo" esta marcado no dialogo, e o atestado saia em branco. */
+    .page-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+    }
+
+    /* AI dev note: caixa de conteudo ancorada nas quatro bordas + flex column: o texto ocupa
+       o espaco livre e a assinatura fica colada no rodape, sem empurrar nada para fora da folha. */
     .content {
       position: absolute;
-      top: 60px;
-      left: 80px;
-      right: 80px;
-      padding: 20px;
+      top: 12%;
+      left: 9%;
+      right: 9%;
+      bottom: 7%;
+      display: flex;
+      flex-direction: column;
     }
-    
-    /* Título */
+
     .title {
       text-align: center;
       font-size: 28px;
       font-weight: 700;
+      line-height: 1.3;
       color: #1a365d;
-      margin-bottom: 40px;
-      margin-top: 20px;
+      margin-bottom: 48px;
     }
-    
-    /* Texto do atestado */
+
     .statement-text {
+      flex: 1;
       font-size: 16px;
+      line-height: 2;
       color: #333;
       text-align: justify;
-      margin-bottom: 30px;
-      line-height: 2;
     }
-    
+
     .statement-text p {
-      margin-bottom: 25px;
+      margin-bottom: 24px;
       text-indent: 40px;
     }
-    
+
     .highlight {
       font-weight: 600;
     }
-    
-    /* Seção de assinatura - centralizada */
+
     .signature-section {
-      margin-top: 60px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .signature-container {
       display: flex;
       flex-direction: column;
       align-items: center;
     }
-    
+
     .signature-image {
-      max-width: 220px;
-      max-height: 110px;
+      width: 220px;
+      height: 110px;
       object-fit: contain;
     }
-    
+
     .location-date {
       font-size: 16px;
-      color: #333;
+      line-height: 1.6;
       text-align: center;
-      margin-top: 15px;
+      margin-top: 8px;
     }
-    
+
     @media print {
-      @page {
-        size: A4 landscape;
-        margin: 0;
-      }
-      
+      html,
       body {
+        overflow: hidden;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        margin: 0;
-        padding: 0;
-      }
-      
-      .page {
-        width: 100%;
-        height: 100vh;
-        background-image: url('${BACKGROUND_IMAGE_URL}');
-        background-size: 100% 100%;
-        background-position: center;
-        background-repeat: no-repeat;
       }
     }
   </style>
 </head>
 <body>
   <div class="page">
+    <img src="${BACKGROUND_IMAGE_URL}" alt="" class="page-bg" />
+
     <div class="content">
       <h1 class="title">Atestado de Comparecimento</h1>
-      
+
       <div class="statement-text">
         <p>
-          Confirmo que, <span class="highlight">${responsible.name}</span> esteve presente na consulta 
-          fisioterapêutica do(a) menor <span class="highlight">${patientName}</span> que ocorreu na data 
+          Confirmo que, <span class="highlight">${safeResponsibleName}</span> esteve presente na consulta
+          fisioterapêutica do(a) menor <span class="highlight">${safePatientName}</span> que ocorreu na data
           <span class="highlight">${appointmentDateFormatted}</span>, no período <span class="highlight">${shift}</span>.
         </p>
-        
+
         <p>
           Sem mais para o momento, firmo a presente declaração para que produza seus efeitos legais.
         </p>
       </div>
-      
+
       <div class="signature-section">
-        <div class="signature-container">
-          <img src="${signatureUrl}" alt="Assinatura ${professional.name}" class="signature-image" />
-        </div>
+        <img src="${signatureUrl}" alt="Assinatura ${escapeHtml(professional.name)}" class="signature-image" />
         <div class="location-date">
           Brasília, ${hoje}
         </div>
@@ -427,16 +438,10 @@ export const AttendanceStatementGenerator: React.FC<
       });
 
       // Abrir nova janela para impressão/PDF
-      const printWindow = window.open('', '_blank');
+      // AI dev note: openPrintWindow só chama print() depois que fundo, assinatura e fontes
+      // terminaram de carregar - o setTimeout fixo de 1s imprimia com as imagens em branco.
+      const printWindow = openPrintWindow(htmlContent);
       if (printWindow) {
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-
-        // Aguardar carregamento das fontes e imagens antes de imprimir
-        setTimeout(() => {
-          printWindow.print();
-        }, 1000);
-
         toast({
           title: 'Atestado gerado',
           description: 'O atestado foi aberto para impressão/download',
