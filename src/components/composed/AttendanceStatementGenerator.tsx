@@ -349,12 +349,29 @@ export const AttendanceStatementGenerator: React.FC<
       margin-top: 8px;
     }
 
+    /* AI dev note: na impressao a folha vira position:fixed ancorada nas quatro bordas,
+       entao ela passa a ter exatamente o tamanho da area imprimivel - qualquer que seja a
+       margem que o aparelho aplique. Sem nada no fluxo, o documento tem uma folha so em
+       qualquer navegador. O Android ignora @page{size} e impoe margem propria: por isso a
+       folha de 210mm ainda estourava para uma segunda pagina no celular. */
     @media print {
       html,
       body {
+        width: auto;
+        height: auto;
         overflow: hidden;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+      }
+
+      .page {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        height: auto;
       }
     }
   </style>
