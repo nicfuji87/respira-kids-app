@@ -1749,6 +1749,14 @@ export const EvolutionSectionContent: React.FC<
                   onChange={(checked) => updateIntervencao({ shaker: checked })}
                   disabled={disabled}
                 />
+                <CheckboxField
+                  label="Lavagem Nasal"
+                  checked={intervencao.lavagem_nasal || false}
+                  onChange={(checked) =>
+                    updateIntervencao({ lavagem_nasal: checked })
+                  }
+                  disabled={disabled}
+                />
               </div>
 
               {/* PEEP - aparece se usar EPAP ou EPAP selo d'água */}

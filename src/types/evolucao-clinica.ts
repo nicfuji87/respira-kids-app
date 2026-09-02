@@ -183,6 +183,7 @@ export interface IntervencaoRespiratoria {
   ambu: boolean; // Hiperinsuflação manual com reanimador (Ambu)
   acapella: boolean; // Dispositivo de PEP oscilatório
   shaker: boolean; // Dispositivo de PEP oscilatório
+  lavagem_nasal: boolean; // Lavagem/higiene nasal realizada na sessão
 
   // Aspiração
   aspiracao: boolean;
@@ -642,6 +643,7 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       ambu: false,
       acapella: false,
       shaker: false,
+      lavagem_nasal: false,
       aspiracao: false,
     },
     avaliacao_depois: {
@@ -995,7 +997,8 @@ export function verificarSecaoEvolucaoCompleta(
           i.nebulizacao ||
           i.ambu ||
           i.acapella ||
-          i.shaker;
+          i.shaker ||
+          i.lavagem_nasal;
         return temTecnica ? 'completo' : 'vazio';
       }
       case 'avaliacao_depois': {

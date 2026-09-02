@@ -1129,6 +1129,7 @@ export const AppointmentDetailsManager =
               tecnicas.push('Ambu (hiperinsuflação manual)');
             if (ev.intervencao.acapella) tecnicas.push('Acapella');
             if (ev.intervencao.shaker) tecnicas.push('Shaker');
+            if (ev.intervencao.lavagem_nasal) tecnicas.push('Lavagem Nasal');
             if (tecnicas.length > 0) {
               conteudoResumo += `🔧 Técnicas Utilizadas\n`;
               conteudoResumo += `   • ${tecnicas.join(', ')}\n`;
