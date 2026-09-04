@@ -48,3 +48,7 @@ stats.json
 
 # Supabase CLI local cache / linked project metadata
 supabase/.temp/
+
+# Ferramentas locais de IA (skills/config) — nao fazem parte do app
+.agents/
+.codex/

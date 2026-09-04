@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   CreditCard,
   QrCode,
-  Copy,
   CalendarDays,
   CheckCircle2,
   Check,
@@ -34,8 +33,11 @@ import type {
 // AI dev note: Página pública de pagamento (#/pagamento/:token).
 // O cliente vê as datas das consultas e escolhe a forma de pagamento (PIX ou cartão
 // 1x..Nx) com os valores já calculados (repasse de taxas). Ao confirmar, a edge
-// function confirm-payment-link cria a cobrança no Asaas: PIX exibe o QR aqui;
-// cartão redireciona para o checkout hospedado do Asaas (invoiceUrl).
+// function confirm-payment-link cria a cobrança no Asaas e a página REDIRECIONA para
+// a fatura hospedada do Asaas (invoiceUrl) — PIX e cartão, sem exceção.
+// AI dev note: NÃO reintroduzir QR Code / copia-e-cola embutidos aqui. O papel desta
+// página termina na escolha da forma de pagamento; quem exibe o meio de pagamento e
+// recebe é o Asaas. Decisão do dono do produto — evita manter duas telas de cobrança.
 // A seleção é unificada (PIX ou cartão+parcelas) com check visível na opção escolhida.
 
 // AI dev note: WhatsApp de contato da clínica (mesmo número usado em
@@ -67,11 +69,6 @@ export const PagamentoPublicoPage: React.FC = () => {
   // Por padrão já vem com PIX selecionado (forma sem acréscimo).
   const [selecao, setSelecao] = useState<Selecao>({ tipo: 'pix' });
   const [isConfirming, setIsConfirming] = useState(false);
-  const [pixResult, setPixResult] = useState<{
-    encodedImage?: string;
-    payload?: string;
-    expirationDate?: string;
-  } | null>(null);
 
   // CTA: ao selecionar uma opção, rolamos a tela até o botão e o destacamos por
   // um instante, deixando claro que ainda é preciso CONFIRMAR para gerar o pagamento.
@@ -122,31 +119,17 @@ export const PagamentoPublicoPage: React.FC = () => {
         return;
       }
 
-      if (forma === 'credit_card') {
-        if (res.data.invoiceUrl) {
-          window.location.href = res.data.invoiceUrl;
-          return;
-        }
-        toast({
-          title: 'Erro',
-          description: 'Não foi possível abrir o checkout do cartão.',
-          variant: 'destructive',
-        });
+      // PIX e cartão seguem o mesmo caminho: a cobrança já existe no Asaas, então
+      // mandamos o cliente para a fatura hospedada e é lá que ele paga.
+      if (res.data.invoiceUrl) {
+        window.location.href = res.data.invoiceUrl;
         return;
       }
-
-      // PIX: exibir QR Code (ou cair no invoiceUrl)
-      if (res.data.pix?.encodedImage || res.data.pix?.payload) {
-        setPixResult(res.data.pix);
-      } else if (res.data.invoiceUrl) {
-        window.location.href = res.data.invoiceUrl;
-      } else {
-        toast({
-          title: 'Erro',
-          description: 'Não foi possível gerar o PIX.',
-          variant: 'destructive',
-        });
-      }
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível abrir a cobrança para pagamento.',
+        variant: 'destructive',
+      });
     } finally {
       setIsConfirming(false);
     }
@@ -199,73 +182,6 @@ export const PagamentoPublicoPage: React.FC = () => {
             : 'Se você acredita que isso foi um engano ou precisa de um novo link, fale com a clínica.'
         }
       />
-    );
-  }
-
-  // ---------- PIX gerado: exibir QR ----------
-  if (pixResult) {
-    return (
-      <PageShell>
-        <Card className="w-full max-w-md rounded-2xl shadow-lg">
-          <CardHeader className="text-center">
-            <IconBubble tone="verde">
-              <QrCode className="h-6 w-6" />
-            </IconBubble>
-            <CardTitle>Pague com PIX</CardTitle>
-            <CardDescription>
-              Escaneie o QR Code no app do seu banco ou copie o código abaixo.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Valor em destaque para conferência no app do banco */}
-            <div className="rounded-xl border bg-muted/30 p-3 text-center">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Valor a pagar
-              </p>
-              <p className="text-3xl font-bold tracking-tight text-foreground">
-                {formatBRL(link.opcoes.pix.total)}
-              </p>
-              {link.paciente_nome && (
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {link.paciente_nome}
-                  {link.empresa_nome && ` • ${link.empresa_nome}`}
-                </p>
-              )}
-            </div>
-            {pixResult.encodedImage && (
-              <div className="flex justify-center">
-                <img
-                  src={`data:image/png;base64,${pixResult.encodedImage}`}
-                  alt="QR Code PIX"
-                  className="h-60 w-60 rounded-xl border bg-white p-2"
-                />
-              </div>
-            )}
-            {pixResult.payload && (
-              <div className="space-y-2">
-                <div className="break-all rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-                  {pixResult.payload}
-                </div>
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(pixResult.payload!);
-                    toast({ title: 'Código PIX copiado' });
-                  }}
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Copiar código PIX (copia e cola)
-                </Button>
-              </div>
-            )}
-            <div className="flex items-center justify-center gap-2 rounded-lg bg-verde-pipa/10 p-3 text-sm text-verde-pipa">
-              <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-              <span>Assim que você pagar, a confirmação é automática.</span>
-            </div>
-          </CardContent>
-        </Card>
-      </PageShell>
     );
   }
 

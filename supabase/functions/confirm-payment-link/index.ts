@@ -46,6 +46,15 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Soma dias a uma data ISO (YYYY-MM-DD) sem passar por fuso: a string é lida como
+// meia-noite UTC, somam-se os dias e ela volta a ser YYYY-MM-DD. Serve p/ derivar o
+// vencimento a partir do "hoje" já resolvido em horário de Brasília.
+function addDaysISO(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 // AI dev note: Normaliza telefone p/ o Asaas. O banco guarda o JID do WhatsApp
 // (55 + DDD + local), e o local costuma vir SEM o 9 do celular (556181257981).
 // Sem tratar, o Asaas interpreta o 55 como DDD e corta o número. Aqui:
@@ -214,17 +223,28 @@ serve(async (req: Request) => {
       link.responsavel_cobranca_id
     );
 
-    // 5. Vencimento no Asaas (PIX usa; cartão exige também) = dia da CONFIRMAÇÃO,
-    // não o vencimento original da pré-cobrança. O link fica válido por 30 dias
-    // (expira_em), então o cliente pode confirmar bem depois do vencimento
-    // "oficial" — usar link.vencimento aqui poderia mandar ao Asaas uma data já
-    // no passado. Calculado em horário de Brasília (não UTC do servidor).
-    const dueDate = new Intl.DateTimeFormat('en-CA', {
+    // 5. Vencimento no Asaas (PIX usa; cartão exige também).
+    // AI dev note: NÃO usar link.vencimento puro — o link vale 30 dias (expira_em),
+    // então o cliente pode confirmar depois do vencimento "oficial" e o Asaas recusa
+    // data no passado. Mas também NÃO usar o dia da confirmação: a cobrança nascia
+    // vencendo HOJE e virava OVERDUE na madrugada seguinte, deixando a fatura do
+    // Asaas com o carimbo vermelho "Cobrança Vencida" para quem não pagou na hora —
+    // o que faz o pagador achar que o link morreu (o PIX segue válido por 365 dias
+    // após o vencimento, mas ninguém lê isso na tela). Regra: o mais TARDE entre o
+    // vencimento combinado no link e hoje + GRACE_DAYS, dando folga para pagar.
+    // Datas calculadas em horário de Brasília (não UTC do servidor).
+    const GRACE_DAYS = 3;
+    const hojeBR = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'America/Sao_Paulo',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     }).format(new Date());
+    const vencimentoMinimo = addDaysISO(hojeBR, GRACE_DAYS);
+    const dueDate =
+      link.vencimento && link.vencimento > vencimentoMinimo
+        ? (link.vencimento as string)
+        : vencimentoMinimo;
 
     // 6. Criar cobrança no Asaas
     // AI dev note: o Asaas limita a description do PARCELAMENTO a 500 chars e RECUSA a
@@ -482,8 +502,8 @@ async function registrarFaturaEAgendamentos(
       tomador_nfe_id: link.tomador_nfe_id ?? link.responsavel_cobranca_id,
       paciente_id: link.paciente_id,
       // AI dev note: vencimento da FATURA = mesma data enviada ao Asaas (dueDate,
-      // dia da confirmação), não o link.vencimento original — mantém fatura e
-      // Asaas sempre coerentes entre si.
+      // já com a folga do GRACE_DAYS), não o link.vencimento original — mantém
+      // fatura e Asaas sempre coerentes entre si.
       vencimento: dueDate,
       dados_asaas: {
         ...payment,
