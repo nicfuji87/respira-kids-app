@@ -36,6 +36,17 @@ function somenteDigitos(v: string | null | undefined): string {
   return (v ?? '').replace(/\D/g, '');
 }
 
+// AI dev note: o link do WhatsApp tem que apontar para a APP (app.respirakidsbrasilia.com.br),
+// não para o site institucional (respirakids.com.br) — lá o WordPress ignora o hash e o
+// cliente cai na home, sem Pix nenhum. É o mesmo domínio dos links de #/pagamento/.
+const APP_URL_PADRAO = 'https://app.respirakidsbrasilia.com.br';
+
+function baseDaApp(): string {
+  const bruto = (Deno.env.get('APP_PUBLIC_URL') ?? '').trim();
+  const base = bruto || APP_URL_PADRAO;
+  return base.replace(/\/+$/, '');
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -186,7 +197,7 @@ serve(async (req: Request) => {
     }
 
     // ---- webhook pro n8n mandar o link no WhatsApp (não bloqueia a resposta) ----
-    const linkPublico = `${Deno.env.get('APP_PUBLIC_URL') ?? 'https://respirakids.com.br'}/#/pagamento-produto/${token}`;
+    const linkPublico = `${baseDaApp()}/#/pagamento-produto/${token}`;
 
     const { error: whErr } = await admin.from('webhook_queue').insert({
       evento: 'venda_produto_criada',

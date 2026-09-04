@@ -26,6 +26,12 @@ Todos os profissionais, estagiárias e equipe de apoio, nas duas unidades:
 - **Sala 311** — 2 consultórios, recepção principal, copa e banheiro
 - **Sala 310** — 1 consultório, sala de espera, depósito e banheiro
 
+> **Base normativa (RDC 63/2011, Art. 59):** os insumos de higienização das mãos devem
+> estar disponíveis não só para a equipe, mas também para **pacientes, acompanhantes e
+> visitantes**. Este POP cobre a técnica da equipe; a disponibilidade de álcool gel nas
+> áreas de espera para uso de pacientes/acompanhantes é tratada na pendência ao final
+> deste documento.
+
 ## 3. Materiais
 
 | Item                    | Especificação em uso                                                                                                             |
@@ -98,6 +104,15 @@ Este POP não gera registro por atendimento. A comprovação se dá por:
 - Registro de treinamento da equipe neste POP (com data e versão)
 - Observação da prática durante supervisão da RT
 
+## 8. Base normativa
+
+- RDC Anvisa nº 63/2011, Art. 8º, II — higienização das mãos como ação de Segurança do
+  Paciente.
+- RDC Anvisa nº 63/2011, Art. 59 — disponibilização de insumos para higienização das
+  mãos a trabalhadores, pacientes, acompanhantes e visitantes.
+- RDC Anvisa nº 42/2010 — obrigatoriedade de preparação alcoólica (concentração final
+  mínima de 70% para gel) nos pontos de assistência.
+
 ---
 
 ## ⚠️ Pendências assumidas nesta versão
@@ -114,6 +129,10 @@ Ainda em aberto:
 1. **Cartaz com a técnica de higienização junto a cada pia** — a RT vai providenciar.
    Este POP fica pronto para aprovação assim que o cartaz estiver afixado (ou pode ser
    aprovado já, com a providência registrada como ação de implantação).
+2. **Álcool gel acessível a pacientes/acompanhantes nas áreas de espera** (RDC 63/2011,
+   Art. 59) — confirmar se já existe ponto de álcool gel nas duas recepções, fora da
+   alcance de crianças pequenas (risco de ingestão), ou se precisa ser instalado. Ainda
+   não levantado.
 
 ---
 
@@ -123,4 +142,4 @@ Este documento entra em vigor após assinatura da Responsável Técnica.
 
 Bruna Cury Lourenço Peres — CREFITO-DF 167135-F
 
-Data: \_**\_/\_\_**/**\_\_\_\_** Assinatura: **************\_\_**************
+Data: \_**\_/\_\_**/**\_\_\_\_** Assinatura: ******\*\*******\_\_******\*\*******

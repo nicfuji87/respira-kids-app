@@ -1,5 +1,11 @@
 import React from 'react';
-import { format, differenceInDays, startOfMonth, endOfMonth } from 'date-fns';
+import {
+  format,
+  parseISO,
+  startOfMonth,
+  endOfMonth,
+  addMonths,
+} from 'date-fns';
 import {
   Search,
   Calendar,
@@ -14,6 +20,9 @@ import {
   Receipt,
   CalendarCheck,
   CalendarX,
+  CircleDashed,
+  PencilLine,
+  History,
 } from 'lucide-react';
 import {
   Card,
@@ -52,41 +61,66 @@ import {
   Checkbox,
 } from '@/components/primitives';
 import { PagamentoForm } from './PagamentoForm';
+import { BaixaLoteDialog } from './BaixaLoteDialog';
+import {
+  PrevisaoValorDialog,
+  type PrevisaoParaPreencher,
+} from './PrevisaoValorDialog';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
 
-// AI dev note: Lista de contas a pagar com filtros e ações
-// Mostra parcelas agrupadas por vencimento, status e valor
-// Permite registro de pagamentos e exportação de dados
+// AI dev note: Agenda de contas a pagar, lendo vw_contas_pagar.
+//
+// A view já calcula situacao, dias_atraso e faixa_atraso — não recalcular aqui,
+// senão a tela e o fluxo de caixa divergem sobre o que está vencido.
+//
+// Dois conceitos que a tela precisa manter separados:
+//  · CONTA — valor conhecido, é dívida, entra nos totais e pode ser paga.
+//  · PREVISÃO (eh_previsao) — conta fixa de valor variável (condomínio, energia,
+//    impostos) que nasce com R$ 0,00 esperando o boleto. NÃO é dívida e não
+//    entra em nenhum total; aparece para ser preenchida. Antes de 31/08/2026
+//    essas linhas eram filtradas fora da tela e ficavam invisíveis no sistema
+//    inteiro — 44 previsões de fev→ago/2026 nunca viraram conta a pagar.
+//
+// Parcela vencida permanece pendente até o pagamento acontecer: nada de baixa
+// presumida. Por isso existe o painel de aging, que carrega o passivo à vista.
 
-interface ContaPagar {
+type Situacao =
+  | 'pago'
+  | 'cancelado'
+  | 'atrasado'
+  | 'vence_hoje'
+  | 'vence_em_7_dias'
+  | 'a_vencer';
+
+type FaixaAtraso =
+  | 'a_vencer'
+  | 'ate_30'
+  | 'de_31_a_60'
+  | 'de_61_a_90'
+  | 'de_91_a_365'
+  | 'acima_de_365';
+
+interface ContaPagarView {
   id: string;
   lancamento_id: string;
   numero_parcela: number;
   total_parcelas: number;
   valor_parcela: number;
   data_vencimento: string;
+  data_pagamento: string | null;
   status_pagamento: 'pendente' | 'pago' | 'cancelado';
-  data_pagamento?: string | null;
-  forma_pagamento_id?: string | null;
-  conta_bancaria_id?: string | null;
-  numero_documento_pagamento?: string | null;
-  observacoes_pagamento?: string | null;
-  lancamento: {
-    tipo_lancamento: 'despesa' | 'receita';
-    numero_documento?: string | null;
-    descricao: string;
-    valor_total: number;
-    fornecedor?: {
-      nome_razao_social: string;
-      nome_fantasia?: string | null;
-    } | null;
-    categoria?: {
-      nome: string;
-      codigo: string;
-    } | null;
-    eh_divisao_socios: boolean;
-  };
+  descricao: string;
+  numero_documento: string | null;
+  tipo_lancamento: 'despesa' | 'receita';
+  fornecedor: string | null;
+  categoria: string | null;
+  carteira: string | null;
+  eh_previsao: boolean;
+  situacao: Situacao;
+  dias_para_vencer: number;
+  dias_atraso: number;
+  faixa_atraso: FaixaAtraso | null;
 }
 
 interface ContaPagarListProps {
@@ -95,9 +129,23 @@ interface ContaPagarListProps {
   className?: string;
 }
 
+const FAIXAS: { chave: FaixaAtraso; rotulo: string }[] = [
+  { chave: 'ate_30', rotulo: 'Até 30 dias' },
+  { chave: 'de_31_a_60', rotulo: '31 a 60 dias' },
+  { chave: 'de_61_a_90', rotulo: '61 a 90 dias' },
+  { chave: 'de_91_a_365', rotulo: '91 dias a 1 ano' },
+  { chave: 'acima_de_365', rotulo: 'Mais de 1 ano' },
+];
+
+const moeda = (v: number) =>
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(v);
+
 export const ContasPagarList = React.memo<ContaPagarListProps>(
   ({ tipo = 'todos', showFilters = true, className }) => {
-    const [contas, setContas] = React.useState<ContaPagar[]>([]);
+    const [contas, setContas] = React.useState<ContaPagarView[]>([]);
     const [contasSelecionadas, setContasSelecionadas] = React.useState<
       Set<string>
     >(new Set());
@@ -110,10 +158,19 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
     const [dateRange, setDateRange] = React.useState<
       { from: Date; to: Date } | undefined
     >();
-    const [showPagamentoForm, setShowPagamentoForm] = React.useState(false);
     const [contaParaPagar, setContaParaPagar] =
-      React.useState<ContaPagar | null>(null);
+      React.useState<ContaPagarView | null>(null);
+    const [previsaoParaPreencher, setPrevisaoParaPreencher] =
+      React.useState<PrevisaoParaPreencher | null>(null);
+    const [showBaixaLote, setShowBaixaLote] = React.useState(false);
     const { toast } = useToast();
+
+    // Passivo total em aberto — independe do filtro de período da tela, porque
+    // a dívida antiga não some quando alguém olha só o mês corrente.
+    const [aging, setAging] = React.useState<
+      { faixa_atraso: FaixaAtraso; qtd: number; total: number }[]
+    >([]);
+    const [totalPrevisoes, setTotalPrevisoes] = React.useState(0);
 
     // Calcular período baseado na seleção
     React.useEffect(() => {
@@ -121,101 +178,88 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
 
       switch (selectedPeriodo) {
         case 'vencidas':
-          setDateRange({
-            from: new Date(2000, 0, 1),
-            to: hoje,
-          });
+          setDateRange({ from: new Date(2000, 0, 1), to: hoje });
           break;
         case 'hoje':
-          setDateRange({
-            from: hoje,
-            to: hoje,
-          });
+          setDateRange({ from: hoje, to: hoje });
           break;
         case 'semana': {
-          const proximaSemana = new Date(hoje);
-          proximaSemana.setDate(hoje.getDate() + 7);
-          setDateRange({
-            from: hoje,
-            to: proximaSemana,
-          });
+          const em7 = new Date(hoje);
+          em7.setDate(em7.getDate() + 7);
+          setDateRange({ from: hoje, to: em7 });
           break;
         }
         case 'mes_atual':
-          setDateRange({
-            from: startOfMonth(hoje),
-            to: endOfMonth(hoje),
-          });
+          setDateRange({ from: startOfMonth(hoje), to: endOfMonth(hoje) });
           break;
         case 'proximo_mes': {
-          const proximoMes = new Date(
-            hoje.getFullYear(),
-            hoje.getMonth() + 1,
-            1
-          );
-          setDateRange({
-            from: startOfMonth(proximoMes),
-            to: endOfMonth(proximoMes),
-          });
+          const prox = addMonths(hoje, 1);
+          setDateRange({ from: startOfMonth(prox), to: endOfMonth(prox) });
           break;
         }
-        case 'personalizado':
-          // Mantém o dateRange atual para seleção manual
+        case 'proximos_3_meses':
+          setDateRange({
+            from: startOfMonth(hoje),
+            to: endOfMonth(addMonths(hoje, 3)),
+          });
           break;
+        case 'todas':
         default:
           setDateRange(undefined);
+          break;
       }
     }, [selectedPeriodo]);
 
-    // Carregar contas
+    // Agregação vem pronta do servidor: somar no cliente exigiria baixar todas
+    // as parcelas em aberto, e o PostgREST corta em 1000 linhas por padrão.
+    const loadAging = React.useCallback(async () => {
+      const [agingRes, previsoesRes] = await Promise.all([
+        supabase
+          .from('vw_aging_contas_pagar')
+          .select('faixa_atraso, qtd, total'),
+        supabase.from('vw_previsoes_resumo').select('total').maybeSingle(),
+      ]);
+
+      if (agingRes.error) {
+        console.error('Erro ao carregar aging:', agingRes.error);
+      } else {
+        const porFaixa = new Map(
+          (agingRes.data || []).map((f) => [
+            f.faixa_atraso as FaixaAtraso,
+            { qtd: Number(f.qtd), total: Number(f.total) },
+          ])
+        );
+        setAging(
+          FAIXAS.filter((f) => porFaixa.has(f.chave)).map((f) => ({
+            faixa_atraso: f.chave,
+            ...porFaixa.get(f.chave)!,
+          }))
+        );
+      }
+
+      if (previsoesRes.error) {
+        console.error('Erro ao contar previsões:', previsoesRes.error);
+      } else {
+        setTotalPrevisoes(Number(previsoesRes.data?.total ?? 0));
+      }
+    }, []);
+
     const loadContas = React.useCallback(async () => {
+      setIsLoading(true);
       try {
-        setIsLoading(true);
-
-        // AI dev note: !inner + o filtro abaixo tiram os PRÉ-LANÇAMENTOS da agenda.
-        // Conta fixa de valor variável (energia, condomínio) nasce com R$ 0,00
-        // esperando o valor real — não é conta a pagar ainda, e sem isso apareciam
-        // como "vencidas" (eram 30 dos 117 vencidos em 29/07/2026), inflando o
-        // alerta e o total em atraso.
         let query = supabase
-          .from('contas_pagar')
-          .select(
-            `
-            *,
-            lancamento:lancamento_id!inner (
-              tipo_lancamento,
-              numero_documento,
-              descricao,
-              valor_total,
-              eh_divisao_socios,
-              status_lancamento,
-              fornecedor:fornecedor_id (
-                nome_razao_social,
-                nome_fantasia
-              ),
-              categoria:categoria_contabil_id (
-                nome,
-                codigo
-              )
-            )
-          `
-          )
-          .neq('lancamento.status_lancamento', 'pre_lancamento')
-          .neq('lancamento.status_lancamento', 'cancelado')
-          .order('data_vencimento', { ascending: true })
-          .order('created_at', { ascending: false });
+          .from('vw_contas_pagar')
+          .select('*')
+          .order('data_vencimento', { ascending: true });
 
-        // Filtro por tipo
         if (tipo !== 'todos') {
-          query = query.eq('lancamento.tipo_lancamento', tipo);
+          query = query.eq('tipo_lancamento', tipo);
         }
 
-        // Filtro por status
         if (selectedStatus !== 'todos') {
           query = query.eq('status_pagamento', selectedStatus);
         }
 
-        // Filtro por período
         if (dateRange?.from) {
           query = query.gte(
             'data_vencimento',
@@ -229,17 +273,16 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
           );
         }
 
-        // Filtro por termo de busca
         if (searchTerm) {
           query = query.or(
-            `lancamento.descricao.ilike.%${searchTerm}%,lancamento.numero_documento.ilike.%${searchTerm}%`
+            `descricao.ilike.%${searchTerm}%,numero_documento.ilike.%${searchTerm}%,fornecedor.ilike.%${searchTerm}%`
           );
         }
 
         const { data, error } = await query;
-
         if (error) throw error;
-        setContas(data || []);
+
+        setContas((data || []) as ContaPagarView[]);
       } catch (error) {
         console.error('Erro ao carregar contas:', error);
         toast({
@@ -253,87 +296,122 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
     }, [tipo, selectedStatus, dateRange, searchTerm, toast]);
 
     React.useEffect(() => {
-      loadContas();
+      void loadContas();
     }, [loadContas]);
 
-    // Calcular totais
+    React.useEffect(() => {
+      void loadAging();
+    }, [loadAging]);
+
+    const recarregar = React.useCallback(() => {
+      setContasSelecionadas(new Set());
+      void loadContas();
+      void loadAging();
+    }, [loadContas, loadAging]);
+
+    // Previsão não é dívida: fica fora de todo total.
+    const contasReais = React.useMemo(
+      () => contas.filter((c) => !c.eh_previsao),
+      [contas]
+    );
+    const previsoesNaTela = React.useMemo(
+      () => contas.filter((c) => c.eh_previsao),
+      [contas]
+    );
+
     const totais = React.useMemo(() => {
-      const total = contas.reduce((sum, conta) => sum + conta.valor_parcela, 0);
-      const pendente = contas
+      const total = contasReais.reduce(
+        (s, c) => s + Number(c.valor_parcela),
+        0
+      );
+      const pendente = contasReais
         .filter((c) => c.status_pagamento === 'pendente')
-        .reduce((sum, conta) => sum + conta.valor_parcela, 0);
-      const pago = contas
+        .reduce((s, c) => s + Number(c.valor_parcela), 0);
+      const pago = contasReais
         .filter((c) => c.status_pagamento === 'pago')
-        .reduce((sum, conta) => sum + conta.valor_parcela, 0);
-      const vencidas = contas.filter(
-        (c) =>
-          c.status_pagamento === 'pendente' &&
-          new Date(c.data_vencimento) < new Date()
+        .reduce((s, c) => s + Number(c.valor_parcela), 0);
+      const vencidas = contasReais.filter(
+        (c) => c.situacao === 'atrasado'
       ).length;
 
       return { total, pendente, pago, vencidas };
-    }, [contas]);
+    }, [contasReais]);
+
+    const totalAtrasoGeral = React.useMemo(
+      () => aging.reduce((s, f) => s + f.total, 0),
+      [aging]
+    );
+    const qtdAtrasoGeral = React.useMemo(
+      () => aging.reduce((s, f) => s + f.qtd, 0),
+      [aging]
+    );
+
+    const valorSelecionado = React.useMemo(
+      () =>
+        contasReais
+          .filter((c) => contasSelecionadas.has(c.id))
+          .reduce((s, c) => s + Number(c.valor_parcela), 0),
+      [contasReais, contasSelecionadas]
+    );
 
     // Handlers
-    const handlePagar = (conta: ContaPagar) => {
-      setContaParaPagar(conta);
-      setShowPagamentoForm(true);
-    };
+    const handlePagar = (conta: ContaPagarView) => setContaParaPagar(conta);
 
-    const handlePagarSelecionadas = () => {
-      if (contasSelecionadas.size === 0) {
-        toast({
-          variant: 'destructive',
-          title: 'Nenhuma conta selecionada',
-          description: 'Selecione pelo menos uma conta para pagar.',
-        });
-        return;
-      }
+    const handlePreencherPrevisao = async (conta: ContaPagarView) => {
+      // Busca a sugestão de valor (último valor real da mesma regra) só ao abrir
+      const { data } = await supabase
+        .from('vw_previsoes_a_preencher')
+        .select('valor_ultimo_real, competencia_ultimo_real')
+        .eq('conta_pagar_id', conta.id)
+        .maybeSingle();
 
-      // TODO: Implementar pagamento em lote
-      toast({
-        title: 'Funcionalidade em desenvolvimento',
-        description: 'Pagamento em lote será implementado em breve.',
+      setPrevisaoParaPreencher({
+        id: conta.id,
+        descricao: conta.descricao,
+        data_vencimento: conta.data_vencimento,
+        fornecedor: conta.fornecedor,
+        categoria: conta.categoria,
+        valor_ultimo_real: data?.valor_ultimo_real ?? null,
+        competencia_ultimo_real: data?.competencia_ultimo_real ?? null,
       });
     };
 
     const handleSelecionarConta = (contaId: string, checked: boolean) => {
-      const novasContas = new Set(contasSelecionadas);
-      if (checked) {
-        novasContas.add(contaId);
-      } else {
-        novasContas.delete(contaId);
-      }
-      setContasSelecionadas(novasContas);
+      const novas = new Set(contasSelecionadas);
+      if (checked) novas.add(contaId);
+      else novas.delete(contaId);
+      setContasSelecionadas(novas);
     };
+
+    const selecionaveis = React.useMemo(
+      () => contasReais.filter((c) => c.status_pagamento === 'pendente'),
+      [contasReais]
+    );
 
     const handleSelecionarTodas = (checked: boolean) => {
-      if (checked) {
-        const contasPendentes = contas
-          .filter((c) => c.status_pagamento === 'pendente')
-          .map((c) => c.id);
-        setContasSelecionadas(new Set(contasPendentes));
-      } else {
-        setContasSelecionadas(new Set());
+      setContasSelecionadas(
+        checked ? new Set(selecionaveis.map((c) => c.id)) : new Set()
+      );
+    };
+
+    const todasSelecionadas =
+      selecionaveis.length > 0 &&
+      selecionaveis.every((c) => contasSelecionadas.has(c.id));
+
+    const getStatusBadge = (conta: ContaPagarView) => {
+      if (conta.eh_previsao) {
+        return (
+          <Badge
+            variant="outline"
+            className="border-dashed text-muted-foreground"
+          >
+            <CircleDashed className="mr-1 h-3 w-3" />
+            Aguardando valor
+          </Badge>
+        );
       }
-    };
 
-    const handlePagamentoSuccess = () => {
-      setShowPagamentoForm(false);
-      setContaParaPagar(null);
-      loadContas();
-      toast({
-        title: 'Pagamento registrado',
-        description: 'O pagamento foi registrado com sucesso.',
-      });
-    };
-
-    const getStatusBadge = (status: string, dataVencimento: string) => {
-      const hoje = new Date();
-      const vencimento = new Date(dataVencimento);
-      const diasAteVencimento = differenceInDays(vencimento, hoje);
-
-      switch (status) {
+      switch (conta.situacao) {
         case 'pago':
           return (
             <Badge variant="outline" className="text-green-600">
@@ -348,107 +426,92 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
               Cancelado
             </Badge>
           );
-        case 'pendente':
-          if (diasAteVencimento < 0) {
-            return (
-              <Badge variant="destructive">
-                <AlertCircle className="mr-1 h-3 w-3" />
-                Vencida há {Math.abs(diasAteVencimento)} dia
-                {Math.abs(diasAteVencimento) !== 1 ? 's' : ''}
-              </Badge>
-            );
-          } else if (diasAteVencimento === 0) {
-            return (
-              <Badge variant="secondary" className="text-orange-600">
-                <Clock className="mr-1 h-3 w-3" />
-                Vence hoje
-              </Badge>
-            );
-          } else if (diasAteVencimento <= 7) {
-            return (
-              <Badge variant="secondary">
-                <Clock className="mr-1 h-3 w-3" />
-                Vence em {diasAteVencimento} dia
-                {diasAteVencimento !== 1 ? 's' : ''}
-              </Badge>
-            );
-          } else {
-            return (
-              <Badge variant="outline">
-                <Calendar className="mr-1 h-3 w-3" />A vencer
-              </Badge>
-            );
-          }
+        case 'atrasado':
+          return (
+            <Badge variant="destructive">
+              <AlertCircle className="mr-1 h-3 w-3" />
+              Vencida há {conta.dias_atraso} dia
+              {conta.dias_atraso !== 1 ? 's' : ''}
+            </Badge>
+          );
+        case 'vence_hoje':
+          return (
+            <Badge variant="secondary" className="text-orange-600">
+              <Clock className="mr-1 h-3 w-3" />
+              Vence hoje
+            </Badge>
+          );
+        case 'vence_em_7_dias':
+          return (
+            <Badge variant="secondary">
+              <Clock className="mr-1 h-3 w-3" />
+              Vence em {conta.dias_para_vencer} dia
+              {conta.dias_para_vencer !== 1 ? 's' : ''}
+            </Badge>
+          );
         default:
-          return <Badge variant="outline">{status}</Badge>;
+          return (
+            <Badge variant="outline">
+              <Calendar className="mr-1 h-3 w-3" />A vencer
+            </Badge>
+          );
       }
     };
 
-    const getTipoIcon = (tipo: 'despesa' | 'receita') => {
-      return tipo === 'despesa' ? (
+    const getTipoIcon = (tipoLancamento: 'despesa' | 'receita') =>
+      tipoLancamento === 'despesa' ? (
         <DollarSign className="h-4 w-4 text-red-500" />
       ) : (
         <Receipt className="h-4 w-4 text-green-500" />
       );
-    };
 
-    const handleExportCSV = async () => {
+    const handleExportCSV = () => {
       try {
-        // Criar cabeçalho CSV
         const headers = [
           'Data Vencimento',
           'Tipo',
-          'Fornecedor/Cliente',
+          'Fornecedor',
           'Descrição',
           'Número Documento',
           'Parcela',
           'Valor',
-          'Status',
+          'Situação',
+          'Dias em atraso',
           'Data Pagamento',
           'Categoria',
+          'Carteira',
         ];
 
-        // Criar linhas CSV
-        const rows = contas.map((conta) => [
-          format(new Date(conta.data_vencimento), 'dd/MM/yyyy'),
-          conta.lancamento.tipo_lancamento === 'despesa'
-            ? 'Despesa'
-            : 'Receita',
-          conta.lancamento.fornecedor?.nome_fantasia ||
-            conta.lancamento.fornecedor?.nome_razao_social ||
-            '',
-          conta.lancamento.descricao,
-          conta.lancamento.numero_documento || '',
-          `${conta.numero_parcela}/${conta.total_parcelas}`,
-          new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-          }).format(conta.valor_parcela),
-          conta.status_pagamento === 'pago'
-            ? 'Pago'
-            : conta.status_pagamento === 'pendente'
-              ? 'Pendente'
-              : 'Cancelado',
-          conta.data_pagamento
-            ? format(new Date(conta.data_pagamento), 'dd/MM/yyyy')
+        const rows = contas.map((c) => [
+          format(parseISO(c.data_vencimento), 'dd/MM/yyyy'),
+          c.tipo_lancamento === 'despesa' ? 'Despesa' : 'Receita',
+          c.fornecedor || '',
+          c.descricao,
+          c.numero_documento || '',
+          `${c.numero_parcela}/${c.total_parcelas}`,
+          c.eh_previsao ? 'aguardando valor' : moeda(Number(c.valor_parcela)),
+          c.eh_previsao ? 'Previsão' : c.situacao,
+          String(c.dias_atraso ?? 0),
+          c.data_pagamento
+            ? format(parseISO(c.data_pagamento), 'dd/MM/yyyy')
             : '',
-          conta.lancamento.categoria?.nome || '',
+          c.categoria || '',
+          c.carteira || '',
         ]);
 
-        // Montar CSV
         const csvContent = [
           headers.join(';'),
-          ...rows.map((row) => row.join(';')),
+          ...rows.map((r) => r.join(';')),
         ].join('\n');
 
-        // Criar blob e download
-        const blob = new Blob(['\ufeff' + csvContent], {
+        const blob = new Blob(['﻿' + csvContent], {
           type: 'text/csv;charset=utf-8;',
         });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `contas_pagar_${format(new Date(), 'yyyy-MM-dd')}.csv`;
         link.click();
+        URL.revokeObjectURL(link.href);
 
         toast({
           title: 'Exportação concluída',
@@ -463,13 +526,6 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
         });
       }
     };
-
-    const contasPendentes = contas.filter(
-      (c) => c.status_pagamento === 'pendente'
-    );
-    const todasSelecionadas =
-      contasPendentes.length > 0 &&
-      contasPendentes.every((c) => contasSelecionadas.has(c.id));
 
     return (
       <>
@@ -493,9 +549,9 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                   Exportar
                 </Button>
                 {contasSelecionadas.size > 0 && (
-                  <Button size="sm" onClick={handlePagarSelecionadas}>
+                  <Button size="sm" onClick={() => setShowBaixaLote(true)}>
                     <CreditCard className="mr-2 h-4 w-4" />
-                    Pagar Selecionadas ({contasSelecionadas.size})
+                    Dar baixa ({contasSelecionadas.size})
                   </Button>
                 )}
               </div>
@@ -508,14 +564,9 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">
-                        Total
+                        Total no período
                       </p>
-                      <p className="text-xl font-bold">
-                        {new Intl.NumberFormat('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        }).format(totais.total)}
-                      </p>
+                      <p className="text-xl font-bold">{moeda(totais.total)}</p>
                     </div>
                     <DollarSign className="h-8 w-8 text-muted-foreground/20" />
                   </div>
@@ -527,13 +578,10 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">
-                        Pendente
+                        A pagar
                       </p>
                       <p className="text-xl font-bold text-orange-600">
-                        {new Intl.NumberFormat('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        }).format(totais.pendente)}
+                        {moeda(totais.pendente)}
                       </p>
                     </div>
                     <Clock className="h-8 w-8 text-orange-600/20" />
@@ -549,10 +597,7 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                         Pago
                       </p>
                       <p className="text-xl font-bold text-green-600">
-                        {new Intl.NumberFormat('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        }).format(totais.pago)}
+                        {moeda(totais.pago)}
                       </p>
                     </div>
                     <CheckCircle className="h-8 w-8 text-green-600/20" />
@@ -565,10 +610,14 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">
-                        Vencidas
+                        Em atraso (total)
                       </p>
                       <p className="text-xl font-bold text-red-600">
-                        {totais.vencidas}
+                        {moeda(totalAtrasoGeral)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {qtdAtrasoGeral} parcela
+                        {qtdAtrasoGeral !== 1 ? 's' : ''} em aberto
                       </p>
                     </div>
                     <AlertCircle className="h-8 w-8 text-red-600/20" />
@@ -579,64 +628,121 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
           </CardHeader>
 
           <CardContent className="space-y-4">
+            {/* Passivo em aberto por idade — carregado até que seja pago */}
+            {aging.length > 0 && (
+              <Card className="border-red-200 bg-red-50/50 dark:border-red-900/40 dark:bg-red-950/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <History className="h-4 w-4 text-red-600" />
+                    Passivo em aberto por idade
+                  </CardTitle>
+                  <CardDescription>
+                    Continua em aberto até o pagamento ser registrado — sem
+                    baixa presumida.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    {aging.map((faixa) => (
+                      <div
+                        key={faixa.faixa_atraso}
+                        className="rounded-md border bg-background p-3"
+                      >
+                        <p className="text-xs text-muted-foreground">
+                          {
+                            FAIXAS.find((f) => f.chave === faixa.faixa_atraso)
+                              ?.rotulo
+                          }
+                        </p>
+                        <p className="text-sm font-bold text-red-600">
+                          {moeda(faixa.total)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {faixa.qtd} parcela{faixa.qtd !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Previsões esperando o valor real */}
+            {totalPrevisoes > 0 && (
+              <Alert>
+                <CircleDashed className="h-4 w-4" />
+                <AlertTitle>
+                  {totalPrevisoes} conta{totalPrevisoes !== 1 ? 's' : ''} fixa
+                  {totalPrevisoes !== 1 ? 's' : ''} aguardando valor
+                </AlertTitle>
+                <AlertDescription>
+                  Condomínio, energia, limpeza e impostos nascem sem valor —
+                  chegam como previsão e viram conta a pagar quando alguém
+                  preenche o valor do boleto.
+                  {previsoesNaTela.length > 0 && (
+                    <>
+                      {' '}
+                      <strong>{previsoesNaTela.length}</strong> aparece
+                      {previsoesNaTela.length !== 1 ? 'm' : ''} na lista abaixo.
+                    </>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Filtros */}
             {showFilters && (
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-4">
-                  {/* Busca */}
-                  <div className="md:col-span-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Buscar por descrição ou documento..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9"
-                      />
-                    </div>
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="md:col-span-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por descrição, documento ou fornecedor..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9"
+                    />
                   </div>
-
-                  {/* Status */}
-                  <Select
-                    value={selectedStatus}
-                    onValueChange={setSelectedStatus}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos os status</SelectItem>
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                      <SelectItem value="pago">Pago</SelectItem>
-                      <SelectItem value="cancelado">Cancelado</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {/* Período */}
-                  <Select
-                    value={selectedPeriodo}
-                    onValueChange={setSelectedPeriodo}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Período" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas as datas</SelectItem>
-                      <SelectItem value="vencidas">Vencidas</SelectItem>
-                      <SelectItem value="hoje">Vence hoje</SelectItem>
-                      <SelectItem value="semana">Próximos 7 dias</SelectItem>
-                      <SelectItem value="mes_atual">Mês atual</SelectItem>
-                      <SelectItem value="proximo_mes">Próximo mês</SelectItem>
-                      <SelectItem value="personalizado">
-                        Personalizado...
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
+
+                <Select
+                  value={selectedStatus}
+                  onValueChange={setSelectedStatus}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os status</SelectItem>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="pago">Pago</SelectItem>
+                    <SelectItem value="cancelado">Cancelado</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={selectedPeriodo}
+                  onValueChange={setSelectedPeriodo}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as datas</SelectItem>
+                    <SelectItem value="vencidas">Vencidas</SelectItem>
+                    <SelectItem value="hoje">Vence hoje</SelectItem>
+                    <SelectItem value="semana">Próximos 7 dias</SelectItem>
+                    <SelectItem value="mes_atual">Mês atual</SelectItem>
+                    <SelectItem value="proximo_mes">Próximo mês</SelectItem>
+                    <SelectItem value="proximos_3_meses">
+                      Próximos 3 meses
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
-            {/* Lista de Contas */}
+            {/* Lista */}
             {isLoading ? (
               <div className="space-y-4">
                 {[...Array(5)].map((_, i) => (
@@ -654,20 +760,19 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                   selectedStatus !== 'todos' ||
                   selectedPeriodo !== 'todas'
                     ? 'Tente ajustar os filtros de busca.'
-                    : 'As contas a pagar serão geradas automaticamente ao cadastrar lançamentos.'}
+                    : 'As contas a pagar são geradas ao cadastrar lançamentos e pelas regras de contas fixas.'}
                 </p>
               </div>
             ) : (
               <>
-                {/* Alerta para contas vencidas */}
                 {totais.vencidas > 0 && selectedStatus !== 'pago' && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Atenção!</AlertTitle>
+                    <AlertTitle>Contas vencidas no período</AlertTitle>
                     <AlertDescription>
-                      Você tem {totais.vencidas} conta
+                      {totais.vencidas} conta
                       {totais.vencidas !== 1 ? 's' : ''} vencida
-                      {totais.vencidas !== 1 ? 's' : ''}.
+                      {totais.vencidas !== 1 ? 's' : ''} dentro do filtro atual.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -685,17 +790,22 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                         </TableHead>
                         <TableHead>Vencimento</TableHead>
                         <TableHead>Tipo</TableHead>
-                        <TableHead>Fornecedor/Cliente</TableHead>
+                        <TableHead>Fornecedor</TableHead>
                         <TableHead>Descrição</TableHead>
                         <TableHead>Parcela</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Situação</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {contas.map((conta) => (
-                        <TableRow key={conta.id}>
+                        <TableRow
+                          key={conta.id}
+                          className={
+                            conta.eh_previsao ? 'bg-muted/40' : undefined
+                          }
+                        >
                           <TableCell>
                             <Checkbox
                               checked={contasSelecionadas.has(conta.id)}
@@ -705,31 +815,29 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                                   checked as boolean
                                 )
                               }
-                              disabled={conta.status_pagamento !== 'pendente'}
-                              aria-label={`Selecionar conta ${conta.id}`}
+                              disabled={
+                                conta.status_pagamento !== 'pendente' ||
+                                conta.eh_previsao
+                              }
+                              aria-label={`Selecionar ${conta.descricao}`}
                             />
                           </TableCell>
                           <TableCell>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium">
-                                {format(
-                                  new Date(conta.data_vencimento),
-                                  'dd/MM/yyyy'
-                                )}
-                              </span>
-                            </div>
+                            <span className="text-sm font-medium">
+                              {format(
+                                parseISO(conta.data_vencimento),
+                                'dd/MM/yyyy'
+                              )}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger>
-                                  {getTipoIcon(
-                                    conta.lancamento.tipo_lancamento
-                                  )}
+                                  {getTipoIcon(conta.tipo_lancamento)}
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {conta.lancamento.tipo_lancamento ===
-                                  'despesa'
+                                  {conta.tipo_lancamento === 'despesa'
                                     ? 'Despesa'
                                     : 'Receita'}
                                 </TooltipContent>
@@ -737,25 +845,20 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                             </TooltipProvider>
                           </TableCell>
                           <TableCell>
-                            {conta.lancamento.fornecedor ? (
-                              <span className="text-sm">
-                                {conta.lancamento.fornecedor.nome_fantasia ||
-                                  conta.lancamento.fornecedor.nome_razao_social}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                -
-                              </span>
-                            )}
+                            <span className="text-sm">
+                              {conta.fornecedor || (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium line-clamp-1">
-                                {conta.lancamento.descricao}
+                              <span className="line-clamp-1 text-sm font-medium">
+                                {conta.descricao}
                               </span>
-                              {conta.lancamento.numero_documento && (
+                              {conta.numero_documento && (
                                 <span className="text-xs text-muted-foreground">
-                                  Doc: {conta.lancamento.numero_documento}
+                                  Doc: {conta.numero_documento}
                                 </span>
                               )}
                             </div>
@@ -766,19 +869,22 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
-                            <span className="text-sm font-medium">
-                              {new Intl.NumberFormat('pt-BR', {
-                                style: 'currency',
-                                currency: 'BRL',
-                              }).format(conta.valor_parcela)}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            {getStatusBadge(
-                              conta.status_pagamento,
-                              conta.data_vencimento
+                            {conta.eh_previsao ? (
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="h-auto p-0 text-sm"
+                                onClick={() => handlePreencherPrevisao(conta)}
+                              >
+                                informar valor
+                              </Button>
+                            ) : (
+                              <span className="text-sm font-medium">
+                                {moeda(Number(conta.valor_parcela))}
+                              </span>
                             )}
                           </TableCell>
+                          <TableCell>{getStatusBadge(conta)}</TableCell>
                           <TableCell>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -789,16 +895,27 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                {conta.status_pagamento === 'pendente' && (
-                                  <>
-                                    <DropdownMenuItem
-                                      onClick={() => handlePagar(conta)}
-                                    >
-                                      <CreditCard className="mr-2 h-4 w-4" />
-                                      Registrar Pagamento
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                  </>
+                                {conta.eh_previsao ? (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handlePreencherPrevisao(conta)
+                                    }
+                                  >
+                                    <PencilLine className="mr-2 h-4 w-4" />
+                                    Preencher valor
+                                  </DropdownMenuItem>
+                                ) : (
+                                  conta.status_pagamento === 'pendente' && (
+                                    <>
+                                      <DropdownMenuItem
+                                        onClick={() => handlePagar(conta)}
+                                      >
+                                        <CreditCard className="mr-2 h-4 w-4" />
+                                        Registrar Pagamento
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                    </>
+                                  )
                                 )}
                                 {conta.status_pagamento === 'pago' &&
                                   conta.data_pagamento && (
@@ -806,14 +923,13 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                                       <CalendarCheck className="mr-2 h-4 w-4" />
                                       Pago em{' '}
                                       {format(
-                                        new Date(conta.data_pagamento),
+                                        parseISO(conta.data_pagamento),
                                         'dd/MM/yyyy'
                                       )}
                                     </DropdownMenuItem>
                                   )}
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    // TODO: Implementar visualização de detalhes do lançamento
                                     toast({
                                       title: 'Em desenvolvimento',
                                       description:
@@ -837,15 +953,56 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
           </CardContent>
         </Card>
 
-        {/* Form de Pagamento - será criado em seguida */}
-        {showPagamentoForm && contaParaPagar && (
+        {contaParaPagar && (
           <PagamentoForm
-            conta={contaParaPagar}
-            onSuccess={handlePagamentoSuccess}
-            onCancel={() => {
-              setShowPagamentoForm(false);
-              setContaParaPagar(null);
+            conta={{
+              id: contaParaPagar.id,
+              lancamento_id: contaParaPagar.lancamento_id,
+              numero_parcela: contaParaPagar.numero_parcela,
+              total_parcelas: contaParaPagar.total_parcelas,
+              valor_parcela: Number(contaParaPagar.valor_parcela),
+              data_vencimento: contaParaPagar.data_vencimento,
+              lancamento: {
+                tipo_lancamento: contaParaPagar.tipo_lancamento,
+                numero_documento: contaParaPagar.numero_documento,
+                descricao: contaParaPagar.descricao,
+                fornecedor: contaParaPagar.fornecedor
+                  ? { nome_razao_social: contaParaPagar.fornecedor }
+                  : null,
+              },
             }}
+            onSuccess={() => {
+              setContaParaPagar(null);
+              recarregar();
+              toast({
+                title: 'Pagamento registrado',
+                description: 'O pagamento foi registrado com sucesso.',
+              });
+            }}
+            onCancel={() => setContaParaPagar(null)}
+          />
+        )}
+
+        {previsaoParaPreencher && (
+          <PrevisaoValorDialog
+            previsao={previsaoParaPreencher}
+            onSuccess={() => {
+              setPrevisaoParaPreencher(null);
+              recarregar();
+            }}
+            onCancel={() => setPrevisaoParaPreencher(null)}
+          />
+        )}
+
+        {showBaixaLote && (
+          <BaixaLoteDialog
+            contaIds={Array.from(contasSelecionadas)}
+            valorTotal={valorSelecionado}
+            onSuccess={() => {
+              setShowBaixaLote(false);
+              recarregar();
+            }}
+            onCancel={() => setShowBaixaLote(false)}
           />
         )}
       </>

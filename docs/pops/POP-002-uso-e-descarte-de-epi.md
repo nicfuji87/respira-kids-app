@@ -104,6 +104,11 @@ A retirada é o momento de maior risco de contaminação. A ordem importa:
 Todo EPI descartável usado em atendimento vai para o **resíduo infectante**, encaminhado
 à sala de lixo hospitalar do prédio (bombona identificada com símbolo de biorrisco).
 
+> **Regra obrigatória (RDC 63/2011, Art. 47, parágrafo único):** o profissional **não
+> deve sair da clínica ou circular fora dela usando o EPI** empregado no atendimento
+> (jaleco, luva, máscara). Trocar ou remover o EPI antes de sair, inclusive para
+> intervalo entre atendimentos domiciliares.
+
 ## 8. Estoque mínimo e reposição
 
 **Responsável pela compra e controle:** Secretária.
@@ -132,6 +137,20 @@ Este POP não gera registro por atendimento. A comprovação se dá por:
 - Controle de estoque e reposição de EPI
 - Observação da prática durante supervisão da RT
 
+## 10. Base normativa
+
+- RDC Anvisa nº 63/2011, Art. 46 e 47 — fornecimento de EPI em número suficiente,
+  compatível com o risco da atividade.
+- RDC Anvisa nº 63/2011, Art. 47, parágrafo único — proibição de deixar o local de
+  trabalho usando o EPI.
+- RDC Anvisa nº 63/2011, Art. 50 — instruções de uso de EPI devem estar disponíveis a
+  todos os trabalhadores (é o que este documento formaliza).
+- O uso de respirador PFF2/N95 em procedimento gerador de aerossol (item 4.2) segue
+  princípio geral de precaução por via de transmissão — não há artigo da RDC 63/2011 que
+  cite PFF2 nominalmente para fisioterapia respiratória; a exigência decorre da natureza
+  do procedimento, com base no mesmo raciocínio aplicado pela RDC 15/2012 (Art. 12,
+  parágrafo único) a artigos semicríticos de assistência ventilatória/inaloterapia.
+
 ---
 
 ## ⚠️ Pendências assumidas nesta versão
@@ -157,4 +176,4 @@ Este documento entra em vigor após assinatura da Responsável Técnica.
 
 Bruna Cury Lourenço Peres — CREFITO-DF 167135-F
 
-Data: \_**\_/\_\_**/**\_\_\_\_** Assinatura: **************\_\_**************
+Data: \_**\_/\_\_**/**\_\_\_\_** Assinatura: ******\*\*******\_\_******\*\*******

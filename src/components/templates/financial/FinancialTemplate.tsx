@@ -23,6 +23,8 @@ import {
   UserCog,
   Percent,
   Wallet,
+  HandCoins,
+  Banknote,
 } from 'lucide-react';
 import { DevelopmentPlaceholder } from '@/components/composed';
 import { FornecedorList } from '@/components/domain/fornecedores';
@@ -31,6 +33,7 @@ import { ContaBancariaList } from '@/components/domain/contas-bancarias';
 import {
   LancamentoList,
   ContasPagarList,
+  ContasReceberList,
   PreLancamentoValidation,
   DocumentoFiscalUpload,
   LancamentoRecorrenteList,
@@ -44,6 +47,8 @@ import {
   ResumoCarteiras,
   ContaInterPanel,
   ContaInterPagamento,
+  RepassesPanel,
+  FechamentoEstagioPanel,
 } from '@/components/domain/financial';
 import { ProdutoList } from '@/components/domain/produtos';
 import { useSearchParams } from 'react-router-dom';
@@ -106,6 +111,31 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
           icon: CalendarDays,
           roles: ['admin', 'secretaria'],
           content: <ContasPagarList />,
+        },
+        {
+          // AI dev note: comissão e estágio no mesmo lugar porque são a mesma
+          // operação — um valor apurado no fim do mês que vira conta a pagar.
+          // O que muda é a fonte do número: fatura paga numa, ponto na outra.
+          id: 'folha',
+          label: 'Folha',
+          icon: HandCoins,
+          roles: ['admin', 'secretaria'],
+          content: (
+            <div className="space-y-10">
+              <RepassesPanel />
+              <FechamentoEstagioPanel />
+            </div>
+          ),
+        },
+        {
+          // AI dev note: leitura pura — a cobrança acontece em /cobrancas e a
+          // baixa vem do webhook do ASAAS. Aqui é a visão de quanto se tem a
+          // receber e há quanto tempo.
+          id: 'contas_receber',
+          label: 'Contas a Receber',
+          icon: Banknote,
+          roles: ['admin', 'secretaria'],
+          content: <ContasReceberList />,
         },
         {
           // AI dev note: saldo/extrato é leitura e serve à conciliação diária,
@@ -334,15 +364,21 @@ export const FinancialTemplate = React.memo<FinancialTemplateProps>(
       );
     }
 
-    // AI dev note: Grid cols dinâmico baseado no número de tabs permitidas
+    // AI dev note: Grid cols dinâmico baseado no número de tabs permitidas.
+    // Acima de 8 abas, 5 colunas em duas linhas cheias lê melhor do que 8
+    // colunas com uma segunda linha quase vazia.
     const gridColsClass =
-      allowedTabs.length >= 8
-        ? 'md:grid-cols-8'
-        : allowedTabs.length === 7
-          ? 'md:grid-cols-7'
-          : allowedTabs.length === 6
-            ? 'md:grid-cols-6'
-            : 'md:grid-cols-5';
+      allowedTabs.length >= 11
+        ? 'md:grid-cols-6'
+        : allowedTabs.length >= 9
+          ? 'md:grid-cols-5'
+          : allowedTabs.length === 8
+            ? 'md:grid-cols-8'
+            : allowedTabs.length === 7
+              ? 'md:grid-cols-7'
+              : allowedTabs.length === 6
+                ? 'md:grid-cols-6'
+                : 'md:grid-cols-5';
 
     return (
       <div className={className}>

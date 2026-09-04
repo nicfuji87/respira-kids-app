@@ -18,3 +18,8 @@ export { LancamentoResponsavelManager } from './LancamentoResponsavelManager';
 export { CaixaClinicaPanel } from './CaixaClinicaPanel';
 export { TributosEmpresaManager } from './TributosEmpresaManager';
 export { ResumoCarteiras } from './ResumoCarteiras';
+export { ContasReceberList } from './ContasReceberList';
+export { BaixaLoteDialog } from './BaixaLoteDialog';
+export { PrevisaoValorDialog } from './PrevisaoValorDialog';
+export { RepassesPanel } from './RepassesPanel';
+export { FechamentoEstagioPanel } from './FechamentoEstagioPanel';
