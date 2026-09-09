@@ -1312,7 +1312,7 @@ export const ManualClinicalReportGenerator =
       // ============== Enviar ao responsável ==============
 
       const handleSendToResponsible = useCallback(async () => {
-        if (!savedReport?.pdfUrl) {
+        if (!savedReport?.id) {
           toast({
             title: 'Salve primeiro',
             description: 'Salve o relatório antes de enviar ao responsável.',
@@ -1322,52 +1322,30 @@ export const ManualClinicalReportGenerator =
         }
         setIsSending(true);
         try {
-          // Buscar dados do responsável
-          const { data: patientData, error: patientError } = await supabase
-            .from('pacientes_com_responsaveis_view')
-            .select(
-              'responsavel_legal_nome, responsavel_legal_telefone, responsavel_legal_email'
-            )
-            .eq('id', patientId)
-            .single();
-          if (patientError || !patientData) {
-            throw new Error('Não foi possível buscar dados do responsável');
+          // AI dev note: INSERT direto em webhook_queue é barrado por RLS para
+          // role='profissional' (só admin e secretaria têm policy). Como a tela
+          // é liberada para profissional, quem enfileira é a RPC — que monta o
+          // payload no servidor a partir do id do relatório.
+          // Ver supabase/migrations/relatorio_envio_responsavel_rpc.sql
+          const { data, error } = await supabase.rpc(
+            'fn_enviar_relatorio_responsavel',
+            {
+              p_relatorio_id: savedReport.id,
+              p_data_emissao: reportDate || null,
+            }
+          );
+          if (error) {
+            console.error('Erro ao enfileirar webhook:', error);
+            throw new Error(
+              error.message || 'Erro ao enviar para o responsável'
+            );
           }
 
-          const webhookPayload = {
-            evento: 'relatorio_clinico_gerado',
-            payload: {
-              tipo: 'relatorio_clinico_gerado',
-              timestamp: new Date().toISOString(),
-              webhook_id: crypto.randomUUID(),
-              data: {
-                paciente: { id: patientId, nome: patientName },
-                responsavel_legal: {
-                  nome: patientData.responsavel_legal_nome,
-                  telefone: patientData.responsavel_legal_telefone,
-                  email: patientData.responsavel_legal_email || null,
-                },
-                relatorio: {
-                  url: savedReport.pdfUrl,
-                  data_emissao: reportDate,
-                  profissional: professionalInfo.name,
-                  origem: 'manual',
-                },
-              },
-            },
-          };
-
-          const { error: webhookError } = await supabase
-            .from('webhook_queue')
-            .insert(webhookPayload);
-          if (webhookError) {
-            console.error('Erro ao enfileirar webhook:', webhookError);
-            throw new Error('Erro ao enviar para o responsável');
-          }
-
+          const destinatario = (data as { responsavel_nome?: string } | null)
+            ?.responsavel_nome;
           toast({
             title: 'Enviado!',
-            description: `Relatório enviado para ${patientData.responsavel_legal_nome || 'o responsável'}`,
+            description: `Relatório enviado para ${destinatario || 'o responsável'}`,
           });
           onClose();
         } catch (err) {
@@ -1381,15 +1359,7 @@ export const ManualClinicalReportGenerator =
         } finally {
           setIsSending(false);
         }
-      }, [
-        savedReport,
-        patientId,
-        patientName,
-        reportDate,
-        professionalInfo,
-        toast,
-        onClose,
-      ]);
+      }, [savedReport, reportDate, toast, onClose]);
 
       // ============== Render ==============
 
