@@ -362,7 +362,21 @@ export async function confirmarPagamento(
       { body: { token, forma, parcelas, successUrl } }
     );
     if (error) {
-      return { success: false, error: 'Erro ao confirmar o pagamento' };
+      // AI dev note: a edge function responde 4xx/5xx com { error } explicando o
+      // motivo (ex.: "O email informado é inválido."). Com status não-2xx o
+      // functions.invoke põe a resposta em error.context e deixa data nulo — sem
+      // ler o corpo aqui, TODO erro virava o genérico abaixo e ninguém via a causa
+      // (família da Elisa Barros, 11/09/2026: só aparecia "Erro ao confirmar o
+      // pagamento"). O motivo real vai para o toast e para o print que o cliente
+      // manda à clínica.
+      let mensagem = 'Erro ao confirmar o pagamento';
+      try {
+        const corpo = await (error as { context?: Response }).context?.json();
+        if (corpo?.error) mensagem = corpo.error;
+      } catch {
+        // corpo não-JSON: mantém o genérico
+      }
+      return { success: false, error: mensagem };
     }
     if (!data?.success) {
       return {

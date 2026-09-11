@@ -21,6 +21,11 @@ const corsHeaders = {
 
 const ASAAS_BASE_URL = 'https://api.asaas.com/v3';
 
+// Formato mínimo que o Asaas aceita. Pega os erros de digitação reais que chegam do
+// cadastro (ponto sobrando no fim, TLD cortado, arroba faltando).
+const EMAIL_VALIDO =
+  /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+
 interface RequestBody {
   token: string;
   forma: 'pix' | 'credit_card';
@@ -411,6 +416,20 @@ async function ensureAsaasCustomer(
       if (!email && fb.email) email = fb.email as string;
       if (!telefone && fb.telefone) telefone = String(fb.telefone);
     }
+  }
+
+  // AI dev note: e-mail com erro de digitação (ex.: "douglasfcr@gmail.co.") faz o
+  // Asaas RECUSAR a criação do cliente, e isso derrubava a cobrança inteira: a
+  // família via "Erro ao confirmar o pagamento" e não conseguia pagar (Douglas /
+  // Elisa Barros, 11/09/2026). O e-mail só serve à NFS-e; o pagamento não depende
+  // dele. Então e-mail inválido é descartado AQUI: a cobrança sai, e quem reclama
+  // depois é a nota ("E-mail do cliente incompleto"), corrigível no cadastro.
+  email = email.trim();
+  if (email && (!EMAIL_VALIDO.test(email) || email.includes('..'))) {
+    console.warn(
+      `⚠️ [confirm-payment-link] e-mail inválido no cadastro da pessoa ${responsavelId}; cliente do Asaas segue sem e-mail`
+    );
+    email = '';
   }
 
   const cpf = String(resp.cpf_cnpj).replace(/\D/g, '');
