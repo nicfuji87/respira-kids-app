@@ -18,7 +18,11 @@ import type {
   VendaProdutoPublica,
   CredencialAVencer,
   ProdutoCusto,
+  VendaHistorico,
+  CanalCobrancaVenda,
+  CategoriaVenda,
 } from '@/types/produtos';
+import { dataNoFusoDaClinica } from './produto-vendas-historico';
 
 const PRODUTO_COLS =
   'id, codigo, nome, descricao, unidade_medida, vendavel, controla_estoque, eh_kit, categoria_venda, preco_venda, preco_referencia, estoque_minimo, estoque_atual, foto_url, ativo, created_at, updated_at';
@@ -368,6 +372,144 @@ export async function fetchVendasPaciente(
       quantidade: i.quantidade,
     })),
   }));
+}
+
+// === HISTÓRICO DE VENDAS (página Vendas) ===
+
+const VENDA_HISTORICO_COLS = [
+  'id, status, valor_total, desconto, created_at, observacoes',
+  'pago_em, pago_valor, pago_e2eid, inter_txid, cobranca_token, pix_expira_em',
+  'cancelado_em, motivo_cancelamento, estorno_valor, fatura_id',
+  'paciente:paciente_id (id, nome)',
+  'responsavel:responsavel_cobranca_id (id, nome)',
+  'vendedor:criado_por (nome)',
+  // venda antiga cobrada pelo Asaas: o link da fatura mora no JSON do Asaas
+  'fatura:fatura_id (id, status, invoice_url:dados_asaas->>invoiceUrl, forma:dados_asaas->>billingType)',
+  'itens:produto_venda_itens (quantidade, preco_unitario, subtotal, produto:produto_id (id, nome, categoria_venda, eh_kit))',
+].join(', ');
+
+interface VendaHistoricoRow {
+  id: string;
+  status: string;
+  valor_total: number;
+  desconto: number | null;
+  created_at: string;
+  observacoes: string | null;
+  pago_em: string | null;
+  pago_valor: number | null;
+  pago_e2eid: string | null;
+  inter_txid: string | null;
+  cobranca_token: string | null;
+  pix_expira_em: string | null;
+  cancelado_em: string | null;
+  motivo_cancelamento: string | null;
+  estorno_valor: number | null;
+  fatura_id: string | null;
+  paciente: { id: string; nome: string } | null;
+  responsavel: { id: string; nome: string } | null;
+  vendedor: { nome: string } | null;
+  fatura: {
+    id: string;
+    status: string;
+    invoice_url: string | null;
+    forma: string | null;
+  } | null;
+  itens:
+    | {
+        quantidade: number;
+        preco_unitario: number;
+        subtotal: number | null;
+        produto: {
+          id: string;
+          nome: string;
+          categoria_venda: CategoriaVenda | null;
+          eh_kit: boolean;
+        } | null;
+      }[]
+    | null;
+}
+
+const numeroOuNull = (v: number | null): number | null =>
+  v === null ? null : Number(v);
+
+function mapVendaHistorico(v: VendaHistoricoRow): VendaHistorico {
+  // o canal sai do rastro que a cobrança deixou, não do status: uma venda
+  // cancelada depois de paga continua tendo sido paga por algum lugar
+  const canal: CanalCobrancaVenda | null = v.fatura_id
+    ? 'asaas'
+    : v.inter_txid || v.cobranca_token
+      ? 'pix_inter'
+      : v.pago_em
+        ? 'manual'
+        : null;
+
+  return {
+    id: v.id,
+    status: v.status as StatusVenda,
+    valor_total: Number(v.valor_total),
+    desconto: Number(v.desconto ?? 0),
+    created_at: v.created_at,
+    data_venda: dataNoFusoDaClinica(v.created_at),
+    paciente: v.paciente,
+    responsavel: v.responsavel,
+    vendedor_nome: v.vendedor?.nome ?? null,
+    itens: (v.itens ?? [])
+      .map((i) => ({
+        produto_id: i.produto?.id ?? null,
+        nome: i.produto?.nome ?? 'Produto',
+        categoria: i.produto?.categoria_venda ?? null,
+        eh_kit: Boolean(i.produto?.eh_kit),
+        quantidade: Number(i.quantidade),
+        preco_unitario: Number(i.preco_unitario),
+        subtotal: Number(i.subtotal ?? i.quantidade * i.preco_unitario),
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+    observacoes: v.observacoes,
+    canal,
+    foi_paga: v.status === 'pago' || v.pago_em !== null,
+    pago_em: v.pago_em,
+    pago_valor: numeroOuNull(v.pago_valor),
+    pago_e2eid: v.pago_e2eid,
+    cobranca_token: v.cobranca_token,
+    pix_expira_em: v.pix_expira_em,
+    fatura: v.fatura,
+    cancelado_em: v.cancelado_em,
+    motivo_cancelamento: v.motivo_cancelamento,
+    estorno_valor: numeroOuNull(v.estorno_valor),
+  };
+}
+
+// Todas as vendas da loja, mais recentes primeiro — desde a primeira. Os filtros
+// ficam na tela (produto-vendas-historico): são dezenas de vendas por mês.
+// O PostgREST corta a resposta no max_rows sem avisar, então a busca vai em lotes
+// até bater com a contagem, para o "desde o início" continuar inteiro quando crescer.
+export async function fetchHistoricoVendas(): Promise<VendaHistorico[]> {
+  const LOTE = 500;
+  const linhas: VendaHistoricoRow[] = [];
+  let total: number | null = null;
+
+  while (total === null || linhas.length < total) {
+    const { data, error, count } = await supabase
+      .from('produto_vendas')
+      .select(VENDA_HISTORICO_COLS, {
+        count: total === null ? 'exact' : undefined,
+      })
+      .eq('ativo', true)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(linhas.length, linhas.length + LOTE - 1);
+    if (error) throw new Error(error.message);
+
+    const lote = (data ?? []) as unknown as VendaHistoricoRow[];
+    if (total === null) total = count ?? lote.length;
+    if (lote.length === 0) break;
+    linhas.push(...lote);
+  }
+
+  // venda criada no meio da paginação empurra as outras uma posição: sem isto, a
+  // da divisa entre dois lotes apareceria duas vezes
+  const unicas = new Map(linhas.map((l) => [l.id, l] as const));
+  return [...unicas.values()].map(mapVendaHistorico);
 }
 
 // === COBRANÇA PIX (BANCO INTER) ===

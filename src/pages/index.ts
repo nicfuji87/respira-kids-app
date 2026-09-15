@@ -11,6 +11,7 @@ export { default as PersonDetailsPage } from './PersonDetailsPage';
 // Módulos
 export { ProdutosPage } from './ProdutosPage';
 export { EstoquePage } from './EstoquePage';
+export { VendasPage } from './VendasPage';
 export { FinanceiroPage } from './FinanceiroPage';
 export { CobrancasPage } from './CobrancasPage';
 export { ConfiguracoesPage } from './ConfiguracoesPage';

@@ -108,6 +108,15 @@ export const STATUS_VENDA_LABELS: Record<StatusVenda, string> = {
   cancelado: 'Cancelado',
 };
 
+// Cor do badge de status — a mesma no detalhe do paciente e na página Vendas.
+export const STATUS_VENDA_BADGE_CLASSES: Record<StatusVenda, string> = {
+  pago: 'bg-verde-pipa/20 text-roxo-titulo border-verde-pipa/30',
+  aguardando_pagamento:
+    'bg-amarelo-pipa/20 text-amarelo-pipa border-amarelo-pipa/30',
+  cancelado: 'bg-muted text-muted-foreground border-border',
+  rascunho: 'bg-muted text-muted-foreground border-border',
+};
+
 export interface VendaProdutoResumo {
   id: string;
   status: StatusVenda;
@@ -119,6 +128,57 @@ export interface VendaProdutoResumo {
   pix_copia_cola: string | null;
   cobranca_token: string | null;
   pix_expira_em: string | null;
+}
+
+// Por onde a venda foi cobrada:
+//   pix_inter = Pix do Banco Inter, sem nota (caminho atual)
+//   asaas     = fatura do Asaas (caminho antigo; vem de produto_vendas.fatura_id)
+//   manual    = marcada paga sem cobrança registrada
+export type CanalCobrancaVenda = 'pix_inter' | 'asaas' | 'manual';
+
+export interface VendaHistoricoItem {
+  produto_id: string | null;
+  nome: string;
+  categoria: CategoriaVenda | null;
+  eh_kit: boolean;
+  quantidade: number;
+  preco_unitario: number;
+  subtotal: number;
+}
+
+// Uma venda na página Vendas (histórico de todas as vendas da loja).
+export interface VendaHistorico {
+  id: string;
+  status: StatusVenda;
+  valor_total: number;
+  desconto: number;
+  created_at: string;
+  // dia da venda no fuso da clínica (YYYY-MM-DD); é nele que o filtro de período bate
+  data_venda: string;
+  paciente: { id: string; nome: string } | null;
+  // quem paga: o responsável de cobrança do paciente
+  responsavel: { id: string; nome: string } | null;
+  vendedor_nome: string | null;
+  itens: VendaHistoricoItem[];
+  observacoes: string | null;
+  canal: CanalCobrancaVenda | null;
+  // venda cancelada pode ter sido paga antes — o estorno do Pix é separado
+  foi_paga: boolean;
+  pago_em: string | null;
+  pago_valor: number | null;
+  // EndToEndId do Pix: é por ele que se acha o pagamento no extrato do Inter
+  pago_e2eid: string | null;
+  cobranca_token: string | null;
+  pix_expira_em: string | null;
+  fatura: {
+    id: string;
+    status: string;
+    invoice_url: string | null;
+    forma: string | null;
+  } | null;
+  cancelado_em: string | null;
+  motivo_cancelamento: string | null;
+  estorno_valor: number | null;
 }
 
 // Retorno de inter-criar-cobranca-produto

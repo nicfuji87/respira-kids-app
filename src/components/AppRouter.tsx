@@ -16,6 +16,7 @@ import {
   PersonDetailsPage,
   ProdutosPage,
   EstoquePage,
+  VendasPage,
   FinanceiroPage,
   CobrancasPage,
   ConfiguracoesPage,
@@ -214,6 +215,16 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute path="/estoque" currentUserRole={validUserRole}>
               <EstoquePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Vendas - histórico de vendas da loja (admin + secretaria) */}
+        <Route
+          path="/vendas"
+          element={
+            <ProtectedRoute path="/vendas" currentUserRole={validUserRole}>
+              <VendasPage />
             </ProtectedRoute>
           }
         />

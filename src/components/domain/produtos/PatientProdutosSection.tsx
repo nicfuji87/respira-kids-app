@@ -62,9 +62,9 @@ import {
   type EmpresaCobranca,
 } from '@/lib/produtos-api';
 import {
+  STATUS_VENDA_BADGE_CLASSES,
   STATUS_VENDA_LABELS,
   type ProdutoVendavel,
-  type StatusVenda,
   type VendaProdutoResumo,
 } from '@/types/produtos';
 
@@ -86,14 +86,6 @@ function formatDateTime(iso: string): string {
     return iso;
   }
 }
-
-const STATUS_STYLE: Record<StatusVenda, string> = {
-  pago: 'bg-verde-pipa/20 text-roxo-titulo border-verde-pipa/30',
-  aguardando_pagamento:
-    'bg-amarelo-pipa/20 text-amarelo-pipa border-amarelo-pipa/30',
-  cancelado: 'bg-muted text-muted-foreground border-border',
-  rascunho: 'bg-muted text-muted-foreground border-border',
-};
 
 export const PatientProdutosSection = React.memo<PatientProdutosSectionProps>(
   ({ patientId, userRole }) => {
@@ -601,7 +593,7 @@ const HistoricoTab: React.FC<{
             </span>
             <Badge
               variant="outline"
-              className={cn('text-xs', STATUS_STYLE[v.status])}
+              className={cn('text-xs', STATUS_VENDA_BADGE_CLASSES[v.status])}
             >
               {STATUS_VENDA_LABELS[v.status]}
             </Badge>
