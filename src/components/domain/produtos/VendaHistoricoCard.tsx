@@ -1,6 +1,6 @@
-// AI dev note: Uma venda da loja na página Vendas — quem comprou, quando, o que
-// levou e como pagou, com o link da cobrança (ou da fatura, em venda antiga do
-// Asaas). Só leitura: vender, reenviar e cancelar ficam no detalhe do paciente.
+// AI dev note: Uma venda da loja na aba Vendas de Produtos — quem comprou, quando,
+// o que levou e como pagou, com o link da cobrança (ou da fatura, em venda antiga
+// do Asaas). Só leitura: vender, reenviar e cancelar ficam no detalhe do paciente.
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';

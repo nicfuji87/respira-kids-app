@@ -374,7 +374,7 @@ export async function fetchVendasPaciente(
   }));
 }
 
-// === HISTÓRICO DE VENDAS (página Vendas) ===
+// === HISTÓRICO DE VENDAS (aba Vendas de Produtos) ===
 
 const VENDA_HISTORICO_COLS = [
   'id, status, valor_total, desconto, created_at, observacoes',

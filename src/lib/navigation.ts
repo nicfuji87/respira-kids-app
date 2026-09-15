@@ -3,7 +3,6 @@ import {
   Calendar,
   Users,
   ShoppingBag,
-  ShoppingCart,
   Package,
   DollarSign,
   Settings,
@@ -65,10 +64,9 @@ export const navigationConfig: NavigationConfig[] = [
     section: 'gestao',
   },
   // Pessoa foi removido do sidebar - função disponível em Configurações > Usuarios
-  // AI dev note: Produtos = catálogo do que a clínica vende (cadastro).
-  // Estoque = posição/movimentação de quantidade. Mesmo banco (produtos_servicos),
-  // duas visões. Vendas = histórico de todas as vendas da loja (produto_vendas).
-  // Os três são admin + secretaria.
+  // AI dev note: Produtos = catálogo do que a clínica vende (cadastro) + aba Vendas
+  // (histórico de todas as vendas da loja). Estoque = posição/movimentação de
+  // quantidade. Mesmo banco (produtos_servicos), duas visões. Ambos admin + secretaria.
   {
     icon: ShoppingBag,
     label: 'Produtos',
@@ -80,13 +78,6 @@ export const navigationConfig: NavigationConfig[] = [
     icon: Package,
     label: 'Estoque',
     href: '/estoque',
-    roles: ['admin', 'secretaria'],
-    section: 'gestao',
-  },
-  {
-    icon: ShoppingCart,
-    label: 'Vendas',
-    href: '/vendas',
     roles: ['admin', 'secretaria'],
     section: 'gestao',
   },

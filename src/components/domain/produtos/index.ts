@@ -11,3 +11,4 @@ export { PixCobrancaCard } from './PixCobrancaCard';
 export { CredencialVencimentoAlert } from './CredencialVencimentoAlert';
 export { PatientProdutosSection } from './PatientProdutosSection';
 export { VendaHistoricoCard } from './VendaHistoricoCard';
+export { HistoricoVendas } from './HistoricoVendas';

@@ -1,13 +1,17 @@
-// AI dev note: Página Produtos (admin + secretaria) — CATÁLOGO do que a clínica vende
-// (espaçadores, brinquedos, kits). O controle de quantidade/estoque fica na aba Estoque
-// (mesmo banco: produtos_servicos). Venda + cobrança ASAAS entram na Fase 2.
+// AI dev note: Página Produtos (admin + secretaria), com duas abas: Catálogo (o que a
+// clínica vende: espaçadores, brinquedos, kits) e Vendas (histórico de todas as vendas
+// da loja, HistoricoVendas). A aba fica na URL (?tab=vendas), como em Configurações.
+// O controle de quantidade fica na página Estoque (mesmo banco: produtos_servicos) e a
+// venda em si é feita no detalhe do paciente.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/primitives/card';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Switch } from '@/components/primitives/switch';
+import { Tabs, TabsList, TabsTrigger } from '@/components/primitives/tabs';
 import { useToast } from '@/components/primitives/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -24,6 +28,7 @@ import {
   ProdutoFormDialog,
   StatCard,
   ProdutoThumb,
+  HistoricoVendas,
 } from '@/components/domain/produtos';
 import { fetchProdutos, setProdutoAtivo, formatBRL } from '@/lib/produtos-api';
 import {
@@ -36,6 +41,14 @@ export const ProdutosPage: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const userId = user?.pessoa?.id ?? '';
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const aba = searchParams.get('tab') === 'vendas' ? 'vendas' : 'catalogo';
+
+  // A aba Vendas só monta quando é aberta e depois continua montada (escondida):
+  // voltar do Catálogo não perde os filtros nem recarrega o histórico.
+  const [vendasMontada, setVendasMontada] = useState(aba === 'vendas');
+  if (aba === 'vendas' && !vendasMontada) setVendasMontada(true);
 
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,89 +115,112 @@ export const ProdutosPage: React.FC = () => {
             Produtos
           </h1>
           <p className="text-muted-foreground mt-1">
-            Catálogo de espaçadores, brinquedos e kits vendidos na clínica. O
-            estoque fica na aba Estoque.
+            Catálogo de espaçadores, brinquedos e kits vendidos na clínica e o
+            histórico das vendas. O estoque fica no menu Estoque.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void loadData()}
-            disabled={loading}
-            className="gap-2"
-          >
-            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-            Atualizar
-          </Button>
-          <Button size="sm" onClick={handleNovo} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Novo produto
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          icon={ShoppingBag}
-          tone="roxo"
-          label="Produtos ativos"
-          value={loading ? '—' : kpis.total}
-        />
-        <StatCard
-          icon={Package}
-          tone="azul"
-          label="Espaçadores"
-          value={loading ? '—' : kpis.espacadores}
-        />
-        <StatCard
-          icon={Boxes}
-          tone="verde"
-          label="Brinquedos"
-          value={loading ? '—' : kpis.brinquedos}
-        />
-      </div>
-
-      {error && (
-        <Card className="border-destructive/40 bg-destructive/5">
-          <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
-            <p className="flex-1 text-sm text-foreground">{error}</p>
-            <Button variant="ghost" size="sm" onClick={() => void loadData()}>
-              Tentar novamente
+        {aba === 'catalogo' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadData()}
+              disabled={loading}
+              className="gap-2"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+              Atualizar
             </Button>
-          </CardContent>
-        </Card>
+            <Button size="sm" onClick={handleNovo} className="gap-2">
+              <Plus className="w-4 h-4" />
+              Novo produto
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <Tabs value={aba} onValueChange={(v) => setSearchParams({ tab: v })}>
+        <TabsList>
+          <TabsTrigger value="catalogo">Catálogo</TabsTrigger>
+          <TabsTrigger value="vendas">Vendas</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {aba === 'catalogo' && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard
+              icon={ShoppingBag}
+              tone="roxo"
+              label="Produtos ativos"
+              value={loading ? '—' : kpis.total}
+            />
+            <StatCard
+              icon={Package}
+              tone="azul"
+              label="Espaçadores"
+              value={loading ? '—' : kpis.espacadores}
+            />
+            <StatCard
+              icon={Boxes}
+              tone="verde"
+              label="Brinquedos"
+              value={loading ? '—' : kpis.brinquedos}
+            />
+          </div>
+
+          {error && (
+            <Card className="border-destructive/40 bg-destructive/5">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
+                <p className="flex-1 text-sm text-foreground">{error}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void loadData()}
+                >
+                  Tentar novamente
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex items-center justify-end">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+              <Switch
+                checked={incluirInativos}
+                onCheckedChange={setIncluirInativos}
+              />
+              Mostrar inativos
+            </label>
+          </div>
+
+          {loading ? (
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : produtos.length === 0 ? (
+            <EmptyState onNovo={handleNovo} />
+          ) : (
+            <div className="space-y-2">
+              {produtos.map((p) => (
+                <ProdutoRow
+                  key={p.id}
+                  produto={p}
+                  onEditar={() => handleEditar(p)}
+                  onToggleAtivo={() => handleToggleAtivo(p)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      <div className="flex items-center justify-end">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-          <Switch
-            checked={incluirInativos}
-            onCheckedChange={setIncluirInativos}
-          />
-          Mostrar inativos
-        </label>
-      </div>
-
-      {loading ? (
-        <div className="space-y-2">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-xl" />
-          ))}
-        </div>
-      ) : produtos.length === 0 ? (
-        <EmptyState onNovo={handleNovo} />
-      ) : (
-        <div className="space-y-2">
-          {produtos.map((p) => (
-            <ProdutoRow
-              key={p.id}
-              produto={p}
-              onEditar={() => handleEditar(p)}
-              onToggleAtivo={() => handleToggleAtivo(p)}
-            />
-          ))}
+      {vendasMontada && (
+        <div hidden={aba !== 'vendas'}>
+          <HistoricoVendas />
         </div>
       )}
 

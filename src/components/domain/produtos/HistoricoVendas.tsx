@@ -1,7 +1,7 @@
-// AI dev note: Página Vendas (admin + secretaria) — histórico de TODAS as vendas da
-// loja (espaçadores, brinquedos e outros): quem comprou, quando, o que levou e como
-// pagou. Vender, reenviar a cobrança e cancelar continuam no detalhe do paciente;
-// aqui é consulta.
+// AI dev note: Aba Vendas da página Produtos (admin + secretaria) — histórico de TODAS
+// as vendas da loja (espaçadores, brinquedos e outros): quem comprou, quando, o que
+// levou e como pagou. Vender, reenviar a cobrança e cancelar continuam no detalhe do
+// paciente; aqui é consulta.
 //
 // Carrega o histórico inteiro uma vez e filtra em memória (produto-vendas-historico):
 // são dezenas de vendas por mês, então "desde a primeira venda" é o padrão e trocar
@@ -32,7 +32,6 @@ import {
 } from '@/components/primitives/select';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { cn } from '@/lib/utils';
-import { StatCard, VendaHistoricoCard } from '@/components/domain/produtos';
 import { fetchHistoricoVendas, formatBRL } from '@/lib/produtos-api';
 import {
   FILTROS_VENDAS_VAZIOS,
@@ -52,6 +51,8 @@ import {
   type VendaHistorico,
   type VendaHistoricoItem,
 } from '@/types/produtos';
+import { StatCard } from './StatCard';
+import { VendaHistoricoCard } from './VendaHistoricoCard';
 
 const TODOS = '__todos__';
 const POR_PAGINA = 50;
@@ -65,7 +66,7 @@ const FILTROS_STATUS: { value: FiltroStatusVenda; label: string }[] = [
 
 const CATEGORIAS = Object.keys(CATEGORIA_LABELS) as CategoriaVenda[];
 
-export const VendasPage: React.FC = () => {
+export const HistoricoVendas: React.FC = () => {
   const [vendas, setVendas] = useState<VendaHistorico[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +82,7 @@ export const VendasPage: React.FC = () => {
       setVendas(await fetchHistoricoVendas());
       setAgora(Date.now());
     } catch (err) {
-      console.error('[VendasPage] erro ao carregar:', err);
+      console.error('[HistoricoVendas] erro ao carregar:', err);
       setError('Não conseguimos carregar as vendas. Tente novamente.');
     } finally {
       setLoading(false);
@@ -177,28 +178,10 @@ export const VendasPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-            Vendas
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Histórico das vendas da loja: quem comprou, quando, o que levou e
-            como pagou. Para vender, reenviar a cobrança ou cancelar, use o
-            detalhe do paciente.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void loadData()}
-          disabled={loading}
-          className="gap-2"
-        >
-          <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-          Atualizar
-        </Button>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Todas as vendas da loja, desde a primeira. Para vender, reenviar a
+        cobrança ou cancelar, use o detalhe do paciente.
+      </p>
 
       <div className="space-y-2">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -263,6 +246,18 @@ export const VendasPage: React.FC = () => {
                   {s.label}
                 </Button>
               ))}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void loadData()}
+                disabled={loading}
+                title="Recarregar as vendas"
+                aria-label="Recarregar as vendas"
+              >
+                <RefreshCw
+                  className={cn('h-4 w-4', loading && 'animate-spin')}
+                />
+              </Button>
             </div>
           </div>
 
@@ -437,5 +432,3 @@ export const VendasPage: React.FC = () => {
     </div>
   );
 };
-
-export default VendasPage;

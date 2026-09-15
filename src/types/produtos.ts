@@ -108,7 +108,7 @@ export const STATUS_VENDA_LABELS: Record<StatusVenda, string> = {
   cancelado: 'Cancelado',
 };
 
-// Cor do badge de status — a mesma no detalhe do paciente e na página Vendas.
+// Cor do badge de status — a mesma no detalhe do paciente e na aba Vendas de Produtos.
 export const STATUS_VENDA_BADGE_CLASSES: Record<StatusVenda, string> = {
   pago: 'bg-verde-pipa/20 text-roxo-titulo border-verde-pipa/30',
   aguardando_pagamento:
@@ -146,7 +146,7 @@ export interface VendaHistoricoItem {
   subtotal: number;
 }
 
-// Uma venda na página Vendas (histórico de todas as vendas da loja).
+// Uma venda na aba Vendas de Produtos (histórico de todas as vendas da loja).
 export interface VendaHistorico {
   id: string;
   status: StatusVenda;

@@ -1,5 +1,5 @@
-// AI dev note: Filtros e totais da página Vendas (histórico da loja). Puro, sem
-// Supabase: a página carrega o histórico inteiro uma vez (fetchHistoricoVendas) e
+// AI dev note: Filtros e totais da aba Vendas de Produtos (histórico da loja). Puro,
+// sem Supabase: a aba carrega o histórico inteiro uma vez (fetchHistoricoVendas) e
 // estas funções recortam em memória. Datas de filtro são YYYY-MM-DD no fuso da
 // clínica e comparam direto como texto.
 
