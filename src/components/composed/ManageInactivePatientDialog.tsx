@@ -27,16 +27,22 @@ import {
   markPatientDoNotContact,
   unmarkPatientDoNotContact,
 } from '@/lib/inatividade-api';
-import type {
-  InactivePatient,
-  MotivoNaoContatar,
-  PessoaEvento,
-} from '@/types/inatividade';
+import type { MotivoNaoContatar, PessoaEvento } from '@/types/inatividade';
+
+// AI dev note: aceita tanto a linha da lista de reativação (v2) quanto a da
+// view antiga; só precisa do básico para marcar "não contatar" e ver histórico.
+export interface PacienteGerenciavel {
+  id: string;
+  nome: string;
+  nao_contatar: boolean;
+  motivo_nao_contatar?: string | null;
+  observacoes_controle?: string | null;
+}
 
 export interface ManageInactivePatientDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  patient: InactivePatient | null;
+  patient: PacienteGerenciavel | null;
   onSuccess?: () => void;
 }
 

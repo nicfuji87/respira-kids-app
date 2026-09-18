@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { InactivePatientsCard } from '@/components/composed/InactivePatientsCard';
 import { ContactInactivePatientDialog } from '@/components/composed/ContactInactivePatientDialog';
 import { ManageInactivePatientDialog } from '@/components/composed/ManageInactivePatientDialog';
-import type { InactivePatient } from '@/types/inatividade';
+import type { ReativacaoPaciente } from '@/types/inatividade';
 
 export interface InactivePatientsManagerProps {
   className?: string;
@@ -17,16 +17,15 @@ export const InactivePatientsManager: React.FC<
   InactivePatientsManagerProps
 > = ({ className, maxItems }) => {
   const navigate = useNavigate();
-  const [contactPatient, setContactPatient] = useState<InactivePatient | null>(
-    null
-  );
-  const [managePatient, setManagePatient] = useState<InactivePatient | null>(
+  const [contactPatient, setContactPatient] =
+    useState<ReativacaoPaciente | null>(null);
+  const [managePatient, setManagePatient] = useState<ReativacaoPaciente | null>(
     null
   );
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handlePatientClick = useCallback(
-    (p: InactivePatient) => {
+    (p: ReativacaoPaciente) => {
       navigate(`/pacientes/${p.id}`);
     },
     [navigate]

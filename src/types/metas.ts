@@ -29,6 +29,13 @@ export interface TipoMeta {
   updated_at: string;
 }
 
+// AI dev note: Níveis de premiação (metas.niveis). Nível atingido = maior
+// `valor` <= valor_atual. O bônus só vale se a meta requisito estiver batida.
+export interface MetaNivel {
+  valor: number;
+  bonus: number;
+}
+
 export interface Meta {
   id: string;
   titulo: string;
@@ -44,6 +51,8 @@ export interface Meta {
   valor_minimo: number | null;
   valor_atual: number;
   status: MetaStatus;
+  niveis: MetaNivel[] | null;
+  requisito_meta_id: string | null;
   criado_por: string;
   created_at: string;
   updated_at: string;
@@ -76,6 +85,14 @@ export interface MetaDashboard {
   status_atingimento: MetaStatusAtingimento;
   created_at: string;
   updated_at: string;
+  niveis: MetaNivel[] | null;
+  requisito_meta_id: string | null;
+  requisito_titulo: string | null;
+  requisito_valor_atual: number | null;
+  requisito_valor_meta: number | null;
+  requisito_ok: boolean;
+  bonus_nivel: number | null;
+  nivel_atingido: number;
 }
 
 export interface MetaAcompanhamento {
@@ -97,6 +114,8 @@ export interface CreateMetaInput {
   periodo_fim: string;
   valor_meta: number;
   valor_minimo?: number | null;
+  niveis?: MetaNivel[] | null;
+  requisito_meta_id?: string | null;
 }
 
 export interface MetasFilters {

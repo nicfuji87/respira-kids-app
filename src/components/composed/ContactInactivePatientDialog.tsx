@@ -2,6 +2,8 @@
 // Fluxo: secretária clica em "Contatar" no card → este dialog abre com botão wa.me
 // que abre a conversa no WhatsApp do device. Depois ela volta aqui e registra o retorno
 // (não respondeu, marcou consulta, tudo bem, etc) — não há envio automático por webhook.
+// v2 (set/2026): mensagem por perfil (reativacao-mensagens.ts), editável antes de
+// abrir o WhatsApp; o registro vai pela RPC, que decide se conta para a meta.
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -37,38 +39,22 @@ import {
 import { cn } from '@/lib/utils';
 import {
   buildWhatsAppLink,
-  registerInactivityContact,
+  registrarContatoReativacao,
 } from '@/lib/inatividade-api';
+import { montarMensagemReativacao } from '@/lib/reativacao-mensagens';
+import { useAuth } from '@/hooks/useAuth';
 import type {
-  InactivePatient,
   MetodoContato,
+  ReativacaoPaciente,
   ResultadoContato,
 } from '@/types/inatividade';
 
 export interface ContactInactivePatientDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  patient: InactivePatient | null;
+  patient: ReativacaoPaciente | null;
   onSuccess?: () => void;
 }
-
-// AI dev note: Sugestão de mensagem inicial para colar no WhatsApp (opcional)
-const buildSuggestedMessage = (p: InactivePatient): string => {
-  const resp = p.responsavel_legal_nome?.split(' ')[0] || 'Olá';
-  switch (p.status_alerta) {
-    case 'alerta_540':
-    case 'alerta_360':
-      return `Oi ${resp}, tudo bem? Aqui é da Respira Kids. Estamos passando para saber como está o(a) ${p.nome}. Faz um tempinho que não nos vemos por aqui — quer agendar uma avaliação?`;
-    case 'alerta_180':
-      return `Oi ${resp}, tudo bem? Aqui é da Respira Kids. Já faz cerca de 6 meses desde a última sessão do(a) ${p.nome}. Como ele(a) está? Quer marcar uma avaliação?`;
-    case 'alerta_60':
-      return `Oi ${resp}, tudo bem? Aqui é da Respira Kids. Notei que faz uns 60 dias desde a última sessão do(a) ${p.nome}. Quer remarcar?`;
-    case 'fora_janela':
-      return `Oi ${resp}, tudo bem? Aqui é da Respira Kids, passando para saber como está o(a) ${p.nome} e oferecer uma avaliação final caso queiram.`;
-    default:
-      return `Oi ${resp}, tudo bem? Aqui é da Respira Kids, passando para saber como está o(a) ${p.nome}.`;
-  }
-};
 
 interface ResultadoOption {
   value: ResultadoContato;
@@ -120,6 +106,8 @@ export const ContactInactivePatientDialog: React.FC<
   ContactInactivePatientDialogProps
 > = ({ isOpen, onClose, patient, onSuccess }) => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [mensagem, setMensagem] = useState('');
   const [resultado, setResultado] = useState<ResultadoContato | null>(null);
   const [metodo, setMetodo] = useState<MetodoContato>('whatsapp');
   const [observacoes, setObservacoes] = useState('');
@@ -134,16 +122,22 @@ export const ContactInactivePatientDialog: React.FC<
       setObservacoes('');
       setProximoContato('');
       setWhatsappAberto(false);
+      setMensagem(
+        montarMensagemReativacao({
+          perfil: patient.perfil,
+          pacienteNome: patient.nome,
+          responsavelNome: patient.responsavel_nome,
+          secretariaNome: user?.pessoa?.nome ?? null,
+          idadeMeses: patient.idade_meses,
+        })
+      );
     }
-  }, [isOpen, patient]);
+  }, [isOpen, patient, user?.pessoa?.nome]);
 
   const waLink = useMemo(() => {
     if (!patient) return null;
-    return buildWhatsAppLink(
-      patient.responsavel_telefone,
-      buildSuggestedMessage(patient)
-    );
-  }, [patient]);
+    return buildWhatsAppLink(patient.responsavel_telefone, mensagem);
+  }, [patient, mensagem]);
 
   const handleOpenWhatsApp = () => {
     if (!waLink) return;
@@ -155,19 +149,22 @@ export const ContactInactivePatientDialog: React.FC<
     if (!patient || !resultado) return;
     setSaving(true);
     try {
-      await registerInactivityContact(patient.id, patient.responsavel_id, {
+      const r = await registrarContatoReativacao({
+        pacienteId: patient.id,
         metodo,
-        dias_inativos: patient.dias_sem_consulta ?? 0,
-        alerta: patient.status_alerta,
-        tipo_paciente: patient.tipo_paciente,
-        status: resultado,
-        proximo_contato: proximoContato || undefined,
+        resultado,
+        proximoContato: proximoContato || undefined,
         observacoes: observacoes || undefined,
+        mensagem: whatsappAberto ? mensagem : undefined,
       });
 
       toast({
-        title: 'Retorno registrado',
-        description: 'Histórico do paciente atualizado.',
+        title: r.conta_para_meta
+          ? 'Contato registrado e contando para a meta'
+          : 'Contato registrado',
+        description: r.conta_para_meta
+          ? 'Se houver sessão em até 30 dias, conta como reativação.'
+          : `Não conta para a meta: ${r.motivo ?? 'fora das regras'}.`,
       });
       onSuccess?.();
       onClose();
@@ -191,22 +188,41 @@ export const ContactInactivePatientDialog: React.FC<
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-rosa-suave" />
-            Contatar Paciente Inativo — {patient.nome}
+            Contatar família de {patient.nome}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="flex flex-wrap gap-1.5 text-xs">
-            <Badge variant="outline">Tipo: {patient.tipo_paciente}</Badge>
-            <Badge variant="secondary">
-              {patient.dias_sem_consulta ?? '—'} dias sem consulta
+            <Badge variant="outline">
+              {patient.perfil === 'motora_alta'
+                ? 'Alta da motora'
+                : patient.perfil === 'motora_e_respiratoria'
+                  ? 'Motora + respiratória'
+                  : 'Respiratória'}
             </Badge>
-            {patient.responsavel_legal_nome && (
-              <Badge variant="outline">
-                Resp: {patient.responsavel_legal_nome}
-              </Badge>
+            <Badge variant="secondary">
+              {patient.dias_sem_sessao} dias sem sessão
+            </Badge>
+            {patient.responsavel_nome && (
+              <Badge variant="outline">Resp: {patient.responsavel_nome}</Badge>
             )}
           </div>
+
+          {!patient.conta_para_meta && (
+            <div className="rounded-md border border-amarelo-pipa bg-amarelo-pipa/20 p-2 text-xs">
+              {patient.nao_contatar
+                ? 'A família pediu para não ser contatada.'
+                : 'Esta família já recebeu contato nos últimos 90 dias. Pode falar de novo se fizer sentido, mas este contato não conta para a meta.'}
+            </div>
+          )}
+
+          {patient.perfil === 'motora_alta' && (
+            <p className="text-xs text-muted-foreground">
+              Paciente teve alta da motora: pergunte do desenvolvimento e lembre
+              que atendemos a parte respiratória. Não ofereça motora de novo.
+            </p>
+          )}
 
           {/* AI dev note: Passo 1 — abrir WhatsApp */}
           <div className="border rounded-md p-3 space-y-2 bg-muted/30">
@@ -214,8 +230,14 @@ export const ContactInactivePatientDialog: React.FC<
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rosa-suave text-white text-[10px] font-bold">
                 1
               </span>
-              Abrir conversa no WhatsApp
+              Revisar a mensagem e abrir o WhatsApp
             </div>
+            <Textarea
+              value={mensagem}
+              onChange={(e) => setMensagem(e.target.value)}
+              rows={6}
+              className="text-sm"
+            />
             {waLink ? (
               <Button
                 onClick={handleOpenWhatsApp}

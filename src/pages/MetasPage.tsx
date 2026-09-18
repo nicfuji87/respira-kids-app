@@ -91,6 +91,23 @@ export const MetasPage: React.FC = () => {
     loadMetas();
   }, [loadMetas]);
 
+  // AI dev note: se o mês atual não tem metas mas o próximo tem (ex.: piloto
+  // que começa no mês seguinte), abre direto no próximo. Só na primeira carga.
+  const [pulouMes, setPulouMes] = useState(false);
+  useEffect(() => {
+    if (loading || pulouMes || metas.length > 0) return;
+    setPulouMes(true);
+    const prox = new Date(ano, mes, 1);
+    fetchMetasDashboard({ mes: prox.getMonth() + 1, ano: prox.getFullYear() })
+      .then((m) => {
+        if (m.length > 0) {
+          setMes(prox.getMonth() + 1);
+          setAno(prox.getFullYear());
+        }
+      })
+      .catch(() => undefined);
+  }, [loading, pulouMes, metas.length, mes, ano]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -326,15 +343,24 @@ export const MetasPage: React.FC = () => {
             Sobre o programa de metas
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-1">
+        <CardContent className="text-sm text-muted-foreground space-y-2">
           <p>
-            Os valores das metas são recalculados automaticamente conforme as
-            consultas, evoluções, confirmações e contatos são registrados no
-            sistema.
+            <strong className="text-foreground">
+              Reativação (secretaria):
+            </strong>{' '}
+            conta a família de paciente parado há 60+ dias, sem nada agendado,
+            uma vez a cada 90 dias. Vira reativação se o paciente fizer sessão
+            (de qualquer serviço) em até 30 dias depois do contato. O bônus por
+            nível só vale com a meta de contatos batida.
           </p>
           <p>
-            Você pode forçar uma atualização imediata usando o botão{' '}
-            <strong>Recalcular</strong>.
+            <strong className="text-foreground">Evoluções (clínica):</strong>{' '}
+            porcentagem das sessões realizadas com evolução, e das escritas em
+            até 24h. Conta sessões de até ontem. Faltas marcadas não entram.
+          </p>
+          <p>
+            Os valores são recalculados de hora em hora (8h às 20h). O botão{' '}
+            <strong>Recalcular</strong> atualiza na hora.
           </p>
         </CardContent>
       </Card>

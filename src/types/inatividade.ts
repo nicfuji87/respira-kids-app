@@ -90,3 +90,43 @@ export interface InactivePatientsFilters {
   max_dias?: number;
   busca?: string;
 }
+
+// AI dev note: Reativação v2 (set/2026) — RPC fn_reativacao_lista.
+// Substitui vw_pacientes_inativos na UI. Perfil só muda a MENSAGEM; para a meta
+// qualquer serviço conta. Quem decide se o contato conta é o servidor
+// (fn_registrar_contato_reativacao), nunca o front.
+export type PerfilReativacao =
+  | 'respiratorio'
+  | 'motora_alta'
+  | 'motora_e_respiratoria';
+
+export type FaixaReativacao = '60-90' | '90-180' | '180-365' | '365-540';
+
+export interface ReativacaoPaciente {
+  id: string;
+  nome: string;
+  sexo: string | null;
+  data_nascimento: string | null;
+  idade_meses: number | null;
+  perfil: PerfilReativacao;
+  ultimo_servico: 'respiratoria' | 'motora' | 'outro' | null;
+  data_ultima_sessao: string;
+  dias_sem_sessao: number;
+  faixa: FaixaReativacao;
+  prioridade: 1 | 2 | 3;
+  responsavel_id: string | null;
+  responsavel_nome: string | null;
+  responsavel_telefone: string | null;
+  total_contatos: number;
+  ultimo_contato_em: string | null;
+  ultimo_resultado: ResultadoContato | null;
+  proximo_contato: string | null;
+  em_carencia: boolean;
+  nao_contatar: boolean;
+  conta_para_meta: boolean;
+}
+
+export interface ResultadoRegistroContato {
+  conta_para_meta: boolean;
+  motivo: string | null;
+}

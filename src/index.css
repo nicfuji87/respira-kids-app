@@ -40,6 +40,10 @@
     --amarelo-pipa: 50 99% 56%;
     --verde-pipa: 86 49% 75%;
     --cinza-secundario: 0 0% 45%;
+    /* Séries dos relatórios (2 categorias). Validadas p/ daltonismo e contraste
+       (dataviz validate_palette); os tons de --chart-1/2 ficam claros demais. */
+    --serie-1: 175 84% 32%; /* verde-azulado #0d9488 */
+    --serie-2: 13 78% 54%; /* coral #e5572f */
   }
 
   .dark {
@@ -68,6 +72,8 @@
     --chart-3: 86 49% 77%; /* Verde Pipa */
     --chart-4: 50 99% 56%; /* Amarelo Pipa */
     --chart-5: 292 53% 70%; /* Roxo Claro */
+    --serie-1: 173 80% 36%; /* #12a594 */
+    --serie-2: 15 79% 58%; /* #e8683f */
   }
 }
 

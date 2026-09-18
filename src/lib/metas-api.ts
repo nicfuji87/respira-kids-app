@@ -125,6 +125,8 @@ export async function createMeta(input: CreateMetaInput): Promise<Meta> {
       ano_referencia,
       valor_meta: input.valor_meta,
       valor_minimo: input.valor_minimo ?? null,
+      niveis: input.niveis ?? null,
+      requisito_meta_id: input.requisito_meta_id ?? null,
       criado_por: pessoa.id,
     })
     .select('*')

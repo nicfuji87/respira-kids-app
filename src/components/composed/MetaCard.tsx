@@ -18,6 +18,8 @@ import {
   Users,
   User,
   Trash2,
+  Gift,
+  Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MetaDashboard } from '@/types/metas';
@@ -60,6 +62,21 @@ export const MetaCard: React.FC<MetaCardProps> = ({
       : meta.status_atingimento === 'atrasada'
         ? 'text-destructive'
         : 'text-roxo-titulo';
+
+  const isPct = meta.unidade_medida === 'percentual';
+  const fmt = (v: number | null | undefined) =>
+    Number(v ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) +
+    (isPct ? '%' : '');
+  const brl = (v: number) =>
+    v.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      maximumFractionDigits: 0,
+    });
+  const hoje = new Date().toISOString().slice(0, 10);
+  const naoComecou = meta.periodo_inicio > hoje;
+  const niveis = meta.niveis ?? [];
+  const bonus = Number(meta.bonus_nivel ?? 0);
 
   const formatMesAno = () => {
     const meses = [
@@ -122,17 +139,19 @@ export const MetaCard: React.FC<MetaCardProps> = ({
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {meta.descricao && (
+          <p className="text-xs text-muted-foreground">{meta.descricao}</p>
+        )}
+
         <div>
           <div className="flex items-end justify-between mb-1">
             <div>
               <span className="text-2xl font-bold">
-                {Number(meta.valor_atual).toLocaleString('pt-BR', {
-                  maximumFractionDigits: 2,
-                })}
+                {fmt(meta.valor_atual)}
               </span>
               <span className="text-sm text-muted-foreground ml-1">
-                / {Number(meta.valor_meta).toLocaleString('pt-BR')}{' '}
-                {meta.unidade_medida}
+                / {fmt(meta.valor_meta)}
+                {!isPct && ` ${meta.unidade_medida}`}
               </span>
             </div>
             <div className={cn('text-lg font-semibold', statusColor)}>
@@ -142,16 +161,67 @@ export const MetaCard: React.FC<MetaCardProps> = ({
           <Progress value={pct} className="h-2" />
         </div>
 
+        {/* AI dev note: níveis de bônus; o bônus só vale com o requisito batido */}
+        {niveis.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {niveis.map((n, i) => {
+                const atingido = Number(meta.valor_atual) >= n.valor;
+                return (
+                  <span
+                    key={i}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs',
+                      atingido
+                        ? 'border-green-600/40 bg-green-600/10 text-green-700 dark:text-green-400'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    {atingido ? (
+                      <CheckCircle2 className="h-3 w-3" />
+                    ) : (
+                      <Gift className="h-3 w-3" />
+                    )}
+                    {n.valor}+ = {brl(n.bonus)}
+                  </span>
+                );
+              })}
+            </div>
+            {meta.requisito_meta_id && !meta.requisito_ok && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Lock className="h-3 w-3 shrink-0" />
+                Bônus liberado com {meta.requisito_titulo}:{' '}
+                {Number(meta.requisito_valor_atual ?? 0)} de{' '}
+                {Number(meta.requisito_valor_meta ?? 0)}
+              </p>
+            )}
+            {bonus > 0 && (
+              <p
+                className={cn(
+                  'text-sm font-medium',
+                  meta.requisito_ok
+                    ? 'text-green-700 dark:text-green-400'
+                    : 'text-muted-foreground'
+                )}
+              >
+                {meta.requisito_ok
+                  ? `Bônus garantido até agora: ${brl(bonus)}`
+                  : `Bônus de ${brl(bonus)} aguardando o requisito`}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            {meta.dias_restantes > 0
-              ? `${meta.dias_restantes} dias restantes`
-              : 'Período encerrado'}
+            {naoComecou
+              ? `Começa em ${meta.periodo_inicio.split('-').reverse().join('/')}`
+              : meta.dias_restantes > 0
+                ? `${meta.dias_restantes} dias restantes`
+                : 'Período encerrado'}
           </span>
-          {meta.valor_minimo != null && (
-            <span>
-              Mín: {Number(meta.valor_minimo).toLocaleString('pt-BR')}
-            </span>
+          {meta.valor_minimo != null && niveis.length === 0 && (
+            <span>Mín: {fmt(meta.valor_minimo)}</span>
           )}
         </div>
 

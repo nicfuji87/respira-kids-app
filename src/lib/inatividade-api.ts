@@ -11,7 +11,42 @@ import type {
   TipoPaciente,
   StatusAlertaInatividade,
   MotivoNaoContatar,
+  ReativacaoPaciente,
+  ResultadoRegistroContato,
 } from '@/types/inatividade';
+
+// AI dev note: Lista de reativação v2 (RPC; admin/secretaria). Já vem só com
+// pacientes de 60–540 dias sem sessão realizada e sem nada agendado.
+export async function fetchReativacaoLista(): Promise<ReativacaoPaciente[]> {
+  const { data, error } = await supabase.rpc('fn_reativacao_lista');
+  if (error) throw new Error(error.message);
+  return (data || []) as ReativacaoPaciente[];
+}
+
+// AI dev note: Registra o contato pelo servidor, que decide se conta para a
+// meta (60+ dias, sem agendamento, 1 contato válido a cada 90 dias).
+export async function registrarContatoReativacao(input: {
+  pacienteId: string;
+  metodo: MetodoContato;
+  resultado: ResultadoContato;
+  observacoes?: string;
+  proximoContato?: string;
+  mensagem?: string;
+}): Promise<ResultadoRegistroContato> {
+  const { data, error } = await supabase.rpc(
+    'fn_registrar_contato_reativacao',
+    {
+      p_paciente_id: input.pacienteId,
+      p_metodo: input.metodo,
+      p_resultado: input.resultado,
+      p_observacoes: input.observacoes || null,
+      p_proximo_contato: input.proximoContato || null,
+      p_mensagem: input.mensagem || null,
+    }
+  );
+  if (error) throw new Error(error.message);
+  return data as ResultadoRegistroContato;
+}
 
 // AI dev note: Buscar pacientes inativos com filtros
 export async function fetchInactivePatients(
