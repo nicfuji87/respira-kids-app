@@ -27,6 +27,7 @@ import { ProfessionalFilter } from '@/components/composed/ProfessionalFilter';
 import { WeekBirthdays } from '@/components/composed/WeekBirthdays';
 import { PediatraRelacionamentoManager } from '@/components/domain/relacionamento';
 import { InactivePatientsManager } from '@/components/domain/reativacao';
+import { PesquisaConvitesManager } from '@/components/domain/pesquisa-experiencia/PesquisaConvitesManager';
 import { AppointmentDetailsManager } from '@/components/domain/calendar/AppointmentDetailsManager';
 import { fetchAgendamentoById } from '@/lib/calendar-services';
 import type {
@@ -271,6 +272,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
 
       {/* AI dev note: Programa de reativação - pacientes inativos */}
       <InactivePatientsManager maxItems={15} />
+
+      {/* AI dev note: Convites da pesquisa de experiência - meta da secretaria */}
+      <PesquisaConvitesManager maxItems={10} />
 
       {/* AI dev note: Aniversários da semana */}
       <WeekBirthdays maxItems={20} />

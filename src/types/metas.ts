@@ -12,6 +12,7 @@ export type MetaCategoria =
   | 'qualidade'
   | 'produtividade'
   | 'reativacao'
+  | 'experiencia'
   | 'relacionamento';
 
 export type MetaRoleAlvo = 'todos' | 'admin' | 'profissional' | 'secretaria';

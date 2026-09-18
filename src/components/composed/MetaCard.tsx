@@ -37,6 +37,7 @@ const CATEGORIA_COLORS: Record<string, string> = {
   qualidade: 'bg-roxo-titulo/10 text-roxo-titulo border-roxo-titulo/30',
   produtividade: 'bg-amarelo-pipa text-roxo-titulo border-transparent',
   reativacao: 'bg-rosa-suave/10 text-rosa-suave border-rosa-suave/30',
+  experiencia: 'bg-verde-pipa/20 text-roxo-titulo border-verde-pipa/40',
   relacionamento:
     'bg-vermelho-kids/10 text-vermelho-kids border-vermelho-kids/30',
 };

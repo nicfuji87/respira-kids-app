@@ -354,6 +354,14 @@ export const MetasPage: React.FC = () => {
             nível só vale com a meta de contatos batida.
           </p>
           <p>
+            <strong className="text-foreground">
+              Pesquisa de experiência (secretaria):
+            </strong>{' '}
+            conta o convite para famílias com 3+ sessões nos últimos 60 dias,
+            uma vez a cada 30 dias, e a quantidade de respostas do mês. A nota
+            da pesquisa nunca entra na meta.
+          </p>
+          <p>
             <strong className="text-foreground">Evoluções (clínica):</strong>{' '}
             porcentagem das sessões realizadas com evolução, e das escritas em
             até 24h. Conta sessões de até ontem. Faltas marcadas não entram.
