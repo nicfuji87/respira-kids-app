@@ -31,6 +31,7 @@ export type PesquisaExperienciaField =
   | 'surpresa_positiva'
   // Percepção de valor
   | 'entrega_atendimento'
+  | 'conversa_sessao'
   | 'o_que_vale_pena'
   | 'comparacao_outras_experiencias'
   | 'traz_tranquilidade'
@@ -76,6 +77,7 @@ export interface PesquisaExperienciaResposta {
 
   // Percepção de valor
   entrega_atendimento?: string;
+  conversa_sessao?: string;
   o_que_vale_pena?: string[];
   comparacao_outras_experiencias?: string;
   traz_tranquilidade?: string;
@@ -202,6 +204,7 @@ export interface PesquisaExperienciaStats {
   distribuicaoHojeVeComo: DistribuicaoItem[];
   distribuicaoCriterioDecisao: DistribuicaoItem[];
   distribuicaoEntregaAtendimento: DistribuicaoItem[];
+  distribuicaoConversaSessao: DistribuicaoItem[];
   distribuicaoComparacaoOutras: DistribuicaoItem[];
   distribuicaoTrazTranquilidade: DistribuicaoItem[];
   distribuicaoCustoBeneficio: DistribuicaoItem[];

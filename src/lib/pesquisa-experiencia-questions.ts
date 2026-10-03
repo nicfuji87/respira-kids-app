@@ -207,6 +207,36 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
       { value: 'muito_menos', label: 'Muito menos do que eu esperava' },
     ],
   },
+  // AI dev note: equilíbrio da conversa na sessão. Sem citar estagiária de
+  // propósito (ver migration pesquisa_conversa_sessao.sql): a família nem
+  // sempre sabe quem é quem, e nomear induz a queixa. Escala simétrica.
+  {
+    id: 'conversa_sessao',
+    type: 'single-choice',
+    title: 'Durante as sessões, como é a conversa da profissional com você?',
+    subtitle:
+      'Pensando no equilíbrio entre explicar o cuidado e falar de outros assuntos.',
+    options: [
+      {
+        value: 'muito_pouca',
+        label: 'Conversa e explica bem menos do que eu gostaria',
+      },
+      {
+        value: 'pouca',
+        label: 'Conversa e explica um pouco menos do que eu gostaria',
+      },
+      { value: 'certa', label: 'Na medida certa' },
+      {
+        value: 'as_vezes_demais',
+        label: 'Às vezes se estende em assuntos fora do cuidado',
+      },
+      {
+        value: 'muitas_vezes_demais',
+        label: 'Muitas vezes se estende em assuntos fora do cuidado',
+      },
+      { value: 'nao_sei', label: 'Não sei dizer' },
+    ],
+  },
   {
     id: 'comparacao_outras_experiencias',
     type: 'single-choice',

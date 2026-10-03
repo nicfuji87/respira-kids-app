@@ -56,6 +56,7 @@ function sanitizePayload(
     'hoje_ve_como',
     'criterio_decisao',
     'entrega_atendimento',
+    'conversa_sessao',
     'comparacao_outras_experiencias',
     'traz_tranquilidade',
     'custo_beneficio',
@@ -436,6 +437,7 @@ export function computePesquisaStats(
       rows,
       'entrega_atendimento'
     ),
+    distribuicaoConversaSessao: distribuicaoSingle(rows, 'conversa_sessao'),
     distribuicaoComparacaoOutras: distribuicaoSingle(
       rows,
       'comparacao_outras_experiencias'

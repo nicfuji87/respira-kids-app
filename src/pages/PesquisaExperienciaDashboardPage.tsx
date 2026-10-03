@@ -440,6 +440,12 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
                   barColor="verde"
                 />
                 <PesquisaDistribuicaoBarras
+                  title="A conversa durante a sessão"
+                  subtitle="Equilíbrio entre explicar o cuidado e outros assuntos"
+                  items={stats.distribuicaoConversaSessao}
+                  barColor="verde"
+                />
+                <PesquisaDistribuicaoBarras
                   title="O que mais importa no atendimento"
                   subtitle="Até 2 por respondente"
                   items={stats.distribuicaoOQueValePena}
