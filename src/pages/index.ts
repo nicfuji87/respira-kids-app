@@ -13,6 +13,7 @@ export { ProdutosPage } from './ProdutosPage';
 export { EstoquePage } from './EstoquePage';
 export { FinanceiroPage } from './FinanceiroPage';
 export { CobrancasPage } from './CobrancasPage';
+export { ReativacaoPage } from './ReativacaoPage';
 export { ConfiguracoesPage } from './ConfiguracoesPage';
 
 // Admin only pages

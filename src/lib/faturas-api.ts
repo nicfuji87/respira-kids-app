@@ -1815,7 +1815,8 @@ export async function emitirNfeFatura(
         valor_total,
         descricao,
         empresa_id,
-        link_nfe
+        link_nfe,
+        dados_asaas
       `
       )
       .eq('id', faturaId)
@@ -1892,9 +1893,26 @@ export async function emitirNfeFatura(
           : IBS_CBS_SERVICOS_SAUDE),
       };
 
+      // AI dev note: no cartão PARCELADO a nota é UMA só, com o valor TOTAL
+      // (valor_total), vinculada à 1ª parcela (id_asaas) — nunca o valor de uma
+      // parcela. O parcelamento vai nas observações. O n8n ([Sistema RK] Webhook
+      // Asaas, nó "Gera NF") segue a mesma regra; antes de 30/09/2026 ele usava o
+      // payment.value do webhook e emitia a nota só com a 1ª parcela.
+      const dadosAsaas = fatura.dados_asaas as {
+        parcelas?: number;
+        forma_pagamento?: string;
+      } | null;
+      const parcelas =
+        dadosAsaas?.forma_pagamento === 'credit_card'
+          ? Number(dadosAsaas.parcelas) || 1
+          : 1;
+
       const invoicePayload = {
         serviceDescription: fatura.descricao || 'Serviços de fisioterapia',
-        observations: '',
+        observations:
+          parcelas >= 2
+            ? `Pagamento realizado no cartão de crédito, parcelado em ${parcelas}x.`
+            : '',
         value: fatura.valor_total,
         deductions: 0,
         effectiveDate: hojeBRT(),

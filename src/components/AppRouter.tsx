@@ -18,6 +18,7 @@ import {
   EstoquePage,
   FinanceiroPage,
   CobrancasPage,
+  ReativacaoPage,
   ConfiguracoesPage,
   UsuariosPage,
   RelatoriosPage,
@@ -233,6 +234,15 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute path="/cobrancas" currentUserRole={validUserRole}>
               <CobrancasPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/reativacao"
+          element={
+            <ProtectedRoute path="/reativacao" currentUserRole={validUserRole}>
+              <ReativacaoPage />
             </ProtectedRoute>
           }
         />

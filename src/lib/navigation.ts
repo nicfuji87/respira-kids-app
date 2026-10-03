@@ -14,6 +14,7 @@ import {
   GraduationCap,
   BookOpenCheck,
   Receipt,
+  PhoneCall,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -95,6 +96,16 @@ export const navigationConfig: NavigationConfig[] = [
     icon: Receipt,
     label: 'Cobranças',
     href: '/cobrancas',
+    roles: ['admin', 'secretaria'],
+    section: 'principal',
+  },
+  // AI dev note: Reativação = rotina de contato da secretaria (pacientes
+  // parados + convites da pesquisa). Saiu do Dashboard para cá: no celular
+  // ficava abaixo de quatro cards e ninguém achava.
+  {
+    icon: PhoneCall,
+    label: 'Reativação',
+    href: '/reativacao',
     roles: ['admin', 'secretaria'],
     section: 'principal',
   },
@@ -225,6 +236,14 @@ export const mobileNavigationConfig: Record<UserRole, NavigationConfig[]> = {
       icon: Users,
       label: 'Pacientes',
       href: '/pacientes',
+      roles: ['secretaria'],
+    },
+    // AI dev note: Reativação na barra de baixo porque é rotina diária da
+    // secretaria e ela trabalha no celular.
+    {
+      icon: PhoneCall,
+      label: 'Reativação',
+      href: '/reativacao',
       roles: ['secretaria'],
     },
     {
