@@ -16,6 +16,7 @@ import {
   Trash2,
   AlertTriangle,
   CheckCircle2,
+  Undo2,
   Pencil,
 } from 'lucide-react';
 import {
@@ -53,7 +54,6 @@ import { cn, formatDateBR } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import {
   fetchResponsibleExperienceSurveyTracking,
-  markResponsibleExperienceSurveyAnswered,
   updatePatientConsents,
   type ExperienceSurveyTracking,
 } from '@/lib/patient-api';
@@ -64,7 +64,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/primitives/select';
-import { useAuth } from '@/hooks/useAuth';
+import { useExperienceSurveyMarking } from '@/hooks/useExperienceSurveyMarking';
 import type {
   PatientPersonalInfoProps,
   PatientConsent,
@@ -168,11 +168,13 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
       useState<ExperienceSurveyTracking | null>(null);
     const [isLoadingSurveyTracking, setIsLoadingSurveyTracking] =
       useState(false);
-    const [isMarkingSurveyTracking, setIsMarkingSurveyTracking] =
-      useState(false);
+    const {
+      isSaving: isMarkingSurveyTracking,
+      markAnswered: markSurveyAnswered,
+      unmark: unmarkSurvey,
+    } = useExperienceSurveyMarking(setSurveyTracking);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
-    const { user } = useAuth();
     const canManageSurveyTracking =
       userRole === 'admin' || userRole === 'secretaria';
 
@@ -417,31 +419,14 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
       patient.responsavel_legal_nome,
     ]);
 
-    const handleMarkSurveyAnswered = async () => {
-      if (!patient.responsavel_legal_id || isMarkingSurveyTracking) return;
+    const handleMarkSurveyAnswered = () => {
+      if (!patient.responsavel_legal_id) return;
+      void markSurveyAnswered(patient.responsavel_legal_id, surveyTracking);
+    };
 
-      setIsMarkingSurveyTracking(true);
-      try {
-        const updated = await markResponsibleExperienceSurveyAnswered(
-          patient.responsavel_legal_id,
-          user?.pessoa?.id
-        );
-        setSurveyTracking(updated);
-        toast({
-          title: 'Pesquisa marcada como respondida',
-          description:
-            'O próximo lembrete ficará para daqui a 6 meses. A pesquisa continua anônima.',
-        });
-      } catch (error) {
-        console.error('Erro ao marcar pesquisa respondida:', error);
-        toast({
-          title: 'Não foi possível salvar',
-          description: 'Tente novamente em instantes.',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsMarkingSurveyTracking(false);
-      }
+    const handleUnmarkSurvey = () => {
+      if (!patient.responsavel_legal_id) return;
+      void unmarkSurvey(patient.responsavel_legal_id, surveyTracking);
     };
 
     // AI dev note: Extrair iniciais do nome para fallback do avatar
@@ -631,11 +616,17 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
               disabled={isLoadingSurveyTracking || isMarkingSurveyTracking}
               onCheckedChange={(checked) => {
                 if (checked) {
-                  void handleMarkSurveyAnswered();
+                  handleMarkSurveyAnswered();
+                } else {
+                  handleUnmarkSurvey();
                 }
               }}
               className="mt-0.5"
-              aria-label="Marcar pesquisa de experiência como respondida"
+              aria-label={
+                isUpToDate
+                  ? 'Desmarcar pesquisa de experiência'
+                  : 'Marcar pesquisa de experiência como respondida'
+              }
             />
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -660,12 +651,26 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
               <p className="text-xs text-muted-foreground mt-0.5">
                 {nextLabel}
               </p>
-              {!isUpToDate && (
+              {isUpToDate ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleUnmarkSurvey}
+                  disabled={isLoadingSurveyTracking || isMarkingSurveyTracking}
+                  className="mt-1 -ml-2 h-7 px-2 text-xs text-muted-foreground"
+                >
+                  <Undo2 className="h-3 w-3 mr-1" />
+                  {isMarkingSurveyTracking
+                    ? 'Salvando...'
+                    : 'Marquei sem querer, desmarcar'}
+                </Button>
+              ) : (
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => void handleMarkSurveyAnswered()}
+                  onClick={handleMarkSurveyAnswered}
                   disabled={isLoadingSurveyTracking || isMarkingSurveyTracking}
                   className="mt-2 h-8"
                 >

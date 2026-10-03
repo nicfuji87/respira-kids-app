@@ -350,8 +350,9 @@ export const MetasPage: React.FC = () => {
             </strong>{' '}
             conta a família de paciente parado há 60+ dias, sem nada agendado,
             uma vez a cada 90 dias. Vira reativação se o paciente fizer sessão
-            (de qualquer serviço) em até 30 dias depois do contato. O bônus por
-            nível só vale com a meta de contatos batida.
+            paga em até 30 dias depois do contato (motora ou respiratória;
+            atendimento social não conta porque não gera faturamento). O bônus
+            por nível só vale com a meta de contatos batida.
           </p>
           <p>
             <strong className="text-foreground">

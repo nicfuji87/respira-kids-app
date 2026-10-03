@@ -73,7 +73,6 @@ import {
 } from '@/lib/calendar-services';
 import {
   fetchResponsibleExperienceSurveyTracking,
-  markResponsibleExperienceSurveyAnswered,
   type ExperienceSurveyTracking,
 } from '@/lib/patient-api';
 // AI dev note: generatePatientHistoryAI e checkAIHistoryStatus removidos -
@@ -87,6 +86,7 @@ import type {
 } from '@/types/supabase-calendar';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useExperienceSurveyMarking } from '@/hooks/useExperienceSurveyMarking';
 
 // AI dev note: AppointmentDetailsManager é um DOMAIN que combina COMPOSED específicos
 // para gerenciar detalhes completos de agendamentos médicos com permissões por role
@@ -274,8 +274,11 @@ export const AppointmentDetailsManager =
         useState<ExperienceSurveyTracking | null>(null);
       const [isLoadingSurveyTracking, setIsLoadingSurveyTracking] =
         useState(false);
-      const [isMarkingSurveyTracking, setIsMarkingSurveyTracking] =
-        useState(false);
+      const {
+        isSaving: isMarkingSurveyTracking,
+        markAnswered: markSurveyAnswered,
+        unmark: unmarkSurvey,
+      } = useExperienceSurveyMarking(setSurveyTracking);
 
       // Estados para dados da fatura associada
       const [faturaData, setFaturaData] = useState<{
@@ -1614,33 +1617,17 @@ export const AppointmentDetailsManager =
         return value && value.trim() !== '' ? value : undefined;
       };
 
-      const handleMarkSurveyAnswered = async () => {
-        if (!appointment?.responsavel_legal_id || isMarkingSurveyTracking) {
-          return;
-        }
+      const handleMarkSurveyAnswered = () => {
+        if (!appointment?.responsavel_legal_id) return;
+        void markSurveyAnswered(
+          appointment.responsavel_legal_id,
+          surveyTracking
+        );
+      };
 
-        setIsMarkingSurveyTracking(true);
-        try {
-          const updated = await markResponsibleExperienceSurveyAnswered(
-            appointment.responsavel_legal_id,
-            user?.pessoa?.id
-          );
-          setSurveyTracking(updated);
-          toast({
-            title: 'Pesquisa marcada como respondida',
-            description:
-              'O próximo lembrete ficará para daqui a 6 meses. A resposta continua anônima.',
-          });
-        } catch (error) {
-          console.error('Erro ao marcar pesquisa respondida:', error);
-          toast({
-            title: 'Não foi possível salvar',
-            description: 'Tente novamente em instantes.',
-            variant: 'destructive',
-          });
-        } finally {
-          setIsMarkingSurveyTracking(false);
-        }
+      const handleUnmarkSurvey = () => {
+        if (!appointment?.responsavel_legal_id) return;
+        void unmarkSurvey(appointment.responsavel_legal_id, surveyTracking);
       };
 
       const handleResendNotification = async () => {
@@ -2031,7 +2018,7 @@ export const AppointmentDetailsManager =
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                onClick={() => void handleMarkSurveyAnswered()}
+                                onClick={handleMarkSurveyAnswered}
                                 disabled={isMarkingSurveyTracking}
                                 className="h-8 mt-1"
                               >
@@ -2053,6 +2040,14 @@ export const AppointmentDetailsManager =
                           {surveyTracking.proximaEm
                             ? ` · renovar em ${formatDateBR(surveyTracking.proximaEm)}`
                             : ''}
+                          <button
+                            type="button"
+                            onClick={handleUnmarkSurvey}
+                            disabled={isMarkingSurveyTracking}
+                            className="ml-1 underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                          >
+                            desmarcar
+                          </button>
                         </div>
                       )}
                   </div>

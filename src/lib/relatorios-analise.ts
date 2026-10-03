@@ -640,10 +640,12 @@ export function campanhaVsNatural(ds: Dataset, meses = 6): LinhaCampanha[] {
     let atribuidos = 0;
     for (const [p, dias] of contatosPorPaciente) {
       const arr = ds.porPaciente.get(p) ?? [];
+      // Mesma regra da meta: só sessão que fatura (social tem valor 0).
       const ok = arr.some(
         (s) =>
           s.dia >= ini &&
           s.dia < fim &&
+          s.valor > 0 &&
           dias.some((d) => s.dia >= d && diasEntre(d, s.dia) <= 30)
       );
       if (ok) atribuidos++;

@@ -1249,7 +1249,18 @@ export interface ExperienceSurveyTracking {
   responsavelId: string;
   respondidaEm: string | null;
   proximaEm: string | null;
+  marcadoPor: string | null;
   status: 'pendente' | 'em_dia' | 'vencida';
+}
+
+const SURVEY_TRACKING_COLUMNS =
+  'id, pesquisa_experiencia_respondida_em, pesquisa_experiencia_proxima_em, pesquisa_experiencia_marcado_por';
+
+interface SurveyTrackingRow {
+  id: string;
+  pesquisa_experiencia_respondida_em: string | null;
+  pesquisa_experiencia_proxima_em: string | null;
+  pesquisa_experiencia_marcado_por: string | null;
 }
 
 export function getExperienceSurveyTrackingStatus(
@@ -1266,15 +1277,26 @@ export function getExperienceSurveyTrackingStatus(
   return dueDate <= today ? 'vencida' : 'em_dia';
 }
 
+function toSurveyTracking(row: SurveyTrackingRow): ExperienceSurveyTracking {
+  return {
+    responsavelId: row.id,
+    respondidaEm: row.pesquisa_experiencia_respondida_em,
+    proximaEm: row.pesquisa_experiencia_proxima_em,
+    marcadoPor: row.pesquisa_experiencia_marcado_por,
+    status: getExperienceSurveyTrackingStatus(
+      row.pesquisa_experiencia_respondida_em,
+      row.pesquisa_experiencia_proxima_em
+    ),
+  };
+}
+
 export async function fetchResponsibleExperienceSurveyTracking(
   responsavelId: string
 ): Promise<ExperienceSurveyTracking | null> {
   try {
     const { data, error } = await supabase
       .from('pessoas')
-      .select(
-        'id, pesquisa_experiencia_respondida_em, pesquisa_experiencia_proxima_em'
-      )
+      .select(SURVEY_TRACKING_COLUMNS)
       .eq('id', responsavelId)
       .single();
 
@@ -1286,19 +1308,43 @@ export async function fetchResponsibleExperienceSurveyTracking(
       return null;
     }
 
-    return {
-      responsavelId: data.id,
-      respondidaEm: data.pesquisa_experiencia_respondida_em,
-      proximaEm: data.pesquisa_experiencia_proxima_em,
-      status: getExperienceSurveyTrackingStatus(
-        data.pesquisa_experiencia_respondida_em,
-        data.pesquisa_experiencia_proxima_em
-      ),
-    };
+    return toSurveyTracking(data as SurveyTrackingRow);
   } catch (err) {
     console.error('Erro ao buscar controle de pesquisa:', err);
     return null;
   }
+}
+
+// AI dev note: Grava o controle como está, sem regra. Serve para marcar,
+// desmarcar (tudo null) e para o "Desfazer" do toast, que devolve exatamente
+// os valores anteriores (ex.: família que tinha respondido há 8 meses volta
+// para "Renovar", não para "Pendente").
+export async function setResponsibleExperienceSurveyTracking(
+  responsavelId: string,
+  values: {
+    respondidaEm: string | null;
+    proximaEm: string | null;
+    marcadoPor: string | null;
+  }
+): Promise<ExperienceSurveyTracking> {
+  const { data, error } = await supabase
+    .from('pessoas')
+    .update({
+      pesquisa_experiencia_respondida_em: values.respondidaEm,
+      pesquisa_experiencia_proxima_em: values.proximaEm,
+      pesquisa_experiencia_marcado_por: values.marcadoPor,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', responsavelId)
+    .select(SURVEY_TRACKING_COLUMNS)
+    .single();
+
+  if (error) {
+    console.error('Erro ao salvar controle da pesquisa:', error);
+    throw new Error(error.message);
+  }
+
+  return toSurveyTracking(data as SurveyTrackingRow);
 }
 
 export async function markResponsibleExperienceSurveyAnswered(
@@ -1309,36 +1355,24 @@ export async function markResponsibleExperienceSurveyAnswered(
   const next = new Date(now);
   next.setMonth(next.getMonth() + 6);
 
-  const payload = {
-    pesquisa_experiencia_respondida_em: now.toISOString(),
-    pesquisa_experiencia_proxima_em: next.toISOString().slice(0, 10),
-    pesquisa_experiencia_marcado_por: markedBy || null,
-    updated_at: now.toISOString(),
-  };
+  return setResponsibleExperienceSurveyTracking(responsavelId, {
+    respondidaEm: now.toISOString(),
+    proximaEm: next.toISOString().slice(0, 10),
+    marcadoPor: markedBy || null,
+  });
+}
 
-  const { data, error } = await supabase
-    .from('pessoas')
-    .update(payload)
-    .eq('id', responsavelId)
-    .select(
-      'id, pesquisa_experiencia_respondida_em, pesquisa_experiencia_proxima_em'
-    )
-    .single();
-
-  if (error) {
-    console.error('Erro ao marcar pesquisa respondida:', error);
-    throw new Error(error.message);
-  }
-
-  return {
-    responsavelId: data.id,
-    respondidaEm: data.pesquisa_experiencia_respondida_em,
-    proximaEm: data.pesquisa_experiencia_proxima_em,
-    status: getExperienceSurveyTrackingStatus(
-      data.pesquisa_experiencia_respondida_em,
-      data.pesquisa_experiencia_proxima_em
-    ),
-  };
+// AI dev note: Desmarcar = voltar a "Pendente". A família volta para a lista
+// de convites (fn_pesquisa_lista filtra por proxima_em). Não mexe em nenhuma
+// resposta: a pesquisa é anônima e não há vínculo com a pessoa.
+export async function clearResponsibleExperienceSurveyTracking(
+  responsavelId: string
+): Promise<ExperienceSurveyTracking> {
+  return setResponsibleExperienceSurveyTracking(responsavelId, {
+    respondidaEm: null,
+    proximaEm: null,
+    marcadoPor: null,
+  });
 }
 
 // AI dev note: Função helper para enriquecer pacientes com status de pagamento

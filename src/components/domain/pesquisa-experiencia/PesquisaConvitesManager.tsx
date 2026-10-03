@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { buildWhatsAppLink } from '@/lib/inatividade-api';
 import { fetchMetasDashboard } from '@/lib/metas-api';
-import { markResponsibleExperienceSurveyAnswered } from '@/lib/patient-api';
+import { useExperienceSurveyMarking } from '@/hooks/useExperienceSurveyMarking';
 import {
   fetchPesquisaLista,
   linkPublicoPesquisa,
@@ -139,25 +139,16 @@ export const PesquisaConvitesManager: React.FC<{ maxItems?: number }> = ({
     }
   };
 
-  const marcarRespondida = async (f: FamiliaPesquisa) => {
-    try {
-      await markResponsibleExperienceSurveyAnswered(
-        f.responsavel_id,
-        user?.pessoa?.id ?? null
-      );
-      toast({
-        title: 'Marcado como respondida',
-        description: 'A família volta para a lista daqui a 6 meses.',
-      });
-      void carregar();
-    } catch (e) {
-      toast({
-        title: 'Erro ao marcar',
-        description: e instanceof Error ? e.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
-    }
-  };
+  // AI dev note: ao marcar, a família some da lista; o Desfazer do toast é
+  // o único caminho de volta aqui (no card do paciente há "desmarcar").
+  const { markAnswered } = useExperienceSurveyMarking(() => void carregar());
+
+  const marcarRespondida = (f: FamiliaPesquisa) =>
+    markAnswered(f.responsavel_id, {
+      respondidaEm: f.respondida_em,
+      proximaEm: f.proxima_em,
+      marcadoPor: null,
+    });
 
   const convites = metas.find(
     (m) => m.tipo_meta_codigo === 'pesquisa_convites'
