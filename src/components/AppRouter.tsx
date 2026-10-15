@@ -19,6 +19,7 @@ import {
   FinanceiroPage,
   CobrancasPage,
   ReativacaoPage,
+  PixAprovacaoPage,
   ConfiguracoesPage,
   UsuariosPage,
   RelatoriosPage,
@@ -243,6 +244,16 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute path="/reativacao" currentUserRole={validUserRole}>
               <ReativacaoPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Pix pedido pela @ju no grupo de notas - admin aprova e paga */}
+        <Route
+          path="/pix/:id"
+          element={
+            <ProtectedRoute path="/pix/:id" currentUserRole={validUserRole}>
+              <PixAprovacaoPage />
             </ProtectedRoute>
           }
         />

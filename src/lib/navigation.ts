@@ -277,6 +277,11 @@ export const hasAccessToRoute = (route: string, role: UserRole): boolean => {
     return true;
   }
 
+  // Link do Pix que a @ju manda no grupo de notas: fora do menu, só admin
+  if (route.startsWith('/pix/')) {
+    return role === 'admin';
+  }
+
   // Verificação direta para rota exata
   const exactMatch = navigationConfig.find((item) => item.href === route);
   if (exactMatch) {

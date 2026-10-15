@@ -13,8 +13,8 @@ import { extractText, getDocumentProxy } from 'https://esm.sh/unpdf@0.11.0';
 // XML de NF-e/NFS-e NÃO passa por IA: o layout é fixo, então o parser é determinístico,
 // tem confiança 1.0 e custo zero. IA só entra em PDF e imagem.
 //
-// Limitação conhecida: PDF escaneado (sem camada de texto) não é lido — a função
-// devolve erro pedindo o XML ou uma foto. Rasterizar PDF no edge runtime não é viável.
+// PDF escaneado (sem camada de texto, ex.: "Digitalizar" do WhatsApp) vai inteiro para a
+// OpenAI como arquivo: o modelo lê as páginas como imagem. Rasterizar no edge não é viável.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -272,21 +272,40 @@ async function textoDoPdf(bytes: Uint8Array): Promise<string> {
   return (text || '').trim();
 }
 
+// Em blocos: String.fromCharCode(...bytes) estoura a pilha em arquivo de algumas centenas de KB.
+function paraBase64(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
 async function extrairComIa(params: {
   apiKey: string;
   modelo: string;
   prompt: string;
   conteudo:
     | { tipo: 'texto'; valor: string }
-    | { tipo: 'imagem'; dataUri: string };
+    | { tipo: 'imagem'; dataUri: string }
+    | { tipo: 'pdf'; dataUri: string; nome: string };
 }): Promise<{ dados: Extracao; tokensIn: number; tokensOut: number }> {
+  const c = params.conteudo;
   const userContent =
-    params.conteudo.tipo === 'texto'
-      ? [{ type: 'text', text: params.conteudo.valor.slice(0, 60000) }]
-      : [
-          { type: 'text', text: 'Extraia os dados deste documento fiscal.' },
-          { type: 'image_url', image_url: { url: params.conteudo.dataUri } },
-        ];
+    c.tipo === 'texto'
+      ? [{ type: 'text', text: c.valor.slice(0, 60000) }]
+      : c.tipo === 'imagem'
+        ? [
+            { type: 'text', text: 'Extraia os dados deste documento fiscal.' },
+            { type: 'image_url', image_url: { url: c.dataUri } },
+          ]
+        : [
+            {
+              type: 'text',
+              text: 'Extraia os dados deste documento fiscal (PDF escaneado).',
+            },
+            { type: 'file', file: { filename: c.nome, file_data: c.dataUri } },
+          ];
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -396,27 +415,31 @@ Deno.serve(async (req: Request) => {
 
       if (formato === 'pdf') {
         const texto = await textoDoPdf(bytes);
-        if (texto.length < 40) {
-          throw new Error(
-            'PDF sem camada de texto (provavelmente escaneado). Envie o XML da nota ou uma foto do documento.'
-          );
-        }
-        tipoDetectado = /nfs-?e|servi[çc]o/i.test(texto)
-          ? 'nfse_pdf'
-          : 'danfe_pdf';
+        const escaneado = texto.length < 40;
+        tipoDetectado = escaneado
+          ? 'pdf_escaneado'
+          : /nfs-?e|servi[çc]o/i.test(texto)
+            ? 'nfse_pdf'
+            : 'danfe_pdf';
         const r = await extrairComIa({
           apiKey: chave.encrypted_key,
           modelo,
           prompt,
-          conteudo: { tipo: 'texto', valor: texto },
+          conteudo: escaneado
+            ? {
+                tipo: 'pdf',
+                nome: doc.nome_original || 'documento.pdf',
+                dataUri: `data:application/pdf;base64,${paraBase64(bytes)}`,
+              }
+            : { tipo: 'texto', valor: texto },
         });
         dados = r.dados;
         tokensIn = r.tokensIn;
         tokensOut = r.tokensOut;
-        confianca = 0.85;
+        confianca = escaneado ? 0.7 : 0.85;
       } else if (formato === 'imagem') {
         tipoDetectado = 'cupom';
-        const b64 = btoa(String.fromCharCode(...bytes));
+        const b64 = paraBase64(bytes);
         const r = await extrairComIa({
           apiKey: chave.encrypted_key,
           modelo,
