@@ -45,6 +45,25 @@ function erroDaFunction(data: unknown, fallback: string): string {
   return d?.error || fallback;
 }
 
+// Em resposta não-2xx o supabase-js devolve data=null e guarda o corpo em
+// error.context; sem isto a tela mostra só "Edge Function returned a non-2xx".
+async function erroComCorpo(
+  error: { message: string; context?: unknown },
+  data: unknown
+): Promise<string> {
+  const direto = erroDaFunction(data, '');
+  if (direto) return direto;
+  if (error.context instanceof Response) {
+    try {
+      const corpo = (await error.context.clone().json()) as { error?: string };
+      if (corpo?.error) return corpo.error;
+    } catch {
+      // corpo não é JSON: fica a mensagem genérica
+    }
+  }
+  return error.message;
+}
+
 export async function fetchContaInter(opts?: {
   dataInicio?: string;
   dataFim?: string;
@@ -95,7 +114,7 @@ export async function enviarPagamentoInter(
       favorecido: input.favorecido ?? null,
     },
   });
-  if (error) throw new Error(erroDaFunction(data, error.message));
+  if (error) throw new Error(await erroComCorpo(error, data));
   const r = data as { ok?: boolean; auditoria_id?: string; error?: string };
   if (r?.error) throw new Error(r.error);
   return { ok: Boolean(r?.ok), auditoria_id: r?.auditoria_id ?? '' };

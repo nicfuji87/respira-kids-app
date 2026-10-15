@@ -48,6 +48,20 @@ export async function fetchPixSolicitacao(
   return (data as PixSolicitacao | null) ?? null;
 }
 
+// "Inter POST /banking/v2/pix (422): {"title":"Chave em formato inválido","detail":"..."}"
+// vira "O Inter recusou: Chave em formato inválido. ..." para quem está pagando.
+function mensagemInter(msg: string): string {
+  const m = msg.match(/Inter [A-Z]+ \S+ \((\d+)\): (\{.*\})/s);
+  if (!m) return msg;
+  try {
+    const corpo = JSON.parse(m[2]) as { title?: string; detail?: string };
+    const partes = [corpo.title, corpo.detail].filter(Boolean).join('. ');
+    return partes ? `O Inter recusou: ${partes}` : msg;
+  } catch {
+    return msg;
+  }
+}
+
 // ATENÇÃO: tira dinheiro da conta. Pix enviado não volta.
 export async function pagarPixSolicitacao(id: string): Promise<void> {
   const { data: inicio, error: iniErr } = await supabase.rpc(
@@ -76,7 +90,9 @@ export async function pagarPixSolicitacao(id: string): Promise<void> {
     });
     auditoriaId = r.auditoria_id;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Falha ao enviar o Pix';
+    const msg = mensagemInter(
+      e instanceof Error ? e.message : 'Falha ao enviar o Pix'
+    );
     await supabase.rpc('fn_pix_solicitacao_concluir', {
       p_id: id,
       p_inter_pagamento_id: null,
