@@ -290,6 +290,18 @@ export async function enviarPix(input: {
   );
 }
 
+// Consulta um Pix já enviado (só leitura): recebedor, E2E e situação, para o comprovante.
+export async function consultarPixEnviado(
+  codigoSolicitacao: string
+): Promise<Record<string, unknown>> {
+  return await chamarInter<Record<string, unknown>>(
+    'GET',
+    `/banking/v2/pix/${encodeURIComponent(codigoSolicitacao)}`,
+    undefined,
+    ESCOPO_PAGAMENTO_PIX
+  );
+}
+
 export interface DevolucaoResposta {
   id: string;
   rtrId?: string;
