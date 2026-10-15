@@ -26,8 +26,10 @@ import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
 import { openPrintWindow } from '@/lib/print-document';
 import {
+  fetchPrecosPaciente,
   fetchPrecosProfissional,
-  precoNoMapa,
+  resolverPrecoNosMapas,
+  type PrecosPaciente,
   type PrecosProfissional,
 } from '@/lib/preco-servico';
 import { ProfessionalSelect } from '@/components/composed/ProfessionalSelect';
@@ -103,13 +105,21 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [tiposServico, setTiposServico] = useState<SupabaseTipoServico[]>([]);
   const [isLoadingServicos, setIsLoadingServicos] = useState(true);
-  // AI dev note: Preço por profissional — o orçamento usa o preço da
-  // profissional escolhida (padrão: a da última consulta do paciente).
+  // AI dev note: Mesma regra de preço do agendamento: preço especial do
+  // paciente -> preço da profissional escolhida (padrão: a da última
+  // consulta) -> preço padrão do serviço.
   const [profissionalId, setProfissionalId] = useState('');
   const [precosProfissional, setPrecosProfissional] =
     useState<PrecosProfissional>(new Map());
+  const [precosPaciente, setPrecosPaciente] = useState<PrecosPaciente>(
+    new Map()
+  );
   const precoDe = (servico: SupabaseTipoServico) =>
-    precoNoMapa(precosProfissional, servico, profissionalId);
+    resolverPrecoNosMapas(servico, {
+      precosProfissional,
+      precosPaciente,
+      profissionalId,
+    }).valor;
 
   // Estado para armazenar dados do orçamento gerado (para reutilização)
   const [generatedQuoteData, setGeneratedQuoteData] = useState<{
@@ -176,9 +186,14 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
 
     const loadPrecosEProfissional = async () => {
       try {
-        setPrecosProfissional(await fetchPrecosProfissional());
+        const [doProfissional, doPaciente] = await Promise.all([
+          fetchPrecosProfissional(),
+          fetchPrecosPaciente(patientId),
+        ]);
+        setPrecosProfissional(doProfissional);
+        setPrecosPaciente(doPaciente);
       } catch {
-        // Sem a tabela de exceções o orçamento segue com o preço padrão
+        // Sem as tabelas de exceção o orçamento segue com o preço padrão
       }
       const { data: ultimo } = await supabase
         .from('agendamentos')

@@ -21,6 +21,9 @@ import {
   deleteTipoServico,
   toggleTipoServicoStatus,
 } from '@/lib/servicos-api';
+import { fetchPrecosProfissional } from '@/lib/preco-servico';
+import { Button } from '@/components/primitives/button';
+import { PrecosProfissionalDialog } from './PrecosProfissionalDialog';
 
 // AI dev note: TipoServicosManagement combina GenericTable + GenericForm
 // Demonstra padrão Domain usando componentes Composed reutilizáveis para tipos de serviço
@@ -37,6 +40,12 @@ export const TipoServicosManagement: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<TipoServico | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Preço por profissional: quantas exceções cada serviço tem + dialog
+  const [excecoesPorServico, setExcecoesPorServico] = useState<
+    Record<string, number>
+  >({});
+  const [servicoPrecos, setServicoPrecos] = useState<TipoServico | null>(null);
 
   // Form
   const form = useForm<TipoServicoCreateInput>({
@@ -70,6 +79,17 @@ export const TipoServicosManagement: React.FC = () => {
         description: 'Erro inesperado ao carregar tipos de serviço',
         variant: 'destructive',
       });
+    }
+    try {
+      const precos = await fetchPrecosProfissional();
+      const contagem: Record<string, number> = {};
+      for (const chave of precos.keys()) {
+        const tipoId = chave.split(':')[0];
+        contagem[tipoId] = (contagem[tipoId] || 0) + 1;
+      }
+      setExcecoesPorServico(contagem);
+    } catch {
+      // Contagem é só informativa
     }
     setLoading(false);
   }, [filters]);
@@ -223,6 +243,25 @@ export const TipoServicosManagement: React.FC = () => {
       className: 'w-32 text-right',
     },
     {
+      key: 'precos_profissional',
+      label: 'Por profissional',
+      render: (item) => {
+        const n = excecoesPorServico[item.id] || 0;
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setServicoPrecos(item)}
+            title="Definir preço deste serviço por profissional"
+          >
+            {n === 0 ? 'Mesmo preço' : `${n} com preço próprio`}
+          </Button>
+        );
+      },
+      className: 'w-36',
+    },
+    {
       key: 'cor',
       label: 'Cor',
       render: (item) => (
@@ -339,6 +378,12 @@ export const TipoServicosManagement: React.FC = () => {
         }
         isEditing={!!editingItem}
         loading={isSubmitting}
+      />
+
+      <PrecosProfissionalDialog
+        servico={servicoPrecos}
+        onClose={() => setServicoPrecos(null)}
+        onSaved={loadData}
       />
     </>
   );

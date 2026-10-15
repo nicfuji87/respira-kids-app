@@ -85,7 +85,7 @@ import type {
   SupabasePessoa,
 } from '@/types/supabase-calendar';
 import { supabase } from '@/lib/supabase';
-import { valorServicoParaProfissional } from '@/lib/preco-servico';
+import { resolverPrecoServico } from '@/lib/preco-servico';
 import { useAuth } from '@/hooks/useAuth';
 import { useExperienceSurveyMarking } from '@/hooks/useExperienceSurveyMarking';
 
@@ -699,27 +699,29 @@ export const AppointmentDetailsManager =
         }));
         setIsEdited(true);
 
-        // AI dev note: Preço por profissional — troca o padrão pelo preço da
-        // profissional do atendimento, se ela tiver um.
+        // AI dev note: Preço sugerido (paciente -> profissional -> padrão)
         const profissionalId = formData.profissionalId;
-        if (tipo && profissionalId) {
-          valorServicoParaProfissional(tipo, profissionalId).then((valor) =>
-            setFormData((prev) =>
-              prev.tipoServicoId === value &&
-              prev.profissionalId === profissionalId
-                ? { ...prev, valorServico: String(valor) }
-                : prev
-            )
+        const pacienteId = appointment?.paciente_id;
+        if (tipo) {
+          resolverPrecoServico(tipo, { profissionalId, pacienteId }).then(
+            (preco) =>
+              setFormData((prev) =>
+                prev.tipoServicoId === value &&
+                prev.profissionalId === profissionalId
+                  ? { ...prev, valorServico: String(preco.valor) }
+                  : prev
+              )
           );
         }
       };
 
       // AI dev note: Trocar a profissional muda o preço quando ela tem preço
-      // próprio. Só recalcula se o valor atual é o preço da profissional
-      // anterior — desconto digitado à mão é preservado.
+      // próprio. Só recalcula se o valor atual é o preço sugerido para a
+      // profissional anterior — desconto digitado à mão é preservado.
       const handleProfissionalChange = async (value: string) => {
         const profissionalAnterior = formData.profissionalId;
         const valorAtual = Number(formData.valorServico);
+        const pacienteId = appointment?.paciente_id;
         handleInputChange('profissionalId', value);
 
         const tipo = tipoServicoOptions.find(
@@ -727,15 +729,19 @@ export const AppointmentDetailsManager =
         );
         if (!tipo) return;
 
-        const [valorAnterior, valorNovo] = await Promise.all([
-          valorServicoParaProfissional(tipo, profissionalAnterior),
-          valorServicoParaProfissional(tipo, value),
+        const [anterior, novo] = await Promise.all([
+          resolverPrecoServico(tipo, {
+            profissionalId: profissionalAnterior,
+            pacienteId,
+          }),
+          resolverPrecoServico(tipo, { profissionalId: value, pacienteId }),
         ]);
-        if (valorAtual !== valorAnterior || valorNovo === valorAnterior) return;
+        if (valorAtual !== anterior.valor || novo.valor === anterior.valor)
+          return;
 
         setFormData((prev) =>
           prev.profissionalId === value && prev.tipoServicoId === tipo.id
-            ? { ...prev, valorServico: String(valorNovo) }
+            ? { ...prev, valorServico: String(novo.valor) }
             : prev
         );
       };
