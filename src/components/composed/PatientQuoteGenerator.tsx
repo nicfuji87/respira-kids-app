@@ -25,6 +25,12 @@ import { ScrollArea } from '@/components/primitives/scroll-area';
 import { useToast } from '@/components/primitives/use-toast';
 import { supabase } from '@/lib/supabase';
 import { openPrintWindow } from '@/lib/print-document';
+import {
+  fetchPrecosProfissional,
+  precoNoMapa,
+  type PrecosProfissional,
+} from '@/lib/preco-servico';
+import { ProfessionalSelect } from '@/components/composed/ProfessionalSelect';
 import type { SupabaseTipoServico } from '@/types/supabase-calendar';
 
 export interface PatientQuoteGeneratorProps {
@@ -97,6 +103,13 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [tiposServico, setTiposServico] = useState<SupabaseTipoServico[]>([]);
   const [isLoadingServicos, setIsLoadingServicos] = useState(true);
+  // AI dev note: Preço por profissional — o orçamento usa o preço da
+  // profissional escolhida (padrão: a da última consulta do paciente).
+  const [profissionalId, setProfissionalId] = useState('');
+  const [precosProfissional, setPrecosProfissional] =
+    useState<PrecosProfissional>(new Map());
+  const precoDe = (servico: SupabaseTipoServico) =>
+    precoNoMapa(precosProfissional, servico, profissionalId);
 
   // Estado para armazenar dados do orçamento gerado (para reutilização)
   const [generatedQuoteData, setGeneratedQuoteData] = useState<{
@@ -118,13 +131,14 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
     servicosSelecionados.forEach((item) => {
       const servico = tiposServico.find((s) => s.id === item.servicoId);
       if (servico && item.quantidade > 0) {
-        const subtotal = servico.valor * item.quantidade;
+        const valorUnitario = precoDe(servico);
+        const subtotal = valorUnitario * item.quantidade;
         valorTotal += subtotal;
         itens.push({
           nome: servico.nome,
           descricao: servico.descricao,
           quantidade: item.quantidade,
-          valorUnitario: servico.valor,
+          valorUnitario,
           subtotal,
         });
       }
@@ -160,10 +174,30 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
       }
     };
 
+    const loadPrecosEProfissional = async () => {
+      try {
+        setPrecosProfissional(await fetchPrecosProfissional());
+      } catch {
+        // Sem a tabela de exceções o orçamento segue com o preço padrão
+      }
+      const { data: ultimo } = await supabase
+        .from('agendamentos')
+        .select('profissional_id')
+        .eq('paciente_id', patientId)
+        .eq('ativo', true)
+        .order('data_hora', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (ultimo?.profissional_id) {
+        setProfissionalId((atual) => atual || ultimo.profissional_id);
+      }
+    };
+
     if (isOpen) {
       loadTiposServico();
+      loadPrecosEProfissional();
     }
-  }, [isOpen, toast]);
+  }, [isOpen, toast, patientId]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -172,6 +206,7 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
         { id: generateId(), servicoId: '', quantidade: 8 },
       ]);
       setGeneratedQuoteData(null);
+      setProfissionalId('');
     }
   }, [isOpen]);
 
@@ -792,6 +827,19 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
             </div>
           </div>
 
+          {/* Profissional (define o preço quando ela tem preço próprio) */}
+          <div className="space-y-2">
+            <Label>Profissional</Label>
+            <ProfessionalSelect
+              value={profissionalId}
+              onValueChange={(value) => {
+                setProfissionalId(value);
+                setGeneratedQuoteData(null);
+              }}
+              placeholder="Preço padrão da clínica"
+            />
+          </div>
+
           {/* Lista de Serviços */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -840,7 +888,7 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
                               <div className="flex items-center justify-between w-full gap-2">
                                 <span className="truncate">{servico.nome}</span>
                                 <span className="text-muted-foreground text-xs flex-shrink-0">
-                                  {formatCurrency(servico.valor)}
+                                  {formatCurrency(precoDe(servico))}
                                 </span>
                               </div>
                             </SelectItem>
@@ -873,8 +921,12 @@ export const PatientQuoteGenerator: React.FC<PatientQuoteGeneratorProps> = ({
                           <span className="text-xs text-muted-foreground">
                             ={' '}
                             {formatCurrency(
-                              (tiposServico.find((s) => s.id === item.servicoId)
-                                ?.valor || 0) * item.quantidade
+                              (() => {
+                                const servico = tiposServico.find(
+                                  (s) => s.id === item.servicoId
+                                );
+                                return servico ? precoDe(servico) : 0;
+                              })() * item.quantidade
                             )}
                           </span>
                         )}

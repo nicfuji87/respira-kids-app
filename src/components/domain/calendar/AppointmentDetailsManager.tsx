@@ -85,6 +85,7 @@ import type {
   SupabasePessoa,
 } from '@/types/supabase-calendar';
 import { supabase } from '@/lib/supabase';
+import { valorServicoParaProfissional } from '@/lib/preco-servico';
 import { useAuth } from '@/hooks/useAuth';
 import { useExperienceSurveyMarking } from '@/hooks/useExperienceSurveyMarking';
 
@@ -697,6 +698,46 @@ export const AppointmentDetailsManager =
           valorServico: tipo ? String(tipo.valor) : prev.valorServico,
         }));
         setIsEdited(true);
+
+        // AI dev note: Preço por profissional — troca o padrão pelo preço da
+        // profissional do atendimento, se ela tiver um.
+        const profissionalId = formData.profissionalId;
+        if (tipo && profissionalId) {
+          valorServicoParaProfissional(tipo, profissionalId).then((valor) =>
+            setFormData((prev) =>
+              prev.tipoServicoId === value &&
+              prev.profissionalId === profissionalId
+                ? { ...prev, valorServico: String(valor) }
+                : prev
+            )
+          );
+        }
+      };
+
+      // AI dev note: Trocar a profissional muda o preço quando ela tem preço
+      // próprio. Só recalcula se o valor atual é o preço da profissional
+      // anterior — desconto digitado à mão é preservado.
+      const handleProfissionalChange = async (value: string) => {
+        const profissionalAnterior = formData.profissionalId;
+        const valorAtual = Number(formData.valorServico);
+        handleInputChange('profissionalId', value);
+
+        const tipo = tipoServicoOptions.find(
+          (t) => t.id === formData.tipoServicoId
+        );
+        if (!tipo) return;
+
+        const [valorAnterior, valorNovo] = await Promise.all([
+          valorServicoParaProfissional(tipo, profissionalAnterior),
+          valorServicoParaProfissional(tipo, value),
+        ]);
+        if (valorAtual !== valorAnterior || valorNovo === valorAnterior) return;
+
+        setFormData((prev) =>
+          prev.profissionalId === value && prev.tipoServicoId === tipo.id
+            ? { ...prev, valorServico: String(valorNovo) }
+            : prev
+        );
       };
 
       // Funções para edição de evoluções
@@ -2232,9 +2273,7 @@ export const AppointmentDetailsManager =
                     {userRole === 'admin' ? (
                       <Select
                         value={formData.profissionalId}
-                        onValueChange={(value) =>
-                          handleInputChange('profissionalId', value)
-                        }
+                        onValueChange={handleProfissionalChange}
                         disabled={isLoadingProfissionais}
                       >
                         <SelectTrigger>

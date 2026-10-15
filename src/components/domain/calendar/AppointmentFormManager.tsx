@@ -51,6 +51,7 @@ import type {
   SupabaseTipoServico,
 } from '@/types/supabase-calendar';
 import { supabase } from '@/lib/supabase';
+import { valorServicoParaProfissional } from '@/lib/preco-servico';
 import { useAuth } from '@/hooks/useAuth';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
 
@@ -150,6 +151,13 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     // período e checar disponibilidade (fn_horario_disponivel) por sobreposição real.
     const [selectedServiceDuration, setSelectedServiceDuration] =
       useState<number>(0);
+    // AI dev note: Serviço selecionado (id + preço padrão) — o valor final
+    // depende também da profissional (preço por profissional), então ao
+    // trocar a profissional o valor é recalculado a partir daqui.
+    const [selectedService, setSelectedService] = useState<{
+      id: string;
+      valor: number;
+    } | null>(null);
 
     // Estados para empresas de faturamento
     const [empresasOptions, setEmpresasOptions] = useState<
@@ -223,6 +231,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         // escolhido numa abertura anterior e a checagem de conflito roda com
         // duração antiga (>0) mesmo sem serviço selecionado, gerando erro fantasma.
         setSelectedServiceDuration(0);
+        setSelectedService(null);
       }
     }, [isOpen, initialDate, initialTime, initialPatientId]);
 
@@ -332,6 +341,27 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       [] // AI dev note: Dependências removidas para evitar re-renders infinitos
     );
 
+    // AI dev note: Aplica o preço (padrão ou da profissional) só se serviço e
+    // profissional ainda forem os mesmos quando a busca terminar.
+    const aplicarValorServico = useCallback(
+      async (
+        servico: { id: string; valor: number },
+        profissionalId: string
+      ) => {
+        const valor = await valorServicoParaProfissional(
+          servico,
+          profissionalId
+        );
+        setFormData((prev) =>
+          prev.tipo_servico_id === servico.id &&
+          prev.profissional_id === profissionalId
+            ? { ...prev, valor_servico: valor }
+            : prev
+        );
+      },
+      []
+    );
+
     // Handler para mudança de tipo de serviço (atualiza valor automaticamente)
     const handleServiceTypeChange = useCallback(
       (serviceId: string, serviceData?: SupabaseTipoServico) => {
@@ -339,6 +369,13 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
 
         if (serviceData) {
           updateField('valor_servico', serviceData.valor);
+          setSelectedService({ id: serviceId, valor: serviceData.valor });
+          if (formData.profissional_id) {
+            aplicarValorServico(
+              { id: serviceId, valor: serviceData.valor },
+              formData.profissional_id
+            );
+          }
           // AI dev note: Armazenar nome do serviço para validação de valor zero
           setSelectedServiceName(serviceData.nome || '');
           // AI dev note: Duração altera o período -> revalida disponibilidade
@@ -358,6 +395,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         formData.data_hora,
         formData.profissional_id,
         checkScheduleConflicts,
+        aplicarValorServico,
       ]
     );
 
@@ -389,7 +427,23 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     // Handler para mudança de profissional com validação de conflitos
     const handleProfessionalChange = useCallback(
       (professionalId: string) => {
+        const profissionalAnterior = formData.profissional_id;
+        const valorAtual = formData.valor_servico;
         updateField('profissional_id', professionalId);
+
+        // AI dev note: Preço depende da profissional. Só recalcula se o valor
+        // atual ainda é o preço da profissional anterior — desconto digitado
+        // à mão é preservado.
+        if (selectedService) {
+          valorServicoParaProfissional(
+            selectedService,
+            profissionalAnterior
+          ).then((valorAnterior) => {
+            if (valorAtual === valorAnterior) {
+              aplicarValorServico(selectedService, professionalId);
+            }
+          });
+        }
 
         if (formData.data_hora) {
           checkScheduleConflicts(
@@ -402,8 +456,12 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       [
         updateField,
         formData.data_hora,
+        formData.profissional_id,
+        formData.valor_servico,
+        selectedService,
         selectedServiceDuration,
         checkScheduleConflicts,
+        aplicarValorServico,
       ]
     );
 
@@ -466,15 +524,23 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           setFormData((prev) => ({ ...prev, ...patch }));
           setPrefilledFields(applied);
 
+          // Revalidar disponibilidade com o profissional/duração pré-preenchidos
+          const profissionalFinal =
+            patch.profissional_id || formData.profissional_id;
+
           // Manter validações coerentes com o serviço pré-preenchido
           if (patch.tipo_servico_id && tipoServico) {
             setSelectedServiceName(tipoServico.nome || '');
             setSelectedServiceDuration(tipoServico.duracao_minutos || 0);
+            setSelectedService({
+              id: tipoServico.id,
+              valor: tipoServico.valor,
+            });
+            if (patch.valor_servico !== undefined && profissionalFinal) {
+              aplicarValorServico(tipoServico, profissionalFinal);
+            }
           }
 
-          // Revalidar disponibilidade com o profissional/duração pré-preenchidos
-          const profissionalFinal =
-            patch.profissional_id || formData.profissional_id;
           const duracaoFinal =
             patch.tipo_servico_id && tipoServico
               ? tipoServico.duracao_minutos || 0
@@ -500,6 +566,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         formData.data_hora,
         selectedServiceDuration,
         checkScheduleConflicts,
+        aplicarValorServico,
       ]
     );
 
@@ -520,6 +587,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       if (prefilledFields.includes('tipo_servico_id')) {
         setSelectedServiceName('');
         setSelectedServiceDuration(0);
+        setSelectedService(null);
       }
       setHasConflict(false);
       setConflictDetails('');
