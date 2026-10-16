@@ -23,6 +23,7 @@ import {
 } from '@/lib/servicos-api';
 import { fetchPrecosProfissional } from '@/lib/preco-servico';
 import { Button } from '@/components/primitives/button';
+import { Users } from 'lucide-react';
 import { PrecosProfissionalDialog } from './PrecosProfissionalDialog';
 
 // AI dev note: TipoServicosManagement combina GenericTable + GenericForm
@@ -32,8 +33,10 @@ export const TipoServicosManagement: React.FC = () => {
   const [data, setData] = useState<TipoServico[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters] = useState<SystemEntityFilters>({
+    // AI dev note: a tabela pagina no cliente; buscar tudo de uma vez
+    // (com limit 10 só os 10 primeiros apareciam e não havia próxima página)
     page: 1,
-    limit: 10,
+    limit: 500,
   });
 
   // Modal states
@@ -249,17 +252,18 @@ export const TipoServicosManagement: React.FC = () => {
         const n = excecoesPorServico[item.id] || 0;
         return (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-7 px-2 text-xs"
+            className="h-7 gap-1.5 px-2 text-xs"
             onClick={() => setServicoPrecos(item)}
             title="Definir preço deste serviço por profissional"
           >
-            {n === 0 ? 'Mesmo preço' : `${n} com preço próprio`}
+            <Users className="h-3.5 w-3.5" />
+            {n === 0 ? 'Ajustar preços' : `${n} com preço próprio`}
           </Button>
         );
       },
-      className: 'w-36',
+      className: 'w-44',
     },
     {
       key: 'cor',
@@ -361,7 +365,7 @@ export const TipoServicosManagement: React.FC = () => {
         addButtonText="Novo Serviço"
         searchPlaceholder="Buscar por nome ou descrição..."
         emptyMessage="Nenhum tipo de serviço encontrado"
-        itemsPerPage={filters.limit}
+        itemsPerPage={25}
       />
 
       <GenericForm

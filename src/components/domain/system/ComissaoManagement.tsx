@@ -31,8 +31,10 @@ export const ComissaoManagement: React.FC = () => {
   const [data, setData] = useState<ComissaoProfissional[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters] = useState<ComissaoFilters>({
+    // AI dev note: a tabela pagina no cliente; buscar tudo de uma vez
+    // (com limit 10 só os 10 primeiros apareciam e não havia próxima página)
     page: 1,
-    limit: 10,
+    limit: 500,
   });
 
   // Options for selects
@@ -387,7 +389,7 @@ export const ComissaoManagement: React.FC = () => {
         addButtonText="Nova Comissão"
         searchPlaceholder="Buscar por profissional ou serviço..."
         emptyMessage="Nenhuma comissão encontrada"
-        itemsPerPage={filters.limit}
+        itemsPerPage={25}
       />
 
       <GenericForm
