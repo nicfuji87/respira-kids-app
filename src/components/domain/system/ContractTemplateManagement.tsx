@@ -23,7 +23,7 @@ import {
   toggleContractTemplateStatus,
   createTemplateVersion,
 } from '@/lib/contract-templates-api';
-import { FileText, Plus, Copy } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 // AI dev note: ContractTemplateManagement combina GenericTable + ContractTemplateEditor
@@ -336,25 +336,12 @@ export const ContractTemplateManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FileText className="h-6 w-6 text-primary" />
-          <div>
-            <h2 className="text-2xl font-bold">Modelos de Contrato</h2>
-            <p className="text-muted-foreground">
-              Gerencie modelos de contrato com variáveis dinâmicas
-            </p>
-          </div>
-        </div>
-        <Button onClick={handleAdd} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Modelo
-        </Button>
-      </div>
-
-      {/* Table */}
+      {/* AI dev note: título e "Novo Modelo" ficam no cabeçalho da própria
+          tabela (antes havia um header extra com outro botão "Novo Modelo") */}
       <GenericTable
+        title="Modelos de Contrato"
+        description="Modelos com variáveis dinâmicas"
+        addButtonText="Novo Modelo"
         data={data}
         columns={columns}
         loading={loading}

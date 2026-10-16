@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Button } from '@/components/primitives/button';
 import { ScrollArea } from '@/components/primitives/scroll-area';
 import {
   Tooltip,
@@ -10,7 +9,7 @@ import {
 
 import { NavigationItem } from '@/components/composed/NavigationItem';
 import { Separator } from '@/components/primitives/separator';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   getNavigationForRole,
@@ -74,59 +73,38 @@ export const DashboardSidebar = React.memo<DashboardSidebarProps>(
       onCollapsedChange?.(newCollapsed);
     };
 
-    const sidebarWidth = internalCollapsed ? 'w-16' : 'w-60';
+    const sidebarWidth = internalCollapsed ? 'w-[68px]' : 'w-60';
 
     return (
-      <div
+      <aside
         className={cn(
-          'relative flex flex-col bg-background border-r transition-all duration-300',
+          'relative flex flex-col border-r bg-nav transition-[width] duration-200 ease-out',
           sidebarWidth,
           className
         )}
       >
-        {/* Header com toggle */}
-        <div className="flex items-center justify-between h-16 px-4 border-b">
+        {/* Marca */}
+        <div
+          className={cn(
+            'flex h-14 shrink-0 items-center gap-2.5',
+            internalCollapsed ? 'justify-center px-2' : 'px-5'
+          )}
+        >
+          <img
+            src="/images/logos/icone-respira-kids.png"
+            alt="Respira Kids"
+            className="h-8 w-8 shrink-0"
+          />
           {!internalCollapsed && (
-            <div className="flex items-center space-x-2">
-              <img
-                src="/images/logos/icone-respira-kids.png"
-                alt="Respira Kids"
-                className="h-8 w-8"
-              />
-              <span className="font-semibold text-lg">Respira Kids</span>
-            </div>
+            <span className="truncate text-[15px] font-bold tracking-tight text-roxo-titulo dark:text-foreground">
+              Respira Kids
+            </span>
           )}
-
-          {internalCollapsed && (
-            <img
-              src="/images/logos/icone-respira-kids.png"
-              alt="Respira Kids"
-              className="h-8 w-8 mx-auto"
-            />
-          )}
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleToggleCollapse}
-            className="h-8 w-8 p-0"
-            aria-label={
-              internalCollapsed
-                ? 'Expandir menu lateral'
-                : 'Recolher menu lateral'
-            }
-          >
-            {internalCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </Button>
         </div>
 
         {/* Navegação */}
         {/* AI dev note: Colapsada, cada item ganha Tooltip com o label (só ícone visível) */}
-        <ScrollArea className="flex-1 px-3 py-4">
+        <ScrollArea className="flex-1 px-3 pb-4 pt-2">
           <TooltipProvider delayDuration={200}>
             {(() => {
               const renderItem = (item: NavigationConfig) => {
@@ -161,7 +139,7 @@ export const DashboardSidebar = React.memo<DashboardSidebarProps>(
               // Lista plana (roles com poucos itens, ex.: profissional)
               if (!showSections) {
                 return (
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {navigationItems.map(renderItem)}
                   </div>
                 );
@@ -183,13 +161,13 @@ export const DashboardSidebar = React.memo<DashboardSidebarProps>(
 
               // Expandida: heading discreto por seção
               return (
-                <div className="space-y-5">
+                <div className="space-y-6">
                   {sectionGroups.map((group) => (
                     <div key={group.section}>
-                      <p className="px-3 pb-1 text-xs font-medium text-muted-foreground">
+                      <p className="px-3 pb-1.5 text-xs font-medium text-muted-foreground/80">
                         {SECTION_LABELS[group.section]}
                       </p>
-                      <div className="space-y-1">
+                      <div className="space-y-0.5">
                         {group.items.map(renderItem)}
                       </div>
                     </div>
@@ -200,18 +178,33 @@ export const DashboardSidebar = React.memo<DashboardSidebarProps>(
           </TooltipProvider>
         </ScrollArea>
 
-        {/* Footer */}
-        <div className="p-3 border-t">
-          <div
+        {/* Rodapé: recolher/expandir (antes ficava no topo, ao lado da marca,
+            e o rodapé só mostrava "Respira Kids v1.0") */}
+        <div className="shrink-0 border-t p-3">
+          <button
+            type="button"
+            onClick={handleToggleCollapse}
+            aria-label={
+              internalCollapsed
+                ? 'Expandir menu lateral'
+                : 'Recolher menu lateral'
+            }
             className={cn(
-              'text-xs text-muted-foreground',
-              internalCollapsed ? 'text-center' : 'text-left'
+              'flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+              internalCollapsed && 'justify-center px-2'
             )}
           >
-            {internalCollapsed ? 'v1.0' : 'Respira Kids v1.0'}
-          </div>
+            {internalCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <>
+                <PanelLeftClose className="h-4 w-4" />
+                <span>Recolher menu</span>
+              </>
+            )}
+          </button>
         </div>
-      </div>
+      </aside>
     );
   }
 );

@@ -60,7 +60,7 @@ export const DesktopLayout = React.memo<DesktopLayoutProps>(
         />
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Top bar */}
           <DashboardTopBar
             userName={userName}
@@ -76,7 +76,9 @@ export const DesktopLayout = React.memo<DesktopLayoutProps>(
 
           {/* Content area */}
           <main className="flex-1 overflow-auto">
-            <div className="w-full px-4 py-6">{children}</div>
+            <div className="mx-auto w-full max-w-[1680px] px-4 py-6 md:px-6 lg:px-8">
+              {children}
+            </div>
           </main>
         </div>
       </div>

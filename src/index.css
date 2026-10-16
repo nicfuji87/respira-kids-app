@@ -6,7 +6,7 @@
 @layer base {
   :root {
     /* Tema claro com cores Respira Kids */
-    --background: 44 93% 97%; /* Bege muito claro */
+    --background: 42 60% 97%; /* Bege muito claro (menos saturado: mais limpo) */
     --foreground: 292 53% 20%; /* Roxo Título */
     --card: 0 0% 100%; /* Branco */
     --card-foreground: 292 53% 20%; /* Roxo Título */
@@ -14,18 +14,19 @@
     --popover-foreground: 292 53% 20%; /* Roxo Título */
     --primary: 174 46% 65%; /* Azul Respira */
     --primary-foreground: 292 53% 20%; /* Roxo Título (7.7:1 sobre Azul Respira - WCAG AA) */
-    --secondary: 44 93% 93%; /* Bege Fundo */
+    --secondary: 42 52% 93%; /* Bege Fundo */
     --secondary-foreground: 292 53% 20%; /* Roxo Título */
-    --muted: 44 93% 93%; /* Bege Fundo */
+    --muted: 42 45% 94%; /* Bege Fundo suave */
     --muted-foreground: 0 0% 40%; /* Cinza Secundário escurecido (>=4.5:1 sobre bege) */
     --accent: 86 49% 75%; /* Verde Pipa */
     --accent-foreground: 292 53% 20%; /* Roxo Título */
     --destructive: 0 72% 51%; /* Vermelho Erro escurecido (~#DC2626, >=4.5:1 sobre branco) */
     --destructive-foreground: 0 0% 100%; /* Branco */
-    --border: 44 30% 88%; /* Bege mais escuro para bordas */
-    --input: 44 30% 88%; /* Bege mais escuro para inputs */
+    --border: 40 22% 88%; /* Bege mais escuro para bordas */
+    --input: 40 18% 84%; /* Borda de campo um tom acima da borda de card */
     --ring: 174 46% 40%; /* Azul Respira escurecido p/ foco (>=3:1 sobre branco e bege) */
-    --radius: 0.65rem; /* Radius do tema fornecido */
+    --radius: 0.75rem; /* Radius base (cards 12px, controles 10px) */
+    --card-pad: 1rem; /* padding interno de Card no celular (24px a partir de sm) */
     --chart-1: 174 46% 65%; /* Azul Respira */
     --chart-2: 13 83% 75%; /* Vermelho Kids */
     --chart-3: 86 49% 75%; /* Verde Pipa */
@@ -44,6 +45,20 @@
        (dataviz validate_palette); os tons de --chart-1/2 ficam claros demais. */
     --serie-1: 175 84% 32%; /* verde-azulado #0d9488 */
     --serie-2: 13 78% 54%; /* coral #e5572f */
+
+    /* Superfície da navegação (sidebar/topbar/bottom tabs): segunda camada neutra */
+    --nav: 0 0% 100%;
+
+    /* Rosa da marca (metas de reativação, contato com famílias) */
+    --rosa-suave: 338 50% 50%;
+
+    /* Versões "tinta" das cores pastel: usadas SÓ por text-* (ver tailwind
+       textColor). Teal/verde/amarelo/coral pastel como cor de letra ficavam
+       com contraste ~1.5:1; estes tons passam AA (>=4.5:1) sobre branco/bege. */
+    --azul-respira-ink: 174 55% 27%;
+    --verde-pipa-ink: 95 45% 27%;
+    --amarelo-pipa-ink: 36 90% 29%;
+    --vermelho-kids-ink: 12 68% 41%;
   }
 
   .dark {
@@ -74,6 +89,13 @@
     --chart-5: 292 53% 70%; /* Roxo Claro */
     --serie-1: 173 80% 36%; /* #12a594 */
     --serie-2: 15 79% 58%; /* #e8683f */
+    --nav: 292 53% 10%;
+    --rosa-suave: 338 60% 68%;
+    /* No escuro o pastel original já contrasta com o fundo roxo */
+    --azul-respira-ink: 174 46% 70%;
+    --verde-pipa-ink: 86 49% 75%;
+    --amarelo-pipa-ink: 50 99% 60%;
+    --vermelho-kids-ink: 13 83% 75%;
   }
 }
 
@@ -81,8 +103,22 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  /* Números de dinheiro/quantidade alinhados em tabelas */
+  table {
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -98,6 +134,21 @@
 
   .animate-respira-pulse {
     animation: respira-pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Rolagem horizontal sem barra (abas, chips) — o conteúdo continua rolável */
+  .scrollbar-none,
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Área segura do iPhone/Android com barra de gestos */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   /* Sombra roxa — EXCLUSIVA de elementos flutuantes (modais, dropdowns, tooltips) */

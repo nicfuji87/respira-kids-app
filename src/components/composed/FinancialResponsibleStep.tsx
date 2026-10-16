@@ -287,7 +287,7 @@ export const FinancialResponsibleStep =
                       'flex items-start space-x-3 p-4 rounded-lg border transition-all cursor-pointer',
                       isSameAsLegal === true
                         ? 'border-primary bg-primary/5'
-                        : 'border-border hover:bg-accent/30'
+                        : 'border-border hover:bg-muted'
                     )}
                   >
                     <RadioGroupItem value="same" id="same" className="mt-0.5" />
@@ -307,7 +307,7 @@ export const FinancialResponsibleStep =
                       'flex items-start space-x-3 p-4 rounded-lg border transition-all cursor-pointer',
                       isSameAsLegal === false
                         ? 'border-primary bg-primary/5'
-                        : 'border-border hover:bg-accent/30'
+                        : 'border-border hover:bg-muted'
                     )}
                   >
                     <RadioGroupItem

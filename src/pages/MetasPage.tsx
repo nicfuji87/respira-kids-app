@@ -181,18 +181,12 @@ export const MetasPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Target className="h-6 w-6 text-rosa-suave" />
-            Metas
-          </h1>
-          <p className="text-muted-foreground">
-            Acompanhe seu desempenho e as metas da clínica
-          </p>
-        </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">
+          Seu desempenho e as metas da clínica no mês.
+        </p>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={String(mes)} onValueChange={(v) => setMes(Number(v))}>
             <SelectTrigger className="w-[120px]">
               <SelectValue />
@@ -237,7 +231,6 @@ export const MetasPage: React.FC = () => {
             size="sm"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="gap-1"
           >
             <RefreshCw
               className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'}
@@ -246,7 +239,7 @@ export const MetasPage: React.FC = () => {
           </Button>
 
           {isAdmin && (
-            <Button onClick={() => setCreateOpen(true)} className="gap-1">
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" />
               Nova Meta
             </Button>

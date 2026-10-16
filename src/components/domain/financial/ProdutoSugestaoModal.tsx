@@ -254,7 +254,7 @@ export const ProdutoSugestaoModal = React.memo<ProdutoSugestaoModalProps>(
                         key={match.produto.id}
                         className={cn(
                           'flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors',
-                          'hover:bg-accent hover:border-primary'
+                          'hover:bg-muted hover:border-primary'
                         )}
                         onClick={() => handleSelecionarProduto(match.produto)}
                       >
@@ -311,7 +311,7 @@ export const ProdutoSugestaoModal = React.memo<ProdutoSugestaoModalProps>(
                     {searchResults.map((match) => (
                       <div
                         key={match.produto.id}
-                        className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-accent"
+                        className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted"
                         onClick={() => handleSelecionarProduto(match.produto)}
                       >
                         <div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PatientDetailsManager } from '@/components/domain/pacientes/PatientDetailsManager';
+import { Button } from '@/components/primitives/button';
 
 // AI dev note: PatientDetailsPage - Página de detalhes do paciente
 // Usa useParams para pegar ID da URL e PatientDetailsManager para exibir dados
@@ -18,12 +19,9 @@ export const PatientDetailsPage: React.FC = () => {
       <div className="w-full max-w-none py-8">
         <div className="text-center">
           <p className="text-destructive">ID do paciente não fornecido</p>
-          <button
-            onClick={handleBack}
-            className="mt-4 text-primary hover:underline"
-          >
+          <Button variant="outline" onClick={handleBack} className="mt-4">
             Voltar para lista de pacientes
-          </button>
+          </Button>
         </div>
       </div>
     );

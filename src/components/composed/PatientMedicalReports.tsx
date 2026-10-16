@@ -154,7 +154,7 @@ export const PatientMedicalReports = React.memo<PatientMedicalReportsProps>(
               {reports.map((report, index) => (
                 <div
                   key={report.id}
-                  className="border rounded-lg p-4 space-y-2 hover:bg-accent/50 transition-colors"
+                  className="border rounded-lg p-4 space-y-2 hover:bg-muted transition-colors"
                 >
                   {/* Cabeçalho do relatório */}
                   <div className="flex items-start justify-between gap-2">

@@ -1462,7 +1462,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                 {savedReports.map((report, index) => (
                   <div
                     key={report.id}
-                    className="border rounded-lg p-4 space-y-2 hover:bg-accent/50 transition-colors"
+                    className="border rounded-lg p-4 space-y-2 hover:bg-muted transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1694,7 +1694,7 @@ export const ClinicalReportGenerator = React.memo<ClinicalReportGeneratorProps>(
                                   'flex items-start gap-3 p-2 rounded-md cursor-pointer transition-colors',
                                   isSelected
                                     ? 'bg-primary/10'
-                                    : 'hover:bg-accent/50'
+                                    : 'hover:bg-muted'
                                 )}
                                 onClick={() =>
                                   toggleEvolutionSelection(evol.id)

@@ -277,7 +277,7 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
                 }}
                 className="flex gap-2 h-11"
               >
-                <div className="flex items-center justify-center space-x-2 flex-1 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+                <div className="flex items-center justify-center space-x-2 flex-1 rounded-lg border border-border hover:bg-muted transition-colors">
                   <RadioGroupItem value="M" id="sexo-m" />
                   <Label
                     htmlFor="sexo-m"
@@ -286,7 +286,7 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
                     M
                   </Label>
                 </div>
-                <div className="flex items-center justify-center space-x-2 flex-1 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+                <div className="flex items-center justify-center space-x-2 flex-1 rounded-lg border border-border hover:bg-muted transition-colors">
                   <RadioGroupItem value="F" id="sexo-f" />
                   <Label
                     htmlFor="sexo-f"
@@ -341,7 +341,7 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
               }
               className="space-y-2"
             >
-              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-accent/20 transition-colors">
+              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors">
                 <RadioGroupItem
                   value="responsavel"
                   id="nf-responsavel"
@@ -360,7 +360,7 @@ export const PatientDataStep = React.memo<PatientDataStepProps>(
                   </p>
                 </Label>
               </div>
-              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-accent/20 transition-colors">
+              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors">
                 <RadioGroupItem
                   value="paciente"
                   id="nf-paciente"

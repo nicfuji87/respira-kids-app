@@ -65,7 +65,7 @@ export const ResponsibleIdentificationStep =
                 htmlFor="option-yes"
                 className={cn(
                   'flex items-start space-x-3 p-4 rounded-lg border cursor-pointer transition-all',
-                  'hover:bg-accent/30',
+                  'hover:bg-muted',
                   selectedValue === 'yes'
                     ? 'border-primary bg-primary/5'
                     : 'border-border'
@@ -95,7 +95,7 @@ export const ResponsibleIdentificationStep =
                 htmlFor="option-no"
                 className={cn(
                   'flex items-start space-x-3 p-4 rounded-lg border cursor-pointer transition-all',
-                  'hover:bg-accent/30',
+                  'hover:bg-muted',
                   selectedValue === 'no'
                     ? 'border-primary bg-primary/5'
                     : 'border-border'

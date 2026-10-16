@@ -17,6 +17,7 @@ export interface MobileLayoutProps {
   // Navigation
   currentPath: string;
   onNavigate: (path: string) => void;
+  pageTitle?: string;
 
   // Actions
   onSettingsClick?: () => void;
@@ -35,6 +36,7 @@ export const MobileLayout = React.memo<MobileLayoutProps>(
     userAvatar,
     currentPath,
     onNavigate,
+    pageTitle,
     onSettingsClick,
     onLogout,
     children,
@@ -55,13 +57,14 @@ export const MobileLayout = React.memo<MobileLayoutProps>(
           userAvatar={userAvatar}
           currentPath={currentPath}
           onNavigate={onNavigate}
+          pageTitle={pageTitle}
           onSettingsClick={onSettingsClick}
           onLogout={onLogout}
         />
 
         {/* Content area - AI dev note: Padding otimizado para mobile */}
-        <main className="flex-1 overflow-auto pt-16 pb-16">
-          <div className="px-3 py-4">{children}</div>
+        <main className="flex-1 overflow-auto pt-14 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+          <div className="px-3 py-4 sm:px-4">{children}</div>
         </main>
 
         {/* Bottom tabs */}

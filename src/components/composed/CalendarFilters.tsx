@@ -109,8 +109,8 @@ const MultiSelectFilter = React.memo<MultiSelectFilterProps>(
             {/* Opção "Todos" */}
             <div
               className={cn(
-                'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer',
-                isAllSelected && 'bg-accent'
+                'flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer',
+                isAllSelected && 'bg-primary/15'
               )}
               onClick={selectAll}
             >
@@ -134,8 +134,8 @@ const MultiSelectFilter = React.memo<MultiSelectFilterProps>(
                 <div
                   key={item.id}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer',
-                    isSelected && 'bg-accent/50'
+                    'flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer',
+                    isSelected && 'bg-primary/10'
                   )}
                   onClick={() => toggleItem(item.id)}
                 >
@@ -334,7 +334,7 @@ export const CalendarFilters = React.memo<CalendarFiltersProps>(
       (showEmpresaFilter && empresaArray.length > 0 ? 1 : 0);
 
     return (
-      <Card className={`p-3 mb-3 ${className}`}>
+      <Card className={cn('mb-4 border-0 bg-transparent p-0', className)}>
         {/* Linha compacta: botão Filtros (com contador) + Limpar + contagem de eventos */}
         <div className="flex flex-wrap items-center gap-2">
           <Button

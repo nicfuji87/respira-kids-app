@@ -238,7 +238,7 @@ export const TributosEmpresaManager = React.memo(() => {
         return (
           <Card key={emp.id}>
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center justify-between text-base">
+              <CardTitle className="flex flex-wrap items-center justify-between text-base">
                 <span className="flex items-center gap-2">
                   <Building2 className="h-4 w-4" />
                   {emp.nome_fantasia}

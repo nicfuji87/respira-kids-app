@@ -51,7 +51,7 @@ export const ScaleSelector: React.FC<ScaleSelectorProps> = ({
                 sizeClasses[size],
                 isSelected
                   ? 'bg-primary border-primary text-primary-foreground shadow-md scale-110'
-                  : 'bg-background border-border text-foreground hover:border-primary/50 hover:bg-accent',
+                  : 'bg-background border-border text-foreground hover:border-primary/50 hover:bg-muted',
                 disabled && 'opacity-50 cursor-not-allowed'
               )}
             >
@@ -69,4 +69,3 @@ export const ScaleSelector: React.FC<ScaleSelectorProps> = ({
 };
 
 ScaleSelector.displayName = 'ScaleSelector';
-

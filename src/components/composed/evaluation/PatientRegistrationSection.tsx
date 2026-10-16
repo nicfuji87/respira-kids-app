@@ -1453,7 +1453,7 @@ export const PatientRegistrationSection: React.FC<
                     type="button"
                     onClick={() => handleVincularResponsavel(resp)}
                     disabled={isSaving}
-                    className="w-full p-3 text-left rounded-lg border hover:bg-accent transition-colors flex items-center justify-between gap-3"
+                    className="w-full p-3 text-left rounded-lg border hover:bg-muted transition-colors flex items-center justify-between gap-3"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{resp.nome}</p>

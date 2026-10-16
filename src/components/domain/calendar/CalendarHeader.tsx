@@ -35,7 +35,8 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
             locale: ptBR,
           });
         case 'agenda':
-          return 'Agenda';
+          // "Agenda" repetia o título da página (topo)
+          return 'Próximos agendamentos';
         default:
           return format(currentDate, 'MMMM yyyy', { locale: ptBR });
       }
@@ -56,10 +57,11 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
 
     return (
       <div className="flex flex-wrap items-center gap-2 md:gap-3">
-        {/* Título do período — headline da toolbar */}
-        <h1 className="w-full sm:w-auto min-w-0 text-xl md:text-2xl font-bold text-roxo-titulo capitalize [text-wrap:balance] truncate">
+        {/* Título do período — headline da toolbar (h2: o h1 é o título da
+            página, no topo) */}
+        <h2 className="w-full sm:w-auto min-w-0 text-xl md:text-2xl font-semibold tracking-tight text-roxo-titulo dark:text-foreground first-letter:uppercase truncate">
           {getDateLabel()}
-        </h1>
+        </h2>
 
         {/* Grupo de navegação temporal — segmentado, bordas colapsadas */}
         <div className="inline-flex items-center rounded-md -space-x-px">
@@ -134,24 +136,34 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
           </Button>
         )}
 
-        {/* DatePicker mobile */}
-        <div className="w-full sm:hidden">
+        {/* Mobile: "ir para data" e o CTA dividem a mesma linha (antes eram
+            duas linhas de largura total, além do título e da navegação) */}
+        <div className="flex w-full items-center gap-2 sm:hidden">
           <DatePicker
             value={formatDateForPicker(currentDate)}
             onChange={handleDateSelect}
-            placeholder="Selecionar data"
-            className="w-full"
+            placeholder="Ir para data"
+            className="min-w-0 flex-1"
             inputClassName="h-9"
           />
+          {onNewEvent && (
+            <Button
+              onClick={onNewEvent}
+              className="h-9 shrink-0 px-3 font-semibold"
+            >
+              <Plus className="h-4 w-4" />
+              Novo
+            </Button>
+          )}
         </div>
 
-        {/* CTA primário — único botão sólido da toolbar */}
+        {/* CTA primário — único botão sólido da toolbar (sm+) */}
         {onNewEvent && (
           <Button
             onClick={onNewEvent}
-            className="order-last sm:order-none w-full sm:w-auto h-9 px-4 text-sm font-semibold"
+            className="hidden sm:inline-flex h-9 px-4 font-semibold"
           >
-            <Plus className="h-4 w-4 mr-1.5" />
+            <Plus className="h-4 w-4" />
             Novo Agendamento
           </Button>
         )}

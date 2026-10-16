@@ -6,7 +6,6 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/primitives/tabs';
-import { DevelopmentPlaceholder } from './DevelopmentPlaceholder';
 import { MyProfileSection } from '@/components/domain/profile';
 import { CompanyForm } from './CompanyForm';
 import { UserManagement } from '@/components/domain/users';
@@ -137,11 +136,15 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
     if (allowedTabs.length === 0) {
       return (
         <div className={className}>
-          <DevelopmentPlaceholder
-            title="Acesso Restrito"
-            description="Você não tem permissão para acessar nenhuma configuração."
-            icon={<Settings className="h-12 w-12 text-destructive/50" />}
-          />
+          {/* AI dev note: antes usava DevelopmentPlaceholder, que exibia
+              "Em desenvolvimento" junto do aviso de acesso restrito */}
+          <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-6 py-12 text-center">
+            <Settings className="h-10 w-10 text-muted-foreground/60" />
+            <p className="font-semibold">Acesso restrito</p>
+            <p className="text-sm text-muted-foreground">
+              Você não tem permissão para acessar nenhuma configuração.
+            </p>
+          </div>
         </div>
       );
     }
@@ -153,15 +156,13 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
           onValueChange={handleTabChange}
           className="w-full"
         >
-          <TabsList className="flex flex-wrap justify-start gap-1 h-auto p-2 w-full">
+          {/* Nível principal = abas sublinhadas; sub-abas internas ficam no
+              controle segmentado. Rola na horizontal no celular. */}
+          <TabsList variant="line">
             {allowedTabs.map((tab) => {
               const IconComponent = tab.icon;
               return (
-                <TabsTrigger
-                  key={tab.id}
-                  value={tab.id}
-                  className="flex items-center gap-2 h-9 text-xs sm:text-sm px-3 whitespace-nowrap"
-                >
+                <TabsTrigger key={tab.id} value={tab.id}>
                   <IconComponent className="h-4 w-4 flex-shrink-0" />
                   <span>{tab.label}</span>
                 </TabsTrigger>

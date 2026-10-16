@@ -141,7 +141,9 @@ export const PendenciasTab: React.FC = () => {
 
   const progresso = useMemo(() => {
     const total = pendencias.length;
-    const concluidas = pendencias.filter((p) => p.status === 'concluido').length;
+    const concluidas = pendencias.filter(
+      (p) => p.status === 'concluido'
+    ).length;
     const altaAbertas = pendencias.filter(
       (p) => p.criticidade === 'alta' && p.status !== 'concluido'
     ).length;
@@ -245,9 +247,10 @@ export const PendenciasTab: React.FC = () => {
       </Card>
 
       <Tabs value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
-        <TabsList className="flex flex-wrap h-auto">
+        <TabsList>
           <TabsTrigger value="abertas">
-            Em aberto ({pendencias.filter((p) => p.status !== 'concluido').length})
+            Em aberto (
+            {pendencias.filter((p) => p.status !== 'concluido').length})
           </TabsTrigger>
           <TabsTrigger value="alta" className="gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -264,9 +267,7 @@ export const PendenciasTab: React.FC = () => {
         <Card className="bg-verde-pipa/10 border-verde-pipa/40">
           <CardContent className="p-8 text-center space-y-2">
             <Check className="w-10 h-10 text-verde-pipa mx-auto" />
-            <p className="font-medium text-foreground">
-              Nada neste filtro.
-            </p>
+            <p className="font-medium text-foreground">Nada neste filtro.</p>
           </CardContent>
         </Card>
       ) : (
@@ -354,12 +355,18 @@ const PendenciaCard: React.FC<PendenciaCardProps> = ({
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
               variant="outline"
-              className={cn('text-xs', CRITICIDADE_CLASSES[pendencia.criticidade])}
+              className={cn(
+                'text-xs',
+                CRITICIDADE_CLASSES[pendencia.criticidade]
+              )}
             >
               {CRITICIDADE_LABELS[pendencia.criticidade]}
             </Badge>
             {pendencia.responsavel_sugerido && (
-              <Badge variant="outline" className="text-xs text-muted-foreground">
+              <Badge
+                variant="outline"
+                className="text-xs text-muted-foreground"
+              >
                 {pendencia.responsavel_sugerido}
               </Badge>
             )}

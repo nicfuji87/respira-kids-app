@@ -157,7 +157,7 @@ export const SharedSchedulePage = React.memo(() => {
               href="https://wa.me/556181446666"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 p-3 rounded-lg border hover:bg-accent transition-colors"
+              className="flex items-center justify-center gap-2 p-3 rounded-lg border hover:bg-muted transition-colors"
             >
               <Phone className="w-4 h-4 text-green-600" />
               <span className="text-sm font-medium">

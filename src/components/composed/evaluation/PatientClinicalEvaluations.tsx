@@ -178,13 +178,17 @@ export const PatientClinicalEvaluations: React.FC<
   return (
     <>
       <Card className={className}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-4">
           <CardTitle className="flex items-center gap-2 text-lg">
             <ClipboardList className="h-5 w-5 text-primary" />
             Avaliações Clínicas TM/AC
           </CardTitle>
           {canEdit && (
-            <Button onClick={handleNovaAvaliacao} size="sm" className="gap-2">
+            <Button
+              onClick={handleNovaAvaliacao}
+              size="sm"
+              aria-label="Nova Avaliação"
+            >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Nova Avaliação</span>
             </Button>
@@ -201,23 +205,14 @@ export const PatientClinicalEvaluations: React.FC<
             <div className="text-center py-8 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">Nenhuma avaliação registrada</p>
-              {canEdit && (
-                <Button
-                  variant="outline"
-                  onClick={handleNovaAvaliacao}
-                  className="mt-4 gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Criar primeira avaliação
-                </Button>
-              )}
+              {/* "Nova Avaliação" já está no cabeçalho do card */}
             </div>
           ) : (
             <div className="space-y-3">
               {avaliacoes.map((avaliacao) => (
                 <div
                   key={avaliacao.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border bg-card hover:bg-muted transition-colors"
                 >
                   <div className="flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -303,4 +298,3 @@ export const PatientClinicalEvaluations: React.FC<
 };
 
 PatientClinicalEvaluations.displayName = 'PatientClinicalEvaluations';
-

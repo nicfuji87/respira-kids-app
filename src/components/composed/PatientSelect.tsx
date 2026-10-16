@@ -365,7 +365,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
                         <div
                           key={patient.id}
                           onClick={() => handlePatientSelect(patient)}
-                          className="p-3 hover:bg-accent cursor-pointer rounded-md mb-2"
+                          className="p-3 hover:bg-muted cursor-pointer rounded-md mb-2"
                         >
                           {renderPatientInfo(patient)}
                         </div>
@@ -427,7 +427,7 @@ export const PatientSelect = React.memo<PatientSelectProps>(
                         <div
                           key={patient.id}
                           onClick={() => handlePatientSelect(patient)}
-                          className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                          className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
                         >
                           {renderPatientInfo(patient)}
                         </div>

@@ -109,7 +109,7 @@ export const ColorPicker = React.memo<ColorPickerProps>(
                   onClick={() => handleColorSelect(color.value)}
                   className={cn(
                     'justify-start h-8 px-2 w-full',
-                    isSelected && 'bg-accent'
+                    isSelected && 'bg-primary/15'
                   )}
                 >
                   <div

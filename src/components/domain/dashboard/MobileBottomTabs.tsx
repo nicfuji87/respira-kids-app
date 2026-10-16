@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { getMobileNavigationForRole, type UserRole } from '@/lib/navigation';
 
 // AI dev note: MobileBottomTabs combina NavigationItem components
-// Bottom tabs mobile com navegação role-based, altura fixa 60px
+// Bottom tabs mobile com navegação role-based, altura 64px + área segura
 
 export interface MobileBottomTabsProps {
   userRole: UserRole;
@@ -18,14 +18,14 @@ export const MobileBottomTabs = React.memo<MobileBottomTabsProps>(
     const navigationItems = getMobileNavigationForRole(userRole);
 
     return (
-      <div
+      <nav
+        aria-label="Navegação principal"
         className={cn(
-          'fixed bottom-0 left-0 right-0 z-50 bg-background border-t',
-          'h-16 px-2 md:hidden',
+          'fixed bottom-0 left-0 right-0 z-50 border-t bg-nav/95 backdrop-blur supports-[backdrop-filter]:bg-nav/85 pb-safe md:hidden',
           className
         )}
       >
-        <div className="flex items-center justify-around h-full">
+        <div className="flex h-16 items-stretch justify-around px-1 py-1.5">
           {navigationItems.map((item) => (
             <NavigationItem
               key={item.href}
@@ -35,11 +35,11 @@ export const MobileBottomTabs = React.memo<MobileBottomTabsProps>(
               onClick={() => onNavigate(item.href)}
               badge={item.badge}
               variant="mobile"
-              className="flex-1 max-w-20"
+              className="max-w-24 flex-1"
             />
           ))}
         </div>
-      </div>
+      </nav>
     );
   }
 );

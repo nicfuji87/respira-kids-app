@@ -3,13 +3,26 @@ import { Button } from '@/components/primitives/button';
 import {
   Sheet,
   SheetContent,
+  SheetTitle,
   SheetTrigger,
 } from '@/components/primitives/sheet';
 import { UserProfileDropdown } from '@/components/composed/UserProfileDropdown';
 import { NavigationItem } from '@/components/composed/NavigationItem';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getNavigationForRole, type UserRole } from '@/lib/navigation';
+import {
+  getNavigationForRole,
+  type NavigationConfig,
+  type UserRole,
+} from '@/lib/navigation';
+
+type MenuSection = NonNullable<NavigationConfig['section']>;
+const SECTION_ORDER: MenuSection[] = ['principal', 'gestao', 'sistema'];
+const SECTION_LABELS: Record<MenuSection, string> = {
+  principal: 'Principal',
+  gestao: 'Gestão',
+  sistema: 'Sistema',
+};
 
 // AI dev note: MobileHeader combina Sheet e UserProfileDropdown
 // Header mobile com hamburger menu e navegação lateral
@@ -24,6 +37,8 @@ export interface MobileHeaderProps {
   // Navigation
   currentPath: string;
   onNavigate: (path: string) => void;
+  /** Título da página atual (mesmo rótulo do topo no desktop) */
+  pageTitle?: string;
 
   // Actions
   onSettingsClick?: () => void;
@@ -40,6 +55,7 @@ export const MobileHeader = React.memo<MobileHeaderProps>(
     userAvatar,
     currentPath,
     onNavigate,
+    pageTitle,
     onSettingsClick,
     onLogout,
     className,
@@ -49,78 +65,103 @@ export const MobileHeader = React.memo<MobileHeaderProps>(
     // AI dev note: Sheet controlado para fechar o drawer ao navegar
     const [menuOpen, setMenuOpen] = React.useState(false);
 
+    // Agrupa o menu nas mesmas seções do sidebar desktop
+    const sections = SECTION_ORDER.map((section) => ({
+      section,
+      items: navigationItems.filter(
+        (item) => (item.section ?? 'principal') === section
+      ),
+    })).filter((group) => group.items.length > 0);
+    const showSections =
+      sections.filter((group) => group.items.length >= 2).length >= 2;
+
+    const renderItem = (item: (typeof navigationItems)[number]) => (
+      <NavigationItem
+        key={item.href}
+        icon={<item.icon className="h-4 w-4" />}
+        label={item.label}
+        isActive={currentPath === item.href}
+        onClick={() => {
+          setMenuOpen(false);
+          onNavigate(item.href);
+        }}
+        badge={item.badge}
+        variant="desktop"
+        className="h-11"
+      />
+    );
+
     return (
       <header
         className={cn(
-          'fixed top-0 left-0 right-0 z-50 bg-background border-b',
-          'h-16 px-4 md:hidden',
+          'fixed left-0 right-0 top-0 z-50 h-14 border-b bg-nav/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-nav/85 md:hidden',
           className
         )}
       >
-        <div className="flex items-center justify-between h-full">
-          {/* Left side - Menu + Logo */}
-          <div className="flex items-center space-x-3">
+        <div className="flex h-full items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
             <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
               <SheetTrigger asChild>
                 {/* AI dev note: h-10 w-10 (40px) para touch target adequado em tablet */}
-                <Button variant="ghost" size="sm" className="h-10 w-10 p-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10"
+                  aria-label="Abrir menu"
+                >
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-64 p-0">
-                <div className="flex flex-col h-full">
-                  {/* Header do menu */}
-                  <div className="flex items-center space-x-2 px-4 py-6 border-b">
-                    <img
-                      src="/images/logos/icone-respira-kids.png"
-                      alt="Respira Kids"
-                      className="h-8 w-8"
-                    />
-                    <span className="font-semibold text-lg">Respira Kids</span>
-                  </div>
+              <SheetContent
+                side="left"
+                className="flex w-72 flex-col gap-0 bg-nav p-0"
+              >
+                <SheetTitle className="sr-only">Menu</SheetTitle>
+                <div className="flex h-14 shrink-0 items-center gap-2.5 border-b px-5">
+                  <img
+                    src="/images/logos/icone-respira-kids.png"
+                    alt=""
+                    className="h-8 w-8"
+                  />
+                  <span className="text-[15px] font-bold tracking-tight text-roxo-titulo dark:text-foreground">
+                    Respira Kids
+                  </span>
+                </div>
 
-                  {/* Navegação */}
-                  <div className="flex-1 px-2 py-4">
-                    <div className="space-y-1">
-                      {navigationItems.map((item) => (
-                        <NavigationItem
-                          key={item.href}
-                          icon={<item.icon className="h-4 w-4" />}
-                          label={item.label}
-                          isActive={currentPath === item.href}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            onNavigate(item.href);
-                          }}
-                          badge={item.badge}
-                          variant="desktop"
-                        />
+                <nav className="flex-1 overflow-y-auto px-3 py-4">
+                  {showSections ? (
+                    <div className="space-y-6">
+                      {sections.map((group) => (
+                        <div key={group.section}>
+                          <p className="px-3 pb-1.5 text-xs font-medium text-muted-foreground/80">
+                            {SECTION_LABELS[group.section]}
+                          </p>
+                          <div className="space-y-0.5">
+                            {group.items.map(renderItem)}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="p-4 border-t">
-                    <div className="text-xs text-muted-foreground">
-                      Respira Kids v1.0
+                  ) : (
+                    <div className="space-y-0.5">
+                      {navigationItems.map(renderItem)}
                     </div>
-                  </div>
-                </div>
+                  )}
+                </nav>
               </SheetContent>
             </Sheet>
 
-            <div className="flex items-center space-x-2">
-              <img
-                src="/images/logos/icone-respira-kids.png"
-                alt="Respira Kids"
-                className="h-6 w-6"
-              />
-              <span className="font-semibold text-base">Respira Kids</span>
-            </div>
+            <img
+              src="/images/logos/icone-respira-kids.png"
+              alt="Respira Kids"
+              className="h-7 w-7 shrink-0"
+            />
+            <span className="truncate text-base font-semibold tracking-tight text-roxo-titulo dark:text-foreground">
+              {pageTitle || 'Respira Kids'}
+            </span>
           </div>
 
-          {/* Right side - Profile */}
-          <div className="flex items-center space-x-2">
+          <div className="flex shrink-0 items-center">
             <UserProfileDropdown
               name={userName}
               email={userEmail}

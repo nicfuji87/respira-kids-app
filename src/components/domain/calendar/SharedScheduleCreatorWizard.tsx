@@ -505,7 +505,7 @@ export const SharedScheduleCreatorWizard =
                     {servicos.map((servico) => (
                       <div
                         key={servico.id}
-                        className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                        className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                       >
                         <Checkbox
                           id={`servico-${servico.id}`}
@@ -564,7 +564,7 @@ export const SharedScheduleCreatorWizard =
                       {locais.map((local) => (
                         <div
                           key={local.id}
-                          className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                          className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                         >
                           <Checkbox
                             id={`local-${local.id}`}
@@ -607,7 +607,7 @@ export const SharedScheduleCreatorWizard =
                       {empresas.map((empresa) => (
                         <div
                           key={empresa.id}
-                          className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                          className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                         >
                           <Checkbox
                             id={`empresa-${empresa.id}`}

@@ -82,7 +82,7 @@ export const SecretariaDashboardTemplate =
             {/* Dashboard Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Agendamentos Hoje
                   </CardTitle>
@@ -97,7 +97,7 @@ export const SecretariaDashboardTemplate =
               </Card>
 
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Pacientes Ativos
                   </CardTitle>
@@ -112,7 +112,7 @@ export const SecretariaDashboardTemplate =
               </Card>
 
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Documentos Pendentes
                   </CardTitle>

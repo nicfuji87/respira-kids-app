@@ -1,26 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/primitives/button';
-import { Badge } from '@/components/primitives/badge';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/primitives/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/primitives/dialog';
-import { ScrollArea } from '@/components/primitives/scroll-area';
+import { Card, CardContent, CardHeader } from '@/components/primitives/card';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
-import { AlertTriangle, RefreshCw, Filter, Stethoscope } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { useAdminMetrics } from '@/hooks/useAdminMetrics';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
-import { UserMetrics } from '@/components/composed/UserMetrics';
-import { ProfessionalMetrics } from '@/components/composed/ProfessionalMetrics';
 import { ConsultationsToEvolve } from '@/components/composed/ConsultationsToEvolve';
 import { CurrentAppointments } from '@/components/composed/CurrentAppointments';
 import { ProfessionalFilter } from '@/components/composed/ProfessionalFilter';
@@ -34,6 +19,7 @@ import type {
 } from '@/lib/professional-dashboard-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
 import { useAuth } from '@/hooks/useAuth';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 // AI dev note: AdminDashboard é específico para role admin da clínica Respira Kids
 // Interface completa de gestão com métricas, notificações e ações rápidas
@@ -211,42 +197,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         </Alert>
       )}
 
-      {/* AI dev note: Header dinâmico com saudação personalizada */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo dark:text-foreground">
-            {getGreeting()}, {firstName}!
-          </h1>
-        </div>
-        <div className="flex items-center gap-2 md:gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refreshAll}
-            disabled={loading}
-            className="gap-2 text-xs md:text-sm"
-          >
-            <RefreshCw
-              className={`h-3 w-3 md:h-4 md:w-4 ${
-                loading ? 'animate-spin' : ''
-              }`}
+      {/* AI dev note: Saudação + ações; o filtro de profissional fica na mesma
+          faixa (antes era uma linha própria com ícone + rótulo redundantes) */}
+      <PageHeader
+        title={`${getGreeting()}, ${firstName}!`}
+        actions={
+          <>
+            <ProfessionalFilter
+              selectedProfessionals={selectedProfessionals}
+              onSelectionChange={setSelectedProfessionals}
             />
-            {loading ? 'Atualizando...' : 'Atualizar'}
-          </Button>
-        </div>
-      </div>
-
-      {/* AI dev note: Filtro de profissional para toda a interface */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Filtrar por profissional:</span>
-        </div>
-        <ProfessionalFilter
-          selectedProfessionals={selectedProfessionals}
-          onSelectionChange={setSelectedProfessionals}
-        />
-      </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshAll}
+              disabled={loading}
+            >
+              <RefreshCw className={loading ? 'animate-spin' : ''} />
+              {loading ? 'Atualizando...' : 'Atualizar'}
+            </Button>
+          </>
+        }
+      />
 
       {/* AI dev note: Atendimentos Atuais - janela de 3 atendimentos (anterior, atual, próximo) */}
       {/* Inclui "Ver mais atendimentos" para expandir os próximos */}
@@ -259,65 +231,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         userRole="admin"
       />
 
-      {/* AI dev note: Seção de métricas detalhadas */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <UserMetrics metrics={null} loading={loading} />
-        <ProfessionalMetrics metrics={null} />
-      </div>
-
       {/* AI dev note: Relacionamento com pediatras - meta estratégica de admin */}
       <PediatraRelacionamentoManager maxItems={15} />
 
       {/* AI dev note: Aniversários da semana */}
       <WeekBirthdays maxItems={20} />
 
-      {/* AI dev note: Seção de consultas para evolução */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Stethoscope className="h-5 w-5" />
-            Consultas para Evolução
-            {evolutionCount > 0 && (
-              <Badge variant="destructive">{evolutionCount}</Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[600px]">
-            <ConsultationsToEvolve
-              consultations={consultationsToEvolve || []}
-              loading={loading}
-              onConsultationClick={handleAppointmentClick}
-              onCreateEvolutionClick={handleEvolutionClick}
-              maxItems={10}
-            />
-          </ScrollArea>
-        </CardContent>
-      </Card>
+      {/* AI dev note: Consultas para evolução — o componente já é um Card com
+          título e "Ver mais"; antes vinha dentro de outro Card com outro título
+          e um scroll fixo de 600px. */}
+      <ConsultationsToEvolve
+        title="Consultas para Evolução"
+        count={evolutionCount}
+        consultations={consultationsToEvolve || []}
+        loading={loading}
+        onConsultationClick={handleAppointmentClick}
+        onCreateEvolutionClick={handleEvolutionClick}
+        maxItems={10}
+      />
 
-      {/* AI dev note: Modal de detalhes do agendamento */}
-      <Dialog
-        open={isAppointmentDetailsOpen}
-        onOpenChange={setIsAppointmentDetailsOpen}
-      >
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Detalhes do Agendamento</DialogTitle>
-          </DialogHeader>
-          <div className="overflow-y-auto max-h-[80vh]">
-            {selectedAppointmentData && (
-              <AppointmentDetailsManager
-                isOpen={isAppointmentDetailsOpen}
-                appointment={selectedAppointmentData}
-                onClose={handleAppointmentDetailsClose}
-                onSave={handleAppointmentDetailsSave}
-                userRole="admin"
-                locaisAtendimento={formData.locaisAtendimento || []}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* AI dev note: AppointmentDetailsManager já abre o próprio Dialog —
+          envolver em outro Dialog mostrava dois modais empilhados. */}
+      {selectedAppointmentData && (
+        <AppointmentDetailsManager
+          isOpen={isAppointmentDetailsOpen}
+          appointment={selectedAppointmentData}
+          onClose={handleAppointmentDetailsClose}
+          onSave={handleAppointmentDetailsSave}
+          userRole="admin"
+          locaisAtendimento={formData.locaisAtendimento || []}
+        />
+      )}
     </div>
   );
 };

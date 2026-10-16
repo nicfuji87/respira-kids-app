@@ -113,25 +113,20 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
     <div className={cn('w-full space-y-6', className)}>
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="flex w-full overflow-x-auto h-auto p-1 gap-1 md:grid md:grid-cols-7 md:overflow-visible no-scrollbar">
+        <TabsList>
           {visibleTabs.map((tab) => {
             const IconComponent = tab.icon;
             return (
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 h-14 text-xs p-2 min-w-[80px] md:min-w-0 flex-1 md:flex-auto',
-                  !tab.implemented && 'opacity-70'
-                )}
+                className={cn(!tab.implemented && 'opacity-70')}
               >
-                <IconComponent className="h-4 w-4 flex-shrink-0" />
-                <span className="whitespace-nowrap md:whitespace-normal md:truncate text-center leading-tight">
-                  {tab.label}
-                </span>
+                <IconComponent />
+                {tab.label}
                 {!tab.implemented && (
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    Em breve
+                  <span className="text-xs text-muted-foreground">
+                    (em breve)
                   </span>
                 )}
               </TabsTrigger>
@@ -139,10 +134,10 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
           })}
         </TabsList>
 
+        {/* AI dev note: a descrição da aba (tab.description) não é mais
+            exibida aqui — repetia a descrição do card logo abaixo. */}
         {visibleTabs.map((tab) => (
-          <TabsContent key={tab.id} value={tab.id} className="mt-6 space-y-3">
-            {/* Descrição da seção ativa */}
-            <p className="text-sm text-muted-foreground">{tab.description}</p>
+          <TabsContent key={tab.id} value={tab.id} className="mt-4">
             {tab.content}
           </TabsContent>
         ))}

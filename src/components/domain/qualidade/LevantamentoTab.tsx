@@ -324,7 +324,7 @@ export const LevantamentoTab: React.FC = () => {
 
       {/* Filtro */}
       <Tabs value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
-        <TabsList className="flex flex-wrap h-auto">
+        <TabsList>
           <TabsTrigger value="todas">Todas ({TOTAL_PERGUNTAS})</TabsTrigger>
           <TabsTrigger value="criticas" className="gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />

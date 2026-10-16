@@ -51,7 +51,7 @@ const SimNaoToggle: React.FC<{
           'flex-1 py-1.5 px-3 rounded-md border-2 transition-all text-sm font-medium',
           value === true
             ? 'bg-green-50 dark:bg-green-950/20 border-green-500 text-green-700 dark:text-green-300'
-            : 'border-border hover:bg-accent'
+            : 'border-border hover:bg-muted'
         )}
       >
         {value === true && <Check className="inline w-3.5 h-3.5 mr-1" />}
@@ -64,7 +64,7 @@ const SimNaoToggle: React.FC<{
           'flex-1 py-1.5 px-3 rounded-md border-2 transition-all text-sm font-medium',
           value === false
             ? 'bg-gray-100 dark:bg-gray-900 border-gray-400 text-gray-700 dark:text-gray-300'
-            : 'border-border hover:bg-accent'
+            : 'border-border hover:bg-muted'
         )}
       >
         {value === false && <Check className="inline w-3.5 h-3.5 mr-1" />}

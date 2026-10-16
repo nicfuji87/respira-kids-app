@@ -276,8 +276,8 @@ const MultiSelectFilter = React.memo<MultiSelectFilterProps>(
               aria-selected={isAllSelected}
               tabIndex={0}
               className={cn(
-                'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer focus-visible:outline-none focus-visible:bg-accent',
-                isAllSelected && 'bg-accent'
+                'flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer focus-visible:outline-none focus-visible:bg-primary/15',
+                isAllSelected && 'bg-primary/15'
               )}
               onClick={selectAll}
               onKeyDown={(e) => {
@@ -310,8 +310,8 @@ const MultiSelectFilter = React.memo<MultiSelectFilterProps>(
                   aria-selected={isSelected}
                   tabIndex={0}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-2 hover:bg-accent cursor-pointer focus-visible:outline-none focus-visible:bg-accent',
-                    isSelected && 'bg-accent/50'
+                    'flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer focus-visible:outline-none focus-visible:bg-primary/15',
+                    isSelected && 'bg-primary/10'
                   )}
                   onClick={() => toggleItem(item.id)}
                   onKeyDown={(e) => {

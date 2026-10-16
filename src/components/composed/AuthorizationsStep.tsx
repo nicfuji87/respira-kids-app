@@ -121,7 +121,7 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                     'flex-1 py-2 px-4 rounded-lg border-2 transition-all font-medium',
                     usoCientifico === true
                       ? 'bg-green-50 dark:bg-green-950/20 border-green-500 text-green-700 dark:text-green-300'
-                      : 'border-border hover:bg-accent'
+                      : 'border-border hover:bg-muted'
                   )}
                 >
                   {usoCientifico === true && (
@@ -141,7 +141,7 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                     'flex-1 py-2 px-4 rounded-lg border-2 transition-all font-medium',
                     usoCientifico === false
                       ? 'bg-gray-100 dark:bg-gray-900 border-gray-400 text-gray-700 dark:text-gray-300'
-                      : 'border-border hover:bg-accent'
+                      : 'border-border hover:bg-muted'
                   )}
                 >
                   {usoCientifico === false && (
@@ -180,7 +180,7 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                     'flex-1 py-2 px-4 rounded-lg border-2 transition-all font-medium',
                     usoRedesSociais === true
                       ? 'bg-green-50 dark:bg-green-950/20 border-green-500 text-green-700 dark:text-green-300'
-                      : 'border-border hover:bg-accent'
+                      : 'border-border hover:bg-muted'
                   )}
                 >
                   {usoRedesSociais === true && (
@@ -200,7 +200,7 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                     'flex-1 py-2 px-4 rounded-lg border-2 transition-all font-medium',
                     usoRedesSociais === false
                       ? 'bg-gray-100 dark:bg-gray-900 border-gray-400 text-gray-700 dark:text-gray-300'
-                      : 'border-border hover:bg-accent'
+                      : 'border-border hover:bg-muted'
                   )}
                 >
                   {usoRedesSociais === false && (
@@ -239,7 +239,7 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                     'flex-1 py-2 px-4 rounded-lg border-2 transition-all font-medium',
                     usoNome === true
                       ? 'bg-green-50 dark:bg-green-950/20 border-green-500 text-green-700 dark:text-green-300'
-                      : 'border-border hover:bg-accent'
+                      : 'border-border hover:bg-muted'
                   )}
                 >
                   {usoNome === true && (
@@ -259,7 +259,7 @@ export const AuthorizationsStep = React.memo<AuthorizationsStepProps>(
                     'flex-1 py-2 px-4 rounded-lg border-2 transition-all font-medium',
                     usoNome === false
                       ? 'bg-gray-100 dark:bg-gray-900 border-gray-400 text-gray-700 dark:text-gray-300'
-                      : 'border-border hover:bg-accent'
+                      : 'border-border hover:bg-muted'
                   )}
                 >
                   {usoNome === false && (
