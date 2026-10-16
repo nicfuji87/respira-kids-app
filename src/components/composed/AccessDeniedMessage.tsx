@@ -46,7 +46,10 @@ export const AccessDeniedMessage = React.memo<AccessDeniedMessageProps>(
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <Alert variant="default" className="bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800">
+            <Alert
+              variant="default"
+              className="bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800"
+            >
               <AlertDescription className="text-sm text-foreground">
                 Não identificamos seu cadastro em nosso sistema. Para agendar
                 horários, é necessário estar cadastrado previamente.
@@ -62,7 +65,7 @@ export const AccessDeniedMessage = React.memo<AccessDeniedMessageProps>(
                   href={`https://wa.me/${contactPhone.replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                 >
                   <Phone className="w-4 h-4 text-green-600" />
                   <div>
@@ -76,7 +79,7 @@ export const AccessDeniedMessage = React.memo<AccessDeniedMessageProps>(
                 {/* Email */}
                 <a
                   href={`mailto:${contactEmail}`}
-                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                 >
                   <Mail className="w-4 h-4 text-blue-600" />
                   <div>
@@ -92,7 +95,7 @@ export const AccessDeniedMessage = React.memo<AccessDeniedMessageProps>(
                   href={`https://${contactWebsite}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                 >
                   <Globe className="w-4 h-4 text-purple-600" />
                   <div>
@@ -122,5 +125,3 @@ export const AccessDeniedMessage = React.memo<AccessDeniedMessageProps>(
 );
 
 AccessDeniedMessage.displayName = 'AccessDeniedMessage';
-
-

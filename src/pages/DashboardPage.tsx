@@ -334,7 +334,7 @@ export const DashboardPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                 <div className="h-4 bg-muted rounded w-24 animate-pulse" />
                 <div className="h-4 w-4 bg-muted rounded animate-pulse" />
               </CardHeader>
@@ -369,7 +369,7 @@ export const DashboardPage: React.FC = () => {
       {/* Métricas principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Agendamentos Hoje
             </CardTitle>
@@ -384,7 +384,7 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Pacientes Ativos
             </CardTitle>
@@ -397,7 +397,7 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Sessões do Mês
             </CardTitle>
@@ -412,7 +412,7 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Faturamento</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>

@@ -626,7 +626,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                           'flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all shrink-0',
                           currentSection === index
                             ? 'bg-primary text-primary-foreground scale-110'
-                            : 'bg-muted hover:bg-accent',
+                            : 'bg-muted hover:bg-muted',
                           secoesPendentesRevisao.includes(secao.id) &&
                             'ring-2 ring-amber-400 ring-offset-1'
                         )}

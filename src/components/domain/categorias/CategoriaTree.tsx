@@ -243,7 +243,7 @@ export const CategoriaTree = React.memo(() => {
       <div key={categoria.id}>
         <div
           className={cn(
-            'group flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-accent/50 transition-colors',
+            'group flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-muted transition-colors',
             !categoria.ativo && 'opacity-50'
           )}
           style={{ paddingLeft: `${level * 24 + 12}px` }}
@@ -252,7 +252,7 @@ export const CategoriaTree = React.memo(() => {
           <button
             onClick={() => hasChildren && toggleExpanded(categoria.id)}
             className={cn(
-              'flex h-5 w-5 items-center justify-center rounded hover:bg-accent',
+              'flex h-5 w-5 items-center justify-center rounded hover:bg-muted',
               !hasChildren && 'invisible'
             )}
           >

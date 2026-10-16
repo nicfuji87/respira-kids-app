@@ -1012,15 +1012,11 @@ export const FinancialFaturasList: React.FC<FinancialFaturasListProps> = ({
     <>
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between gap-2">
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2">
             <span>Faturas</span>
-            <div className="flex items-center gap-2">
-              {/* AI dev note: contagem do conjunto FILTRADO completo (mesma
-                  fonte do "Mostrando X-Y de N"), não apenas da página atual */}
-              <Badge variant="outline">
-                {totalCount} fatura
-                {totalCount !== 1 ? 's' : ''}
-              </Badge>
+            {/* AI dev note: a contagem total aparece no resumo e no "Mostrando
+                X-Y de N" da paginação — o badge aqui era a terceira vez */}
+            <div className="flex flex-wrap items-center gap-2">
               {/* AI dev note: exporta TODAS as faturas do período+filtros em PDF
                   (útil p/ caçar NFe não emitida / com erro em lote). */}
               <Button

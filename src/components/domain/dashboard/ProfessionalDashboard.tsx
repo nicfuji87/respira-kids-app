@@ -4,7 +4,6 @@ import {
   ProfessionalMetrics,
   CurrentAppointments,
   ConsultationsToEvolve,
-  MaterialRequestCard,
   WeekBirthdays,
 } from '@/components/composed';
 import { RefreshCw } from 'lucide-react';
@@ -16,6 +15,7 @@ import type {
   MaterialRequest,
   CurrentWindowAppointment,
 } from '@/lib/professional-dashboard-api';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 // AI dev note: ProfessionalDashboard - Componente Domain que combina Composed
 // Dashboard específico para role profissional com dados reais do Supabase
@@ -42,8 +42,7 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
     onCurrentAppointmentClick,
     onConsultationClick,
     onCreateEvolutionClick,
-    onMaterialRequestClick,
-    onCreateMaterialRequest,
+    // onMaterialRequestClick / onCreateMaterialRequest: ver nota no render
     className,
     userRole,
   }) => {
@@ -68,7 +67,6 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
       upcomingAppointments,
       currentWindowAppointments,
       consultationsToEvolve,
-      materialRequests,
       loading,
       error,
       lastUpdate,
@@ -87,28 +85,20 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
 
     return (
       <div className={cn('space-y-6', className)}>
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Bem-vindo, {professionalName}!
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Botão de refresh */}
+        <PageHeader
+          title={`Bem-vindo, ${professionalName}!`}
+          actions={
             <Button
               variant="outline"
               size="sm"
               onClick={handleRefresh}
               disabled={loading}
-              className="gap-2"
             >
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
               {loading ? 'Atualizando...' : 'Atualizar'}
             </Button>
-          </div>
-        </div>
+          }
+        />
 
         {/* AI dev note: Atendimentos Atuais - janela de 3 atendimentos (anterior, atual, próximo) */}
         {/* Inclui "Ver mais atendimentos" para expandir os próximos */}
@@ -131,14 +121,11 @@ export const ProfessionalDashboard = React.memo<ProfessionalDashboardProps>(
         {/* Aniversários da semana */}
         <WeekBirthdays maxItems={20} />
 
-        {/* Solicitação de material */}
-        <MaterialRequestCard
-          requests={materialRequests}
-          loading={loading}
-          error={error}
-          onRequestClick={onMaterialRequestClick}
-          onCreateRequest={onCreateMaterialRequest}
-        />
+        {/* AI dev note: MaterialRequestCard (solicitação de material) fora do
+            dashboard enquanto a funcionalidade não existe — o card só mostrava
+            "Funcionalidade em Desenvolvimento" e dois botões sem efeito.
+            Props materialRequests/onMaterialRequestClick/onCreateMaterialRequest
+            seguem aceitas para religar quando ficar pronta. */}
 
         {/* Consultas a evoluir */}
         <div id="consultations-to-evolve">

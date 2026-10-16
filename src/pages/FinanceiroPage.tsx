@@ -26,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchAgendamentoById } from '@/lib/calendar-services';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
 import { useToast } from '@/components/primitives/use-toast';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 // AI dev note: Interfaces para tipos da página financeira
 interface ConsultationWithPatient {
@@ -274,16 +275,11 @@ export const FinanceiroPage: React.FC = () => {
   return (
     <>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Financeiro</h1>
-          <p className="text-muted-foreground">
-            {isProfessional
-              ? 'Minhas comissões e consultas'
-              : isPinValidated
-                ? 'Gestão financeira e faturamento'
-                : 'Área restrita - Autenticação necessária'}
-          </p>
-        </div>
+        {/* AI dev note: título "Financeiro" já está no topo; a linha "Área
+            restrita" repetia o diálogo de PIN. Fica só o contexto do profissional. */}
+        {isProfessional && (
+          <PageHeader description="Minhas comissões e consultas." />
+        )}
 
         {/* Conteúdo - Admin/Secretaria precisa de PIN, Profissional não */}
         {isPinValidated && (
@@ -291,7 +287,7 @@ export const FinanceiroPage: React.FC = () => {
             {/* Versão Admin e Secretaria - Combina comissões + novo módulo financeiro */}
             {isAdminOrSecretaria && userRole && (
               <Tabs defaultValue="comissoes" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 h-auto">
+                <TabsList className="w-full justify-start md:grid md:grid-cols-2">
                   <TabsTrigger value="comissoes">
                     Comissões e Agendamentos
                   </TabsTrigger>
@@ -320,7 +316,7 @@ export const FinanceiroPage: React.FC = () => {
                       });
                     }}
                   >
-                    <TabsList className="grid w-full grid-cols-4 h-auto">
+                    <TabsList className="w-full justify-start md:grid md:grid-cols-4">
                       <TabsTrigger value="consultas">Consultas</TabsTrigger>
                       <TabsTrigger value="faturas">Faturas</TabsTrigger>
                       <TabsTrigger value="grafico">Gráfico Anual</TabsTrigger>
@@ -411,7 +407,7 @@ export const FinanceiroPage: React.FC = () => {
                   )
                 }
               >
-                <TabsList className="grid w-full grid-cols-3 h-auto">
+                <TabsList className="w-full justify-start sm:grid sm:grid-cols-3">
                   <TabsTrigger value="resumo">Resumo</TabsTrigger>
                   <TabsTrigger value="consultas">Consultas</TabsTrigger>
                   <TabsTrigger value="grafico">Gráfico Anual</TabsTrigger>

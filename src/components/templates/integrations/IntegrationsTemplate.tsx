@@ -51,40 +51,23 @@ export const IntegrationsTemplate: React.FC<IntegrationsTemplateProps> = ({
 
   return (
     <div className={cn('w-full space-y-6', className)}>
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Integrações</h1>
-        <p className="text-muted-foreground">
-          Configure integrações externas e prompts de IA para melhorar a
-          funcionalidade do sistema
-        </p>
-      </div>
-
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 gap-1 h-auto p-1">
+        {/* A descrição de cada aba já é o título/descrição do card de baixo */}
+        <TabsList>
           {tabsConfig.map((tab) => {
             const IconComponent = tab.icon;
             return (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                className="flex items-center gap-2 h-12 text-sm p-3"
-              >
-                <IconComponent className="h-4 w-4 flex-shrink-0" />
-                <div className="flex flex-col items-start">
-                  <span className="font-medium">{tab.label}</span>
-                  <span className="text-xs text-muted-foreground hidden md:block">
-                    {tab.description}
-                  </span>
-                </div>
+              <TabsTrigger key={tab.id} value={tab.id}>
+                <IconComponent />
+                {tab.label}
               </TabsTrigger>
             );
           })}
         </TabsList>
 
         {tabsConfig.map((tab) => (
-          <TabsContent key={tab.id} value={tab.id} className="mt-6">
+          <TabsContent key={tab.id} value={tab.id} className="mt-4">
             {tab.content}
           </TabsContent>
         ))}

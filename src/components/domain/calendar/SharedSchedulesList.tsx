@@ -221,8 +221,8 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
             </div>
           </div>
 
-          <Button onClick={() => setIsCreatorOpen(true)} size="lg">
-            <Plus className="w-4 h-4 mr-2" />
+          <Button onClick={() => setIsCreatorOpen(true)}>
+            <Plus className="w-4 h-4" />
             Nova Agenda Compartilhada
           </Button>
         </div>
@@ -239,16 +239,7 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
                 ? 'Nenhuma agenda encontrada com este título'
                 : 'Nenhuma agenda criada ainda'}
             </p>
-            {!searchTerm && (
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setIsCreatorOpen(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Criar Primeira Agenda
-              </Button>
-            )}
+            {/* "Nova Agenda Compartilhada" já está no topo da lista */}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

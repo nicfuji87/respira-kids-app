@@ -71,6 +71,7 @@ import {
   UserCheck,
   Users,
 } from 'lucide-react';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 const chartConfig = {
   total: {
@@ -214,28 +215,20 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
-            <MessagesSquare className="w-7 h-7 text-azul-respira" />
-            Análise de Conversas
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Inteligência sobre os atendimentos do WhatsApp — volume, qualidade,
-            follow-ups e alertas.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void loadData()}
-          disabled={loading}
-          className="gap-2"
-        >
-          <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-          Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        description="Atendimentos do WhatsApp: volume, qualidade, follow-ups e alertas."
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void loadData()}
+            disabled={loading}
+          >
+            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            Atualizar
+          </Button>
+        }
+      />
 
       {/* Erros */}
       {error && (
@@ -255,7 +248,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
 
       {/* Loading inicial */}
       {loading && allRows.length === 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {[0, 1, 2, 3].map((i) => (
             <Card key={i}>
               <CardContent className="p-5">
@@ -285,7 +278,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
 
       {allRows.length > 0 && (
         <Tabs defaultValue="visao_geral" className="space-y-4">
-          <TabsList className="flex flex-wrap h-auto">
+          <TabsList>
             <TabsTrigger value="visao_geral" className="gap-2">
               <LayoutDashboard className="w-4 h-4" />
               Visão Geral
@@ -333,7 +326,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
           {/* ============================ VISÃO GERAL ============================ */}
           <TabsContent value="visao_geral" className="space-y-6">
             {/* KPIs principais */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <WhatsAppStatCard
                 icon={MessagesSquare}
                 tone="azul"
@@ -365,7 +358,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
             </div>
 
             {/* KPIs secundários */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <WhatsAppStatCard
                 icon={Clock}
                 tone="roxo"
@@ -397,7 +390,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
             </div>
 
             {/* KPIs de cadastro / conciliação / serviço */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <WhatsAppStatCard
                 icon={UserCheck}
                 tone="verde"
@@ -587,7 +580,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <WhatsAppStatCard
                 icon={Scale}
                 tone="vermelho"
@@ -693,7 +686,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
             </Card>
 
             {/* Funil */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <WhatsAppStatCard
                 icon={DollarSign}
                 tone="azul"
@@ -723,7 +716,7 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
             </div>
 
             {/* Resolução */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <WhatsAppStatCard
                 icon={CheckCircle2}
                 tone="verde"

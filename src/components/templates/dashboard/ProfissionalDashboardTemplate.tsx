@@ -64,7 +64,7 @@ export const ProfissionalDashboardTemplate =
             {/* Dashboard Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Sessões Hoje
                   </CardTitle>
@@ -79,7 +79,7 @@ export const ProfissionalDashboardTemplate =
               </Card>
 
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Meus Pacientes
                   </CardTitle>
@@ -94,7 +94,7 @@ export const ProfissionalDashboardTemplate =
               </Card>
 
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Prontuários
                   </CardTitle>
@@ -109,7 +109,7 @@ export const ProfissionalDashboardTemplate =
               </Card>
 
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Avaliações
                   </CardTitle>

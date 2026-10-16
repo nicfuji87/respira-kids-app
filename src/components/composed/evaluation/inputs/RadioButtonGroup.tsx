@@ -58,7 +58,7 @@ export const RadioButtonGroup: React.FC<RadioButtonGroupProps> = ({
               layout === 'vertical' && 'w-full text-left',
               isSelected
                 ? 'bg-primary border-primary text-primary-foreground shadow-md'
-                : 'bg-background border-border text-foreground hover:border-primary/50 hover:bg-accent',
+                : 'bg-background border-border text-foreground hover:border-primary/50 hover:bg-muted',
               disabled && 'opacity-50 cursor-not-allowed'
             )}
           >
@@ -70,7 +70,9 @@ export const RadioButtonGroup: React.FC<RadioButtonGroupProps> = ({
               <p
                 className={cn(
                   'text-xs mt-0.5',
-                  isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                  isSelected
+                    ? 'text-primary-foreground/80'
+                    : 'text-muted-foreground'
                 )}
               >
                 {option.descricao}
@@ -84,4 +86,3 @@ export const RadioButtonGroup: React.FC<RadioButtonGroupProps> = ({
 };
 
 RadioButtonGroup.displayName = 'RadioButtonGroup';
-

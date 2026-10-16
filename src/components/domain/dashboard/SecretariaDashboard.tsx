@@ -25,6 +25,7 @@ import type {
   UpcomingAppointment,
   ConsultationToEvolve,
 } from '@/lib/secretaria-dashboard-api';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 // AI dev note: SecretariaDashboard - Componente Domain específico para role secretaria
 // Interface operacional focada em quantidades e alertas, sem valores financeiros globais
@@ -132,7 +133,7 @@ export const SecretariaDashboard = React.memo<SecretariaDashboardProps>(
           </div>
 
           {/* Métricas skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardHeader className="pb-2">
@@ -174,42 +175,32 @@ export const SecretariaDashboard = React.memo<SecretariaDashboardProps>(
           </Alert>
         )}
 
-        {/* AI dev note: Header personalizado para secretaria */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-roxo-titulo dark:text-foreground">
-              {getGreeting()}, {firstName}!
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Dashboard operacional - Secretaria
-            </p>
-          </div>
-          <div className="flex items-center gap-2 md:gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={loading}
-              className="gap-2 text-xs md:text-sm"
-            >
-              <RefreshCw
-                className={`h-3 w-3 md:h-4 md:w-4 ${
-                  loading ? 'animate-spin' : ''
-                }`}
-              />
-              {loading ? 'Atualizando...' : 'Atualizar'}
-            </Button>
-            {lastUpdate && (
-              <span className="text-xs text-muted-foreground hidden sm:block">
-                Última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
-              </span>
-            )}
-          </div>
-        </div>
+        {/* AI dev note: Saudação + atualizar (mesmo padrão dos 3 dashboards) */}
+        <PageHeader
+          title={`${getGreeting()}, ${firstName}!`}
+          actions={
+            <>
+              {lastUpdate && (
+                <span className="hidden text-xs text-muted-foreground sm:block">
+                  Atualizado às {lastUpdate.toLocaleTimeString('pt-BR')}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={loading}
+              >
+                <RefreshCw className={loading ? 'animate-spin' : ''} />
+                {loading ? 'Atualizando...' : 'Atualizar'}
+              </Button>
+            </>
+          }
+        />
 
         {/* AI dev note: Métricas operacionais (sem valores financeiros) */}
         {metrics && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {/* Consultas do Mês */}
             <Card className="bg-azul-respira/5 border-azul-respira/20">
               <CardHeader className="pb-2">
@@ -366,9 +357,6 @@ export const SecretariaDashboard = React.memo<SecretariaDashboardProps>(
                   </div>
                   <div className="text-sm text-muted-foreground">Pendentes</div>
                 </div>
-              </div>
-              <div className="text-xs text-muted-foreground text-center">
-                {metrics?.observacao}
               </div>
             </CardContent>
           </Card>

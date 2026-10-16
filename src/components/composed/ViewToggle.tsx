@@ -87,7 +87,7 @@ export const ViewToggle = React.memo<ViewToggleProps>(
                   onClick={() => handleViewChange(option.value)}
                   className={cn(
                     'cursor-pointer text-sm',
-                    isActive && 'bg-accent text-accent-foreground font-medium'
+                    isActive && 'bg-primary/15 text-foreground font-medium'
                   )}
                 >
                   <IconComponent className="h-4 w-4 mr-2" />

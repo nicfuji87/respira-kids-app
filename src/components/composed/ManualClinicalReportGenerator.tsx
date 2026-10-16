@@ -1590,7 +1590,7 @@ export const ManualClinicalReportGenerator =
                             <button
                               key={item.id}
                               type="button"
-                              className="w-full text-left px-2 py-1.5 rounded hover:bg-accent transition-colors flex flex-col gap-0.5"
+                              className="w-full text-left px-2 py-1.5 rounded hover:bg-muted transition-colors flex flex-col gap-0.5"
                               onClick={() => handleQuickInsert(item.value)}
                             >
                               <span className="text-xs font-medium">
@@ -1831,7 +1831,7 @@ export const ManualClinicalReportGenerator =
                             <button
                               key={p.id}
                               type="button"
-                              className="w-full text-left p-2 rounded-md hover:bg-accent transition-colors"
+                              className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors"
                               onClick={() => handlePickTemplatePatient(p)}
                             >
                               <div className="text-sm font-medium">
@@ -1896,7 +1896,7 @@ export const ManualClinicalReportGenerator =
                           {templateReports.map((r) => (
                             <div
                               key={r.id}
-                              className="border rounded-md p-3 hover:bg-accent/40 transition-colors"
+                              className="border rounded-md p-3 hover:bg-muted transition-colors"
                             >
                               <div className="flex items-start justify-between gap-2 mb-1">
                                 <span className="text-xs text-muted-foreground">

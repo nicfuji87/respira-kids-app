@@ -28,6 +28,7 @@ import {
   LevantamentoTab,
   PendenciasTab,
 } from '@/components/domain/qualidade';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 type ManualTab =
   | 'levantamento'
@@ -41,18 +42,10 @@ export const ManualPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-          Manual de Boas Práticas
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Manual, POPs, cronograma de limpeza e os registros que comprovam a
-          rotina.
-        </p>
-      </div>
+      <PageHeader description="Manual de Boas Práticas, POPs, cronograma de limpeza e os registros que comprovam a rotina." />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as ManualTab)}>
-        <TabsList className="flex flex-wrap h-auto">
+        <TabsList>
           <TabsTrigger value="levantamento" className="gap-2">
             <ClipboardCheck className="w-4 h-4" />
             Levantamento

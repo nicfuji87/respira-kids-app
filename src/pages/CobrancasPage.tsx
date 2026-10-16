@@ -8,22 +8,13 @@
 // Por isso esta rota não tem PIN.
 
 import React from 'react';
-import { MessageCircle } from 'lucide-react';
 import { CobrancasPendentesList } from '@/components/composed/CobrancasPendentesList';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 export const CobrancasPage: React.FC = () => {
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <MessageCircle className="h-6 w-6 text-rosa-suave" />
-          Cobranças
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Cobranças em aberto para enviar pelo WhatsApp. O botão abre a conversa
-          do responsável com a mensagem pronta — é só conferir e enviar.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader description="Cobranças em aberto. O botão abre o WhatsApp do responsável com a mensagem pronta." />
 
       <CobrancasPendentesList />
     </div>

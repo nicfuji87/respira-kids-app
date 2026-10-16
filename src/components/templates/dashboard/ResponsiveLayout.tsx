@@ -92,7 +92,12 @@ export const ResponsiveLayout = React.memo<ResponsiveLayoutProps>(
 
         {/* Mobile Layout */}
         <div className="md:hidden">
-          {!isDesktop && <MobileLayout {...sharedProps} />}
+          {!isDesktop && (
+            <MobileLayout
+              {...sharedProps}
+              pageTitle={breadcrumbItems[breadcrumbItems.length - 1]?.label}
+            />
+          )}
         </div>
       </>
     );

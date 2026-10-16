@@ -1,9 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/primitives/button';
-import {
-  BreadcrumbNav,
-  type BreadcrumbItem,
-} from '@/components/composed/BreadcrumbNav';
+import { type BreadcrumbItem } from '@/components/composed/BreadcrumbNav';
 import { UserProfileDropdown } from '@/components/composed/UserProfileDropdown';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -41,49 +38,50 @@ export const DashboardTopBar = React.memo<DashboardTopBarProps>(
     userRole,
     userAvatar,
     breadcrumbItems,
-    onBreadcrumbClick,
     onMobileMenuClick,
     showMobileMenu = false,
     onSettingsClick,
     onLogout,
     className,
   }) => {
+    // AI dev note: o "breadcrumb" sempre tem 1 item (a página atual — ver
+    // useNavigation), então vira o título da página. Antes era um botão que
+    // navegava para a própria página, e cada página repetia o mesmo nome num h1.
+    const current = breadcrumbItems[breadcrumbItems.length - 1];
+
     return (
       <header
         className={cn(
-          'flex items-center justify-between h-16 px-4 bg-background border-b',
+          'flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-6 lg:px-8',
           className
         )}
       >
-        {/* Left side - Mobile menu + Breadcrumb */}
-        <div className="flex items-center space-x-4">
+        <div className="flex min-w-0 items-center gap-3">
           {showMobileMenu && (
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={onMobileMenuClick}
-              className="h-8 w-8 p-0 md:hidden"
+              className="md:hidden"
+              aria-label="Abrir menu"
             >
               <Menu className="h-4 w-4" />
             </Button>
           )}
 
-          <BreadcrumbNav
-            items={breadcrumbItems}
-            onItemClick={onBreadcrumbClick}
-            className="hidden md:flex"
-          />
-
-          {/* Mobile: show only current page */}
-          {breadcrumbItems.length > 0 && (
-            <h1 className="text-lg font-semibold md:hidden">
-              {breadcrumbItems[breadcrumbItems.length - 1].label}
+          {current && (
+            <h1 className="flex min-w-0 items-center gap-2.5 text-lg font-semibold tracking-tight text-roxo-titulo dark:text-foreground">
+              {current.icon && (
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary [&_svg]:h-4 [&_svg]:w-4">
+                  {current.icon}
+                </span>
+              )}
+              <span className="truncate">{current.label}</span>
             </h1>
           )}
         </div>
 
-        {/* Right side - Profile */}
-        <div className="flex items-center space-x-2">
+        <div className="flex shrink-0 items-center gap-2">
           <UserProfileDropdown
             name={userName}
             email={userEmail}

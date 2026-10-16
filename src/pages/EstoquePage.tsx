@@ -38,6 +38,7 @@ import {
   type ProdutoCusto,
 } from '@/types/produtos';
 import type { EstoqueMovimento } from '@/types/produtos';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 export const EstoquePage: React.FC = () => {
   const { user } = useAuth();
@@ -112,27 +113,20 @@ export const EstoquePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-            Estoque
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Posição e movimentação dos produtos. O cadastro fica na aba
-            Produtos.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void loadData()}
-          disabled={loading}
-          className="gap-2"
-        >
-          <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-          Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        description="Posição e movimentação dos produtos. O cadastro fica em Produtos."
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void loadData()}
+            disabled={loading}
+          >
+            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            Atualizar
+          </Button>
+        }
+      />
 
       <CredencialVencimentoAlert />
 

@@ -193,7 +193,7 @@ const CurrentAppointmentCard = React.memo<{
         <div className="mt-2 flex justify-end">
           <Badge
             variant="outline"
-            className="bg-amarelo-crianca/10 text-amarelo-crianca border-amarelo-crianca/30 text-[10px] font-semibold gap-1"
+            className="bg-amarelo-pipa/20 text-amarelo-pipa border-amarelo-pipa/50 text-xs font-semibold gap-1"
           >
             <FileText className="h-3 w-3" />
             Evoluir
@@ -407,7 +407,7 @@ export const CurrentAppointments = React.memo<CurrentAppointmentsProps>(
       <Card className={cn('w-full', className)}>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Zap className="h-5 w-5 text-amarelo-crianca" />
+            <Zap className="h-5 w-5 text-amarelo-pipa" />
             Atendimentos Agora
           </CardTitle>
         </CardHeader>

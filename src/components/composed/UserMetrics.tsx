@@ -26,7 +26,7 @@ export const UserMetrics = React.memo<UserMetricsProps>(
       return (
         <div
           className={cn(
-            'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4',
+            'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4',
             className
           )}
         >
@@ -90,12 +90,12 @@ export const UserMetrics = React.memo<UserMetricsProps>(
     return (
       <div className={cn('space-y-6', className)}>
         {/* Cards principais */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
           {cards.map((card) => {
             const Icon = card.icon;
             return (
               <Card key={card.title} className={cn(card.className)}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     {card.title}
                   </CardTitle>

@@ -279,7 +279,7 @@ export const PediatricianStep = React.memo<PediatricianStepProps>(
                         key={result.id}
                         type="button"
                         onClick={() => handleSelectPediatrician(result)}
-                        className="w-full p-3 text-left hover:bg-accent transition-colors"
+                        className="w-full p-3 text-left hover:bg-muted transition-colors"
                       >
                         <div className="font-medium">{result.nome}</div>
                         {result.crm && (

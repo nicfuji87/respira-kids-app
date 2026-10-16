@@ -43,6 +43,8 @@ import type { Usuario } from '@/types/usuarios';
 export interface PatientsListProps {
   className?: string;
   onPatientSelect?: (patientId: string) => void;
+  /** Ação da página (ex.: "Novo Paciente") na mesma linha da busca */
+  headerAction?: React.ReactNode;
 }
 
 type SortOption = 'nome' | 'updated_at';
@@ -50,6 +52,7 @@ type SortOption = 'nome' | 'updated_at';
 export const PatientsList: React.FC<PatientsListProps> = ({
   className,
   onPatientSelect,
+  headerAction,
 }) => {
   const [patients, setPatients] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -416,19 +419,22 @@ export const PatientsList: React.FC<PatientsListProps> = ({
           Antes o container virava uma única linha já em sm (640px), espremendo a busca
           em tablets/telas médias - o campo ficava minúsculo e o texto digitado não aparecia. */}
       <div className="flex flex-col xl:flex-row gap-3">
-        {/* Campo de busca com autocomplete */}
-        <div className="relative w-full xl:flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
-          <Input
-            type="text"
-            placeholder="Buscar pacientes por nome, email, telefone ou CPF..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-10 pr-4"
-          />
-          {searchLoading && (
-            <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-          )}
+        {/* Campo de busca com autocomplete (+ ação da página ao lado) */}
+        <div className="flex w-full items-center gap-2 xl:flex-1">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Buscar pacientes por nome, email, telefone ou CPF..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="pl-10 pr-4"
+            />
+            {searchLoading && (
+              <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          {headerAction}
         </div>
 
         {/* Filtros - AI dev note: flex-wrap permite que os botoes quebrem linha em
@@ -735,11 +741,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
               ? `${totalPatients} paciente${totalPatients !== 1 ? 's' : ''} encontrado${totalPatients !== 1 ? 's' : ''}`
               : 'Nenhum paciente encontrado'}
           </span>
-          {totalPages > 1 && (
-            <span>
-              Página {currentPage} de {totalPages}
-            </span>
-          )}
+          {/* "Página X de Y" fica só na barra de paginação, embaixo */}
         </div>
       )}
 
@@ -807,9 +809,11 @@ export const PatientsList: React.FC<PatientsListProps> = ({
 
                   {/* Informações principais */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4">
+                    {/* No celular os badges descem para baixo do nome (antes
+                        a coluna de badges espremia o nome em poucas letras) */}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-lg truncate">
+                        <h3 className="font-semibold text-base sm:text-lg truncate">
                           {patient.nome}
                         </h3>
 
@@ -861,7 +865,7 @@ export const PatientsList: React.FC<PatientsListProps> = ({
                       </div>
 
                       {/* Status de pagamento e consultas */}
-                      <div className="flex flex-col items-end gap-2 shrink-0">
+                      <div className="flex flex-row flex-wrap items-center gap-2 sm:flex-col sm:items-end sm:shrink-0">
                         {/* AI dev note: Badge com TEXTO (não só cor/tooltip) —
                             estado de pagamento legível sem hover e acessível */}
                         {(patient.total_consultas_pagamento || 0) > 0 && (

@@ -65,7 +65,7 @@ export const DashboardExample: React.FC<DashboardExampleProps> = ({
         {/* Metrics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Agendamentos Hoje
               </CardTitle>
@@ -78,7 +78,7 @@ export const DashboardExample: React.FC<DashboardExampleProps> = ({
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Pacientes Ativos
               </CardTitle>
@@ -91,7 +91,7 @@ export const DashboardExample: React.FC<DashboardExampleProps> = ({
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Prontuários</CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -102,7 +102,7 @@ export const DashboardExample: React.FC<DashboardExampleProps> = ({
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Sessões</CardTitle>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>

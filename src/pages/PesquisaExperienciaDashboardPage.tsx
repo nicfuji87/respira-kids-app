@@ -58,6 +58,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 function formatNumber(n: number | null): string {
   if (n === null || n === undefined) return '—';
@@ -157,42 +158,27 @@ export const PesquisaExperienciaDashboardPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-            Pesquisa de Experiência
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Insights e percepções das famílias Respira Kids — respostas
-            anônimas.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void loadData()}
-            disabled={loading}
-            className="gap-2"
-          >
-            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-            Atualizar
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyLink}
-            className="gap-2"
-          >
-            <Copy className="w-4 h-4" />
-            Copiar link
-          </Button>
-          <Button size="sm" onClick={handleOpenSurvey} className="gap-2">
-            <ExternalLink className="w-4 h-4" />
-            Abrir pesquisa
-          </Button>
-        </div>
-      </div>
+      {/* "Copiar link" fica só no card do link público, logo abaixo */}
+      <PageHeader
+        description="Percepções das famílias Respira Kids. Respostas anônimas."
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadData()}
+              disabled={loading}
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+              Atualizar
+            </Button>
+            <Button size="sm" onClick={handleOpenSurvey}>
+              <ExternalLink className="w-4 h-4" />
+              Abrir pesquisa
+            </Button>
+          </>
+        }
+      />
 
       {/* Card do link público */}
       <Card className="bg-azul-respira/5 border-azul-respira/30">

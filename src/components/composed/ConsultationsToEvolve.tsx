@@ -36,6 +36,8 @@ interface ConsultationsToEvolveProps {
   className?: string;
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
   title?: string;
+  /** Total pendente exibido ao lado do título (opcional) */
+  count?: number;
   emptyMessage?: string;
   showProfessionalName?: boolean;
   showValues?: boolean;
@@ -178,7 +180,7 @@ const ConsultationItem = React.memo<{
           (consultation.prioridade === 'urgente' ||
             consultation.diasPendente > 2) &&
             'border-destructive/30 bg-destructive/5',
-          onClick && 'cursor-pointer hover:bg-accent/50'
+          onClick && 'cursor-pointer hover:bg-muted'
         )}
         onClick={() => onClick?.(consultation)}
       >
@@ -302,6 +304,7 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
     className,
     userRole,
     title = 'Consultas a Evoluir',
+    count,
     emptyMessage = 'Nenhuma consulta pendente de evolução',
     showProfessionalName = true,
     showValues = true,
@@ -317,10 +320,13 @@ export const ConsultationsToEvolve = React.memo<ConsultationsToEvolveProps>(
 
     return (
       <Card className={cn('w-full', className)}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-4">
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-vermelho-kids" />
             {title}
+            {count !== undefined && count > 0 && (
+              <Badge variant="destructive">{count}</Badge>
+            )}
             {urgentCount > 0 && showAlert && (
               <Badge variant="destructive" className="ml-2">
                 {urgentCount} urgentes

@@ -754,8 +754,9 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
               </button>
             </div>
 
+            {/* AI dev note: o nome já é o título da página (PatientDetailsManager);
+                aqui fica só o complemento ao lado da foto */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-semibold truncate">{patient.nome}</h3>
               {patient.sexo && (
                 <p className="text-sm text-muted-foreground">
                   {patient.sexo === 'M'
@@ -1025,7 +1026,7 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                 </p>
               ) : sameResponsible && patient.responsavel_legal_nome ? (
                 // Responsável Legal e Financeiro são a mesma pessoa
-                <div className="flex items-start gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
                   <div className="flex gap-1">
                     <Badge variant="outline" className="text-xs">
                       Legal
@@ -1034,7 +1035,7 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                       Financeiro
                     </Badge>
                   </div>
-                  <div className="flex-1 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1">
                     {onResponsibleClick ? (
                       <Button
                         variant="link"
@@ -1068,14 +1069,16 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                     )}
                     {patient.responsavel_legal_email &&
                       userRole !== 'profissional' && (
-                        <p className="text-sm text-muted-foreground">
-                          📧 {patient.responsavel_legal_email}
+                        <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                          <Mail className="h-3.5 w-3.5 shrink-0" />
+                          {patient.responsavel_legal_email}
                         </p>
                       )}
                     {patient.responsavel_legal_telefone &&
                       userRole !== 'profissional' && (
-                        <p className="text-sm text-muted-foreground">
-                          📱 {formatPhone(patient.responsavel_legal_telefone)}
+                        <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                          <Phone className="h-3.5 w-3.5 shrink-0" />
+                          {formatPhone(patient.responsavel_legal_telefone)}
                         </p>
                       )}
                     <SurveyTrackingControl />
@@ -1086,11 +1089,11 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                 <>
                   {/* Responsável Legal */}
                   {patient.responsavel_legal_nome && (
-                    <div className="flex items-start gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
                       <Badge variant="outline" className="mt-1">
                         Legal
                       </Badge>
-                      <div className="flex-1 space-y-1">
+                      <div className="min-w-0 flex-1 space-y-1">
                         {onResponsibleClick ? (
                           <Button
                             variant="link"
@@ -1127,14 +1130,15 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                         )}
                         {patient.responsavel_legal_email &&
                           userRole !== 'profissional' && (
-                            <p className="text-sm text-muted-foreground">
-                              📧 {patient.responsavel_legal_email}
+                            <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                              <Mail className="h-3.5 w-3.5 shrink-0" />
+                              {patient.responsavel_legal_email}
                             </p>
                           )}
                         {patient.responsavel_legal_telefone &&
                           userRole !== 'profissional' && (
-                            <p className="text-sm text-muted-foreground">
-                              📱{' '}
+                            <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                              <Phone className="h-3.5 w-3.5 shrink-0" />
                               {formatPhone(patient.responsavel_legal_telefone)}
                             </p>
                           )}
@@ -1145,11 +1149,11 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
 
                   {/* Responsável Financeiro */}
                   {patient.responsavel_financeiro_nome && (
-                    <div className="flex items-start gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
                       <Badge variant="outline" className="mt-1">
                         Financeiro
                       </Badge>
-                      <div className="flex-1 space-y-1">
+                      <div className="min-w-0 flex-1 space-y-1">
                         {onResponsibleClick ? (
                           <Button
                             variant="link"
@@ -1186,14 +1190,15 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
                         )}
                         {patient.responsavel_financeiro_email &&
                           userRole !== 'profissional' && (
-                            <p className="text-sm text-muted-foreground">
-                              📧 {patient.responsavel_financeiro_email}
+                            <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                              <Mail className="h-3.5 w-3.5 shrink-0" />
+                              {patient.responsavel_financeiro_email}
                             </p>
                           )}
                         {patient.responsavel_financeiro_telefone &&
                           userRole !== 'profissional' && (
-                            <p className="text-sm text-muted-foreground">
-                              📱{' '}
+                            <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                              <Phone className="h-3.5 w-3.5 shrink-0" />
                               {formatPhone(
                                 patient.responsavel_financeiro_telefone
                               )}

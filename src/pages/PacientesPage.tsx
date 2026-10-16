@@ -56,22 +56,20 @@ export const PacientesPage: React.FC = () => {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      {/* Header com ações */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Pacientes</h1>
-          <p className="text-muted-foreground">
-            Gerencie seus pacientes e histórico de atendimentos
-          </p>
-        </div>
-        <Button onClick={handleNewPatient}>
-          <UserPlus className="h-4 w-4 mr-2" />
-          Novo Paciente
-        </Button>
-      </div>
-
-      {/* Lista paginada de pacientes */}
-      <PatientsList className="w-full" />
+      {/* Lista paginada de pacientes — "Novo Paciente" fica ao lado da busca */}
+      <PatientsList
+        className="w-full"
+        headerAction={
+          <Button
+            onClick={handleNewPatient}
+            className="shrink-0"
+            aria-label="Novo Paciente"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Novo Paciente</span>
+          </Button>
+        }
+      />
 
       {/* Dialog de cadastro administrativo */}
       <AdminPatientRegistrationDialog

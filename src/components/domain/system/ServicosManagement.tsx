@@ -17,22 +17,12 @@ export const ServicosManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          Gerenciamento de Serviços
-        </h2>
-        <p className="text-muted-foreground">
-          Configure os tipos de serviços oferecidos e as comissões dos
-          profissionais
-        </p>
-      </div>
-
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
         className="space-y-6"
       >
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList>
           <TabsTrigger
             value="tipos-servico"
             className="flex items-center gap-2"

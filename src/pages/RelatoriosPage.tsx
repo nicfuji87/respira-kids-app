@@ -21,6 +21,7 @@ import {
   InsightsEstrategicos,
   RelatoriosTradicionais,
 } from '@/components/domain/relatorios';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 export const RelatoriosPage: React.FC = () => {
   const [base, setBase] = useState<RelatoriosBase | null>(null);
@@ -50,24 +51,22 @@ export const RelatoriosPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold">Relatórios</h1>
-          <p className="text-muted-foreground">
-            O que aconteceu na clínica e o que os números sugerem fazer
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1"
-          onClick={() => void carregar()}
-          disabled={loading}
-        >
-          <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-          Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        description="O que aconteceu na clínica e o que os números sugerem fazer."
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void carregar()}
+            disabled={loading}
+          >
+            <RefreshCw
+              className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'}
+            />
+            Atualizar
+          </Button>
+        }
+      />
 
       {error && (
         <Card className="border-destructive/40 bg-destructive/5">

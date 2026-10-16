@@ -180,7 +180,7 @@ export const FinancialPreFaturasList: React.FC<
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex flex-wrap items-center justify-between">
             <span className="flex items-center gap-2 text-amber-900">
               <FileClock className="h-5 w-5" />
               Pré-faturas — não geradas no Asaas

@@ -435,7 +435,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                             'w-full flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors text-sm',
                             isActive
                               ? 'bg-primary text-primary-foreground'
-                              : 'hover:bg-accent',
+                              : 'hover:bg-muted',
                             !isActive && `border-l-3 ${corCategoria.border}`
                           )}
                           style={{
@@ -663,7 +663,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                                   'w-full flex items-center gap-1.5 px-2 py-1 rounded text-left transition-colors text-xs',
                                   isActive
                                     ? 'bg-primary text-primary-foreground'
-                                    : 'hover:bg-accent'
+                                    : 'hover:bg-muted'
                                 )}
                                 style={{
                                   borderLeftWidth: isActive ? 0 : '2px',
@@ -729,7 +729,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                                 'w-full flex items-center justify-center p-1 rounded transition-colors',
                                 isActive
                                   ? 'bg-primary text-primary-foreground'
-                                  : 'hover:bg-accent'
+                                  : 'hover:bg-muted'
                               )}
                             >
                               <span

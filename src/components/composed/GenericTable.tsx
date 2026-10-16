@@ -97,21 +97,23 @@ export const GenericTable = <T extends Record<string, any>>({
     <Card className={cn('w-full', className)}>
       <CardHeader>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <CardTitle>{title}</CardTitle>
-            {description && <CardDescription>{description}</CardDescription>}
-          </div>
+          {(title || description) && (
+            <div className="min-w-0 space-y-1">
+              {title && <CardTitle>{title}</CardTitle>}
+              {description && <CardDescription>{description}</CardDescription>}
+            </div>
+          )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 md:ml-auto md:w-auto">
             {/* Busca */}
             {showSearch && (
-              <div className="relative">
+              <div className="relative w-full md:w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder={searchPlaceholder}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
+                  className="pl-10"
                 />
               </div>
             )}
@@ -119,7 +121,7 @@ export const GenericTable = <T extends Record<string, any>>({
             {/* Filtros */}
             {onFilter && (
               <Button variant="outline" size="sm" onClick={onFilter}>
-                <Filter className="mr-2 h-4 w-4" />
+                <Filter className="h-4 w-4" />
                 {filterButtonText}
               </Button>
             )}
@@ -127,7 +129,7 @@ export const GenericTable = <T extends Record<string, any>>({
             {/* Adicionar */}
             {onAdd && (
               <Button size="sm" onClick={onAdd}>
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="h-4 w-4" />
                 {addButtonText}
               </Button>
             )}

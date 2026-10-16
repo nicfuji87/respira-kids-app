@@ -7,13 +7,6 @@ import { WebhookManagement } from '@/components/domain/system/WebhookManagement'
 export const WebhooksPage: React.FC = () => {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Webhooks</h1>
-        <p className="text-muted-foreground">
-          Configure webhooks para receber notificações de eventos do sistema
-        </p>
-      </div>
-
       <WebhookManagement />
     </div>
   );

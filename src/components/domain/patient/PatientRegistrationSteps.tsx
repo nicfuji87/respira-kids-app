@@ -314,7 +314,7 @@ const RegistrationErrorCard: React.FC<{ onRetry: () => void }> = ({
       href={CLINIC_WHATSAPP_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-center gap-2 p-3 rounded-lg border hover:bg-accent transition-colors"
+      className="flex items-center justify-center gap-2 p-3 rounded-lg border hover:bg-muted transition-colors"
     >
       <MessageCircle className="w-4 h-4 text-green-600" aria-hidden="true" />
       <span className="text-sm font-medium">

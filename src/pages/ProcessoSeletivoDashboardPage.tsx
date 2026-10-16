@@ -47,6 +47,7 @@ import type {
   StatusCandidatura,
 } from '@/types/processo-seletivo';
 import type { LucideIcon } from 'lucide-react';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 function buildPublicUrl(): string {
   return `${window.location.origin}/#/vaga-estagio`;
@@ -138,16 +139,7 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-            Estagiários
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Ponto eletrônico, gestão do estágio e candidaturas dos estagiários.
-          </p>
-        </div>
-      </div>
+      <PageHeader description="Ponto eletrônico, gestão do estágio e candidaturas." />
 
       <Tabs
         value={mainTab}
@@ -155,7 +147,7 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
           setMainTab(v as 'ponto' | 'gestao' | 'candidaturas')
         }
       >
-        <TabsList className="flex flex-wrap h-auto">
+        <TabsList>
           <TabsTrigger value="ponto" className="gap-2">
             <Clock className="w-4 h-4" />
             Ponto eletrônico
@@ -190,15 +182,6 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
             >
               <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
               Atualizar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyLink}
-              className="gap-2"
-            >
-              <Copy className="w-4 h-4" />
-              Copiar link
             </Button>
             <Button
               size="sm"
@@ -336,7 +319,7 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
                 value={filter}
                 onValueChange={(v) => setFilter(v as FilterStatus)}
               >
-                <TabsList className="flex flex-wrap h-auto">
+                <TabsList>
                   <TabsTrigger value="todos">Todos ({rows.length})</TabsTrigger>
                   {(
                     [

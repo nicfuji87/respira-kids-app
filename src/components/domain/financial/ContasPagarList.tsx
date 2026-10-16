@@ -13,7 +13,6 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  ChevronRight,
   Download,
   DollarSign,
   MoreHorizontal,
@@ -928,18 +927,8 @@ export const ContasPagarList = React.memo<ContaPagarListProps>(
                                       )}
                                     </DropdownMenuItem>
                                   )}
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    toast({
-                                      title: 'Em desenvolvimento',
-                                      description:
-                                        'Visualização de detalhes será implementada.',
-                                    });
-                                  }}
-                                >
-                                  <ChevronRight className="mr-2 h-4 w-4" />
-                                  Ver Lançamento
-                                </DropdownMenuItem>
+                                {/* AI dev note: item "Ver Lançamento" removido — só mostrava
+                                    um toast "Em desenvolvimento". */}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>

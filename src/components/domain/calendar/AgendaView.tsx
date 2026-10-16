@@ -107,76 +107,76 @@ export const AgendaView = React.memo<AgendaViewProps>(
     const today = startOfDay(new Date());
 
     return (
-      <Card className={cn('w-full', className)}>
-        <CardContent className="p-0">
-          <ScrollArea className="h-[calc(100vh-10rem)] w-full">
-            <div className="p-3 md:p-4 space-y-5">
-              {daysWithEvents.map((day) => {
-                const isToday = isSameDay(day.date, today);
-                const dayLabel = format(day.date, "EEEE, dd 'de' MMMM", {
-                  locale: ptBR,
-                });
-                const relativeDays = differenceInDays(day.date, today);
+      // AI dev note: sem Card externo — cada evento já é um card (EventCard);
+      // o Card em volta deixava cards dentro de card com padding dobrado.
+      <div className={cn('w-full', className)}>
+        <ScrollArea className="h-[calc(100vh-10rem)] w-full">
+          <div className="space-y-5 pb-4">
+            {daysWithEvents.map((day) => {
+              const isToday = isSameDay(day.date, today);
+              const dayLabel = format(day.date, "EEEE, dd 'de' MMMM", {
+                locale: ptBR,
+              });
+              const relativeDays = differenceInDays(day.date, today);
 
-                // AI dev note: sem caso "Ontem" — a view agenda só lista
-                // eventos a partir de hoje, dia anterior nunca aparece
-                let relativeLabel = '';
-                if (relativeDays === 0) relativeLabel = 'Hoje';
-                else if (relativeDays === 1) relativeLabel = 'Amanhã';
+              // AI dev note: sem caso "Ontem" — a view agenda só lista
+              // eventos a partir de hoje, dia anterior nunca aparece
+              let relativeLabel = '';
+              if (relativeDays === 0) relativeLabel = 'Hoje';
+              else if (relativeDays === 1) relativeLabel = 'Amanhã';
 
-                return (
-                  <div key={day.date.toISOString()} className="space-y-2">
-                    {/* Cabeçalho do dia.
+              return (
+                <div key={day.date.toISOString()} className="space-y-2">
+                  {/* Cabeçalho do dia.
                         AI dev note: DS — heading roxo-titulo; teal nunca como
                         cor de texto ("Hoje" é chip de superfície teal) */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-semibold capitalize text-roxo-titulo">
-                        {dayLabel}
-                      </h3>
-                      {relativeLabel && (
-                        <span
-                          className={cn(
-                            'text-xs px-2 py-0.5 rounded-full font-medium',
-                            isToday
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted text-muted-foreground'
-                          )}
-                        >
-                          {relativeLabel}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Eventos do dia */}
-                    <div className="space-y-2">
-                      {day.events.map((event) => (
-                        <EventCard
-                          key={event.id}
-                          event={event}
-                          variant="detailed"
-                          onClick={handleEventClick}
-                          showTime={true}
-                          showLocation={true}
-                          showAttendees={true}
-                          actions={
-                            event.metadata?.type === 'bloqueio' ? undefined : (
-                              <LembreteWhatsAppButton
-                                event={event}
-                                resumo={lembretes.get(event.id)}
-                                onEnviado={carregarLembretes}
-                              />
-                            )
-                          }
-                        />
-                      ))}
-                    </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-semibold capitalize text-roxo-titulo">
+                      {dayLabel}
+                    </h3>
+                    {relativeLabel && (
+                      <span
+                        className={cn(
+                          'text-xs px-2 py-0.5 rounded-full font-medium',
+                          isToday
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {relativeLabel}
+                      </span>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+
+                  {/* Eventos do dia */}
+                  <div className="space-y-2">
+                    {day.events.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        variant="detailed"
+                        onClick={handleEventClick}
+                        showTime={true}
+                        showLocation={true}
+                        showAttendees={true}
+                        actions={
+                          event.metadata?.type === 'bloqueio' ? undefined : (
+                            <LembreteWhatsAppButton
+                              event={event}
+                              resumo={lembretes.get(event.id)}
+                              onEnviado={carregarLembretes}
+                            />
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
     );
   }
 );

@@ -73,7 +73,7 @@ export const SlotsList = React.memo<SlotsListProps>(
                   return (
                     <div
                       key={slot.id}
-                      className="flex items-center justify-between p-2 sm:p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      className="flex items-center justify-between p-2 sm:p-3 rounded-lg border bg-card hover:bg-muted transition-colors"
                     >
                       <div className="flex items-center gap-2 sm:gap-3">
                         <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />

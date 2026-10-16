@@ -271,7 +271,7 @@ export const PatientPediatriciansSection: React.FC<
             pediatricians.map((ped) => (
               <div
                 key={ped.id}
-                className="flex items-start gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+                className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted transition-colors"
               >
                 <Stethoscope className="h-4 w-4 text-muted-foreground mt-1" />
                 <div className="flex-1 space-y-1">
@@ -311,17 +311,10 @@ export const PatientPediatriciansSection: React.FC<
           ) : (
             <div className="text-center py-6 border-2 border-dashed rounded-lg">
               <Stethoscope className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground mb-3">
+              <p className="text-sm text-muted-foreground">
                 Nenhum pediatra cadastrado
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsDialogOpen(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Pediatra
-              </Button>
+              {/* "Adicionar Pediatra" já está no cabeçalho da seção */}
             </div>
           )}
         </div>

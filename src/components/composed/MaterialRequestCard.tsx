@@ -92,7 +92,7 @@ const RequestItem = React.memo<{
       className={cn(
         'flex items-center justify-between p-3 border rounded-lg transition-all duration-200',
         'hover:shadow-sm hover:border-primary/20',
-        onClick && 'cursor-pointer hover:bg-accent/50'
+        onClick && 'cursor-pointer hover:bg-muted'
       )}
       onClick={() => onClick?.(request)}
     >
@@ -153,7 +153,7 @@ export const MaterialRequestCard = React.memo<MaterialRequestCardProps>(
 
     return (
       <Card className={cn('w-full', className)}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-4">
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5 text-roxo-titulo" />
             Solicitação de Material

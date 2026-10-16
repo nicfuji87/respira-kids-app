@@ -177,7 +177,7 @@ export const DocumentosTab: React.FC = () => {
       </Card>
 
       <Tabs value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
-        <TabsList className="flex flex-wrap h-auto">
+        <TabsList>
           <TabsTrigger value="todos">Todos ({contagem.total})</TabsTrigger>
           <TabsTrigger value="vigente">
             Vigentes ({contagem.vigentes})

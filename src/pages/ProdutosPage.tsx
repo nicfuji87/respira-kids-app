@@ -36,6 +36,7 @@ import {
   type CategoriaVenda,
   type Produto,
 } from '@/types/produtos';
+import { PageHeader } from '@/components/composed/PageHeader';
 
 export const ProdutosPage: React.FC = () => {
   const { toast } = useToast();
@@ -109,35 +110,30 @@ export const ProdutosPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-            Produtos
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Catálogo de espaçadores, brinquedos e kits vendidos na clínica e o
-            histórico das vendas. O estoque fica no menu Estoque.
-          </p>
-        </div>
-        {aba === 'catalogo' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void loadData()}
-              disabled={loading}
-              className="gap-2"
-            >
-              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-              Atualizar
-            </Button>
-            <Button size="sm" onClick={handleNovo} className="gap-2">
-              <Plus className="w-4 h-4" />
-              Novo produto
-            </Button>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        description="Espaçadores, brinquedos e kits vendidos na clínica, e o histórico das vendas."
+        actions={
+          aba === 'catalogo' && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadData()}
+                disabled={loading}
+              >
+                <RefreshCw
+                  className={cn('w-4 h-4', loading && 'animate-spin')}
+                />
+                Atualizar
+              </Button>
+              <Button size="sm" onClick={handleNovo}>
+                <Plus className="w-4 h-4" />
+                Novo produto
+              </Button>
+            </>
+          )
+        }
+      />
 
       <Tabs value={aba} onValueChange={(v) => setSearchParams({ tab: v })}>
         <TabsList>

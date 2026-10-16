@@ -1,6 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PatientDetailsManager } from '@/components/domain/pacientes/PatientDetailsManager';
+import { Button } from '@/components/primitives/button';
 
 // AI dev note: PersonDetailsPage - Página para visualização de qualquer pessoa
 // Reutiliza PatientDetailsManager adaptado para diferentes tipos de pessoa
@@ -16,7 +17,7 @@ export const PersonDetailsPage: React.FC = () => {
 
   if (!id) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-destructive mb-4">
             Pessoa não encontrada
@@ -24,12 +25,9 @@ export const PersonDetailsPage: React.FC = () => {
           <p className="text-muted-foreground mb-4">
             ID da pessoa não foi fornecido.
           </p>
-          <button
-            onClick={handleBack}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
+          <Button variant="outline" onClick={handleBack}>
             Voltar
-          </button>
+          </Button>
         </div>
       </div>
     );

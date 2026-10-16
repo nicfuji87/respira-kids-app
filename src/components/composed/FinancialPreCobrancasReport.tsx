@@ -312,7 +312,7 @@ export const FinancialPreCobrancasReport: React.FC<
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between gap-2">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
             Funil de pré-cobranças
