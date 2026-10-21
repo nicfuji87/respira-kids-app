@@ -85,6 +85,11 @@ export interface OportunidadePainel {
   criancas: string | null;
   agendamentos: number;
   receita_vinculada: number;
+  /** Regra fixa sobre a análise da noite (ver migração atribuicao_v2_painel_auditoria). */
+  intencao: Intencao;
+  intencao_fonte: 'etapa' | 'analise' | null;
+  intencao_analise: string | null;
+  intencao_analisada_em: string | null;
 }
 
 export interface CliqueDia {
@@ -149,12 +154,32 @@ export const CANAIS_PAGOS = ['google_ads', 'meta_ads'];
 export const ETAPAS: { ord: number; chave: string; rotulo: string }[] = [
   { ord: 1, chave: 'contato', rotulo: 'Conversa' },
   { ord: 2, chave: 'identificado', rotulo: 'Contato identificado' },
-  { ord: 3, chave: 'qualificado', rotulo: 'Lead qualificado' },
+  // Etapa 3 = conversa com intenção de contratar (análise da noite ou fato:
+  // pediu/agendou). Não é "lead qualificado": ninguém avalia a qualidade.
+  { ord: 3, chave: 'qualificado', rotulo: 'Intenção de contratar' },
   { ord: 4, chave: 'agendamento_solicitado', rotulo: 'Agendamento solicitado' },
   { ord: 5, chave: 'agendado', rotulo: 'Agendamento confirmado' },
   { ord: 6, chave: 'atendido', rotulo: 'Atendimento realizado' },
   { ord: 7, chave: 'pago', rotulo: 'Pagamento recebido' },
 ];
+
+export type Intencao =
+  | 'contratar'
+  | 'paciente'
+  | 'sem_demanda'
+  | 'nao_analisada';
+export const INTENCOES: Record<Intencao, string> = {
+  contratar: 'Intenção de contratar',
+  paciente: 'Paciente em atendimento',
+  sem_demanda: 'Sem demanda comercial',
+  nao_analisada: 'Ainda não analisada',
+};
+export const INTENCOES_DETALHE: Record<Intencao, string> = {
+  contratar: 'perguntou valor/horário, lead quente ou já pediu/agendou',
+  paciente: 'família já atendida: remarcar, cancelar, pagar, nota',
+  sem_demanda: 'fornecedor, saudação sem pedido, outros assuntos',
+  nao_analisada: 'a análise roda de madrugada; conversa do dia entra amanhã',
+};
 
 export const ESTADOS: Record<string, string> = {
   aberta: 'Em aberto',
@@ -504,11 +529,49 @@ export function calcularFunil(r: Recorte): EtapaFunil[] {
   const ops = r.oportunidades;
   let anterior: number | null = null;
   return ETAPAS.filter((e) => e.ord !== 2).map((e) => {
-    const q = ops.filter((o) => o.etapa_maxima_ord >= e.ord).length;
+    const q = ops.filter((o) =>
+      e.ord === 3
+        ? o.intencao === 'contratar' || o.etapa_maxima_ord >= 3
+        : o.etapa_maxima_ord >= e.ord
+    ).length;
     const taxa = anterior == null || anterior === 0 ? null : q / anterior;
     anterior = q;
     return { rotulo: e.rotulo, quantidade: q, taxa };
   });
+}
+
+// ── Tamanho e cobertura da amostra ───────────────────────────────────
+// Abaixo disso o painel avisa que comparar canais/campanhas não é conclusivo.
+// Limiares de bom senso (não estatísticos); ajuste aqui se o dono decidir.
+export const AMOSTRA_MIN_PACIENTES = 30;
+export const AMOSTRA_MIN_COBERTURA = 0.7;
+
+export function lerAmostra(r: Recorte) {
+  const comerciais = r.oportunidades.filter((o) => o.intencao === 'contratar');
+  const comOrigem = comerciais.filter(
+    (o) => o.tipo_origem !== 'nao_atribuida'
+  ).length;
+  const novos = r.aquisicoes.length;
+  const ligados = r.aquisicoes.filter(
+    (a) => a.tipo_vinculo !== 'sem_vinculo'
+  ).length;
+  const coberturaOrigem = comerciais.length
+    ? comOrigem / comerciais.length
+    : null;
+  const coberturaPacientes = novos ? ligados / novos : null;
+  return {
+    conversas: r.oportunidades.length,
+    comerciais: comerciais.length,
+    comOrigem,
+    coberturaOrigem,
+    novos,
+    ligados,
+    coberturaPacientes,
+    suficiente:
+      novos >= AMOSTRA_MIN_PACIENTES &&
+      (coberturaOrigem ?? 0) >= AMOSTRA_MIN_COBERTURA &&
+      (coberturaPacientes ?? 0) >= AMOSTRA_MIN_COBERTURA,
+  };
 }
 
 export function topoDoSite(r: Recorte) {
@@ -840,7 +903,11 @@ export interface Qualidade {
     novos_pacientes: number;
     com_oportunidade: number;
     vinculo_alto: number;
+    vinculo_provavel: number;
+    sem_vinculo: number;
   };
+  /** Paciente novo com consulta passada ainda sem "finalizado". */
+  aguardando_baixa: { pacientes: number; ligados_a_conversa: number };
   faturas:
     | {
         mes: string;

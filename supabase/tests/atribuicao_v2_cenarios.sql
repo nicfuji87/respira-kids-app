@@ -7,7 +7,8 @@
 -- (PostgREST com a service role) e executar com
 --   DO $x$ BEGIN EXECUTE (SELECT sql FROM public.zz_rascunho_sql WHERE id='teste'); END $x$;
 -- Rodar DEPOIS das migrações atribuicao_v2_ju.sql e atribuicao_v2_custos.sql.
--- Resultado de 21/10/2026: fase 1 (27) + custos/coorte (9).
+-- Resultado de 21/10/2026: fase 1 (27) + custos/coorte (9) + sessão sem baixa (3,
+-- depois de atribuicao_v2_painel_auditoria.sql).
 -- =====================================================================
 
 -- Os gatilhos da agenda/pessoas/faturas ficam LIGADOS (este acesso não pode usar
@@ -140,6 +141,7 @@ DECLARE
   x record; v int; v2 int; v_txt text; ev1 int; ev2 int; snap1 text; snap2 text;
   v_tok text; v_base jsonb; v_lin jsonb; v_tot jsonb; r jsonb; r2 jsonb; r3 jsonb; d1 date; v_num numeric;
   p13 uuid; c13 bigint;
+  rQ uuid; p14 uuid; p15 uuid; p16 uuid; a14a uuid; a15a uuid; a16b uuid;
   T13 timestamptz := date_trunc('month', now()) - interval '3 days' + interval '15 hours';
 BEGIN
   -- os telefones fictícios não podem existir de verdade
@@ -276,6 +278,28 @@ BEGIN
   PERFORM pg_temp.ag(p13, T13 + interval '2 hours', date_trunc('month', n0) + interval '2 days', 'finalizado', 'pago', 260,
                      pg_temp.fatura(rN, p13, 260, 'pago', date_trunc('month', n0) + interval '2 days'));
   PERFORM pg_temp.clique('RK-TSTP2345', 'google', 'cpc', '777', 'Coorte', T13 - interval '1 min');
+
+  ---------------------------------------------------------------- S14-S16 sessão sem baixa ("finalizado")
+  -- S14 paciente antigo cujas sessões nunca tiveram baixa (confirmado + pago): a 1ª finalizada agora NÃO é aquisição nova
+  rQ := pg_temp.pessoa('responsavel', 'Mãe Q', pg_temp.tel(26), n0 - interval '300 days');
+  p14 := pg_temp.pessoa('paciente', 'Criança Q1', NULL, n0 - interval '300 days');
+  PERFORM pg_temp.liga(p14, rQ);
+  a14a := pg_temp.ag(p14, n0 - interval '210 days', n0 - interval '200 days', 'confirmado', 'pago', 260,
+                     pg_temp.fatura(rQ, p14, 260, 'pago', n0 - interval '199 days'));
+  PERFORM pg_temp.ag(p14, n0 - interval '9 days', n0 - interval '8 days', 'finalizado', 'pago', 260,
+                     pg_temp.fatura(rQ, p14, 260, 'pago', n0 - interval '7 days'));
+  -- S15 paciente novo: 1ª sessão paga e sem baixa, 2ª finalizada → aquisição na 1ª sessão
+  p15 := pg_temp.pessoa('paciente', 'Criança Q2', NULL, n0 - interval '20 days');
+  PERFORM pg_temp.liga(p15, rQ);   -- irmão da Q1: família já atendida (sessão paga sem baixa)
+  a15a := pg_temp.ag(p15, n0 - interval '20 days', n0 - interval '6 days', 'confirmado', 'pago', 260,
+                     pg_temp.fatura(rQ, p15, 260, 'pago', n0 - interval '6 days'));
+  PERFORM pg_temp.ag(p15, n0 - interval '20 days', n0 - interval '3 days', 'finalizado', 'pendente', 260, NULL);
+  -- S16 só agendado (sem pagamento, sem baixa) não conta; nem sessão paga sem nenhuma finalizada
+  p16 := pg_temp.pessoa('paciente', 'Criança Q3', NULL, n0 - interval '20 days');
+  PERFORM pg_temp.liga(p16, rQ);
+  PERFORM pg_temp.ag(p16, n0 - interval '20 days', n0 - interval '10 days', 'agendado', 'pendente', 260, NULL);
+  a16b := pg_temp.ag(p16, n0 - interval '20 days', n0 - interval '5 days', 'confirmado', 'pago', 260,
+                     pg_temp.fatura(rQ, p16, 260, 'pago', n0 - interval '5 days'));
 
   ---------------------------------------------------------------- exclusões
   cx := pg_temp.conversa(5561999000099);       -- faixa das conversas fictícias da Ju
@@ -499,6 +523,16 @@ BEGIN
   IF v_txt = date_trunc('month', T13)::date || ':1:260.00' AND snap1 = 'true'
   THEN ok := array_append(ok, 'S13 coorte no mês do clique, atendido no mês seguinte, receita sem duplicar'::text);
   ELSE falhas := array_append(falhas, format('S13: linhas=%s mes_origem_ok=%s', v_txt, snap1)); END IF;
+
+  -- S14-S16 sessão sem baixa
+  x := pg_temp.aq(p14);
+  IF x.primeiro_atendimento_id = a14a THEN ok := array_append(ok, 'S14 paciente antigo sem baixa não vira aquisição nova'::text);
+  ELSE falhas := array_append(falhas, format('S14: %s', row_to_json(x))); END IF;
+  x := pg_temp.aq(p15);
+  SELECT count(*) INTO v FROM public.vw_atrib_aquisicoes WHERE paciente_id = p16;
+  IF x.primeiro_atendimento_id = a15a AND NOT x.familia_nova AND v = 0
+  THEN ok := array_append(ok, 'S15/S16 1ª sessão paga sem baixa ancora a aquisição; sem finalizada não conta'::text);
+  ELSE falhas := array_append(falhas, format('S15/S16: p15=%s p16_linhas=%s', row_to_json(x), v)); END IF;
 
   -- Reconstrução do zero: apaga tudo o que é derivado (vínculos, estados e o
   -- histórico calculado) e recalcula de uma vez. Tem de dar o mesmo resultado

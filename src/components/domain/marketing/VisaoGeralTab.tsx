@@ -4,6 +4,7 @@ import {
   brl,
   calcularFunil,
   calcularMidia,
+  lerAmostra,
   num,
   pct,
   rotuloMes,
@@ -14,6 +15,7 @@ import {
 } from '@/lib/marketing-atribuicao';
 import {
   Aviso,
+  AvisoAmostra,
   BarrasHorizontais,
   CartaoIndicador,
   ColunasMensais,
@@ -23,9 +25,7 @@ export const VisaoGeralTab: React.FC<{ r: Recorte }> = ({ r }) => {
   const midia = useMemo(() => calcularMidia(r), [r]);
   const funil = useMemo(() => calcularFunil(r), [r]);
   const site = useMemo(() => topoDoSite(r), [r]);
-  const comOrigem = r.oportunidades.filter(
-    (o) => o.tipo_origem !== 'nao_atribuida'
-  ).length;
+  const amostra = useMemo(() => lerAmostra(r), [r]);
   const receita = r.aquisicoes.reduce((s, a) => s + a.ltv_realizado, 0);
   const porMes = r.meses.map((m) => ({
     rotulo: rotuloMes(m),
@@ -34,6 +34,8 @@ export const VisaoGeralTab: React.FC<{ r: Recorte }> = ({ r }) => {
 
   return (
     <div className="space-y-4">
+      <AvisoAmostra a={amostra} />
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <CartaoIndicador
           rotulo="Investimento (mídia paga)"
@@ -41,14 +43,14 @@ export const VisaoGeralTab: React.FC<{ r: Recorte }> = ({ r }) => {
           formato={brl}
         />
         <CartaoIndicador
-          rotulo="Conversas com origem"
-          valor={num(comOrigem)}
-          detalhe={`de ${num(r.oportunidades.length)} conversas no período`}
+          rotulo="Conversas com intenção de contratar"
+          valor={num(amostra.comerciais)}
+          detalhe={`de ${num(amostra.conversas)} conversas no período · ${num(amostra.comOrigem)} com origem identificada`}
         />
         <CartaoIndicador
           rotulo="Pacientes novos atendidos"
-          valor={num(r.aquisicoes.length)}
-          detalhe={`${num(midia.novosPagos)} atribuídos à mídia paga`}
+          valor={num(amostra.novos)}
+          detalhe={`1ª sessão finalizada na agenda · ${num(amostra.ligados)} ligado(s) a uma conversa · ${num(midia.novosPagos)} à mídia paga`}
         />
         <CartaoIndicador rotulo="CAC de mídia" ind={midia.cac} formato={brl} />
         <CartaoIndicador

@@ -23,7 +23,15 @@ import {
 } from 'recharts';
 import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
-import type { CustoStatus, Indicador } from '@/lib/marketing-atribuicao';
+import {
+  AMOSTRA_MIN_COBERTURA,
+  AMOSTRA_MIN_PACIENTES,
+  type CustoStatus,
+  type Indicador,
+  type lerAmostra,
+} from '@/lib/marketing-atribuicao';
+
+type Amostra = ReturnType<typeof lerAmostra>;
 
 /** Valor de um indicador ou "Indisponível" com o motivo visível. */
 export const ValorIndicador: React.FC<{
@@ -168,6 +176,31 @@ export const Aviso: React.FC<{
     <div className="text-muted-foreground">{children}</div>
   </div>
 );
+
+/**
+ * Tamanho e cobertura da amostra. Fica SEMPRE visível (inclusive depois que
+ * os custos chegarem): enquanto não houver pacientes e origem suficientes, a
+ * comparação entre canais não é conclusiva.
+ */
+export const AvisoAmostra: React.FC<{ a: Amostra }> = ({ a }) => (
+  <Aviso tom={a.suficiente ? 'info' : 'atencao'}>
+    {!a.suficiente && (
+      <strong className="text-foreground">
+        Amostra ainda pequena para decidir investimento.{' '}
+      </strong>
+    )}
+    {a.novos} paciente{a.novos === 1 ? '' : 's'} novo
+    {a.novos === 1 ? '' : 's'} no período ({a.ligados} ligado
+    {a.ligados === 1 ? '' : 's'} a uma conversa) e {a.comOrigem} de{' '}
+    {a.comerciais} conversas com intenção de contratar com origem identificada (
+    {pctAmostra(a.coberturaOrigem)}).{' '}
+    {a.suficiente
+      ? 'Amostra dentro do mínimo do painel.'
+      : `A comparação entre canais e campanhas só passa a ser conclusiva a partir de ${AMOSTRA_MIN_PACIENTES} pacientes novos e ${Math.round(AMOSTRA_MIN_COBERTURA * 100)}% de origem identificada.`}
+  </Aviso>
+);
+const pctAmostra = (v: number | null) =>
+  v == null ? '—' : `${Math.round(v * 100)}%`;
 
 const COR = 'hsl(var(--serie-1))';
 

@@ -6,6 +6,7 @@ import {
 import {
   brl,
   calcularMidia,
+  lerAmostra,
   linhasCampanha,
   linhasCanal,
   num,
@@ -17,7 +18,12 @@ import {
   type LinhaCampanha,
   type Recorte,
 } from '@/lib/marketing-atribuicao';
-import { Aviso, CelulaIndicador, SeloCusto } from './marketing-ui';
+import {
+  Aviso,
+  AvisoAmostra,
+  CelulaIndicador,
+  SeloCusto,
+} from './marketing-ui';
 
 type LinhaTabela = LinhaCampanha & {
   roas1: Indicador;
@@ -32,12 +38,14 @@ export const CampanhasTab: React.FC<{ r: Recorte }> = ({ r }) => {
   const canais = useMemo(() => linhasCanal(r), [r]);
   const midia = useMemo(() => calcularMidia(r), [r]);
   const site = topoDoSite(r);
+  const amostra = useMemo(() => lerAmostra(r), [r]);
   const naoAtribuidos = r.aquisicoes.filter(
     (a) => a.tipo_origem === 'sem_vinculo' || a.tipo_origem === 'nao_atribuida'
   ).length;
 
   return (
     <div className="space-y-4">
+      <AvisoAmostra a={amostra} />
       {!midia.completo && (
         <Aviso tom="atencao">
           {midia.investimento.motivo ?? midia.investimento.aviso} CAC e ROAS

@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/primitives/skeleton';
 import {
   ESTADOS,
   ETAPAS,
+  INTENCOES,
   MOTIVOS_PERDA,
   ORIGENS,
   brl,
@@ -20,6 +21,7 @@ import {
   data,
   dataHora,
   rotuloCanal,
+  type Intencao,
   type Jornada,
   type Recorte,
 } from '@/lib/marketing-atribuicao';
@@ -128,10 +130,18 @@ function montarPassos(j: Jornada): Passo[] {
       detalhe: `${a.servico ?? 'serviço'} · vínculo ${a.tipo_vinculo === 'pedido_ju' ? 'pelo pedido da Ju' : a.tipo_vinculo === 'humano' ? 'confirmado pela equipe' : 'provável (telefone + janela de 60 dias)'}`,
     });
     // data_hora é hora de parede (sem fuso): mostrada como está
+    const em = `${a.data_hora}:00-03:00`;
+    const semBaixa =
+      (a.status_consulta === 'agendado' ||
+        a.status_consulta === 'confirmado') &&
+      new Date(em).getTime() < Date.now();
     p.push({
-      em: `${a.data_hora}:00-03:00`,
+      em,
       titulo: `Sessão ${STATUS_CONSULTA[a.status_consulta ?? ''] ?? a.status_consulta} — ${a.crianca}`,
       detalhe: [
+        semBaixa
+          ? 'já passou e não foi finalizada na agenda: só conta como atendimento depois da baixa'
+          : null,
         SITUACAO_RECEITA[a.situacao_receita ?? ''] ?? a.situacao_receita,
         a.receita ? brl(a.receita) : null,
         a.tipo_paciente === 'recorrente'
@@ -263,16 +273,18 @@ export const JornadasTab: React.FC<{
 }> = ({ r, aberta, setAberta }) => {
   const [busca, setBusca] = useState('');
   const [estado, setEstado] = useState('todos');
+  const [intencao, setIntencao] = useState<'todas' | Intencao>('todas');
   const lista = useMemo(() => {
     const b = busca.trim().toLowerCase();
     return r.oportunidades.filter(
       (o) =>
         (estado === 'todos' || o.estado === estado) &&
+        (intencao === 'todas' || o.intencao === intencao) &&
         (!b ||
           (o.criancas ?? '').toLowerCase().includes(b) ||
           String(o.id) === b)
     );
-  }, [r.oportunidades, busca, estado]);
+  }, [r.oportunidades, busca, estado, intencao]);
 
   return (
     <>
@@ -311,6 +323,30 @@ export const JornadasTab: React.FC<{
               </button>
             ))}
           </div>
+          <div
+            className="flex flex-wrap gap-1"
+            role="group"
+            aria-label="Filtrar por intenção"
+          >
+            {(
+              [
+                'todas',
+                'contratar',
+                'paciente',
+                'sem_demanda',
+                'nao_analisada',
+              ] as const
+            ).map((i) => (
+              <button
+                key={i}
+                onClick={() => setIntencao(i)}
+                className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs ${intencao === i ? 'border-[hsl(var(--azul-respira-ink))] bg-muted font-medium' : 'text-muted-foreground'}`}
+                aria-pressed={intencao === i}
+              >
+                {i === 'todas' ? 'Qualquer intenção' : INTENCOES[i]}
+              </button>
+            ))}
+          </div>
         </div>
         {lista.length ? (
           <div className="overflow-x-auto rounded-md border">
@@ -321,6 +357,7 @@ export const JornadasTab: React.FC<{
                     'Nº',
                     'Aberta em',
                     'Criança(s)',
+                    'Intenção',
                     'Origem',
                     'Campanha',
                     'Etapa máxima',
@@ -361,6 +398,18 @@ export const JornadasTab: React.FC<{
                       {o.criancas ?? (
                         <span className="text-muted-foreground">—</span>
                       )}
+                    </td>
+                    <td
+                      className="whitespace-nowrap px-3 py-2"
+                      title={
+                        o.intencao_fonte === 'etapa'
+                          ? 'pelo fato: pediu ou agendou'
+                          : o.intencao_analisada_em
+                            ? `análise da noite de ${data(o.intencao_analisada_em)}`
+                            : undefined
+                      }
+                    >
+                      {INTENCOES[o.intencao] ?? o.intencao}
                     </td>
                     <td
                       className="whitespace-nowrap px-3 py-2"

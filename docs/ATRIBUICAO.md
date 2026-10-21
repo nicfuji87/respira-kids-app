@@ -111,15 +111,53 @@ Paciente já atendido que volta por campanha conta como retenção, não entra n
 - **Filtro de serviço:** vale para pacientes e receita (serviço do 1º atendimento); o
   investimento não se divide por serviço, então CAC/ROAS ficam indisponíveis com ele.
 
+## Ajustes da auditoria (21/10/2026, `atribuicao_v2_painel_auditoria.sql`)
+
+- **Paciente novo e sessão sem baixa.** A recepção nem sempre marca "finalizado": desde
+  14/10, 71 sessões passadas seguiam agendadas/confirmadas contra 40 finalizadas, e 367
+  dos 1.430 pacientes com sessão paga não têm nenhuma finalizada. Com a regra antiga um
+  paciente antigo virava "novo" no dia em que alguém desse baixa numa sessão dele (157
+  das 1.077 aquisições históricas tinham sessão paga antes). Agora:
+  - para contar como aquisição continua sendo preciso **1 sessão finalizada**;
+  - a **data** da aquisição e o "família já atendida" usam a 1ª sessão que **ocorreu**
+    (`fn_atrib_sessao_ocorreu`): finalizada, ou agendada/confirmada já passada e paga
+    (estorno, falta, cancelamento, reagendamento e erro nunca contam);
+  - o descarte `ja_paciente` do processamento usa a mesma regra.
+    Efeito: 157 datas e 13 "família nova" históricos corrigidos; o período rastreado não mudou.
+- **Mesmos números, universos diferentes.** "Pacientes novos atendidos" (Visão geral)
+  inclui quem chegou sem conversa ligada; o funil conta só oportunidades da Ju. Sessões e
+  retorno contam só sessões finalizadas; a receita conta o que foi pago.
+- **Consultas sem baixa** (aba Qualidade): paciente novo com consulta já passada ainda
+  agendada/confirmada. Não vira aquisição até a baixa — era o caso da jornada #17.
+- **Vínculo** dos pacientes novos separado em confirmado (equipe ou pedido da Ju),
+  provável (telefone + 60 dias) e sem conversa.
+- **Intenção da conversa** (`vw_atrib_oportunidades_painel.intencao`): toda conversa
+  nova vira oportunidade, mas nem toda é comercial. Regra fixa sobre a análise da noite
+  (`whatsapp_conversas`, mesma chave de telefone): pediu/agendou → contratar; lead quente,
+  demanda comercial ou cliente novo que perguntou valor/horário → contratar; "outros" ou
+  "sem atendimento" → sem demanda comercial; o resto → paciente em atendimento; sem análise
+  posterior à abertura → ainda não analisada. A IA não escolhe a categoria nem muda o
+  estado da oportunidade. Em 21/10: 13 contratar, 5 pacientes, 2 sem demanda, 7 do dia.
+- **Funil:** a etapa 3 virou "Intenção de contratar" (não há avaliação de qualidade de
+  lead). As 27 conversas seguem como volume; a taxa útil é intenção → agendamento.
+- **Amostra:** aviso fixo em Visão geral e Campanhas. Comparação entre canais só é tratada
+  como conclusiva a partir de 30 pacientes novos e 70% de origem identificada e de
+  pacientes ligados a conversa (`AMOSTRA_MIN_*` em `marketing-atribuicao.ts`; limiar de
+  bom senso, não estatístico).
+- **Desempenho:** as visões leem a MV de receita em vez de agendamentos/faturas (o RLS
+  por linha estourava o tempo do admin): aquisições 500 ms → 20 ms, Qualidade 650 → 80 ms.
+  Efeito colateral: aquisição aparece até 10 min depois da baixa, como a receita.
+
 ## Testes
 
-`supabase/tests/atribuicao_v2_cenarios.sql` — 34 verificações com dados fictícios,
+`supabase/tests/atribuicao_v2_cenarios.sql` — 36 verificações com dados fictícios,
 numa transação sempre desfeita: 1ª criança pelo Google, 2º filho, dois responsáveis,
 paciente antigo voltando, remarcação, cancelamento e recuperação, falta cobrada,
 fatura com desconto e sessão não paga, estorno, sem origem, fatos fora de ordem,
 reprocessamento, reconstrução do zero; custos (importar, repetir, reprocessar, divergência,
 moeda/conta/linha inválidas, token errado, custo completo × parado, campanha sem custo) e
-coorte de um mês para o outro. Carga real: 0,8 s na 1ª rodada, 0,2 s nas seguintes.
+coorte de um mês para o outro; paciente antigo sem baixa e 1ª sessão paga sem baixa
+(S14–S16). `supabase/tests/atribuicao_v2_painel_testes.sql` — 7 do painel. Carga real: 0,8 s na 1ª rodada, 0,2 s nas seguintes.
 
 **Conferência com dados reais (21/10/2026, só totais):** a receita por sessão bate com as
 faturas pagas — jul R$ 124.560,00 (exato), ago R$ 184.750,00 × 184.750,02 (2 centavos de
@@ -143,13 +181,16 @@ Pagamento fora de fatura no trimestre: R$ 3.200 (quase tudo sessão de valor zer
   primeira vez, rodar com `DIAS = 31` para trazer o histórico.
 - Validar uma aquisição paga de ponta a ponta quando a campanha estiver no ar
   (clique no anúncio → RK → WhatsApp → agenda → atendimento → receita).
-- Painel admin. Classificação de qualificação/motivo de perda pela análise da noite (fase 3).
+- Motivo de perda pela análise da noite (a intenção já usa essa análise).
+- Recepção dar baixa ("finalizado") nas sessões: sem isso o paciente novo não aparece.
 - Meta: anúncio de clique para WhatsApp (dados de referral na Entrada).
 - Jurídico: base legal de cada operação (dado de saúde de criança: art. 11 da LGPD),
   retenção (24 meses proposto) e LIA. Anonimização ainda **não** agendada.
 
 ## Rollback
 
+`supabase/migrations/atribuicao_v2_painel_auditoria_rollback.sql` (ajustes da auditoria;
+restaura o texto exato salvo em `interno.atrib_definicoes_anteriores`),
 `supabase/migrations/atribuicao_v2_painel_rollback.sql` (fase 3),
 `supabase/migrations/atribuicao_v2_custos_rollback.sql` (fase 2, desfaz só os custos),
 `supabase/migrations/atribuicao_v2_ju_rollback.sql` (sistema, tudo) e

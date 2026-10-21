@@ -73,7 +73,8 @@ export const CoortesTab: React.FC<{ r: Recorte }> = ({ r }) => {
           formato={brl}
         />
         <CartaoIndicador
-          rotulo="Sessões por paciente"
+          rotulo="Sessões finalizadas por paciente"
+          detalhe="só sessões com baixa na agenda (finalizado)"
           ind={
             aqs.length
               ? {
@@ -126,7 +127,8 @@ export const CoortesTab: React.FC<{ r: Recorte }> = ({ r }) => {
         foi naquele mês. A receita de 30/90/180 dias conta as sessões desde o 1º
         atendimento, uma vez só, mesmo que paguem nos meses seguintes. * =
         parcial: ainda há pacientes que não completaram o prazo. LTV da família
-        soma irmãos atendidos depois.
+        soma irmãos atendidos depois. Sessões e retorno contam só sessões
+        finalizadas na agenda; a receita conta tudo o que foi pago.
       </Aviso>
 
       <SecaoRelatorio
@@ -214,7 +216,7 @@ export const CoortesTab: React.FC<{ r: Recorte }> = ({ r }) => {
             },
             {
               chave: 'sessoesMedias',
-              titulo: 'Sessões/paciente',
+              titulo: 'Sessões finalizadas/paciente',
               alinhar: 'direita',
               formato: (v) =>
                 v == null
@@ -263,7 +265,7 @@ export const CoortesTab: React.FC<{ r: Recorte }> = ({ r }) => {
               },
               {
                 chave: 'sessoes',
-                titulo: 'Sessões/paciente',
+                titulo: 'Sessões finalizadas/paciente',
                 alinhar: 'direita',
                 formato: (v) =>
                   (v as number).toLocaleString('pt-BR', {

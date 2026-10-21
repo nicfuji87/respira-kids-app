@@ -6,6 +6,8 @@ import {
 import {
   ESTADOS,
   ETAPAS,
+  INTENCOES,
+  INTENCOES_DETALHE,
   MOTIVOS_PERDA,
   calcularFunil,
   contarPor,
@@ -14,6 +16,7 @@ import {
   pct,
   rotuloCanal,
   topoDoSite,
+  type Intencao,
   type Recorte,
 } from '@/lib/marketing-atribuicao';
 import { Aviso, BarrasHorizontais } from './marketing-ui';
@@ -25,8 +28,14 @@ export const FunilTab: React.FC<{
   const funil = useMemo(() => calcularFunil(r), [r]);
   const site = useMemo(() => topoDoSite(r), [r]);
   const ops = r.oportunidades;
+  // Família em tratamento e conversa sem demanda não são oportunidade de
+  // aquisição em andamento: ficam fora desta lista (mas contam no volume).
   const paradas = contarPor(
-    ops.filter((o) => o.estado === 'aberta' || o.estado === 'agendada'),
+    ops.filter(
+      (o) =>
+        (o.estado === 'aberta' || o.estado === 'agendada') &&
+        (o.intencao === 'contratar' || o.intencao === 'nao_analisada')
+    ),
     (o) => ETAPAS.find((e) => e.chave === o.etapa_atual)?.rotulo
   );
   const perdas = contarPor(
@@ -37,7 +46,23 @@ export const FunilTab: React.FC<{
         : 'Sem motivo'
   );
   const comEvidencia = ops.filter((o) => o.motivo_evidencia);
-  const qualificadasPelaIa = ops.some((o) => o.etapa_maxima === 'qualificado');
+  const ordemIntencao: Intencao[] = [
+    'contratar',
+    'paciente',
+    'sem_demanda',
+    'nao_analisada',
+  ];
+  const porIntencao = ordemIntencao.map((i) => ({
+    intencao: INTENCOES[i],
+    detalhe: INTENCOES_DETALHE[i],
+    q: ops.filter((o) => o.intencao === i).length,
+    p: ops.length
+      ? ops.filter((o) => o.intencao === i).length / ops.length
+      : null,
+  }));
+  const novosSemConversa = r.aquisicoes.filter(
+    (a) => a.tipo_vinculo === 'sem_vinculo'
+  ).length;
 
   const linhasEtapa = funil.map((e) => ({
     etapa: e.rotulo,
@@ -122,19 +147,49 @@ export const FunilTab: React.FC<{
               },
             ]}
           />
-          {!qualificadasPelaIa && (
-            <Aviso>
-              "Lead qualificado" ainda não é classificado sozinho (fase futura):
-              hoje a etapa só conta quem já avançou além dela. A taxa de
-              conversa → qualificado não deve ser lida como qualidade de lead.
-            </Aviso>
-          )}
+          <Aviso>
+            O funil conta só conversas que chegaram pelo WhatsApp da Ju.
+            "Atendimento realizado" exige a sessão marcada como finalizada na
+            agenda: consulta que já aconteceu mas segue "agendada" ou
+            "confirmada" ainda não aparece aqui.
+            {novosSemConversa > 0 &&
+              ` ${num(novosSemConversa)} paciente(s) novo(s) do período chegaram sem conversa ligada: estão na Visão geral, não neste funil.`}
+          </Aviso>
         </SecaoRelatorio>
 
         <div className="space-y-4">
           <SecaoRelatorio
+            titulo="O que as conversas pediam"
+            descricao="Toda conversa nova vira oportunidade, mas nem toda é comercial. Classificação por regra fixa sobre a análise da noite; quem pediu ou agendou conta como intenção pelo próprio fato."
+          >
+            <TabelaRelatorio
+              linhas={porIntencao}
+              colunas={[
+                {
+                  chave: 'intencao',
+                  titulo: 'Intenção',
+                  formato: (v, l) => (
+                    <div>
+                      <div>{String(v)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {String((l as { detalhe: string }).detalhe)}
+                      </div>
+                    </div>
+                  ),
+                },
+                { chave: 'q', titulo: 'Conversas', alinhar: 'direita' },
+                {
+                  chave: 'p',
+                  titulo: 'Do total',
+                  alinhar: 'direita',
+                  formato: (v) => pct(v as number | null),
+                },
+              ]}
+            />
+          </SecaoRelatorio>
+          <SecaoRelatorio
             titulo="Onde estão as oportunidades em andamento"
-            descricao="Etapa atual das que estão abertas ou agendadas."
+            descricao="Etapa atual das abertas ou agendadas com intenção de contratar (ou ainda não analisadas)."
           >
             <TabelaRelatorio
               linhas={paradas.map(([etapa, q]) => ({ etapa, q }))}

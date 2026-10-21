@@ -58,6 +58,7 @@ export const QualidadeTab: React.FC<{
   const pOrigem = o.oportunidades ? comOrigem / o.oportunidades : null;
   const a = q.agendamentos_90d;
   const pAg = a.novos_pacientes ? a.com_oportunidade / a.novos_pacientes : null;
+  const baixa = q.aguardando_baixa ?? { pacientes: 0, ligados_a_conversa: 0 };
   const faturas = q.faturas ?? [];
   const difTotal = faturas.reduce(
     (s, f) => s + Math.abs(Number(f.diferenca)),
@@ -110,13 +111,23 @@ export const QualidadeTab: React.FC<{
               pOrigem == null ? 'neutro' : pOrigem >= 0.5 ? 'ok' : 'atencao'
             }
             selo={pct(pOrigem)}
-            detalhe={`${num(comOrigem)} de ${num(o.oportunidades)} conversas com origem completa · ${num(o.site_recuperada)} com código sem clique · ${num(o.pendente)} buscando · ${num(o.nao_atribuida)} sem origem`}
+            detalhe={`${num(comOrigem)} de ${num(o.oportunidades)} conversas com origem completa · ${num(o.site_recuperada)} com código sem clique · ${num(o.pendente)} buscando · ${num(o.nao_atribuida)} sem origem (todas as conversas, inclusive de pacientes em atendimento)`}
           />
           <Linha
-            rotulo="Cobertura de agendamentos (90 dias)"
+            rotulo="Pacientes novos ligados a uma conversa (90 dias)"
             situacao={pAg == null ? 'neutro' : pAg >= 0.5 ? 'ok' : 'atencao'}
             selo={pct(pAg)}
-            detalhe={`${num(a.com_oportunidade)} de ${num(a.novos_pacientes)} pacientes novos ligados a uma conversa (${num(a.vinculo_alto)} com vínculo alto)`}
+            detalhe={`De ${num(a.novos_pacientes)} paciente(s) novo(s) atendido(s): ${num(a.vinculo_alto)} com vínculo confirmado (equipe ou pedido da Ju) · ${num(a.vinculo_provavel ?? 0)} provável (mesmo telefone, até 60 dias) · ${num(a.sem_vinculo ?? a.novos_pacientes - a.com_oportunidade)} sem conversa ligada. Paciente novo = 1ª sessão finalizada na agenda.`}
+          />
+          <Linha
+            rotulo="Consultas sem baixa na agenda"
+            situacao={baixa.pacientes > 0 ? 'atencao' : 'ok'}
+            selo={
+              baixa.pacientes > 0
+                ? `${num(baixa.pacientes)} aguardando`
+                : 'Nada pendente'
+            }
+            detalhe={`${num(baixa.pacientes)} paciente(s) novo(s) com consulta que já passou e segue "agendada" ou "confirmada" (${num(baixa.ligados_a_conversa)} ligado(s) a uma conversa). Só contam como atendidos depois que a recepção marcar "finalizado".`}
           />
           <Linha
             rotulo="Faturas conciliadas com a receita"
