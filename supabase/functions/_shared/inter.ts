@@ -244,9 +244,12 @@ export async function obterExtrato(
 
 // --- saída de dinheiro. Toda chamada abaixo move fundos de verdade. ---
 
+// dataVencimento é obrigatório no Inter (400 "pagarBoleto.body.dataVencimento: não
+// pode ser nulo", 21/10/2026); dataPagamento futura agenda, ausente paga hoje.
 export async function pagarBoleto(input: {
   codBarraLinhaDigitavel: string;
   valorPagar: number;
+  dataVencimento: string;
   dataPagamento?: string;
 }): Promise<Record<string, unknown>> {
   return await chamarInter<Record<string, unknown>>(
@@ -255,6 +258,7 @@ export async function pagarBoleto(input: {
     {
       codBarraLinhaDigitavel: input.codBarraLinhaDigitavel,
       valorPagar: input.valorPagar,
+      dataVencimento: input.dataVencimento,
       dataPagamento: input.dataPagamento,
     },
     ESCOPO_PAGAMENTO_BOLETO

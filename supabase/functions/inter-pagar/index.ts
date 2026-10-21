@@ -18,6 +18,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { pagarBoleto, pagarDarf, enviarPix } from '../_shared/inter.ts';
+import { linhaDoCodigoDeBarras, validarLinha } from '../_shared/boleto.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,6 +45,8 @@ interface Requisicao {
   // boleto
   codigo_barras?: string;
   data_pagamento?: string;
+  // opcional: sem ele, sai do próprio código (fator de vencimento)
+  data_vencimento?: string;
   // pix
   chave?: string;
   favorecido?: string;
@@ -140,6 +143,28 @@ serve(async (req: Request) => {
     if (tipo === 'boleto' && !body.codigo_barras) {
       return json({ error: 'codigo_barras é obrigatório para boleto' }, 400);
     }
+    // O Inter exige o vencimento. Vem do próprio código (linha de 47 ou barras de 44
+    // dígitos, conferidos pelos DVs); quem chama só precisa mandar se o código não
+    // tiver fator de vencimento.
+    let dataVencimento: string | null = null;
+    if (tipo === 'boleto') {
+      const digitos = body.codigo_barras!.replace(/\D/g, '');
+      const linha =
+        digitos.length === 44 ? linhaDoCodigoDeBarras(digitos) : digitos;
+      dataVencimento =
+        body.data_vencimento ||
+        (linha && validarLinha(linha)?.vencimento) ||
+        null;
+      if (!dataVencimento || !/^\d{4}-\d{2}-\d{2}$/.test(dataVencimento)) {
+        return json(
+          {
+            error:
+              'Não consegui ler o vencimento do boleto. Confira o código ou informe data_vencimento.',
+          },
+          400
+        );
+      }
+    }
     if (tipo === 'pix' && !body.chave) {
       return json({ error: 'chave é obrigatória para Pix' }, 400);
     }
@@ -180,6 +205,7 @@ serve(async (req: Request) => {
       resposta = await pagarBoleto({
         codBarraLinhaDigitavel: body.codigo_barras!,
         valorPagar: valor,
+        dataVencimento: dataVencimento!,
         dataPagamento: body.data_pagamento,
       });
     } else if (tipo === 'darf') {
