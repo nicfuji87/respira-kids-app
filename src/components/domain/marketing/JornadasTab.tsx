@@ -304,7 +304,7 @@ export const JornadasTab: React.FC<{
               <button
                 key={e}
                 onClick={() => setEstado(e)}
-                className={`rounded-full border px-3 py-1 text-xs ${estado === e ? 'border-[hsl(var(--azul-respira-ink))] bg-muted font-medium' : 'text-muted-foreground'}`}
+                className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs ${estado === e ? 'border-[hsl(var(--azul-respira-ink))] bg-muted font-medium' : 'text-muted-foreground'}`}
                 aria-pressed={estado === e}
               >
                 {e === 'todos' ? 'Todos' : ESTADOS[e]}

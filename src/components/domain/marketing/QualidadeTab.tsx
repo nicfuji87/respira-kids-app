@@ -146,7 +146,11 @@ export const QualidadeTab: React.FC<{
             selo={
               q.pendencias.erros_7d > 0
                 ? `${q.pendencias.erros_7d} erro(s)`
-                : 'Sem erros'
+                : q.pendencias.toques_sem_clique +
+                      q.pendencias.sessoes_a_conciliar_90d >
+                    0
+                  ? `${num(q.pendencias.toques_sem_clique + q.pendencias.sessoes_a_conciliar_90d)} a resolver`
+                  : 'Nada pendente'
             }
             detalhe={`${num(q.pendencias.toques_sem_clique)} código(s) ainda buscando o clique · ${num(q.pendencias.sessoes_a_conciliar_90d)} sessão(ões) canceladas e pagas a conciliar (90 dias)`}
           />

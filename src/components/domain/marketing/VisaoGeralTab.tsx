@@ -70,7 +70,7 @@ export const VisaoGeralTab: React.FC<{ r: Recorte }> = ({ r }) => {
         calculados.
       </Aviso>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <SecaoRelatorio
           titulo="Funil de aquisição"
           descricao={`Site: ${num(site.cliques)} cliques no WhatsApp → ${num(site.comCodigo)} conversas com o código (taxa de vinculação observada ${pct(site.taxaVinculacao)}).`}
