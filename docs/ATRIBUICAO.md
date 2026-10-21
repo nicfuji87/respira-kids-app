@@ -148,6 +148,16 @@ Paciente já atendido que volta por campanha conta como retenção, não entra n
   por linha estourava o tempo do admin): aquisições 500 ms → 20 ms, Qualidade 650 → 80 ms.
   Efeito colateral: aquisição aparece até 10 min depois da baixa, como a receita.
 
+## Orgânico × mídia paga (21/10/2026)
+
+Três grupos (`trafegoDe` em `marketing-atribuicao.ts`): **mídia paga** (Google/Meta
+Ads), **orgânico com origem identificada** (Google orgânico, Instagram, site, IA) e
+**sem origem identificada** (chegou no WhatsApp sem o código do site). O último nunca é
+somado ao orgânico: com campanha no ar ele pode incluir clique pago que perdeu o código.
+Sem mídia paga no período (até 21/10 nunca houve), o painel não mostra investimento,
+CAC e ROAS e trata os números como **linha de base** para medir o que a campanha
+acrescentar. O filtro de canal tem os três grupos.
+
 ## Testes
 
 `supabase/tests/atribuicao_v2_cenarios.sql` — 36 verificações com dados fictícios,
