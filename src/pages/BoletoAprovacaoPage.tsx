@@ -34,6 +34,7 @@ import {
   agendarBoleto,
   cancelarBoletoSolicitacao,
   fetchBoletoSolicitacao,
+  minimoExigidoPeloInter,
   type BoletoSolicitacao,
   type BoletoStatus,
 } from '@/lib/boletos-email-api';
@@ -141,14 +142,14 @@ export const BoletoAprovacaoPage: React.FC = () => {
     void carregar();
   }, [carregar]);
 
-  const agendar = async () => {
+  const agendar = async (valorPagar?: number) => {
     if (!boleto) return;
     setEnviando(true);
     try {
-      const r = await agendarBoleto(boleto.id);
+      const r = await agendarBoleto(boleto.id, valorPagar);
       toast({
-        title: 'Boleto agendado no Inter',
-        description: `${formatBRL(Number(boleto.valor))} para ${formatDia(r.data_pagamento)}.`,
+        title: 'Boleto enviado ao Inter',
+        description: `${formatBRL(valorPagar ?? Number(boleto.valor))} para ${formatDia(r.data_pagamento)}.`,
       });
     } catch (e) {
       toast({
@@ -229,6 +230,13 @@ export const BoletoAprovacaoPage: React.FC = () => {
   const bloqueado = graves.length > 0 && !conferiu;
   const st = STATUS[boleto.status];
   const cnpjCadastro = (boleto.fornecedor_cnpj ?? '').replace(/\D/g, '');
+  // vencido: o Inter já respondeu quanto aceita com multa e juros
+  const minimoInter =
+    boleto.status === 'erro' ? minimoExigidoPeloInter(boleto.erro) : null;
+  const encargos =
+    minimoInter && minimoInter > Number(boleto.valor)
+      ? minimoInter - Number(boleto.valor)
+      : null;
 
   return (
     <div className="mx-auto max-w-md space-y-4">
@@ -353,6 +361,12 @@ export const BoletoAprovacaoPage: React.FC = () => {
                   {formatDia(boleto.data_pagamento)}
                   {boleto.aprovado_por ? ` · por ${boleto.aprovado_por}` : ''}
                 </dd>
+                {boleto.valor_pagar &&
+                  Number(boleto.valor_pagar) > Number(boleto.valor) && (
+                    <dd className="text-xs text-muted-foreground">
+                      {formatBRL(Number(boleto.valor_pagar))} com multa e juros
+                    </dd>
+                  )}
               </div>
             )}
           </dl>
@@ -392,10 +406,35 @@ export const BoletoAprovacaoPage: React.FC = () => {
                   ? 'Já venceu: o Inter tenta pagar hoje e pode recusar ou cobrar encargos.'
                   : `O Inter debita no dia ${formatDia(dataAgendar)}. Até lá dá para cancelar no app do Inter.`}
               </p>
+              {minimoInter && encargos && (
+                <>
+                  <p className="text-sm text-roxo-titulo">
+                    O Inter calculou {formatBRL(encargos)} de multa e juros pelo
+                    atraso. Total a pagar hoje:{' '}
+                    <strong>{formatBRL(minimoInter)}</strong>.
+                  </p>
+                  <Button
+                    onClick={() => void agendar(minimoInter)}
+                    disabled={enviando || bloqueado}
+                    className="h-12 w-full gap-2 text-base"
+                  >
+                    {enviando ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <CalendarClock className="h-5 w-5" />
+                    )}
+                    Pagar {formatBRL(minimoInter)} com multa e juros
+                  </Button>
+                </>
+              )}
               <Button
                 onClick={() => void agendar()}
                 disabled={enviando || bloqueado}
-                className="h-12 w-full gap-2 text-base"
+                variant={minimoInter ? 'outline' : 'default'}
+                className={cn(
+                  'w-full gap-2',
+                  minimoInter ? 'h-10' : 'h-12 text-base'
+                )}
               >
                 {enviando ? (
                   <Loader2 className="h-5 w-5 animate-spin" />

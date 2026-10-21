@@ -239,6 +239,8 @@ export interface BoletoSolicitacao {
   id: string;
   status: BoletoStatus;
   valor: number;
+  // valor efetivamente mandado ao Inter (com multa e juros quando vencido)
+  valor_pagar: number | null;
   vencimento: string;
   linha_digitavel: string;
   banco_codigo: string | null;
@@ -283,13 +285,28 @@ function mensagemInter(msg: string): string {
   }
 }
 
-// ATENÇÃO: agenda a saída de dinheiro da conta do Inter.
+// Boleto vencido: o Inter recusa o valor original e informa o mínimo com encargos
+// ("Pagamento mínimo aceito: R$ 1552.49"). Devolve esse valor para a página oferecer.
+export function minimoExigidoPeloInter(erro: string | null): number | null {
+  const m = erro?.match(/m[ií]nimo aceito:\s*R\$\s*([\d.,]+)/i);
+  if (!m) return null;
+  // o Inter manda com ponto decimal ("1552.49"); aceita também "1.552,49"
+  const bruto = m[1].replace(/[.,]$/, '');
+  const n = /,\d{2}$/.test(bruto)
+    ? Number(bruto.replace(/\./g, '').replace(',', '.'))
+    : Number(bruto.replace(/,/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// ATENÇÃO: agenda a saída de dinheiro da conta do Inter. `valorPagar` só para
+// boleto vencido (o servidor aceita até 10% acima do valor do boleto).
 export async function agendarBoleto(
-  id: string
+  id: string,
+  valorPagar?: number
 ): Promise<{ data_pagamento: string | null }> {
   const { data: inicio, error: iniErr } = await supabase.rpc(
     'fn_boleto_solicitacao_iniciar',
-    { p_id: id }
+    { p_id: id, p_valor_pagar: valorPagar ?? null }
   );
   if (iniErr) throw new Error(iniErr.message);
   const ini = inicio as {
