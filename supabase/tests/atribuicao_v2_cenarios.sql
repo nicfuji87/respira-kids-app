@@ -6,7 +6,8 @@
 -- Como rodar sem colar 90 KB: subir migração+teste para public.zz_rascunho_sql
 -- (PostgREST com a service role) e executar com
 --   DO $x$ BEGIN EXECUTE (SELECT sql FROM public.zz_rascunho_sql WHERE id='teste'); END $x$;
--- Resultado de 21/10/2026: 27 OK, 0 falhas (inclui reconstrução do zero).
+-- Rodar DEPOIS das migrações atribuicao_v2_ju.sql e atribuicao_v2_custos.sql.
+-- Resultado de 21/10/2026: fase 1 (27) + custos/coorte (9).
 -- =====================================================================
 
 -- Os gatilhos da agenda/pessoas/faturas ficam LIGADOS (este acesso não pode usar
@@ -137,6 +138,9 @@ DECLARE
   T11 timestamptz := n0 - interval '12 days';
   T12 timestamptz := n0 - interval '10 days';
   x record; v int; v2 int; v_txt text; ev1 int; ev2 int; snap1 text; snap2 text;
+  v_tok text; v_base jsonb; v_lin jsonb; v_tot jsonb; r jsonb; r2 jsonb; r3 jsonb; d1 date; v_num numeric;
+  p13 uuid; c13 bigint;
+  T13 timestamptz := date_trunc('month', now()) - interval '3 days' + interval '15 hours';
 BEGIN
   -- os telefones fictícios não podem existir de verdade
   IF EXISTS (SELECT 1 FROM public.pessoas WHERE public.fn_atrib_tel_chave(telefone::text) LIKE '617700%') THEN
@@ -262,6 +266,16 @@ BEGIN
   PERFORM pg_temp.msg(c12, 'Referência: RK-TSTN2345', T12);
   PERFORM public.fn_atrib_processar();
   PERFORM pg_temp.pedido(c12, 'AGENDAMENTO', T12 - interval '2 days', NULL);
+
+  ---------------------------------------------------------------- S13 coorte: clique num mês, atendimento no seguinte
+  c13 := pg_temp.conversa(pg_temp.tel(25));
+  PERFORM pg_temp.msg(c13, 'Referência: RK-TSTP2345', T13);
+  rN := pg_temp.pessoa('responsavel', 'Mãe P', pg_temp.tel(25), T13 + interval '1 hour');
+  p13 := pg_temp.pessoa('paciente', 'Criança P', NULL, T13 + interval '1 hour');
+  PERFORM pg_temp.liga(p13, rN);
+  PERFORM pg_temp.ag(p13, T13 + interval '2 hours', date_trunc('month', n0) + interval '2 days', 'finalizado', 'pago', 260,
+                     pg_temp.fatura(rN, p13, 260, 'pago', date_trunc('month', n0) + interval '2 days'));
+  PERFORM pg_temp.clique('RK-TSTP2345', 'google', 'cpc', '777', 'Coorte', T13 - interval '1 min');
 
   ---------------------------------------------------------------- exclusões
   cx := pg_temp.conversa(5561999000099);       -- faixa das conversas fictícias da Ju
@@ -403,17 +417,87 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.atrib_erros) THEN ok := array_append(ok, ('nenhum erro de captura')::text);
   ELSE falhas := array_append(falhas, ((SELECT string_agg(etapa || ': ' || detalhe, ' | ') FROM public.atrib_erros))::text); END IF;
 
-  -- custos idempotentes + CAC/ROAS
-  FOR v IN 1..2 LOOP   -- reimportar o mesmo dia não duplica
-    PERFORM public.fn_atrib_custos_importar(jsonb_build_object('plataforma', 'google_ads', 'conta_id', '8744391492',
-      'linhas', jsonb_build_array(jsonb_build_object('data', T1::date, 'campanha_id', '111', 'campanha_nome', 'Respiratória Brasília',
-                                                     'impressoes', 1000, 'cliques', 40, 'custo_micros', 300000000))));
-  END LOOP;
-  SELECT count(*) INTO v FROM public.atrib_custos_diarios WHERE campanha_id = '111';
-  SELECT investimento || '/' || novos_pacientes || '/' || cac_midia INTO v_txt FROM public.vw_atrib_campanhas_mensal
-   WHERE campanha_id = '111' AND mes = date_trunc('month', T1)::date;
-  IF v = 1 AND v_txt IS NOT NULL THEN ok := array_append(ok, (('custos idempotentes; campanha 111 mês do S1: investimento/novos/CAC = ' || v_txt))::text);
-  ELSE falhas := array_append(falhas, (format('custos: linhas=%s cac=%s', v, v_txt))::text); END IF;
+  ---------------------------------------------------------------- CUSTOS (fase 2)
+  IF NOT EXISTS (SELECT 1 FROM vault.secrets WHERE name = 'atrib_custos_token') THEN
+    PERFORM vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'atrib_custos_token');
+  END IF;
+  SELECT decrypted_secret INTO v_tok FROM vault.decrypted_secrets WHERE name = 'atrib_custos_token';
+  d1 := date_trunc('month', T1)::date;            -- mês inteiro do S1
+  v_base := jsonb_build_object('plataforma', 'google_ads', 'conta_id', '874-439-1492', 'moeda', 'BRL',
+              'fuso', 'America/Sao_Paulo', 'periodo_de', d1, 'periodo_ate', (d1 + interval '1 month - 1 day')::date, 'execucao', 'teste');
+  v_lin := jsonb_build_array(
+    jsonb_build_object('data', d1, 'campanha_id', '111', 'campanha_nome', 'Respiratória Brasília', 'status', 'ENABLED', 'impressoes', 1000, 'cliques', 40, 'custo_micros', 300000000),
+    jsonb_build_object('data', d1, 'campanha_id', '112', 'campanha_nome', 'Motor', 'status', 'ENABLED', 'impressoes', 200, 'cliques', 5, 'custo_micros', 50000000),
+    jsonb_build_object('data', d1 + 1, 'campanha_id', '111', 'campanha_nome', 'Respiratória Brasília', 'status', 'ENABLED', 'impressoes', 300, 'cliques', 9, 'custo_micros', 100000000));
+  v_tot := jsonb_build_array(jsonb_build_object('data', d1, 'custo_micros', 350000000), jsonb_build_object('data', d1 + 1, 'custo_micros', 100000000));
+
+  -- C1 importação válida / C2 repetir não duplica
+  r := public.fn_atrib_custos_receber(v_base || jsonb_build_object('linhas', v_lin, 'totais_conta', v_tot), v_tok);
+  r2 := public.fn_atrib_custos_receber(v_base || jsonb_build_object('linhas', v_lin, 'totais_conta', v_tot), v_tok);
+  SELECT count(*), sum(custo) INTO v, v_num FROM public.atrib_custos_diarios WHERE conta_id = '8744391492' AND data BETWEEN d1 AND d1 + 1;
+  IF (r->>'status') = 'ok' AND (r2->>'status') = 'ok' AND v = 3 AND v_num = 450 THEN ok := array_append(ok, 'C1/C2 custo importado e reimportado sem duplicar (R$ 450)'::text);
+  ELSE falhas := array_append(falhas, format('C1/C2: %s %s linhas=%s soma=%s', r, r2, v, v_num)); END IF;
+
+  -- C3 reprocessamento: ajuste do Google e campanha que sumiu da janela
+  v_lin := jsonb_build_array(
+    jsonb_build_object('data', d1, 'campanha_id', '111', 'campanha_nome', 'Respiratória Brasília', 'status', 'ENABLED', 'impressoes', 1000, 'cliques', 40, 'custo_micros', 310000000),
+    jsonb_build_object('data', d1 + 1, 'campanha_id', '111', 'campanha_nome', 'Respiratória Brasília', 'status', 'ENABLED', 'impressoes', 300, 'cliques', 9, 'custo_micros', 100000000));
+  v_tot := jsonb_build_array(jsonb_build_object('data', d1, 'custo_micros', 310000000), jsonb_build_object('data', d1 + 1, 'custo_micros', 100000000));
+  r := public.fn_atrib_custos_receber(v_base || jsonb_build_object('linhas', v_lin, 'totais_conta', v_tot), v_tok);
+  SELECT count(*), sum(custo) INTO v, v_num FROM public.atrib_custos_diarios WHERE conta_id = '8744391492' AND data BETWEEN d1 AND d1 + 1;
+  IF (r->>'ok')::boolean AND v = 2 AND v_num = 410 THEN ok := array_append(ok, 'C3 reprocessamento substitui a janela (R$ 410)'::text);
+  ELSE falhas := array_append(falhas, format('C3: %s linhas=%s soma=%s', r, v, v_num)); END IF;
+
+  -- C4 conciliação divergente: entra, mas fica marcada
+  r := public.fn_atrib_custos_receber(v_base || jsonb_build_object('linhas', v_lin,
+         'totais_conta', jsonb_build_array(jsonb_build_object('data', d1, 'custo_micros', 310000000), jsonb_build_object('data', d1 + 1, 'custo_micros', 120000000))), v_tok);
+  SELECT ultimo_status INTO v_txt FROM public.vw_atrib_custos_status WHERE plataforma = 'google_ads';
+  IF (r->>'status') = 'divergente' AND (r->>'diferenca')::numeric = 20 AND v_txt = 'divergente' THEN ok := array_append(ok, 'C4 divergência de R$ 20 detectada e sinalizada'::text);
+  ELSE falhas := array_append(falhas, format('C4: %s status=%s', r, v_txt)); END IF;
+  r := public.fn_atrib_custos_receber(v_base || jsonb_build_object('linhas', v_lin, 'totais_conta', v_tot), v_tok);   -- volta ao certo
+
+  -- C5 moeda / C6 conta / C8 linha malformada: rejeitados, nada muda
+  r := public.fn_atrib_custos_receber(v_base || jsonb_build_object('moeda', 'USD', 'linhas', v_lin, 'totais_conta', v_tot), v_tok);
+  r2 := public.fn_atrib_custos_receber(v_base || jsonb_build_object('conta_id', '111-222-3333', 'linhas', v_lin, 'totais_conta', v_tot), v_tok);
+  r3 := public.fn_atrib_custos_receber(v_base || jsonb_build_object('linhas', jsonb_build_array(jsonb_build_object('data', 'ontem', 'campanha_id', '111', 'custo_micros', 1)), 'totais_conta', v_tot), v_tok);
+  SELECT count(*), sum(custo) INTO v, v_num FROM public.atrib_custos_diarios WHERE conta_id = '8744391492' AND data BETWEEN d1 AND d1 + 1;
+  IF NOT (r->>'ok')::boolean AND NOT (r2->>'ok')::boolean AND NOT (r3->>'ok')::boolean AND v = 2 AND v_num = 410
+     AND (SELECT count(*) FROM public.atrib_custos_importacoes WHERE status = 'rejeitada') >= 3
+  THEN ok := array_append(ok, format('C5/C6/C8 rejeitados sem mexer nos custos (%s | %s | %s)', r->>'motivo', r2->>'motivo', r3->>'motivo'));
+  ELSE falhas := array_append(falhas, format('C5/C6/C8: %s %s %s linhas=%s soma=%s', r, r2, r3, v, v_num)); END IF;
+
+  -- C7 token errado
+  BEGIN
+    PERFORM public.fn_atrib_custos_receber(v_base || jsonb_build_object('linhas', v_lin, 'totais_conta', v_tot), 'token-errado-com-mais-de-32-caracteres!!');
+    falhas := array_append(falhas, 'C7 token errado foi aceito'::text);
+  EXCEPTION WHEN insufficient_privilege THEN ok := array_append(ok, 'C7 token errado recusado'::text);
+  END;
+
+  -- C9 custo completo → CAC/ROAS; importação parada → "não disponível"
+  SELECT custo_status || '/' || investimento || '/' || novos_pacientes || '/' || coalesce(cac_midia::text, 'null') INTO v_txt
+    FROM public.vw_atrib_campanhas_mensal WHERE campanha_id = '111' AND mes = d1;
+  UPDATE public.atrib_custos_importacoes SET recebido_em = recebido_em - interval '3 days';
+  SELECT custo_status || '/' || coalesce(cac_midia::text, 'null') || '/' || coalesce(roas_30d::text, 'null') INTO snap1
+    FROM public.vw_atrib_campanhas_mensal WHERE campanha_id = '111' AND mes = d1;
+  SELECT desatualizado::text INTO snap2 FROM public.vw_atrib_custos_status WHERE plataforma = 'google_ads';
+  IF v_txt = 'completo/410.00/1/410.00' AND snap1 = 'desatualizado/null/null' AND snap2 = 'true'
+  THEN ok := array_append(ok, 'C9 CAC só com custo completo; importação parada = não disponível'::text);
+  ELSE falhas := array_append(falhas, format('C9: completo=%s parado=%s desatualizado=%s', v_txt, snap1, snap2)); END IF;
+
+  -- C10 campanha paga sem custo importado: investimento NULL, não zero
+  SELECT custo_status || '/' || coalesce(investimento::text, 'null') || '/' || coalesce(roas_30d::text, 'null') INTO v_txt
+    FROM public.vw_atrib_campanhas_mensal WHERE campanha_id = '222';
+  IF v_txt = 'sem_dados/null/null' THEN ok := array_append(ok, 'C10 campanha sem custo = não disponível (nunca zero)'::text);
+  ELSE falhas := array_append(falhas, ('C10: ' || coalesce(v_txt, 'sem linha'))::text); END IF;
+
+  -- S13 coorte: clicou num mês, atendido no seguinte → conta no mês do clique, receita uma vez só
+  SELECT string_agg(mes || ':' || novos_pacientes || ':' || receita_acumulada, ',' ORDER BY mes) INTO v_txt
+    FROM public.vw_atrib_campanhas_mensal WHERE campanha_id = '777';
+  SELECT (mes_origem = date_trunc('month', T13)::date AND mes = date_trunc('month', n0)::date)::text INTO snap1
+    FROM public.vw_atrib_aquisicoes WHERE paciente_id = p13;
+  IF v_txt = date_trunc('month', T13)::date || ':1:260.00' AND snap1 = 'true'
+  THEN ok := array_append(ok, 'S13 coorte no mês do clique, atendido no mês seguinte, receita sem duplicar'::text);
+  ELSE falhas := array_append(falhas, format('S13: linhas=%s mes_origem_ok=%s', v_txt, snap1)); END IF;
 
   -- Reconstrução do zero: apaga tudo o que é derivado (vínculos, estados e o
   -- histórico calculado) e recalcula de uma vez. Tem de dar o mesmo resultado

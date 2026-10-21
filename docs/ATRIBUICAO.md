@@ -61,13 +61,47 @@ Acesso: só admin lê; escrita só pelas funções/jobs. `atrib_config` guarda j
 
 Paciente já atendido que volta por campanha conta como retenção, não entra no CAC.
 
+## Custos do Google Ads (fase 2, `atribuicao_v2_custos.sql`)
+
+- **Script:** `scripts/google-ads/atrib-custos.js`, colado na conta 874-439-1492 e
+  agendado para rodar diariamente. A cada execução manda os últimos 7 dias (por dia e
+  campanha: `cost_micros`, impressões, cliques, nome e status) e o total da conta por dia.
+- **Entrada:** `fn_atrib_custos_receber(p, p_token)` pela chave pública + token próprio
+  (vault `atrib_custos_token`; trocar com `vault.update_secret` e colar no script).
+  Nenhuma credencial administrativa do Supabase vai para o Google.
+- **Validação:** conta fixa (`atrib_config.google_ads_conta_id`), moeda BRL, janela de no
+  máximo 31 dias, campos numéricos. Rejeição não muda nada e fica registrada.
+- **Idempotência:** cada envio substitui a janela daquela conta. Repetir não duplica;
+  ajustes do Google em dias anteriores são absorvidos.
+- **Conciliação:** soma das campanhas × total da conta por dia; diferença acima de
+  1 centavo marca a importação como `divergente` (dados entram, painel avisa).
+- **Monitoramento:** `vw_atrib_custos_status` (uma linha por plataforma): última
+  importação, cobertura, último status, `desatualizado` (sem importação há 36 h).
+- **Regra do ROAS:** `vw_atrib_campanhas_mensal.custo_status` = `completo` |
+  `desatualizado` | `sem_dados` | `nao_se_aplica`. CAC, custo por agendamento e ROAS só
+  aparecem com custo completo; fora disso são NULL ("não disponível"), nunca zero.
+  O gasto inteiro da campanha é o denominador. O ROAS é "atribuído observado": parte das
+  conversas pode não ter origem vinculada — ler junto da cobertura.
+- **Coorte:** pelo mês do clique (`vw_atrib_aquisicoes.mes_origem`), alinhado ao mês do
+  gasto. Quem clicou em outubro e foi atendido em novembro conta em outubro; a receita de
+  novembro e dezembro entra na coorte de outubro pelos horizontes 30/90/180, uma vez só.
+- **Indicador renomeado:** `taxa_vinculacao_rk_observada` (cliques no botão → mensagens
+  com código). Não é taxa de conversão do WhatsApp.
+
 ## Testes
 
-`supabase/tests/atribuicao_v2_cenarios.sql` — 27 verificações com dados fictícios,
+`supabase/tests/atribuicao_v2_cenarios.sql` — 34 verificações com dados fictícios,
 numa transação sempre desfeita: 1ª criança pelo Google, 2º filho, dois responsáveis,
 paciente antigo voltando, remarcação, cancelamento e recuperação, falta cobrada,
 fatura com desconto e sessão não paga, estorno, sem origem, fatos fora de ordem,
-reprocessamento e reconstrução do zero. Carga real: 0,8 s na 1ª rodada, 0,2 s nas seguintes.
+reprocessamento, reconstrução do zero; custos (importar, repetir, reprocessar, divergência,
+moeda/conta/linha inválidas, token errado, custo completo × parado, campanha sem custo) e
+coorte de um mês para o outro. Carga real: 0,8 s na 1ª rodada, 0,2 s nas seguintes.
+
+**Conferência com dados reais (21/10/2026, só totais):** a receita por sessão bate com as
+faturas pagas — jul R$ 124.560,00 (exato), ago R$ 184.750,00 × 184.750,02 (2 centavos de
+arredondamento do rateio), set R$ 151.900,00 (exato); 661 faturas, nenhuma sem sessão.
+Pagamento fora de fatura no trimestre: R$ 3.200 (quase tudo sessão de valor zero).
 
 ## Limites conhecidos
 
@@ -82,13 +116,17 @@ reprocessamento e reconstrução do zero. Carga real: 0,8 s na 1ª rodada, 0,2 s
 
 ## Pendências
 
-- Endpoint autenticado + Google Ads Script para o custo diário (tabela e função prontas).
-- Painel admin (fase 2). Classificação de qualificação/motivo de perda pela análise da noite (fase 3).
+- Colar e agendar o Google Ads Script (precisa de quem tem acesso à conta) e, na
+  primeira vez, rodar com `DIAS = 31` para trazer o histórico.
+- Validar uma aquisição paga de ponta a ponta quando a campanha estiver no ar
+  (clique no anúncio → RK → WhatsApp → agenda → atendimento → receita).
+- Painel admin. Classificação de qualificação/motivo de perda pela análise da noite (fase 3).
 - Meta: anúncio de clique para WhatsApp (dados de referral na Entrada).
 - Jurídico: base legal de cada operação (dado de saúde de criança: art. 11 da LGPD),
   retenção (24 meses proposto) e LIA. Anonimização ainda **não** agendada.
 
 ## Rollback
 
-`supabase/migrations/atribuicao_v2_ju_rollback.sql` (sistema) e
+`supabase/migrations/atribuicao_v2_custos_rollback.sql` (fase 2, desfaz só os custos),
+`supabase/migrations/atribuicao_v2_ju_rollback.sql` (sistema, tudo) e
 `docs/atribuicao/sql/site_02_leitura_app_rollback.sql` (repo do site).
