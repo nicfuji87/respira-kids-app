@@ -21,6 +21,7 @@ export { ConfiguracoesPage } from './ConfiguracoesPage';
 // Admin only pages
 export { UsuariosPage } from './UsuariosPage';
 export { RelatoriosPage } from './RelatoriosPage';
+export { MarketingPage } from './MarketingPage';
 export { WebhooksPage } from './WebhooksPage';
 export { PesquisaExperienciaDashboardPage } from './PesquisaExperienciaDashboardPage';
 export { ProcessoSeletivoDashboardPage } from './ProcessoSeletivoDashboardPage';

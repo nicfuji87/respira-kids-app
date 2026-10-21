@@ -24,6 +24,7 @@ import {
   ConfiguracoesPage,
   UsuariosPage,
   RelatoriosPage,
+  MarketingPage,
   WebhooksPage,
   PesquisaExperienciaDashboardPage,
   ProcessoSeletivoDashboardPage,
@@ -296,6 +297,15 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute path="/relatorios" currentUserRole={validUserRole}>
               <RelatoriosPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/marketing"
+          element={
+            <ProtectedRoute path="/marketing" currentUserRole={validUserRole}>
+              <MarketingPage />
             </ProtectedRoute>
           }
         />

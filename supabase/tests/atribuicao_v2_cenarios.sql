@@ -315,6 +315,7 @@ BEGIN
   ELSE falhas := array_append(falhas, (format('reprocessamento: eventos %s→%s, estado igual=%s', ev1, ev2, snap1 = snap2))::text); END IF;
 
   ---------------------------------------------------------------- VERIFICAÇÕES
+  PERFORM public.fn_atrib_atualizar_receita();   -- receita por sessão é pré-calculada (fase 3)
   -- S1
   x := pg_temp.aq(p1);
   IF x.campanha_id = '111' AND x.canal = 'google_ads' AND x.familia_nova AND x.contato_novo AND x.receita_primeira_sessao = 260

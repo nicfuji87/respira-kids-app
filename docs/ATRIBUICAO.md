@@ -88,6 +88,29 @@ Paciente já atendido que volta por campanha conta como retenção, não entra n
 - **Indicador renomeado:** `taxa_vinculacao_rk_observada` (cliques no botão → mensagens
   com código). Não é taxa de conversão do WhatsApp.
 
+## Painel admin (fase 3, `atribuicao_v2_painel.sql`)
+
+- **Tela:** `/marketing` (menu Gestão → Marketing, só admin). Seis abas — Visão geral,
+  Funil, Campanhas, Jornadas, Receita e coortes, Qualidade dos dados — sobre um único
+  recorte (período, canal, campanha, serviço). Regras em `src/lib/marketing-atribuicao.ts`.
+- **Regra do painel:** sem dado suficiente o indicador mostra "Indisponível" + motivo;
+  nunca zero nem estimativa. CAC completo, payback e margem aparecem como indisponíveis
+  até existirem os custos não-mídia e a margem de contribuição. Nada se chama "Lucro".
+- **Rateio em centavos:** a receita da fatura é dividida entre as sessões em centavos
+  inteiros (maiores restos); a soma fecha exatamente com a fatura (as 4.255 faturas pagas
+  conferidas em 21/10/2026). Como o rateio olha a fatura inteira, a receita por sessão é
+  pré-calculada em `interno.mv_atrib_receita_sessao` (job `atrib_receita`, a cada 10 min;
+  hora em `atrib_config.receita_atualizada_em`, mostrada na aba Qualidade).
+- **Acesso:** toda visão filtra por `fn_atrib_pode_ver()` (admin, ou o próprio banco /
+  service_role); as RPCs do painel (`fn_atrib_jornada`, `fn_atrib_painel_qualidade`)
+  usam `fn_atrib_rpc_ok()` e devolvem 42501 para quem não é admin. O esquema `interno`
+  não é exposto pela API. Testado se passando por secretaria e profissional reais: zero
+  linhas em 14 visões/tabelas e RPCs recusadas; anon sem permissão.
+- **Jornada:** origem, mensagem com código, eventos, agendamentos e receita; nome da
+  criança abreviado, telefone mascarado, sem conteúdo de mensagem nem dado clínico.
+- **Filtro de serviço:** vale para pacientes e receita (serviço do 1º atendimento); o
+  investimento não se divide por serviço, então CAC/ROAS ficam indisponíveis com ele.
+
 ## Testes
 
 `supabase/tests/atribuicao_v2_cenarios.sql` — 34 verificações com dados fictícios,
@@ -127,6 +150,7 @@ Pagamento fora de fatura no trimestre: R$ 3.200 (quase tudo sessão de valor zer
 
 ## Rollback
 
+`supabase/migrations/atribuicao_v2_painel_rollback.sql` (fase 3),
 `supabase/migrations/atribuicao_v2_custos_rollback.sql` (fase 2, desfaz só os custos),
 `supabase/migrations/atribuicao_v2_ju_rollback.sql` (sistema, tudo) e
 `docs/atribuicao/sql/site_02_leitura_app_rollback.sql` (repo do site).
