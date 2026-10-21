@@ -39,6 +39,8 @@ import {
   mesesEntre,
   recortar,
   rotuloCanal,
+  TRAFEGOS,
+  trafegoDe,
   rotuloMes,
   type DadosPainel,
   type Filtros,
@@ -126,9 +128,16 @@ export const MarketingPage: React.FC = () => {
     dados?.oportunidades.forEach((o) => s.add(o.canal));
     dados?.aquisicoes.forEach((a) => s.add(a.canal));
     dados?.campanhas.forEach((c) => c.plataforma && s.add(c.plataforma));
+    // Grupos primeiro (mídia paga só aparece quando existir), depois cada canal.
+    const tipos = new Set([...s].map((c) => trafegoDe(c)));
     return [
       ['todos', 'Todos os canais'],
-      ...[...s].map((c) => [c, rotuloCanal(c)]),
+      ...(['pago', 'organico', 'sem_origem'] as const)
+        .filter((t) => tipos.has(t))
+        .map((t) => [`tipo:${t}`, `Grupo: ${TRAFEGOS[t]}`]),
+      ...[...s]
+        .filter((c) => trafegoDe(c) !== 'sem_origem')
+        .map((c) => [c, rotuloCanal(c)]),
     ] as [string, string][];
   }, [dados]);
   const campanhas = useMemo(() => {

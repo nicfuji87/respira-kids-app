@@ -26,12 +26,21 @@ import { cn } from '@/lib/utils';
 import {
   AMOSTRA_MIN_COBERTURA,
   AMOSTRA_MIN_PACIENTES,
+  TRAFEGOS,
+  TRAFEGOS_DETALHE,
+  brl,
+  num,
+  rotuloCanal,
   type CustoStatus,
   type Indicador,
   type lerAmostra,
+  type linhasCanal,
+  type linhasTrafego,
 } from '@/lib/marketing-atribuicao';
 
 type Amostra = ReturnType<typeof lerAmostra>;
+type LinhaCanal = ReturnType<typeof linhasCanal>[number];
+type LinhaTrafego = ReturnType<typeof linhasTrafego>[number];
 
 /** Valor de um indicador ou "Indisponível" com o motivo visível. */
 export const ValorIndicador: React.FC<{
@@ -182,11 +191,16 @@ export const Aviso: React.FC<{
  * os custos chegarem): enquanto não houver pacientes e origem suficientes, a
  * comparação entre canais não é conclusiva.
  */
-export const AvisoAmostra: React.FC<{ a: Amostra }> = ({ a }) => (
+export const AvisoAmostra: React.FC<{ a: Amostra; semMidia?: boolean }> = ({
+  a,
+  semMidia,
+}) => (
   <Aviso tom={a.suficiente ? 'info' : 'atencao'}>
     {!a.suficiente && (
       <strong className="text-foreground">
-        Amostra ainda pequena para decidir investimento.{' '}
+        {semMidia
+          ? 'Amostra ainda pequena para comparar origens.'
+          : 'Amostra ainda pequena para decidir investimento.'}{' '}
       </strong>
     )}
     {a.novos} paciente{a.novos === 1 ? '' : 's'} novo
@@ -196,9 +210,101 @@ export const AvisoAmostra: React.FC<{ a: Amostra }> = ({ a }) => (
     {pctAmostra(a.coberturaOrigem)}).{' '}
     {a.suficiente
       ? 'Amostra dentro do mínimo do painel.'
-      : `A comparação entre canais e campanhas só passa a ser conclusiva a partir de ${AMOSTRA_MIN_PACIENTES} pacientes novos e ${Math.round(AMOSTRA_MIN_COBERTURA * 100)}% de origem identificada.`}
+      : `A comparação entre canais${semMidia ? '' : ' e campanhas'} só passa a ser conclusiva a partir de ${AMOSTRA_MIN_PACIENTES} pacientes novos e ${Math.round(AMOSTRA_MIN_COBERTURA * 100)}% de origem identificada.`}
   </Aviso>
 );
+
+/** Enquanto não há campanha no ar: tudo é orgânico e vira linha de base. */
+export const AvisoSemMidia: React.FC = () => (
+  <Aviso>
+    <strong className="text-foreground">
+      Nenhuma campanha paga no período: todo o movimento é orgânico.{' '}
+    </strong>
+    Estes números são a linha de base. Quando o Google Ads começar, é com eles
+    que se mede o que a campanha acrescentou (e não só o que ela recebeu de
+    crédito). Investimento, CAC e ROAS aparecem quando houver mídia paga.
+  </Aviso>
+);
+
+/**
+ * Origens agrupadas por tipo de tráfego: uma linha-resumo por grupo (pago,
+ * orgânico identificado, sem origem) e os canais dentro dele.
+ */
+export const TabelaOrigens: React.FC<{
+  grupos: LinhaTrafego[];
+  canais: LinhaCanal[];
+  ocultarPagoVazio?: boolean;
+}> = ({ grupos, canais, ocultarPagoVazio }) => {
+  // Grupo vazio some; a mídia paga vazia fica (gasto sem resultado precisa
+  // aparecer), a não ser que não haja mídia nenhuma no período.
+  const visiveis = grupos.filter(
+    (g) =>
+      g.conversas + g.novos > 0 || (g.trafego === 'pago' && !ocultarPagoVazio)
+  );
+  const cel = 'px-3 py-2 text-right tabular-nums whitespace-nowrap';
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/50 text-left text-muted-foreground">
+          <tr>
+            {[
+              'Origem',
+              'Conversas',
+              'Com intenção',
+              'Agendaram',
+              'Pacientes novos',
+              'Receita até hoje',
+            ].map((h, i) => (
+              <th
+                key={h}
+                className={cn(
+                  'whitespace-nowrap px-3 py-2 font-medium',
+                  i > 0 && 'text-right'
+                )}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {visiveis.map((g) => (
+            <React.Fragment key={g.trafego}>
+              <tr className="border-t bg-muted/30 font-medium">
+                <td className="px-3 py-2">
+                  <div>{TRAFEGOS[g.trafego]}</div>
+                  <div className="text-xs font-normal text-muted-foreground">
+                    {TRAFEGOS_DETALHE[g.trafego]}
+                  </div>
+                </td>
+                <td className={cel}>{num(g.conversas)}</td>
+                <td className={cel}>{num(g.comIntencao)}</td>
+                <td className={cel}>{num(g.agendaram)}</td>
+                <td className={cel}>{num(g.novos)}</td>
+                <td className={cel}>{brl(g.receitaTotal)}</td>
+              </tr>
+              {canais
+                .filter((c) => c.trafego === g.trafego)
+                .filter(() => g.trafego !== 'sem_origem' || g.canais.length > 1)
+                .map((c) => (
+                  <tr key={c.canal} className="border-t">
+                    <td className="py-2 pl-7 pr-3 text-muted-foreground">
+                      {rotuloCanal(c.canal)}
+                    </td>
+                    <td className={cel}>{num(c.conversas)}</td>
+                    <td className={cel}>{num(c.comIntencao)}</td>
+                    <td className={cel}>{num(c.agendaram)}</td>
+                    <td className={cel}>{num(c.novos)}</td>
+                    <td className={cel}>{brl(c.receitaTotal)}</td>
+                  </tr>
+                ))}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 const pctAmostra = (v: number | null) =>
   v == null ? '—' : `${Math.round(v * 100)}%`;
 

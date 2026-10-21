@@ -147,9 +147,41 @@ export const CANAIS: Record<string, string> = {
   direto: 'Acesso direto',
   outro: 'Outros sites',
   desconhecido: 'Código sem clique',
-  nao_atribuido: 'Não atribuído',
+  nao_atribuido: 'Sem origem identificada',
 };
 export const CANAIS_PAGOS = ['google_ads', 'meta_ads'];
+
+// ── Tipo de tráfego ──────────────────────────────────────────────────
+// Mídia paga × orgânico com origem identificada × sem origem. "Sem origem"
+// é quem chegou no WhatsApp sem o código do site (indicação, Maps, contato
+// salvo, Instagram sem o botão). Sem campanha no ar ele é orgânico; com
+// campanha, pode incluir clique pago que perdeu o código — por isso fica
+// separado e nunca é somado ao orgânico automaticamente.
+export type Trafego = 'pago' | 'organico' | 'sem_origem';
+export const TRAFEGOS: Record<Trafego, string> = {
+  pago: 'Mídia paga',
+  organico: 'Orgânico (origem identificada)',
+  sem_origem: 'Sem origem identificada',
+};
+export const TRAFEGOS_DETALHE: Record<Trafego, string> = {
+  pago: 'Google Ads, Meta Ads',
+  organico:
+    'Google orgânico, Instagram, acesso direto ao site, outros sites, IA',
+  sem_origem:
+    'chegou no WhatsApp sem o código do site: indicação, Google Maps, contato salvo…',
+};
+export const trafegoDe = (canal: string | null | undefined): Trafego =>
+  canal && CANAIS_PAGOS.includes(canal)
+    ? 'pago'
+    : !canal || canal === 'nao_atribuido' || canal === 'desconhecido'
+      ? 'sem_origem'
+      : 'organico';
+/** Valores do filtro "Canal" que agrupam vários canais. */
+export const FILTRO_TRAFEGO: Record<string, Trafego> = {
+  'tipo:pago': 'pago',
+  'tipo:organico': 'organico',
+  'tipo:sem_origem': 'sem_origem',
+};
 
 export const ETAPAS: { ord: number; chave: string; rotulo: string }[] = [
   { ord: 1, chave: 'contato', rotulo: 'Conversa' },
@@ -366,6 +398,8 @@ export interface Recorte {
   oportunidades: OportunidadePainel[];
   cliques: CliqueDia[];
   custos: CustosStatus | null;
+  /** Houve mídia paga no PERÍODO (ignora o filtro de canal/campanha/serviço). */
+  midiaNoPeriodo: boolean;
 }
 
 const noPeriodo = (ym: string | null | undefined, f: Filtros) =>
@@ -373,8 +407,9 @@ const noPeriodo = (ym: string | null | undefined, f: Filtros) =>
 export const mesCoorte = (a: Aquisicao) => a.mes_origem ?? a.mes;
 
 export function recortar(d: DadosPainel, f: Filtros): Recorte {
+  const grupo = FILTRO_TRAFEGO[f.canal];
   const canalOk = (c: string | null | undefined) =>
-    f.canal === 'todos' || c === f.canal;
+    f.canal === 'todos' || (grupo ? trafegoDe(c) === grupo : c === f.canal);
   const campOk = (c: string | null | undefined) =>
     f.campanha === 'todas' || c === f.campanha;
   const servOk = (s: string | null | undefined) =>
@@ -385,7 +420,10 @@ export function recortar(d: DadosPainel, f: Filtros): Recorte {
     campanhas: d.campanhas.filter(
       (c) =>
         noPeriodo(c.mes, f) &&
-        (f.canal === 'todos' || c.plataforma === f.canal) &&
+        (f.canal === 'todos' ||
+          (grupo
+            ? trafegoDe(c.plataforma) === grupo
+            : c.plataforma === f.canal)) &&
         campOk(c.campanha_id)
     ),
     aquisicoes: d.aquisicoes.filter(
@@ -408,6 +446,20 @@ export function recortar(d: DadosPainel, f: Filtros): Recorte {
         campOk(c.campanha_id || null)
     ),
     custos: d.custos,
+    midiaNoPeriodo:
+      d.campanhas.some(
+        (c) => noPeriodo(c.mes, f) && trafegoDe(c.plataforma) === 'pago'
+      ) ||
+      d.oportunidades.some(
+        (o) =>
+          noPeriodo(anoMes(o.aberta_em), f) && trafegoDe(o.canal) === 'pago'
+      ) ||
+      d.aquisicoes.some(
+        (a) => noPeriodo(mesCoorte(a), f) && trafegoDe(a.canal) === 'pago'
+      ) ||
+      d.cliques.some(
+        (c) => noPeriodo(c.dia.slice(0, 7), f) && trafegoDe(c.canal) === 'pago'
+      ),
   };
 }
 
@@ -421,8 +473,15 @@ export interface Midia {
   roas: Record<'r1' | 'r30' | 'r90' | 'r180', Indicador>;
 }
 
+/** Houve mídia paga no período? (independe do filtro de canal escolhido) */
+export const temMidiaPaga = (r: Recorte): boolean => r.midiaNoPeriodo;
+
 function motivoSemCusto(r: Recorte): string {
-  if (r.filtros.canal !== 'todos' && !CANAIS_PAGOS.includes(r.filtros.canal))
+  if (
+    r.filtros.canal !== 'todos' &&
+    r.filtros.canal !== 'tipo:pago' &&
+    !CANAIS_PAGOS.includes(r.filtros.canal)
+  )
     return 'Canal sem investimento em mídia.';
   if (!r.custos?.ultima_importacao)
     return 'Custos do Google Ads ainda não importados (script não instalado ou sem execução).';
@@ -716,7 +775,9 @@ export function linhasCampanha(r: Recorte): LinhaCampanha[] {
     );
 }
 
-/** Origens sem investimento (orgânico, direto…), para comparar com as pagas. */
+const ORDEM_TRAFEGO: Trafego[] = ['pago', 'organico', 'sem_origem'];
+
+/** Uma linha por canal, agrupadas por tipo de tráfego (pago, orgânico, sem origem). */
 export function linhasCanal(r: Recorte) {
   const canais = new Set<string>([
     ...r.oportunidades.map((o) => o.canal),
@@ -728,14 +789,48 @@ export function linhasCanal(r: Recorte) {
       const aqs = r.aquisicoes.filter((a) => a.canal === c);
       return {
         canal: c,
+        trafego: trafegoDe(c),
         conversas: ops.length,
+        comIntencao: ops.filter((o) => o.intencao === 'contratar').length,
         agendaram: ops.filter((o) => o.etapa_maxima_ord >= 5).length,
         novos: aqs.length,
         receita90: aqs.reduce((s, a) => s + a.receita_90d, 0),
         receitaTotal: aqs.reduce((s, a) => s + a.ltv_realizado, 0),
       };
     })
-    .sort((a, b) => b.novos - a.novos || b.conversas - a.conversas);
+    .sort(
+      (a, b) =>
+        ORDEM_TRAFEGO.indexOf(a.trafego) - ORDEM_TRAFEGO.indexOf(b.trafego) ||
+        b.novos - a.novos ||
+        b.conversas - a.conversas
+    );
+}
+
+/** Totais por tipo de tráfego (inclui grupos vazios, para mostrar "0" na mídia paga). */
+export function linhasTrafego(r: Recorte) {
+  const canais = linhasCanal(r);
+  return ORDEM_TRAFEGO.map((t) => {
+    const cs = canais.filter((c) => c.trafego === t);
+    const soma = (
+      k:
+        | 'conversas'
+        | 'comIntencao'
+        | 'agendaram'
+        | 'novos'
+        | 'receita90'
+        | 'receitaTotal'
+    ) => cs.reduce((s, c) => s + c[k], 0);
+    return {
+      trafego: t,
+      canais: cs.map((c) => c.canal),
+      conversas: soma('conversas'),
+      comIntencao: soma('comIntencao'),
+      agendaram: soma('agendaram'),
+      novos: soma('novos'),
+      receita90: soma('receita90'),
+      receitaTotal: soma('receitaTotal'),
+    };
+  });
 }
 
 // ── Coortes ──────────────────────────────────────────────────────────

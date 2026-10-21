@@ -9,9 +9,10 @@ import {
   lerAmostra,
   linhasCampanha,
   linhasCanal,
+  linhasTrafego,
   num,
   pct,
-  rotuloCanal,
+  temMidiaPaga,
   topoDoSite,
   vezes,
   type Indicador,
@@ -21,8 +22,10 @@ import {
 import {
   Aviso,
   AvisoAmostra,
+  AvisoSemMidia,
   CelulaIndicador,
   SeloCusto,
+  TabelaOrigens,
 } from './marketing-ui';
 
 type LinhaTabela = LinhaCampanha & {
@@ -39,9 +42,47 @@ export const CampanhasTab: React.FC<{ r: Recorte }> = ({ r }) => {
   const midia = useMemo(() => calcularMidia(r), [r]);
   const site = topoDoSite(r);
   const amostra = useMemo(() => lerAmostra(r), [r]);
+  const semMidia = useMemo(() => !temMidiaPaga(r), [r]);
+  const grupos = useMemo(() => linhasTrafego(r), [r]);
   const naoAtribuidos = r.aquisicoes.filter(
     (a) => a.tipo_origem === 'sem_vinculo' || a.tipo_origem === 'nao_atribuida'
   ).length;
+
+  const origens = (
+    <SecaoRelatorio
+      titulo="Todas as origens"
+      descricao={
+        semMidia
+          ? 'Sem campanha no ar, tudo é orgânico: esta é a linha de base para comparar quando a mídia paga começar.'
+          : 'Mídia paga ao lado do orgânico. "Sem origem identificada" fica à parte: pode incluir clique pago que perdeu o código.'
+      }
+    >
+      <TabelaOrigens
+        grupos={grupos}
+        canais={canais}
+        ocultarPagoVazio={semMidia}
+      />
+    </SecaoRelatorio>
+  );
+
+  if (semMidia)
+    return (
+      <div className="space-y-4">
+        <AvisoSemMidia />
+        <AvisoAmostra a={amostra} semMidia />
+        {origens}
+        <SecaoRelatorio
+          titulo="Campanhas pagas"
+          descricao="Aparecem aqui quando o Google Ads (ou o Meta) começar a enviar custos."
+        >
+          <p className="text-sm text-muted-foreground">
+            Nenhuma campanha paga ainda. Cada campanha com gasto vai aparecer
+            com investimento, conversas, pacientes novos, CAC e ROAS — inclusive
+            as que não gerarem paciente.
+          </p>
+        </SecaoRelatorio>
+      </div>
+    );
 
   return (
     <div className="space-y-4">
@@ -188,40 +229,7 @@ export const CampanhasTab: React.FC<{ r: Recorte }> = ({ r }) => {
         )}
       </SecaoRelatorio>
 
-      <SecaoRelatorio
-        titulo="Todas as origens"
-        descricao="Para comparar a mídia paga com orgânico, Instagram e acesso direto (sem investimento)."
-      >
-        {canais.length ? (
-          <TabelaRelatorio
-            linhas={canais}
-            colunas={[
-              {
-                chave: 'canal',
-                titulo: 'Origem',
-                formato: (v) => rotuloCanal(v as string),
-              },
-              { chave: 'conversas', titulo: 'Conversas', alinhar: 'direita' },
-              { chave: 'agendaram', titulo: 'Agendaram', alinhar: 'direita' },
-              { chave: 'novos', titulo: 'Pacientes novos', alinhar: 'direita' },
-              {
-                chave: 'receita90',
-                titulo: 'Receita 90 dias',
-                alinhar: 'direita',
-                formato: (v) => brl(v as number),
-              },
-              {
-                chave: 'receitaTotal',
-                titulo: 'Receita até hoje',
-                alinhar: 'direita',
-                formato: (v) => brl(v as number),
-              },
-            ]}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">Sem dados no período.</p>
-        )}
-      </SecaoRelatorio>
+      {origens}
     </div>
   );
 };
