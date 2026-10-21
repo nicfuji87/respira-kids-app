@@ -191,7 +191,7 @@ BEGIN
   ORDER BY (er.email = v_rem) DESC, (er.identificador IS NOT NULL) DESC, er.created_at
   LIMIT 1;
   IF NOT FOUND THEN
-    UPDATE public.email_mensagens SET status = 'ignorado', detalhe = 'Remetente sem cadastro' WHERE id = v_msg;
+    UPDATE public.email_mensagens SET status = 'ignorado', detalhe = public.fn_email_motivo_ignorado(v_rem) WHERE id = v_msg;
     RETURN jsonb_build_object('ok', false, 'status', 'ignorado');
   END IF;
 
