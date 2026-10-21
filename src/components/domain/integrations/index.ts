@@ -2,3 +2,4 @@
 
 export { ApiKeysManagement } from './ApiKeysManagement';
 export { PromptsManagement } from './PromptsManagement';
+export { BoletosEmailManagement } from './BoletosEmailManagement';

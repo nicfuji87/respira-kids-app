@@ -278,7 +278,7 @@ export const hasAccessToRoute = (route: string, role: UserRole): boolean => {
   }
 
   // Link do Pix que a @ju manda no grupo de notas: fora do menu, só admin
-  if (route.startsWith('/pix/')) {
+  if (route.startsWith('/pix/') || route.startsWith('/boleto/')) {
     return role === 'admin';
   }
 

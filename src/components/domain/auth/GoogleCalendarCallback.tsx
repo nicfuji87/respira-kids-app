@@ -7,6 +7,9 @@ import { supabase } from '@/lib/supabase';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Card, CardContent } from '@/components/primitives/card';
+import { concluirConexaoGmail } from '@/lib/boletos-email-api';
+
+const CONFIG_BOLETOS = '/configuracoes?tab=integrations&secao=boletos';
 
 export const GoogleCalendarCallback: React.FC = () => {
   const navigate = useNavigate();
@@ -14,6 +17,10 @@ export const GoogleCalendarCallback: React.FC = () => {
     'loading'
   );
   const [error, setError] = useState<string | null>(null);
+  const [destino, setDestino] = useState('/configuracoes?tab=integracao');
+  const [mensagemOk, setMensagemOk] = useState(
+    'Seus agendamentos serão sincronizados automaticamente'
+  );
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
@@ -52,13 +59,29 @@ export const GoogleCalendarCallback: React.FC = () => {
       }
 
       // Parse state data
-      let stateData: { userId: string; autoEnable?: boolean };
+      let stateData: { userId: string; autoEnable?: boolean; tipo?: string };
       try {
         stateData = JSON.parse(stateStr);
         addLog(`✅ State parsed - userId: ${stateData.userId}`);
       } catch {
         stateData = { userId: stateStr };
         addLog(`⚠️ State fallback - userId: ${stateData.userId}`);
+      }
+
+      // Caixa de e-mail para os boletos (Configurações > Integrações): mesmo client
+      // OAuth, outra edge function.
+      if (stateData.tipo === 'gmail_boletos') {
+        setDestino(CONFIG_BOLETOS);
+        const email = await concluirConexaoGmail(code);
+        setMensagemOk(`Caixa ${email} conectada. Os boletos dela serão lidos.`);
+        setStatus('success');
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname + window.location.hash
+        );
+        setTimeout(() => navigate(CONFIG_BOLETOS), 2000);
+        return;
       }
 
       addLog('📞 Chamando Edge Function google-oauth-callback...');
@@ -156,7 +179,7 @@ export const GoogleCalendarCallback: React.FC = () => {
                   Conectado com Sucesso!
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Seus agendamentos serão sincronizados automaticamente
+                  {mensagemOk}
                 </p>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -173,10 +196,10 @@ export const GoogleCalendarCallback: React.FC = () => {
                   Erro na Conexão
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
-                  {error || 'Não foi possível conectar com o Google Calendar'}
+                  {error || 'Não foi possível conectar com o Google'}
                 </p>
               </div>
-              <Button onClick={() => navigate('/configuracoes?tab=integracao')}>
+              <Button onClick={() => navigate(destino)}>
                 Voltar para Configurações
               </Button>
             </div>

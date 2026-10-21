@@ -15,6 +15,7 @@ export { FinanceiroPage } from './FinanceiroPage';
 export { CobrancasPage } from './CobrancasPage';
 export { ReativacaoPage } from './ReativacaoPage';
 export { PixAprovacaoPage } from './PixAprovacaoPage';
+export { BoletoAprovacaoPage } from './BoletoAprovacaoPage';
 export { ConfiguracoesPage } from './ConfiguracoesPage';
 
 // Admin only pages

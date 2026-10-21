@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Tabs,
   TabsContent,
@@ -7,9 +8,10 @@ import {
 } from '@/components/primitives/tabs';
 import {
   ApiKeysManagement,
+  BoletosEmailManagement,
   PromptsManagement,
 } from '@/components/domain/integrations';
-import { Key, MessageSquare } from 'lucide-react';
+import { Key, Mail, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // AI dev note: IntegrationsTemplate é o template principal para integrações
@@ -30,7 +32,11 @@ export interface IntegrationsTemplateProps {
 export const IntegrationsTemplate: React.FC<IntegrationsTemplateProps> = ({
   className,
 }) => {
-  const [activeTab, setActiveTab] = useState('api-keys');
+  // ?secao=boletos: volta do login do Google ao conectar uma caixa de e-mail
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get('secao') === 'boletos' ? 'boletos' : 'api-keys'
+  );
 
   const tabsConfig: TabConfig[] = [
     {
@@ -46,6 +52,13 @@ export const IntegrationsTemplate: React.FC<IntegrationsTemplateProps> = ({
       icon: MessageSquare,
       description: 'Gerencie prompts para processamento de IA',
       content: <PromptsManagement />,
+    },
+    {
+      id: 'boletos',
+      label: 'Boletos por e-mail',
+      icon: Mail,
+      description: 'Boletos recebidos por e-mail viram contas a pagar',
+      content: <BoletosEmailManagement />,
     },
   ];
 
