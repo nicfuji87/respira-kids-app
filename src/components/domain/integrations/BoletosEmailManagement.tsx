@@ -107,7 +107,9 @@ const NOVO: RemetenteInput = {
   links_permitidos: null,
 };
 
-const formaDe = (d: RemetenteInput): 'inter' | 'debito' | 'outra_conta' =>
+const formaDe = (
+  d: RemetenteInput
+): 'inter' | 'debito' | 'outra_conta' | 'asaas' =>
   d.debito_automatico ? 'debito' : d.pagar_por;
 
 export const BoletosEmailManagement: React.FC = () => {
@@ -419,6 +421,9 @@ export const BoletosEmailManagement: React.FC = () => {
                   {r.pagar_por === 'outra_conta'
                     ? ' · pago por outra conta'
                     : ''}
+                  {r.pagar_por === 'asaas'
+                    ? ' · agendado no Asaas (Bruna libera)'
+                    : ''}
                   {r.links_permitidos
                     ? ` · baixa por link (${r.links_permitidos})`
                     : ''}
@@ -629,14 +634,25 @@ export const BoletosEmailManagement: React.FC = () => {
                 <Label>Forma de pagamento</Label>
                 <Select
                   value={formaDe(dados)}
-                  onValueChange={(v) =>
+                  onValueChange={(v) => {
+                    const forma = v as ReturnType<typeof formaDe>;
+                    const contaAtual = contasBancarias.find(
+                      (c) => c.id === dados.conta_bancaria_id
+                    );
                     setDados({
-                      debito_automatico: v === 'debito',
-                      pagar_por: v === 'outra_conta' ? 'outra_conta' : 'inter',
+                      debito_automatico: forma === 'debito',
+                      pagar_por:
+                        forma === 'outra_conta' || forma === 'asaas'
+                          ? forma
+                          : 'inter',
+                      // Asaas só com conta que tem chave de API
                       conta_bancaria_id:
-                        v === 'inter' ? null : dados.conta_bancaria_id,
-                    })
-                  }
+                        forma === 'inter' ||
+                        (forma === 'asaas' && !contaAtual?.asaas)
+                          ? null
+                          : dados.conta_bancaria_id,
+                    });
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -646,17 +662,24 @@ export const BoletosEmailManagement: React.FC = () => {
                       Inter (botão para agendar no grupo)
                     </SelectItem>
                     <SelectItem value="debito">Débito automático</SelectItem>
+                    {contasBancarias.some((c) => c.asaas) && (
+                      <SelectItem value="asaas">
+                        Asaas (agenda sozinho, Bruna libera no app)
+                      </SelectItem>
+                    )}
                     <SelectItem value="outra_conta">
-                      Outra conta (ex.: Asaas da BC)
+                      Outra conta (pagar e marcar como pago)
                     </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {formaDe(dados) === 'debito'
                     ? 'A conta é só registrada e avisada no grupo, sem botão de pagar. No vencimento, a baixa sai sozinha na conta abaixo.'
-                    : formaDe(dados) === 'outra_conta'
-                      ? 'O aviso no grupo diz por qual conta pagar e traz a linha digitável. Depois de pagar, alguém toca “Marquei como pago” e a baixa sai na conta abaixo.'
-                      : 'O aviso no grupo traz o botão para conferir e agendar o pagamento pelo Inter.'}
+                    : formaDe(dados) === 'asaas'
+                      ? 'Quando o boleto chega, o sistema já cria o pagamento no Asaas da conta abaixo. O aviso no grupo diz que falta a liberação da Bruna no app do Asaas. Quando o Asaas pagar, a baixa sai sozinha.'
+                      : formaDe(dados) === 'outra_conta'
+                        ? 'O aviso no grupo diz por qual conta pagar e traz a linha digitável. Depois de pagar, alguém toca “Marquei como pago” e a baixa sai na conta abaixo.'
+                        : 'O aviso no grupo traz o botão para conferir e agendar o pagamento pelo Inter.'}
                 </p>
                 {formaDe(dados) !== 'inter' && (
                   <Select
@@ -668,16 +691,20 @@ export const BoletosEmailManagement: React.FC = () => {
                         placeholder={
                           formaDe(dados) === 'debito'
                             ? 'Conta que é debitada…'
-                            : 'Conta que paga…'
+                            : formaDe(dados) === 'asaas'
+                              ? 'Conta do Asaas…'
+                              : 'Conta que paga…'
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {contasBancarias.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.nome}
-                        </SelectItem>
-                      ))}
+                      {contasBancarias
+                        .filter((c) => formaDe(dados) !== 'asaas' || c.asaas)
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nome}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 )}

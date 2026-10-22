@@ -90,6 +90,10 @@ export async function lerEmailsAgora(): Promise<unknown> {
 // Remetentes cadastrados
 // ---------------------------------------------------------------------------
 
+// inter: o admin agenda no Inter pela página; outra_conta: alguém paga e marca como pago;
+// asaas: o sistema agenda no Asaas (conta com chave de API) e a Bruna libera no app dela.
+export type PagarPor = 'inter' | 'outra_conta' | 'asaas';
+
 export interface RemetenteBoleto {
   id: string;
   email: string;
@@ -102,7 +106,7 @@ export interface RemetenteBoleto {
   debito_automatico: boolean;
   conta_bancaria_id: string | null;
   senha_pdf: string | null;
-  pagar_por: 'inter' | 'outra_conta';
+  pagar_por: PagarPor;
   links_permitidos: string | null;
   fornecedor?: {
     nome_fantasia: string | null;
@@ -132,7 +136,7 @@ export interface RemetenteInput {
   debito_automatico: boolean;
   conta_bancaria_id: string | null;
   senha_pdf: string | null;
-  pagar_por: 'inter' | 'outra_conta';
+  pagar_por: PagarPor;
   links_permitidos: string | null;
 }
 
@@ -170,6 +174,8 @@ export async function excluirRemetente(id: string) {
 export interface OpcaoSimples {
   id: string;
   nome: string;
+  // conta bancária no Asaas com chave de API (dá para agendar pagamento por ela)
+  asaas?: boolean;
 }
 
 export async function listarFornecedoresAtivos(): Promise<OpcaoSimples[]> {
@@ -190,12 +196,13 @@ export async function listarFornecedoresAtivos(): Promise<OpcaoSimples[]> {
 export async function listarContasBancarias(): Promise<OpcaoSimples[]> {
   const { data, error } = await supabase
     .from('contas_bancarias')
-    .select('id, banco_nome, agencia, conta, digito')
+    .select('id, banco_nome, agencia, conta, digito, asaas_empresa_id')
     .eq('ativo', true)
     .order('banco_nome');
   if (error) throw new Error(error.message);
   return (data ?? []).map((c) => ({
     id: c.id as string,
+    asaas: !!c.asaas_empresa_id,
     nome: [
       c.banco_nome,
       c.conta ? `conta ${c.conta}${c.digito ? '-' + c.digito : ''}` : null,
@@ -255,6 +262,8 @@ export async function listarEmailsLidos(limite = 30): Promise<EmailLido[]> {
 export type BoletoStatus =
   | 'aguardando'
   | 'pagando'
+  // conta do Asaas: o sistema está criando o pagamento lá
+  | 'agendando'
   | 'agendado'
   | 'pago'
   | 'erro'
@@ -298,10 +307,13 @@ export interface BoletoSolicitacao {
   conta_debito: string | null;
   // senha do PDF (ex.: Claro = 5 primeiros dígitos do CNPJ)
   senha_pdf: string | null;
-  pagar_por: 'inter' | 'outra_conta';
+  pagar_por: PagarPor;
   // por qual conta pagar e de quem é o custo (lançamento individual)
   conta_pagamento: string | null;
   custo_de: string | null;
+  // titular da conta (ex.: BC FISIO KIDS) e id do pagamento criado no Asaas
+  conta_titular: string | null;
+  asaas_bill_id: string | null;
 }
 
 export async function fetchBoletoSolicitacao(
@@ -410,6 +422,31 @@ export async function marcarBoletoPago(
   const res = r as { ok?: boolean; erro?: string } | null;
   if (!res?.ok)
     throw new Error(res?.erro || 'Não foi possível marcar como pago');
+}
+
+// Conta do Asaas que não foi agendada sozinha (erro, alerta grave): pede de novo e a edge
+// cria o pagamento lá na hora. Quem libera o dinheiro é a Bruna, no app do Asaas.
+export async function agendarBoletoNoAsaas(
+  id: string,
+  confirmado: boolean
+): Promise<{ agendado: boolean; detalhe: string | null }> {
+  const { data: r, error } = await supabase.rpc('fn_boleto_asaas_pedir', {
+    p_id: id,
+    p_confirmado: confirmado,
+  });
+  if (error) throw new Error(error.message);
+  const res = r as { ok?: boolean; erro?: string } | null;
+  if (!res?.ok)
+    throw new Error(res?.erro || 'Não foi possível pedir o agendamento');
+
+  const { data, error: fnErr } = await supabase.functions.invoke(
+    'email-boletos',
+    { body: { so_asaas: true } }
+  );
+  if (fnErr) throw new Error(fnErr.message);
+  const detalhe =
+    (data as { asaas?: Record<string, string> } | null)?.asaas?.[id] ?? null;
+  return { agendado: !!detalhe?.startsWith('agendado'), detalhe };
 }
 
 export async function cancelarBoletoSolicitacao(id: string): Promise<void> {

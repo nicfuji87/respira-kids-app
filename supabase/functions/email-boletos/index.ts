@@ -11,11 +11,16 @@
 //      a IA, mas a linha que ela devolve passa pela MESMA conferência;
 //   3. guarda o PDF no Storage e chama fn_boleto_registrar_email, que preenche a conta
 //      fixa do mês (ou cria a conta), confere contra golpe e abre o pedido de pagamento.
-// O aviso com o link sai no grupo pelo fluxo de avisos do Pix (n8n). Esta função NÃO
-// paga nada: quem agenda é o admin logado no app, pela inter-pagar.
+// O aviso com o link sai no grupo pelo fluxo de avisos do Pix (n8n). No Inter esta função
+// NÃO paga nada: quem agenda é o admin logado no app, pela inter-pagar.
 //
-// Também confere no Inter (só leitura) os boletos agendados cujo dia chegou e dá
+// Exceção: remetente com pagar_por = 'asaas' (contas da BC FISIO). A solicitação nasce
+// 'agendando' e aqui ela é simulada e criada como pagamento de conta no Asaas (POST /v3/bill).
+// O Asaas segura o pagamento até a Bruna liberar no app dela; o aviso no grupo diz isso.
+//
+// Também confere os agendados (Inter no dia, só leitura; Asaas a cada rodada) e dá
 // baixa nos de débito automático no vencimento (fn_boletos_debito_baixar).
+// Body { so_asaas: true } (botão da página do boleto): pula o Gmail e só agenda/confere.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import {
@@ -583,17 +588,296 @@ async function lerCaixa(
   return resumo;
 }
 
+// ---------------------------------------------------------------- Asaas
+const ASAAS = 'https://api.asaas.com/v3';
+
+interface RespostaAsaas {
+  ok: boolean;
+  status: number;
+  // deno-lint-ignore no-explicit-any
+  data: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+
+async function asaas(
+  token: string,
+  metodo: 'GET' | 'POST',
+  caminho: string,
+  corpo?: unknown
+): Promise<RespostaAsaas> {
+  const res = await fetch(`${ASAAS}${caminho}`, {
+    method: metodo,
+    headers: {
+      access_token: token,
+      'Content-Type': 'application/json',
+      'User-Agent': 'RespiraKids/1.0',
+    },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+    signal: AbortSignal.timeout(30_000),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+
+function erroDoAsaas(r: RespostaAsaas): string {
+  const msgs = (r.data?.errors ?? []) as { description?: string }[];
+  return (
+    msgs
+      .map((e) => e.description)
+      .filter(Boolean)
+      .join(' ') || `HTTP ${r.status}`
+  );
+}
+
+function hojeBrasilia(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+  }).format(new Date());
+}
+
+// Conta de consumo/tributo (48 dígitos, começa com 8): o Asaas só aceita o código de barras
+// de 44 (sem os DVs de cada bloco). Boleto bancário vai pela linha digitável.
+function codigoParaAsaas(linha: string) {
+  if (linha.length === 48) {
+    const barCode = [0, 12, 24, 36].map((i) => linha.slice(i, i + 11)).join('');
+    return { barCode };
+  }
+  return { identificationField: linha };
+}
+
+async function chaveAsaas(
+  admin: Admin,
+  cache: Map<string, string | null>,
+  empresaId: string | null
+): Promise<string | null> {
+  if (!empresaId) return null;
+  if (!cache.has(empresaId)) {
+    const { data } = await admin
+      .from('pessoa_empresas')
+      .select('api_token_externo')
+      .eq('id', empresaId)
+      .single();
+    cache.set(empresaId, (data?.api_token_externo as string) || null);
+  }
+  return cache.get(empresaId) ?? null;
+}
+
+// Cria no Asaas os pagamentos das solicitações 'agendando'. Não dá dinheiro sem a Bruna:
+// o Asaas segura até a liberação no app. Qualquer falha devolve para pagamento manual
+// ('externo' se ainda não foi anunciado, senão 'erro'), com o motivo.
+async function agendarNoAsaas(admin: Admin, cache: Map<string, string | null>) {
+  const resultado: Record<string, string> = {};
+  const limite = new Date(Date.now() - 10 * 60_000).toISOString();
+  const preso =
+    'A tentativa de agendar no Asaas não terminou. Confira no app do Asaas se o pagamento já existe antes de tentar de novo.';
+  // travado há mais de 10 min (função caiu no meio): não dá para saber se o Asaas registrou
+  await admin
+    .from('boleto_solicitacoes')
+    .update({ status: 'externo', erro: preso })
+    .eq('status', 'agendando')
+    .lt('asaas_tentativa_em', limite)
+    .is('anunciado_em', null);
+  await admin
+    .from('boleto_solicitacoes')
+    .update({
+      status: 'erro',
+      erro: preso,
+      concluido_em: new Date().toISOString(),
+    })
+    .eq('status', 'agendando')
+    .lt('asaas_tentativa_em', limite)
+    .not('anunciado_em', 'is', null);
+
+  // trava: só quem conseguir marcar a tentativa segue (duas rodadas não agendam o mesmo)
+  const { data: pegos } = await admin
+    .from('boleto_solicitacoes')
+    .update({ asaas_tentativa_em: new Date().toISOString() })
+    .eq('status', 'agendando')
+    .is('asaas_tentativa_em', null)
+    .select(
+      'id, linha_digitavel, valor, vencimento, descricao, alertas, asaas_confirmado, remetente_id, anunciado_em'
+    );
+
+  for (const s of (pegos ?? []) as {
+    id: string;
+    linha_digitavel: string;
+    valor: number;
+    vencimento: string | null;
+    descricao: string | null;
+    alertas: { nivel: string; texto: string }[] | null;
+    asaas_confirmado: boolean;
+    remetente_id: string | null;
+    anunciado_em: string | null;
+  }[]) {
+    const desistir = async (motivo: string) => {
+      await admin
+        .from('boleto_solicitacoes')
+        .update({
+          status: s.anunciado_em ? 'erro' : 'externo',
+          erro: motivo.slice(0, 500),
+          ...(s.anunciado_em ? { concluido_em: new Date().toISOString() } : {}),
+        })
+        .eq('id', s.id)
+        .eq('status', 'agendando');
+      resultado[s.id] = `não agendado: ${motivo}`;
+    };
+    try {
+      const { data: rem } = await admin
+        .from('email_boleto_remetentes')
+        .select('conta_bancaria_id, contas_bancarias(asaas_empresa_id)')
+        .eq('id', s.remetente_id)
+        .single();
+      const conta = rem?.contas_bancarias as
+        | { asaas_empresa_id: string | null }
+        | { asaas_empresa_id: string | null }[]
+        | null;
+      const empresaId = Array.isArray(conta)
+        ? conta[0]?.asaas_empresa_id
+        : conta?.asaas_empresa_id;
+      const token = await chaveAsaas(admin, cache, empresaId ?? null);
+      if (!token) {
+        await desistir('A conta do Asaas do cadastro não tem chave de API.');
+        continue;
+      }
+      const graves = (s.alertas ?? []).filter((a) => a.nivel === 'grave');
+      if (graves.length && !s.asaas_confirmado) {
+        await desistir(
+          `Não agendei por causa de um alerta grave (${graves[0].texto}). Confira o boleto e agende pelo link.`
+        );
+        continue;
+      }
+
+      const codigo = codigoParaAsaas(s.linha_digitavel);
+      const sim = await asaas(token, 'POST', '/bill/simulate', codigo);
+      if (!sim.ok) {
+        await desistir(`O Asaas recusou: ${erroDoAsaas(sim)}`);
+        continue;
+      }
+      const info = sim.data?.bankSlipInfo ?? {};
+      const valorAsaas = Number(info.value) || Number(s.valor);
+      if (valorAsaas > Number(s.valor) * 1.1 + 0.01) {
+        await desistir(
+          `O Asaas cobraria R$ ${valorAsaas.toFixed(2)}, mais de 10% acima do boleto (R$ ${Number(s.valor).toFixed(2)}). Confira antes.`
+        );
+        continue;
+      }
+      const hoje = hojeBrasilia();
+      const alvo = s.vencimento && s.vencimento >= hoje ? s.vencimento : hoje;
+      const minimo = String(sim.data?.minimumScheduleDate ?? hoje);
+      const dia = alvo > minimo ? alvo : minimo;
+
+      let criado: RespostaAsaas;
+      try {
+        criado = await asaas(token, 'POST', '/bill', {
+          ...codigo,
+          scheduleDate: dia,
+          description: (s.descricao ?? 'Conta recebida por e-mail').slice(
+            0,
+            200
+          ),
+          externalReference: s.id,
+          ...(info.dueDate || !s.vencimento ? {} : { dueDate: s.vencimento }),
+          ...(info.value ? {} : { value: Number(s.valor) }),
+        });
+      } catch (e) {
+        // sem resposta: o Asaas pode ter registrado. Não repete sozinho.
+        await desistir(
+          `Sem resposta do Asaas (${e instanceof Error ? e.message : e}). Confira no app do Asaas se o pagamento já existe antes de tentar de novo.`
+        );
+        continue;
+      }
+      if (!criado.ok || !criado.data?.id) {
+        await desistir(`O Asaas recusou: ${erroDoAsaas(criado)}`);
+        continue;
+      }
+      await admin
+        .from('boleto_solicitacoes')
+        .update({
+          status: 'agendado',
+          erro: null,
+          asaas_bill_id: criado.data.id,
+          asaas_resposta: criado.data,
+          data_pagamento: criado.data.scheduleDate ?? dia,
+          valor_pagar: Number(criado.data.value) || valorAsaas,
+        })
+        .eq('id', s.id)
+        .eq('status', 'agendando');
+      resultado[s.id] = `agendado no Asaas para ${dia}`;
+    } catch (e) {
+      await desistir(
+        `Falha ao agendar no Asaas (${e instanceof Error ? e.message : e}). Confira no app do Asaas antes de tentar de novo.`
+      );
+    }
+  }
+  return resultado;
+}
+
+// Agendado pelo Asaas: consulta o pagamento (só leitura). PAID dá baixa; cancelado/falhou avisa.
+async function conferirNoAsaas(
+  admin: Admin,
+  cache: Map<string, string | null>,
+  b: { id: string; asaas_bill_id: string; asaas_empresa_id: string | null }
+): Promise<string> {
+  const token = await chaveAsaas(admin, cache, b.asaas_empresa_id);
+  if (!token) return 'sem chave do Asaas';
+  const r = await asaas(token, 'GET', `/bill/${b.asaas_bill_id}`);
+  if (!r.ok) return `falha na consulta: ${erroDoAsaas(r)}`;
+  const st = String(r.data?.status ?? '');
+  if (st === 'PAID') {
+    await admin
+      .from('boleto_solicitacoes')
+      .update({
+        data_pagamento: r.data.paymentDate ?? hojeBrasilia(),
+        valor_pagar: Number(r.data.value) || undefined,
+        asaas_resposta: r.data,
+      })
+      .eq('id', b.id);
+    await admin.rpc('fn_boleto_confirmar_pagamento', {
+      p_id: b.id,
+      p_pago: true,
+    });
+    return 'pago';
+  }
+  if (['FAILED', 'CANCELLED', 'REFUNDED'].includes(st)) {
+    const motivos = ((r.data?.failReasons ?? []) as string[]).join(' ');
+    const nome = {
+      FAILED: 'falhou',
+      CANCELLED: 'cancelado',
+      REFUNDED: 'estornado',
+    }[st];
+    await admin.rpc('fn_boleto_confirmar_pagamento', {
+      p_id: b.id,
+      p_pago: false,
+      p_erro: `No Asaas o pagamento ${nome}${motivos ? `: ${motivos}` : ''}`,
+    });
+    return st.toLowerCase();
+  }
+  return `aguardando (${st || '?'})`;
+}
+
 // Boleto agendado cujo dia chegou: confere no Inter (só leitura) se saiu.
-async function conferirAgendados(admin: Admin) {
+async function conferirAgendados(
+  admin: Admin,
+  cache: Map<string, string | null>
+) {
   const { data } = await admin.rpc('fn_boletos_agendados_para_conferir');
   const lista = (data ?? []) as {
     id: string;
     linha_digitavel: string;
     data_pagamento: string;
+    asaas_bill_id: string | null;
+    asaas_empresa_id: string | null;
   }[];
   const resultado: Record<string, string> = {};
   for (const b of lista) {
     try {
+      if (b.asaas_bill_id) {
+        resultado[b.id] = await conferirNoAsaas(admin, cache, {
+          id: b.id,
+          asaas_bill_id: b.asaas_bill_id,
+          asaas_empresa_id: b.asaas_empresa_id,
+        });
+        continue;
+      }
       const dia = b.data_pagamento;
       const inicio = new Date(Date.parse(dia) - 7 * 86_400_000)
         .toISOString()
@@ -674,6 +958,18 @@ serve(async (req: Request) => {
     }
   }
 
+  const pedido = (await req.json().catch(() => ({}))) as { so_asaas?: boolean };
+  const chaves = new Map<string, string | null>();
+  if (pedido?.so_asaas) {
+    try {
+      const asaasAgendados = await agendarNoAsaas(admin, chaves);
+      const agendados = await conferirAgendados(admin, chaves);
+      return json({ ok: true, asaas: asaasAgendados, agendados });
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    }
+  }
+
   try {
     const [{ data: caixas }, { data: remetentes }, { data: empresas }] =
       await Promise.all([
@@ -732,12 +1028,14 @@ serve(async (req: Request) => {
       }
     }
 
-    const agendados = await conferirAgendados(admin);
+    const asaasAgendados = await agendarNoAsaas(admin, chaves);
+    const agendados = await conferirAgendados(admin, chaves);
     // débito automático cujo vencimento chegou: baixa na conta do cadastro
     const { data: debitos } = await admin.rpc('fn_boletos_debito_baixar');
     return json({
       ok: true,
       caixas: caixasResumo,
+      asaas: asaasAgendados,
       agendados,
       debitos_baixados: debitos ?? 0,
     });

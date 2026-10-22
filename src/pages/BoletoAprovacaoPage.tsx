@@ -3,6 +3,8 @@
 // PDF e os alertas e toca "Agendar": o app chama a inter-pagar de sempre com a data
 // do vencimento (ou hoje, se já venceu). Boleto adulterado é golpe comum por e-mail,
 // por isso alerta "grave" (banco ou beneficiário diferente) exige marcar que conferiu.
+// Conta do Asaas da BC (pagar_por 'asaas'): o sistema já agenda sozinho; aqui só aparece
+// "Agendar no Asaas" quando não deu (erro ou alerta grave), e a Bruna libera no app.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -33,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { abrirDocumentoFinanceiro } from '@/lib/financeiro-storage';
 import {
   agendarBoleto,
+  agendarBoletoNoAsaas,
   cancelarBoletoSolicitacao,
   marcarBoletoPago,
   fetchBoletoSolicitacao,
@@ -108,6 +111,10 @@ const STATUS: Record<BoletoStatus, { label: string; className: string }> = {
     label: 'Enviando…',
     className: 'bg-amarelo-pipa/20 text-roxo-titulo border-amarelo-pipa/40',
   },
+  agendando: {
+    label: 'Agendando no Asaas…',
+    className: 'bg-amarelo-pipa/20 text-roxo-titulo border-amarelo-pipa/40',
+  },
   agendado: {
     label: 'Agendado',
     className: 'bg-azul-respira/20 text-roxo-titulo border-azul-respira/40',
@@ -176,6 +183,36 @@ export const BoletoAprovacaoPage: React.FC = () => {
     } catch (e) {
       toast({
         title: 'O boleto não foi agendado',
+        description: e instanceof Error ? e.message : 'Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setEnviando(false);
+      await carregar();
+    }
+  };
+
+  // conta do Asaas que não agendou sozinha: pede de novo (a Bruna libera no app do Asaas)
+  const agendarAsaas = async () => {
+    if (!boleto) return;
+    setEnviando(true);
+    try {
+      const r = await agendarBoletoNoAsaas(boleto.id, conferiu);
+      if (r.agendado) {
+        toast({
+          title: 'Agendado no Asaas',
+          description: 'Falta a Bruna liberar no app do Asaas.',
+        });
+      } else {
+        toast({
+          title: 'Não agendou no Asaas',
+          description: r.detalhe ?? 'O motivo aparece na página.',
+          variant: 'destructive',
+        });
+      }
+    } catch (e) {
+      toast({
+        title: 'Não agendou no Asaas',
         description: e instanceof Error ? e.message : 'Tente novamente.',
         variant: 'destructive',
       });
@@ -269,8 +306,14 @@ export const BoletoAprovacaoPage: React.FC = () => {
   const venceu = boleto.vencimento < hoje;
   const dataAgendar = venceu ? hoje : boleto.vencimento;
   const graves = boleto.alertas.filter((a) => a.nivel === 'grave');
+  const asaas = boleto.pagar_por === 'asaas';
+  const noAsaas = `Asaas${boleto.conta_titular ? ` da ${boleto.conta_titular}` : ''}`;
+  // Inter só para quem paga pelo Inter (o Asaas tem o próprio bloco)
   const podeAgendar =
-    boleto.status === 'aguardando' || boleto.status === 'erro';
+    boleto.pagar_por === 'inter' &&
+    (boleto.status === 'aguardando' || boleto.status === 'erro');
+  const asaasPendente =
+    asaas && (boleto.status === 'externo' || boleto.status === 'erro');
   const bloqueado = graves.length > 0 && !conferiu;
   const st = STATUS[boleto.status];
   const cnpjCadastro = (boleto.fornecedor_cnpj ?? '').replace(/\D/g, '');
@@ -290,11 +333,19 @@ export const BoletoAprovacaoPage: React.FC = () => {
           Boleto recebido por e-mail
         </h1>
         <p className="text-muted-foreground">
-          Confira e agende pela conta do Inter.
+          {asaas
+            ? `Pago pelo ${noAsaas}: a Bruna libera no app do Asaas.`
+            : boleto.pagar_por === 'outra_conta'
+              ? 'Pago fora do sistema: depois de pagar, marque aqui.'
+              : 'Confira e agende pela conta do Inter.'}
         </p>
       </div>
 
-      <Card className={cn(podeAgendar && 'border-amarelo-pipa/50')}>
+      <Card
+        className={cn(
+          (podeAgendar || asaasPendente) && 'border-amarelo-pipa/50'
+        )}
+      >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-base">
@@ -511,7 +562,87 @@ export const BoletoAprovacaoPage: React.FC = () => {
             </>
           )}
 
-          {boleto.status === 'externo' && (
+          {asaasPendente && (
+            <>
+              {boleto.status === 'externo' && boleto.erro && (
+                <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                  {boleto.erro}
+                </p>
+              )}
+              {graves.length > 0 && (
+                <label className="flex items-start gap-2 rounded-lg border border-destructive/40 p-3 text-sm">
+                  <Checkbox
+                    checked={conferiu}
+                    onCheckedChange={(v) => setConferiu(v === true)}
+                    className="mt-0.5"
+                  />
+                  Conferi o PDF e confirmei com o fornecedor que estes dados de
+                  pagamento estão certos.
+                </label>
+              )}
+              <p className="flex items-start gap-2 text-xs text-muted-foreground">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amarelo-pipa" />
+                O sistema cria o pagamento no {noAsaas}
+                {venceu
+                  ? ' para hoje, com a multa e os juros que o Asaas calcular'
+                  : ` para ${formatDia(boleto.vencimento)}`}
+                . O dinheiro só sai depois que a Bruna liberar no app do Asaas.
+              </p>
+              <Button
+                onClick={() => void agendarAsaas()}
+                disabled={enviando || bloqueado}
+                className="h-12 w-full gap-2 text-base"
+              >
+                {enviando ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <CalendarClock className="h-5 w-5" />
+                )}
+                Agendar no Asaas
+              </Button>
+              <div className="space-y-1.5 border-t pt-3">
+                <label
+                  htmlFor="data-pago-asaas"
+                  className="text-sm text-muted-foreground"
+                >
+                  Já foi pago direto no Asaas? Data do pagamento
+                </label>
+                <Input
+                  id="data-pago-asaas"
+                  type="date"
+                  value={dataPago}
+                  max={hojeSP()}
+                  onChange={(e) => setDataPago(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => void marcarPago()}
+                disabled={enviando || !dataPago}
+                className="w-full gap-2"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Marquei como pago
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => void cancelar()}
+                disabled={enviando}
+                className="w-full gap-2"
+              >
+                <XCircle className="h-4 w-4" />
+                Cancelar este pedido
+              </Button>
+            </>
+          )}
+          {boleto.status === 'agendando' && (
+            <p className="flex items-center gap-2 text-sm text-roxo-titulo">
+              <Loader2 className="h-5 w-5 animate-spin text-azul-respira" />
+              Criando o pagamento no {noAsaas}…
+            </p>
+          )}
+
+          {boleto.status === 'externo' && !asaas && (
             <>
               <p className="flex items-start gap-2 rounded-lg bg-amarelo-pipa/20 p-3 text-sm text-roxo-titulo">
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
@@ -575,7 +706,14 @@ export const BoletoAprovacaoPage: React.FC = () => {
               </Button>
             </>
           )}
-          {boleto.status === 'agendado' && (
+          {boleto.status === 'agendado' && asaas && (
+            <p className="flex items-start gap-2 rounded-lg bg-azul-respira/10 p-3 text-sm text-roxo-titulo">
+              <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-azul-respira" />
+              Agendado no {noAsaas}. Falta a liberação da Bruna no app do Asaas.
+              Quando o Asaas pagar, o sistema dá baixa na conta.
+            </p>
+          )}
+          {boleto.status === 'agendado' && !asaas && (
             <p className="flex items-center gap-2 text-sm text-roxo-titulo">
               <CalendarClock className="h-5 w-5 text-azul-respira" />
               Agendado no Inter. No dia, o sistema confere e dá baixa na conta.
