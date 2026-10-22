@@ -395,6 +395,11 @@ export const BoletoAprovacaoPage: React.FC = () => {
               <FileText className="h-4 w-4" /> Ver o boleto (PDF)
             </Button>
           )}
+          {boleto.anexo_path && boleto.senha_pdf && (
+            <p className="-mt-2 text-center text-xs text-muted-foreground">
+              O PDF pede senha: <strong>{boleto.senha_pdf}</strong>
+            </p>
+          )}
 
           {boleto.status === 'erro' && boleto.erro && (
             <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">

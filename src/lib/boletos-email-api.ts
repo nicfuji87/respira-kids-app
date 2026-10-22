@@ -101,6 +101,7 @@ export interface RemetenteBoleto {
   ativo: boolean;
   debito_automatico: boolean;
   conta_bancaria_id: string | null;
+  senha_pdf: string | null;
   fornecedor?: {
     nome_fantasia: string | null;
     nome_razao_social: string | null;
@@ -112,7 +113,7 @@ export async function listarRemetentes(): Promise<RemetenteBoleto[]> {
   const { data, error } = await supabase
     .from('email_boleto_remetentes')
     .select(
-      'id, email, fornecedor_id, lancamento_recorrente_id, identificador, categoria_contabil_id, observacao, ativo, debito_automatico, conta_bancaria_id, fornecedor:fornecedores(nome_fantasia, nome_razao_social), recorrente:lancamentos_recorrentes(descricao)'
+      'id, email, fornecedor_id, lancamento_recorrente_id, identificador, categoria_contabil_id, observacao, ativo, debito_automatico, conta_bancaria_id, senha_pdf, fornecedor:fornecedores(nome_fantasia, nome_razao_social), recorrente:lancamentos_recorrentes(descricao)'
     )
     .order('email');
   if (error) throw new Error(error.message);
@@ -128,6 +129,7 @@ export interface RemetenteInput {
   ativo: boolean;
   debito_automatico: boolean;
   conta_bancaria_id: string | null;
+  senha_pdf: string | null;
 }
 
 export async function salvarRemetente(input: RemetenteInput, id?: string) {
@@ -136,6 +138,7 @@ export async function salvarRemetente(input: RemetenteInput, id?: string) {
     email: input.email.trim().toLowerCase(),
     identificador: input.identificador?.trim() || null,
     observacao: input.observacao?.trim() || null,
+    senha_pdf: input.senha_pdf?.trim() || null,
     updated_at: new Date().toISOString(),
   };
   const { error } = id
@@ -286,6 +289,8 @@ export interface BoletoSolicitacao {
   aprovado_por: string | null;
   debito_automatico: boolean;
   conta_debito: string | null;
+  // senha do PDF (ex.: Claro = 5 primeiros dígitos do CNPJ)
+  senha_pdf: string | null;
 }
 
 export async function fetchBoletoSolicitacao(

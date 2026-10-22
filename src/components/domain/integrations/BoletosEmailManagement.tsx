@@ -102,6 +102,7 @@ const NOVO: RemetenteInput = {
   ativo: true,
   debito_automatico: false,
   conta_bancaria_id: null,
+  senha_pdf: null,
 };
 
 export const BoletosEmailManagement: React.FC = () => {
@@ -183,6 +184,7 @@ export const BoletosEmailManagement: React.FC = () => {
               ativo: r.ativo,
               debito_automatico: r.debito_automatico,
               conta_bancaria_id: r.conta_bancaria_id,
+              senha_pdf: r.senha_pdf,
             },
           }
         : { dados: { ...NOVO } }
@@ -573,6 +575,22 @@ export const BoletosEmailManagement: React.FC = () => {
                 <p className="text-xs text-muted-foreground">
                   Para quando o mesmo remetente manda boletos de contas
                   diferentes (uma sala e outra, por exemplo).
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="rem-senha">Senha do PDF (opcional)</Label>
+                <Input
+                  id="rem-senha"
+                  value={dados.senha_pdf ?? ''}
+                  onChange={(e) => setDados({ senha_pdf: e.target.value })}
+                  placeholder="Ex.: 51869"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Se a fatura vier com senha. Em branco, o sistema tenta os
+                  padrões com o CNPJ da clínica (4, 5, 6 ou 8 primeiros dígitos
+                  e o CNPJ inteiro) e guarda a que abrir.
                 </p>
               </div>
 

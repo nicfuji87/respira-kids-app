@@ -126,14 +126,61 @@ async function gmail<T>(token: string, caminho: string): Promise<T> {
   return (await r.json()) as T;
 }
 
-async function textoDoPdf(bytes: Uint8Array): Promise<string> {
-  try {
-    const pdf = await getDocumentProxy(new Uint8Array(bytes));
+interface Remetente {
+  id: string;
+  email: string;
+  senha_pdf: string | null;
+}
+
+function remetenteDe(email: string, lista: Remetente[]): Remetente | null {
+  return (
+    lista.find((r) => r.email === email) ??
+    lista.find((r) => r.email.startsWith('@') && email.endsWith(r.email)) ??
+    null
+  );
+}
+
+// Senhas para PDF protegido: a do cadastro primeiro; depois os padrões que operadoras e
+// bancos usam com o CNPJ do titular (Claro = 5 primeiros dígitos).
+function senhasCandidatas(rem: Remetente | null, cnpjs: string[]): string[] {
+  const s = new Set<string>();
+  if (rem?.senha_pdf) s.add(rem.senha_pdf);
+  for (const c of cnpjs
+    .map((x) => x.replace(/\D/g, ''))
+    .filter((x) => x.length === 14)) {
+    for (const n of [5, 4, 6, 8, 14]) s.add(c.slice(0, n));
+  }
+  return [...s];
+}
+
+// Lê o texto do PDF; se tiver senha, tenta as candidatas (pdf.js: PasswordException).
+async function textoDoPdf(
+  bytes: Uint8Array,
+  senhas: string[]
+): Promise<{ texto: string; protegido: boolean; senha: string | null }> {
+  const ler = async (password?: string) => {
+    const pdf = await getDocumentProxy(
+      new Uint8Array(bytes),
+      password ? { password } : {}
+    );
     const { text } = await extractText(pdf, { mergePages: true });
     return Array.isArray(text) ? text.join('\n') : String(text ?? '');
-  } catch {
-    return '';
+  };
+  try {
+    return { texto: await ler(), protegido: false, senha: null };
+  } catch (e) {
+    if ((e as Error)?.name !== 'PasswordException') {
+      return { texto: '', protegido: false, senha: null };
+    }
   }
+  for (const senha of senhas) {
+    try {
+      return { texto: await ler(senha), protegido: true, senha };
+    } catch {
+      // senha errada: tenta a próxima
+    }
+  }
+  return { texto: '', protegido: true, senha: null };
 }
 
 // PDF escaneado: a IA só procura a linha; a conferência dos DVs continua valendo.
@@ -203,7 +250,8 @@ async function lerCaixa(
   admin: Admin,
   caixa: { id: string; email: string; refresh_token: string },
   consulta: string,
-  cnpjsNossos: string[]
+  cnpjsNossos: string[],
+  remetentes: Remetente[]
 ) {
   const resumo = { caixa: caixa.email, novas: 0, boletos: 0, outras: 0 };
   const token = await tokenGoogle(caixa.refresh_token);
@@ -236,6 +284,7 @@ async function lerCaixa(
     const recebidoEm = msg.internalDate
       ? new Date(Number(msg.internalDate)).toISOString()
       : null;
+    const rem = remetenteDe(remetente, remetentes);
     const base = {
       caixa_id: caixa.id,
       remetente,
@@ -272,13 +321,27 @@ async function lerCaixa(
 
     let n = 0;
     let algum = false;
+    let semSenha = false;
     for (const [i, parte] of pdfs.entries()) {
       const anexo = await gmail<{ data: string }>(
         token,
         `/messages/${id}/attachments/${parte.body!.attachmentId}`
       );
       const bytes = base64urlParaBytes(anexo.data);
-      const texto = await textoDoPdf(bytes);
+      const lido = await textoDoPdf(bytes, senhasCandidatas(rem, cnpjsNossos));
+      const texto = lido.texto;
+      if (lido.protegido && !lido.senha) {
+        semSenha = true;
+        continue;
+      }
+      // a senha que abriu fica no cadastro (a página do boleto mostra para quem abrir o PDF)
+      if (lido.senha && rem && rem.senha_pdf !== lido.senha) {
+        await admin
+          .from('email_boleto_remetentes')
+          .update({ senha_pdf: lido.senha })
+          .eq('id', rem.id);
+        rem.senha_pdf = lido.senha;
+      }
       let boletos = acharBoletos(texto);
       let benef = acharBeneficiario(texto, cnpjsNossos);
       if (!boletos.length && texto.replace(/\s/g, '').length < 200) {
@@ -335,7 +398,9 @@ async function lerCaixa(
           ...base,
           gmail_id: id,
           texto: `${assunto}\n${corpo}`,
-          motivo: 'Não achei boleto com linha digitável válida no PDF',
+          motivo: semSenha
+            ? 'PDF com senha que não consegui abrir: cadastre a senha no remetente'
+            : 'Não achei boleto com linha digitável válida no PDF',
         },
       });
       resumo.outras++;
@@ -443,7 +508,10 @@ serve(async (req: Request) => {
           .select('id, email, refresh_token')
           .eq('ativo', true)
           .not('refresh_token', 'is', null),
-        admin.from('email_boleto_remetentes').select('email').eq('ativo', true),
+        admin
+          .from('email_boleto_remetentes')
+          .select('id, email, senha_pdf')
+          .eq('ativo', true),
         admin.from('pessoa_empresas').select('cnpj'),
       ]);
 
@@ -464,7 +532,8 @@ serve(async (req: Request) => {
               admin,
               caixa as { id: string; email: string; refresh_token: string },
               consulta,
-              cnpjsNossos
+              cnpjsNossos,
+              (remetentes ?? []) as Remetente[]
             )
           );
           await admin
