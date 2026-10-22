@@ -21,6 +21,7 @@
 // Também confere os agendados (Inter no dia, só leitura; Asaas a cada rodada) e dá
 // baixa nos de débito automático no vencimento (fn_boletos_debito_baixar).
 // Body { so_asaas: true } (botão da página do boleto): pula o Gmail e só agenda/confere.
+// Conta 'externo' de conta Asaas agendada à mão no app do Asaas é achada na lista (adotarDoAsaas).
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import {
@@ -811,6 +812,114 @@ async function agendarNoAsaas(admin: Admin, cache: Map<string, string | null>) {
   return resultado;
 }
 
+// Conta paga "por fora" no Asaas (status 'externo', a Bruna agendou no app do Asaas): procura
+// o pagamento na lista do Asaas pela linha/código de barras (só leitura) e passa a acompanhá-lo
+// como os agendados pela API. Assim a baixa vem do Asaas, sem ninguém tocar em "Marcar como pago".
+const digitos = (v: unknown) => String(v ?? '').replace(/\D/g, '');
+
+async function adotarDoAsaas(admin: Admin, cache: Map<string, string | null>) {
+  const resultado: Record<string, string> = {};
+  const { data } = await admin
+    .from('boleto_solicitacoes')
+    .select(
+      'id, linha_digitavel, valor, vencimento, email_boleto_remetentes(contas_bancarias(asaas_empresa_id))'
+    )
+    .eq('status', 'externo')
+    .is('asaas_bill_id', null);
+  type Linha = {
+    id: string;
+    linha_digitavel: string;
+    valor: number;
+    vencimento: string | null;
+    empresa: string | null;
+  };
+  const um = <T>(v: T | T[] | null | undefined) =>
+    Array.isArray(v) ? v[0] : v;
+  const porEmpresa = new Map<string, Linha[]>();
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    // deno-lint-ignore no-explicit-any
+    const rem: any = um(r.email_boleto_remetentes as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const conta = um(rem?.contas_bancarias) as
+      | { asaas_empresa_id: string | null }
+      | undefined;
+    const empresa = conta?.asaas_empresa_id ?? null;
+    if (!empresa) continue;
+    const l = { ...(r as unknown as Linha), empresa };
+    porEmpresa.set(empresa, [...(porEmpresa.get(empresa) ?? []), l]);
+  }
+
+  for (const [empresa, linhas] of porEmpresa) {
+    const token = await chaveAsaas(admin, cache, empresa);
+    if (!token) continue;
+    // deno-lint-ignore no-explicit-any
+    const contas: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+    for (let offset = 0; offset < 300; offset += 100) {
+      const r = await asaas(token, 'GET', `/bill?limit=100&offset=${offset}`);
+      if (!r.ok) {
+        for (const l of linhas)
+          resultado[l.id] = `lista do Asaas falhou: ${erroDoAsaas(r)}`;
+        break;
+      }
+      contas.push(...((r.data?.data ?? []) as unknown[]));
+      if (!r.data?.hasMore) break;
+    }
+    const validas = contas.filter(
+      (c) => !['CANCELLED', 'FAILED', 'REFUNDED'].includes(String(c?.status))
+    );
+    // pagamento do Asaas já ligado a outra conta não serve
+    const { data: ligados } = await admin
+      .from('boleto_solicitacoes')
+      .select('asaas_bill_id')
+      .in('asaas_bill_id', validas.map((c) => String(c.id)).slice(0, 300));
+    const jaUsadas = new Set<string>(
+      (ligados ?? []).map((x) => String(x.asaas_bill_id))
+    );
+    for (const l of linhas) {
+      const codigo = codigoParaAsaas(l.linha_digitavel);
+      const alvos = new Set(
+        [l.linha_digitavel, codigo.barCode ?? ''].filter(Boolean)
+      );
+      const bate = (c: Record<string, unknown>) =>
+        [c.identificationField, c.barCode].some((v) => alvos.has(digitos(v)));
+      let achada = validas.find((c) => !jaUsadas.has(c.id) && bate(c));
+      if (!achada) {
+        // sem a linha na resposta: mesmo valor e vencimento, e só se houver exatamente um
+        const candidatas = validas.filter(
+          (c) =>
+            !jaUsadas.has(c.id) &&
+            Math.abs(Number(c.value) - Number(l.valor)) < 0.01 &&
+            l.vencimento &&
+            c.dueDate === l.vencimento
+        );
+        if (candidatas.length === 1) achada = candidatas[0];
+      }
+      if (!achada) {
+        resultado[l.id] = 'ainda não está no Asaas';
+        continue;
+      }
+      jaUsadas.add(achada.id);
+      const { data: mudou } = await admin
+        .from('boleto_solicitacoes')
+        .update({
+          status: 'agendado',
+          erro: null,
+          asaas_bill_id: achada.id,
+          asaas_resposta: achada,
+          data_pagamento: achada.paymentDate ?? achada.scheduleDate ?? null,
+          valor_pagar: Number(achada.value) || undefined,
+        })
+        .eq('id', l.id)
+        .eq('status', 'externo')
+        .is('asaas_bill_id', null)
+        .select('id');
+      resultado[l.id] = mudou?.length
+        ? `achado no Asaas (${achada.status})`
+        : 'mudou enquanto procurava';
+    }
+  }
+  return resultado;
+}
+
 // Agendado pelo Asaas: consulta o pagamento (só leitura). PAID dá baixa; cancelado/falhou avisa.
 async function conferirNoAsaas(
   admin: Admin,
@@ -963,8 +1072,9 @@ serve(async (req: Request) => {
   if (pedido?.so_asaas) {
     try {
       const asaasAgendados = await agendarNoAsaas(admin, chaves);
+      const adotados = await adotarDoAsaas(admin, chaves);
       const agendados = await conferirAgendados(admin, chaves);
-      return json({ ok: true, asaas: asaasAgendados, agendados });
+      return json({ ok: true, asaas: asaasAgendados, adotados, agendados });
     } catch (e) {
       return json({ error: e instanceof Error ? e.message : String(e) }, 500);
     }
@@ -1029,6 +1139,9 @@ serve(async (req: Request) => {
     }
 
     const asaasAgendados = await agendarNoAsaas(admin, chaves);
+    const adotados = await adotarDoAsaas(admin, chaves).catch((e) => ({
+      erro: e instanceof Error ? e.message : String(e),
+    }));
     const agendados = await conferirAgendados(admin, chaves);
     // débito automático cujo vencimento chegou: baixa na conta do cadastro
     const { data: debitos } = await admin.rpc('fn_boletos_debito_baixar');
@@ -1036,6 +1149,7 @@ serve(async (req: Request) => {
       ok: true,
       caixas: caixasResumo,
       asaas: asaasAgendados,
+      adotados,
       agendados,
       debitos_baixados: debitos ?? 0,
     });
