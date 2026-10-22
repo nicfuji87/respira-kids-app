@@ -1,0 +1,22 @@
+-- Aplicada em 22/10/2026 (migrations ju_cobranca_quando_e_retorno, ju_numeros_falsos_sempre_sombra,
+-- ju_numeros_falsos_sempre_sombra_fix, ju_sombra_telefones_teste), 1º dia da Ju no ar, pedido do dono.
+--
+-- 1) fn_ju_contexto_cliente ganhou, por criança:
+--    - sessoes_sem_cobranca: sessões dos últimos 60 dias já passadas (agendado/confirmado/finalizado/
+--      faltou) com pagamento 'pendente' — {data, profissional, valor}. Sessão que ninguém marcou como
+--      finalizada também conta (caso André: "Confirmado" de 20/10).
+--    - ultima_conduta: última evolução dos últimos 60 dias com alta_completa / alta_parcial /
+--      manter_fisioterapia — {data, conduta, frequencia_sugerida}.
+-- 2) ju_conhecimento:
+--    - COBRANCA_QUANDO: duas formas (por sessão; fatura única do mês até o dia 5 do mês seguinte).
+--      Pedido de link sem cobrança aberta: com sessão marcada → oferece juntar no mês, sem perguntar
+--      de alta; sem sessão marcada → pergunta se a fisio pediu nova sessão ou se teve alta (mesmo com
+--      alta no sistema, confirma: a evolução pode não ter sido preenchida); chama FINANCEIRO já na 1ª
+--      resposta. Nunca "não encontrei o link": "a cobrança ainda não foi gerada".
+--    - RETORNO: a clínica não trabalha com retorno; cada sessão é um atendimento completo e é cobrada.
+--    Prompt (n8n + scripts/n8n/ju-atendimento-prompt.md): linha apontando para os dois itens.
+-- 3) Testes com a Ju no ar: números falsos 55619990000NN nunca são liberados e sempre rodam em sombra
+--    (fn_ju_liberado / fn_ju_sombra). ju_config.sombra_telefones força sombra para telefones reais
+--    durante um teste com o contexto de uma família real (esvaziar logo depois).
+-- Testado 22/10 ~20h com o contexto da Anna (sessão amanhã), do André (sem sessão) e de uma família
+-- com alta: 4/4 adequados.

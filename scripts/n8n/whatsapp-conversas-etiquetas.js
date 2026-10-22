@@ -24,7 +24,9 @@ const ETQ = {
   relatorio: '5',
   importante: '6',
 };
-const GERIDAS = ['22', '23', '24', '25', '26', '27'];
+// 22/10/2026 (Ju no ar): as 22-27 passaram a ser da Ju (ela coloca ao abrir o pedido e tirar = concluído).
+// Esta análise não coloca nem tira mais essas; só adiciona 5 e 6.
+const GERIDAS = [];
 const SO_ADICIONA = ['5', '6'];
 
 const pendenteEquipe =

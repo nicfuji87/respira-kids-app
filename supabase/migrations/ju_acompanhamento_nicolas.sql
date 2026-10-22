@@ -1,0 +1,14 @@
+-- Aplicada em 22/10/2026 (migration ju_acompanhamento_nicolas), no go-live da Ju (19h12).
+-- Pedido do dono: por ~3 dias, cada mensagem que a Ju manda para uma família vira uma cópia
+-- no WhatsApp do Nicolas, para ele acompanhar (e entrar pelo Chatwoot se precisar).
+--  - ju_config.acompanhar_ate (26/10 00:00 BRT) e acompanhar_numero (5561981446666);
+--    desliga sozinho depois da data. Para parar antes: UPDATE ju_config SET acompanhar_ate = now().
+--  - gatilho trg_ju_acompanhar (fn_ju_acompanhar) em ju_mensagens origem JU (o eco da Ju):
+--    monta "👀 Ju respondeu · responsável · crianças · telefone / Família: últimas 3 / Ju: texto";
+--    partes seguidas da mesma conversa juntam no mesmo aviso enquanto ele não saiu.
+--  - ju_avisos_grupo.destino (nulo = grupo) e conversa_id; fn_ju_tarefas devolve o destino e o
+--    n8n RK Ju - Tarefas manda para esse número (sem citar o aviso original).
+-- Testado: aviso de teste chegou ao Nicolas às 19:12 e o eco voltou como AUTOMACAO.
+-- Go-live no mesmo momento: atraso zerado em todas as conversas e
+--   UPDATE ju_config SET modo_teste = false, sombra = false;
+-- e o nó "Etiquetas" do [RK] Analise Conversacional parou de mexer nas 22-27 (GERIDAS = []).
