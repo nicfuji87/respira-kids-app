@@ -13,6 +13,8 @@ export interface EvolucaoSecao {
   icone: string;
   campos: string[];
   ordem: number;
+  // Seção preenchida só quando indicada (ex.: medidas). Não entra no progresso.
+  opcional?: boolean;
 }
 
 // =========================================================================
@@ -295,7 +297,19 @@ export interface CraniometriaEvolucao {
   ci_percentual?: number;
   plagiocefalia_severidade?: string;
   braquicefalia_severidade?: string;
+  // Fórmula e faixas usadas no cálculo (ver PROTOCOLO_CRANIOMETRIA)
+  protocolo?: string;
 }
+
+/**
+ * Convenção usada nos cálculos do crânio, gravada junto de cada resultado
+ * para que medidas futuras só sejam comparadas com a mesma definição.
+ * CVAI = |A − B| ÷ maior diagonal × 100, faixas da escala de Atlanta (CHOA);
+ * CI = largura ÷ comprimento × 100, faixas [mín, máx) 75/85/90/100. Mesma convenção
+ * é usada na avaliação clínica (avaliacoes-clinicas.ts).
+ */
+export const PROTOCOLO_CRANIOMETRIA =
+  'cvai-maior-diagonal-choa_ci-75-85-90-100_v1';
 
 export interface GoniometriaEvolucao {
   rotacao_ativa_direita?: number;
@@ -306,8 +320,14 @@ export interface GoniometriaEvolucao {
   inclinacao_ativa_esquerda?: number;
   inclinacao_passiva_direita?: number;
   inclinacao_passiva_esquerda?: number;
-  diferencial_rotacao?: number; // calculado
-  diferencial_inclinacao?: number; // calculado
+  // Diferença entre os lados |D − E|, calculada (ver calcularDiferencasGoniometria)
+  diferenca_rotacao_ativa?: number;
+  diferenca_rotacao_passiva?: number;
+  diferenca_inclinacao_ativa?: number;
+  diferenca_inclinacao_passiva?: number;
+  // Compatibilidade: diferença passiva (ou ativa, se só ela foi medida)
+  diferencial_rotacao?: number;
+  diferencial_inclinacao?: number;
   observacoes?: string;
 }
 
@@ -346,17 +366,36 @@ export interface IntervencaoMotoraAssimetria {
   observacoes?: string;
 }
 
+/**
+ * Resposta observada na sessão. Campo ausente = não registrado (nunca "não").
+ * 'nao_avaliado' = a profissional declarou que não observou isso hoje.
+ */
+export type RespostaObservada = boolean | 'nao_avaliado';
+
+/**
+ * Relato do responsável sobre o programa domiciliar. É relato, não observação
+ * da profissional; por isso tem "não informado" em vez de "não avaliado".
+ */
+export type AdesaoDomiciliar = 'sim' | 'parcial' | 'nao' | 'nao_informado';
+
 export interface RespostaIntervencaoMotora {
-  melhora_adm?: boolean;
-  reducao_preferencia_postural?: boolean;
-  melhora_controle_cervical?: boolean;
-  tolerancia_prono_melhorou?: boolean;
-  pais_seguindo_orientacoes?: boolean;
+  // Melhoras observadas, sempre em relação à sessão anterior
+  melhora_adm?: RespostaObservada | null;
+  reducao_preferencia_postural?: RespostaObservada | null;
+  melhora_controle_cervical?: RespostaObservada | null;
+  tolerancia_prono_melhorou?: RespostaObservada | null;
+  adesao_domiciliar?: AdesaoDomiciliar | null;
+  // Campo antigo ("Pais seguindo orientações"), substituído por
+  // adesao_domiciliar. Só lido em registros antigos; não é mais gravado.
+  pais_seguindo_orientacoes?: RespostaObservada | null;
   observacoes?: string;
 }
 
 export interface OrientacoesMotoraAssimetria {
+  // Sono seguro: de barriga para cima, sem posicionadores (rótulo da tela)
   posicionamento_sono: boolean;
+  // Posicionamento e brincadeiras com a criança acordada (lado não preferido)
+  posicionamento_vigilia?: boolean;
   tummy_time_frequencia?: string;
   exercicios_domiciliares: boolean;
   sinais_alerta: boolean;
@@ -380,7 +419,24 @@ export interface CondutaMotoraAssimetria {
   observacoes?: string;
 }
 
+export interface AutoriaEvolucao {
+  pessoa_id: string;
+  nome?: string | null;
+  registro_profissional?: string | null;
+  em: string; // ISO
+}
+
+/**
+ * Versão do formulário gravada em cada evolução motora. Registros sem versão
+ * são da versão original: neles, "encaminhamento médico = não" pode ser só o
+ * valor padrão do formulário, e não uma decisão clínica.
+ */
+export const VERSAO_FORMULARIO_MOTORA = '1.1';
+
 export interface EvolucaoMotoraAssimetria {
+  versao_formulario?: string;
+  autor?: AutoriaEvolucao;
+  ultima_edicao?: AutoriaEvolucao;
   craniometria?: CraniometriaEvolucao;
   goniometria?: GoniometriaEvolucao;
   palpacao?: PalpacaoECOMEvolucao;
@@ -482,6 +538,7 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
     icone: '📐',
     campos: ['diagonais', 'comprimento', 'largura', 'perimetro'],
     ordem: 1,
+    opcional: true,
   },
   {
     id: 'goniometria',
@@ -489,6 +546,7 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
     icone: '📏',
     campos: ['rotacao', 'inclinacao', 'diferencial'],
     ordem: 2,
+    opcional: true,
   },
   {
     id: 'palpacao',
@@ -496,6 +554,7 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
     icone: '👋',
     campos: ['tonus', 'nodulo'],
     ordem: 3,
+    opcional: true,
   },
   {
     id: 'controle_motor',
@@ -524,6 +583,7 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
     icone: '📝',
     campos: ['posicionamento', 'tummy_time', 'exercicios'],
     ordem: 7,
+    opcional: true,
   },
   {
     id: 'conduta',
@@ -840,7 +900,16 @@ export function criarEvolucaoMotoraAssimetriaVazia(): EvolucaoMotoraAssimetria {
 export function calcularMetricasCraniometriaEvolucao(
   medidas: CraniometriaEvolucao
 ): CraniometriaEvolucao {
-  const resultado = { ...medidas };
+  // Recalcula do zero: apagar uma medida também apaga o índice que dependia dela
+  const resultado: CraniometriaEvolucao = {
+    ...medidas,
+    cva_mm: undefined,
+    cvai_percentual: undefined,
+    ci_percentual: undefined,
+    plagiocefalia_severidade: undefined,
+    braquicefalia_severidade: undefined,
+    protocolo: undefined,
+  };
 
   // CVA = |Diagonal A - Diagonal B|
   if (medidas.diagonal_a_mm && medidas.diagonal_b_mm) {
@@ -872,20 +941,115 @@ export function calcularMetricasCraniometriaEvolucao(
     resultado.ci_percentual =
       (medidas.largura_ml_mm / medidas.comprimento_ap_mm) * 100;
 
-    // Classificação Braquicefalia/Escafocefalia
+    // Classificação Braquicefalia/Escafocefalia. Faixas [mín, máx), iguais às
+    // da avaliação (BRAQUICEFALIA_CLASSIFICACAO): 85% já é braquicefalia leve.
     if (resultado.ci_percentual < 75) {
       resultado.braquicefalia_severidade = 'escafocefalia';
-    } else if (resultado.ci_percentual <= 85) {
+    } else if (resultado.ci_percentual < 85) {
       resultado.braquicefalia_severidade = 'normal';
-    } else if (resultado.ci_percentual <= 90) {
+    } else if (resultado.ci_percentual < 90) {
       resultado.braquicefalia_severidade = 'braquicefalia_leve';
-    } else if (resultado.ci_percentual <= 100) {
+    } else if (resultado.ci_percentual < 100) {
       resultado.braquicefalia_severidade = 'braquicefalia_moderada';
     } else {
       resultado.braquicefalia_severidade = 'braquicefalia_severa';
     }
   }
 
+  if (
+    resultado.cvai_percentual !== undefined ||
+    resultado.ci_percentual !== undefined
+  ) {
+    resultado.protocolo = PROTOCOLO_CRANIOMETRIA;
+  }
+
+  return resultado;
+}
+
+/** Rótulos das classificações do crânio, para tela e texto */
+export const ROTULO_PLAGIOCEFALIA: Record<string, string> = {
+  normal: 'sem plagiocefalia',
+  leve: 'plagiocefalia leve',
+  moderada: 'plagiocefalia moderada',
+  severa: 'plagiocefalia severa',
+  muito_severa: 'plagiocefalia muito severa',
+};
+
+export const ROTULO_BRAQUICEFALIA: Record<string, string> = {
+  escafocefalia: 'escafocefalia',
+  normal: 'proporção normal',
+  braquicefalia_leve: 'braquicefalia leve',
+  braquicefalia_moderada: 'braquicefalia moderada',
+  braquicefalia_severa: 'braquicefalia severa',
+};
+
+/**
+ * Classifica a diferença entre os lados da rotação cervical. Mesmas faixas e
+ * mesmas fronteiras da avaliação clínica (GONIOMETRIA_CLASSIFICACAO_ASSIMETRIA,
+ * intervalos [mín, máx)): menos de 5° normal, de 5° a menos de 15° leve,
+ * de 15° a menos de 30° moderada, 30° ou mais severa. Mudar a fronteira aqui
+ * exige mudar a avaliação junto, senão as duas telas divergem.
+ */
+export const TEXTO_FAIXAS_DIFERENCA_CERVICAL =
+  'menos de 5° normal; de 5° a menos de 15° leve; de 15° a menos de 30° moderada; 30° ou mais severa';
+
+/** Lado com menor amplitude (para onde o movimento está mais limitado) */
+export function ladoMenorAmplitude(
+  direita: number | undefined,
+  esquerda: number | undefined
+): 'direita' | 'esquerda' | undefined {
+  if (typeof direita !== 'number' || typeof esquerda !== 'number')
+    return undefined;
+  if (direita === esquerda) return undefined;
+  return direita < esquerda ? 'direita' : 'esquerda';
+}
+
+export function classificarDiferencaCervical(
+  diferenca: number | undefined
+): 'normal' | 'leve' | 'moderada' | 'severa' | undefined {
+  if (diferenca === undefined) return undefined;
+  if (diferenca < 5) return 'normal';
+  if (diferenca < 15) return 'leve';
+  if (diferenca < 30) return 'moderada';
+  return 'severa';
+}
+
+/**
+ * Calcula |D − E| da rotação e da inclinação, ativa e passiva. Só calcula
+ * quando os dois lados foram medidos (0° é uma medida válida).
+ */
+export function calcularDiferencasGoniometria(
+  g: GoniometriaEvolucao
+): GoniometriaEvolucao {
+  const dif = (d?: number, e?: number) =>
+    typeof d === 'number' && typeof e === 'number'
+      ? Math.abs(d - e)
+      : undefined;
+
+  const resultado: GoniometriaEvolucao = {
+    ...g,
+    diferenca_rotacao_ativa: dif(
+      g.rotacao_ativa_direita,
+      g.rotacao_ativa_esquerda
+    ),
+    diferenca_rotacao_passiva: dif(
+      g.rotacao_passiva_direita,
+      g.rotacao_passiva_esquerda
+    ),
+    diferenca_inclinacao_ativa: dif(
+      g.inclinacao_ativa_direita,
+      g.inclinacao_ativa_esquerda
+    ),
+    diferenca_inclinacao_passiva: dif(
+      g.inclinacao_passiva_direita,
+      g.inclinacao_passiva_esquerda
+    ),
+  };
+  resultado.diferencial_rotacao =
+    resultado.diferenca_rotacao_passiva ?? resultado.diferenca_rotacao_ativa;
+  resultado.diferencial_inclinacao =
+    resultado.diferenca_inclinacao_passiva ??
+    resultado.diferenca_inclinacao_ativa;
   return resultado;
 }
 
@@ -1022,6 +1186,127 @@ export function verificarSecaoEvolucaoCompleta(
     }
   }
 
+  if (tipoEvolucao === 'motora_assimetria') {
+    return verificarSecaoMotoraCompleta(
+      secaoId,
+      dados as EvolucaoMotoraAssimetria
+    );
+  }
+
+  return 'vazio';
+}
+
+const temTexto = (s?: string | null) => !!s && s.trim().length > 0;
+const temNumero = (n?: number | null) => typeof n === 'number';
+
+function verificarSecaoMotoraCompleta(
+  secaoId: string,
+  ev: EvolucaoMotoraAssimetria
+): 'completo' | 'parcial' | 'vazio' {
+  switch (secaoId) {
+    case 'craniometria': {
+      const c = ev.craniometria || {};
+      const medidas = [
+        c.diagonal_a_mm,
+        c.diagonal_b_mm,
+        c.comprimento_ap_mm,
+        c.largura_ml_mm,
+        c.perimetro_cefalico_cm,
+      ].filter(temNumero).length;
+      if (temNumero(c.diagonal_a_mm) && temNumero(c.diagonal_b_mm))
+        return 'completo';
+      return medidas > 0 ? 'parcial' : 'vazio';
+    }
+    case 'goniometria': {
+      const g = ev.goniometria || {};
+      const rotacaoCompleta =
+        (temNumero(g.rotacao_passiva_direita) &&
+          temNumero(g.rotacao_passiva_esquerda)) ||
+        (temNumero(g.rotacao_ativa_direita) &&
+          temNumero(g.rotacao_ativa_esquerda));
+      if (rotacaoCompleta) return 'completo';
+      const algum = [
+        g.rotacao_ativa_direita,
+        g.rotacao_ativa_esquerda,
+        g.rotacao_passiva_direita,
+        g.rotacao_passiva_esquerda,
+        g.inclinacao_ativa_direita,
+        g.inclinacao_ativa_esquerda,
+        g.inclinacao_passiva_direita,
+        g.inclinacao_passiva_esquerda,
+      ].some(temNumero);
+      return algum || temTexto(g.observacoes) ? 'parcial' : 'vazio';
+    }
+    case 'palpacao': {
+      const p = ev.palpacao || {};
+      if (p.ecom_direito_tonus && p.ecom_esquerdo_tonus) return 'completo';
+      return p.ecom_direito_tonus ||
+        p.ecom_esquerdo_tonus ||
+        p.nodulo_direito ||
+        p.nodulo_esquerdo ||
+        temTexto(p.observacoes)
+        ? 'parcial'
+        : 'vazio';
+    }
+    case 'controle_motor': {
+      const c = ev.controle_motor || {};
+      const algum =
+        c.supino_linha_media ||
+        c.supino_alcance ||
+        c.prono_tolerancia ||
+        c.prono_carga_peso ||
+        c.prono_controle_cabeca ||
+        temTexto(c.observacoes);
+      return algum ? 'completo' : 'vazio';
+    }
+    case 'intervencao': {
+      const i = ev.intervencao;
+      const algum =
+        i.alongamentos ||
+        i.fortalecimento ||
+        i.estimulacao_sensorial ||
+        i.posicionamentos_terapeuticos ||
+        i.tummy_time ||
+        i.bandagem_kinesio ||
+        i.orientacao_pais ||
+        temTexto(i.outras_tecnicas);
+      return algum ? 'completo' : 'vazio';
+    }
+    case 'resposta': {
+      const r = ev.resposta || {};
+      const itens = [
+        r.melhora_adm,
+        r.reducao_preferencia_postural,
+        r.melhora_controle_cervical,
+        r.tolerancia_prono_melhorou,
+        // registro antigo pode ter só o campo anterior
+        r.adesao_domiciliar ?? r.pais_seguindo_orientacoes,
+      ];
+      const respondidos = itens.filter(
+        (v) => v !== undefined && v !== null
+      ).length;
+      if (respondidos === itens.length) return 'completo';
+      return respondidos > 0 || temTexto(r.observacoes) ? 'parcial' : 'vazio';
+    }
+    case 'orientacoes': {
+      const o = ev.orientacoes;
+      return o.posicionamento_sono ||
+        o.posicionamento_vigilia ||
+        o.exercicios_domiciliares ||
+        o.sinais_alerta ||
+        o.uso_capacete ||
+        temTexto(o.tummy_time_frequencia) ||
+        temTexto(o.outras)
+        ? 'completo'
+        : 'vazio';
+    }
+    case 'conduta': {
+      const c = ev.conduta;
+      if (c.manter_fisioterapia === false) return 'completo';
+      if (c.manter_fisioterapia && c.frequencia_sugerida) return 'completo';
+      return 'parcial';
+    }
+  }
   return 'vazio';
 }
 

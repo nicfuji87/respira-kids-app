@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/primitives/checkbox';
 import { RadioButtonGroup } from '@/components/composed/evaluation/inputs/RadioButtonGroup';
 import { BooleanToggle } from '@/components/composed/evaluation/inputs/BooleanToggle';
 import { cn } from '@/lib/utils';
+import { AjudaParametroBotao } from './AjudaParametroBotao';
 import type {
   TipoEvolucao,
   EvolucaoRespiratoria,
@@ -28,9 +29,17 @@ import type {
   RespostaIntervencaoMotora,
   OrientacoesMotoraAssimetria,
   CondutaMotoraAssimetria,
+  RespostaObservada,
+  AdesaoDomiciliar,
 } from '@/types/evolucao-clinica';
 import {
   calcularMetricasCraniometriaEvolucao,
+  calcularDiferencasGoniometria,
+  classificarDiferencaCervical,
+  ladoMenorAmplitude,
+  TEXTO_FAIXAS_DIFERENCA_CERVICAL,
+  ROTULO_PLAGIOCEFALIA,
+  ROTULO_BRAQUICEFALIA,
   calcularClassificacaoClinica,
   getTextoClassificacaoClinica,
   getAvaliacaoRespiratoriaNormal,
@@ -93,13 +102,29 @@ const Field: React.FC<{
   children: React.ReactNode;
   className?: string;
   required?: boolean;
-}> = ({ label, children, className, required }) => (
+  ajuda?: string; // chave em AJUDA_MOTORA: mostra o "?" ao lado do nome
+}> = ({ label, children, className, required, ajuda }) => (
   <div className={cn('space-y-2', className)}>
-    <Label className="text-sm font-medium">
-      {label}
-      {required && <span className="text-red-500 ml-1">*</span>}
-    </Label>
+    <div className="flex items-center gap-1 min-h-7">
+      <Label className="text-sm font-medium">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </Label>
+      {ajuda && <AjudaParametroBotao id={ajuda} />}
+    </div>
     {children}
+  </div>
+);
+
+// Título de bloco com o "?" ao lado (ex.: "Rotação Cervical (graus)")
+const TituloComAjuda: React.FC<{
+  ajuda: string;
+  className?: string;
+  children: React.ReactNode;
+}> = ({ ajuda, className, children }) => (
+  <div className="flex items-center gap-1">
+    <h4 className={cn('font-medium', className)}>{children}</h4>
+    <AjudaParametroBotao id={ajuda} />
   </div>
 );
 
@@ -109,7 +134,8 @@ const CheckboxField: React.FC<{
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
-}> = ({ label, checked, onChange, disabled }) => (
+  ajuda?: string;
+}> = ({ label, checked, onChange, disabled, ajuda }) => (
   <div className="flex items-center gap-2">
     <Checkbox
       checked={checked}
@@ -117,6 +143,7 @@ const CheckboxField: React.FC<{
       disabled={disabled}
     />
     <Label className="text-sm cursor-pointer">{label}</Label>
+    {ajuda && <AjudaParametroBotao id={ajuda} />}
   </div>
 );
 
@@ -138,6 +165,92 @@ const BooleanField: React.FC<{
     <BooleanToggle value={value} onChange={onChange} disabled={disabled} />
   </div>
 );
+
+// Escolha única sem nada marcado de início: em branco significa "não
+// registrado". Tocar de novo na opção escolhida limpa a resposta.
+type OpcaoEscolha<T> = { valor: T; label: string; ativo: string };
+
+const ATIVO_SIM = 'bg-emerald-500 border-emerald-500 text-white';
+const ATIVO_PARCIAL = 'bg-amber-500 border-amber-500 text-white';
+const ATIVO_NAO = 'bg-rose-500 border-rose-500 text-white';
+const ATIVO_NEUTRO = 'bg-slate-500 border-slate-500 text-white';
+
+const OPCOES_RESPOSTA: OpcaoEscolha<RespostaObservada>[] = [
+  { valor: true, label: 'Sim', ativo: ATIVO_SIM },
+  { valor: false, label: 'Não', ativo: ATIVO_NAO },
+  { valor: 'nao_avaliado', label: 'Não avaliado', ativo: ATIVO_NEUTRO },
+];
+
+const OPCOES_ADESAO: OpcaoEscolha<AdesaoDomiciliar>[] = [
+  { valor: 'sim', label: 'Sim', ativo: ATIVO_SIM },
+  { valor: 'parcial', label: 'Parcialmente', ativo: ATIVO_PARCIAL },
+  { valor: 'nao', label: 'Não', ativo: ATIVO_NAO },
+  { valor: 'nao_informado', label: 'Não informado', ativo: ATIVO_NEUTRO },
+];
+
+function EscolhaField<T extends string | boolean>({
+  label,
+  value,
+  onChange,
+  opcoes,
+  disabled,
+  ajuda,
+}: {
+  label: string;
+  value: T | null | undefined;
+  onChange: (value: T | undefined) => void;
+  opcoes: OpcaoEscolha<T>[];
+  disabled?: boolean;
+  ajuda?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 p-3 bg-muted/30 rounded-lg">
+      <div className="flex items-center gap-1 min-h-7">
+        <Label className="text-sm font-medium">{label}</Label>
+        {ajuda && <AjudaParametroBotao id={ajuda} />}
+      </div>
+      <div
+        className={cn(
+          'grid gap-2',
+          opcoes.length > 3 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'
+        )}
+        role="radiogroup"
+        aria-label={label}
+      >
+        {opcoes.map((op) => {
+          const selecionado = value === op.valor;
+          return (
+            <button
+              key={String(op.valor)}
+              type="button"
+              role="radio"
+              aria-checked={selecionado}
+              disabled={disabled}
+              onClick={() => onChange(selecionado ? undefined : op.valor)}
+              className={cn(
+                'min-h-11 py-2 px-1 rounded-lg border-2 font-medium transition-all text-[13px] sm:text-sm whitespace-nowrap',
+                selecionado
+                  ? op.ativo
+                  : 'bg-background border-border text-muted-foreground hover:bg-muted',
+                disabled && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              {op.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const RespostaField: React.FC<{
+  label: string;
+  value: RespostaObservada | null | undefined;
+  onChange: (value: RespostaObservada | undefined) => void;
+  disabled?: boolean;
+  ajuda?: string;
+}> = (props) => <EscolhaField {...props} opcoes={OPCOES_RESPOSTA} />;
 
 export const EvolutionSectionContent: React.FC<
   EvolutionSectionContentProps
@@ -2732,13 +2845,14 @@ export const EvolutionSectionContent: React.FC<
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">
-                📐 Medidas craniométricas para acompanhar evolução da
-                assimetria. Os índices CVAI e CI são calculados automaticamente.
+                📐 Medidas para acompanhar a evolução da assimetria craniana.
+                CVA, CVAI e CI são calculados automaticamente. Preencha quando a
+                medição estiver indicada.
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Diagonal A (mm)">
+              <Field label="Diagonal A (mm)" ajuda="diagonal_a">
                 <Input
                   type="number"
                   min={0}
@@ -2754,7 +2868,7 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                 />
               </Field>
-              <Field label="Diagonal B (mm)">
+              <Field label="Diagonal B (mm)" ajuda="diagonal_b">
                 <Input
                   type="number"
                   min={0}
@@ -2770,7 +2884,7 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                 />
               </Field>
-              <Field label="Comprimento AP (mm)">
+              <Field label="Comprimento AP (mm)" ajuda="comprimento_ap">
                 <Input
                   type="number"
                   min={0}
@@ -2786,7 +2900,7 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                 />
               </Field>
-              <Field label="Largura ML (mm)">
+              <Field label="Largura ML (mm)" ajuda="largura_ml">
                 <Input
                   type="number"
                   min={0}
@@ -2802,7 +2916,7 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                 />
               </Field>
-              <Field label="Perímetro Cefálico (cm)">
+              <Field label="Perímetro Cefálico (cm)" ajuda="perimetro_cefalico">
                 <Input
                   type="number"
                   min={0}
@@ -2825,11 +2939,14 @@ export const EvolutionSectionContent: React.FC<
             {(craniometria.cva_mm !== undefined ||
               craniometria.cvai_percentual !== undefined) && (
               <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-                <h4 className="font-medium text-gray-700">
+                <TituloComAjuda
+                  ajuda="metricas_cranio"
+                  className="text-gray-700"
+                >
                   📊 Métricas Calculadas
-                </h4>
+                </TituloComAjuda>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   {craniometria.cva_mm !== undefined && (
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">
@@ -2855,6 +2972,13 @@ export const EvolutionSectionContent: React.FC<
                         {craniometria.cvai_percentual.toFixed(1)}%
                       </div>
                       <div className="text-xs text-muted-foreground">CVAI</div>
+                      {craniometria.plagiocefalia_severidade && (
+                        <div className="text-xs font-medium first-letter:uppercase">
+                          {ROTULO_PLAGIOCEFALIA[
+                            craniometria.plagiocefalia_severidade
+                          ] || craniometria.plagiocefalia_severidade}
+                        </div>
+                      )}
                     </div>
                   )}
                   {craniometria.ci_percentual !== undefined && (
@@ -2863,7 +2987,7 @@ export const EvolutionSectionContent: React.FC<
                         className={cn(
                           'text-2xl font-bold',
                           craniometria.ci_percentual >= 75 &&
-                            craniometria.ci_percentual <= 85
+                            craniometria.ci_percentual < 85
                             ? 'text-green-600'
                             : craniometria.ci_percentual < 75
                               ? 'text-blue-600'
@@ -2872,23 +2996,26 @@ export const EvolutionSectionContent: React.FC<
                       >
                         {craniometria.ci_percentual.toFixed(1)}%
                       </div>
-                      <div className="text-xs text-muted-foreground">CI</div>
-                    </div>
-                  )}
-                  {craniometria.plagiocefalia_severidade && (
-                    <div className="text-center">
-                      <div className="text-sm font-medium capitalize">
-                        {craniometria.plagiocefalia_severidade.replace(
-                          '_',
-                          ' '
-                        )}
-                      </div>
                       <div className="text-xs text-muted-foreground">
-                        Plagiocefalia
+                        CI (índice cefálico)
                       </div>
+                      {craniometria.braquicefalia_severidade && (
+                        <div className="text-xs font-medium first-letter:uppercase">
+                          {ROTULO_BRAQUICEFALIA[
+                            craniometria.braquicefalia_severidade
+                          ] || craniometria.braquicefalia_severidade}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  CVAI calculado sobre a maior diagonal, faixas da escala de
+                  Atlanta (CHOA). CI: normal de 75% a menos de 85%. Mesma
+                  convenção da avaliação. A classificação apoia a leitura dos
+                  números: não substitui o exame do formato do crânio nem indica
+                  capacete sozinha.
+                </p>
               </div>
             )}
           </div>
@@ -2903,24 +3030,73 @@ export const EvolutionSectionContent: React.FC<
 
         const updateGoniometria = (updates: Partial<GoniometriaEvolucao>) => {
           onMotoraChange({
-            goniometria: { ...goniometria, ...updates },
+            goniometria: calcularDiferencasGoniometria({
+              ...goniometria,
+              ...updates,
+            }),
           });
+        };
+
+        const diferencas = [
+          {
+            label: 'Rotação passiva',
+            valor: goniometria.diferenca_rotacao_passiva,
+            classifica: true,
+            lado: ladoMenorAmplitude(
+              goniometria.rotacao_passiva_direita,
+              goniometria.rotacao_passiva_esquerda
+            ),
+          },
+          {
+            label: 'Rotação ativa',
+            valor: goniometria.diferenca_rotacao_ativa,
+            classifica: true,
+            lado: ladoMenorAmplitude(
+              goniometria.rotacao_ativa_direita,
+              goniometria.rotacao_ativa_esquerda
+            ),
+          },
+          {
+            label: 'Inclinação passiva',
+            valor: goniometria.diferenca_inclinacao_passiva,
+            classifica: false,
+            lado: ladoMenorAmplitude(
+              goniometria.inclinacao_passiva_direita,
+              goniometria.inclinacao_passiva_esquerda
+            ),
+          },
+          {
+            label: 'Inclinação ativa',
+            valor: goniometria.diferenca_inclinacao_ativa,
+            classifica: false,
+            lado: ladoMenorAmplitude(
+              goniometria.inclinacao_ativa_direita,
+              goniometria.inclinacao_ativa_esquerda
+            ),
+          },
+        ].filter((d) => d.valor !== undefined);
+
+        const corClassificacao: Record<string, string> = {
+          normal: 'text-green-600',
+          leve: 'text-yellow-600',
+          moderada: 'text-orange-600',
+          severa: 'text-red-600',
         };
 
         return (
           <div className="space-y-6">
             <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-blue-700">
+              <TituloComAjuda ajuda="rotacao" className="text-blue-700">
                 Rotação Cervical (graus)
-              </h4>
+              </TituloComAjuda>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Field label="Ativa D">
                   <Input
                     type="number"
                     min={0}
-                    max={90}
-                    value={goniometria.rotacao_ativa_direita || ''}
+                    max={180}
+                    value={goniometria.rotacao_ativa_direita ?? ''}
                     onChange={(e) =>
                       updateGoniometria({
                         rotacao_ativa_direita: e.target.value
@@ -2935,8 +3111,8 @@ export const EvolutionSectionContent: React.FC<
                   <Input
                     type="number"
                     min={0}
-                    max={90}
-                    value={goniometria.rotacao_ativa_esquerda || ''}
+                    max={180}
+                    value={goniometria.rotacao_ativa_esquerda ?? ''}
                     onChange={(e) =>
                       updateGoniometria({
                         rotacao_ativa_esquerda: e.target.value
@@ -2951,8 +3127,8 @@ export const EvolutionSectionContent: React.FC<
                   <Input
                     type="number"
                     min={0}
-                    max={90}
-                    value={goniometria.rotacao_passiva_direita || ''}
+                    max={180}
+                    value={goniometria.rotacao_passiva_direita ?? ''}
                     onChange={(e) =>
                       updateGoniometria({
                         rotacao_passiva_direita: e.target.value
@@ -2967,8 +3143,8 @@ export const EvolutionSectionContent: React.FC<
                   <Input
                     type="number"
                     min={0}
-                    max={90}
-                    value={goniometria.rotacao_passiva_esquerda || ''}
+                    max={180}
+                    value={goniometria.rotacao_passiva_esquerda ?? ''}
                     onChange={(e) =>
                       updateGoniometria({
                         rotacao_passiva_esquerda: e.target.value
@@ -2983,17 +3159,17 @@ export const EvolutionSectionContent: React.FC<
             </div>
 
             <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-medium text-purple-700">
+              <TituloComAjuda ajuda="inclinacao" className="text-purple-700">
                 Inclinação Lateral (graus)
-              </h4>
+              </TituloComAjuda>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Field label="Ativa D">
                   <Input
                     type="number"
                     min={0}
-                    max={45}
-                    value={goniometria.inclinacao_ativa_direita || ''}
+                    max={90}
+                    value={goniometria.inclinacao_ativa_direita ?? ''}
                     onChange={(e) =>
                       updateGoniometria({
                         inclinacao_ativa_direita: e.target.value
@@ -3008,8 +3184,8 @@ export const EvolutionSectionContent: React.FC<
                   <Input
                     type="number"
                     min={0}
-                    max={45}
-                    value={goniometria.inclinacao_ativa_esquerda || ''}
+                    max={90}
+                    value={goniometria.inclinacao_ativa_esquerda ?? ''}
                     onChange={(e) =>
                       updateGoniometria({
                         inclinacao_ativa_esquerda: e.target.value
@@ -3024,8 +3200,8 @@ export const EvolutionSectionContent: React.FC<
                   <Input
                     type="number"
                     min={0}
-                    max={45}
-                    value={goniometria.inclinacao_passiva_direita || ''}
+                    max={90}
+                    value={goniometria.inclinacao_passiva_direita ?? ''}
                     onChange={(e) =>
                       updateGoniometria({
                         inclinacao_passiva_direita: e.target.value
@@ -3040,8 +3216,8 @@ export const EvolutionSectionContent: React.FC<
                   <Input
                     type="number"
                     min={0}
-                    max={45}
-                    value={goniometria.inclinacao_passiva_esquerda || ''}
+                    max={90}
+                    value={goniometria.inclinacao_passiva_esquerda ?? ''}
                     onChange={(e) =>
                       updateGoniometria({
                         inclinacao_passiva_esquerda: e.target.value
@@ -3054,6 +3230,51 @@ export const EvolutionSectionContent: React.FC<
                 </Field>
               </div>
             </div>
+
+            {diferencas.length > 0 && (
+              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+                <h4 className="font-medium text-gray-700">
+                  📊 Diferença entre os lados
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {diferencas.map((d) => {
+                    const classe = d.classifica
+                      ? classificarDiferencaCervical(d.valor)
+                      : undefined;
+                    return (
+                      <div key={d.label} className="text-center">
+                        <div
+                          className={cn(
+                            'text-2xl font-bold',
+                            classe ? corClassificacao[classe] : 'text-blue-600'
+                          )}
+                        >
+                          {d.valor}°
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {d.label}
+                        </div>
+                        {classe && (
+                          <div className="text-xs font-medium capitalize">
+                            {classe}
+                          </div>
+                        )}
+                        {d.lado && (
+                          <div className="text-xs text-muted-foreground">
+                            menor para a {d.lado}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Rotação classificada com as mesmas faixas da avaliação:{' '}
+                  {TEXTO_FAIXAS_DIFERENCA_CERVICAL}. A classificação apoia a
+                  leitura dos números e não é um diagnóstico por si só.
+                </p>
+              </div>
+            )}
 
             <Field label="Observações">
               <Textarea
@@ -3089,7 +3310,7 @@ export const EvolutionSectionContent: React.FC<
               <div className="border rounded-lg p-4 space-y-4">
                 <h4 className="font-medium text-blue-700">ECOM Direito</h4>
 
-                <Field label="Tônus">
+                <Field label="Tônus" ajuda="ecom_tonus">
                   <RadioButtonGroup
                     value={palpacao.ecom_direito_tonus}
                     onChange={(v) =>
@@ -3112,6 +3333,7 @@ export const EvolutionSectionContent: React.FC<
 
                 <CheckboxField
                   label="Nódulo Presente"
+                  ajuda="nodulo"
                   checked={palpacao.nodulo_direito || false}
                   onChange={(checked) =>
                     updatePalpacao({ nodulo_direito: checked })
@@ -3124,7 +3346,7 @@ export const EvolutionSectionContent: React.FC<
               <div className="border rounded-lg p-4 space-y-4">
                 <h4 className="font-medium text-purple-700">ECOM Esquerdo</h4>
 
-                <Field label="Tônus">
+                <Field label="Tônus" ajuda="ecom_tonus">
                   <RadioButtonGroup
                     value={palpacao.ecom_esquerdo_tonus}
                     onChange={(v) =>
@@ -3147,6 +3369,7 @@ export const EvolutionSectionContent: React.FC<
 
                 <CheckboxField
                   label="Nódulo Presente"
+                  ajuda="nodulo"
                   checked={palpacao.nodulo_esquerdo || false}
                   onChange={(checked) =>
                     updatePalpacao({ nodulo_esquerdo: checked })
@@ -3235,7 +3458,10 @@ export const EvolutionSectionContent: React.FC<
                 🔷 SUPINO (Barriga para cima)
               </h4>
 
-              <Field label="Manutenção na Linha Média">
+              <Field
+                label="Manutenção na Linha Média"
+                ajuda="supino_linha_media"
+              >
                 <RadioButtonGroup
                   value={controle.supino_linha_media}
                   onChange={(v) =>
@@ -3258,7 +3484,10 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
 
-              <Field label="Alcance de Linha Média (Mãos)">
+              <Field
+                label="Alcance de Linha Média (Mãos)"
+                ajuda="supino_alcance"
+              >
                 <RadioButtonGroup
                   value={controle.supino_alcance}
                   onChange={(v) =>
@@ -3287,7 +3516,7 @@ export const EvolutionSectionContent: React.FC<
                 🔶 PRONO (Tummy Time)
               </h4>
 
-              <Field label="Tolerância">
+              <Field label="Tolerância" ajuda="prono_tolerancia">
                 <RadioButtonGroup
                   value={controle.prono_tolerancia}
                   onChange={(v) =>
@@ -3307,7 +3536,7 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
 
-              <Field label="Carga de Peso">
+              <Field label="Carga de Peso" ajuda="prono_carga_peso">
                 <RadioButtonGroup
                   value={controle.prono_carga_peso}
                   onChange={(v) =>
@@ -3327,7 +3556,7 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
 
-              <Field label="Controle de Cabeça">
+              <Field label="Controle de Cabeça" ajuda="prono_controle_cabeca">
                 <RadioButtonGroup
                   value={controle.prono_controle_cabeca}
                   onChange={(v) =>
@@ -3485,45 +3714,76 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-6">
+            <div className="space-y-1">
+              <h4 className="font-medium">
+                Em relação à sessão anterior, você observou:
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                Use “Não avaliado” quando não deu para observar. O que ficar em
+                branco sai como não registrado.
+              </p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <BooleanField
-                value={resposta.melhora_adm || false}
-                onChange={(checked) => updateResposta({ melhora_adm: checked })}
+              <RespostaField
+                value={resposta.melhora_adm}
+                onChange={(v) => updateResposta({ melhora_adm: v })}
                 label="Melhora da ADM"
+                ajuda="melhora_adm"
                 disabled={disabled}
               />
-              <BooleanField
-                value={resposta.reducao_preferencia_postural || false}
-                onChange={(checked) =>
-                  updateResposta({ reducao_preferencia_postural: checked })
+              <RespostaField
+                value={resposta.reducao_preferencia_postural}
+                onChange={(v) =>
+                  updateResposta({ reducao_preferencia_postural: v })
                 }
                 label="Redução da Preferência Postural"
+                ajuda="reducao_preferencia_postural"
                 disabled={disabled}
               />
-              <BooleanField
-                value={resposta.melhora_controle_cervical || false}
-                onChange={(checked) =>
-                  updateResposta({ melhora_controle_cervical: checked })
+              <RespostaField
+                value={resposta.melhora_controle_cervical}
+                onChange={(v) =>
+                  updateResposta({ melhora_controle_cervical: v })
                 }
                 label="Melhora do Controle Cervical"
+                ajuda="melhora_controle_cervical"
                 disabled={disabled}
               />
-              <BooleanField
-                value={resposta.tolerancia_prono_melhorou || false}
-                onChange={(checked) =>
-                  updateResposta({ tolerancia_prono_melhorou: checked })
+              <RespostaField
+                value={resposta.tolerancia_prono_melhorou}
+                onChange={(v) =>
+                  updateResposta({ tolerancia_prono_melhorou: v })
                 }
                 label="Tolerância ao Prono Melhorou"
+                ajuda="tolerancia_prono_melhorou"
                 disabled={disabled}
               />
-              <BooleanField
-                value={resposta.pais_seguindo_orientacoes || false}
-                onChange={(checked) =>
-                  updateResposta({ pais_seguindo_orientacoes: checked })
-                }
-                label="Pais Seguindo Orientações"
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-medium">Relato do responsável</h4>
+              <EscolhaField
+                value={resposta.adesao_domiciliar}
+                onChange={(v) => updateResposta({ adesao_domiciliar: v })}
+                opcoes={OPCOES_ADESAO}
+                label="O responsável relata ter realizado as orientações domiciliares?"
+                ajuda="adesao_domiciliar"
                 disabled={disabled}
               />
+              {!resposta.adesao_domiciliar &&
+                resposta.pais_seguindo_orientacoes !== undefined &&
+                resposta.pais_seguindo_orientacoes !== null && (
+                  <p className="text-xs text-muted-foreground">
+                    Registro antigo, pergunta anterior: “Pais seguindo
+                    orientações” ={' '}
+                    {resposta.pais_seguindo_orientacoes === true
+                      ? 'Sim'
+                      : resposta.pais_seguindo_orientacoes === false
+                        ? 'Não'
+                        : 'Não avaliado'}
+                    .
+                  </p>
+                )}
             </div>
 
             <Field label="Observações">
@@ -3557,12 +3817,20 @@ export const EvolutionSectionContent: React.FC<
 
         return (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <CheckboxField
-                label="Posicionamento para Sono"
+                label="Sono seguro (de barriga para cima, sem posicionadores)"
                 checked={orientacoes.posicionamento_sono}
                 onChange={(checked) =>
                   updateOrientacoes({ posicionamento_sono: checked })
+                }
+                disabled={disabled}
+              />
+              <CheckboxField
+                label="Posicionamento e brincadeiras acordado (estimular o lado não preferido)"
+                checked={orientacoes.posicionamento_vigilia || false}
+                onChange={(checked) =>
+                  updateOrientacoes({ posicionamento_vigilia: checked })
                 }
                 disabled={disabled}
               />
@@ -3592,7 +3860,7 @@ export const EvolutionSectionContent: React.FC<
               />
             </div>
 
-            <Field label="Frequência do Tummy Time">
+            <Field label="Frequência do Tummy Time (acordado e supervisionado)">
               <Input
                 value={orientacoes.tummy_time_frequencia || ''}
                 onChange={(e) =>
@@ -3665,7 +3933,7 @@ export const EvolutionSectionContent: React.FC<
               </Field>
             )}
 
-            <Field label="Reavaliação em (dias)">
+            <Field label="Reavaliação em (dias)" ajuda="reavaliacao_dias">
               <Input
                 type="number"
                 min={1}
