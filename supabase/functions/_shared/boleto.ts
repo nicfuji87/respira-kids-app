@@ -155,15 +155,31 @@ export function validarArrecadacao(linha: string): Boleto | null {
   return arrecadacaoDoCodigo(blocos.map((b) => b.slice(0, 11)).join(''));
 }
 
-// Vencimento escrito na fatura ("Vencimento: 20/10/2026", "Vencto 20/10/2026").
+// Vencimento escrito na fatura ("Vencimento: 20/10/2026", "Vencto 20/10/2026",
+// "Pagar este documento até 20/10/2026"). Percorre todas as ocorrências e fica com a
+// primeira data válida: no DARF, "Data de Vencimento" vem colado em "Número do Documento
+// 07.16.26282...", que parece data e não é.
 export function acharVencimentoNoTexto(texto: string): string | null {
-  const m = texto.match(
-    /venc(?:imento|to)?\.?[^\d]{0,40}?(\d{2})[/.-](\d{2})[/.-](\d{4})/i
-  );
-  if (!m) return null;
-  const [, d, mes, a] = m;
-  const iso = `${a}-${mes}-${d}`;
-  return Number.isNaN(Date.parse(iso)) ? null : iso;
+  const re =
+    /(?:venc(?:imento|to)?|pagar(?:\s+este\s+documento)?\s+at[ée])\.?[^\d]{0,40}?(\d{2})[/.-](\d{2})[/.-](\d{4})/gi;
+  for (const m of texto.matchAll(re)) {
+    const [, d, mes, a] = m;
+    const dia = Number(d);
+    const mesN = Number(mes);
+    const ano = Number(a);
+    if (
+      dia < 1 ||
+      dia > 31 ||
+      mesN < 1 ||
+      mesN > 12 ||
+      ano < 2000 ||
+      ano > 2100
+    )
+      continue;
+    const iso = `${a}-${mes}-${d}`;
+    if (!Number.isNaN(Date.parse(iso))) return iso;
+  }
+  return null;
 }
 
 // Procura boletos no texto do PDF, do jeito mais seguro para o menos:
