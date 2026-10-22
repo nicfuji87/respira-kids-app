@@ -496,8 +496,16 @@ async function lerCaixa(
       })),
       ...baixados.map((b) => ({ nome: b.nome, carregar: async () => b.bytes })),
     ];
+    // PDFs lidos sem boleto ficam guardados para quem quiser abrir (e para diagnóstico)
+    const guardados: string[] = [];
     for (const [i, parte] of arquivos.entries()) {
       const bytes = await parte.carregar();
+      const caminho = `boletos/${caixa.id}/${id}-${i + 1}.pdf`;
+      await admin.storage.from(BUCKET).upload(caminho, bytes, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+      guardados.push(`${BUCKET}/${caminho}`);
       const lido = await textoDoPdf(bytes, senhasCandidatas(rem, cnpjsNossos));
       const texto = lido.texto;
       if (lido.protegido && !lido.senha) {
@@ -524,11 +532,6 @@ async function lerCaixa(
 
       for (const b of boletos) {
         const sufixo = n === 0 ? '' : `:${n + 1}`;
-        const caminho = `boletos/${caixa.id}/${id}-${i + 1}.pdf`;
-        await admin.storage.from(BUCKET).upload(caminho, bytes, {
-          contentType: 'application/pdf',
-          upsert: true,
-        });
         const { data: r, error } = await admin.rpc(
           'fn_boleto_registrar_email',
           {
@@ -567,9 +570,11 @@ async function lerCaixa(
           ...base,
           gmail_id: id,
           texto: `${assunto}\n${corpo}`,
-          motivo: semSenha
-            ? 'PDF com senha que não consegui abrir: cadastre a senha no remetente'
-            : 'Não achei boleto com linha digitável válida no PDF',
+          motivo:
+            (semSenha
+              ? 'PDF com senha que não consegui abrir: cadastre a senha no remetente'
+              : 'Não achei boleto com linha digitável válida no PDF') +
+            (guardados.length ? ` (PDF: ${guardados.join(', ')})` : ''),
         },
       });
       resumo.outras++;
