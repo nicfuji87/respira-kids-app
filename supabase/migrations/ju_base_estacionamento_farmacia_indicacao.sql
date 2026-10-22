@@ -1,0 +1,4 @@
+-- Base da Ju (regras do dono, 21/10/2026): estacionamento (gratuito e rotativo; aviso da pista
+-- lateral com fiscalização do Detran), Drogasil em frente ao prédio e pedido de indicação de
+-- profissional (não opina; passa às fisios como CLINICO). Textos completos em ju_conhecimento,
+-- ids ESTACIONAMENTO, FARMACIA e INDICACAO_PROFISSIONAIS.

@@ -1,0 +1,18 @@
+-- Aplicada em 22/10/2026 (migration ju_cumprimento_e_sombra_barrada), ok do dono após a
+-- análise da sombra das 11h às 16h45. Conteúdo aplicado:
+--  1) fn_ju_so_cumprimento(conversa): o que a família mandou desde a última fala da clínica
+--     (ou da resposta da Ju na sombra; no máximo 10 min) é só cumprimento ("oi", "Lolo boa
+--     tarde", "bom dia, tudo bem?") e a última mensagem tem menos de 60 s. fn_ju_turno devolve
+--     'so_cumprimento'; no n8n Atendimento o IF "Só cumprimento?" (depois de "Dados do turno")
+--     manda para "Esperar o pedido" (40 s) e volta ao "Dados do turno" — no máximo uma vez.
+--  2) ju_sombra.barrada + gatilho trg_ju_sombra_barrada (fn_ju_sombra_barrada): mesma regra
+--     do fn_ju_responder — MENSAGEM_NOVA, SEM_IA, LOLO_NA_CONVERSA (pausa valendo) e
+--     JA_RESPONDIDA (mesma versão já tinha resposta). Nulo = a resposta sairia de verdade.
+--     Histórico preenchido só com MENSAGEM_NOVA (o único motivo certo olhando para trás).
+--  3) primeira_interacao do fn_ju_turno ignora respostas da sombra barradas.
+-- Regras novas no prompt (n8n + scripts/n8n/ju-atendimento-prompt.md): reforço sem novidade
+-- ("pode verificar?") = [NADA] sem chamar a equipe de novo; criança já atendida pedindo
+-- horário com fisio/dia/hora = passa o pedido sem perguntar motivo; "como posso te ajudar?"
+-- entrou na lista de frases de call center.
+-- Testado com conversas falsas 5561999000081-83: [NADA] no reforço, pedido do Mateus sem
+-- pergunta de motivo, "Lolo boa tarde" respondido ~35 s depois sem "como posso ajudar".

@@ -1,0 +1,13 @@
+-- =====================================================================
+-- Ju: ferramenta de bateria de testes em modo sombra (21/10/2026)
+-- =====================================================================
+-- AI dev note: fn_ju_teste_rodar(casos) cria conversas falsas
+-- 55619990000NN@s.whatsapp.net (fora da lista de teste => sombra: nada sai),
+-- com histórico opcional, pedido já aberto ("aberto") ou pausa da Lolô ativa
+-- ("pausa", em minutos), e dispara o Atendimento pelo webhook das Tarefas.
+-- Resultado em ju_sombra. Exemplo:
+--   SELECT fn_ju_teste_rodar('[{"n":1,"msg":"Vocês atendem bebê?"}]');
+-- Corpo atual: ver pg_get_functiondef('public.fn_ju_teste_rodar'::regproc)
+-- (criada na migration ju_teste_rodar e remendada em
+-- ju_parcelamento_e_teste_pausa para aceitar "pausa").
+-- =====================================================================
