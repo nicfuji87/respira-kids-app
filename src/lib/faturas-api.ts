@@ -1771,6 +1771,17 @@ const IBS_CBS_SERVICOS_SAUDE = {
   operationIndicatorCode: '030101', // Serviço prestado fisicamente sobre a pessoa
 } as const;
 
+// PIS/COFINS da NT-007: desde 21/10/2026 o Asaas recusa nota do Regime Normal
+// sem `pisCofinsTaxStatus` ("A Situação tributária do PIS/COFINS é obrigatória").
+// CST 01 com as alíquotas do Lucro Presumido (cumulativo), decisão do dono.
+// operationPis/operationCofins só DECLARAM o tributo na nota; retenção continua
+// em `pis`/`cofins`/`csll` (zero). Não enviar `pisCofinsRetentionType`: o Asaas calcula.
+const PIS_COFINS_LUCRO_PRESUMIDO = {
+  pisCofinsTaxStatus: 'STANDARD_TAXABLE_OPERATION',
+  operationPis: 0.65,
+  operationCofins: 3,
+} as const;
+
 // === EMITIR NFE PARA FATURA ===
 export async function emitirNfeFatura(
   faturaId: string,
@@ -1887,10 +1898,11 @@ export async function emitirNfeFatura(
         inss: 0,
         ir: 0,
         pis: 0,
-        // Grupo IBSCBS: exigido de quem está no Regime Normal (ver constante acima)
+        // Grupo IBSCBS e PIS/COFINS: exigidos de quem está no Regime Normal
+        // (ver constantes acima)
         ...(apiConfig.regimeTributario === 'simples_nacional'
           ? {}
-          : IBS_CBS_SERVICOS_SAUDE),
+          : { ...IBS_CBS_SERVICOS_SAUDE, ...PIS_COFINS_LUCRO_PRESUMIDO }),
       };
 
       // AI dev note: no cartão PARCELADO a nota é UMA só, com o valor TOTAL
