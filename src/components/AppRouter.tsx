@@ -21,6 +21,7 @@ import {
   ReativacaoPage,
   PixAprovacaoPage,
   BoletoAprovacaoPage,
+  AgendaLancarPage,
   ConfiguracoesPage,
   UsuariosPage,
   RelatoriosPage,
@@ -256,6 +257,19 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute path="/boleto/:id" currentUserRole={validUserRole}>
               <BoletoAprovacaoPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Consulta combinada no WhatsApp e não lançada - botão do aviso no grupo */}
+        <Route
+          path="/agenda/lancar/:id"
+          element={
+            <ProtectedRoute
+              path="/agenda/lancar/:id"
+              currentUserRole={validUserRole}
+            >
+              <AgendaLancarPage />
             </ProtectedRoute>
           }
         />

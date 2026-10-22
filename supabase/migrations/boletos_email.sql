@@ -334,6 +334,13 @@ BEGIN
     ) RETURNING id INTO v_lanc;
   END IF;
 
+  -- pago por outra conta (ex.: Asaas da BC): o alerta de vencido não fala do Inter
+  IF r.pagar_por = 'outra_conta' THEN
+    SELECT coalesce(jsonb_agg(CASE WHEN a ->> 'texto' LIKE 'Venceu em%'
+             THEN jsonb_build_object('nivel', 'atencao', 'texto', split_part(a ->> 'texto', '.', 1) || '. Pode ter multa e juros.')
+             ELSE a END), '[]'::jsonb) INTO v_alertas
+    FROM jsonb_array_elements(v_alertas) a;
+  END IF;
   -- débito automático não passa pelo Inter: só o valor fora do comum interessa
   IF r.debito_automatico THEN
     SELECT coalesce(jsonb_agg(a), '[]'::jsonb) INTO v_alertas
@@ -352,7 +359,7 @@ BEGIN
     -- grupo 🧾 RK · Notas fiscais (robô), o mesmo dos pedidos de Pix
     '120363140440447965@g.us',
     -- débito automático: só registra, sem botão de pagar (boletos_email_debito_automatico.sql)
-    CASE WHEN r.debito_automatico THEN 'debito' ELSE 'aguardando' END
+    CASE WHEN r.debito_automatico THEN 'debito' WHEN r.pagar_por = 'outra_conta' THEN 'externo' ELSE 'aguardando' END
   ) RETURNING id INTO v_sol;
 
   UPDATE public.email_mensagens SET status = 'boleto', solicitacao_id = v_sol, detalhe = NULL WHERE id = v_msg;

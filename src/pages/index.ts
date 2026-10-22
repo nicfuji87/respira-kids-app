@@ -16,6 +16,7 @@ export { CobrancasPage } from './CobrancasPage';
 export { ReativacaoPage } from './ReativacaoPage';
 export { PixAprovacaoPage } from './PixAprovacaoPage';
 export { BoletoAprovacaoPage } from './BoletoAprovacaoPage';
+export { AgendaLancarPage } from './AgendaLancarPage';
 export { ConfiguracoesPage } from './ConfiguracoesPage';
 
 // Admin only pages

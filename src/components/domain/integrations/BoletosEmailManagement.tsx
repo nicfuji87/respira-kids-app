@@ -102,7 +102,15 @@ const NOVO: RemetenteInput = {
   ativo: true,
   debito_automatico: false,
   conta_bancaria_id: null,
+  senha_pdf: null,
+  pagar_por: 'inter',
+  links_permitidos: null,
 };
+
+const formaDe = (
+  d: RemetenteInput
+): 'inter' | 'debito' | 'outra_conta' | 'asaas' =>
+  d.debito_automatico ? 'debito' : d.pagar_por;
 
 export const BoletosEmailManagement: React.FC = () => {
   const { toast } = useToast();
@@ -183,6 +191,9 @@ export const BoletosEmailManagement: React.FC = () => {
               ativo: r.ativo,
               debito_automatico: r.debito_automatico,
               conta_bancaria_id: r.conta_bancaria_id,
+              senha_pdf: r.senha_pdf,
+              pagar_por: r.pagar_por,
+              links_permitidos: r.links_permitidos,
             },
           }
         : { dados: { ...NOVO } }
@@ -192,10 +203,10 @@ export const BoletosEmailManagement: React.FC = () => {
   const salvar = async () => {
     if (!editando) return;
     const { dados } = editando;
-    if (dados.debito_automatico && !dados.conta_bancaria_id) {
+    if (formaDe(dados) !== 'inter' && !dados.conta_bancaria_id) {
       toast({
         title: 'Falta a conta',
-        description: 'Escolha a conta bancária onde cai o débito automático.',
+        description: 'Escolha a conta bancária que paga (ou é debitada).',
         variant: 'destructive',
       });
       return;
@@ -407,6 +418,15 @@ export const BoletosEmailManagement: React.FC = () => {
                     ? ` · quando citar “${r.identificador}”`
                     : ''}
                   {r.debito_automatico ? ' · débito automático' : ''}
+                  {r.pagar_por === 'outra_conta'
+                    ? ' · pago por outra conta'
+                    : ''}
+                  {r.pagar_por === 'asaas'
+                    ? ' · agendado no Asaas (Bruna libera)'
+                    : ''}
+                  {r.links_permitidos
+                    ? ` · baixa por link (${r.links_permitidos})`
+                    : ''}
                 </p>
               </div>
               <div className="flex items-center gap-1">
@@ -576,37 +596,115 @@ export const BoletosEmailManagement: React.FC = () => {
                 </p>
               </div>
 
-              <div className="space-y-2 rounded-lg border p-3">
-                <Label className="flex items-center gap-2">
-                  <Switch
-                    checked={dados.debito_automatico}
-                    onCheckedChange={(v) =>
-                      setDados({
-                        debito_automatico: v,
-                        conta_bancaria_id: v ? dados.conta_bancaria_id : null,
-                      })
-                    }
-                  />
-                  Débito automático
-                </Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="rem-senha">Senha do PDF (opcional)</Label>
+                <Input
+                  id="rem-senha"
+                  value={dados.senha_pdf ?? ''}
+                  onChange={(e) => setDados({ senha_pdf: e.target.value })}
+                  placeholder="Ex.: 51869"
+                  autoComplete="off"
+                />
                 <p className="text-xs text-muted-foreground">
-                  A conta é só registrada e avisada no grupo, sem botão de
-                  pagar. No vencimento, a baixa sai sozinha na conta abaixo.
+                  Se a fatura vier com senha. Em branco, o sistema tenta os
+                  padrões com o CNPJ da clínica (4, 5, 6 ou 8 primeiros dígitos
+                  e o CNPJ inteiro) e guarda a que abrir.
                 </p>
-                {dados.debito_automatico && (
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="rem-link">Documento por link (opcional)</Label>
+                <Input
+                  id="rem-link"
+                  value={dados.links_permitidos ?? ''}
+                  onChange={(e) =>
+                    setDados({ links_permitidos: e.target.value })
+                  }
+                  placeholder="Ex.: hubstrom"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Para quem manda um botão “Baixar” em vez de anexar o PDF.
+                  Informe o domínio do site; o sistema só baixa de lá e nunca
+                  abre link de descadastro.
+                </p>
+              </div>
+
+              <div className="space-y-2 rounded-lg border p-3">
+                <Label>Forma de pagamento</Label>
+                <Select
+                  value={formaDe(dados)}
+                  onValueChange={(v) => {
+                    const forma = v as ReturnType<typeof formaDe>;
+                    const contaAtual = contasBancarias.find(
+                      (c) => c.id === dados.conta_bancaria_id
+                    );
+                    setDados({
+                      debito_automatico: forma === 'debito',
+                      pagar_por:
+                        forma === 'outra_conta' || forma === 'asaas'
+                          ? forma
+                          : 'inter',
+                      // Asaas só com conta que tem chave de API
+                      conta_bancaria_id:
+                        forma === 'inter' ||
+                        (forma === 'asaas' && !contaAtual?.asaas)
+                          ? null
+                          : dados.conta_bancaria_id,
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inter">
+                      Inter (botão para agendar no grupo)
+                    </SelectItem>
+                    <SelectItem value="debito">Débito automático</SelectItem>
+                    {contasBancarias.some((c) => c.asaas) && (
+                      <SelectItem value="asaas">
+                        Asaas (agenda sozinho, Bruna libera no app)
+                      </SelectItem>
+                    )}
+                    <SelectItem value="outra_conta">
+                      Outra conta (pagar e marcar como pago)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {formaDe(dados) === 'debito'
+                    ? 'A conta é só registrada e avisada no grupo, sem botão de pagar. No vencimento, a baixa sai sozinha na conta abaixo.'
+                    : formaDe(dados) === 'asaas'
+                      ? 'Quando o boleto chega, o sistema já cria o pagamento no Asaas da conta abaixo. O aviso no grupo diz que falta a liberação da Bruna no app do Asaas. Quando o Asaas pagar, a baixa sai sozinha.'
+                      : formaDe(dados) === 'outra_conta'
+                        ? 'O aviso no grupo diz por qual conta pagar e traz a linha digitável. Depois de pagar, alguém toca “Marquei como pago” e a baixa sai na conta abaixo.'
+                        : 'O aviso no grupo traz o botão para conferir e agendar o pagamento pelo Inter.'}
+                </p>
+                {formaDe(dados) !== 'inter' && (
                   <Select
                     value={dados.conta_bancaria_id ?? undefined}
                     onValueChange={(v) => setDados({ conta_bancaria_id: v })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Conta que é debitada…" />
+                      <SelectValue
+                        placeholder={
+                          formaDe(dados) === 'debito'
+                            ? 'Conta que é debitada…'
+                            : formaDe(dados) === 'asaas'
+                              ? 'Conta do Asaas…'
+                              : 'Conta que paga…'
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      {contasBancarias.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.nome}
-                        </SelectItem>
-                      ))}
+                      {contasBancarias
+                        .filter((c) => formaDe(dados) !== 'asaas' || c.asaas)
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nome}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 )}

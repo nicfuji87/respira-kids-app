@@ -69,6 +69,11 @@ export interface AppointmentFormManagerProps {
   initialDate?: Date;
   initialTime?: string;
   initialPatientId?: string; // Novo: Para auto-preencher paciente
+  // AI dev note: página "Lançar consulta" (aviso de consulta combinada no WhatsApp):
+  // fisio lida da conversa e, com prefillFromLastAppointment, serviço/empresa da
+  // última consulta da criança (o mesmo pré-preenchimento de quando se escolhe o paciente).
+  initialProfessionalId?: string;
+  prefillFromLastAppointment?: boolean;
   onSave?: (appointmentId: string) => void;
   className?: string;
 }
@@ -107,6 +112,8 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     initialDate,
     initialTime,
     initialPatientId,
+    initialProfessionalId,
+    prefillFromLastAppointment,
     onSave,
     className,
   }) => {
@@ -218,7 +225,7 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         setFormData({
           data_hora: dateTimeString,
           paciente_id: initialPatientId || '',
-          profissional_id: '',
+          profissional_id: initialProfessionalId || '',
           tipo_servico_id: '',
           local_id: '',
           status_consulta_id: '',
@@ -243,7 +250,13 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         autoPrecoRef.current = 0;
         setPrecoInfo(null);
       }
-    }, [isOpen, initialDate, initialTime, initialPatientId]);
+    }, [
+      isOpen,
+      initialDate,
+      initialTime,
+      initialPatientId,
+      initialProfessionalId,
+    ]);
 
     // Validar conflitos de horário
     const checkScheduleConflicts = useCallback(
@@ -597,6 +610,26 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
         aplicarValorServico,
       ]
     );
+
+    // Paciente que já vem escolhido: roda o mesmo pré-preenchimento uma vez, depois do reset
+    const prefillInicialRef = useRef<string | null>(null);
+    useEffect(() => {
+      if (!isOpen) {
+        prefillInicialRef.current = null;
+        return;
+      }
+      if (!prefillFromLastAppointment || !initialPatientId) return;
+      if (prefillInicialRef.current === initialPatientId) return;
+      if (formData.paciente_id !== initialPatientId) return;
+      prefillInicialRef.current = initialPatientId;
+      handlePatientChange(initialPatientId);
+    }, [
+      isOpen,
+      prefillFromLastAppointment,
+      initialPatientId,
+      formData.paciente_id,
+      handlePatientChange,
+    ]);
 
     // AI dev note: "Ignorar" — reverte somente os campos que o pré-preenchimento aplicou
     const handleUndoPrefill = useCallback(() => {

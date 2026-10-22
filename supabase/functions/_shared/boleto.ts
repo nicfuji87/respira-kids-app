@@ -155,21 +155,63 @@ export function validarArrecadacao(linha: string): Boleto | null {
   return arrecadacaoDoCodigo(blocos.map((b) => b.slice(0, 11)).join(''));
 }
 
-// Vencimento escrito na fatura ("Vencimento: 20/10/2026", "Vencto 20/10/2026").
+// Vencimento escrito na fatura ("Vencimento: 20/10/2026", "Vencto 20/10/2026",
+// "Pagar este documento até 20/10/2026"). Percorre todas as ocorrências e fica com a
+// primeira data válida: no DARF, "Data de Vencimento" vem colado em "Número do Documento
+// 07.16.26282...", que parece data e não é.
 export function acharVencimentoNoTexto(texto: string): string | null {
-  const m = texto.match(
-    /venc(?:imento|to)?\.?[^\d]{0,40}?(\d{2})[/.-](\d{2})[/.-](\d{4})/i
-  );
-  if (!m) return null;
-  const [, d, mes, a] = m;
-  const iso = `${a}-${mes}-${d}`;
-  return Number.isNaN(Date.parse(iso)) ? null : iso;
+  const re =
+    /(?:venc(?:imento|to)?|pagar(?:\s+este\s+documento)?\s+at[ée])\.?[^\d]{0,40}?(\d{2})[/.-](\d{2})[/.-](\d{4})/gi;
+  for (const m of texto.matchAll(re)) {
+    const [, d, mes, a] = m;
+    const dia = Number(d);
+    const mesN = Number(mes);
+    const ano = Number(a);
+    if (
+      dia < 1 ||
+      dia > 31 ||
+      mesN < 1 ||
+      mesN > 12 ||
+      ano < 2000 ||
+      ano > 2100
+    )
+      continue;
+    const iso = `${a}-${mes}-${d}`;
+    if (!Number.isNaN(Date.parse(iso))) return iso;
+  }
+  return null;
 }
 
-// Procura boletos no texto do PDF. A linha costuma vir com pontos e espaços
-// ("03399.12345 67890.123456 ..."), às vezes quebrada; tenta janelas de dígitos.
+// Procura boletos no texto do PDF, do jeito mais seguro para o menos:
+//   1. a linha no formato impresso ("03399.12345 67890.123456 ...", "84670000001-7 ...")
+//      ou como sequência isolada de 47/48 dígitos;
+//   2. só se nada disso aparecer, janelas de dígitos no texto corrido (o extrator às
+//      vezes quebra a linha). Janela deslocada dentro de uma linha verdadeira pode fechar
+//      os DVs por acaso (honorários da Faoli, 22/10/2026: R$ 356,82 virou R$ 3.568,25
+//      vencendo em 2038), por isso aqui o vencimento precisa ser plausível.
+const FORMATOS = [
+  /(?<!\d)\d{5}[.\s]?\d{5}\s+\d{5}[.\s]?\d{6}\s+\d{5}[.\s]?\d{6}\s+\d\s+\d{14}(?!\d)/g,
+  /(?<!\d)\d{11}[-\s]?\d\s+\d{11}[-\s]?\d\s+\d{11}[-\s]?\d\s+\d{11}[-\s]?\d(?!\d)/g,
+  /(?<!\d)\d{47,48}(?!\d)/g,
+];
+
+function vencimentoPlausivel(b: Boleto, hoje = new Date()): boolean {
+  if (b.tipo === 'arrecadacao' || !b.vencimento) return true;
+  const dias = Math.abs(Date.parse(b.vencimento) - hoje.getTime()) / 86_400_000;
+  return dias <= 400;
+}
+
 export function acharBoletos(texto: string, hoje?: Date): Boleto[] {
   const achados = new Map<string, Boleto>();
+  for (const re of FORMATOS) {
+    for (const m of texto.matchAll(re)) {
+      const d = m[0].replace(/\D/g, '');
+      const b = d.length === 47 ? validarLinha(d, hoje) : validarArrecadacao(d);
+      if (b) achados.set(b.linha, b);
+    }
+  }
+  if (achados.size) return [...achados.values()];
+
   // blocos de dígitos separados só por espaço, ponto ou hífen
   const blocos = (texto.match(/\d[\d.\s-]{40,80}\d/g) ?? []).map((b) =>
     b.replace(/\D/g, '')
@@ -177,7 +219,7 @@ export function acharBoletos(texto: string, hoje?: Date): Boleto[] {
   for (const d of blocos) {
     for (let i = 0; i + 47 <= d.length; i++) {
       const b = validarLinha(d.slice(i, i + 47), hoje);
-      if (b) achados.set(b.linha, b);
+      if (b && vencimentoPlausivel(b, hoje)) achados.set(b.linha, b);
     }
     for (let i = 0; i + 48 <= d.length; i++) {
       const b = validarArrecadacao(d.slice(i, i + 48));
@@ -192,7 +234,7 @@ export function acharBoletos(texto: string, hoje?: Date): Boleto[] {
       if (d.length !== 44) continue;
       const l = linhaDoCodigoDeBarras(d);
       const b = l ? validarLinha(l, hoje) : arrecadacaoDoCodigo(d);
-      if (b) achados.set(b.linha, b);
+      if (b && vencimentoPlausivel(b, hoje)) achados.set(b.linha, b);
     }
   }
   return [...achados.values()];
