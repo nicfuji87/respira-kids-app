@@ -133,11 +133,32 @@ Deno.serve(async (req: Request) => {
       respFallback = responsavelRow ?? pessoaContrato ?? null;
     }
 
+    // AI dev note: o n8n trata número que começa com 55 como DDI e qualquer outro
+    // como internacional ("(61) 9xxxx-xxxx" virava +61, Austrália). Por isso o
+    // telefone do signatário sai SEMPRE em E.164 (+55 DDD 9 número), não importa
+    // o formato impresso no contrato. Mesma regra de src/lib/telefone-br.ts.
+    const telefoneE164 = (valor: unknown): string | null => {
+      if (valor === null || valor === undefined) return null;
+      let d = String(valor).replace(/\D/g, '');
+      if ((d.length === 12 || d.length === 13) && d.startsWith('55')) {
+        d = d.slice(2);
+      }
+      if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+      if (d.length !== 10 && d.length !== 11) return null;
+      const ddd = d.slice(0, 2);
+      let numero = d.slice(2);
+      if (ddd.startsWith('0')) return null;
+      if (numero.length === 8 && /^[6-9]/.test(numero)) numero = `9${numero}`;
+      if (numero.length === 9 && !numero.startsWith('9')) return null;
+      return `+55${ddd}${numero}`;
+    };
+
+    const telefoneBruto = respTelefoneVar || respFallback?.telefone || null;
     const responsavelLegal = {
       id: respFallback?.id ?? pessoaId,
       nome: respNomeVar || respFallback?.nome || '',
       email: respEmailVar || respFallback?.email || null,
-      telefone: respTelefoneVar || respFallback?.telefone || null,
+      telefone: telefoneE164(telefoneBruto) ?? telefoneBruto,
     };
 
     // Guard: sem e-mail do signatário NÃO enviamos para assinatura, senão o n8n

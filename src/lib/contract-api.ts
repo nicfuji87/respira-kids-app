@@ -3,6 +3,7 @@
 
 import { supabase } from './supabase';
 import { formatCPF } from './profile';
+import { formatarTelefoneBR } from './telefone-br';
 
 // Interfaces conforme plano aprovado
 export interface ContractVariables {
@@ -303,14 +304,9 @@ export async function buildContractVariablesForPatient(
     return `${day}/${month}/${year}`;
   };
 
-  const formatarTelefone = (telefone: bigint | number | null): string => {
-    if (!telefone) return '';
-    const tel = telefone.toString();
-    if (tel.length === 11) {
-      return `(${tel.slice(0, 2)}) ${tel.slice(2, 7)}-${tel.slice(7)}`;
-    }
-    return tel;
-  };
+  // AI dev note: o telefone em pessoas é o JID (55 + DDD + número, às vezes sem o 9).
+  const formatarTelefone = (telefone: bigint | number | null): string =>
+    formatarTelefoneBR(telefone);
 
   const mesmoResponsavel =
     p.responsavel_legal_id === p.responsavel_financeiro_id;
