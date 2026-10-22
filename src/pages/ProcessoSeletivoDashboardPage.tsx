@@ -28,6 +28,7 @@ import {
   ChevronRight,
   Clock,
   ClipboardList,
+  Presentation,
 } from 'lucide-react';
 import {
   StatusBadge,
@@ -35,6 +36,7 @@ import {
   EstagioCandidatoDetail,
   PontoEletronicoTab,
   ValeTransportePainel,
+  ReunioesTab,
 } from '@/components/domain/processo-seletivo';
 import {
   computeStats,
@@ -65,6 +67,7 @@ function formatDate(iso: string): string {
 }
 
 type FilterStatus = 'todos' | StatusCandidatura;
+type MainTab = 'ponto' | 'gestao' | 'reunioes' | 'candidaturas';
 
 export const ProcessoSeletivoDashboardPage: React.FC = () => {
   const { toast } = useToast();
@@ -77,9 +80,7 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
   const [filter, setFilter] = useState<FilterStatus>('todos');
   const [selected, setSelected] = useState<CandidaturaEstagioRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [mainTab, setMainTab] = useState<'ponto' | 'gestao' | 'candidaturas'>(
-    'ponto'
-  );
+  const [mainTab, setMainTab] = useState<MainTab>('ponto');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -139,14 +140,9 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
-      <PageHeader description="Ponto eletrônico, gestão do estágio e candidaturas." />
+      <PageHeader description="Ponto eletrônico, gestão do estágio, reuniões e candidaturas." />
 
-      <Tabs
-        value={mainTab}
-        onValueChange={(v) =>
-          setMainTab(v as 'ponto' | 'gestao' | 'candidaturas')
-        }
-      >
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)}>
         <TabsList>
           <TabsTrigger value="ponto" className="gap-2">
             <Clock className="w-4 h-4" />
@@ -155,6 +151,10 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
           <TabsTrigger value="gestao" className="gap-2">
             <ClipboardList className="w-4 h-4" />
             Gestão do estágio
+          </TabsTrigger>
+          <TabsTrigger value="reunioes" className="gap-2">
+            <Presentation className="w-4 h-4" />
+            Reuniões
           </TabsTrigger>
           <TabsTrigger value="candidaturas" className="gap-2">
             <Users className="w-4 h-4" />
@@ -168,6 +168,10 @@ export const ProcessoSeletivoDashboardPage: React.FC = () => {
 
         <TabsContent value="gestao" className="mt-4">
           <ValeTransportePainel />
+        </TabsContent>
+
+        <TabsContent value="reunioes" className="mt-4">
+          <ReunioesTab />
         </TabsContent>
 
         <TabsContent value="candidaturas" className="space-y-6 mt-4">

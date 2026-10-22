@@ -14,3 +14,4 @@ export { EstagioCandidatoDetail } from './EstagioCandidatoDetail';
 export { EstagioContratoSection } from './EstagioContratoSection';
 export { PontoEletronicoTab } from './PontoEletronicoTab';
 export { ValeTransportePainel } from './ValeTransportePainel';
+export { ReunioesTab } from './ReunioesTab';
