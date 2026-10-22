@@ -35,6 +35,7 @@ import {
 import { buildUsoImagemVars, type ContractVariables } from '@/lib/contract-api';
 import { toast } from '@/components/primitives/use-toast';
 import { formatCPF } from '@/lib/profile';
+import { formatarTelefoneBR } from '@/lib/telefone-br';
 import { formatDateBR } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
@@ -405,7 +406,9 @@ export const AdminPatientRegistrationDialog: React.FC<
       // Responsável Legal
       responsavelLegalNome: responsavelNome || '',
       responsavelLegalCpf: formatCPF(responsavelCpf || ''),
-      responsavelLegalTelefone: formData.whatsappResponsavel || '',
+      responsavelLegalTelefone: formatarTelefoneBR(
+        formData.whatsappResponsavel
+      ),
       responsavelLegalEmail:
         formData.emailPaciente || formData.emailResponsavel || '',
       responsavelLegalFinanceiro: formData.isResponsavelFinanceiroIgualLegal
@@ -420,7 +423,7 @@ export const AdminPatientRegistrationDialog: React.FC<
       // Compatibilidade
       contratante: responsavelNome || '',
       cpf: formatCPF(responsavelCpf || ''),
-      telefone: formData.whatsappResponsavel || '',
+      telefone: formatarTelefoneBR(formData.whatsappResponsavel),
       email: formData.emailPaciente || formData.emailResponsavel || '',
 
       // Endereço

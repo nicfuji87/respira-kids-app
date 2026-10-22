@@ -32,6 +32,7 @@ import { Button } from '@/components/primitives/button';
 import { AlertCircle, Check, Copy, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { cleanCPF } from '@/lib/cpf-validator';
+import { formatarTelefoneBR } from '@/lib/telefone-br';
 import {
   generateContractPreview,
   buildUsoImagemVars,
@@ -807,18 +808,14 @@ export const PatientRegistrationSteps =
             financeiroCpf = responsavelFinanceiro.personData.cpf;
             financeiroEmail = responsavelFinanceiro.personData.email || '';
             const tel = responsavelFinanceiro.personData.telefone || '';
-            financeiroTelefone = tel
-              ? `(${tel.slice(0, 2)}) ${tel.slice(2, 7)}-${tel.slice(7)}`
-              : '';
+            financeiroTelefone = formatarTelefoneBR(tel);
           } else if (responsavelFinanceiro?.newPersonData) {
             // Nova pessoa cadastrada
             financeiroNome = responsavelFinanceiro.newPersonData.nome;
             financeiroCpf = responsavelFinanceiro.newPersonData.cpf;
             financeiroEmail = responsavelFinanceiro.newPersonData.email;
             const tel = responsavelFinanceiro.newPersonData.whatsapp;
-            financeiroTelefone = tel
-              ? `(${tel.slice(0, 2)}) ${tel.slice(2, 7)}-${tel.slice(7)}`
-              : '';
+            financeiroTelefone = formatarTelefoneBR(tel);
           }
 
           // Formatar CPF com máscara
@@ -846,9 +843,9 @@ export const PatientRegistrationSteps =
 
         // Preparar variáveis do contrato conforme plano
         // Formatar telefone para (XX) XXXXX-XXXX
-        const telefoneFormatado = registrationData.phoneNumber
-          ? `(${registrationData.phoneNumber.slice(0, 2)}) ${registrationData.phoneNumber.slice(2, 7)}-${registrationData.phoneNumber.slice(7)}`
-          : '';
+        const telefoneFormatado = formatarTelefoneBR(
+          registrationData.phoneNumber
+        );
 
         // AI dev note: Converter data de nascimento de formato ISO (YYYY-MM-DD) para formato brasileiro (dd/mm/aaaa)
         const formatarDataBrasileira = (dataISO: string): string => {
@@ -1504,9 +1501,7 @@ export const PatientRegistrationSteps =
               onBack={handleBack}
               defaultValues={registrationData.responsavelLegal}
               whatsappNumber={
-                registrationData.phoneNumber
-                  ? `(${registrationData.phoneNumber.slice(0, 2)}) ${registrationData.phoneNumber.slice(2, 7)}-${registrationData.phoneNumber.slice(7)}`
-                  : undefined
+                formatarTelefoneBR(registrationData.phoneNumber) || undefined
               }
             />
           );
