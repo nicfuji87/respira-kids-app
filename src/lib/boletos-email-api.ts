@@ -102,6 +102,8 @@ export interface RemetenteBoleto {
   debito_automatico: boolean;
   conta_bancaria_id: string | null;
   senha_pdf: string | null;
+  pagar_por: 'inter' | 'outra_conta';
+  links_permitidos: string | null;
   fornecedor?: {
     nome_fantasia: string | null;
     nome_razao_social: string | null;
@@ -113,7 +115,7 @@ export async function listarRemetentes(): Promise<RemetenteBoleto[]> {
   const { data, error } = await supabase
     .from('email_boleto_remetentes')
     .select(
-      'id, email, fornecedor_id, lancamento_recorrente_id, identificador, categoria_contabil_id, observacao, ativo, debito_automatico, conta_bancaria_id, senha_pdf, fornecedor:fornecedores(nome_fantasia, nome_razao_social), recorrente:lancamentos_recorrentes(descricao)'
+      'id, email, fornecedor_id, lancamento_recorrente_id, identificador, categoria_contabil_id, observacao, ativo, debito_automatico, conta_bancaria_id, senha_pdf, pagar_por, links_permitidos, fornecedor:fornecedores(nome_fantasia, nome_razao_social), recorrente:lancamentos_recorrentes(descricao)'
     )
     .order('email');
   if (error) throw new Error(error.message);
@@ -130,6 +132,8 @@ export interface RemetenteInput {
   debito_automatico: boolean;
   conta_bancaria_id: string | null;
   senha_pdf: string | null;
+  pagar_por: 'inter' | 'outra_conta';
+  links_permitidos: string | null;
 }
 
 export async function salvarRemetente(input: RemetenteInput, id?: string) {
@@ -139,6 +143,7 @@ export async function salvarRemetente(input: RemetenteInput, id?: string) {
     identificador: input.identificador?.trim() || null,
     observacao: input.observacao?.trim() || null,
     senha_pdf: input.senha_pdf?.trim() || null,
+    links_permitidos: input.links_permitidos?.trim().toLowerCase() || null,
     updated_at: new Date().toISOString(),
   };
   const { error } = id
@@ -255,7 +260,9 @@ export type BoletoStatus =
   | 'erro'
   | 'cancelado'
   // débito automático: só registrado, baixa no vencimento
-  | 'debito';
+  | 'debito'
+  // pago por outra conta (ex.: Asaas da BC): alguém marca como pago no app
+  | 'externo';
 
 export interface AlertaBoleto {
   nivel: 'info' | 'atencao' | 'grave';
@@ -291,6 +298,10 @@ export interface BoletoSolicitacao {
   conta_debito: string | null;
   // senha do PDF (ex.: Claro = 5 primeiros dígitos do CNPJ)
   senha_pdf: string | null;
+  pagar_por: 'inter' | 'outra_conta';
+  // por qual conta pagar e de quem é o custo (lançamento individual)
+  conta_pagamento: string | null;
+  custo_de: string | null;
 }
 
 export async function fetchBoletoSolicitacao(
@@ -384,6 +395,21 @@ export async function agendarBoleto(
   // o Inter já aceitou: falha aqui só atrasa o registro (o fluxo de avisos reconcilia)
   if (fimErr) console.error('[boleto-solicitacao] concluir:', fimErr.message);
   return { data_pagamento: ini.data_pagamento ?? null };
+}
+
+// Boleto pago fora do sistema (outra conta): registra o pagamento e dá baixa.
+export async function marcarBoletoPago(
+  id: string,
+  data: string
+): Promise<void> {
+  const { data: r, error } = await supabase.rpc('fn_boleto_marcar_pago', {
+    p_id: id,
+    p_data: data,
+  });
+  if (error) throw new Error(error.message);
+  const res = r as { ok?: boolean; erro?: string } | null;
+  if (!res?.ok)
+    throw new Error(res?.erro || 'Não foi possível marcar como pago');
 }
 
 export async function cancelarBoletoSolicitacao(id: string): Promise<void> {

@@ -103,7 +103,12 @@ const NOVO: RemetenteInput = {
   debito_automatico: false,
   conta_bancaria_id: null,
   senha_pdf: null,
+  pagar_por: 'inter',
+  links_permitidos: null,
 };
+
+const formaDe = (d: RemetenteInput): 'inter' | 'debito' | 'outra_conta' =>
+  d.debito_automatico ? 'debito' : d.pagar_por;
 
 export const BoletosEmailManagement: React.FC = () => {
   const { toast } = useToast();
@@ -185,6 +190,8 @@ export const BoletosEmailManagement: React.FC = () => {
               debito_automatico: r.debito_automatico,
               conta_bancaria_id: r.conta_bancaria_id,
               senha_pdf: r.senha_pdf,
+              pagar_por: r.pagar_por,
+              links_permitidos: r.links_permitidos,
             },
           }
         : { dados: { ...NOVO } }
@@ -194,10 +201,10 @@ export const BoletosEmailManagement: React.FC = () => {
   const salvar = async () => {
     if (!editando) return;
     const { dados } = editando;
-    if (dados.debito_automatico && !dados.conta_bancaria_id) {
+    if (formaDe(dados) !== 'inter' && !dados.conta_bancaria_id) {
       toast({
         title: 'Falta a conta',
-        description: 'Escolha a conta bancária onde cai o débito automático.',
+        description: 'Escolha a conta bancária que paga (ou é debitada).',
         variant: 'destructive',
       });
       return;
@@ -409,6 +416,12 @@ export const BoletosEmailManagement: React.FC = () => {
                     ? ` · quando citar “${r.identificador}”`
                     : ''}
                   {r.debito_automatico ? ' · débito automático' : ''}
+                  {r.pagar_por === 'outra_conta'
+                    ? ' · pago por outra conta'
+                    : ''}
+                  {r.links_permitidos
+                    ? ` · baixa por link (${r.links_permitidos})`
+                    : ''}
                 </p>
               </div>
               <div className="flex items-center gap-1">
@@ -594,30 +607,70 @@ export const BoletosEmailManagement: React.FC = () => {
                 </p>
               </div>
 
-              <div className="space-y-2 rounded-lg border p-3">
-                <Label className="flex items-center gap-2">
-                  <Switch
-                    checked={dados.debito_automatico}
-                    onCheckedChange={(v) =>
-                      setDados({
-                        debito_automatico: v,
-                        conta_bancaria_id: v ? dados.conta_bancaria_id : null,
-                      })
-                    }
-                  />
-                  Débito automático
-                </Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="rem-link">Documento por link (opcional)</Label>
+                <Input
+                  id="rem-link"
+                  value={dados.links_permitidos ?? ''}
+                  onChange={(e) =>
+                    setDados({ links_permitidos: e.target.value })
+                  }
+                  placeholder="Ex.: hubstrom"
+                  autoComplete="off"
+                />
                 <p className="text-xs text-muted-foreground">
-                  A conta é só registrada e avisada no grupo, sem botão de
-                  pagar. No vencimento, a baixa sai sozinha na conta abaixo.
+                  Para quem manda um botão “Baixar” em vez de anexar o PDF.
+                  Informe o domínio do site; o sistema só baixa de lá e nunca
+                  abre link de descadastro.
                 </p>
-                {dados.debito_automatico && (
+              </div>
+
+              <div className="space-y-2 rounded-lg border p-3">
+                <Label>Forma de pagamento</Label>
+                <Select
+                  value={formaDe(dados)}
+                  onValueChange={(v) =>
+                    setDados({
+                      debito_automatico: v === 'debito',
+                      pagar_por: v === 'outra_conta' ? 'outra_conta' : 'inter',
+                      conta_bancaria_id:
+                        v === 'inter' ? null : dados.conta_bancaria_id,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inter">
+                      Inter (botão para agendar no grupo)
+                    </SelectItem>
+                    <SelectItem value="debito">Débito automático</SelectItem>
+                    <SelectItem value="outra_conta">
+                      Outra conta (ex.: Asaas da BC)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {formaDe(dados) === 'debito'
+                    ? 'A conta é só registrada e avisada no grupo, sem botão de pagar. No vencimento, a baixa sai sozinha na conta abaixo.'
+                    : formaDe(dados) === 'outra_conta'
+                      ? 'O aviso no grupo diz por qual conta pagar e traz a linha digitável. Depois de pagar, alguém toca “Marquei como pago” e a baixa sai na conta abaixo.'
+                      : 'O aviso no grupo traz o botão para conferir e agendar o pagamento pelo Inter.'}
+                </p>
+                {formaDe(dados) !== 'inter' && (
                   <Select
                     value={dados.conta_bancaria_id ?? undefined}
                     onValueChange={(v) => setDados({ conta_bancaria_id: v })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Conta que é debitada…" />
+                      <SelectValue
+                        placeholder={
+                          formaDe(dados) === 'debito'
+                            ? 'Conta que é debitada…'
+                            : 'Conta que paga…'
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {contasBancarias.map((c) => (

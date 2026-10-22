@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { Checkbox } from '@/components/primitives/checkbox';
+import { Input } from '@/components/primitives/input';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { useToast } from '@/components/primitives/use-toast';
 import {
@@ -33,6 +34,7 @@ import { abrirDocumentoFinanceiro } from '@/lib/financeiro-storage';
 import {
   agendarBoleto,
   cancelarBoletoSolicitacao,
+  marcarBoletoPago,
   fetchBoletoSolicitacao,
   minimoExigidoPeloInter,
   type BoletoSolicitacao,
@@ -126,6 +128,10 @@ const STATUS: Record<BoletoStatus, { label: string; className: string }> = {
     label: 'Débito automático',
     className: 'bg-azul-respira/20 text-roxo-titulo border-azul-respira/40',
   },
+  externo: {
+    label: 'Pagar por outra conta',
+    className: 'bg-amarelo-pipa/20 text-roxo-titulo border-amarelo-pipa/40',
+  },
 };
 
 export const BoletoAprovacaoPage: React.FC = () => {
@@ -137,6 +143,7 @@ export const BoletoAprovacaoPage: React.FC = () => {
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [conferiu, setConferiu] = useState(false);
+  const [dataPago, setDataPago] = useState(hojeSP());
 
   const carregar = useCallback(async () => {
     if (!id) return;
@@ -170,6 +177,28 @@ export const BoletoAprovacaoPage: React.FC = () => {
       toast({
         title: 'O boleto não foi agendado',
         description: e instanceof Error ? e.message : 'Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setEnviando(false);
+      await carregar();
+    }
+  };
+
+  // pago fora do sistema (ex.: Asaas da BC): registra e dá baixa na conta do cadastro
+  const marcarPago = async () => {
+    if (!boleto) return;
+    setEnviando(true);
+    try {
+      await marcarBoletoPago(boleto.id, dataPago);
+      toast({
+        title: 'Pagamento registrado',
+        description: 'Conta baixada no financeiro.',
+      });
+    } catch (e) {
+      toast({
+        title: 'Não foi possível registrar',
+        description: e instanceof Error ? e.message : undefined,
         variant: 'destructive',
       });
     } finally {
@@ -277,6 +306,11 @@ export const BoletoAprovacaoPage: React.FC = () => {
           </div>
           {boleto.descricao && (
             <p className="text-sm text-muted-foreground">{boleto.descricao}</p>
+          )}
+          {boleto.custo_de && (
+            <p className="text-sm font-medium text-roxo-titulo">
+              Custo só da {boleto.custo_de}
+            </p>
           )}
         </CardHeader>
 
@@ -477,6 +511,51 @@ export const BoletoAprovacaoPage: React.FC = () => {
             </>
           )}
 
+          {boleto.status === 'externo' && (
+            <>
+              <p className="flex items-start gap-2 rounded-lg bg-amarelo-pipa/20 p-3 text-sm text-roxo-titulo">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                Pagar pelo {boleto.conta_pagamento ?? 'outra conta'}, não pelo
+                Inter. Copie a linha digitável acima.
+              </p>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="data-pago"
+                  className="text-sm text-muted-foreground"
+                >
+                  Data em que foi pago
+                </label>
+                <Input
+                  id="data-pago"
+                  type="date"
+                  value={dataPago}
+                  max={hojeSP()}
+                  onChange={(e) => setDataPago(e.target.value)}
+                />
+              </div>
+              <Button
+                onClick={() => void marcarPago()}
+                disabled={enviando || !dataPago}
+                className="h-12 w-full gap-2 text-base"
+              >
+                {enviando ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5" />
+                )}
+                Marquei como pago
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => void cancelar()}
+                disabled={enviando}
+                className="w-full gap-2"
+              >
+                <XCircle className="h-4 w-4" />
+                Cancelar este pedido
+              </Button>
+            </>
+          )}
           {boleto.status === 'debito' && (
             <>
               <p className="flex items-start gap-2 text-sm text-roxo-titulo">

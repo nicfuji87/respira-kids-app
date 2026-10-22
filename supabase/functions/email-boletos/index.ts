@@ -130,6 +130,71 @@ interface Remetente {
   id: string;
   email: string;
   senha_pdf: string | null;
+  links_permitidos: string | null;
+}
+
+// Documento que chega por link ("Baixar", plataforma do contador) em vez de anexo. Só
+// segue link com texto de download ou do domínio cadastrado, nunca de descadastro (abrir
+// um "unsubscribe" descadastraria a caixa), e só aceita PDF vindo do domínio cadastrado.
+async function pdfsPorLink(
+  html: string,
+  dominios: string[]
+): Promise<{ pdfs: { bytes: Uint8Array; nome: string }[]; vistos: string[] }> {
+  const pdfs: { bytes: Uint8Array; nome: string }[] = [];
+  const vistos: string[] = [];
+  const doDominio = (u: string) => {
+    try {
+      const h = new URL(u).hostname.toLowerCase();
+      return dominios.some((d) => h.includes(d));
+    } catch {
+      return false;
+    }
+  };
+  const ancoras = [
+    ...html.matchAll(
+      /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+    ),
+  ];
+  const candidatos = ancoras
+    .map((m) => ({
+      url: m[1].replace(/&amp;/g, '&'),
+      texto: m[2]
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    }))
+    .filter((a) => /^https:\/\//i.test(a.url))
+    .filter(
+      (a) =>
+        !/unsubscribe|descadastr|cancelar|opt-?out|remover/i.test(
+          a.url + ' ' + a.texto
+        )
+    )
+    .filter((a) => /baixar|download/i.test(a.texto) || doDominio(a.url))
+    .slice(0, 4);
+
+  for (const c of candidatos) {
+    try {
+      const r = await fetch(c.url, {
+        redirect: 'follow',
+        signal: AbortSignal.timeout(20_000),
+      });
+      const tipo = r.headers.get('content-type') ?? '';
+      const final = r.url || c.url;
+      vistos.push(`${new URL(final).hostname} (${tipo.split(';')[0] || '?'})`);
+      if (!r.ok || !doDominio(final)) continue;
+      const bytes = new Uint8Array(await r.arrayBuffer());
+      const ehPdf =
+        tipo.includes('pdf') ||
+        new TextDecoder().decode(bytes.subarray(0, 5)) === '%PDF-';
+      if (ehPdf && bytes.length < 15_000_000) {
+        pdfs.push({ bytes, nome: c.texto || 'documento.pdf' });
+      }
+    } catch (e) {
+      vistos.push(`falha: ${e instanceof Error ? e.message : e}`.slice(0, 80));
+    }
+  }
+  return { pdfs, vistos };
 }
 
 function remetenteDe(email: string, lista: Remetente[]): Remetente | null {
@@ -261,6 +326,20 @@ async function lerCaixa(
     `/messages?maxResults=25&q=${encodeURIComponent(consulta)}`
   );
   const ids = (lista.messages ?? []).map((m) => m.id);
+  // quem manda o documento por link (sem anexo) precisa de uma busca sem has:attachment
+  const porLink = [
+    ...new Set(
+      remetentes.filter((r) => r.links_permitidos).map((r) => r.email)
+    ),
+  ];
+  if (porLink.length) {
+    const q2 = `from:(${porLink.join(' OR ')}) -has:attachment newer_than:15d`;
+    const l2 = await gmail<{ messages?: { id: string }[] }>(
+      token,
+      `/messages?maxResults=10&q=${encodeURIComponent(q2)}`
+    );
+    for (const m of l2.messages ?? []) if (!ids.includes(m.id)) ids.push(m.id);
+  }
   if (!ids.length) return resumo;
 
   const { data: vistas } = await admin
@@ -306,13 +385,32 @@ async function lerCaixa(
       )
       .slice(0, 3);
 
-    if (!pdfs.length) {
+    // documento por link: vira "anexo" com os bytes já baixados
+    const baixados: { bytes: Uint8Array; nome: string }[] = [];
+    let vistos: string[] = [];
+    if (!pdfs.length && rem?.links_permitidos) {
+      const html = todas
+        .filter((p) => p.mimeType === 'text/html' && p.body?.data)
+        .map((p) => new TextDecoder().decode(base64urlParaBytes(p.body!.data!)))
+        .join('\n');
+      const dominios = rem.links_permitidos
+        .split(/[\s,;]+/)
+        .map((d) => d.trim().toLowerCase())
+        .filter(Boolean);
+      const r = await pdfsPorLink(html, dominios);
+      baixados.push(...r.pdfs);
+      vistos = r.vistos;
+    }
+
+    if (!pdfs.length && !baixados.length) {
       await admin.rpc('fn_email_mensagem_registrar', {
         p: {
           ...base,
           gmail_id: id,
           status: 'sem_boleto',
-          detalhe: 'E-mail sem PDF',
+          detalhe: vistos.length
+            ? `Link sem PDF: ${vistos.join('; ')}`.slice(0, 480)
+            : 'E-mail sem PDF',
         },
       });
       resumo.outras++;
@@ -322,12 +420,23 @@ async function lerCaixa(
     let n = 0;
     let algum = false;
     let semSenha = false;
-    for (const [i, parte] of pdfs.entries()) {
-      const anexo = await gmail<{ data: string }>(
-        token,
-        `/messages/${id}/attachments/${parte.body!.attachmentId}`
-      );
-      const bytes = base64urlParaBytes(anexo.data);
+    const arquivos: { nome: string; carregar: () => Promise<Uint8Array> }[] = [
+      ...pdfs.map((parte) => ({
+        nome: parte.filename ?? '',
+        carregar: async () =>
+          base64urlParaBytes(
+            (
+              await gmail<{ data: string }>(
+                token,
+                `/messages/${id}/attachments/${parte.body!.attachmentId}`
+              )
+            ).data
+          ),
+      })),
+      ...baixados.map((b) => ({ nome: b.nome, carregar: async () => b.bytes })),
+    ];
+    for (const [i, parte] of arquivos.entries()) {
+      const bytes = await parte.carregar();
       const lido = await textoDoPdf(bytes, senhasCandidatas(rem, cnpjsNossos));
       const texto = lido.texto;
       if (lido.protegido && !lido.senha) {
@@ -365,11 +474,10 @@ async function lerCaixa(
             p: {
               ...base,
               gmail_id: id + sufixo,
-              texto:
-                `${assunto}\n${corpo}\n${parte.filename ?? ''}\n${texto}`.slice(
-                  0,
-                  20000
-                ),
+              texto: `${assunto}\n${corpo}\n${parte.nome}\n${texto}`.slice(
+                0,
+                20000
+              ),
               linha_digitavel: b.linha,
               banco_codigo: b.banco,
               valor: b.valor,
@@ -510,7 +618,7 @@ serve(async (req: Request) => {
           .not('refresh_token', 'is', null),
         admin
           .from('email_boleto_remetentes')
-          .select('id, email, senha_pdf')
+          .select('id, email, senha_pdf, links_permitidos')
           .eq('ativo', true),
         admin.from('pessoa_empresas').select('cnpj'),
       ]);
