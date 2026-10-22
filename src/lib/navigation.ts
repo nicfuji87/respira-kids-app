@@ -282,6 +282,11 @@ export const hasAccessToRoute = (route: string, role: UserRole): boolean => {
     return role === 'admin';
   }
 
+  // Botão "Lançar consulta" do aviso no 🔔 Notificações: quem lança na agenda
+  if (route.startsWith('/agenda/lancar/')) {
+    return role === 'admin' || role === 'secretaria';
+  }
+
   // Verificação direta para rota exata
   const exactMatch = navigationConfig.find((item) => item.href === route);
   if (exactMatch) {
