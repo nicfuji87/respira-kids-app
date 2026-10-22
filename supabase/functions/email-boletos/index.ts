@@ -136,12 +136,19 @@ interface Remetente {
 // Documento que chega por link ("Baixar", plataforma do contador) em vez de anexo. Só
 // segue link com texto de download ou do domínio cadastrado, nunca de descadastro (abrir
 // um "unsubscribe" descadastraria a caixa), e só aceita PDF vindo do domínio cadastrado.
+// Se o link abre uma PÁGINA do domínio (ex.: tela da Hubstrom com outro botão), procura
+// nela o link do arquivo e dá mais um passo. O diagnóstico guarda só host + caminho
+// (sem a query, que costuma ter o código de acesso ao documento).
+const NAO_SEGUIR =
+  /unsubscribe|descadastr|cancelar|opt-?out|remover|logout|sair/i;
+
 async function pdfsPorLink(
   html: string,
   dominios: string[]
 ): Promise<{ pdfs: { bytes: Uint8Array; nome: string }[]; vistos: string[] }> {
   const pdfs: { bytes: Uint8Array; nome: string }[] = [];
   const vistos: string[] = [];
+  const jaVisitados = new Set<string>();
   const doDominio = (u: string) => {
     try {
       const h = new URL(u).hostname.toLowerCase();
@@ -150,50 +157,99 @@ async function pdfsPorLink(
       return false;
     }
   };
-  const ancoras = [
-    ...html.matchAll(
-      /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
-    ),
-  ];
-  const candidatos = ancoras
-    .map((m) => ({
-      url: m[1].replace(/&amp;/g, '&'),
-      texto: m[2]
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim(),
-    }))
-    .filter((a) => /^https:\/\//i.test(a.url))
-    .filter(
-      (a) =>
-        !/unsubscribe|descadastr|cancelar|opt-?out|remover/i.test(
-          a.url + ' ' + a.texto
-        )
-    )
-    .filter((a) => /baixar|download/i.test(a.texto) || doDominio(a.url))
-    .slice(0, 4);
-
-  for (const c of candidatos) {
+  const semQuery = (u: string) => {
     try {
-      const r = await fetch(c.url, {
+      const x = new URL(u);
+      return `${x.hostname}${x.pathname}`.slice(0, 90);
+    } catch {
+      return u.slice(0, 40);
+    }
+  };
+
+  // links de uma página: <a href>, src de iframe/embed e data de object
+  const linksDaPagina = (pagina: string, base: string) => {
+    const achados: { url: string; texto: string }[] = [];
+    for (const m of pagina.matchAll(
+      /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+    )) {
+      achados.push({
+        url: m[1],
+        texto: m[2]
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim(),
+      });
+    }
+    for (const m of pagina.matchAll(
+      /<(?:iframe|embed|object)\b[^>]*(?:src|data)\s*=\s*["']([^"']+)["']/gi
+    )) {
+      achados.push({ url: m[1], texto: 'documento' });
+    }
+    return achados
+      .map((a) => {
+        try {
+          return {
+            url: new URL(a.url.replace(/&amp;/g, '&'), base).href,
+            texto: a.texto,
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter((a): a is { url: string; texto: string } => !!a)
+      .filter((a) => /^https:\/\//i.test(a.url))
+      .filter((a) => !NAO_SEGUIR.test(a.url + ' ' + a.texto));
+  };
+
+  const baixar = async (url: string, nome: string, passo: number) => {
+    if (jaVisitados.has(url) || jaVisitados.size >= 8) return;
+    jaVisitados.add(url);
+    try {
+      const r = await fetch(url, {
         redirect: 'follow',
         signal: AbortSignal.timeout(20_000),
       });
       const tipo = r.headers.get('content-type') ?? '';
-      const final = r.url || c.url;
-      vistos.push(`${new URL(final).hostname} (${tipo.split(';')[0] || '?'})`);
-      if (!r.ok || !doDominio(final)) continue;
+      const final = r.url || url;
+      vistos.push(`${semQuery(final)} (${tipo.split(';')[0] || '?'})`);
+      if (!r.ok || !doDominio(final)) return;
       const bytes = new Uint8Array(await r.arrayBuffer());
       const ehPdf =
         tipo.includes('pdf') ||
         new TextDecoder().decode(bytes.subarray(0, 5)) === '%PDF-';
-      if (ehPdf && bytes.length < 15_000_000) {
-        pdfs.push({ bytes, nome: c.texto || 'documento.pdf' });
+      if (ehPdf) {
+        if (bytes.length < 15_000_000)
+          pdfs.push({ bytes, nome: nome || 'documento.pdf' });
+        return;
       }
+      // página do próprio domínio: procura o arquivo nela (um passo a mais, no máximo)
+      if (passo >= 2 || !tipo.includes('html')) return;
+      const pagina = new TextDecoder().decode(bytes);
+      const titulo = pagina.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
+      const scripts = (pagina.match(/<script\b/gi) ?? []).length;
+      const internos = linksDaPagina(pagina, final)
+        .filter((a) => doDominio(a.url))
+        .filter(
+          (a) =>
+            /baixar|download|documento/i.test(a.texto) ||
+            /\.pdf|download|arquivo|file|documento/i.test(
+              new URL(a.url).pathname
+            )
+        )
+        .slice(0, 4);
+      vistos.push(
+        `página "${(titulo ?? '').slice(0, 40)}", ${scripts} scripts, ${internos.length} link(s) de arquivo`
+      );
+      for (const a of internos) await baixar(a.url, a.texto, passo + 1);
     } catch (e) {
       vistos.push(`falha: ${e instanceof Error ? e.message : e}`.slice(0, 80));
     }
-  }
+  };
+
+  const candidatos = linksDaPagina(html, 'https://email.invalid/')
+    .filter((a) => /baixar|download/i.test(a.texto) || doDominio(a.url))
+    .slice(0, 4);
+  for (const c of candidatos) await baixar(c.url, c.texto, 1);
   return { pdfs, vistos };
 }
 
