@@ -139,6 +139,9 @@ interface Remetente {
 // Se o link abre uma PÁGINA do domínio (ex.: tela da Hubstrom com outro botão), procura
 // nela o link do arquivo e dá mais um passo. O diagnóstico guarda só host + caminho
 // (sem a query, que costuma ter o código de acesso ao documento).
+// texto do link que indica arquivo (o Gestta mostra só um ícone ao lado do nome do documento)
+const TEXTO_DE_ARQUIVO =
+  /baixar|download|darf|guia|boleto|documento|fatura|recibo/i;
 const NAO_SEGUIR =
   /unsubscribe|descadastr|cancelar|opt-?out|remover|logout|sair/i;
 
@@ -160,7 +163,9 @@ async function pdfsPorLink(
   const semQuery = (u: string) => {
     try {
       const x = new URL(u);
-      return `${x.hostname}${x.pathname}`.slice(0, 90);
+      // só o 1º segmento do caminho: o resto costuma ser o código de acesso ao arquivo
+      const seg = x.pathname.split('/').filter(Boolean)[0];
+      return `${x.hostname}${seg ? `/${seg.slice(0, 20)}/…` : ''}`;
     } catch {
       return u.slice(0, 40);
     }
@@ -247,7 +252,7 @@ async function pdfsPorLink(
   };
 
   const candidatos = linksDaPagina(html, 'https://email.invalid/')
-    .filter((a) => /baixar|download/i.test(a.texto) || doDominio(a.url))
+    .filter((a) => TEXTO_DE_ARQUIVO.test(a.texto) || doDominio(a.url))
     .slice(0, 4);
   for (const c of candidatos) await baixar(c.url, c.texto, 1);
   return { pdfs, vistos };
