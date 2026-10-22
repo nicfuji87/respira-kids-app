@@ -43,6 +43,109 @@ const content = (m) =>
     : '');
 const count = (re, s) => ((s || '').match(re) || []).length;
 
+// Reconhece as mensagens automáticas do sistema (cobrança, NF, lembrete, contrato, loja)
+// e as respostas de botão. Devolve null para mensagem que não é automática.
+// curto: versão compacta que vai para a IA. flags: o que a mensagem resolve por regra.
+function classificarAutomatica(texto) {
+  const t = String(texto || '').trim();
+  if (!t) return null;
+  const pega = (re) => {
+    const m = t.match(re);
+    return m ? m[1].trim() : '';
+  };
+  const valor = pega(/Valor:\s*\*?\s*(R\$\s?[\d.,]+)/i);
+  const descricao = pega(/(?:Descrição da Fatura|Fatura):\s*\*([^*]+)\*/i)
+    .replace(/,?\s*CPF[^,.)]*/gi, '')
+    .replace(/,?\s*CREFITO[^,.)]*/gi, '')
+    .replace(/\s*Atendimentos realizados ao paciente[^.]*\.?/i, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 220);
+  const junta = (...p) => p.filter(Boolean).join(' – ');
+
+  if (/^\[Pagamento Recebido\]/i.test(t))
+    return {
+      tipo: 'pagamento_recebido',
+      curto: junta('[Automático] Pagamento recebido', descricao, valor),
+      flags: { pagamento_a_conferir: false, pagamento_confirmado: true },
+    };
+  if (/^Segue a nota fiscal referente/i.test(t))
+    return {
+      tipo: 'nota_fiscal',
+      curto: junta('[Automático] Nota fiscal enviada', descricao),
+      flags: { nota_fiscal_pendente: false, nota_fiscal_enviada: true },
+    };
+  if (/Segue o link da fatura/i.test(t) && /Detalhes da Fatura/i.test(t))
+    return {
+      tipo: 'fatura',
+      curto: junta('[Automático] Fatura enviada', descricao, valor),
+      flags: { pagamento_solicitado: true },
+    };
+  if (
+    /Estamos escrevendo apenas para lembrar/i.test(t) &&
+    /fatura em aberto/i.test(t)
+  )
+    return {
+      tipo: 'lembrete_fatura',
+      curto: junta(
+        '[Automático] Lembrete de fatura em aberto',
+        descricao,
+        pega(/Dias Vencidos:\s*\*?(\d+)/i) &&
+          `${pega(/Dias Vencidos:\s*\*?(\d+)/i)} dias vencidos`,
+        valor
+      ),
+      flags: { pagamento_solicitado: true },
+    };
+  if (/sua compra na Respira Kids está separada/i.test(t))
+    return {
+      tipo: 'loja',
+      curto: junta(
+        '[Automático] Cobrança de produto',
+        pega(/separada:\s*\*([^*]+)\*/i),
+        valor
+      ),
+      flags: {},
+    };
+  if (/^\*?\[Lembrete de Consulta\]/i.test(t))
+    return {
+      tipo: 'lembrete_consulta',
+      curto: junta(
+        '[Automático] Lembrete de consulta',
+        pega(/Data:\s*\*([^*]+)\*/i),
+        pega(/Hora:\s*\*([^*]+)\*/i),
+        pega(/Profissional:\s*\*([^*]+)\*/i)
+      ),
+      flags: {},
+    };
+  if (/Sua consulta foi \*?cancelada/i.test(t))
+    return {
+      tipo: 'cancelamento_auto',
+      curto: '[Automático] Aviso de consulta cancelada',
+      flags: {},
+    };
+  if (/Não identificamos a assinatura do contrato/i.test(t))
+    return {
+      tipo: 'contrato_pendente',
+      curto: '[Automático] Aviso de contrato não assinado',
+      flags: {},
+    };
+  if (/^✅?\s*Contrato assinado com sucesso/i.test(t))
+    return {
+      tipo: 'contrato_assinado',
+      curto: '[Automático] Contrato assinado',
+      flags: {},
+    };
+  if (
+    /^confirmar\.[0-9a-f-]{36}$/i.test(t) ||
+    /^\(\d+\):\s*Confirmar$/i.test(t)
+  )
+    return {
+      tipo: 'botao_confirmar',
+      curto: '[Botão] Confirmou a consulta',
+      flags: { confirmacao_consulta: true },
+    };
+  return null;
+}
+
 /** Horário comercial: seg–sex 8h–18h (America/Sao_Paulo). */
 function isForaHorarioComercial(d) {
   const wd = new Intl.DateTimeFormat('en-US', {
@@ -130,6 +233,8 @@ let firstAt = null,
 let foraHorario = false;
 const gaps = [];
 const fmtMsgs = [];
+// Uma entrada por mensagem enviada à IA: o nó "Só automação?" usa para decidir se pula a IA.
+const mensagensMeta = [];
 let hashBase = `${conversaId}|${messages.length}|`;
 
 for (const m of messages) {
@@ -183,7 +288,17 @@ for (const m of messages) {
       : isStaff(m)
         ? 'Atendente'
         : 'Sistema';
-  if (!isActivity(m) && c) fmtMsgs.push(`[${fmt(d)}] ${who}: ${c}`);
+  if (!isActivity(m) && c) {
+    // Mensagem automática vai resumida para a IA (economia de tokens); o hash não muda.
+    const auto = isNote(m) ? null : classificarAutomatica(m.content);
+    fmtMsgs.push(`[${fmt(d)}] ${who}: ${auto ? auto.curto : c}`);
+    mensagensMeta.push({
+      em: d ? d.toISOString() : null,
+      auto: !!auto,
+      tipo: auto ? auto.tipo : null,
+      flags: auto ? auto.flags : null,
+    });
+  }
 }
 const tMedio = gaps.length
   ? Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length)
@@ -222,6 +337,9 @@ const metricas_objetivas = {
   maior_tempo_resposta_minutos: maiorGap || null,
   mensagens_cliente_pendentes: lastCli ? 1 : 0,
   fora_horario_comercial: foraHorario,
+  whatsapp_jid: String(contact.identifier || '').endsWith('@s.whatsapp.net')
+    ? String(contact.identifier)
+    : null,
 };
 
 const instruction = `Você é o analista de conversas da Respira Kids. Analise a conversa de WhatsApp abaixo e responda SOMENTE em JSON válido (sem markdown, sem texto fora do JSON). As métricas objetivas já foram calculadas; você preenche apenas a interpretação.
@@ -230,32 +348,31 @@ A maioria das conversas é sobre: agendamento, clientes novos, confirmação de 
 Regras obrigatórias:
 - tipo_demanda: evite "mista" salvo duas demandas igualmente centrais; prefira administrativa|financeira|clinica|comercial|relacionamento.
 - tem_conteudo_clinico: true só com discussão clínica real (sintoma, conduta, evolução) — não por cadastro/agendamento/NF.
-- sintomas_mencionados e sinais_alerta_clinicos: só se tem_conteudo_clinico=true.
 - pontos_de_atrito e sugestao_melhoria: só com problema real (atraso, cobrança contestada, falta de resposta, insatisfação).
-- dados_sensiveis_detectados: true só para CPF, endereço completo, dados bancários ou prontuário — nome/telefone do WhatsApp = false.
 - necessita_followup: true só se faltar ação humana clara para a equipe.
 - status_conversa: alinhe com quem falou por último (cliente sem resposta → pendente_atendente; atendente sem resposta do cliente → pendente_cliente).
 - reclamacao_identificada e requer_atencao_admin: true apenas com insatisfação relevante.
+- data_consulta_mencionada: SEMPRE datas em formato ISO "YYYY-MM-DD" (ex.: "2025-06-06"). Converta expressões relativas ("amanhã", "segunda", "dia 6") para a data absoluta com base na data/hora da própria mensagem. Use [] se nenhuma data de consulta for citada. NÃO inclua horários.
+- valor_mencionado: número decimal (ex.: 21.9) ou null — NUNCA string formatada como "R$21,90".
+- profissional_mencionado: array com nomes próprios de profissionais citados (vazio se nenhum).
+- Os 5 campos abaixo viram etiquetas no WhatsApp da secretária. Marque true só quando a pendência AINDA estiver aberta no fim da conversa; se já foi resolvida, false. Na dúvida, false.
+- encaixe_urgente: criança com sintoma agudo (febre, muita secreção, chiado, piora) e pedido de atendimento para hoje ou amanhã, ainda sem horário marcado.
+- pagamento_a_conferir: cliente diz que já pagou (manda comprovante, pagou em dinheiro, Pix direto para a profissional, fora do link) e a equipe ainda não confirmou a baixa, ou lembrete automático de cobrança chegou depois do pagamento.
+- cobranca_contestada: cliente questiona valor, cobrança duplicada ou indevida, cobrança de sessão cancelada, ou pede parcelamento/desconto, sem resposta final da equipe.
+- nota_fiscal_pendente: cliente pediu NF ou segunda via, ou houve erro na emissão, e a nota ainda não foi entregue.
+- documento_pendente: cliente pediu relatório, atestado ou declaração (ex.: para reembolso) e ainda não recebeu.
 
 Retorne exatamente:
 {
  "resumo": "máx 500 caracteres, 1 parágrafo",
  "intencao_principal": "agendamento|confirmacao|remarcacao|cancelamento|duvida_valor|duvida_clinica|financeiro|documento|nota_fiscal|avaliacao|pos_consulta|sem_atendimento|outros",
- "intencoes_secundarias": [],
  "tipo_demanda": "clinica|administrativa|financeira|comercial|relacionamento|mista|outros",
  "status_conversa": "finalizada|pendente_atendente|pendente_cliente|aguardando_equipe|aguardando_data_futura|sem_atendimento",
- "etapa_conversa": "novo_lead|paciente_ativo|pos_consulta|cobranca|recorrente|suporte|outros",
  "tem_conteudo_clinico": false,
- "idade_paciente_mencionada": null,
- "sintomas_mencionados": [],
- "sinais_alerta_clinicos": [],
- "urgencia_clinica": "baixa|media|alta|nao_aplicavel",
- "necessita_triagem_humana": false,
  "lead_quente": false,
  "cliente_novo": false,
  "perguntou_valor": false,
  "perguntou_disponibilidade": false,
- "solicitacao_mesmo_dia": false,
  "agendamento_realizado": false,
  "confirmacao_consulta": false,
  "remarcacao_solicitada": false,
@@ -263,31 +380,28 @@ Retorne exatamente:
  "pagamento_solicitado": false,
  "pagamento_confirmado": false,
  "nota_fiscal_enviada": false,
- "pesquisa_satisfacao_enviada": false,
  "profissional_mencionado": [],
  "data_consulta_mencionada": [],
  "tipo_servico_mencionado": "respiratoria|motora|avaliacao|multiplos|nao_informado",
  "local_atendimento": "clinica|domiciliar|nao_informado",
- "valor_mencionado": null ou número decimal (ex.: 21.9) — NUNCA string formatada como "R$21,90",
- "indicacao_pediatra_mencionada": false,
- "solicitou_encaixe": false,
+ "valor_mencionado": null,
  "resolvido_primeiro_contato": false,
  "sentimento_cliente": "positivo|satisfeito|neutro|ansioso|preocupado|frustrado|negativo",
- "qualidade_atendimento": "otimo|bom|regular|ruim",
  "pontos_de_atrito": [],
  "sugestao_melhoria": null,
  "reclamacao_identificada": false,
  "nivel_insatisfacao": "nenhum|baixo|medio|alto",
  "motivo_insatisfacao": null,
  "requer_atencao_admin": false,
- "dados_sensiveis_detectados": false,
- "tipos_dados_sensiveis": [],
- "risco_lgpd": "nenhum|baixo|medio|alto",
  "necessita_followup": false,
  "acao_recomendada": null,
  "responsavel_sugerido": "recepcao|fisioterapeuta|financeiro|gestao|medico_ou_triagem|nao_aplicavel",
  "prazo_followup": "hoje|24h|48h|esta_semana|antes_da_consulta|sem_prazo",
- "confianca_analise": 0.0
+ "encaixe_urgente": false,
+ "pagamento_a_conferir": false,
+ "cobranca_contestada": false,
+ "nota_fiscal_pendente": false,
+ "documento_pendente": false
 }
 Segue a conversa:`;
 
@@ -297,6 +411,7 @@ return [
       chatwoot_conversa_id: conversaId,
       hash_conteudo: hashConteudo,
       metricas_objetivas,
+      mensagens_meta: mensagensMeta,
       formattedConversation: `${instruction}\n\n${fmtMsgs.join('\n')}`,
     },
   },
