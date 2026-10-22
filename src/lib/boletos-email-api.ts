@@ -99,6 +99,8 @@ export interface RemetenteBoleto {
   categoria_contabil_id: string | null;
   observacao: string | null;
   ativo: boolean;
+  debito_automatico: boolean;
+  conta_bancaria_id: string | null;
   fornecedor?: {
     nome_fantasia: string | null;
     nome_razao_social: string | null;
@@ -110,7 +112,7 @@ export async function listarRemetentes(): Promise<RemetenteBoleto[]> {
   const { data, error } = await supabase
     .from('email_boleto_remetentes')
     .select(
-      'id, email, fornecedor_id, lancamento_recorrente_id, identificador, categoria_contabil_id, observacao, ativo, fornecedor:fornecedores(nome_fantasia, nome_razao_social), recorrente:lancamentos_recorrentes(descricao)'
+      'id, email, fornecedor_id, lancamento_recorrente_id, identificador, categoria_contabil_id, observacao, ativo, debito_automatico, conta_bancaria_id, fornecedor:fornecedores(nome_fantasia, nome_razao_social), recorrente:lancamentos_recorrentes(descricao)'
     )
     .order('email');
   if (error) throw new Error(error.message);
@@ -124,6 +126,8 @@ export interface RemetenteInput {
   identificador: string | null;
   observacao: string | null;
   ativo: boolean;
+  debito_automatico: boolean;
+  conta_bancaria_id: string | null;
 }
 
 export async function salvarRemetente(input: RemetenteInput, id?: string) {
@@ -173,6 +177,24 @@ export async function listarFornecedoresAtivos(): Promise<OpcaoSimples[]> {
       nome: (f.nome_fantasia || f.nome_razao_social || '—') as string,
     }))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+export async function listarContasBancarias(): Promise<OpcaoSimples[]> {
+  const { data, error } = await supabase
+    .from('contas_bancarias')
+    .select('id, banco_nome, agencia, conta, digito')
+    .eq('ativo', true)
+    .order('banco_nome');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((c) => ({
+    id: c.id as string,
+    nome: [
+      c.banco_nome,
+      c.conta ? `conta ${c.conta}${c.digito ? '-' + c.digito : ''}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  }));
 }
 
 export async function listarContasFixas(
@@ -228,7 +250,9 @@ export type BoletoStatus =
   | 'agendado'
   | 'pago'
   | 'erro'
-  | 'cancelado';
+  | 'cancelado'
+  // débito automático: só registrado, baixa no vencimento
+  | 'debito';
 
 export interface AlertaBoleto {
   nivel: 'info' | 'atencao' | 'grave';
@@ -260,6 +284,8 @@ export interface BoletoSolicitacao {
   assunto: string | null;
   caixa: string | null;
   aprovado_por: string | null;
+  debito_automatico: boolean;
+  conta_debito: string | null;
 }
 
 export async function fetchBoletoSolicitacao(
@@ -302,7 +328,9 @@ export function minimoExigidoPeloInter(erro: string | null): number | null {
 // boleto vencido (o servidor aceita até 10% acima do valor do boleto).
 export async function agendarBoleto(
   id: string,
-  valorPagar?: number
+  valorPagar?: number,
+  // conta de arrecadação (48 dígitos) não traz o vencimento no código
+  vencimento?: string
 ): Promise<{ data_pagamento: string | null }> {
   const { data: inicio, error: iniErr } = await supabase.rpc(
     'fn_boleto_solicitacao_iniciar',
@@ -326,6 +354,7 @@ export async function agendarBoleto(
       tipo: 'boleto',
       valor: Number(ini.valor),
       codigoBarras: ini.linha_digitavel,
+      dataVencimento: vencimento,
       dataPagamento: ini.data_pagamento,
       favorecido: ini.favorecido ?? undefined,
       descricao: ini.descricao ?? undefined,

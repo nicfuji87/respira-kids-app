@@ -94,6 +94,8 @@ export interface PagamentoInput {
   descricao?: string;
   codigoBarras?: string;
   dataPagamento?: string;
+  // boleto: o servidor tira do código; só conta de arrecadação precisa mandar
+  dataVencimento?: string;
   chave?: string;
   favorecido?: string;
 }
@@ -110,6 +112,7 @@ export async function enviarPagamentoInter(
       descricao: input.descricao ?? null,
       codigo_barras: input.codigoBarras ?? null,
       data_pagamento: input.dataPagamento ?? null,
+      data_vencimento: input.dataVencimento ?? null,
       chave: input.chave ?? null,
       favorecido: input.favorecido ?? null,
     },

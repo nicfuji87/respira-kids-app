@@ -3,13 +3,19 @@
 // Valor, vencimento e banco saem do PRÓPRIO código, conferido pelos dígitos
 // verificadores (módulo 10 em cada campo + módulo 11 no DV geral). Um número que
 // não fecha os DVs é descartado: melhor "não achei boleto" do que pagar errado.
-// Boleto de arrecadação (48 dígitos, começa com 8: água, luz, tributo) fica de fora.
+//
+// Conta de concessionária (telefone, internet, luz, água, tributo) usa o código de
+// ARRECADAÇÃO: 48 dígitos começando com 8, 4 blocos de 11 + DV. Também é conferido
+// pelos DVs, mas não traz vencimento: quem chama tira a data do texto da fatura.
 
 export interface Boleto {
-  linha: string; // 47 dígitos
-  banco: string; // 3 dígitos (033 = Santander, 077 = Inter...)
+  tipo: 'bancario' | 'arrecadacao';
+  linha: string; // 47 dígitos (bancário) ou 48 (arrecadação)
+  // bancário: 3 dígitos do banco (033 = Santander, 077 = Inter...);
+  // arrecadação: "A" + segmento + código da empresa no convênio (ex.: A4-0296)
+  banco: string;
   valor: number; // reais; 0 = "valor em aberto" no código
-  vencimento: string | null; // YYYY-MM-DD; null quando o fator é 0
+  vencimento: string | null; // YYYY-MM-DD; null quando o código não traz
 }
 
 function modulo10(digitos: string): number {
@@ -70,6 +76,7 @@ export function validarLinha(linha: string, hoje?: Date): Boleto | null {
   if (String(modulo11(semDv)) !== dvGeral) return null;
 
   return {
+    tipo: 'bancario',
     linha,
     banco: linha.slice(0, 3),
     valor: Number(fatorValor.slice(4)) / 100,
@@ -96,6 +103,69 @@ export function linhaDoCodigoDeBarras(cb: string): string | null {
   );
 }
 
+// Arrecadação: o 3º dígito diz o módulo dos DVs (6/7 = módulo 10, 8/9 = módulo 11).
+// No módulo 11 daqui, resto 0 ou 1 vira DV 0 (regra da Febraban para convênios).
+function modulo11Arrecadacao(digitos: string): number {
+  let soma = 0;
+  let peso = 2;
+  for (let i = digitos.length - 1; i >= 0; i--) {
+    soma += Number(digitos[i]) * peso;
+    peso = peso === 9 ? 2 : peso + 1;
+  }
+  const dv = 11 - (soma % 11);
+  return dv >= 10 ? 0 : dv;
+}
+
+function dvArrecadacao(id: string, digitos: string): number | null {
+  if (id === '6' || id === '7') return modulo10(digitos);
+  if (id === '8' || id === '9') return modulo11Arrecadacao(digitos);
+  return null;
+}
+
+function arrecadacaoDoCodigo(cb: string): Boleto | null {
+  if (!/^8\d{43}$/.test(cb)) return null;
+  const id = cb[2];
+  const dv = dvArrecadacao(id, cb.slice(0, 3) + cb.slice(4));
+  if (dv === null || String(dv) !== cb[3]) return null;
+  // 6 e 8 trazem o valor efetivo; 7 e 9, valor de referência (fica sem valor)
+  const valor = id === '6' || id === '8' ? Number(cb.slice(4, 15)) / 100 : 0;
+  const linha = [0, 11, 22, 33]
+    .map((i) => {
+      const bloco = cb.slice(i, i + 11);
+      return bloco + dvArrecadacao(id, bloco);
+    })
+    .join('');
+  return {
+    tipo: 'arrecadacao',
+    linha,
+    banco: `A${cb[1]}-${cb.slice(15, 19)}`,
+    valor,
+    vencimento: null,
+  };
+}
+
+// Confere 48 dígitos como linha de arrecadação (cada bloco de 11 + DV).
+export function validarArrecadacao(linha: string): Boleto | null {
+  if (!/^8\d{47}$/.test(linha)) return null;
+  const id = linha[2];
+  const blocos = [0, 12, 24, 36].map((i) => linha.slice(i, i + 12));
+  for (const b of blocos) {
+    if (String(dvArrecadacao(id, b.slice(0, 11))) !== b[11]) return null;
+  }
+  return arrecadacaoDoCodigo(blocos.map((b) => b.slice(0, 11)).join(''));
+}
+
+// Vencimento escrito na fatura ("Vencimento: 20/10/2026", "Vencto 20/10/2026").
+export function acharVencimentoNoTexto(texto: string): string | null {
+  const m = texto.match(
+    /venc(?:imento|to)?\.?[^\d]{0,40}?(\d{2})[/.-](\d{2})[/.-](\d{4})/i
+  );
+  if (!m) return null;
+  const [, d, mes, a] = m;
+  const iso = `${a}-${mes}-${d}`;
+  return Number.isNaN(Date.parse(iso)) ? null : iso;
+}
+
 // Procura boletos no texto do PDF. A linha costuma vir com pontos e espaços
 // ("03399.12345 67890.123456 ..."), às vezes quebrada; tenta janelas de dígitos.
 export function acharBoletos(texto: string, hoje?: Date): Boleto[] {
@@ -109,6 +179,10 @@ export function acharBoletos(texto: string, hoje?: Date): Boleto[] {
       const b = validarLinha(d.slice(i, i + 47), hoje);
       if (b) achados.set(b.linha, b);
     }
+    for (let i = 0; i + 48 <= d.length; i++) {
+      const b = validarArrecadacao(d.slice(i, i + 48));
+      if (b) achados.set(b.linha, b);
+    }
   }
   // Código de barras só quando não há linha digitável, e só em bloco do tamanho
   // dele: janelas de 44 dentro de uma linha de 47 geram falso positivo (o DV geral
@@ -117,7 +191,7 @@ export function acharBoletos(texto: string, hoje?: Date): Boleto[] {
     for (const d of blocos) {
       if (d.length !== 44) continue;
       const l = linhaDoCodigoDeBarras(d);
-      const b = l ? validarLinha(l, hoje) : null;
+      const b = l ? validarLinha(l, hoje) : arrecadacaoDoCodigo(d);
       if (b) achados.set(b.linha, b);
     }
   }

@@ -51,6 +51,7 @@ import {
   excluirRemetente,
   lerEmailsAgora,
   listarCaixas,
+  listarContasBancarias,
   listarContasFixas,
   listarEmailsLidos,
   listarFornecedoresAtivos,
@@ -99,6 +100,8 @@ const NOVO: RemetenteInput = {
   identificador: null,
   observacao: null,
   ativo: true,
+  debito_automatico: false,
+  conta_bancaria_id: null,
 };
 
 export const BoletosEmailManagement: React.FC = () => {
@@ -111,6 +114,7 @@ export const BoletosEmailManagement: React.FC = () => {
 
   const [fornecedores, setFornecedores] = useState<OpcaoSimples[]>([]);
   const [contasFixas, setContasFixas] = useState<OpcaoSimples[]>([]);
+  const [contasBancarias, setContasBancarias] = useState<OpcaoSimples[]>([]);
   const [editando, setEditando] = useState<{
     id?: string;
     dados: RemetenteInput;
@@ -156,7 +160,12 @@ export const BoletosEmailManagement: React.FC = () => {
   const abrirEdicao = async (r?: RemetenteBoleto) => {
     if (!fornecedores.length) {
       try {
-        setFornecedores(await listarFornecedoresAtivos());
+        const [f, c] = await Promise.all([
+          listarFornecedoresAtivos(),
+          listarContasBancarias(),
+        ]);
+        setFornecedores(f);
+        setContasBancarias(c);
       } catch {
         // a lista vazia já mostra que algo deu errado
       }
@@ -172,6 +181,8 @@ export const BoletosEmailManagement: React.FC = () => {
               identificador: r.identificador,
               observacao: r.observacao,
               ativo: r.ativo,
+              debito_automatico: r.debito_automatico,
+              conta_bancaria_id: r.conta_bancaria_id,
             },
           }
         : { dados: { ...NOVO } }
@@ -181,6 +192,14 @@ export const BoletosEmailManagement: React.FC = () => {
   const salvar = async () => {
     if (!editando) return;
     const { dados } = editando;
+    if (dados.debito_automatico && !dados.conta_bancaria_id) {
+      toast({
+        title: 'Falta a conta',
+        description: 'Escolha a conta bancária onde cai o débito automático.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!/@/.test(dados.email) || !dados.fornecedor_id) {
       toast({
         title: 'Faltam dados',
@@ -387,6 +406,7 @@ export const BoletosEmailManagement: React.FC = () => {
                   {r.identificador
                     ? ` · quando citar “${r.identificador}”`
                     : ''}
+                  {r.debito_automatico ? ' · débito automático' : ''}
                 </p>
               </div>
               <div className="flex items-center gap-1">
@@ -462,7 +482,7 @@ export const BoletosEmailManagement: React.FC = () => {
       </Card>
 
       <Dialog open={!!editando} onOpenChange={(o) => !o && setEditando(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editando?.id ? 'Editar remetente' : 'Novo remetente'}
@@ -554,6 +574,42 @@ export const BoletosEmailManagement: React.FC = () => {
                   Para quando o mesmo remetente manda boletos de contas
                   diferentes (uma sala e outra, por exemplo).
                 </p>
+              </div>
+
+              <div className="space-y-2 rounded-lg border p-3">
+                <Label className="flex items-center gap-2">
+                  <Switch
+                    checked={dados.debito_automatico}
+                    onCheckedChange={(v) =>
+                      setDados({
+                        debito_automatico: v,
+                        conta_bancaria_id: v ? dados.conta_bancaria_id : null,
+                      })
+                    }
+                  />
+                  Débito automático
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  A conta é só registrada e avisada no grupo, sem botão de
+                  pagar. No vencimento, a baixa sai sozinha na conta abaixo.
+                </p>
+                {dados.debito_automatico && (
+                  <Select
+                    value={dados.conta_bancaria_id ?? undefined}
+                    onValueChange={(v) => setDados({ conta_bancaria_id: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Conta que é debitada…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {contasBancarias.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <Label className="flex items-center gap-2">
