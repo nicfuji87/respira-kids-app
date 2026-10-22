@@ -192,12 +192,13 @@ export const BoletoAprovacaoPage: React.FC = () => {
     }
   };
 
-  // conta do Asaas que não agendou sozinha: pede de novo (a Bruna libera no app do Asaas)
-  const agendarAsaas = async () => {
+  // conta do Asaas que não agendou sozinha: pede de novo (a Bruna libera no app do Asaas).
+  // trocar: boleto que ia pelo Inter passa a ser pago pelo Asaas da BC.
+  const agendarAsaas = async (trocar = false) => {
     if (!boleto) return;
     setEnviando(true);
     try {
-      const r = await agendarBoletoNoAsaas(boleto.id, conferiu);
+      const r = await agendarBoletoNoAsaas(boleto.id, conferiu, trocar);
       if (r.agendado) {
         toast({
           title: 'Agendado no Asaas',
@@ -330,14 +331,18 @@ export const BoletoAprovacaoPage: React.FC = () => {
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <FileText className="h-6 w-6 text-roxo-titulo" />
-          Boleto recebido por e-mail
+          {boleto.origem === 'grupo'
+            ? 'Boleto enviado no grupo'
+            : 'Boleto recebido por e-mail'}
         </h1>
         <p className="text-muted-foreground">
           {asaas
             ? `Pago pelo ${noAsaas}: a Bruna libera no app do Asaas.`
             : boleto.pagar_por === 'outra_conta'
               ? 'Pago fora do sistema: depois de pagar, marque aqui.'
-              : 'Confira e agende pela conta do Inter.'}
+              : !boleto.forma_escolhida
+                ? 'Escolha como pagar: Inter ou Asaas da BC.'
+                : 'Confira e agende pela conta do Inter.'}
         </p>
       </div>
 
@@ -546,9 +551,20 @@ export const BoletoAprovacaoPage: React.FC = () => {
                 ) : (
                   <CalendarClock className="h-5 w-5" />
                 )}
+                {!boleto.forma_escolhida ? 'Inter · ' : ''}
                 {dataAgendar === hoje
                   ? `Pagar hoje ${formatBRL(Number(boleto.valor))}`
                   : `Agendar para ${formatDia(dataAgendar)}`}
+              </Button>
+              {/* alternativa: o sistema agenda no Asaas da BC e a Bruna libera no app */}
+              <Button
+                variant="outline"
+                onClick={() => void agendarAsaas(true)}
+                disabled={enviando || bloqueado}
+                className="h-10 w-full gap-2"
+              >
+                <CalendarClock className="h-4 w-4" />
+                Pagar pelo Asaas da BC (Bruna libera)
               </Button>
               <Button
                 variant="ghost"

@@ -314,6 +314,9 @@ export interface BoletoSolicitacao {
   // titular da conta (ex.: BC FISIO KIDS) e id do pagamento criado no Asaas
   conta_titular: string | null;
   asaas_bill_id: string | null;
+  // boleto mandado no grupo sem dizer "inter" ou "asaas": a página oferece as duas formas
+  forma_escolhida: boolean;
+  origem: 'email' | 'grupo';
 }
 
 export async function fetchBoletoSolicitacao(
@@ -426,13 +429,16 @@ export async function marcarBoletoPago(
 
 // Conta do Asaas que não foi agendada sozinha (erro, alerta grave): pede de novo e a edge
 // cria o pagamento lá na hora. Quem libera o dinheiro é a Bruna, no app do Asaas.
+// trocar = boleto que ia pelo Inter passa a ser pago pelo Asaas da BC.
 export async function agendarBoletoNoAsaas(
   id: string,
-  confirmado: boolean
+  confirmado: boolean,
+  trocar = false
 ): Promise<{ agendado: boolean; detalhe: string | null }> {
   const { data: r, error } = await supabase.rpc('fn_boleto_asaas_pedir', {
     p_id: id,
     p_confirmado: confirmado,
+    p_trocar: trocar,
   });
   if (error) throw new Error(error.message);
   const res = r as { ok?: boolean; erro?: string } | null;

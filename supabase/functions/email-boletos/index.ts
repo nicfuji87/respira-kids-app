@@ -22,6 +22,7 @@
 // baixa nos de débito automático no vencimento (fn_boletos_debito_baixar).
 // Body { so_asaas: true } (botão da página do boleto): pula o Gmail e só agenda/confere.
 // Conta 'externo' de conta Asaas agendada à mão no app do Asaas é achada na lista (adotarDoAsaas).
+// Body { grupo: true } (fn_boleto_grupo_receber): lê os boletos mandados no grupo de notas.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import {
@@ -318,7 +319,9 @@ async function textoDoPdf(
 // PDF escaneado: a IA só procura a linha; a conferência dos DVs continua valendo.
 async function boletoPelaIa(
   admin: Admin,
-  bytes: Uint8Array
+  bytes: Uint8Array,
+  // foto do boleto (grupo do WhatsApp) vai como imagem; o resto como PDF
+  mime = 'application/pdf'
 ): Promise<{ boleto: Boleto | null; doc: string | null; nome: string | null }> {
   const vazio = { boleto: null, doc: null, nome: null };
   const { data: chave } = await admin
@@ -342,17 +345,24 @@ async function boletoPelaIa(
         {
           role: 'user',
           content: [
-            {
-              type: 'file',
-              file: {
-                filename: 'boleto.pdf',
-                file_data: `data:application/pdf;base64,${bytesParaBase64(bytes)}`,
-              },
-            },
+            mime.startsWith('image/')
+              ? {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mime};base64,${bytesParaBase64(bytes)}`,
+                  },
+                }
+              : {
+                  type: 'file',
+                  file: {
+                    filename: 'boleto.pdf',
+                    file_data: `data:application/pdf;base64,${bytesParaBase64(bytes)}`,
+                  },
+                },
             {
               type: 'text',
               text:
-                'Este PDF pode ser um boleto bancário. Copie exatamente a linha digitável (47 dígitos, ou 48 se começar com 8) ' +
+                'Este documento pode ser um boleto bancário. Copie exatamente a linha digitável (47 dígitos, ou 48 se começar com 8) ' +
                 'e o CNPJ e o nome do beneficiário. Responda só JSON: ' +
                 '{"linha_digitavel": "só dígitos ou vazio", "beneficiario_cnpj": "só dígitos ou vazio", "beneficiario_nome": ""}',
             },
@@ -695,7 +705,7 @@ async function agendarNoAsaas(admin: Admin, cache: Map<string, string | null>) {
     .eq('status', 'agendando')
     .is('asaas_tentativa_em', null)
     .select(
-      'id, linha_digitavel, valor, vencimento, descricao, alertas, asaas_confirmado, remetente_id, anunciado_em'
+      'id, linha_digitavel, valor, vencimento, descricao, alertas, asaas_confirmado, remetente_id, conta_bancaria_id, anunciado_em'
     );
 
   for (const s of (pegos ?? []) as {
@@ -707,6 +717,7 @@ async function agendarNoAsaas(admin: Admin, cache: Map<string, string | null>) {
     alertas: { nivel: string; texto: string }[] | null;
     asaas_confirmado: boolean;
     remetente_id: string | null;
+    conta_bancaria_id: string | null;
     anunciado_em: string | null;
   }[]) {
     const desistir = async (motivo: string) => {
@@ -722,19 +733,28 @@ async function agendarNoAsaas(admin: Admin, cache: Map<string, string | null>) {
       resultado[s.id] = `não agendado: ${motivo}`;
     };
     try {
-      const { data: rem } = await admin
-        .from('email_boleto_remetentes')
-        .select('conta_bancaria_id, contas_bancarias(asaas_empresa_id)')
-        .eq('id', s.remetente_id)
-        .single();
-      const conta = rem?.contas_bancarias as
-        | { asaas_empresa_id: string | null }
-        | { asaas_empresa_id: string | null }[]
-        | null;
-      const empresaId = Array.isArray(conta)
-        ? conta[0]?.asaas_empresa_id
-        : conta?.asaas_empresa_id;
-      const token = await chaveAsaas(admin, cache, empresaId ?? null);
+      // conta da própria solicitação (boleto do grupo) ou a do cadastro do remetente
+      let contaId = s.conta_bancaria_id;
+      if (!contaId && s.remetente_id) {
+        const { data: rem } = await admin
+          .from('email_boleto_remetentes')
+          .select('conta_bancaria_id')
+          .eq('id', s.remetente_id)
+          .single();
+        contaId = (rem?.conta_bancaria_id as string) ?? null;
+      }
+      const { data: conta } = contaId
+        ? await admin
+            .from('contas_bancarias')
+            .select('asaas_empresa_id')
+            .eq('id', contaId)
+            .single()
+        : { data: null };
+      const token = await chaveAsaas(
+        admin,
+        cache,
+        (conta?.asaas_empresa_id as string) ?? null
+      );
       if (!token) {
         await desistir('A conta do Asaas do cadastro não tem chave de API.');
         continue;
@@ -1035,6 +1055,268 @@ async function conferirAgendados(
   return resultado;
 }
 
+// ---------------------------------------------------------------- grupo de notas do WhatsApp
+// Boleto mandado no grupo ("pagar pelo inter/asaas"): o n8n só enfileira em
+// boleto_grupo_pedidos (fn_boleto_grupo_receber, que chama esta função na hora). Aqui o
+// arquivo é baixado da uazapi, o código lido e conferido pelos DVs (foto passa pela IA, mas a
+// linha que ela devolve é conferida igual) e fn_boleto_registrar_grupo decide: repetido,
+// substitui o boleto vencido da mesma conta, preenche a conta lançada ou cria. O resultado
+// fica no pedido e o fluxo de avisos responde no grupo citando a mensagem.
+const ARQUIVOS_UAZAPI = 'https://infuse.uazapi.com/files/';
+
+interface PedidoGrupo {
+  id: string;
+  chatid: string;
+  messageid: string;
+  remetente: string | null;
+  legenda: string | null;
+  arquivo_url: string | null;
+  mime: string | null;
+  forma: 'inter' | 'asaas' | null;
+}
+
+type ItemGrupo = Record<string, unknown> & {
+  status?: string;
+  solicitacao_id?: string;
+  pagar_por?: string | null;
+};
+
+// "IPTU sala 311 pagar pelo inter" → "IPTU sala 311" (vira parte da descrição da conta nova)
+function dicaDaLegenda(legenda: string): string | null {
+  const t = legenda
+    .replace(/\d[\d.\s-]{30,}\d/g, ' ')
+    .replace(
+      /\b(@ju|pagar|pague|paga|pagamento|agendar|agenda|agende|pelo|pela|com|no|na|o|a|por|favor|esse|este|essa|boleto|inter|asaas|asas|banco|conta|do|da|de)\b/gi,
+      ' '
+    )
+    .replace(/[^\p{L}\p{N}\s/-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return t.length >= 3 ? t.slice(0, 60) : null;
+}
+
+// Pré-conferência no Asaas (só leitura) de boleto que vai pelo Inter: conta de consumo/tributo
+// vencida não recalcula ("não pode ser paga após o vencimento"). Avisa antes de alguém tentar.
+async function preConferirNoAsaas(
+  admin: Admin,
+  cache: Map<string, string | null>,
+  item: ItemGrupo,
+  linha: string
+) {
+  try {
+    const { data: conta } = await admin
+      .from('contas_bancarias')
+      .select('asaas_empresa_id')
+      .not('asaas_empresa_id', 'is', null)
+      .eq('ativo', true)
+      .limit(1)
+      .maybeSingle();
+    const token = await chaveAsaas(
+      admin,
+      cache,
+      (conta?.asaas_empresa_id as string) ?? null
+    );
+    if (!token) return;
+    const sim = await asaas(
+      token,
+      'POST',
+      '/bill/simulate',
+      codigoParaAsaas(linha)
+    );
+    if (sim.ok) return;
+    const motivo = erroDoAsaas(sim);
+    if (!/venciment/i.test(motivo)) return;
+    const alerta = {
+      nivel: 'grave',
+      texto:
+        'Este código não aceita pagamento depois do vencimento. Emita um boleto novo e mande no grupo (ele entra no lugar deste).',
+    };
+    const { data: s } = await admin
+      .from('boleto_solicitacoes')
+      .select('alertas')
+      .eq('id', item.solicitacao_id)
+      .single();
+    await admin
+      .from('boleto_solicitacoes')
+      .update({ alertas: [...((s?.alertas as unknown[]) ?? []), alerta] })
+      .eq('id', item.solicitacao_id);
+    item.vencido_sem_recalculo = true;
+  } catch {
+    // pré-conferência é ajuda, não trava nada
+  }
+}
+
+async function lerPedidoGrupo(
+  admin: Admin,
+  cache: Map<string, string | null>,
+  p: PedidoGrupo,
+  cnpjsNossos: string[]
+): Promise<{ itens: ItemGrupo[]; anexo: string | null }> {
+  const legenda = p.legenda ?? '';
+  let achados: Boleto[] = [];
+  let texto = '';
+  let benef: { doc: string | null; nome: string | null } = {
+    doc: null,
+    nome: null,
+  };
+  let anexo: string | null = null;
+
+  if (p.arquivo_url) {
+    if (!p.arquivo_url.startsWith(ARQUIVOS_UAZAPI))
+      throw new Error('O endereço do arquivo não é do WhatsApp');
+    const r = await fetch(p.arquivo_url, {
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!r.ok) throw new Error(`Não consegui baixar o arquivo (${r.status})`);
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    if (bytes.length > 15_000_000) throw new Error('Arquivo grande demais');
+    const ehPdf = new TextDecoder().decode(bytes.subarray(0, 5)) === '%PDF-';
+    const mime = ehPdf
+      ? 'application/pdf'
+      : (p.mime || r.headers.get('content-type') || 'image/jpeg').split(';')[0];
+    const ext = ehPdf ? 'pdf' : mime.includes('png') ? 'png' : 'jpg';
+    const caminho = `boletos/grupo/${p.id}.${ext}`;
+    await admin.storage
+      .from(BUCKET)
+      .upload(caminho, bytes, { contentType: mime, upsert: true });
+    anexo = `${BUCKET}/${caminho}`;
+
+    if (ehPdf) {
+      const lido = await textoDoPdf(bytes, senhasCandidatas(null, cnpjsNossos));
+      texto = lido.texto;
+      achados = acharBoletos(texto);
+      benef = acharBeneficiario(texto, cnpjsNossos);
+      if (!achados.length && texto.replace(/\s/g, '').length < 200) {
+        const ia = await boletoPelaIa(admin, bytes);
+        if (ia.boleto) {
+          achados = [ia.boleto];
+          benef = { doc: ia.doc, nome: ia.nome };
+        }
+      }
+    } else if (mime.startsWith('image/')) {
+      const ia = await boletoPelaIa(admin, bytes, mime);
+      if (ia.boleto) {
+        achados = [ia.boleto];
+        benef = { doc: ia.doc, nome: ia.nome };
+      }
+    }
+  }
+  // código colado na mensagem (ou na legenda da foto ilegível)
+  if (!achados.length) achados = acharBoletos(legenda);
+
+  const itens: ItemGrupo[] = [];
+  for (const b of achados.slice(0, 3)) {
+    const { data, error } = await admin.rpc('fn_boleto_registrar_grupo', {
+      p: {
+        pedido_id: p.id,
+        chatid: p.chatid,
+        remetente: p.remetente,
+        forma: p.forma,
+        linha_digitavel: b.linha,
+        banco_codigo: b.banco,
+        valor: b.valor,
+        vencimento:
+          b.vencimento ??
+          acharVencimentoNoTexto(texto) ??
+          acharVencimentoNoTexto(legenda),
+        beneficiario_doc: benef.doc,
+        beneficiario_nome: benef.nome,
+        anexo_path: anexo,
+        descricao_hint: dicaDaLegenda(legenda),
+      },
+    });
+    if (error) throw new Error(`registrar boleto: ${error.message}`);
+    const item = { ...(data as ItemGrupo) };
+    if (item.status === 'boleto' && item.pagar_por !== 'asaas')
+      await preConferirNoAsaas(admin, cache, item, b.linha);
+    itens.push(item);
+  }
+  return { itens, anexo };
+}
+
+async function processarGrupo(
+  admin: Admin,
+  cache: Map<string, string | null>,
+  cnpjsNossos: string[]
+) {
+  const resumo: Record<string, string> = {};
+  const limite = new Date(Date.now() - 10 * 60_000).toISOString();
+  // leitura que caiu no meio: avisa para mandar de novo
+  await admin
+    .from('boleto_grupo_pedidos')
+    .update({
+      status: 'erro',
+      resultado: { motivo: 'A leitura não terminou. Mande o boleto de novo.' },
+    })
+    .eq('status', 'processando')
+    .lt('tentativa_em', limite);
+
+  const { data: pegos } = await admin
+    .from('boleto_grupo_pedidos')
+    .update({ status: 'processando', tentativa_em: new Date().toISOString() })
+    .eq('status', 'recebido')
+    .select(
+      'id, chatid, messageid, remetente, legenda, arquivo_url, mime, forma'
+    );
+
+  const lidos: { p: PedidoGrupo; itens: ItemGrupo[]; anexo: string | null }[] =
+    [];
+  for (const p of (pegos ?? []) as PedidoGrupo[]) {
+    try {
+      lidos.push({
+        p,
+        ...(await lerPedidoGrupo(admin, cache, p, cnpjsNossos)),
+      });
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      await admin
+        .from('boleto_grupo_pedidos')
+        .update({ status: 'erro', resultado: { motivo: motivo.slice(0, 300) } })
+        .eq('id', p.id);
+      resumo[p.id] = `erro: ${motivo}`;
+    }
+  }
+
+  // "pagar pelo asaas": agenda agora, para a resposta no grupo já dizer o resultado
+  if (lidos.some((l) => l.itens.some((i) => i.pagar_por === 'asaas')))
+    await agendarNoAsaas(admin, cache);
+
+  for (const { p, itens, anexo } of lidos) {
+    for (const it of itens) {
+      if (!it.solicitacao_id || it.status !== 'boleto') continue;
+      const { data: s } = await admin
+        .from('boleto_solicitacoes')
+        .select('status, erro, data_pagamento, valor_pagar, alertas')
+        .eq('id', it.solicitacao_id)
+        .single();
+      Object.assign(it, {
+        situacao: s?.status,
+        erro: s?.erro,
+        data_pagamento: s?.data_pagamento,
+        valor_pagar: s?.valor_pagar,
+        alertas: s?.alertas ?? it.alertas,
+      });
+    }
+    const status = !itens.length
+      ? 'sem_boleto'
+      : itens.some((i) => i.status === 'boleto')
+        ? 'ok'
+        : String(itens[0].status ?? 'erro');
+    await admin
+      .from('boleto_grupo_pedidos')
+      .update({
+        status,
+        resultado: { itens },
+        anexo_path: anexo,
+        solicitacao_id:
+          itens.find((i) => i.status === 'boleto')?.solicitacao_id ?? null,
+      })
+      .eq('id', p.id);
+    resumo[p.id] = status;
+  }
+  return resumo;
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -1067,8 +1349,27 @@ serve(async (req: Request) => {
     }
   }
 
-  const pedido = (await req.json().catch(() => ({}))) as { so_asaas?: boolean };
+  const pedido = (await req.json().catch(() => ({}))) as {
+    so_asaas?: boolean;
+    grupo?: boolean;
+  };
   const chaves = new Map<string, string | null>();
+  const cnpjsDasEmpresas = async () =>
+    ((await admin.from('pessoa_empresas').select('cnpj')).data ?? [])
+      .map((e) => String(e.cnpj ?? ''))
+      .filter(Boolean);
+  if (pedido?.grupo) {
+    try {
+      const grupo = await processarGrupo(
+        admin,
+        chaves,
+        await cnpjsDasEmpresas()
+      );
+      return json({ ok: true, grupo });
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    }
+  }
   if (pedido?.so_asaas) {
     try {
       const asaasAgendados = await agendarNoAsaas(admin, chaves);
@@ -1138,6 +1439,8 @@ serve(async (req: Request) => {
       }
     }
 
+    // rede de segurança: pedido do grupo que a chamada imediata não pegou
+    const grupo = await processarGrupo(admin, chaves, cnpjsNossos);
     const asaasAgendados = await agendarNoAsaas(admin, chaves);
     const adotados = await adotarDoAsaas(admin, chaves).catch((e) => ({
       erro: e instanceof Error ? e.message : String(e),
@@ -1148,6 +1451,7 @@ serve(async (req: Request) => {
     return json({
       ok: true,
       caixas: caixasResumo,
+      grupo,
       asaas: asaasAgendados,
       adotados,
       agendados,
