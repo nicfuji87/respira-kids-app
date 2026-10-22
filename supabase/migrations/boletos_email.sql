@@ -195,7 +195,7 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'status', 'ignorado');
   END IF;
 
-  IF v_linha !~ '^[0-9]{47}$' OR coalesce(v_valor, 0) <= 0 OR v_venc IS NULL THEN
+  IF v_linha !~ '^[0-9]{47,48}$' OR coalesce(v_valor, 0) <= 0 OR v_venc IS NULL THEN
     UPDATE public.email_mensagens SET status = 'sem_boleto',
       detalhe = coalesce(nullif(p ->> 'motivo', ''), 'Não achei boleto com linha digitável válida no PDF')
     WHERE id = v_msg;
@@ -334,16 +334,25 @@ BEGIN
     ) RETURNING id INTO v_lanc;
   END IF;
 
+  -- débito automático não passa pelo Inter: só o valor fora do comum interessa
+  IF r.debito_automatico THEN
+    SELECT coalesce(jsonb_agg(a), '[]'::jsonb) INTO v_alertas
+    FROM jsonb_array_elements(v_alertas) a
+    WHERE a ->> 'texto' LIKE 'Valor fora do comum%' OR a ->> 'texto' LIKE 'A conta "%';
+  END IF;
+
   INSERT INTO public.boleto_solicitacoes (
     lancamento_id, fornecedor_id, remetente_id, mensagem_id, remetente_email,
     linha_digitavel, banco_codigo, valor, vencimento, beneficiario_nome, beneficiario_doc,
-    anexo_path, descricao, alertas, chatid
+    anexo_path, descricao, alertas, chatid, status
   ) VALUES (
     v_lanc, r.fornecedor_id, r.id, v_msg, v_rem,
     v_linha, v_banco, v_valor, v_venc, nullif(p ->> 'beneficiario_nome', ''), v_doc,
     nullif(p ->> 'anexo_path', ''), v_desc, v_alertas,
     -- grupo 🧾 RK · Notas fiscais (robô), o mesmo dos pedidos de Pix
-    '120363140440447965@g.us'
+    '120363140440447965@g.us',
+    -- débito automático: só registra, sem botão de pagar (boletos_email_debito_automatico.sql)
+    CASE WHEN r.debito_automatico THEN 'debito' ELSE 'aguardando' END
   ) RETURNING id INTO v_sol;
 
   UPDATE public.email_mensagens SET status = 'boleto', solicitacao_id = v_sol, detalhe = NULL WHERE id = v_msg;

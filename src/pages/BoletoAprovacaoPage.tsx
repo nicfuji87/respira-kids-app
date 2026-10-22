@@ -65,8 +65,19 @@ const formatDoc = (d: string | null) => {
   return d || '—';
 };
 
+// 47 dígitos = boleto bancário; 48 = conta de consumo (arrecadação, 4 blocos de 11 + DV)
 const formatLinha = (l: string) =>
-  `${l.slice(0, 5)}.${l.slice(5, 10)} ${l.slice(10, 15)}.${l.slice(15, 21)} ${l.slice(21, 26)}.${l.slice(26, 32)} ${l[32]} ${l.slice(33)}`;
+  l.length === 48
+    ? (l.match(/.{12}/g) ?? [])
+        .map((b) => `${b.slice(0, 11)}-${b[11]}`)
+        .join(' ')
+    : `${l.slice(0, 5)}.${l.slice(5, 10)} ${l.slice(10, 15)}.${l.slice(15, 21)} ${l.slice(21, 26)}.${l.slice(26, 32)} ${l[32]} ${l.slice(33)}`;
+
+// "A4-0024" = arrecadação, segmento 4 (telecom), empresa 0024 no convênio
+const descreverBanco = (codigo: string) =>
+  codigo.startsWith('A')
+    ? `Conta de consumo · convênio ${codigo.slice(3)}`
+    : `${codigo} · ${BANCOS[codigo] ?? 'outro banco'}`;
 
 const BANCOS: Record<string, string> = {
   '001': 'Banco do Brasil',
@@ -111,6 +122,10 @@ const STATUS: Record<BoletoStatus, { label: string; className: string }> = {
     label: 'Cancelado',
     className: 'bg-muted text-muted-foreground',
   },
+  debito: {
+    label: 'Débito automático',
+    className: 'bg-azul-respira/20 text-roxo-titulo border-azul-respira/40',
+  },
 };
 
 export const BoletoAprovacaoPage: React.FC = () => {
@@ -146,7 +161,7 @@ export const BoletoAprovacaoPage: React.FC = () => {
     if (!boleto) return;
     setEnviando(true);
     try {
-      const r = await agendarBoleto(boleto.id, valorPagar);
+      const r = await agendarBoleto(boleto.id, valorPagar, boleto.vencimento);
       toast({
         title: 'Boleto enviado ao Inter',
         description: `${formatBRL(valorPagar ?? Number(boleto.valor))} para ${formatDia(r.data_pagamento)}.`,
@@ -321,7 +336,7 @@ export const BoletoAprovacaoPage: React.FC = () => {
               <dt className="text-muted-foreground">Banco do boleto</dt>
               <dd>
                 {boleto.banco_codigo
-                  ? `${boleto.banco_codigo} · ${BANCOS[boleto.banco_codigo] ?? 'outro banco'}`
+                  ? descreverBanco(boleto.banco_codigo)
                   : '—'}
               </dd>
             </div>
@@ -457,6 +472,25 @@ export const BoletoAprovacaoPage: React.FC = () => {
             </>
           )}
 
+          {boleto.status === 'debito' && (
+            <>
+              <p className="flex items-start gap-2 text-sm text-roxo-titulo">
+                <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-azul-respira" />
+                Débito automático
+                {boleto.conta_debito ? ` no ${boleto.conta_debito}` : ''}. A
+                conta já está nas contas a pagar e a baixa sai sozinha em{' '}
+                {formatDia(boleto.vencimento)}.
+              </p>
+              <Button
+                variant="ghost"
+                onClick={() => void cancelar()}
+                className="w-full gap-2"
+              >
+                <XCircle className="h-4 w-4" />
+                Não dar baixa automática
+              </Button>
+            </>
+          )}
           {boleto.status === 'agendado' && (
             <p className="flex items-center gap-2 text-sm text-roxo-titulo">
               <CalendarClock className="h-5 w-5 text-azul-respira" />

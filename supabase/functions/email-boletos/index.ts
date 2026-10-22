@@ -14,7 +14,8 @@
 // O aviso com o link sai no grupo pelo fluxo de avisos do Pix (n8n). Esta função NÃO
 // paga nada: quem agenda é o admin logado no app, pela inter-pagar.
 //
-// Também confere no Inter (só leitura) os boletos agendados cujo dia chegou.
+// Também confere no Inter (só leitura) os boletos agendados cujo dia chegou e dá
+// baixa nos de débito automático no vencimento (fn_boletos_debito_baixar).
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import {
@@ -24,7 +25,9 @@ import {
 import { extractText, getDocumentProxy } from 'https://esm.sh/unpdf@0.12.1';
 import {
   acharBeneficiario,
+  acharVencimentoNoTexto,
   acharBoletos,
+  validarArrecadacao,
   validarLinha,
   type Boleto,
 } from '../_shared/boleto.ts';
@@ -170,7 +173,7 @@ async function boletoPelaIa(
             {
               type: 'text',
               text:
-                'Este PDF pode ser um boleto bancário. Copie exatamente a linha digitável (47 dígitos) ' +
+                'Este PDF pode ser um boleto bancário. Copie exatamente a linha digitável (47 dígitos, ou 48 se começar com 8) ' +
                 'e o CNPJ e o nome do beneficiário. Responda só JSON: ' +
                 '{"linha_digitavel": "só dígitos ou vazio", "beneficiario_cnpj": "só dígitos ou vazio", "beneficiario_nome": ""}',
             },
@@ -185,7 +188,7 @@ async function boletoPelaIa(
     const d = JSON.parse(corpo.choices?.[0]?.message?.content ?? '{}');
     const linha = String(d.linha_digitavel ?? '').replace(/\D/g, '');
     return {
-      boleto: validarLinha(linha),
+      boleto: validarLinha(linha) ?? validarArrecadacao(linha),
       doc: String(d.beneficiario_cnpj ?? '').replace(/\D/g, '') || null,
       nome: d.beneficiario_nome
         ? String(d.beneficiario_nome).slice(0, 120)
@@ -289,12 +292,10 @@ async function lerCaixa(
       for (const b of boletos) {
         const sufixo = n === 0 ? '' : `:${n + 1}`;
         const caminho = `boletos/${caixa.id}/${id}-${i + 1}.pdf`;
-        await admin.storage
-          .from(BUCKET)
-          .upload(caminho, bytes, {
-            contentType: 'application/pdf',
-            upsert: true,
-          });
+        await admin.storage.from(BUCKET).upload(caminho, bytes, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
         const { data: r, error } = await admin.rpc(
           'fn_boleto_registrar_email',
           {
@@ -309,7 +310,11 @@ async function lerCaixa(
               linha_digitavel: b.linha,
               banco_codigo: b.banco,
               valor: b.valor,
-              vencimento: b.vencimento,
+              // arrecadação (conta de consumo) não traz a data no código: vem da fatura
+              vencimento:
+                b.vencimento ??
+                acharVencimentoNoTexto(texto) ??
+                acharVencimentoNoTexto(`${assunto}\n${corpo}`),
               beneficiario_doc: benef.doc,
               beneficiario_nome: benef.nome,
               anexo_path: `${BUCKET}/${caminho}`,
@@ -485,7 +490,14 @@ serve(async (req: Request) => {
     }
 
     const agendados = await conferirAgendados(admin);
-    return json({ ok: true, caixas: caixasResumo, agendados });
+    // débito automático cujo vencimento chegou: baixa na conta do cadastro
+    const { data: debitos } = await admin.rpc('fn_boletos_debito_baixar');
+    return json({
+      ok: true,
+      caixas: caixasResumo,
+      agendados,
+      debitos_baixados: debitos ?? 0,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('[email-boletos]', msg);
