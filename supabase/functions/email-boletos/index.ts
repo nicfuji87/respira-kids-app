@@ -647,7 +647,10 @@ function hojeBrasilia(): string {
 
 // Conta de consumo/tributo (48 dígitos, começa com 8): o Asaas só aceita o código de barras
 // de 44 (sem os DVs de cada bloco). Boleto bancário vai pela linha digitável.
-function codigoParaAsaas(linha: string) {
+function codigoParaAsaas(linha: string): {
+  barCode?: string;
+  identificationField?: string;
+} {
   if (linha.length === 48) {
     const barCode = [0, 12, 24, 36].map((i) => linha.slice(i, i + 11)).join('');
     return { barCode };
