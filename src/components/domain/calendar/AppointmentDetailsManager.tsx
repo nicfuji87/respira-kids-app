@@ -57,7 +57,12 @@ import type {
   TipoEvolucao,
   EvolucaoRespiratoria,
   EvolucaoMotoraAssimetria,
+  AutoriaEvolucao,
 } from '@/types/evolucao-clinica';
+import {
+  gerarResumoEvolucaoMotora,
+  prepararEvolucaoMotoraParaSalvar,
+} from '@/lib/evolucao-motora-resumo';
 import { RichTextEditor } from '@/components/primitives/rich-text-editor';
 import { cn, formatDateBR, formatDateTimeBR } from '@/lib/utils';
 import {
@@ -820,7 +825,7 @@ export const AppointmentDetailsManager =
       };
 
       // Handler para salvar evolução estruturada (criar ou editar)
-      const handleSaveStructuredEvolution = async (dados: {
+      const handleSaveStructuredEvolution = async (dadosRecebidos: {
         tipo_evolucao: TipoEvolucao;
         evolucao_respiratoria?: EvolucaoRespiratoria;
         evolucao_motora_assimetria?: EvolucaoMotoraAssimetria;
@@ -828,9 +833,38 @@ export const AppointmentDetailsManager =
         if (!appointment || !user?.pessoa?.id) return;
 
         const isEditing = !!editingEvolucaoData;
+        let dados = dadosRecebidos;
 
         setIsSavingEvolucao(true);
         try {
+          // Evolução motora: identifica a profissional logada (nome, CREFITO,
+          // data e hora) e a versão do formulário. Ver
+          // prepararEvolucaoMotoraParaSalvar para as regras de edição.
+          if (
+            dados.tipo_evolucao === 'motora_assimetria' &&
+            dados.evolucao_motora_assimetria
+          ) {
+            const { data: prof } = await supabase
+              .from('pessoas')
+              .select('registro_profissional')
+              .eq('id', user.pessoa.id)
+              .maybeSingle();
+            const profissional: AutoriaEvolucao = {
+              pessoa_id: user.pessoa.id,
+              nome: user.pessoa.nome ?? null,
+              registro_profissional: prof?.registro_profissional ?? null,
+              em: new Date().toISOString(),
+            };
+            dados = {
+              ...dados,
+              evolucao_motora_assimetria: prepararEvolucaoMotoraParaSalvar(
+                dados.evolucao_motora_assimetria,
+                profissional,
+                isEditing
+              ),
+            };
+          }
+
           // Gerar texto resumido baseado nos dados estruturados
           let conteudoResumo = `📋 Evolução Estruturada (${dados.tipo_evolucao === 'respiratoria' ? 'Respiratória' : 'Motora/Assimetria'})\n\n`;
 
@@ -1445,23 +1479,9 @@ export const AppointmentDetailsManager =
             dados.tipo_evolucao === 'motora_assimetria' &&
             dados.evolucao_motora_assimetria
           ) {
-            const ev = dados.evolucao_motora_assimetria;
-            if (ev.craniometria?.cvai_percentual) {
-              conteudoResumo += `• CVAI: ${ev.craniometria.cvai_percentual.toFixed(1)}%\n`;
-            }
-            if (
-              ev.intervencao.alongamentos ||
-              ev.intervencao.fortalecimento ||
-              ev.intervencao.tummy_time
-            ) {
-              conteudoResumo += `• Intervenção: `;
-              const tecnicas = [];
-              if (ev.intervencao.alongamentos) tecnicas.push('Alongamentos');
-              if (ev.intervencao.fortalecimento)
-                tecnicas.push('Fortalecimento');
-              if (ev.intervencao.tummy_time) tecnicas.push('Tummy Time');
-              conteudoResumo += tecnicas.join(', ') + '\n';
-            }
+            conteudoResumo += gerarResumoEvolucaoMotora(
+              dados.evolucao_motora_assimetria
+            );
           }
 
           // Extrair dados de analytics para colunas de dashboard

@@ -9,6 +9,7 @@ import {
   Save,
   CheckCircle2,
   Circle,
+  CircleDot,
   AlertCircle,
   ChevronLeft,
   ChevronRight,
@@ -53,6 +54,7 @@ import {
   criarEvolucaoRespiratoriaDeAnterior,
   criarEvolucaoMotoraAssimetriaVazia,
   verificarSecaoEvolucaoCompleta,
+  getTipoEvolucaoPorServico,
   SECOES_REAPROVEITAVEIS_RESPIRATORIA,
 } from '@/types/evolucao-clinica';
 import { EvolutionSectionContent } from './EvolutionSectionContent';
@@ -128,19 +130,10 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   // Determinar tipo de evolução baseado no serviço
   const determinarTipoEvolucao = useCallback((): TipoEvolucao => {
     if (existingData?.tipo_evolucao) return existingData.tipo_evolucao;
-
-    if (tipoServico) {
-      const nomeLower = tipoServico.toLowerCase();
-      if (
-        nomeLower.includes('respira') ||
-        nomeLower.includes('pulmonar') ||
-        nomeLower.includes('bronqu') ||
-        nomeLower.includes('pneumo')
-      ) {
-        return 'respiratoria';
-      }
-    }
-    return 'respiratoria'; // Default
+    // Serviço motor abre direto na evolução motora; sem pista, respiratória
+    return (
+      (tipoServico && getTipoEvolucaoPorServico(tipoServico)) || 'respiratoria'
+    );
   }, [tipoServico, existingData]);
 
   const [tipoEvolucao, setTipoEvolucao] = useState<TipoEvolucao>(
@@ -449,31 +442,40 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     }
   };
 
-  // Calcular progresso
-  const calcularProgresso = (): number => {
-    let completas = 0;
-    const dados =
-      tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : evolucaoMotora;
-
-    for (const secao of secoes) {
-      const status = verificarSecaoEvolucaoCompleta(
-        tipoEvolucao,
-        secao.id,
-        dados
-      );
-      if (status === 'completo') completas++;
-    }
-
-    return Math.round((completas / secoes.length) * 100);
-  };
-
-  const progresso = calcularProgresso();
+  // Progresso: só as seções essenciais contam. Seções complementares
+  // (medidas, orientações) não baixam o progresso quando ficam em branco e
+  // aparecem com outro ícone quando preenchidas.
+  const dadosAtuais =
+    tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : evolucaoMotora;
+  const statusDaSecao = (secaoId: string) =>
+    verificarSecaoEvolucaoCompleta(tipoEvolucao, secaoId, dadosAtuais);
+  const temComplementares = secoes.some((s) => s.opcional);
+  const essenciais = secoes.filter((s) => !s.opcional);
+  const essenciaisFeitas = essenciais.filter(
+    (s) => statusDaSecao(s.id) === 'completo'
+  ).length;
+  const complementaresPreenchidas = secoes.filter(
+    (s) => s.opcional && statusDaSecao(s.id) !== 'vazio'
+  ).length;
+  const progresso =
+    essenciais.length === 0
+      ? 0
+      : Math.round((essenciaisFeitas / essenciais.length) * 100);
+  const progressoCurto = temComplementares
+    ? `${essenciaisFeitas}/${essenciais.length}`
+    : `${progresso}%`;
+  const progressoLongo = temComplementares
+    ? `${essenciaisFeitas} de ${essenciais.length} essenciais`
+    : `${progresso}% completo`;
 
   // AI dev note: Status textual da seção para aria-label das bolinhas
   const getStatusLabel = (secaoId: string): string => {
-    const dados =
-      tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : evolucaoMotora;
-    const status = verificarSecaoEvolucaoCompleta(tipoEvolucao, secaoId, dados);
+    const status = statusDaSecao(secaoId);
+    const opcional = secoes.find((s) => s.id === secaoId)?.opcional;
+    if (opcional)
+      return status === 'vazio'
+        ? 'complementar, em branco'
+        : 'complementar, preenchida';
     if (status === 'completo') return 'completa';
     if (status === 'parcial') return 'parcial';
     return 'vazia';
@@ -481,11 +483,15 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
   // Obter ícone de status da seção
   const getStatusIcon = (secaoId: string, className?: string) => {
-    const dados =
-      tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : evolucaoMotora;
-    const status = verificarSecaoEvolucaoCompleta(tipoEvolucao, secaoId, dados);
+    const status = statusDaSecao(secaoId);
+    const opcional = secoes.find((s) => s.id === secaoId)?.opcional;
 
     const baseClass = className || 'h-4 w-4';
+
+    // Complementar preenchida: ícone próprio, para não parecer essencial
+    if (opcional && status !== 'vazio') {
+      return <CircleDot className={cn(baseClass, 'text-sky-500')} />;
+    }
 
     switch (status) {
       case 'completo':
@@ -515,15 +521,20 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-[95vw] sm:max-w-[900px] h-[95vh] sm:h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b flex-shrink-0 space-y-0">
+        {/* pr-12 no celular: espaço para o X de fechar do próprio dialog */}
+        <DialogHeader className="pl-4 pr-12 py-3 sm:px-6 sm:py-4 border-b flex-shrink-0 space-y-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-col gap-1 min-w-0">
               <div className="flex items-center justify-between sm:justify-start gap-2">
                 <DialogTitle className="text-base sm:text-lg font-semibold truncate">
                   {getTipoLabel()}
                 </DialogTitle>
-                <Badge variant="secondary" className="sm:hidden text-xs">
-                  {progresso}%
+                <Badge
+                  variant="secondary"
+                  className="sm:hidden text-xs shrink-0"
+                  aria-label={progressoLongo}
+                >
+                  {progressoCurto}
                 </Badge>
               </div>
               {patientName && (
@@ -563,8 +574,14 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                 </Button>
               </div>
               <Badge variant="secondary" className="hidden sm:inline-flex">
-                {progresso}% completo
+                {progressoLongo}
               </Badge>
+              {temComplementares && complementaresPreenchidas > 0 && (
+                <span className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap">
+                  + {complementaresPreenchidas} complementar
+                  {complementaresPreenchidas > 1 ? 'es' : ''}
+                </span>
+              )}
               {/* Indicador de autosave */}
               {lastSaved && !isReadOnly && (
                 <Badge
@@ -575,14 +592,6 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                   Rascunho salvo
                 </Badge>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 sm:hidden ml-auto"
-                onClick={handleClose}
-              >
-                <X className="h-4 w-4" />
-              </Button>
             </div>
           </div>
           <Progress value={progresso} className="h-1 mt-2 hidden sm:block" />
@@ -627,6 +636,10 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                           currentSection === index
                             ? 'bg-primary text-primary-foreground scale-110'
                             : 'bg-muted hover:bg-muted',
+                          // Complementar: borda tracejada ("quando indicado")
+                          secao.opcional &&
+                            currentSection !== index &&
+                            'border border-dashed border-muted-foreground/40 bg-transparent',
                           secoesPendentesRevisao.includes(secao.id) &&
                             'ring-2 ring-amber-400 ring-offset-1'
                         )}
@@ -636,6 +649,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                     </TooltipTrigger>
                     <TooltipContent>
                       {secao.icone} {secao.titulo}
+                      {secao.opcional ? ' (quando indicado)' : ''}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

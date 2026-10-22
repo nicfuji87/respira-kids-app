@@ -48,7 +48,11 @@ export const DesktopLayout = React.memo<DesktopLayoutProps>(
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     return (
-      <div className={cn('flex h-screen bg-background', className)}>
+      // w-full min-w-0: sem isto uma tabela larga (ex.: coortes do Marketing)
+      // alargava a página inteira em vez de rolar dentro do próprio cartão.
+      <div
+        className={cn('flex h-screen w-full min-w-0 bg-background', className)}
+      >
         {/* Sidebar */}
         <DashboardSidebar
           userRole={userRole}

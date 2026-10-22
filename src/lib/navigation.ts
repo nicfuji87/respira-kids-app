@@ -15,6 +15,7 @@ import {
   BookOpenCheck,
   Receipt,
   PhoneCall,
+  TrendingUp,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -130,6 +131,15 @@ export const navigationConfig: NavigationConfig[] = [
     icon: FileText,
     label: 'Relatórios',
     href: '/relatorios',
+    roles: ['admin'],
+    section: 'gestao',
+  },
+  // AI dev note: Inteligência comercial (atribuição de pacientes) — admin apenas.
+  // As visões do banco também só devolvem dados para admin.
+  {
+    icon: TrendingUp,
+    label: 'Marketing',
+    href: '/marketing',
     roles: ['admin'],
     section: 'gestao',
   },
