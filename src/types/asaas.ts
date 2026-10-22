@@ -200,6 +200,10 @@ export interface AsaasInvoiceTaxes {
   taxSituationCode?: string; // CST do IBS/CBS
   taxClassificationCode?: string; // cClassTrib do IBS/CBS
   operationIndicatorCode?: string; // Código indicador de operação
+  // PIS/COFINS da NT-007 (obrigatório no Regime Normal desde 21/10/2026)
+  pisCofinsTaxStatus?: string; // CST do PIS/COFINS (ex.: STANDARD_TAXABLE_OPERATION = 01)
+  operationPis?: number | null; // alíquota de PIS da operação (declarada, não retida)
+  operationCofins?: number | null; // alíquota de COFINS da operação
 }
 
 export interface ScheduleInvoiceRequest {

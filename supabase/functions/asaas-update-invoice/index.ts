@@ -34,6 +34,9 @@ interface UpdateInvoiceRequest {
       taxSituationCode?: string;
       taxClassificationCode?: string;
       operationIndicatorCode?: string;
+      pisCofinsTaxStatus?: string;
+      operationPis?: number | null;
+      operationCofins?: number | null;
     };
   };
 }
