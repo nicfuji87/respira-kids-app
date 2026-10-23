@@ -1,6 +1,7 @@
 -- Grupo 🔔 Notificações menos poluído (pedido do dono, 23/10/2026):
 -- 1) um pedido = uma mensagem ("card"): novidades da família entram no próprio card
---    (o n8n edita se o card tem menos de 13 min; senão apaga e posta de novo, já consolidado);
+--    (o n8n apaga o card antigo e posta de novo, já consolidado; editar não serve porque o
+--    WhatsApp não mostra edição em mensagem com botão; pode_editar ficou sem uso);
 -- 2) lembrete ⏰ só para pedido urgente (um só); o resto vai para o resumo das 12h e 17h30;
 -- 3) pedido concluído: o n8n apaga o card do grupo.
 
