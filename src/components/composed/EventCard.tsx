@@ -8,6 +8,8 @@ import { Badge } from '@/components/primitives/badge';
 
 import { cn } from '@/lib/utils';
 import type { CalendarEvent, EventColor } from '@/types/calendar';
+import { isCompromissoEvent } from '@/lib/agenda-bloqueios-api';
+import { CompromissoEventCard } from './CompromissoEventCard';
 
 import {
   eventColorMap,
@@ -56,6 +58,24 @@ export const EventCard = React.memo<EventCardProps>(
   }) => {
     // AI dev note: userRole será usado para controlar visualizações específicas por role no futuro
     void userRole;
+
+    // Compromissos (almoço, férias...) têm visual próprio em todas as variantes
+    if (isCompromissoEvent(event)) {
+      return (
+        <CompromissoEventCard
+          event={event}
+          variant={
+            variant === 'week'
+              ? 'week'
+              : variant === 'month' || variant === 'compact'
+                ? 'month'
+                : 'list'
+          }
+          onClick={onClick}
+          className={className}
+        />
+      );
+    }
 
     const handleClick = (e?: React.MouseEvent) => {
       e?.stopPropagation(); // AI dev note: Evitar propagação do evento para containers pais

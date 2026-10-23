@@ -17,6 +17,10 @@ import {
 } from '@/components/primitives/select';
 import { Label } from '@/components/primitives/label';
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
+import {
+  separarCompromissos,
+  filtrarCompromissosPorProfissional,
+} from '@/lib/agenda-bloqueios-api';
 
 // AI dev note: SecretariaCalendarTemplate combina CalendarTemplate
 // Template para secretárias com permissões para visualizar profissionais autorizados
@@ -144,7 +148,9 @@ export const SecretariaCalendarTemplate =
 
       // AI dev note: Filtrar eventos com todos os filtros disponíveis
       const getFilteredEvents = useMemo(() => {
-        let filteredEvents = [...events];
+        // Filtros de consulta só nas consultas; compromisso só pelo profissional
+        const { consultas, compromissos } = separarCompromissos(events);
+        let filteredEvents = [...consultas];
 
         // AI dev note: Filtrar por profissional se selecionado
         if (selectedProfessional && selectedProfessional !== 'all') {
@@ -233,7 +239,13 @@ export const SecretariaCalendarTemplate =
           });
         }
 
-        return filteredEvents;
+        return [
+          ...filteredEvents,
+          ...filtrarCompromissosPorProfissional(
+            compromissos,
+            selectedProfessional
+          ),
+        ];
       }, [
         events,
         selectedProfessional,

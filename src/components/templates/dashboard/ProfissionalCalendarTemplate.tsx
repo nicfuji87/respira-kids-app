@@ -3,6 +3,7 @@ import { CalendarTemplate } from './CalendarTemplate';
 import { CalendarFilters } from '@/components/composed/CalendarFilters';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
+import { separarCompromissos } from '@/lib/agenda-bloqueios-api';
 
 // AI dev note: Template específico para profissionals - sem painéis de estatísticas
 export interface ProfissionalUser {
@@ -82,7 +83,10 @@ export const ProfissionalCalendarTemplate =
 
       // AI dev note: Filtrar eventos do profissional com todos os filtros disponíveis
       const getFilteredEvents = useMemo(() => {
-        let filteredEvents = [...events];
+        // Compromissos já vêm no escopo certo do banco (próprios + clínica);
+        // os filtros abaixo são de consulta.
+        const { consultas, compromissos } = separarCompromissos(events);
+        let filteredEvents = [...consultas];
 
         // AI dev note: Filtrar para mostrar apenas eventos do próprio profissional
         if (showOnlyMyEvents) {
@@ -177,7 +181,7 @@ export const ProfissionalCalendarTemplate =
           });
         }
 
-        return filteredEvents;
+        return [...filteredEvents, ...compromissos];
       }, [
         events,
         showOnlyMyEvents,

@@ -23,7 +23,9 @@ import {
   AppointmentFormManager,
 } from '@/components/domain/calendar';
 import { SharedSchedulesList } from '@/components/domain/calendar/SharedSchedulesList';
-import { BloqueioAgendaDialog } from '@/components/domain/calendar/BloqueioAgendaDialog';
+import { CompromissoDialog } from '@/components/domain/calendar/CompromissoDialog';
+import { NovoEventoEscolhaDialog } from '@/components/domain/calendar/NovoEventoEscolhaDialog';
+import { FiltroTiposAgenda } from '@/components/domain/calendar/FiltroTiposAgenda';
 import {
   Tabs,
   TabsList,
@@ -32,7 +34,11 @@ import {
 } from '@/components/primitives/tabs';
 
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
-import type { AgendaBloqueioComProfissional } from '@/types/agenda-bloqueios';
+import type {
+  CompromissoAgenda,
+  GrupoFiltroAgenda,
+} from '@/types/agenda-bloqueios';
+import { isCompromissoEvent } from '@/lib/agenda-bloqueios-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
 import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
@@ -67,6 +73,9 @@ export interface CalendarTemplateProps {
 
   // Permissions
   canCreateEvents?: boolean;
+  // Compromissos (almoço, reunião, férias...) — todo usuário da equipe pode criar
+  // os seus; quem pode o quê o banco decide (RLS).
+  canCreateCompromissos?: boolean;
   canEditEvents?: boolean;
   canDeleteEvents?: boolean;
   canViewAllEvents?: boolean;
@@ -112,6 +121,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     onExternalViewChange,
 
     canCreateEvents = true,
+    canCreateCompromissos = true,
     canEditEvents = true,
     canDeleteEvents = true,
     canViewAllEvents = true,
@@ -149,11 +159,45 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     );
     const [isEventManagerOpen, setIsEventManagerOpen] = useState(false);
     const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
-    const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
-    const [blockToEdit, setBlockToEdit] =
-      useState<AgendaBloqueioComProfissional | null>(null);
+    const [isCompromissoOpen, setIsCompromissoOpen] = useState(false);
+    const [compromissoToEdit, setCompromissoToEdit] =
+      useState<CompromissoAgenda | null>(null);
+    const [compromissoRange, setCompromissoRange] = useState<{
+      start?: Date;
+      end?: Date;
+    }>({});
+    // Clique num horário vazio quando dá para criar os dois tipos
+    const [slotEscolha, setSlotEscolha] = useState<{
+      date: Date;
+      time: string;
+    } | null>(null);
     const [newEventDate, setNewEventDate] = useState<Date | undefined>();
     const [newEventTime, setNewEventTime] = useState<string | undefined>();
+
+    // Filtro visual por tipo (ocultar NÃO libera o horário)
+    const [gruposOcultos, setGruposOcultos] = useState<GrupoFiltroAgenda[]>(
+      () => {
+        try {
+          const salvo = localStorage.getItem('agenda:grupos-ocultos');
+          return salvo ? (JSON.parse(salvo) as GrupoFiltroAgenda[]) : [];
+        } catch {
+          return [];
+        }
+      }
+    );
+    const toggleGrupo = useCallback((g: GrupoFiltroAgenda) => {
+      setGruposOcultos((prev) => {
+        const next = prev.includes(g)
+          ? prev.filter((x) => x !== g)
+          : [...prev, g];
+        try {
+          localStorage.setItem('agenda:grupos-ocultos', JSON.stringify(next));
+        } catch {
+          /* sem storage: filtro vale só nesta sessão */
+        }
+        return next;
+      });
+    }, []);
 
     // Load form data for locations
     const { formData } = useCalendarFormData();
@@ -227,13 +271,11 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     // Event handlers
     const handleEventClick = useCallback(
       (event: CalendarEvent) => {
-        // Bloqueios abrem o diálogo de bloqueio (em edição), não o de consulta
-        if (event.metadata?.type === 'bloqueio') {
-          const bloqueio = (
-            event.metadata as { bloqueio?: AgendaBloqueioComProfissional }
-          ).bloqueio;
-          setBlockToEdit(bloqueio ?? null);
-          setIsBlockDialogOpen(true);
+        // Compromissos abrem o diálogo de compromisso (em edição), não o de consulta
+        if (isCompromissoEvent(event)) {
+          setCompromissoToEdit(event.metadata.compromisso);
+          setCompromissoRange({});
+          setIsCompromissoOpen(true);
           return;
         }
         if (canEditEvents) {
@@ -254,21 +296,56 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       }
     }, [canCreateEvents, currentDate, currentView]);
 
+    const abrirAgendamento = useCallback((date: Date, time?: string) => {
+      setNewEventDate(date);
+      setNewEventTime(time);
+      setIsAppointmentFormOpen(true);
+    }, []);
+
+    const abrirCompromisso = useCallback((date?: Date, time?: string) => {
+      let start: Date | undefined;
+      let end: Date | undefined;
+      if (date && time) {
+        const [h, m] = time.split(':').map(Number);
+        start = new Date(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate(),
+          h || 0,
+          m || 0
+        );
+        end = new Date(start.getTime() + 60 * 60 * 1000);
+      } else if (date) {
+        start = date;
+      }
+      setCompromissoToEdit(null);
+      setCompromissoRange({ start, end });
+      setIsCompromissoOpen(true);
+    }, []);
+
+    // Horário vazio: escolhe entre consulta e compromisso (ou vai direto quando só
+    // um dos dois é permitido — profissional não cria consulta).
     const handleTimeSlotClick = useCallback(
       (time: string, date: Date) => {
-        if (canCreateEvents) {
-          setNewEventDate(date);
-          setNewEventTime(time);
-          setIsAppointmentFormOpen(true);
+        if (canCreateEvents && canCreateCompromissos) {
+          setSlotEscolha({ date, time });
+        } else if (canCreateEvents) {
+          abrirAgendamento(date, time);
+        } else if (canCreateCompromissos) {
+          abrirCompromisso(date, time);
         }
       },
-      [canCreateEvents]
+      [
+        canCreateEvents,
+        canCreateCompromissos,
+        abrirAgendamento,
+        abrirCompromisso,
+      ]
     );
 
-    const handleBlockAgendaClick = useCallback(() => {
-      setBlockToEdit(null);
-      setIsBlockDialogOpen(true);
-    }, []);
+    const handleNovoCompromissoClick = useCallback(() => {
+      abrirCompromisso(currentView === 'agenda' ? new Date() : currentDate);
+    }, [abrirCompromisso, currentView, currentDate]);
 
     // AI dev note: handleEventSave temporariamente comentado para evitar double update flow
     // const handleEventSave = useCallback(
@@ -304,18 +381,39 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
         return [];
       }
 
+      // Filtro visual por tipo (consultas / compromissos / ausências / fechamentos)
+      const visiveis =
+        gruposOcultos.length === 0
+          ? events
+          : events.filter((event) => {
+              const grupo: GrupoFiltroAgenda = isCompromissoEvent(event)
+                ? event.metadata.grupoFiltro
+                : 'consultas';
+              return !gruposOcultos.includes(grupo);
+            });
+
       let filteredEvents: CalendarEvent[] = [];
 
       switch (currentView) {
-        case 'month':
-          filteredEvents = events.filter((event) => {
-            const eventDate = new Date(event.start);
-            const sameMonth = eventDate.getMonth() === currentDate.getMonth();
-            const sameYear =
-              eventDate.getFullYear() === currentDate.getFullYear();
-            return sameMonth && sameYear;
+        case 'month': {
+          // Evento de vários dias (férias) aparece se encosta no mês
+          const inicioMes = new Date(
+            currentDate.getFullYear(),
+            currentDate.getMonth(),
+            1
+          );
+          const fimMes = new Date(
+            currentDate.getFullYear(),
+            currentDate.getMonth() + 1,
+            1
+          );
+          filteredEvents = visiveis.filter((event) => {
+            const ini = new Date(event.start);
+            const fim = new Date(event.end);
+            return ini < fimMes && fim > inicioMes;
           });
           break;
+        }
         case 'week': {
           const weekStart = startOfWeek(currentDate, {
             weekStartsOn: 1,
@@ -325,27 +423,33 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
             weekStartsOn: 1,
             locale: ptBR,
           });
-          filteredEvents = events.filter((event) => {
-            const eventDate = new Date(event.start);
-            return eventDate >= weekStart && eventDate <= weekEnd;
+          // sobreposição (não só o início): férias que começam antes também entram
+          filteredEvents = visiveis.filter((event) => {
+            return (
+              new Date(event.start) <= weekEnd &&
+              new Date(event.end) > weekStart
+            );
           });
           break;
         }
-        case 'day':
-          filteredEvents = events.filter((event) => {
-            const eventDate = new Date(event.start);
-            return eventDate.toDateString() === currentDate.toDateString();
+        case 'day': {
+          const inicioDia = startOfDay(currentDate);
+          const fimDia = addDays(inicioDia, 1);
+          filteredEvents = visiveis.filter((event) => {
+            return (
+              new Date(event.start) < fimDia && new Date(event.end) > inicioDia
+            );
           });
           break;
+        }
         case 'agenda': {
           // AI dev note: Mostrar o dia inteiro a partir do INÍCIO do dia atual
           // (startOfDay), não do horário atual. Usar currentDate cru escondia as
           // consultas já passadas de hoje (ex.: manhã sumia após o meio-dia).
           const inicioDoDia = startOfDay(currentDate);
-          filteredEvents = events
+          filteredEvents = visiveis
             .filter((event) => {
-              const eventDate = new Date(event.start);
-              return eventDate >= inicioDoDia;
+              return new Date(event.end) > inicioDoDia;
             })
             .sort(
               (a, b) =>
@@ -354,11 +458,11 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           break;
         }
         default:
-          filteredEvents = events;
+          filteredEvents = visiveis;
       }
 
       return filteredEvents;
-    }, [events, currentView, currentDate]);
+    }, [events, currentView, currentDate, gruposOcultos]);
 
     // Render current view
     const renderCurrentView = () => {
@@ -432,9 +536,16 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                   onDateChange={handleDateChange}
                   onViewChange={handleViewChange}
                   onNewEvent={canCreateEvents ? handleNewEventClick : undefined}
-                  onBlockAgenda={
-                    canCreateEvents ? handleBlockAgendaClick : undefined
+                  onNewCompromisso={
+                    canCreateCompromissos
+                      ? handleNovoCompromissoClick
+                      : undefined
                   }
+                />
+                <FiltroTiposAgenda
+                  ocultos={gruposOcultos}
+                  onToggle={toggleGrupo}
+                  className="mt-2"
                 />
               </div>
 
@@ -462,9 +573,14 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                 onDateChange={handleDateChange}
                 onViewChange={handleViewChange}
                 onNewEvent={canCreateEvents ? handleNewEventClick : undefined}
-                onBlockAgenda={
-                  canCreateEvents ? handleBlockAgendaClick : undefined
+                onNewCompromisso={
+                  canCreateCompromissos ? handleNovoCompromissoClick : undefined
                 }
+              />
+              <FiltroTiposAgenda
+                ocultos={gruposOcultos}
+                onToggle={toggleGrupo}
+                className="mt-2"
               />
             </div>
 
@@ -549,15 +665,30 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           onSave={handleAppointmentFormSave}
         />
 
-        {/* Bloquear Agenda Modal - Indisponibilidade de profissional/clínica */}
-        <BloqueioAgendaDialog
-          isOpen={isBlockDialogOpen}
-          onClose={() => {
-            setIsBlockDialogOpen(false);
-            setBlockToEdit(null);
+        {/* Escolha ao clicar num horário vazio */}
+        <NovoEventoEscolhaDialog
+          slot={slotEscolha}
+          onClose={() => setSlotEscolha(null)}
+          onAgendamento={(date, time) => {
+            setSlotEscolha(null);
+            abrirAgendamento(date, time);
           }}
-          initialDate={currentDate}
-          editBloqueio={blockToEdit}
+          onCompromisso={(date, time) => {
+            setSlotEscolha(null);
+            abrirCompromisso(date, time);
+          }}
+        />
+
+        {/* Compromisso (almoço, reunião, férias...) — criar/editar */}
+        <CompromissoDialog
+          isOpen={isCompromissoOpen}
+          onClose={() => {
+            setIsCompromissoOpen(false);
+            setCompromissoToEdit(null);
+          }}
+          initialStart={compromissoRange.start}
+          initialEnd={compromissoRange.end}
+          editCompromisso={compromissoToEdit}
         />
       </div>
     );

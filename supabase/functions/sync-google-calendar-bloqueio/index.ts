@@ -5,6 +5,10 @@
 //   com OAuth (pode_atender = true).
 // O mapeamento bloqueio→evento por profissional fica em
 // agenda_bloqueio_google_events (um google_event_id por profissional).
+// Compromissos (out/2026): título livre; privado → visibility 'private' (no Google
+// compartilhado aparece só "ocupado"); dia inteiro → evento de dia (start.date);
+// impede_agendamento=false → 'transparent' (não marca a pessoa como ocupada).
+// inicio/fim são HORA DE PAREDE (+00:00 = horário de Brasília), como as consultas.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -31,6 +35,9 @@ interface Bloqueio {
   fim: string;
   dia_inteiro: boolean;
   motivo: string | null;
+  titulo: string | null;
+  privado: boolean;
+  impede_agendamento: boolean;
   observacao: string | null;
   ativo: boolean;
   deleted_at: string | null;
@@ -46,12 +53,13 @@ const corsHeaders = {
 };
 
 const MOTIVO_LABELS: Record<string, string> = {
-  almoco: 'Almoço',
-  ferias: 'Férias',
-  feriado: 'Feriado',
-  reuniao: 'Reunião',
+  almoco: 'Intervalo / almoço',
   pessoal: 'Pessoal',
-  outro: 'Outro',
+  saude: 'Saúde',
+  reuniao: 'Reunião',
+  ferias: 'Férias / ausência',
+  feriado: 'Clínica fechada',
+  outro: 'Compromisso',
 };
 
 Deno.serve(async (req: Request) => {
@@ -74,7 +82,7 @@ Deno.serve(async (req: Request) => {
     const { data: bloqueio, error: bloqueioError } = await supabase
       .from('agenda_bloqueios')
       .select(
-        'id, profissional_id, inicio, fim, dia_inteiro, motivo, observacao, ativo, deleted_at'
+        'id, profissional_id, inicio, fim, dia_inteiro, motivo, titulo, privado, impede_agendamento, observacao, ativo, deleted_at'
       )
       .eq('id', bloqueio_id)
       .single();
@@ -176,17 +184,39 @@ Deno.serve(async (req: Request) => {
         const existente = mapByProf.get(recipient.id);
 
         if (existente) {
-          await updateGoogleCalendarEvent(
+          const achou = await updateGoogleCalendarEvent(
             accessToken,
             existente.google_calendar_id || calendarId,
             existente.google_event_id,
             eventData
           );
-          await supabase
-            .from('agenda_bloqueio_google_events')
-            .update({ updated_at: new Date().toISOString() })
-            .eq('id', existente.id);
-          results.push({ profissional_id: recipient.id, action: 'updated' });
+          if (achou) {
+            await supabase
+              .from('agenda_bloqueio_google_events')
+              .update({ updated_at: new Date().toISOString() })
+              .eq('id', existente.id);
+            results.push({ profissional_id: recipient.id, action: 'updated' });
+          } else {
+            // evento apagado no Google: recria e troca o mapeamento
+            const eventId = await createGoogleCalendarEvent(
+              accessToken,
+              calendarId,
+              eventData
+            );
+            await supabase
+              .from('agenda_bloqueio_google_events')
+              .update({
+                google_event_id: eventId,
+                google_calendar_id: calendarId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existente.id);
+            results.push({
+              profissional_id: recipient.id,
+              action: 'recreated',
+              eventId,
+            });
+          }
         } else {
           const eventId = await createGoogleCalendarEvent(
             accessToken,
@@ -237,38 +267,48 @@ Deno.serve(async (req: Request) => {
 // AUXILIARES
 // ====================================================================
 
-function formatWithTimezone(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildBlockEvent(b: Bloqueio): any {
-  const motivoLabel = b.motivo
+  const categoria = b.motivo
     ? MOTIVO_LABELS[b.motivo] || b.motivo
-    : 'Bloqueado';
-  const summary = `🔒 Indisponível${motivoLabel ? ` - ${motivoLabel}` : ''}`;
-  let description = 'Bloqueio de agenda (Respira Kids)';
+    : 'Compromisso';
+  const titulo = b.titulo?.trim() || categoria;
+  const summary = b.impede_agendamento ? `🔒 ${titulo}` : titulo;
+
+  let description = b.profissional_id
+    ? 'Compromisso na agenda (Respira Kids)'
+    : 'Clínica inteira (Respira Kids)';
+  if (b.titulo?.trim()) description += ` · ${categoria}`;
+  if (b.impede_agendamento)
+    description += '\nHorário indisponível para novas consultas.';
   if (b.observacao) description += `\n\n📝 ${b.observacao}`;
+
+  // Hora de parede: os 19 primeiros caracteres já são a hora de Brasília
+  const wall = (s: string) => s.slice(0, 19);
+  const quando = b.dia_inteiro
+    ? {
+        // fim gravado = 00:00 do dia seguinte; no Google end.date é exclusivo
+        start: { date: b.inicio.slice(0, 10) },
+        end: { date: b.fim.slice(0, 10) },
+      }
+    : {
+        start: {
+          dateTime: `${wall(b.inicio)}-03:00`,
+          timeZone: 'America/Sao_Paulo',
+        },
+        end: {
+          dateTime: `${wall(b.fim)}-03:00`,
+          timeZone: 'America/Sao_Paulo',
+        },
+      };
 
   return {
     summary,
     description,
-    start: {
-      dateTime: formatWithTimezone(new Date(b.inicio)),
-      timeZone: 'America/Sao_Paulo',
-    },
-    end: {
-      dateTime: formatWithTimezone(new Date(b.fim)),
-      timeZone: 'America/Sao_Paulo',
-    },
+    ...quando,
     colorId: '8', // cinza
-    transparency: 'opaque', // ocupado
+    transparency: b.impede_agendamento ? 'opaque' : 'transparent',
+    visibility: b.privado ? 'private' : 'default',
     reminders: { useDefault: false },
   };
 }
@@ -345,7 +385,7 @@ async function updateGoogleCalendarEvent(
   eventId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   eventData: any
-): Promise<void> {
+): Promise<boolean> {
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
     {
@@ -357,12 +397,18 @@ async function updateGoogleCalendarEvent(
       body: JSON.stringify(eventData),
     }
   );
-  // 404: evento sumiu do Google; recria na próxima. Não falhar aqui.
-  if (!response.ok && response.status !== 404) {
+  // 404/410: evento sumiu do Google → quem chamou recria
+  if (response.status === 404 || response.status === 410) {
+    await response.text();
+    return false;
+  }
+  if (!response.ok) {
     const error = await response.text();
     console.error('❌ Erro ao atualizar evento:', error);
     throw new Error('Falha ao atualizar evento no Google Calendar');
   }
+  await response.text();
+  return true;
 }
 
 async function deleteGoogleCalendarEvent(
