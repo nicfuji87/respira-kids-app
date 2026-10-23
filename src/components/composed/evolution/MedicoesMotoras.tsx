@@ -1,10 +1,10 @@
-// Medidas programadas dentro da evolução motora:
+// Medidas dentro da evolução motora:
 // - MedicaoSessaoBloco: situação de UMA medida nesta sessão (prevista,
-//   último registro) e o que a fisio fez com ela: Medi hoje / Adiar /
-//   Dispensada nesta ocasião / Não se aplica. Sem escolha = "sem registro
-//   nesta evolução", que NÃO afirma que a medida deixou de ser feita.
+//   último registro) e o que a fisio fez: Medi hoje / Não medi hoje / Não
+//   precisa mais. Sem escolha = "sem registro nesta evolução", que NÃO
+//   afirma que a medida deixou de ser feita.
 // - ReavaliacoesConduta: medidas previstas que não têm seção própria aberta
-//   e "Programar próxima reavaliação".
+//   e "Próxima medição" (em 2, 4, 6 ou 8 semanas).
 // Os dados vêm de MedidasEvolucaoContext (carregados pelo agendamento).
 
 import React from 'react';
@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils';
 import { useMedidasEvolucao } from './medidas-evolucao-context';
 import {
   NOME_MEDIDA_MOTORA,
-  type DesfechoDispensa,
   type MedicaoSessao,
   type ProximaReavaliacao,
   type SituacaoMedicao,
@@ -47,15 +46,10 @@ const MOTIVOS_RAPIDOS = [
   'Faltou tempo',
 ];
 
-const OPCOES: { valor: SituacaoMedicao; com: string; sem: string }[] = [
-  { valor: 'medido', com: 'Medi hoje', sem: 'Feita hoje' },
-  { valor: 'adiado', com: 'Adiar medição', sem: 'Adiar' },
-  {
-    valor: 'dispensado',
-    com: 'Dispensada nesta ocasião',
-    sem: 'Dispensada nesta ocasião',
-  },
-  { valor: 'nao_aplicavel', com: 'Não se aplica', sem: 'Não se aplica' },
+const OPCOES: { valor: SituacaoMedicao; label: string }[] = [
+  { valor: 'medido', label: 'Medi hoje' },
+  { valor: 'nao_medido', label: 'Não medi hoje' },
+  { valor: 'nao_precisa', label: 'Não precisa mais' },
 ];
 
 export interface MedicaoSessaoBlocoProps {
@@ -64,18 +58,12 @@ export interface MedicaoSessaoBlocoProps {
   onChange: (m: MedicaoSessao | undefined) => void;
   /** a seção já tem valores digitados para esta medida */
   temValores?: boolean;
-  /** apaga os valores digitados (ao escolher adiar/dispensar/não se aplica) */
+  /** apaga os valores digitados (ao escolher não medi / não precisa mais) */
   onDescartarValores?: () => void;
   disabled?: boolean;
   /** campos da medida (só aparecem em "Medi hoje" ou se já tem valores) */
   children?: React.ReactNode;
 }
-
-const DESFECHOS: { valor: DesfechoDispensa; label: string }[] = [
-  { valor: 'nova_data', label: 'Programar outra data' },
-  { valor: 'periodicidade', label: 'Voltar à periodicidade' },
-  { valor: 'suspender', label: 'Suspender acompanhamento' },
-];
 
 const chipClasse = (sel: boolean) =>
   cn(
@@ -294,15 +282,14 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
   disabled,
   children,
 }) => {
-  const { medidas, dataSessao } = useMedidasEvolucao();
-  // Fora do piloto (ou sem permissão): a evolução fica como antes
+  const { medidas } = useMedidasEvolucao();
+  // Sem permissão (secretaria) ou sem dados: a evolução fica como antes
   if (medidas === null) return <>{children ?? null}</>;
 
   const medida = medidas.find((m) => m.tipo === tipo);
   const temCampos = !!children;
   const situacao = valor?.situacao ?? (temValores ? 'medido' : undefined);
   const mostraCampos = temCampos && situacao === 'medido';
-  const intervalo = medida?.intervalo_dias ?? null;
 
   const escolher = (s: SituacaoMedicao) => {
     if (disabled) return;
@@ -317,21 +304,6 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
 
   const atualizar = (parcial: Partial<MedicaoSessao>) =>
     valor && onChange({ ...valor, ...parcial });
-
-  const escolherDesfecho = (d: DesfechoDispensa) => {
-    if (!valor) return;
-    if (d === 'periodicidade')
-      atualizar({
-        desfecho: d,
-        nova_data:
-          intervalo && dataSessao
-            ? somarDias(dataSessao, intervalo)
-            : undefined,
-      });
-    else if (d === 'suspender')
-      atualizar({ desfecho: d, nova_data: undefined });
-    else atualizar({ desfecho: d, nova_data: undefined });
-  };
 
   return (
     <div className="space-y-4">
@@ -358,7 +330,7 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
         </p>
 
         <div
-          className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+          className="grid grid-cols-3 gap-2"
           role="radiogroup"
           aria-label={`O que foi feito com ${NOME_MEDIDA_MOTORA[tipo]} nesta sessão`}
         >
@@ -382,13 +354,13 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
                   disabled && 'opacity-50 cursor-not-allowed'
                 )}
               >
-                {temCampos ? op.com : op.sem}
+                {op.label}
               </button>
             );
           })}
         </div>
 
-        {/* Feita hoje, medida sem seção: o resultado fica aqui mesmo */}
+        {/* Medi hoje, medida sem seção: o resultado fica aqui mesmo */}
         {valor?.situacao === 'medido' && !temCampos && (
           <CamposResultado
             tipo={tipo}
@@ -398,100 +370,11 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
           />
         )}
 
-        {valor?.situacao === 'adiado' && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-sm">Nova data prevista</Label>
-              <Input
-                type="date"
-                value={valor.nova_data ?? ''}
-                min={dataSessao ? somarDias(dataSessao, 1) : undefined}
-                onChange={(e) =>
-                  atualizar({ nova_data: e.target.value || undefined })
-                }
-                disabled={disabled}
-              />
-              {!valor.nova_data && (
-                <p className="text-xs text-amber-700">
-                  Obrigatória: é nela que o lembrete volta.
-                </p>
-              )}
-            </div>
-            <MotivoCampo
-              motivo={valor.motivo}
-              onChange={(m) => atualizar({ motivo: m })}
-              disabled={disabled}
-            />
-          </div>
-        )}
-
-        {valor?.situacao === 'dispensado' && (
+        {valor?.situacao === 'nao_medido' && (
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">E depois?</Label>
-              <div
-                className="flex flex-wrap gap-1.5"
-                role="radiogroup"
-                aria-label="O que fazer depois da dispensa"
-              >
-                {DESFECHOS.map((d) => {
-                  const semIntervalo =
-                    d.valor === 'periodicidade' && !intervalo;
-                  return (
-                    <button
-                      key={d.valor}
-                      type="button"
-                      role="radio"
-                      aria-checked={valor.desfecho === d.valor}
-                      disabled={disabled || semIntervalo}
-                      title={
-                        semIntervalo
-                          ? 'Esta medida não tem periodicidade definida'
-                          : undefined
-                      }
-                      onClick={() => escolherDesfecho(d.valor)}
-                      className={cn(
-                        chipClasse(valor.desfecho === d.valor),
-                        semIntervalo && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {d.label}
-                    </button>
-                  );
-                })}
-              </div>
-              {!valor.desfecho && (
-                <p className="text-xs text-amber-700">
-                  Obrigatório, para o lembrete não voltar sozinho na próxima
-                  sessão.
-                </p>
-              )}
-              {valor.desfecho === 'periodicidade' && valor.nova_data && (
-                <p className="text-xs text-muted-foreground">
-                  Próxima pela periodicidade ({intervalo} dias a partir de
-                  hoje): {dataBR(valor.nova_data)}.
-                </p>
-              )}
-              {valor.desfecho === 'suspender' && (
-                <p className="text-xs text-muted-foreground">
-                  Deixa de lembrar até alguém reativar na conduta.
-                </p>
-              )}
-            </div>
-            {valor.desfecho === 'nova_data' && (
-              <div className="space-y-1.5 sm:max-w-xs">
-                <Label className="text-sm">Próxima data</Label>
-                <Input
-                  type="date"
-                  value={valor.nova_data ?? ''}
-                  min={dataSessao ? somarDias(dataSessao, 1) : undefined}
-                  onChange={(e) =>
-                    atualizar({ nova_data: e.target.value || undefined })
-                  }
-                  disabled={disabled}
-                />
-              </div>
-            )}
+            <p className="text-xs text-muted-foreground">
+              O lembrete continua e aparece de novo na próxima sessão.
+            </p>
             <MotivoCampo
               motivo={valor.motivo}
               onChange={(m) => atualizar({ motivo: m })}
@@ -500,18 +383,18 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
           </div>
         )}
 
-        {valor?.situacao === 'nao_aplicavel' && (
+        {valor?.situacao === 'nao_precisa' && (
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">
-              Esta medida deixa de ser lembrada para esta criança. Dá para
-              reativar depois, na conduta.
+              Deixa de ser lembrada para esta criança. Para voltar, escolha uma
+              data em &quot;Próxima medição&quot;, na conduta.
             </p>
             <Input
               value={valor.motivo ?? ''}
               onChange={(e) =>
                 atualizar({ motivo: e.target.value || undefined })
               }
-              placeholder="Por que não se aplica (opcional)"
+              placeholder="Por quê (opcional)"
               disabled={disabled}
             />
           </div>
@@ -561,7 +444,6 @@ export const ReavaliacoesConduta: React.FC<ReavaliacoesCondutaProps> = ({
   disabled,
 }) => {
   const { medidas, dataSessao } = useMedidasEvolucao();
-  // Fora do piloto: a conduta fica como antes
   if (medidas === null) return null;
 
   const pendentesSemSecao = medidas.filter(
@@ -570,10 +452,10 @@ export const ReavaliacoesConduta: React.FC<ReavaliacoesCondutaProps> = ({
 
   return (
     <div className="border-t pt-6 space-y-6">
-      <h3 className="text-base font-semibold">Medidas e reavaliações</h3>
+      <h3 className="text-base font-semibold">Medidas</h3>
       {pendentesSemSecao.length > 0 && (
         <div className="space-y-3">
-          <h4 className="font-medium">Medidas previstas para esta sessão</h4>
+          <h4 className="font-medium">Previstas para esta sessão</h4>
           {pendentesSemSecao.map((m) => (
             <MedicaoSessaoBloco
               key={m.tipo}
@@ -588,115 +470,85 @@ export const ReavaliacoesConduta: React.FC<ReavaliacoesCondutaProps> = ({
 
       <div className="space-y-3">
         <div>
-          <h4 className="font-medium">Programar próxima reavaliação</h4>
+          <h4 className="font-medium">Próxima medição</h4>
           <p className="text-sm text-muted-foreground">
-            Escolha a medida e a data. Ela vai aparecer na agenda antes da
-            sessão daquela semana.
+            Opcional. A medida aparece na agenda na sessão daquela semana.
           </p>
         </div>
-        {TIPOS_PROGRAMAVEIS.map((tipo) => {
-          const medida = medidas.find((m) => m.tipo === tipo);
-          const prox = proximas[tipo];
-          const ativo = !!prox;
-          const inativa =
-            medida?.status === 'nao_aplicavel' || medida?.status === 'suspensa';
-          return (
-            <div key={tipo} className="rounded-lg border p-3 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {NOME_MEDIDA_MOTORA[tipo]}
-                  </p>
-                  {medida && (
-                    <p className="text-xs text-muted-foreground">
-                      {descreverEstado(medida)}
-                      {medida.ultima_data
-                        ? ` · último registro ${dataBR(medida.ultima_data)}`
-                        : ''}
+        <div className="rounded-lg border divide-y">
+          {TIPOS_PROGRAMAVEIS.map((tipo) => {
+            const medida = medidas.find((m) => m.tipo === tipo);
+            const prox = proximas[tipo];
+            const inativa =
+              medida?.status === 'nao_aplicavel' ||
+              medida?.status === 'suspensa';
+            return (
+              <div key={tipo} className="p-3 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {NOME_MEDIDA_MOTORA[tipo]}
                     </p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  aria-pressed={ativo}
-                  disabled={disabled}
-                  onClick={() =>
-                    onProximaChange(
-                      tipo,
-                      ativo
-                        ? undefined
-                        : { data: dataSessao ? somarDias(dataSessao, 28) : '' }
-                    )
-                  }
-                  className={cn(
-                    'rounded-full border-2 px-3 py-1 text-sm font-medium',
-                    ativo
-                      ? 'bg-primary border-primary text-primary-foreground'
-                      : 'bg-background border-border text-muted-foreground hover:bg-muted'
-                  )}
-                >
-                  {ativo
-                    ? 'Programada'
-                    : inativa
-                      ? 'Reativar e programar'
-                      : 'Programar'}
-                </button>
-              </div>
-              {prox && inativa && (
-                <p className="text-xs text-muted-foreground">
-                  Ao salvar, o acompanhamento desta medida volta a ficar ativo.
-                </p>
-              )}
-              {prox && (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {SEMANAS.map((s) => {
-                      const d = dataSessao ? somarDias(dataSessao, s * 7) : '';
+                    {medida && medida.estado !== 'sem_programacao' && (
+                      <p className="text-xs text-muted-foreground">
+                        {descreverEstado(medida)}
+                      </p>
+                    )}
+                  </div>
+                  <div
+                    className="flex flex-wrap gap-1.5"
+                    role="radiogroup"
+                    aria-label={`Próxima ${NOME_MEDIDA_MOTORA[tipo]}`}
+                  >
+                    {SEMANAS.map((sem) => {
+                      const d = dataSessao
+                        ? somarDias(dataSessao, sem * 7)
+                        : '';
+                      const sel = !!prox && prox.data === d;
                       return (
                         <button
-                          key={s}
+                          key={sem}
                           type="button"
+                          role="radio"
+                          aria-checked={sel}
                           disabled={disabled || !dataSessao}
                           onClick={() =>
-                            onProximaChange(tipo, { ...prox, data: d })
+                            onProximaChange(
+                              tipo,
+                              sel ? undefined : { ...prox, data: d }
+                            )
                           }
-                          className={chipClasse(prox.data === d)}
+                          className={chipClasse(sel)}
                         >
-                          Em {s} semanas
+                          {sem} sem
                         </button>
                       );
                     })}
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input
-                      type="date"
-                      aria-label={`Data da próxima ${NOME_MEDIDA_MOTORA[tipo]}`}
-                      value={prox.data}
-                      min={dataSessao ? somarDias(dataSessao, 1) : undefined}
-                      onChange={(e) =>
-                        onProximaChange(tipo, { ...prox, data: e.target.value })
-                      }
-                      disabled={disabled}
-                    />
-                    {tipo === 'outra' && (
-                      <Input
-                        value={prox.descricao ?? ''}
-                        onChange={(e) =>
-                          onProximaChange(tipo, {
-                            ...prox,
-                            descricao: e.target.value || undefined,
-                          })
-                        }
-                        placeholder="Qual reavaliação"
-                        disabled={disabled}
-                      />
-                    )}
-                  </div>
                 </div>
-              )}
-            </div>
-          );
-        })}
+                {prox && (
+                  <p className="text-xs text-muted-foreground">
+                    Em {dataBR(prox.data)}
+                    {inativa && ' · volta a ser lembrada ao salvar'}
+                  </p>
+                )}
+                {prox && tipo === 'outra' && (
+                  <Input
+                    value={prox.descricao ?? ''}
+                    onChange={(e) =>
+                      onProximaChange(tipo, {
+                        ...prox,
+                        descricao: e.target.value || undefined,
+                      })
+                    }
+                    placeholder="Qual reavaliação"
+                    disabled={disabled}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

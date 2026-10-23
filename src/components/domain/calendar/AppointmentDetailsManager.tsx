@@ -11,7 +11,6 @@ import {
   Bell,
 } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
-import { useMedidasLiberadas } from '@/hooks/useMedidasLiberadas';
 import { ToastAction } from '@/components/primitives/toast';
 import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
 
@@ -266,10 +265,8 @@ export const AppointmentDetailsManager =
       const [medidasPaciente, setMedidasPaciente] = useState<
         MedidaPaciente[] | null
       >(null);
-      // Piloto: só quem está liberado usa a programação de medidas
-      const podeVerMedidas = useMedidasLiberadas(
-        isOpen && (userRole === 'admin' || userRole === 'profissional')
-      );
+      const podeVerMedidas =
+        isOpen && (userRole === 'admin' || userRole === 'profissional');
       const dataSessao = diaDeParede(appointment?.data_hora);
       const carregarMedidas = useCallback(async () => {
         if (!podeVerMedidas || !appointment?.paciente_id || !dataSessao) {

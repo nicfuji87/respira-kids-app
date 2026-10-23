@@ -13,7 +13,6 @@ import {
   LocaisAtendimentoManagement,
   EnderecoManagement,
   ContractTemplateManagement,
-  MedidasConfigManagement,
 } from '@/components/domain/system';
 import {
   Users,
@@ -23,7 +22,6 @@ import {
   Wrench,
   FileText,
   Home,
-  Ruler,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -105,15 +103,6 @@ export const SystemSettingsTemplate: React.FC<SystemSettingsTemplateProps> = ({
       icon: FileText,
       description: 'Gerenciar modelos de contratos editáveis',
       content: <ContractTemplateManagement />,
-      implemented: true,
-    },
-    {
-      id: 'medidas',
-      label: 'Medidas',
-      icon: Ruler,
-      description:
-        'Intervalos de lembrete das medidas da evolução motora (craniometria, goniometria…)',
-      content: <MedidasConfigManagement />,
       implemented: true,
     },
   ];

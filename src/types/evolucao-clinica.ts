@@ -538,34 +538,18 @@ export const NOME_MEDIDA_MOTORA: Record<TipoMedidaMotora, string> = {
 /**
  * O que a fisio registrou sobre uma medida nesta sessão. Ausente = "sem
  * registro nesta evolução" (NÃO quer dizer que não mediu).
- * - medido: mediu e registrou (abre os campos, quando a medida tem campos)
- * - adiado: estava prevista e não ocorreu; exige nova data
- * - dispensado: a fisio julgou desnecessária nesta ocasião; nova data opcional
- * - nao_aplicavel: a medida não se aplica ao caso; para de lembrar
+ * - medido: mediu e registrou (abre os campos ou o resultado no bloco)
+ * - nao_medido: não mediu hoje; o lembrete continua e volta na próxima sessão
+ * - nao_precisa: não precisa mais acompanhar; para de lembrar (volta se
+ *   alguém escolher uma próxima medição na conduta)
  */
-export type SituacaoMedicao =
-  | 'medido'
-  | 'adiado'
-  | 'dispensado'
-  | 'nao_aplicavel';
-
-/**
- * Dispensada nesta ocasião: o que acontece com o acompanhamento. Obrigatório,
- * para o lembrete não voltar sozinho na sessão seguinte.
- * - nova_data: programa outra data (nova_data)
- * - periodicidade: volta ao intervalo da medida contado a partir de hoje
- *   (a data calculada vai em nova_data)
- * - suspender: suspende o acompanhamento desta medida
- */
-export type DesfechoDispensa = 'nova_data' | 'periodicidade' | 'suspender';
+export type SituacaoMedicao = 'medido' | 'nao_medido' | 'nao_precisa';
 
 export interface MedicaoSessao {
   situacao: SituacaoMedicao;
-  nova_data?: string; // YYYY-MM-DD
   motivo?: string;
-  desfecho?: DesfechoDispensa;
   // Medidas sem seção própria (MFS, perímetro, desenvolvimento, outra):
-  // resultado registrado no próprio bloco ao marcar "Feita hoje"
+  // resultado registrado no próprio bloco ao marcar "Medi hoje"
   valores?: Record<string, string | number>;
 }
 

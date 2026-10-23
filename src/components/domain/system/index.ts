@@ -9,4 +9,3 @@ export { LocaisAtendimentoManagement } from './LocaisAtendimentoManagement';
 export { EnderecoManagement } from './EnderecoManagement';
 export { ContractTemplateManagement } from './ContractTemplateManagement';
 export { WebhookManagement } from './WebhookManagement';
-export { MedidasConfigManagement } from './MedidasConfigManagement';

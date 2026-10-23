@@ -504,8 +504,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       setAvisoAreas(true);
       return;
     }
-    // Medidas (piloto): "feita" sem resultado, adiada sem data e dispensada
-    // sem desfecho não salvam, para não gerar registro vazio nem lembrete em ciclo
+    // Medidas: "Medi hoje" sem o resultado não salva (seria medida feita sem registro)
     if (tipoEvolucao === 'motora_assimetria' && medidas !== null) {
       const pend = pendenciasDasMedicoes(evolucaoMotora);
       if (pend.length > 0) {
