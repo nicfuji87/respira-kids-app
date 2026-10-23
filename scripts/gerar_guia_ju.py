@@ -247,8 +247,9 @@ s += section('10. Pedir para a Ju agendar: @ju', bullets([
     'A Ju lê a conversa e lança a consulta na agenda: a criança, o dia, a hora, a fisio e o tipo de atendimento '
     '(sábado, domingo e feriado já entram com o valor de fim de semana). A sala segue o padrão: Bruna sala 2, '
     'Flávia sala 1, as demais sala 3.',
-    'Depois ela escreve só "Acabei de agendar! Se puder, confere as informações". Os dados da consulta chegam '
-    'para a família pela mensagem automática de sempre.',
+    'Depois ela reage com o sinal verde de certo na sua mensagem do @ju e escreve para a família só "Pronto, consulta agendada! '
+    'Vocês vão receber a confirmação em seguida". Os dados da consulta chegam pela mensagem automática de '
+    'sempre; vale conferir a consulta na agenda.',
     'Se faltar alguma coisa (qual criança, qual horário, qual atendimento), a Ju pergunta ali mesmo. Responda '
     'começando de novo com <b>@ju</b>, por exemplo <b>@ju o Pedro</b> ou <b>@ju isso</b>.',
     'Ela não agenda se o horário já estiver ocupado, se a criança já tiver consulta perto desse horário ou se a '

@@ -64,6 +64,7 @@ import type {
 import {
   inferirAreasMotoras,
   NOME_MEDIDA_MOTORA,
+  descreverRuidosHemitorax,
 } from '@/types/evolucao-clinica';
 import {
   aplicarProgramacaoDaEvolucao,
@@ -1210,13 +1211,7 @@ export const AppointmentDetailsManager =
             if (hd.murmurio_vesicular) {
               conteudoResumo += `     • MV: ${mvMap[hd.murmurio_vesicular] || hd.murmurio_vesicular}\n`;
             }
-            const ruidosD = [];
-            if (hd.ruidos_ausentes) ruidosD.push('Sem ruídos adventícios');
-            if (hd.sibilos) ruidosD.push('Sibilos');
-            if (hd.roncos) ruidosD.push('Roncos');
-            if (hd.roncos_transmissao) ruidosD.push('Roncos de Transmissão');
-            if (hd.estertores_finos) ruidosD.push('Estertores finos');
-            if (hd.estertores_grossos) ruidosD.push('Estertores grossos');
+            const ruidosD = descreverRuidosHemitorax(hd);
             if (ruidosD.length > 0) {
               conteudoResumo += `     • Ruídos: ${ruidosD.join(', ')}\n`;
             }
@@ -1234,13 +1229,7 @@ export const AppointmentDetailsManager =
             if (he.murmurio_vesicular) {
               conteudoResumo += `     • MV: ${mvMap[he.murmurio_vesicular] || he.murmurio_vesicular}\n`;
             }
-            const ruidosE = [];
-            if (he.ruidos_ausentes) ruidosE.push('Sem ruídos adventícios');
-            if (he.sibilos) ruidosE.push('Sibilos');
-            if (he.roncos) ruidosE.push('Roncos');
-            if (he.roncos_transmissao) ruidosE.push('Roncos de Transmissão');
-            if (he.estertores_finos) ruidosE.push('Estertores finos');
-            if (he.estertores_grossos) ruidosE.push('Estertores grossos');
+            const ruidosE = descreverRuidosHemitorax(he);
             if (ruidosE.length > 0) {
               conteudoResumo += `     • Ruídos: ${ruidosE.join(', ')}\n`;
             }
@@ -1270,6 +1259,10 @@ export const AppointmentDetailsManager =
               tecnicas.push('Vibrocompressão');
             if (ev.intervencao.expiração_lenta_prolongada)
               tecnicas.push('Expiração Lenta Prolongada');
+            if (ev.intervencao.inspiracao_forcada)
+              tecnicas.push('Inspiração Forçada');
+            if (ev.intervencao.expiracao_forcada)
+              tecnicas.push('Expiração Forçada');
             if (ev.intervencao.rta) tecnicas.push('RTA');
             if (ev.intervencao.epap) tecnicas.push('EPAP');
             if (ev.intervencao.epap_selo_dagua)
@@ -1414,6 +1407,8 @@ export const AppointmentDetailsManager =
               const mudancasAusculta = [];
               if (ev.avaliacao_depois.ausculta_melhorou)
                 mudancasAusculta.push('Melhora geral');
+              if (ev.avaliacao_depois.ausculta_pouca_melhora)
+                mudancasAusculta.push('Pouca melhora');
               if (ev.avaliacao_depois.ausculta_reducao_roncos)
                 mudancasAusculta.push('↓ Redução de roncos');
               if (ev.avaliacao_depois.ausculta_reducao_sibilos)

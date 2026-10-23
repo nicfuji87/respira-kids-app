@@ -271,3 +271,11 @@ REVOKE ALL ON FUNCTION public.fn_ju_comando_resposta(bigint, text, text, jsonb) 
 -- Fisioterapia Motora FDS R$ 350 (depois da avaliação vem sessão); sem cadastro → avisa; "@ju emite
 -- a nota" → só agenda por enquanto. Validações do banco: mesmo comando 2x, consulta perto, criança de
 -- outra família recusados.
+
+-- (23/10/2026, migration ju_agendar_empresa_por_fisio_e_sugestao_auto, dono)
+-- Empresa da nota fixa por fisio: Flávia → F.S PACHECO (d80f8659…); todas as outras → BC FISIO (e02b9107…).
+-- Gatilho trg_agenda_sugestao_fechar (AFTER INSERT em agendamentos): consulta nova da criança encerra o
+-- aviso "Lançar consulta" pendente (status lancada + agendamento_id), venha do @ju ou do app.
+-- 1º uso real (Laura, 23/10 10h38): consulta certa; a "Nova Consulta" da família não saiu porque o fluxo
+-- n8n [RK] Webhook Agendamento manda para responsavel_legal.telefone e o responsável legal (Gabriel)
+-- está sem telefone no cadastro (uazapi 400 "missing required fields") — não é do @ju.
