@@ -134,6 +134,53 @@ export async function fetchStatus(): Promise<StatusCelular> {
 }
 
 // ---------------------------------------------------------------------------
+// Evoluções da clínica (calendário do mês + o que falta + bônus)
+// Horários vêm em "hora de parede" de Brasília, sem fuso ("2026-10-24T10:00:00").
+// Prazo: 24h; sábado e domingo vencem segunda 23h59 (fn_evolucao_prazo).
+// ---------------------------------------------------------------------------
+export interface DiaEvolucoes {
+  data: string; // YYYY-MM-DD
+  sessoes: number; // agendadas no dia (sem canceladas/faltas/domiciliar)
+  realizadas: number; // já aconteceram
+  evoluidas: number;
+  faltam: number; // aconteceram e estão sem evolução
+  perdidas: number; // prazo vencido sem evolução no prazo
+}
+
+export interface SessaoPendente {
+  id: string;
+  inicio: string;
+  prazo: string;
+  grupo: string;
+  paciente: string;
+  profissional: string;
+}
+
+export interface EvolucoesCelular {
+  mes: string; // YYYY-MM
+  hoje: string; // YYYY-MM-DD
+  agora: string; // hora de parede do servidor
+  dias: DiaEvolucoes[];
+  no_prazo: SessaoPendente[];
+  vencidas: SessaoPendente[];
+  vencidas_total: number;
+  bonus: {
+    base: number;
+    desconto: number;
+    perdidas: number;
+    contadas: number;
+    valor: number;
+  };
+}
+
+export async function fetchEvolucoes(): Promise<EvolucoesCelular> {
+  const token = getToken();
+  if (!token) throw new CelularError('SESSAO_INVALIDA');
+  const r = await chamar('fn_estagio_celular_evolucoes', { p_token: token });
+  return r as unknown as EvolucoesCelular;
+}
+
+// ---------------------------------------------------------------------------
 // Localização (obrigatória): diferencia "negou a permissão" de "sem sinal"
 // ---------------------------------------------------------------------------
 export type GeoFalha = 'negado' | 'indisponivel' | 'sem_suporte';

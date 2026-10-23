@@ -1,7 +1,9 @@
 // AI dev note: Ponto pelo celular da estagiária. Rota pública #/ponto (sem login
 // do app): ela entra com o login + senha que o admin cadastrou na aba Ponto. Só
-// serve para bater ponto e ler/deixar recados entre turnos — mais nada.
-// Fluxo: login -> início (recados + batidas de hoje) -> localização (obrigatória,
+// serve para bater ponto, ler/deixar recados entre turnos e acompanhar as
+// evoluções da clínica (calendário + o que falta + bônus) — mais nada.
+// Fluxo: login -> início (recados + batidas de hoje + progresso das evoluções
+// da clínica, ver EvolucoesProgresso) -> localização (obrigatória,
 // precisa estar na cerca da clínica) -> [saída: checklist + recado] -> selfie -> ok.
 // A cerca é conferida aqui (para dar o aviso na hora) e de novo no servidor.
 
@@ -30,6 +32,7 @@ import { Textarea } from '@/components/primitives/textarea';
 import { cn } from '@/lib/utils';
 import {
   CelularError,
+  fetchEvolucoes,
   fetchStatus,
   getToken,
   login,
@@ -37,6 +40,7 @@ import {
   pedirLocalizacao,
   registrar,
   type GeoFalha,
+  type EvolucoesCelular,
   type StatusCelular,
 } from '@/lib/estagio-celular-api';
 import {
@@ -49,6 +53,7 @@ import {
   CHECKLIST_SAIDA,
   LEMBRETE_ENTRADA,
 } from '@/lib/estagio-ponto-checklist';
+import { EvolucoesProgresso } from '@/components/domain/processo-seletivo/EvolucoesProgresso';
 
 type Fase =
   | 'carregando'
@@ -226,6 +231,10 @@ const SelfieCamera: React.FC<{
 export const PontoCelularPage: React.FC = () => {
   const [fase, setFase] = useState<Fase>('carregando');
   const [status, setStatus] = useState<StatusCelular | null>(null);
+  const [evolucoes, setEvolucoes] = useState<{
+    dados: EvolucoesCelular;
+    recebidoEm: number;
+  } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   // login
@@ -272,6 +281,10 @@ export const PontoCelularPage: React.FC = () => {
       const s = await fetchStatus();
       setStatus(s);
       setFase('inicio');
+      // Progresso das evoluções é complemento: se falhar, o ponto segue.
+      void fetchEvolucoes()
+        .then((dados) => setEvolucoes({ dados, recebidoEm: Date.now() }))
+        .catch(() => undefined);
     } catch (e) {
       tratarErro(e);
       if (!(e instanceof CelularError && e.codigo === 'SESSAO_INVALIDA')) {
@@ -541,6 +554,13 @@ export const PontoCelularPage: React.FC = () => {
               </p>
               {erro && <p className="text-sm text-vermelho-kids">{erro}</p>}
             </div>
+
+            {evolucoes && (
+              <EvolucoesProgresso
+                dados={evolucoes.dados}
+                recebidoEm={evolucoes.recebidoEm}
+              />
+            )}
 
             {status.meu_recado && (
               <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-1">
