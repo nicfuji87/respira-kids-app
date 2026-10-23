@@ -174,18 +174,23 @@ export async function checkAppointmentConflicts(
     // AI dev note: Também tratar bloqueios de agenda (clínica ou do profissional)
     // como conflito, para não publicar slots em horários bloqueados. Complementa o
     // trigger trg_bloqueio_sincroniza_slots (que cobre bloqueios criados DEPOIS dos slots).
+    // FUSO: slot ("2026-11-29T09:00:00", sem offset) e compromisso ("…T09:00:00+00:00")
+    // são ambos hora de parede → compara como UTC (sufixo Z), nunca new Date(slot)
+    // (que leria como horário local e erraria 3h). Privados de outra pessoa não vêm
+    // pela RLS, mas o gatilho trg_slot_respeita_bloqueio fecha o slot no banco.
     const { data: bloqueios } = await supabase
       .from('agenda_bloqueios')
       .select('inicio, fim')
       .eq('ativo', true)
+      .eq('impede_agendamento', true)
       .is('deleted_at', null)
       .or(`profissional_id.eq.${profissionalId},profissional_id.is.null`);
 
     const blockedSlots = slotsDataHora.filter((slot) => {
-      const t = new Date(slot).getTime();
+      const t = Date.parse(`${slot.slice(0, 19)}Z`);
       return (bloqueios || []).some((b) => {
-        const ini = new Date(b.inicio).getTime();
-        const fim = new Date(b.fim).getTime();
+        const ini = Date.parse(b.inicio);
+        const fim = Date.parse(b.fim);
         return t >= ini && t < fim;
       });
     });

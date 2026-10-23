@@ -13,8 +13,10 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/primitives/card';
 import { CurrentTimeIndicator } from './CurrentTimeIndicator';
 import { WeekEventBlock } from './WeekEventBlock';
+import { EventCard } from './EventCard';
 import { EventListModal } from '../domain/calendar';
 import type { CalendarEvent } from '@/types/calendar';
+import { ehEventoDeFaixa, eventoCobreDia } from '@/lib/agenda-bloqueios-api';
 
 // AI dev note: WeekTimeGrid simplificado e limpo
 // Grid semanal com layout simples e funcional
@@ -70,17 +72,27 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
       });
     }, [startHour, endHour]);
 
+    // Dia inteiro / vários dias (feriado, férias) vão para a faixa do topo
+    const { eventosFaixa, eventosGrade } = useMemo(() => {
+      const faixa: CalendarEvent[] = [];
+      const grade: CalendarEvent[] = [];
+      events.forEach((e) => (ehEventoDeFaixa(e) ? faixa : grade).push(e));
+      return { eventosFaixa: faixa, eventosGrade: grade };
+    }, [events]);
+
     // Agrupa eventos por dia
     const eventsGroupedByDay = useMemo(() => {
       const grouped: Record<string, CalendarEvent[]> = {};
 
       weekDays.forEach((day) => {
         const dayKey = day.toISOString().split('T')[0];
-        grouped[dayKey] = events.filter((event) => isSameDay(event.start, day));
+        grouped[dayKey] = eventosGrade.filter((event) =>
+          isSameDay(event.start, day)
+        );
       });
 
       return grouped;
-    }, [weekDays, events]);
+    }, [weekDays, eventosGrade]);
 
     // AI dev note: Detecção de sobreposições estilo Google Agenda
     // Eventos se sobrepõem parcialmente, mantendo largura mínima legível
@@ -244,6 +256,52 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                 );
               })}
             </div>
+
+            {/* Faixa "dia inteiro": feriado/clínica fechada, férias */}
+            {eventosFaixa.length > 0 && (
+              <div className="w-full grid grid-cols-[3rem_repeat(7,minmax(0,1fr))] md:grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-border/60">
+                <div className="flex items-center justify-end border-r border-border/50 pr-1.5 text-right text-xs leading-tight text-muted-foreground">
+                  Dia todo
+                </div>
+                {weekDays.map((day) => {
+                  const doDia = eventosFaixa.filter((e) =>
+                    eventoCobreDia(e, day)
+                  );
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      className="min-h-8 space-y-0.5 border-r border-border/50 p-0.5 last:border-r-0"
+                    >
+                      {doDia.slice(0, 2).map((e) => (
+                        <div key={e.id} className="h-6">
+                          <EventCard
+                            event={e}
+                            variant="week"
+                            onClick={handleEventClick}
+                            className="h-full"
+                          />
+                        </div>
+                      ))}
+                      {doDia.length > 2 && (
+                        <button
+                          type="button"
+                          className="w-full rounded text-xs text-muted-foreground hover:bg-muted"
+                          onClick={() =>
+                            setModalState({
+                              isOpen: true,
+                              date: day,
+                              events: doDia,
+                            })
+                          }
+                        >
+                          +{doDia.length - 2}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
             <div className="w-full grid grid-cols-[3rem_repeat(7,minmax(0,1fr))] md:grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] relative h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">

@@ -2,6 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { CalendarTemplate } from './CalendarTemplate';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
+import {
+  separarCompromissos,
+  filtrarCompromissosPorProfissional,
+} from '@/lib/agenda-bloqueios-api';
 import { CalendarFilters } from '@/components/composed/CalendarFilters';
 import { Card } from '@/components/primitives/card';
 import { Button } from '@/components/primitives/button';
@@ -87,7 +91,9 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
     const [selectedEmpresa, setSelectedEmpresa] = useState<string[]>([]);
 
     const getFilteredEvents = useMemo(() => {
-      let filteredEvents = [...events];
+      // Filtros de consulta só nas consultas; compromisso só pelo profissional
+      const { consultas, compromissos } = separarCompromissos(events);
+      let filteredEvents = [...consultas];
 
       // AI dev note: Filtrar por profissional se selecionado
       if (selectedProfessional && selectedProfessional !== 'all') {
@@ -186,7 +192,13 @@ export const AdminCalendarTemplate = React.memo<AdminCalendarTemplateProps>(
         );
       }
 
-      return filteredEvents;
+      return [
+        ...filteredEvents,
+        ...filtrarCompromissosPorProfissional(
+          compromissos,
+          selectedProfessional
+        ),
+      ];
     }, [
       events,
       selectedProfessional,

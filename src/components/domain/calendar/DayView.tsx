@@ -4,9 +4,18 @@ import { ptBR } from 'date-fns/locale';
 
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/primitives/card';
-import { CurrentTimeIndicator, WeekEventBlock } from '@/components/composed';
+import {
+  CurrentTimeIndicator,
+  WeekEventBlock,
+  EventCard,
+} from '@/components/composed';
 import { EventListModal } from '../calendar';
 import type { CalendarEvent } from '@/types/calendar';
+import {
+  ehEventoDeFaixa,
+  eventoCobreDia,
+  isCompromissoEvent,
+} from '@/lib/agenda-bloqueios-api';
 
 // AI dev note: DayView combina TimeSlot Composed
 // Vista diária com timeline detalhada
@@ -57,10 +66,36 @@ export const DayView = React.memo<DayViewProps>(
       });
     }, [startHour, endHour]);
 
-    // Filtrar eventos do dia atual
+    // Dia inteiro / vários dias (feriado, férias) vão para a faixa do topo
+    const eventosFaixa = useMemo(
+      () =>
+        events.filter(
+          (e) => ehEventoDeFaixa(e) && eventoCobreDia(e, currentDate)
+        ),
+      [events, currentDate]
+    );
+
+    // Compromissos com horário (almoço, terapia...) desenhados por baixo das
+    // consultas: ocupam a largura toda e a consulta por cima fica mais estreita,
+    // deixando o compromisso (e o conflito) visível.
+    const compromissosGrade = useMemo(
+      () =>
+        events.filter(
+          (e) =>
+            isCompromissoEvent(e) &&
+            !ehEventoDeFaixa(e) &&
+            isSameDay(e.start, currentDate)
+        ),
+      [events, currentDate]
+    );
+
+    // Filtrar eventos do dia atual (consultas)
     const dayEvents = useMemo(() => {
-      const filtered = events.filter((event) =>
-        isSameDay(event.start, currentDate)
+      const filtered = events.filter(
+        (event) =>
+          !isCompromissoEvent(event) &&
+          !ehEventoDeFaixa(event) &&
+          isSameDay(event.start, currentDate)
       );
 
       // AI dev note: Debug logs para identificar eventos faltando
@@ -264,6 +299,27 @@ export const DayView = React.memo<DayViewProps>(
               </h2>
             </div>
 
+            {/* Faixa "dia inteiro": feriado/clínica fechada, férias */}
+            {eventosFaixa.length > 0 && (
+              <div className="grid w-full grid-cols-[3rem_1fr] border-b border-border/60 md:grid-cols-[3.5rem_1fr]">
+                <div className="flex items-center justify-end border-r border-border/50 pr-1.5 text-right text-xs leading-tight text-muted-foreground">
+                  Dia todo
+                </div>
+                <div className="space-y-1 p-1">
+                  {eventosFaixa.map((e) => (
+                    <div key={e.id} className="h-7">
+                      <EventCard
+                        event={e}
+                        variant="week"
+                        onClick={handleEventClick}
+                        className="h-full"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
             <div className="w-full grid grid-cols-[3rem_1fr] md:grid-cols-[3.5rem_1fr] h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">
               {/* Coluna de horários - estreita, rótulo à direita sobre a linha
@@ -344,13 +400,34 @@ export const DayView = React.memo<DayViewProps>(
                   );
                 })}
 
+                {/* Compromissos com horário: camada de baixo, largura total */}
+                {compromissosGrade.map((event) => (
+                  <WeekEventBlock
+                    key={event.id}
+                    event={event}
+                    startHour={startHour}
+                    endHour={endHour}
+                    hourHeight={hourHeight}
+                    onClick={handleEventClick}
+                    zIndex={1}
+                    userRole={userRole}
+                  />
+                ))}
+
                 {/* Eventos renderizados sobre os slots */}
                 {/* AI dev note: Filtra e renderiza eventos (max 2 por horário exato) */}
                 {eventsWithOverlap
                   .filter(({ event }) => shouldShowEvent(event, dayEvents))
                   .map(({ event, overlapIndex, totalOverlapping }) => {
-                    // Ajustar para máximo 2 colunas visíveis
-                    const adjustedTotal = Math.min(totalOverlapping, 2);
+                    // Ajustar para máximo 2 colunas visíveis; consulta sobre um
+                    // compromisso fica mais estreita para o compromisso aparecer
+                    const sobreCompromisso = compromissosGrade.some(
+                      (c) => c.start < event.end && c.end > event.start
+                    );
+                    const adjustedTotal = Math.max(
+                      Math.min(totalOverlapping, 2),
+                      sobreCompromisso ? 2 : 1
+                    );
                     const adjustedIndex = Math.min(overlapIndex, 1);
 
                     return (
@@ -363,6 +440,7 @@ export const DayView = React.memo<DayViewProps>(
                         onClick={handleEventClick}
                         overlapIndex={adjustedIndex}
                         totalOverlapping={adjustedTotal}
+                        zIndex={2}
                         userRole={userRole}
                       />
                     );

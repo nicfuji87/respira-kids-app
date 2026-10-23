@@ -216,6 +216,7 @@ export const ResponsiveCalendarTemplate =
               <CalendarTemplate
                 {...baseProps}
                 canCreateEvents={false}
+                canCreateCompromissos={false}
                 canEditEvents={false}
               />
             );

@@ -1,178 +1,198 @@
-// AI dev note: API da feature "Bloquear agenda". CRUD de agenda_bloqueios +
-// expansão de recorrência (materializa linhas concretas) + pré-checagem de
-// consultas em conflito. O enforcement real (agendamento não cai em bloqueio) é
-// do banco (trigger trg_valida_bloqueio_agendamento); aqui é só gestão/UX.
+// AI dev note: API dos COMPROMISSOS da agenda (tabela agenda_bloqueios).
+// - Horários em HORA DE PAREDE, igual agendamentos.data_hora: grava com
+//   toWallClockString(date) e lê com parseSupabaseDatetime. Nunca toISOString()
+//   aqui (foi o bug de 3h: o banco aplicava o bloqueio 3h depois).
+// - Leitura do calendário via RPC fn_agenda_compromissos: já vem mascarada por papel
+//   (privado → "Indisponível") e com nº de conflitos com consultas.
+// - O banco é quem garante as regras: consulta não entra em compromisso
+//   (trg_valida_bloqueio_agendamento), compromisso não entra em consulta sem aceite de
+//   admin/secretária (trg_valida_conflito_compromisso), slots públicos fecham/reabrem
+//   sozinhos (trg_bloqueio_sincroniza_slots). Aqui é gestão e UX.
 
 import { supabase } from './supabase';
-import { MOTIVO_BLOQUEIO_LABELS } from '@/types/agenda-bloqueios';
-import type {
-  AgendaBloqueioComProfissional,
-  ConflitoBloqueio,
-  CreateBloqueioInput,
-  MotivoBloqueio,
+import { parseSupabaseDatetime } from './calendar-mappers';
+import {
+  MOTIVO_BLOQUEIO_CORES,
+  grupoFiltroCompromisso,
+  labelCategoria,
+  tituloCompromisso,
+  type CompromissoAgenda,
+  type CompromissoInput,
+  type ConflitoCompromisso,
+  type CreateCompromissoInput,
+  type MotivoBloqueio,
 } from '@/types/agenda-bloqueios';
 import type { CalendarEvent } from '@/types/calendar';
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.length > 0) return message;
-  }
-  return 'Erro desconhecido';
+const pad = (n: number) => String(n).padStart(2, '0');
+
+// Date (hora local) → string de hora de parede no formato do banco
+export function toWallClockString(d: Date): string {
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:00+00:00`
+  );
 }
 
-// AI dev note: Expande a recorrência em ocorrências concretas {inicio, fim}.
-// 'nenhuma' -> uma ocorrência. 'semanal' -> uma por dia da semana marcado, do
-// dia da primeira ocorrência até `ate` (inclusive), preservando hora e duração.
+export const fromWallClockString = parseSupabaseDatetime;
+
+export const notifyCompromissosChanged = () =>
+  window.dispatchEvent(new Event('bloqueios:changed'));
+
+// ------------------------------------------------------------------
+// Erros vindos do banco
+// ------------------------------------------------------------------
+export type ErroCompromisso =
+  | { tipo: 'conflito'; mensagem: string }
+  | { tipo: 'sem_permissao_conflito'; mensagem: string }
+  | { tipo: 'outro'; mensagem: string };
+
+export function interpretarErroCompromisso(error: unknown): ErroCompromisso {
+  const e = (error ?? {}) as { message?: string; hint?: string };
+  const mensagem =
+    typeof e.message === 'string' && e.message
+      ? e.message
+      : error instanceof Error
+        ? error.message
+        : 'Erro desconhecido';
+  if (e.hint === 'compromisso_conflito') return { tipo: 'conflito', mensagem };
+  if (e.hint === 'compromisso_conflito_sem_permissao')
+    return { tipo: 'sem_permissao_conflito', mensagem };
+  return { tipo: 'outro', mensagem };
+}
+
+export class CompromissoError extends Error {
+  erro: ErroCompromisso;
+  constructor(erro: ErroCompromisso) {
+    super(erro.mensagem);
+    this.erro = erro;
+  }
+}
+
+// ------------------------------------------------------------------
+// Recorrência → ocorrências concretas (hora local preservada)
+// ------------------------------------------------------------------
+const MAX_OCORRENCIAS = 400;
+
 export function expandRecorrencia(
-  input: CreateBloqueioInput
-): Array<{ inicio: string; fim: string }> {
+  input: Pick<CreateCompromissoInput, 'inicio' | 'fim' | 'recorrencia'>
+): Array<{ inicio: Date; fim: Date }> {
   const base = { inicio: input.inicio, fim: input.fim };
-  if (input.recorrencia.tipo === 'nenhuma') return [base];
+  const { recorrencia } = input;
+  if (recorrencia.tipo === 'nenhuma' || !recorrencia.ate) return [base];
 
-  const inicioDate = new Date(input.inicio);
-  const fimDate = new Date(input.fim);
-  const durationMs = fimDate.getTime() - inicioDate.getTime();
-  const startH = inicioDate.getHours();
-  const startM = inicioDate.getMinutes();
+  const duracaoMs = input.fim.getTime() - input.inicio.getTime();
+  const h = input.inicio.getHours();
+  const m = input.inicio.getMinutes();
+  const [ay, am, ad] = recorrencia.ate.split('-').map(Number);
+  const ate = new Date(ay, am - 1, ad, 23, 59, 59);
 
-  const dias = new Set(input.recorrencia.diasSemana);
-  const ate = new Date(`${input.recorrencia.ate}T23:59:59`);
+  const vale = (diaSemana: number) => {
+    if (recorrencia.tipo === 'diaria') return true;
+    if (recorrencia.tipo === 'dias_uteis')
+      return diaSemana >= 1 && diaSemana <= 5;
+    return recorrencia.diasSemana.includes(diaSemana);
+  };
 
-  const results: Array<{ inicio: string; fim: string }> = [];
+  const out: Array<{ inicio: Date; fim: Date }> = [];
   const cursor = new Date(
-    inicioDate.getFullYear(),
-    inicioDate.getMonth(),
-    inicioDate.getDate()
+    input.inicio.getFullYear(),
+    input.inicio.getMonth(),
+    input.inicio.getDate()
   );
-
-  // Trava de segurança contra loops muito longos (2 anos)
   let guard = 0;
-  while (cursor <= ate && guard < 800) {
+  while (cursor <= ate && guard < 800 && out.length < MAX_OCORRENCIAS) {
     guard += 1;
-    if (dias.has(cursor.getDay())) {
-      const occInicio = new Date(
+    if (vale(cursor.getDay())) {
+      const ini = new Date(
         cursor.getFullYear(),
         cursor.getMonth(),
         cursor.getDate(),
-        startH,
-        startM,
-        0,
-        0
+        h,
+        m
       );
-      const occFim = new Date(occInicio.getTime() + durationMs);
-      results.push({
-        inicio: occInicio.toISOString(),
-        fim: occFim.toISOString(),
-      });
+      // soma a duração pelo relógio local (evita surpresa em horário de verão)
+      const fim = new Date(ini.getTime() + duracaoMs);
+      out.push({ inicio: ini, fim });
     }
     cursor.setDate(cursor.getDate() + 1);
   }
-
-  return results.length > 0 ? results : [base];
+  return out.length > 0 ? out : [base];
 }
 
-export async function createBloqueios(
-  input: CreateBloqueioInput
+// ------------------------------------------------------------------
+// Escrita
+// ------------------------------------------------------------------
+function camposComuns(input: CompromissoInput) {
+  return {
+    profissional_id: input.profissionalId,
+    dia_inteiro: input.diaInteiro,
+    motivo: input.categoria,
+    titulo: input.titulo?.trim() ? input.titulo.trim().slice(0, 120) : null,
+    observacao: input.observacao?.trim() ? input.observacao.trim() : null,
+    privado: input.privado,
+    impede_agendamento: input.impedeAgendamento,
+    // carimbo de auditoria (instante real), não é horário de agenda
+    conflito_aceito_em: input.aceitarConflito ? new Date().toISOString() : null,
+  };
+}
+
+export async function createCompromissos(
+  input: CreateCompromissoInput
 ): Promise<{ count: number; recorrenciaId: string | null }> {
-  const occurrences = expandRecorrencia(input);
+  const ocorrencias = expandRecorrencia(input);
   const recorrenciaId =
-    input.recorrencia.tipo !== 'nenhuma' && occurrences.length > 1
+    input.recorrencia.tipo !== 'nenhuma' && ocorrencias.length > 1
       ? crypto.randomUUID()
       : null;
 
-  const rows = occurrences.map((o) => ({
-    profissional_id: input.profissionalId,
-    inicio: o.inicio,
-    fim: o.fim,
-    dia_inteiro: input.diaInteiro,
-    motivo: input.motivo,
-    observacao: input.observacao ?? null,
+  const comuns = camposComuns(input);
+  const rows = ocorrencias.map((o) => ({
+    ...comuns,
+    inicio: toWallClockString(o.inicio),
+    fim: toWallClockString(o.fim),
     recorrencia_id: recorrenciaId,
-    criado_por: input.criadoPor,
   }));
 
   const { error, count } = await supabase
     .from('agenda_bloqueios')
     .insert(rows, { count: 'exact' });
-
-  if (error) throw new Error(getErrorMessage(error));
+  if (error) throw new CompromissoError(interpretarErroCompromisso(error));
   return { count: count ?? rows.length, recorrenciaId };
 }
 
-// AI dev note: Lista bloqueios ativos. Se incluirClinica, traz também os de
-// clínica inteira (profissional_id IS NULL) além dos do profissional.
-export async function listBloqueios(params: {
-  profissionalId?: string | null;
-  incluirClinica?: boolean;
-  from?: string;
-  to?: string;
-}): Promise<AgendaBloqueioComProfissional[]> {
-  let query = supabase
-    .from('agenda_bloqueios')
-    .select(
-      '*, profissional:pessoas!agenda_bloqueios_profissional_id_fkey(nome)'
-    )
-    .eq('ativo', true)
-    .is('deleted_at', null)
-    .order('inicio', { ascending: true });
-
-  if (params.from) query = query.gte('fim', params.from);
-  if (params.to) query = query.lte('inicio', params.to);
-
-  if (params.profissionalId) {
-    if (params.incluirClinica) {
-      query = query.or(
-        `profissional_id.eq.${params.profissionalId},profissional_id.is.null`
-      );
-    } else {
-      query = query.eq('profissional_id', params.profissionalId);
-    }
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(getErrorMessage(error));
-
-  return (data || []).map((b) => {
-    const prof = (b as { profissional?: { nome?: string } | null })
-      .profissional;
-    return {
-      ...(b as unknown as AgendaBloqueioComProfissional),
-      profissional_nome: prof?.nome ?? null,
-    };
-  });
-}
-
-export async function updateBloqueio(
+export async function updateCompromisso(
   id: string,
-  patch: Partial<{
-    inicio: string;
-    fim: string;
-    dia_inteiro: boolean;
-    motivo: string | null;
-    observacao: string | null;
-  }>
+  input: CompromissoInput
 ): Promise<void> {
+  const comuns = camposComuns(input);
+  const patch: Record<string, unknown> = {
+    ...comuns,
+    inicio: toWallClockString(input.inicio),
+    fim: toWallClockString(input.fim),
+  };
+  // Sem aceite novo, não mexe no aceite antigo (o banco exige aceite novo só se mover
+  // para cima de consulta).
+  if (!input.aceitarConflito) delete patch.conflito_aceito_em;
+
   const { error } = await supabase
     .from('agenda_bloqueios')
     .update(patch)
     .eq('id', id);
-  if (error) throw new Error(getErrorMessage(error));
+  if (error) throw new CompromissoError(interpretarErroCompromisso(error));
 }
 
-// AI dev note: Soft delete (mantém integridade). NÃO reabre slots públicos que
-// o bloqueio fechou (limitação conhecida do v1).
-export async function deleteBloqueio(id: string): Promise<void> {
+// Soft delete. O banco reabre os slots públicos que este compromisso fechou.
+export async function deleteCompromisso(id: string): Promise<void> {
   const { error } = await supabase
     .from('agenda_bloqueios')
     .update({ ativo: false, deleted_at: new Date().toISOString() })
     .eq('id', id)
     .is('deleted_at', null);
-  if (error) throw new Error(getErrorMessage(error));
+  if (error) throw new CompromissoError(interpretarErroCompromisso(error));
 }
 
-export async function deleteBloqueioSerie(
+export async function deleteCompromissoSerie(
   recorrenciaId: string
 ): Promise<void> {
   const { error } = await supabase
@@ -180,89 +200,153 @@ export async function deleteBloqueioSerie(
     .update({ ativo: false, deleted_at: new Date().toISOString() })
     .eq('recorrencia_id', recorrenciaId)
     .is('deleted_at', null);
-  if (error) throw new Error(getErrorMessage(error));
+  if (error) throw new CompromissoError(interpretarErroCompromisso(error));
 }
 
-// AI dev note: Consultas ativas (agendado/confirmado) que caem dentro do período
-// do bloqueio — para avisar o usuário antes de confirmar. Aproximação por início
-// da consulta dentro da janela (suficiente para o aviso).
-export async function fetchConflitosParaBloqueio(
+// ------------------------------------------------------------------
+// Leitura
+// ------------------------------------------------------------------
+export async function listCompromissos(params: {
+  from: Date;
+  to: Date;
+  profissionalId?: string | null;
+}): Promise<CompromissoAgenda[]> {
+  const { data, error } = await supabase.rpc('fn_agenda_compromissos', {
+    p_inicio: toWallClockString(params.from),
+    p_fim: toWallClockString(params.to),
+    p_profissional_id: params.profissionalId ?? null,
+  });
+  if (error) throw new CompromissoError(interpretarErroCompromisso(error));
+  return (data ?? []) as CompromissoAgenda[];
+}
+
+// Consultas agendadas/confirmadas que se sobrepõem a alguma ocorrência
+export async function fetchConflitosCompromisso(
   profissionalId: string | null,
-  inicio: string,
-  fim: string
-): Promise<ConflitoBloqueio[]> {
-  let query = supabase
-    .from('vw_agendamentos_completos')
-    .select(
-      'data_hora, paciente_nome, profissional_nome, status_consulta_codigo'
-    )
-    .eq('ativo', true)
-    .gte('data_hora', inicio)
-    .lt('data_hora', fim)
-    .order('data_hora', { ascending: true });
-
-  if (profissionalId) query = query.eq('profissional_id', profissionalId);
-
-  const { data, error } = await query;
-  if (error) throw new Error(getErrorMessage(error));
-
-  return (data || [])
-    .filter((a) => {
-      const codigo = (a as { status_consulta_codigo?: string })
-        .status_consulta_codigo;
-      return codigo === 'agendado' || codigo === 'confirmado';
-    })
-    .map((a) => {
-      const row = a as {
-        data_hora: string;
-        paciente_nome: string | null;
-        profissional_nome: string | null;
-      };
-      return {
-        data_hora: row.data_hora,
-        paciente_nome: row.paciente_nome,
-        profissional_nome: row.profissional_nome,
-      };
-    });
+  ocorrencias: Array<{ inicio: Date; fim: Date }>
+): Promise<ConflitoCompromisso[]> {
+  if (ocorrencias.length === 0) return [];
+  const { data, error } = await supabase.rpc('fn_compromisso_conflitos', {
+    p_profissional_id: profissionalId,
+    p_intervalos: ocorrencias.map((o) => ({
+      inicio: toWallClockString(o.inicio),
+      fim: toWallClockString(o.fim),
+    })),
+  });
+  if (error) throw new CompromissoError(interpretarErroCompromisso(error));
+  return ((data ?? []) as ConflitoCompromisso[]).sort((a, b) =>
+    a.data_hora.localeCompare(b.data_hora)
+  );
 }
 
-// AI dev note: Converte um bloqueio em CalendarEvent cinza para render no
-// calendário. metadata.type='bloqueio' permite o CalendarTemplate diferenciar
-// do agendamento (abre o diálogo de bloqueio, não o de consulta).
-export function mapBloqueioToCalendarEvent(
-  b: AgendaBloqueioComProfissional
+// ------------------------------------------------------------------
+// Calendário
+// ------------------------------------------------------------------
+export interface CompromissoEventMetadata {
+  type: 'bloqueio';
+  compromisso: CompromissoAgenda;
+  categoria: string | null;
+  categoriaLabel: string;
+  grupoFiltro: ReturnType<typeof grupoFiltroCompromisso>;
+  profissionalId: string | null;
+  profissionalNome: string | null;
+  clinicaInteira: boolean;
+  mascarado: boolean;
+  recorrente: boolean;
+  conflitos: number;
+  impedeAgendamento: boolean;
+  [key: string]: unknown;
+}
+
+export function isCompromissoEvent(
+  event: CalendarEvent
+): event is CalendarEvent & { metadata: CompromissoEventMetadata } {
+  return event.metadata?.type === 'bloqueio';
+}
+
+// AI dev note: Os filtros das telas (paciente, serviço, status, pagamento...) são de
+// consulta e derrubavam os compromissos. Os templates separam os dois: filtros de
+// consulta só nas consultas; compromisso só respeita o filtro de profissional
+// (clínica inteira sempre aparece).
+export function separarCompromissos(events: CalendarEvent[]): {
+  consultas: CalendarEvent[];
+  compromissos: CalendarEvent[];
+} {
+  const consultas: CalendarEvent[] = [];
+  const compromissos: CalendarEvent[] = [];
+  for (const e of events)
+    (isCompromissoEvent(e) ? compromissos : consultas).push(e);
+  return { consultas, compromissos };
+}
+
+export function filtrarCompromissosPorProfissional(
+  compromissos: CalendarEvent[],
+  profissionalId?: string | null
+): CalendarEvent[] {
+  if (!profissionalId || profissionalId === 'all') return compromissos;
+  return compromissos.filter((e) => {
+    const m = e.metadata as CompromissoEventMetadata | undefined;
+    return !!m && (m.clinicaInteira || m.profissionalId === profissionalId);
+  });
+}
+
+// AI dev note: Vai para a faixa "dia inteiro" no topo das visões semana/dia (e não
+// para a grade de horas): dia inteiro ou que atravessa a meia-noite (férias).
+export function ehEventoDeFaixa(event: CalendarEvent): boolean {
+  if (event.allDay) return true;
+  const fimInclusivo = new Date(event.end.getTime() - 1);
+  return (
+    event.start.getFullYear() !== fimInclusivo.getFullYear() ||
+    event.start.getMonth() !== fimInclusivo.getMonth() ||
+    event.start.getDate() !== fimInclusivo.getDate()
+  );
+}
+
+export function eventoCobreDia(event: CalendarEvent, dia: Date): boolean {
+  const ini = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate());
+  const fim = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate() + 1);
+  return event.start < fim && event.end > ini;
+}
+
+export function mapCompromissoToCalendarEvent(
+  c: CompromissoAgenda
 ): CalendarEvent {
-  const motivoLabel = b.motivo
-    ? (MOTIVO_BLOQUEIO_LABELS[b.motivo as MotivoBloqueio] ?? b.motivo)
-    : 'Bloqueado';
-  const alvo =
-    b.profissional_id === null
-      ? 'Clínica inteira'
-      : (b.profissional_nome ?? 'Profissional');
+  const metadata: CompromissoEventMetadata = {
+    type: 'bloqueio',
+    compromisso: c,
+    categoria: c.categoria,
+    categoriaLabel: c.mascarado ? 'Indisponível' : labelCategoria(c.categoria),
+    grupoFiltro: grupoFiltroCompromisso(c),
+    profissionalId: c.profissional_id,
+    profissionalNome: c.profissional_nome,
+    clinicaInteira: c.profissional_id === null,
+    mascarado: c.mascarado,
+    recorrente: !!c.recorrencia_id,
+    conflitos: c.conflitos,
+    impedeAgendamento: c.impede_agendamento,
+  };
   return {
-    id: `bloqueio-${b.id}`,
-    title: `🔒 ${motivoLabel}`,
-    description: b.observacao ?? undefined,
-    start: new Date(b.inicio),
-    end: new Date(b.fim),
-    allDay: b.dia_inteiro,
-    color: 'gray',
-    location: alvo,
-    metadata: { type: 'bloqueio', bloqueio: b },
+    id: `bloqueio-${c.id}`,
+    title: tituloCompromisso(c),
+    description: c.observacao ?? undefined,
+    start: fromWallClockString(c.inicio),
+    end: fromWallClockString(c.fim),
+    allDay: c.dia_inteiro,
+    color: c.mascarado
+      ? 'gray'
+      : (MOTIVO_BLOQUEIO_CORES[c.categoria as MotivoBloqueio] ?? 'gray'),
+    location:
+      c.profissional_id === null
+        ? 'Clínica inteira'
+        : (c.profissional_nome ?? undefined),
+    metadata,
   };
 }
 
-export async function fetchBloqueiosAsEvents(params: {
-  from: string;
-  to: string;
-  profissionalId?: string | null;
-  incluirClinica?: boolean;
+export async function fetchCompromissosAsEvents(params: {
+  from: Date;
+  to: Date;
 }): Promise<CalendarEvent[]> {
-  const bloqueios = await listBloqueios({
-    from: params.from,
-    to: params.to,
-    profissionalId: params.profissionalId ?? undefined,
-    incluirClinica: params.incluirClinica,
-  });
-  return bloqueios.map(mapBloqueioToCalendarEvent);
+  const lista = await listCompromissos(params);
+  return lista.map(mapCompromissoToCalendarEvent);
 }

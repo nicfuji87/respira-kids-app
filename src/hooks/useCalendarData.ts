@@ -37,7 +37,7 @@ import {
   mapCalendarEventToAgendamento,
   calculateCalendarPermissions,
 } from '@/lib/calendar-mappers';
-import { fetchBloqueiosAsEvents } from '@/lib/agenda-bloqueios-api';
+import { fetchCompromissosAsEvents } from '@/lib/agenda-bloqueios-api';
 import { useAuth } from './useAuth';
 import type {
   SupabaseTipoServico,
@@ -203,22 +203,17 @@ export const useCalendarData = (
         });
       }
 
-      // AI dev note: Mesclar bloqueios de agenda (eventos cinza) no mesmo range.
-      // Falha ao buscar bloqueios NÃO pode derrubar o calendário de consultas.
+      // AI dev note: Mescla os compromissos da agenda (RPC fn_agenda_compromissos:
+      // escopo por papel e privados já mascarados no banco). Range em hora de parede
+      // (Date local → string sem conversão). Falha aqui NÃO derruba as consultas.
       let bloqueioEvents: CalendarEvent[] = [];
       try {
-        const role = user.pessoa?.role as
-          | 'admin'
-          | 'profissional'
-          | 'secretaria';
-        bloqueioEvents = await fetchBloqueiosAsEvents({
-          from: dateRange.start.toISOString(),
-          to: dateRange.end.toISOString(),
-          profissionalId: role === 'profissional' ? user.pessoa.id : undefined,
-          incluirClinica: role === 'profissional',
+        bloqueioEvents = await fetchCompromissosAsEvents({
+          from: dateRange.start,
+          to: dateRange.end,
         });
       } catch (bloqErr) {
-        console.error('❌ Erro ao buscar bloqueios de agenda:', bloqErr);
+        console.error('❌ Erro ao buscar compromissos da agenda:', bloqErr);
       }
 
       setEvents([...calendarEvents, ...bloqueioEvents]);
@@ -278,7 +273,7 @@ export const useCalendarData = (
   ]);
 
   // AI dev note: Recarrega quando bloqueios de agenda mudam (criados/editados/
-  // removidos no BloqueioAgendaDialog dispara window 'bloqueios:changed').
+  // removidos no CompromissoDialog dispara window 'bloqueios:changed').
   useEffect(() => {
     const handler = () => {
       if (user?.pessoa?.id) fetchEvents();
