@@ -3849,7 +3849,7 @@ export const EvolutionSectionContent: React.FC<
               </Field>
             )}
 
-            {/* Some sozinho para quem não está no piloto das medidas */}
+            {/* Some sozinho para quem não vê medidas (secretaria) */}
             <ReavaliacoesConduta
               medicoes={medicoes}
               proximas={proximas}
