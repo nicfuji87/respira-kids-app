@@ -2,7 +2,7 @@
 
 Uso: python scripts/gerar_guia_ju.py docs/Guia_da_Ju.pdf
 Linguagem simples, sem termos técnicos: o público é a equipe (recepção e fisios).
-Atualizado em 22/10/2026 à noite: a Ju começa a responder as famílias em 23/10; aviso de consulta não lançada com botão.
+Atualizado em 23/10/2026: @ju na conversa para a Ju agendar.
 """
 import sys
 from reportlab.lib.pagesizes import A4
@@ -241,7 +241,25 @@ s += section('9. O que aparece no grupo RK · Notificações', table([
 ], [64, 110]))
 
 # 10
-s += section('10. Se a Ju errar', bullets([
+s += section('10. Pedir para a Ju agendar: @ju', bullets([
+    'Na conversa com a família, quando o horário estiver combinado, escreva uma mensagem começando com <b>@ju</b>. '
+    'Exemplos: <b>@ju agenda</b>, <b>@ju agenda para a Bruna</b>, <b>@ju agende o Pedro amanhã às 9h</b>.',
+    'A Ju lê a conversa e lança a consulta na agenda: a criança, o dia, a hora, a fisio e o tipo de atendimento '
+    '(sábado, domingo e feriado já entram com o valor de fim de semana). A sala segue o padrão: Bruna sala 2, '
+    'Flávia sala 1, as demais sala 3.',
+    'Depois ela escreve só "Acabei de agendar! Se puder, confere as informações". Os dados da consulta chegam '
+    'para a família pela mensagem automática de sempre.',
+    'Se faltar alguma coisa (qual criança, qual horário, qual atendimento), a Ju pergunta ali mesmo. Responda '
+    'começando de novo com <b>@ju</b>, por exemplo <b>@ju o Pedro</b> ou <b>@ju isso</b>.',
+    'Ela não agenda se o horário já estiver ocupado, se a criança já tiver consulta perto desse horário ou se a '
+    'família ainda não tiver cadastro. Nesses casos ela avisa na conversa.',
+    'A família também vê a mensagem com @ju. Só funciona quando quem escreve é a clínica; se a família escrever '
+    '@ju, nada acontece.',
+    'Por enquanto o @ju só agenda. Remarcar, cancelar, nota e atestado continuam como antes.',
+]))
+
+# 11
+s += section('11. Se a Ju errar', bullets([
     'Entre na conversa e escreva para a família: a Ju para sozinha.',
     'Se ela não deve mais atender aquela família, coloque a etiqueta SEM IA.',
     'Mande um print para o Nicolas, para ele ajustar.',
