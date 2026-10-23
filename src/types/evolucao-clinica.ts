@@ -15,7 +15,51 @@ export interface EvolucaoSecao {
   ordem: number;
   // Seção preenchida só quando indicada (ex.: medidas). Não entra no progresso.
   opcional?: boolean;
+  // Evolução motora: áreas a que a seção pertence. Sem áreas = seção comum,
+  // que aparece em toda sessão.
+  areas?: AreaMotora[];
 }
+
+// =========================================================================
+// ÁREAS DA EVOLUÇÃO MOTORA
+// =========================================================================
+
+/**
+ * Áreas que a fisio marca como trabalhadas na sessão. Uma sessão, uma
+ * evolução, uma ou mais áreas: cada área acrescenta as suas seções e o
+ * fechamento (intervenção, resposta, orientações, conduta) é um só.
+ * O serviço da agenda não muda (continua "Fisioterapia Motora").
+ */
+export type AreaMotora =
+  | 'torcicolo'
+  | 'assimetria_craniana'
+  | 'desenvolvimento_motor';
+
+export const AREAS_MOTORAS: {
+  id: AreaMotora;
+  titulo: string;
+  curto: string;
+  descricao: string;
+}[] = [
+  {
+    id: 'torcicolo',
+    titulo: 'Torcicolo',
+    curto: 'Torcicolo',
+    descricao: 'Mobilidade cervical, ECOM e simetria postural',
+  },
+  {
+    id: 'assimetria_craniana',
+    titulo: 'Assimetria craniana',
+    curto: 'Crânio',
+    descricao: 'Plagiocefalia, braquicefalia e craniometria',
+  },
+  {
+    id: 'desenvolvimento_motor',
+    titulo: 'Desenvolvimento motor',
+    curto: 'Desenvolvimento',
+    descricao: 'Marcos motores e controle postural',
+  },
+];
 
 // =========================================================================
 // EVOLUÇÃO RESPIRATÓRIA
@@ -431,10 +475,14 @@ export interface AutoriaEvolucao {
  * são da versão original: neles, "encaminhamento médico = não" pode ser só o
  * valor padrão do formulário, e não uma decisão clínica.
  */
-export const VERSAO_FORMULARIO_MOTORA = '1.1';
+export const VERSAO_FORMULARIO_MOTORA = '1.2';
 
 export interface EvolucaoMotoraAssimetria {
   versao_formulario?: string;
+  // Áreas trabalhadas na sessão (desde a versão 1.2). Ausente = registro
+  // anterior às áreas: mostra todas as seções. Lista vazia = ainda não
+  // escolhidas.
+  areas?: AreaMotora[];
   autor?: AutoriaEvolucao;
   ultima_edicao?: AutoriaEvolucao;
   craniometria?: CraniometriaEvolucao;
@@ -531,37 +579,45 @@ export const EVOLUCAO_RESPIRATORIA_SECOES: EvolucaoSecao[] = [
   },
 ];
 
+// Ordem: seções de cada área (torcicolo → crânio → desenvolvimento) e depois
+// o fechamento comum.
 export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
-  {
-    id: 'craniometria',
-    titulo: 'Medidas Craniométricas',
-    icone: '📐',
-    campos: ['diagonais', 'comprimento', 'largura', 'perimetro'],
-    ordem: 1,
-    opcional: true,
-  },
   {
     id: 'goniometria',
     titulo: 'Goniometria Cervical',
     icone: '📏',
     campos: ['rotacao', 'inclinacao', 'diferencial'],
-    ordem: 2,
+    ordem: 1,
     opcional: true,
+    areas: ['torcicolo'],
   },
   {
     id: 'palpacao',
     titulo: 'Palpação ECOM',
     icone: '👋',
     campos: ['tonus', 'nodulo'],
-    ordem: 3,
+    ordem: 2,
     opcional: true,
+    areas: ['torcicolo'],
   },
   {
+    id: 'craniometria',
+    titulo: 'Medidas Craniométricas',
+    icone: '📐',
+    campos: ['diagonais', 'comprimento', 'largura', 'perimetro'],
+    ordem: 3,
+    opcional: true,
+    areas: ['assimetria_craniana'],
+  },
+  {
+    // Essencial só quando desenvolvimento motor é trabalhado
+    // (ver secaoMotoraEssencial); no torcicolo é complementar.
     id: 'controle_motor',
     titulo: 'Controle Motor',
     icone: '🏋️',
     campos: ['supino', 'prono'],
     ordem: 4,
+    areas: ['desenvolvimento_motor', 'torcicolo'],
   },
   {
     id: 'intervencao',
@@ -867,6 +923,7 @@ export function criarEvolucaoRespiratoriaDeAnterior(
  */
 export function criarEvolucaoMotoraAssimetriaVazia(): EvolucaoMotoraAssimetria {
   return {
+    areas: [],
     craniometria: {},
     goniometria: {},
     palpacao: {},
@@ -1274,11 +1331,9 @@ function verificarSecaoMotoraCompleta(
     }
     case 'resposta': {
       const r = ev.resposta || {};
+      // Só contam as perguntas que aparecem para as áreas da sessão
       const itens = [
-        r.melhora_adm,
-        r.reducao_preferencia_postural,
-        r.melhora_controle_cervical,
-        r.tolerancia_prono_melhorou,
+        ...itensRespostaVisiveis(ev.areas).map((id) => r[id]),
         // registro antigo pode ter só o campo anterior
         r.adesao_domiciliar ?? r.pais_seguindo_orientacoes,
       ];
@@ -1308,6 +1363,137 @@ function verificarSecaoMotoraCompleta(
     }
   }
   return 'vazio';
+}
+
+// -------------------------------------------------------------------------
+// Áreas: o que aparece, o que conta no progresso e o que é gravado
+// -------------------------------------------------------------------------
+
+/** Registro anterior às áreas (sem `areas`): tudo aparece, como antes. */
+export function temAreasDefinidas(ev: EvolucaoMotoraAssimetria): boolean {
+  return Array.isArray(ev.areas);
+}
+
+const areaAtiva = (areas: AreaMotora[] | undefined, a: AreaMotora) =>
+  areas === undefined || areas.includes(a);
+
+/** Seções da evolução motora que aparecem para as áreas marcadas. */
+export function secoesMotorasVisiveis(
+  areas: AreaMotora[] | undefined
+): EvolucaoSecao[] {
+  return EVOLUCAO_MOTORA_ASSIMETRIA_SECOES.filter(
+    (s) => !s.areas || s.areas.some((a) => areaAtiva(areas, a))
+  );
+}
+
+/**
+ * Se a seção conta no progresso. Controle motor só é essencial quando
+ * desenvolvimento motor foi trabalhado; no torcicolo ele é complementar.
+ */
+export function secaoMotoraEssencial(
+  secao: EvolucaoSecao,
+  areas: AreaMotora[] | undefined
+): boolean {
+  if (secao.opcional) return false;
+  if (secao.id === 'controle_motor')
+    return areaAtiva(areas, 'desenvolvimento_motor');
+  return true;
+}
+
+/** Perguntas de "melhora" da resposta e as áreas em que fazem sentido. */
+export const RESPOSTA_MOTORA_POR_AREA: Record<
+  | 'melhora_adm'
+  | 'reducao_preferencia_postural'
+  | 'melhora_controle_cervical'
+  | 'tolerancia_prono_melhorou',
+  AreaMotora[]
+> = {
+  melhora_adm: ['torcicolo'],
+  reducao_preferencia_postural: ['torcicolo', 'assimetria_craniana'],
+  melhora_controle_cervical: ['torcicolo', 'desenvolvimento_motor'],
+  tolerancia_prono_melhorou: [
+    'torcicolo',
+    'assimetria_craniana',
+    'desenvolvimento_motor',
+  ],
+};
+
+export function itensRespostaVisiveis(
+  areas: AreaMotora[] | undefined
+): (keyof typeof RESPOSTA_MOTORA_POR_AREA)[] {
+  return (
+    Object.keys(
+      RESPOSTA_MOTORA_POR_AREA
+    ) as (keyof typeof RESPOSTA_MOTORA_POR_AREA)[]
+  ).filter((id) =>
+    RESPOSTA_MOTORA_POR_AREA[id].some((a) => areaAtiva(areas, a))
+  );
+}
+
+/** Capacete (orientação e indicação) só aparece na assimetria craniana. */
+export const capaceteVisivel = (areas: AreaMotora[] | undefined) =>
+  areaAtiva(areas, 'assimetria_craniana');
+
+/**
+ * Áreas sugeridas a partir de uma evolução anterior: as áreas gravadas nela
+ * ou, em registro antigo, as áreas cujos campos foram preenchidos.
+ */
+export function inferirAreasMotoras(
+  ev: EvolucaoMotoraAssimetria | null | undefined
+): AreaMotora[] {
+  if (!ev) return [];
+  if (Array.isArray(ev.areas)) return [...ev.areas];
+  const preenchido = (o?: object | null) =>
+    !!o &&
+    Object.values(o).some(
+      (v) => v !== undefined && v !== null && v !== '' && v !== false
+    );
+  const areas: AreaMotora[] = [];
+  if (preenchido(ev.goniometria) || preenchido(ev.palpacao))
+    areas.push('torcicolo');
+  if (preenchido(ev.craniometria)) areas.push('assimetria_craniana');
+  if (preenchido(ev.controle_motor)) areas.push('desenvolvimento_motor');
+  return areas;
+}
+
+/**
+ * Antes de gravar: tira o que pertence a áreas desmarcadas, para o registro
+ * não guardar dado escondido. Enquanto a fisio edita, nada é apagado (marcar
+ * de novo a área traz o que já tinha sido preenchido).
+ */
+export function limparAreasNaoTrabalhadas(
+  ev: EvolucaoMotoraAssimetria
+): EvolucaoMotoraAssimetria {
+  if (!Array.isArray(ev.areas)) return ev;
+  const areas = ev.areas;
+  const tem = (a: AreaMotora) => areas.includes(a);
+  const limpo: EvolucaoMotoraAssimetria = { ...ev };
+  if (!tem('torcicolo')) {
+    delete limpo.goniometria;
+    delete limpo.palpacao;
+  }
+  if (!tem('assimetria_craniana')) delete limpo.craniometria;
+  if (!tem('torcicolo') && !tem('desenvolvimento_motor'))
+    delete limpo.controle_motor;
+
+  const visiveis = itensRespostaVisiveis(areas);
+  const resposta = { ...ev.resposta };
+  for (const id of Object.keys(
+    RESPOSTA_MOTORA_POR_AREA
+  ) as (keyof typeof RESPOSTA_MOTORA_POR_AREA)[]) {
+    if (!visiveis.includes(id)) delete resposta[id];
+  }
+  limpo.resposta = resposta;
+
+  if (!capaceteVisivel(areas)) {
+    limpo.orientacoes = { ...ev.orientacoes };
+    delete limpo.orientacoes.uso_capacete;
+    limpo.conduta = { ...ev.conduta };
+    delete limpo.conduta.indicacao_capacete;
+    if (!limpo.conduta.encaminhamento_medico)
+      delete limpo.conduta.motivo_encaminhamento;
+  }
+  return limpo;
 }
 
 /**

@@ -40,6 +40,8 @@ import {
   TEXTO_FAIXAS_DIFERENCA_CERVICAL,
   ROTULO_PLAGIOCEFALIA,
   ROTULO_BRAQUICEFALIA,
+  itensRespostaVisiveis,
+  capaceteVisivel,
   calcularClassificacaoClinica,
   getTextoClassificacaoClinica,
   getAvaliacaoRespiratoriaNormal,
@@ -3703,6 +3705,9 @@ export const EvolutionSectionContent: React.FC<
       // -----------------------------------------------------------------
       case 'resposta': {
         const resposta = evolucao.resposta;
+        const itensVisiveis = itensRespostaVisiveis(evolucao.areas);
+        const respostaVisivel = (id: (typeof itensVisiveis)[number]) =>
+          itensVisiveis.includes(id);
 
         const updateResposta = (
           updates: Partial<RespostaIntervencaoMotora>
@@ -3724,40 +3729,48 @@ export const EvolutionSectionContent: React.FC<
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <RespostaField
-                value={resposta.melhora_adm}
-                onChange={(v) => updateResposta({ melhora_adm: v })}
-                label="Melhora da ADM"
-                ajuda="melhora_adm"
-                disabled={disabled}
-              />
-              <RespostaField
-                value={resposta.reducao_preferencia_postural}
-                onChange={(v) =>
-                  updateResposta({ reducao_preferencia_postural: v })
-                }
-                label="Redução da Preferência Postural"
-                ajuda="reducao_preferencia_postural"
-                disabled={disabled}
-              />
-              <RespostaField
-                value={resposta.melhora_controle_cervical}
-                onChange={(v) =>
-                  updateResposta({ melhora_controle_cervical: v })
-                }
-                label="Melhora do Controle Cervical"
-                ajuda="melhora_controle_cervical"
-                disabled={disabled}
-              />
-              <RespostaField
-                value={resposta.tolerancia_prono_melhorou}
-                onChange={(v) =>
-                  updateResposta({ tolerancia_prono_melhorou: v })
-                }
-                label="Tolerância ao Prono Melhorou"
-                ajuda="tolerancia_prono_melhorou"
-                disabled={disabled}
-              />
+              {respostaVisivel('melhora_adm') && (
+                <RespostaField
+                  value={resposta.melhora_adm}
+                  onChange={(v) => updateResposta({ melhora_adm: v })}
+                  label="Melhora da ADM"
+                  ajuda="melhora_adm"
+                  disabled={disabled}
+                />
+              )}
+              {respostaVisivel('reducao_preferencia_postural') && (
+                <RespostaField
+                  value={resposta.reducao_preferencia_postural}
+                  onChange={(v) =>
+                    updateResposta({ reducao_preferencia_postural: v })
+                  }
+                  label="Redução da Preferência Postural"
+                  ajuda="reducao_preferencia_postural"
+                  disabled={disabled}
+                />
+              )}
+              {respostaVisivel('melhora_controle_cervical') && (
+                <RespostaField
+                  value={resposta.melhora_controle_cervical}
+                  onChange={(v) =>
+                    updateResposta({ melhora_controle_cervical: v })
+                  }
+                  label="Melhora do Controle Cervical"
+                  ajuda="melhora_controle_cervical"
+                  disabled={disabled}
+                />
+              )}
+              {respostaVisivel('tolerancia_prono_melhorou') && (
+                <RespostaField
+                  value={resposta.tolerancia_prono_melhorou}
+                  onChange={(v) =>
+                    updateResposta({ tolerancia_prono_melhorou: v })
+                  }
+                  label="Tolerância ao Prono Melhorou"
+                  ajuda="tolerancia_prono_melhorou"
+                  disabled={disabled}
+                />
+              )}
             </div>
 
             <div className="space-y-2">
@@ -3850,14 +3863,16 @@ export const EvolutionSectionContent: React.FC<
                 }
                 disabled={disabled}
               />
-              <CheckboxField
-                label="Uso de Capacete (se indicado)"
-                checked={orientacoes.uso_capacete || false}
-                onChange={(checked) =>
-                  updateOrientacoes({ uso_capacete: checked })
-                }
-                disabled={disabled}
-              />
+              {capaceteVisivel(evolucao.areas) && (
+                <CheckboxField
+                  label="Uso de Capacete (se indicado)"
+                  checked={orientacoes.uso_capacete || false}
+                  onChange={(checked) =>
+                    updateOrientacoes({ uso_capacete: checked })
+                  }
+                  disabled={disabled}
+                />
+              )}
             </div>
 
             <Field label="Frequência do Tummy Time (acordado e supervisionado)">
@@ -3960,14 +3975,16 @@ export const EvolutionSectionContent: React.FC<
               disabled={disabled}
             />
 
-            <BooleanField
-              value={conduta.indicacao_capacete || false}
-              onChange={(checked) =>
-                updateConduta({ indicacao_capacete: checked })
-              }
-              label="Indicação de Capacete Ortopédico"
-              disabled={disabled}
-            />
+            {capaceteVisivel(evolucao.areas) && (
+              <BooleanField
+                value={conduta.indicacao_capacete || false}
+                onChange={(checked) =>
+                  updateConduta({ indicacao_capacete: checked })
+                }
+                label="Indicação de Capacete Ortopédico"
+                disabled={disabled}
+              />
+            )}
 
             {(conduta.encaminhamento_medico || conduta.indicacao_capacete) && (
               <Field label="Motivo">

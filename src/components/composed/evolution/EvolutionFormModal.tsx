@@ -48,8 +48,12 @@ import {
   type TipoEvolucao,
   type EvolucaoRespiratoria,
   type EvolucaoMotoraAssimetria,
+  type AreaMotora,
   EVOLUCAO_RESPIRATORIA_SECOES,
-  EVOLUCAO_MOTORA_ASSIMETRIA_SECOES,
+  AREAS_MOTORAS,
+  secoesMotorasVisiveis,
+  secaoMotoraEssencial,
+  inferirAreasMotoras,
   criarEvolucaoRespiratoriaVazia,
   criarEvolucaoRespiratoriaDeAnterior,
   criarEvolucaoMotoraAssimetriaVazia,
@@ -84,8 +88,30 @@ export interface EvolutionFormModalProps {
     evolucao_respiratoria?: EvolucaoRespiratoria;
   };
   previousDate?: string;
+  // Evolução motora: áreas da última evolução da criança, já marcadas ao
+  // abrir uma evolução nova (a fisio só desmarca ou acrescenta)
+  areasSugeridas?: AreaMotora[];
   mode?: 'create' | 'edit' | 'view';
 }
+
+/**
+ * Registro anterior às áreas, aberto para editar: passa a ter as áreas que
+ * foram preenchidas nele (ou as três, se nada indicar), para o formulário
+ * não esconder o que já estava registrado.
+ */
+const comAreasParaEdicao = (
+  ev: EvolucaoMotoraAssimetria
+): EvolucaoMotoraAssimetria => {
+  if (Array.isArray(ev.areas)) return ev;
+  const inferidas = inferirAreasMotoras(ev);
+  return {
+    ...ev,
+    areas: inferidas.length ? inferidas : AREAS_MOTORAS.map((a) => a.id),
+  };
+};
+
+const motoraInicial = (ev?: EvolucaoMotoraAssimetria) =>
+  ev ? comAreasParaEdicao(ev) : criarEvolucaoMotoraAssimetriaVazia();
 
 // Chave para localStorage
 const AUTOSAVE_PREFIX = 'evolucao_draft_';
@@ -111,6 +137,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   existingData,
   previousData,
   previousDate,
+  areasSugeridas,
   mode = 'create',
 }) => {
   // Chave única para autosave baseada no agendamento
@@ -144,10 +171,12 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       existingData?.evolucao_respiratoria || criarEvolucaoRespiratoriaVazia()
     );
   const [evolucaoMotora, setEvolucaoMotora] =
-    useState<EvolucaoMotoraAssimetria>(
-      existingData?.evolucao_motora_assimetria ||
-        criarEvolucaoMotoraAssimetriaVazia()
+    useState<EvolucaoMotoraAssimetria>(() =>
+      motoraInicial(existingData?.evolucao_motora_assimetria)
     );
+  // A fisio já mexeu nas áreas: a sugestão que chega depois não sobrescreve
+  const areasTocadasRef = useRef(false);
+  const [avisoAreas, setAvisoAreas] = useState(false);
 
   const [currentSection, setCurrentSection] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -206,13 +235,41 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     }
   }, [currentSection]);
 
-  // Seções baseadas no tipo
+  // Seções baseadas no tipo. Na motora, só as das áreas marcadas + as comuns.
   const secoes =
     tipoEvolucao === 'respiratoria'
       ? EVOLUCAO_RESPIRATORIA_SECOES
-      : EVOLUCAO_MOTORA_ASSIMETRIA_SECOES;
+      : secoesMotorasVisiveis(evolucaoMotora.areas);
+  const ehMotora = tipoEvolucao === 'motora_assimetria';
+  const areasMarcadas = evolucaoMotora.areas ?? [];
 
-  const currentSectionData = secoes[currentSection];
+  // Desmarcar uma área pode encurtar a lista: não deixar o índice sobrar
+  useEffect(() => {
+    if (currentSection > secoes.length - 1)
+      setCurrentSection(Math.max(0, secoes.length - 1));
+  }, [secoes.length, currentSection]);
+
+  const currentSectionData =
+    secoes[Math.min(currentSection, secoes.length - 1)];
+
+  const alternarArea = useCallback(
+    (area: AreaMotora) => {
+      if (isReadOnly) return;
+      areasTocadasRef.current = true;
+      setAvisoAreas(false);
+      setEvolucaoMotora((prev) => {
+        const atuais = prev.areas ?? [];
+        const novas = atuais.includes(area)
+          ? atuais.filter((a) => a !== area)
+          : // mantém a ordem das áreas (torcicolo, crânio, desenvolvimento)
+            AREAS_MOTORAS.map((a) => a.id).filter(
+              (id) => id === area || atuais.includes(id)
+            );
+        return { ...prev, areas: novas };
+      });
+    },
+    [isReadOnly]
+  );
 
   // Função para carregar rascunho do localStorage
   const loadDraft = useCallback((): AutosaveData | null => {
@@ -323,9 +380,10 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
         existingData?.evolucao_respiratoria || criarEvolucaoRespiratoriaVazia()
       );
       setEvolucaoMotora(
-        existingData?.evolucao_motora_assimetria ||
-          criarEvolucaoMotoraAssimetriaVazia()
+        motoraInicial(existingData?.evolucao_motora_assimetria)
       );
+      areasTocadasRef.current = false;
+      setAvisoAreas(false);
       setCurrentSection(0);
       // AI dev note: sem este reset o carry-forward de um atendimento vazaria
       // para o próximo (o modal não desmonta entre aberturas)
@@ -346,6 +404,19 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     loadDraft,
   ]);
 
+  // Áreas da última evolução: marcam se a fisio ainda não escolheu nada.
+  // Precisa ficar DEPOIS do efeito que reinicia o formulário ao abrir; antes
+  // dele, a marcação era apagada quando a sugestão já estava pronta.
+  useEffect(() => {
+    if (!isOpen || mode !== 'create' || areasTocadasRef.current) return;
+    if (!areasSugeridas?.length) return;
+    setEvolucaoMotora((prev) =>
+      prev.areas && prev.areas.length > 0
+        ? prev
+        : { ...prev, areas: [...areasSugeridas] }
+    );
+  }, [isOpen, mode, areasSugeridas]);
+
   // Aplicar o rascunho pendente (ação "Recuperar" do AlertDialog)
   const applyPendingDraft = useCallback(() => {
     if (!pendingDraft) return;
@@ -354,7 +425,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       setEvolucaoRespiratoria(pendingDraft.evolucao_respiratoria);
     }
     if (pendingDraft.evolucao_motora_assimetria) {
-      setEvolucaoMotora(pendingDraft.evolucao_motora_assimetria);
+      setEvolucaoMotora(
+        comAreasParaEdicao(pendingDraft.evolucao_motora_assimetria)
+      );
+      // rascunho já traz a escolha de áreas: não sobrescrever com sugestão
+      areasTocadasRef.current = true;
     }
     setLastSaved(new Date(pendingDraft.savedAt));
     setCurrentSection(0);
@@ -410,6 +485,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       setShowRevisaoPendente(true);
       return;
     }
+    // Evolução motora precisa de pelo menos uma área trabalhada
+    if (tipoEvolucao === 'motora_assimetria' && areasMarcadas.length === 0) {
+      setAvisoAreas(true);
+      return;
+    }
     setIsSaving(true);
     try {
       await onSave({
@@ -449,13 +529,17 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : evolucaoMotora;
   const statusDaSecao = (secaoId: string) =>
     verificarSecaoEvolucaoCompleta(tipoEvolucao, secaoId, dadosAtuais);
-  const temComplementares = secoes.some((s) => s.opcional);
-  const essenciais = secoes.filter((s) => !s.opcional);
+  // Na motora, ser essencial depende das áreas (controle motor só conta
+  // quando desenvolvimento motor foi trabalhado)
+  const ehComplementar = (s: (typeof secoes)[number]) =>
+    ehMotora ? !secaoMotoraEssencial(s, evolucaoMotora.areas) : !!s.opcional;
+  const temComplementares = ehMotora || secoes.some((s) => s.opcional);
+  const essenciais = secoes.filter((s) => !ehComplementar(s));
   const essenciaisFeitas = essenciais.filter(
     (s) => statusDaSecao(s.id) === 'completo'
   ).length;
   const complementaresPreenchidas = secoes.filter(
-    (s) => s.opcional && statusDaSecao(s.id) !== 'vazio'
+    (s) => ehComplementar(s) && statusDaSecao(s.id) !== 'vazio'
   ).length;
   const progresso =
     essenciais.length === 0
@@ -469,9 +553,14 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     : `${progresso}% completo`;
 
   // AI dev note: Status textual da seção para aria-label das bolinhas
+  const secaoComplementar = (secaoId: string) => {
+    const s = secoes.find((x) => x.id === secaoId);
+    return s ? ehComplementar(s) : false;
+  };
+
   const getStatusLabel = (secaoId: string): string => {
     const status = statusDaSecao(secaoId);
-    const opcional = secoes.find((s) => s.id === secaoId)?.opcional;
+    const opcional = secaoComplementar(secaoId);
     if (opcional)
       return status === 'vazio'
         ? 'complementar, em branco'
@@ -484,7 +573,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   // Obter ícone de status da seção
   const getStatusIcon = (secaoId: string, className?: string) => {
     const status = statusDaSecao(secaoId);
-    const opcional = secoes.find((s) => s.id === secaoId)?.opcional;
+    const opcional = secaoComplementar(secaoId);
 
     const baseClass = className || 'h-4 w-4';
 
@@ -601,6 +690,59 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header da seção com indicadores de progresso */}
           <div className="px-4 py-2 sm:px-6 sm:py-3 border-b bg-muted/20 flex-shrink-0">
+            {/* Evolução motora: áreas trabalhadas hoje (uma ou mais) */}
+            {ehMotora && (
+              <div className="mb-3 space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Áreas trabalhadas hoje
+                </p>
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Áreas trabalhadas hoje"
+                >
+                  {AREAS_MOTORAS.map((area) => {
+                    const marcada = areasMarcadas.includes(area.id);
+                    return (
+                      <button
+                        key={area.id}
+                        type="button"
+                        aria-pressed={marcada}
+                        disabled={isReadOnly}
+                        onClick={() => alternarArea(area.id)}
+                        title={area.descricao}
+                        className={cn(
+                          'min-h-9 px-3 rounded-full border-2 text-sm font-medium transition-colors inline-flex items-center gap-1.5',
+                          marcada
+                            ? 'bg-primary border-primary text-primary-foreground'
+                            : 'bg-background border-border text-muted-foreground hover:bg-muted',
+                          isReadOnly && 'opacity-60 cursor-not-allowed'
+                        )}
+                      >
+                        {marcada && <CheckCircle2 className="h-3.5 w-3.5" />}
+                        <span className="sm:hidden">{area.curto}</span>
+                        <span className="hidden sm:inline">{area.titulo}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {areasMarcadas.length === 0 && (
+                  <p
+                    className={cn(
+                      'text-xs',
+                      avisoAreas
+                        ? 'text-destructive font-medium'
+                        : 'text-muted-foreground'
+                    )}
+                    role={avisoAreas ? 'alert' : undefined}
+                  >
+                    {avisoAreas
+                      ? 'Marque pelo menos uma área antes de salvar.'
+                      : 'Marque as áreas trabalhadas: só as seções delas aparecem.'}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex items-center justify-between mb-2 sm:mb-3">
               <div className="flex items-center gap-2 overflow-hidden">
                 <span className="text-xl sm:text-2xl shrink-0">
@@ -609,6 +751,17 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                 <h3 className="text-base sm:text-lg font-medium truncate">
                   {currentSectionData?.titulo}
                 </h3>
+                {ehMotora && currentSectionData?.areas && (
+                  <Badge
+                    variant="outline"
+                    className="hidden sm:inline-flex shrink-0 text-xs font-normal"
+                  >
+                    {currentSectionData.areas
+                      .filter((a) => areasMarcadas.includes(a))
+                      .map((a) => AREAS_MOTORAS.find((x) => x.id === a)?.titulo)
+                      .join(' · ')}
+                  </Badge>
+                )}
               </div>
               <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap ml-2">
                 {currentSection + 1} / {secoes.length}
@@ -637,7 +790,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                             ? 'bg-primary text-primary-foreground scale-110'
                             : 'bg-muted hover:bg-muted',
                           // Complementar: borda tracejada ("quando indicado")
-                          secao.opcional &&
+                          secaoComplementar(secao.id) &&
                             currentSection !== index &&
                             'border border-dashed border-muted-foreground/40 bg-transparent',
                           secoesPendentesRevisao.includes(secao.id) &&
@@ -649,7 +802,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                     </TooltipTrigger>
                     <TooltipContent>
                       {secao.icone} {secao.titulo}
-                      {secao.opcional ? ' (quando indicado)' : ''}
+                      {secaoComplementar(secao.id) ? ' (quando indicado)' : ''}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

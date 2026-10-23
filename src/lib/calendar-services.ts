@@ -1302,6 +1302,42 @@ export const fetchUltimaEvolucaoRespiratoriaPaciente = async (
   return (data?.[0] as SupabaseRelatorioEvolucao) ?? null;
 };
 
+/**
+ * Última evolução MOTORA estruturada do paciente (exclui o agendamento
+ * atual). Usada para já marcar as áreas trabalhadas numa evolução nova.
+ */
+export const fetchUltimaEvolucaoMotoraPaciente = async (
+  pacienteId: string,
+  excludeAgendamentoId?: string
+): Promise<SupabaseRelatorioEvolucao | null> => {
+  const tipoEvolucaoId = await fetchTipoEvolucaoId();
+
+  let query = supabase
+    .from('relatorio_evolucao')
+    .select(
+      'id, created_at, evolucao_motora_assimetria, agendamentos!inner(paciente_id)'
+    )
+    .eq('agendamentos.paciente_id', pacienteId)
+    .eq('tipo_relatorio_id', tipoEvolucaoId)
+    .eq('tipo_evolucao', 'motora_assimetria')
+    .not('evolucao_motora_assimetria', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (excludeAgendamentoId) {
+    query = query.neq('id_agendamento', excludeAgendamentoId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Erro ao buscar última evolução motora do paciente:', error);
+    return null;
+  }
+
+  return (data?.[0] as unknown as SupabaseRelatorioEvolucao) ?? null;
+};
+
 export const saveRelatorioEvolucao = async (
   evolucaoData: SaveEvolucaoData
 ): Promise<SupabaseRelatorioEvolucao> => {
