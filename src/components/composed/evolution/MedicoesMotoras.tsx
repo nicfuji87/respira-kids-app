@@ -27,6 +27,7 @@ import {
   resultadoCompleto,
   somarDias,
 } from '@/lib/motora-medidas';
+import { MOTIVOS_NAO_MEDIU } from '@/lib/motora-catalogo';
 
 const FONTE: Record<string, string> = {
   evolucao: 'evolução',
@@ -40,11 +41,7 @@ const COR_ESTADO: Record<string, string> = {
   em_dia: 'bg-emerald-50 text-emerald-900 border-emerald-200',
 };
 
-const MOTIVOS_RAPIDOS = [
-  'Criança irritada',
-  'Criança dormindo',
-  'Faltou tempo',
-];
+const MOTIVOS_RAPIDOS = MOTIVOS_NAO_MEDIU;
 
 const OPCOES: { valor: SituacaoMedicao; label: string }[] = [
   { valor: 'medido', label: 'Medi hoje' },
