@@ -19,6 +19,7 @@ const ROTAS_PUBLICAS = [
   '#/pagamento-produto/',
   '#/experiencia',
   '#/vaga-estagio',
+  '#/ponto',
 ];
 
 const ehRotaPublica = (hash: string): boolean =>
