@@ -1,0 +1,14 @@
+-- Aplicada em 23/10/2026 (migration ju_lolo_conduzindo_so_no_expediente), 1ª noite da Ju no ar.
+-- Caso Priscila: a Lolô pediu às 18h08 para mudar o horário de segunda; às 20h35 a família
+-- respondeu e a Ju ficou em [NADA] sem abrir pedido (lolo_conduzindo valia por 3 h mesmo fora do
+-- expediente). Agora, no fn_ju_turno, lolo_conduzindo = HUMANO depois da última fala da Ju e
+-- (nos últimos 30 min, ou nas últimas 3 h com o expediente seg-sex 8h-18h valendo).
+-- Também: ju_sombra.ao_vivo — o n8n Atendimento registra toda decisão da Ju no ar (inclusive
+-- [NADA]) em ju_sombra, ligando "Sombra?" (falso) também ao "Registrar sombra".
+-- Analisar o ar: SELECT * FROM ju_sombra WHERE ao_vivo AND barrada IS NULL.
+-- Testado retomando a conversa da Priscila às 07h17 de 23/10: pedido REMARCACAO + resposta.
+-- (23/10, migration ju_lolo_conduzindo_90min, pedido do dono) janela no expediente reduzida de 3 h
+-- para 1h30: Lolô conduzindo = 30 min a qualquer hora, ou 90 min dentro do expediente.
+-- Prompt: contrato já assinado + família falando dele (aviso automático antigo, "quem assina é outra
+-- pessoa") = "já está assinado, tudo certo", sem chamar a secretaria; só chama CONTRATO se pedirem
+-- mudança no contrato ou disserem que não assinaram. Testado com o contexto da Maria Alice: 2/2.
