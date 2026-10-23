@@ -1,4 +1,4 @@
-// n8n "RK Ju - Resumo do dia" (seg–sex 17h30). Cópia dos dois nós Code; manter igual.
+// n8n "RK Ju - Resumo do dia" (seg–sex 12h e 17h30; substitui os lembretes ⏰ de pedido não urgente). Cópia dos dois nós Code; manter igual.
 // Banco (fn_ju_esperando_resposta) junta as conversas em que a família escreveu depois da última
 // resposta da Lolô; a IA escolhe o que ainda precisa de resposta e escreve uma linha por conversa.
 

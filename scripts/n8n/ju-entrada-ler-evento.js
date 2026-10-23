@@ -74,9 +74,9 @@ if (chatid === GRUPO_NOTIFICACOES && botao.startsWith('ju_concluir:')) {
   ];
 }
 // 23/10/2026: aviso automático da clínica no grupo (pedido, lembrete, aviso) sai do próprio número
-// que a secretaria usa, então não notifica ela. Marca o grupo como não lido. Reação (o ✅ do Concluído) não.
+// que a secretaria usa, então não notifica ela. Marca o grupo como não lido. Reação e mensagem apagada (card concluído) não.
 if (chatid === GRUPO_NOTIFICACOES && m.fromMe === true && m.wasSentByApi === true
-    && !/Reaction/i.test(String(m.messageType ?? ''))) {
+    && !/Reaction|Protocol|Revoke|Delete/i.test(String(m.messageType ?? ''))) {
   return [{ json: { evento: 'grupo_nao_lido' } }];
 }
 if (!/@(s\.whatsapp\.net|lid)$/.test(chatid)) return []; // grupo, status, canal, transmissão
