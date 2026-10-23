@@ -33,8 +33,19 @@ import type {
   CondutaMotoraAssimetria,
   RespostaObservada,
   AdesaoDomiciliar,
+  TipoMedidaMotora,
+  MedicaoSessao,
+  ProximaReavaliacao,
 } from '@/types/evolucao-clinica';
+import { medidasComValores } from '@/lib/motora-medidas';
 import {
+  MedicaoSessaoBloco,
+  ReavaliacoesConduta,
+  ComparacaoCraniometria,
+  ComparacaoGoniometria,
+} from './MedicoesMotoras';
+import {
+  secoesMotorasVisiveis,
   calcularMetricasCraniometriaEvolucao,
   calcularDiferencasGoniometria,
   classificarDiferencaCervical,
@@ -2613,6 +2624,28 @@ export const EvolutionSectionContent: React.FC<
 
   if (tipoEvolucao === 'motora_assimetria') {
     const evolucao = evolucaoMotora;
+    // Medidas programadas: o que foi feito hoje e a próxima reavaliação
+    const medicoes = evolucao.medicoes || {};
+    const setMedicao = (
+      tipo: TipoMedidaMotora,
+      m: MedicaoSessao | undefined
+    ) => {
+      const novo = { ...medicoes };
+      if (m) novo[tipo] = m;
+      else delete novo[tipo];
+      onMotoraChange({ medicoes: novo });
+    };
+    const proximas = evolucao.proximas_reavaliacoes || {};
+    const setProxima = (
+      tipo: TipoMedidaMotora,
+      p: ProximaReavaliacao | undefined
+    ) => {
+      const novo = { ...proximas };
+      if (p) novo[tipo] = p;
+      else delete novo[tipo];
+      onMotoraChange({ proximas_reavaliacoes: novo });
+    };
+    const comValores = medidasComValores(evolucao);
 
     switch (secaoId) {
       // -----------------------------------------------------------------
@@ -2631,183 +2664,198 @@ export const EvolutionSectionContent: React.FC<
         };
 
         return (
-          <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800">
-                📐 Medidas para acompanhar a evolução da assimetria craniana.
-                CVA, CVAI e CI são calculados automaticamente. Preencha quando a
-                medição estiver indicada.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Diagonal A (mm)" ajuda="diagonal_a">
-                <Input
-                  type="number"
-                  min={0}
-                  value={craniometria.diagonal_a_mm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      diagonal_a_mm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 145"
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="Diagonal B (mm)" ajuda="diagonal_b">
-                <Input
-                  type="number"
-                  min={0}
-                  value={craniometria.diagonal_b_mm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      diagonal_b_mm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 135"
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="Comprimento AP (mm)" ajuda="comprimento_ap">
-                <Input
-                  type="number"
-                  min={0}
-                  value={craniometria.comprimento_ap_mm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      comprimento_ap_mm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 120"
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="Largura ML (mm)" ajuda="largura_ml">
-                <Input
-                  type="number"
-                  min={0}
-                  value={craniometria.largura_ml_mm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      largura_ml_mm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 110"
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="Perímetro Cefálico (cm)" ajuda="perimetro_cefalico">
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={craniometria.perimetro_cefalico_cm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      perimetro_cefalico_cm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 42.5"
-                  disabled={disabled}
-                />
-              </Field>
-            </div>
-
-            {/* Métricas Calculadas */}
-            {(craniometria.cva_mm !== undefined ||
-              craniometria.cvai_percentual !== undefined) && (
-              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-                <TituloComAjuda
-                  ajuda="metricas_cranio"
-                  className="text-gray-700"
-                >
-                  📊 Métricas Calculadas
-                </TituloComAjuda>
-
-                <div className="grid grid-cols-3 gap-4">
-                  {craniometria.cva_mm !== undefined && (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {craniometria.cva_mm.toFixed(1)} mm
-                      </div>
-                      <div className="text-xs text-muted-foreground">CVA</div>
-                    </div>
-                  )}
-                  {craniometria.cvai_percentual !== undefined && (
-                    <div className="text-center">
-                      <div
-                        className={cn(
-                          'text-2xl font-bold',
-                          craniometria.cvai_percentual < 3.5
-                            ? 'text-green-600'
-                            : craniometria.cvai_percentual < 6.25
-                              ? 'text-yellow-600'
-                              : craniometria.cvai_percentual < 8.75
-                                ? 'text-orange-600'
-                                : 'text-red-600'
-                        )}
-                      >
-                        {craniometria.cvai_percentual.toFixed(1)}%
-                      </div>
-                      <div className="text-xs text-muted-foreground">CVAI</div>
-                      {craniometria.plagiocefalia_severidade && (
-                        <div className="text-xs font-medium first-letter:uppercase">
-                          {ROTULO_PLAGIOCEFALIA[
-                            craniometria.plagiocefalia_severidade
-                          ] || craniometria.plagiocefalia_severidade}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {craniometria.ci_percentual !== undefined && (
-                    <div className="text-center">
-                      <div
-                        className={cn(
-                          'text-2xl font-bold',
-                          craniometria.ci_percentual >= 75 &&
-                            craniometria.ci_percentual < 85
-                            ? 'text-green-600'
-                            : craniometria.ci_percentual < 75
-                              ? 'text-blue-600'
-                              : 'text-orange-600'
-                        )}
-                      >
-                        {craniometria.ci_percentual.toFixed(1)}%
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        CI (índice cefálico)
-                      </div>
-                      {craniometria.braquicefalia_severidade && (
-                        <div className="text-xs font-medium first-letter:uppercase">
-                          {ROTULO_BRAQUICEFALIA[
-                            craniometria.braquicefalia_severidade
-                          ] || craniometria.braquicefalia_severidade}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  CVAI calculado sobre a maior diagonal, faixas da escala de
-                  Atlanta (CHOA). CI: normal de 75% a menos de 85%. Mesma
-                  convenção da avaliação. A classificação apoia a leitura dos
-                  números: não substitui o exame do formato do crânio nem indica
-                  capacete sozinha.
+          <MedicaoSessaoBloco
+            tipo="craniometria"
+            valor={medicoes.craniometria}
+            onChange={(m) => setMedicao('craniometria', m)}
+            temValores={comValores.includes('craniometria')}
+            onDescartarValores={() => onMotoraChange({ craniometria: {} })}
+            disabled={disabled}
+          >
+            <div className="space-y-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  📐 Medidas para acompanhar a evolução da assimetria craniana.
+                  CVA, CVAI e CI são calculados automaticamente. Preencha quando
+                  a medição estiver indicada.
                 </p>
               </div>
-            )}
-          </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Diagonal A (mm)" ajuda="diagonal_a">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={craniometria.diagonal_a_mm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        diagonal_a_mm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 145"
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field label="Diagonal B (mm)" ajuda="diagonal_b">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={craniometria.diagonal_b_mm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        diagonal_b_mm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 135"
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field label="Comprimento AP (mm)" ajuda="comprimento_ap">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={craniometria.comprimento_ap_mm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        comprimento_ap_mm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 120"
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field label="Largura ML (mm)" ajuda="largura_ml">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={craniometria.largura_ml_mm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        largura_ml_mm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 110"
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field
+                  label="Perímetro Cefálico (cm)"
+                  ajuda="perimetro_cefalico"
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={craniometria.perimetro_cefalico_cm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        perimetro_cefalico_cm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 42.5"
+                    disabled={disabled}
+                  />
+                </Field>
+              </div>
+
+              {/* Métricas Calculadas */}
+              {(craniometria.cva_mm !== undefined ||
+                craniometria.cvai_percentual !== undefined) && (
+                <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+                  <TituloComAjuda
+                    ajuda="metricas_cranio"
+                    className="text-gray-700"
+                  >
+                    📊 Métricas Calculadas
+                  </TituloComAjuda>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    {craniometria.cva_mm !== undefined && (
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {craniometria.cva_mm.toFixed(1)} mm
+                        </div>
+                        <div className="text-xs text-muted-foreground">CVA</div>
+                      </div>
+                    )}
+                    {craniometria.cvai_percentual !== undefined && (
+                      <div className="text-center">
+                        <div
+                          className={cn(
+                            'text-2xl font-bold',
+                            craniometria.cvai_percentual < 3.5
+                              ? 'text-green-600'
+                              : craniometria.cvai_percentual < 6.25
+                                ? 'text-yellow-600'
+                                : craniometria.cvai_percentual < 8.75
+                                  ? 'text-orange-600'
+                                  : 'text-red-600'
+                          )}
+                        >
+                          {craniometria.cvai_percentual.toFixed(1)}%
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          CVAI
+                        </div>
+                        {craniometria.plagiocefalia_severidade && (
+                          <div className="text-xs font-medium first-letter:uppercase">
+                            {ROTULO_PLAGIOCEFALIA[
+                              craniometria.plagiocefalia_severidade
+                            ] || craniometria.plagiocefalia_severidade}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {craniometria.ci_percentual !== undefined && (
+                      <div className="text-center">
+                        <div
+                          className={cn(
+                            'text-2xl font-bold',
+                            craniometria.ci_percentual >= 75 &&
+                              craniometria.ci_percentual < 85
+                              ? 'text-green-600'
+                              : craniometria.ci_percentual < 75
+                                ? 'text-blue-600'
+                                : 'text-orange-600'
+                          )}
+                        >
+                          {craniometria.ci_percentual.toFixed(1)}%
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          CI (índice cefálico)
+                        </div>
+                        {craniometria.braquicefalia_severidade && (
+                          <div className="text-xs font-medium first-letter:uppercase">
+                            {ROTULO_BRAQUICEFALIA[
+                              craniometria.braquicefalia_severidade
+                            ] || craniometria.braquicefalia_severidade}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    CVAI calculado sobre a maior diagonal, faixas da escala de
+                    Atlanta (CHOA). CI: normal de 75% a menos de 85%. Mesma
+                    convenção da avaliação. A classificação apoia a leitura dos
+                    números: não substitui o exame do formato do crânio nem
+                    indica capacete sozinha.
+                  </p>
+                </div>
+              )}
+              <ComparacaoCraniometria atual={craniometria} />
+            </div>
+          </MedicaoSessaoBloco>
         );
       }
 
@@ -2873,210 +2921,224 @@ export const EvolutionSectionContent: React.FC<
         };
 
         return (
-          <div className="space-y-6">
-            <div className="border rounded-lg p-4 space-y-4">
-              <TituloComAjuda ajuda="rotacao" className="text-blue-700">
-                Rotação Cervical (graus)
-              </TituloComAjuda>
+          <MedicaoSessaoBloco
+            tipo="goniometria"
+            valor={medicoes.goniometria}
+            onChange={(m) => setMedicao('goniometria', m)}
+            temValores={comValores.includes('goniometria')}
+            onDescartarValores={() => onMotoraChange({ goniometria: {} })}
+            disabled={disabled}
+          >
+            <div className="space-y-6">
+              <div className="border rounded-lg p-4 space-y-4">
+                <TituloComAjuda ajuda="rotacao" className="text-blue-700">
+                  Rotação Cervical (graus)
+                </TituloComAjuda>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Field label="Ativa D">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={goniometria.rotacao_ativa_direita ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        rotacao_ativa_direita: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Ativa E">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={goniometria.rotacao_ativa_esquerda ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        rotacao_ativa_esquerda: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Passiva D">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={goniometria.rotacao_passiva_direita ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        rotacao_passiva_direita: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Passiva E">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={goniometria.rotacao_passiva_esquerda ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        rotacao_passiva_esquerda: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-              </div>
-            </div>
-
-            <div className="border rounded-lg p-4 space-y-4">
-              <TituloComAjuda ajuda="inclinacao" className="text-purple-700">
-                Inclinação Lateral (graus)
-              </TituloComAjuda>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Field label="Ativa D">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={90}
-                    value={goniometria.inclinacao_ativa_direita ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        inclinacao_ativa_direita: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Ativa E">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={90}
-                    value={goniometria.inclinacao_ativa_esquerda ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        inclinacao_ativa_esquerda: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Passiva D">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={90}
-                    value={goniometria.inclinacao_passiva_direita ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        inclinacao_passiva_direita: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Passiva E">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={90}
-                    value={goniometria.inclinacao_passiva_esquerda ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        inclinacao_passiva_esquerda: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-              </div>
-            </div>
-
-            {diferencas.length > 0 && (
-              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-                <h4 className="font-medium text-gray-700">
-                  📊 Diferença entre os lados
-                </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {diferencas.map((d) => {
-                    const classe = d.classifica
-                      ? classificarDiferencaCervical(d.valor)
-                      : undefined;
-                    return (
-                      <div key={d.label} className="text-center">
-                        <div
-                          className={cn(
-                            'text-2xl font-bold',
-                            classe ? corClassificacao[classe] : 'text-blue-600'
-                          )}
-                        >
-                          {d.valor}°
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {d.label}
-                        </div>
-                        {classe && (
-                          <div className="text-xs font-medium capitalize">
-                            {classe}
-                          </div>
-                        )}
-                        {d.lado && (
-                          <div className="text-xs text-muted-foreground">
-                            menor para a {d.lado}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <Field label="Ativa D">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={180}
+                      value={goniometria.rotacao_ativa_direita ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          rotacao_ativa_direita: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Ativa E">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={180}
+                      value={goniometria.rotacao_ativa_esquerda ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          rotacao_ativa_esquerda: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Passiva D">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={180}
+                      value={goniometria.rotacao_passiva_direita ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          rotacao_passiva_direita: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Passiva E">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={180}
+                      value={goniometria.rotacao_passiva_esquerda ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          rotacao_passiva_esquerda: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Rotação classificada com as mesmas faixas da avaliação:{' '}
-                  {TEXTO_FAIXAS_DIFERENCA_CERVICAL}. A classificação apoia a
-                  leitura dos números e não é um diagnóstico por si só.
-                </p>
               </div>
-            )}
 
-            <Field label="Observações">
-              <Textarea
-                value={goniometria.observacoes || ''}
-                onChange={(e) =>
-                  updateGoniometria({ observacoes: e.target.value })
-                }
-                placeholder="Observações sobre amplitude de movimento..."
-                disabled={disabled}
-                rows={2}
+              <div className="border rounded-lg p-4 space-y-4">
+                <TituloComAjuda ajuda="inclinacao" className="text-purple-700">
+                  Inclinação Lateral (graus)
+                </TituloComAjuda>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Field label="Ativa D">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={goniometria.inclinacao_ativa_direita ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          inclinacao_ativa_direita: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Ativa E">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={goniometria.inclinacao_ativa_esquerda ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          inclinacao_ativa_esquerda: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Passiva D">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={goniometria.inclinacao_passiva_direita ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          inclinacao_passiva_direita: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Passiva E">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={goniometria.inclinacao_passiva_esquerda ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          inclinacao_passiva_esquerda: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              {diferencas.length > 0 && (
+                <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+                  <h4 className="font-medium text-gray-700">
+                    📊 Diferença entre os lados
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {diferencas.map((d) => {
+                      const classe = d.classifica
+                        ? classificarDiferencaCervical(d.valor)
+                        : undefined;
+                      return (
+                        <div key={d.label} className="text-center">
+                          <div
+                            className={cn(
+                              'text-2xl font-bold',
+                              classe
+                                ? corClassificacao[classe]
+                                : 'text-blue-600'
+                            )}
+                          >
+                            {d.valor}°
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {d.label}
+                          </div>
+                          {classe && (
+                            <div className="text-xs font-medium capitalize">
+                              {classe}
+                            </div>
+                          )}
+                          {d.lado && (
+                            <div className="text-xs text-muted-foreground">
+                              menor para a {d.lado}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Rotação classificada com as mesmas faixas da avaliação:{' '}
+                    {TEXTO_FAIXAS_DIFERENCA_CERVICAL}. A classificação apoia a
+                    leitura dos números e não é um diagnóstico por si só.
+                  </p>
+                </div>
+              )}
+
+              <Field label="Observações">
+                <Textarea
+                  value={goniometria.observacoes || ''}
+                  onChange={(e) =>
+                    updateGoniometria({ observacoes: e.target.value })
+                  }
+                  placeholder="Observações sobre amplitude de movimento..."
+                  disabled={disabled}
+                  rows={2}
+                />
+              </Field>
+              <ComparacaoGoniometria
+                atual={goniometria as Record<string, unknown>}
               />
-            </Field>
-          </div>
+            </div>
+          </MedicaoSessaoBloco>
         );
       }
 
@@ -3786,6 +3848,21 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
             )}
+
+            {/* Some sozinho para quem não está no piloto das medidas */}
+            <ReavaliacoesConduta
+              medicoes={medicoes}
+              proximas={proximas}
+              onMedicaoChange={setMedicao}
+              onProximaChange={setProxima}
+              tiposComSecao={secoesMotorasVisiveis(evolucao.areas)
+                .map((sec) => sec.id)
+                .filter(
+                  (id): id is TipoMedidaMotora =>
+                    id === 'craniometria' || id === 'goniometria'
+                )}
+              disabled={disabled}
+            />
 
             <Field label="Observações da Conduta">
               <Textarea
