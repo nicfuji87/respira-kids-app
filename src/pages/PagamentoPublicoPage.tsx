@@ -55,6 +55,10 @@ const formatDateBR = (iso: string) => {
   return d && m && y ? `${d}/${m}/${y}` : iso;
 };
 
+// Parcelas mostradas de cara no cartão. Acima disso (7x..12x) fica atrás do link
+// "Parcelar em mais vezes" — disponível, mas sem incentivar parcelamento longo.
+const PARCELAS_VISIVEIS = 6;
+
 // Seleção do cliente: PIX ou cartão com nº de parcelas.
 type Selecao = { tipo: 'pix' } | { tipo: 'credit_card'; parcelas: number };
 
@@ -69,6 +73,7 @@ export const PagamentoPublicoPage: React.FC = () => {
   // Por padrão já vem com PIX selecionado (forma sem acréscimo).
   const [selecao, setSelecao] = useState<Selecao>({ tipo: 'pix' });
   const [isConfirming, setIsConfirming] = useState(false);
+  const [mostrarMaisParcelas, setMostrarMaisParcelas] = useState(false);
 
   // CTA: ao selecionar uma opção, rolamos a tela até o botão e o destacamos por
   // um instante, deixando claro que ainda é preciso CONFIRMAR para gerar o pagamento.
@@ -243,6 +248,12 @@ export const PagamentoPublicoPage: React.FC = () => {
 
   // ---------- Estado principal: escolher forma de pagamento ----------
   const opcoes = link.opcoes;
+  const temMaisParcelas = opcoes.cartao.some(
+    (c) => c.parcelas > PARCELAS_VISIVEIS
+  );
+  const opcoesCartaoVisiveis = mostrarMaisParcelas
+    ? opcoes.cartao
+    : opcoes.cartao.filter((c) => c.parcelas <= PARCELAS_VISIVEIS);
 
   // Valor e rótulo da seleção atual (para o CTA)
   const opcaoCartao =
@@ -352,7 +363,7 @@ export const PagamentoPublicoPage: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                {opcoes.cartao.map((opcao) => (
+                {opcoesCartaoVisiveis.map((opcao) => (
                   <OptionRow
                     key={opcao.parcelas}
                     selected={
@@ -374,6 +385,16 @@ export const PagamentoPublicoPage: React.FC = () => {
                   />
                 ))}
               </div>
+
+              {temMaisParcelas && !mostrarMaisParcelas && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarMaisParcelas(true)}
+                  className="mx-auto block pt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Parcelar em mais vezes
+                </button>
+              )}
             </div>
           )}
         </CardContent>
