@@ -19,7 +19,7 @@ Gabriela (João, paciente novo): quer remarcar para uma sexta de manhã em novem
 (61) 99649-0326, sem cadastro: perguntou o valor da respiratória para bebê de 6 meses; a Ju respondeu, falta oferecer horário. Sem resposta desde 15h51.
 Mensagem de dia anterior: "desde ontem 18h03" ou "desde 21/10". Paciente novo = ja_atendido false.
 urgente = true quando envolve hoje ou amanhã (consulta, encaixe, cancelamento de última hora), reclamação ou cobrança contestada.
-Sem markdown, sem negrito, sem travessão. Português do Brasil, sem diminutivos. Ordem: urgentes primeiro, depois do mais antigo para o mais novo.`;
+Não coloque o telefone na linha de quem tem cadastro (o sistema acrescenta). Sem markdown, sem negrito, sem travessão. Português do Brasil, sem diminutivos. Ordem: urgentes primeiro, depois do mais antigo para o mais novo.`;
 
 const schema = {
   type: 'object',
@@ -67,5 +67,14 @@ return [{
 // let texto;
 // if (itens === null) texto = titulo + '\nNão consegui montar o resumo hoje. Vale passar pelas conversas não lidas.';
 // else if (!itens.length) texto = titulo + '\nNenhuma conversa esperando resposta ✅';
-// else texto = titulo + '\n\n' + itens.map((i) => (i.urgente ? '❗ ' : '• ') + i.linha).join('\n');
+// else {
+//   // Telefone vem do banco (não da IA): a Lolô toca no número e abre a conversa.
+//   const tel = {};
+//   for (const it of $('Conversas esperando').all()) if (it.json?.conversa_id) tel[it.json.conversa_id] = it.json.telefone;
+//   texto = titulo + '\n\n' + itens.map((i) => {
+//     const t = tel[i.conversa_id];
+//     const linha = String(i.linha || '').trim();
+//     return (i.urgente ? '❗ ' : '• ') + linha + (t && !linha.includes(t) ? '\n   📞 ' + t : '');
+//   }).join('\n');
+// }
 // return [{ json: { texto } }];
