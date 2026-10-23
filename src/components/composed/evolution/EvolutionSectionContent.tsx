@@ -44,7 +44,13 @@ import {
   ComparacaoCraniometria,
   ComparacaoGoniometria,
 } from './MedicoesMotoras';
+import { ObjetivosHabilidadesSecao } from './ObjetivosHabilidadesSecao';
 import {
+  IntervencoesSecao,
+  RespostaSessaoSecao,
+} from './IntervencoesRespostaSecoes';
+import {
+  ehFormatoMotoraV13,
   secoesMotorasVisiveis,
   calcularMetricasCraniometriaEvolucao,
   calcularDiferencasGoniometria,
@@ -2649,6 +2655,34 @@ export const EvolutionSectionContent: React.FC<
 
     switch (secaoId) {
       // -----------------------------------------------------------------
+      // FORMATO 1.3: objetivos e habilidades, intervenções, resposta
+      // -----------------------------------------------------------------
+      case 'objetivos_habilidades':
+        return (
+          <ObjetivosHabilidadesSecao
+            evolucao={evolucao}
+            onChange={onMotoraChange}
+            disabled={disabled}
+          />
+        );
+      case 'intervencoes':
+        return (
+          <IntervencoesSecao
+            evolucao={evolucao}
+            onChange={onMotoraChange}
+            disabled={disabled}
+          />
+        );
+      case 'resposta_sessao':
+        return (
+          <RespostaSessaoSecao
+            evolucao={evolucao}
+            onChange={onMotoraChange}
+            disabled={disabled}
+          />
+        );
+
+      // -----------------------------------------------------------------
       // CRANIOMETRIA
       // -----------------------------------------------------------------
       case 'craniometria': {
@@ -3855,7 +3889,10 @@ export const EvolutionSectionContent: React.FC<
               proximas={proximas}
               onMedicaoChange={setMedicao}
               onProximaChange={setProxima}
-              tiposComSecao={secoesMotorasVisiveis(evolucao.areas)
+              tiposComSecao={secoesMotorasVisiveis(
+                evolucao.areas,
+                ehFormatoMotoraV13(evolucao)
+              )
                 .map((sec) => sec.id)
                 .filter(
                   (id): id is TipoMedidaMotora =>

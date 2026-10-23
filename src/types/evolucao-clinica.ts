@@ -1,6 +1,19 @@
 // AI dev note: Tipos para Sistema de Evolução Estruturada
 // Suporta: Evolução Respiratória e Evolução Motora/Assimetria
 
+import type {
+  EstadoHabilidade,
+  ConsistenciaHabilidade,
+  NivelAssistencia,
+  SimetriaMovimento,
+  ControlePostural,
+  TransferenciaPeso,
+  ParticipacaoHabilidade,
+  LadoHabilidade,
+  MetricaHabilidade,
+  ResultadoFuncional,
+} from '@/lib/motora-catalogo';
+
 // =========================================================================
 // TIPOS BASE
 // =========================================================================
@@ -511,7 +524,16 @@ export interface AutoriaEvolucao {
  * são da versão original: neles, "encaminhamento médico = não" pode ser só o
  * valor padrão do formulário, e não uma decisão clínica.
  */
-export const VERSAO_FORMULARIO_MOTORA = '1.2';
+export const VERSAO_FORMULARIO_MOTORA = '1.3';
+
+/**
+ * Formato 1.3: objetivos + habilidades + intervenções por finalidade +
+ * resposta da sessão. Registros anteriores continuam abrindo no formato em que
+ * foram gravados (controle motor, intervenção e resposta antigos).
+ */
+export const ehFormatoMotoraV13 = (
+  ev: Pick<EvolucaoMotoraAssimetria, 'versao_formulario'> | null | undefined
+) => Number(ev?.versao_formulario ?? 0) >= 1.3;
 
 // -------------------------------------------------------------------------
 // Medidas programadas (craniometria, goniometria, MFS…)
@@ -553,6 +575,84 @@ export interface MedicaoSessao {
   valores?: Record<string, string | number>;
 }
 
+// -------------------------------------------------------------------------
+// Formato 1.3: habilidades, objetivos da sessão, intervenções e resposta
+// -------------------------------------------------------------------------
+
+export type MetricasHabilidade = Partial<Record<MetricaHabilidade, number>>;
+
+/**
+ * Uma habilidade registrada nesta sessão. Campo ausente = não registrado
+ * (nunca zero). Números só quando efetivamente mensurados.
+ */
+export interface RegistroHabilidade {
+  habilidade: string; // id do catálogo (src/lib/motora-catalogo.ts)
+  lado?: LadoHabilidade;
+  estado: EstadoHabilidade;
+  consistencia?: ConsistenciaHabilidade;
+  assistencia?: NivelAssistencia;
+  simetria?: SimetriaMovimento;
+  controle?: ControlePostural;
+  transferencia_peso?: TransferenciaPeso;
+  participacao?: ParticipacaoHabilidade;
+  metricas?: MetricasHabilidade;
+  observacao?: string;
+  // Último registro anterior (copiado ao abrir), para o texto e a comparação
+  // não mudarem se o histórico for editado depois
+  anterior?: {
+    data: string;
+    estado: EstadoHabilidade;
+    assistencia?: NivelAssistencia;
+    metricas?: MetricasHabilidade;
+  };
+}
+
+/** Resultado de um objetivo do plano nesta sessão (cópia do que era o objetivo) */
+export interface ObjetivoSessao {
+  objetivo_id: string;
+  descricao: string;
+  resultado?: ResultadoFuncional;
+  rotulo_indicador?: string;
+  unidade?: string;
+  valor?: number;
+  valor_anterior?: number;
+  data_anterior?: string;
+  meta?: number;
+  observacao?: string;
+}
+
+/** Intervenção pela finalidade, com abordagem e região/função */
+export interface IntervencaoFinalidade {
+  finalidade: string; // id em FINALIDADES (ou 'outra')
+  finalidade_outra?: string;
+  abordagens?: string[];
+  abordagem_outra?: string;
+  regioes?: string[];
+  recursos?: string[];
+  detalhe?: string;
+}
+
+export interface RespostaSessaoMotora {
+  participacao?: 'boa' | 'variavel' | 'limitada';
+  ocorrencias?: string[];
+  ocorrencia_outra?: string;
+  // Só quando nenhum objetivo foi trabalhado (senão vai por objetivo)
+  resultado_geral?: ResultadoFuncional;
+  intercorrencias?: string;
+  // Relato do responsável: separado da observação da fisio
+  relato_familia?: string;
+  adesao_domiciliar?: AdesaoDomiciliar | null;
+  observacoes?: string;
+}
+
+/** Idade no dia da sessão (cópia, para o texto) */
+export interface IdadeSessao {
+  cronologica_meses: number;
+  cronologica_texto: string;
+  corrigida_texto?: string;
+  observacao?: string;
+}
+
 export interface ProximaReavaliacao {
   data: string; // YYYY-MM-DD
   descricao?: string; // para "outra"
@@ -568,6 +668,12 @@ export interface EvolucaoMotoraAssimetria {
   // programada na conduta (aplicados na programação do paciente ao salvar)
   medicoes?: Partial<Record<TipoMedidaMotora, MedicaoSessao>>;
   proximas_reavaliacoes?: Partial<Record<TipoMedidaMotora, ProximaReavaliacao>>;
+  // Formato 1.3
+  idade_sessao?: IdadeSessao;
+  habilidades?: RegistroHabilidade[];
+  objetivos_sessao?: ObjetivoSessao[];
+  intervencoes?: IntervencaoFinalidade[];
+  resposta_sessao?: RespostaSessaoMotora;
   autor?: AutoriaEvolucao;
   ultima_edicao?: AutoriaEvolucao;
   craniometria?: CraniometriaEvolucao;
@@ -733,6 +839,40 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
     campos: ['frequencia', 'reavaliacao', 'encaminhamento', 'capacete'],
     ordem: 8,
   },
+];
+
+const SECAO_MOTORA = (id: string) =>
+  EVOLUCAO_MOTORA_ASSIMETRIA_SECOES.find((s) => s.id === id)!;
+
+/** Formato 1.3: objetivos e habilidades primeiro, depois medidas e o fechamento */
+export const EVOLUCAO_MOTORA_SECOES_V13: EvolucaoSecao[] = [
+  {
+    // Essencial quando desenvolvimento motor é trabalhado (secaoMotoraEssencial)
+    id: 'objetivos_habilidades',
+    titulo: 'Objetivos e habilidades',
+    icone: '🎯',
+    campos: ['objetivos', 'habilidades'],
+    ordem: 1,
+  },
+  { ...SECAO_MOTORA('goniometria'), ordem: 2 },
+  { ...SECAO_MOTORA('palpacao'), ordem: 3 },
+  { ...SECAO_MOTORA('craniometria'), ordem: 4 },
+  {
+    id: 'intervencoes',
+    titulo: 'Intervenções realizadas',
+    icone: '🩺',
+    campos: ['finalidade', 'abordagem', 'regiao'],
+    ordem: 5,
+  },
+  {
+    id: 'resposta_sessao',
+    titulo: 'Resposta e participação',
+    icone: '📈',
+    campos: ['participacao', 'resultado', 'intercorrencias'],
+    ordem: 6,
+  },
+  { ...SECAO_MOTORA('orientacoes'), ordem: 7 },
+  { ...SECAO_MOTORA('conduta'), ordem: 8 },
 ];
 
 // =========================================================================
@@ -1071,6 +1211,12 @@ export function criarEvolucaoMotoraAssimetriaVazia(): EvolucaoMotoraAssimetria {
       frequencia_sugerida: null,
       encaminhamento_medico: false,
     },
+    // Evolução nova já nasce no formato 1.3
+    versao_formulario: VERSAO_FORMULARIO_MOTORA,
+    habilidades: [],
+    objetivos_sessao: [],
+    intervencoes: [],
+    resposta_sessao: {},
   };
 }
 
@@ -1468,6 +1614,25 @@ function verificarSecaoMotoraCompleta(
       if (respondidos === itens.length) return 'completo';
       return respondidos > 0 || temTexto(r.observacoes) ? 'parcial' : 'vazio';
     }
+    case 'objetivos_habilidades': {
+      const registrou =
+        (ev.habilidades || []).length > 0 ||
+        (ev.objetivos_sessao || []).some((o) => !!o.resultado);
+      return registrou ? 'completo' : 'vazio';
+    }
+    case 'intervencoes':
+      return (ev.intervencoes || []).length > 0 ? 'completo' : 'vazio';
+    case 'resposta_sessao': {
+      const r = ev.resposta_sessao || {};
+      if (r.participacao) return 'completo';
+      return (r.ocorrencias || []).length > 0 ||
+        temTexto(r.intercorrencias) ||
+        temTexto(r.relato_familia) ||
+        temTexto(r.observacoes) ||
+        !!r.adesao_domiciliar
+        ? 'parcial'
+        : 'vazio';
+    }
     case 'orientacoes': {
       const o = ev.orientacoes;
       return o.posicionamento_sono ||
@@ -1504,11 +1669,12 @@ const areaAtiva = (areas: AreaMotora[] | undefined, a: AreaMotora) =>
 
 /** Seções da evolução motora que aparecem para as áreas marcadas. */
 export function secoesMotorasVisiveis(
-  areas: AreaMotora[] | undefined
+  areas: AreaMotora[] | undefined,
+  v13 = false
 ): EvolucaoSecao[] {
-  return EVOLUCAO_MOTORA_ASSIMETRIA_SECOES.filter(
-    (s) => !s.areas || s.areas.some((a) => areaAtiva(areas, a))
-  );
+  return (
+    v13 ? EVOLUCAO_MOTORA_SECOES_V13 : EVOLUCAO_MOTORA_ASSIMETRIA_SECOES
+  ).filter((s) => !s.areas || s.areas.some((a) => areaAtiva(areas, a)));
 }
 
 /**
@@ -1520,7 +1686,7 @@ export function secaoMotoraEssencial(
   areas: AreaMotora[] | undefined
 ): boolean {
   if (secao.opcional) return false;
-  if (secao.id === 'controle_motor')
+  if (secao.id === 'controle_motor' || secao.id === 'objetivos_habilidades')
     return areaAtiva(areas, 'desenvolvimento_motor');
   return true;
 }

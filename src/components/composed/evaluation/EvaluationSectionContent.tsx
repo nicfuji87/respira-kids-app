@@ -1,3 +1,4 @@
+import { PlanoTerapeuticoMotor } from '@/components/composed/evolution/PlanoTerapeuticoMotor';
 import React from 'react';
 import {
   ChevronDown,
@@ -6350,6 +6351,13 @@ export const EvaluationSectionContent: React.FC<
           {}) as ObjetivosTratamento;
         return (
           <div className="space-y-6">
+            {/* Objetivos estruturados: continuam nas evoluções seguintes */}
+            <PlanoTerapeuticoMotor
+              pacienteId={avaliacao.pessoa_id}
+              origem="avaliacao"
+              origemId={avaliacao.id}
+              mostrarGraficos={false}
+            />
             <Field label="Curto prazo">
               <Textarea
                 value={objetivos.curto_prazo || ''}

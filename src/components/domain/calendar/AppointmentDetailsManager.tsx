@@ -1,3 +1,4 @@
+import { usePlanoMotorDados } from '@/hooks/usePlanoMotorDados';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MapPin,
@@ -298,6 +299,13 @@ export const AppointmentDetailsManager =
       const medidasPendentes = (medidasPaciente ?? []).filter((m) =>
         medidaPendente(m.estado)
       );
+      // Plano terapêutico e histórico motor: só quando a evolução está aberta
+      const planoMotor = usePlanoMotorDados({
+        pacienteId: appointment?.paciente_id,
+        ativo: podeVerMedidas && showEvolutionModal,
+        agendamentoId: appointment?.id,
+        dataSessao,
+      });
 
       // Busca a última evolução do paciente ao abrir o modal p/ nova evolução
       useEffect(() => {
@@ -2800,6 +2808,7 @@ export const AppointmentDetailsManager =
             tipoServico={appointment.servico_nome}
             patientName={appointment.paciente_nome}
             appointmentId={appointment.id}
+            planoMotor={planoMotor}
             existingData={
               editingEvolucaoData
                 ? {

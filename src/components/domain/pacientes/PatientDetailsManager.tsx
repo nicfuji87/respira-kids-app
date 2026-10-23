@@ -21,6 +21,7 @@ import { AppointmentFormManager } from '@/components/domain/calendar/Appointment
 import { PatientConversasSection } from '@/components/domain/whatsapp-conversas';
 import { PatientProdutosSection } from '@/components/domain/produtos';
 import { PatientPrecosSection } from './PatientPrecosSection';
+import { PlanoTerapeuticoMotor } from '@/components/composed/evolution';
 import {
   fetchPatientDetails,
   fetchPatientAnamnesis,
@@ -513,6 +514,16 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
                 }
                 currentUserId={user?.pessoa?.id}
               />
+
+              {/* Plano terapêutico motor: objetivos e gráficos (admin/fisio) */}
+              {(user?.pessoa?.role === 'admin' ||
+                user?.pessoa?.role === 'profissional') && (
+                <PlanoTerapeuticoMotor
+                  pacienteId={actualId}
+                  origem="plano"
+                  ocultarSeVazio
+                />
+              )}
 
               {/* Relatórios Clínicos do Paciente */}
               <ClinicalReportGenerator

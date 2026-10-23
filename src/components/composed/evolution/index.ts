@@ -4,3 +4,4 @@
 export { EvolutionFormModal } from './EvolutionFormModal';
 export { EvolutionSectionContent } from './EvolutionSectionContent';
 export type { EvolutionFormModalProps } from './EvolutionFormModal';
+export { PlanoTerapeuticoMotor } from './PlanoTerapeuticoMotor';

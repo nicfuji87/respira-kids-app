@@ -13,12 +13,30 @@ import {
   ROTULO_BRAQUICEFALIA,
   ROTULO_PLAGIOCEFALIA,
   VERSAO_FORMULARIO_MOTORA,
+  ehFormatoMotoraV13,
   type AdesaoDomiciliar,
   type AutoriaEvolucao,
   type EvolucaoMotoraAssimetria,
   type RespostaObservada,
 } from '@/types/evolucao-clinica';
 import { linhasMedidasDoResumo } from '@/lib/motora-medidas';
+import {
+  diferenca,
+  dataCurta,
+  fmtValor,
+  nomeRegistro,
+  textoRegistroHabilidade,
+} from '@/lib/motora-plano';
+import {
+  ABORDAGEM_CURTA,
+  FINALIDADE_POR_ID,
+  OCORRENCIAS_SESSAO,
+  PARTICIPACOES_SESSAO,
+  RECURSOS,
+  REGIOES,
+  RESULTADOS_FUNCIONAIS,
+  nomeDe,
+} from '@/lib/motora-catalogo';
 
 /**
  * Prepara a evolução motora para gravar: identifica a profissional logada
@@ -156,6 +174,9 @@ export function gerarResumoEvolucaoMotora(
     );
     texto += `🎯 Áreas trabalhadas: ${nomes.join(', ')}\n\n`;
   }
+
+  const v13 = ehFormatoMotoraV13(ev);
+  if (v13) texto += blocosObjetivosHabilidades(ev);
 
   // Medidas craniométricas
   const c = ev.craniometria || {};
@@ -314,8 +335,10 @@ export function gerarResumoEvolucaoMotora(
     controle.push(`Observações: ${cm.observacoes.trim()}`);
   texto += secao('🏋️ Controle motor', controle);
 
-  // Intervenção
-  const i = ev.intervencao;
+  if (v13) texto += blocosIntervencaoResposta(ev);
+
+  // Intervenção (formato anterior)
+  const i = v13 ? undefined : ev.intervencao;
   const interv: string[] = [];
   if (i) {
     const tecnicas = [
@@ -335,8 +358,8 @@ export function gerarResumoEvolucaoMotora(
   }
   texto += secao('🩺 Intervenção realizada', interv);
 
-  // Resposta ao tratamento
-  const r = ev.resposta || {};
+  // Resposta ao tratamento (formato anterior)
+  const r = (v13 ? {} : ev.resposta) || {};
   const resp: string[] = [];
   const itensResposta: [string, RespostaObservada | null | undefined][] = [
     ['Melhora da ADM', r.melhora_adm],
@@ -425,6 +448,120 @@ export function gerarResumoEvolucaoMotora(
   if (edicao) texto += `${edicao}\n`;
 
   return texto.trimEnd() + '\n';
+}
+
+// ------------------------------------------------------------ formato 1.3
+
+const ROTULO_RESULTADO = Object.fromEntries(
+  RESULTADOS_FUNCIONAIS.map((r) => [r.id, r.rotulo.toLowerCase()])
+) as Record<string, string>;
+
+function blocosObjetivosHabilidades(ev: EvolucaoMotoraAssimetria): string {
+  let texto = '';
+  const idade = ev.idade_sessao;
+  if (idade) {
+    let l = `👶 Idade: ${idade.cronologica_texto}`;
+    if (idade.corrigida_texto)
+      l += ` (idade corrigida: ${idade.corrigida_texto})`;
+    if (idade.observacao) l += `. ${idade.observacao}`;
+    texto += `${l}
+
+`;
+  }
+
+  const objs: string[] = [];
+  for (const o of ev.objetivos_sessao || []) {
+    const partes: string[] = [];
+    if (o.resultado) partes.push(ROTULO_RESULTADO[o.resultado] ?? o.resultado);
+    const un = o.unidade ?? '';
+    if (ehNumero(o.valor)) {
+      let v = `hoje ${fmtValor(o.valor, un)}`;
+      if (ehNumero(o.valor_anterior)) {
+        v += ` (antes ${fmtValor(o.valor_anterior, un)}`;
+        if (o.data_anterior) v += ` em ${dataCurta(o.data_anterior)}`;
+        const d = diferenca(o.valor, o.valor_anterior, un);
+        if (d) v += `; ${d}`;
+        v += ')';
+      }
+      partes.push(v);
+    } else if (o.rotulo_indicador) {
+      partes.push('sem mensuração nesta sessão');
+    }
+    if (ehNumero(o.meta)) partes.push(`meta ${fmtValor(o.meta, un)}`);
+    let l = o.descricao + (partes.length ? `: ${partes.join('; ')}` : '');
+    if (temTexto(o.observacao)) l += `. ${o.observacao.trim()}`;
+    objs.push(l);
+  }
+  texto += secao('🎯 Objetivos trabalhados', objs);
+
+  const regs = ev.habilidades || [];
+  const hab = regs
+    .filter((r) => r.estado !== 'nao_observado')
+    .map((r) => textoRegistroHabilidade(r));
+  const naoObs = regs
+    .filter((r) => r.estado === 'nao_observado')
+    .map(nomeRegistro);
+  if (naoObs.length) hab.push(`Não observadas hoje: ${naoObs.join(', ')}`);
+  texto += secao('🧩 Habilidades observadas', hab);
+  return texto;
+}
+
+function blocosIntervencaoResposta(ev: EvolucaoMotoraAssimetria): string {
+  let texto = '';
+  const interv: string[] = [];
+  for (const it of ev.intervencoes || []) {
+    const nome =
+      it.finalidade === 'outra'
+        ? it.finalidade_outra?.trim() || 'Outra finalidade'
+        : (FINALIDADE_POR_ID[it.finalidade]?.nome ?? it.finalidade);
+    const partes: string[] = [];
+    const abord = [
+      ...(it.abordagens || []).map((a) => ABORDAGEM_CURTA[a] ?? a),
+      ...(temTexto(it.abordagem_outra) ? [it.abordagem_outra.trim()] : []),
+    ];
+    if (abord.length) partes.push(`abordagem: ${abord.join(', ')}`);
+    if (it.regioes?.length)
+      partes.push(
+        `região/função: ${it.regioes.map((x) => nomeDe(REGIOES, x).toLowerCase()).join(', ')}`
+      );
+    if (it.recursos?.length)
+      partes.push(
+        `recursos: ${it.recursos.map((x) => nomeDe(RECURSOS, x).toLowerCase()).join(', ')}`
+      );
+    let l = nome + (partes.length ? ` (${partes.join('; ')})` : '');
+    if (temTexto(it.detalhe)) l += `. ${it.detalhe.trim()}`;
+    interv.push(l);
+  }
+  texto += secao('🩺 Intervenções realizadas', interv);
+
+  const r = ev.resposta_sessao || {};
+  const resp: string[] = [];
+  const part = PARTICIPACOES_SESSAO.find(
+    (p) => p.id === r.participacao
+  )?.rotulo;
+  const ocorr = [
+    ...(r.ocorrencias || []).map(
+      (o) =>
+        OCORRENCIAS_SESSAO.find((x) => x.id === o)?.rotulo.toLowerCase() ?? o
+    ),
+    ...(temTexto(r.ocorrencia_outra) ? [r.ocorrencia_outra.trim()] : []),
+  ];
+  if (part || ocorr.length)
+    resp.push([part, ...ocorr].filter(Boolean).join('; '));
+  if (r.resultado_geral)
+    resp.push(`Resultado funcional: ${ROTULO_RESULTADO[r.resultado_geral]}`);
+  if (temTexto(r.intercorrencias))
+    resp.push(`Intercorrências: ${r.intercorrencias.trim()}`);
+  if (temTexto(r.observacoes))
+    resp.push(`Observações da fisioterapeuta: ${r.observacoes.trim()}`);
+  if (temTexto(r.relato_familia))
+    resp.push(`Relato da família: ${r.relato_familia.trim()}`);
+  if (r.adesao_domiciliar)
+    resp.push(
+      `Responsável relata ter realizado as orientações domiciliares: ${ADESAO[r.adesao_domiciliar]}`
+    );
+  texto += secao('📈 Resposta e participação', resp);
+  return texto;
 }
 
 function linhaAutoria(rotulo: string, autor?: AutoriaEvolucao): string | null {
