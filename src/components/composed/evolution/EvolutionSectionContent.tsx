@@ -17,6 +17,8 @@ import type {
   RitmoRespiratorio,
   AuscultaPulmonar,
   AuscultaHemitorax,
+  RuidoAdventicio,
+  LocalizacaoRuido,
   IntervencaoRespiratoria,
   AvaliacaoRespiratoriaDepois,
   OrientacoesRespiratoria,
@@ -45,6 +47,8 @@ import {
   calcularClassificacaoClinica,
   getTextoClassificacaoClinica,
   getAvaliacaoRespiratoriaNormal,
+  RUIDOS_ADVENTICIOS,
+  LOCALIZACOES_RUIDO,
 } from '@/types/evolucao-clinica';
 
 // AI dev note: EvolutionSectionContent - Renderiza conteúdo de cada seção da evolução
@@ -253,6 +257,181 @@ const RespostaField: React.FC<{
   disabled?: boolean;
   ajuda?: string;
 }> = (props) => <EscolhaField {...props} opcoes={OPCOES_RESPOSTA} />;
+
+// Ausculta de um hemitórax. Cada ruído marcado abre logo abaixo a pergunta
+// "onde?" (ex.: marcou roncos → onde estão os roncos?), em vez de uma
+// localização única que não dizia qual ruído estava onde.
+const HemitoraxAuscultaCard: React.FC<{
+  titulo: string;
+  className?: string;
+  tituloClassName?: string;
+  valor: AuscultaHemitorax;
+  onChange: (updates: Partial<AuscultaHemitorax>) => void;
+  disabled?: boolean;
+}> = ({ titulo, className, tituloClassName, valor, onChange, disabled }) => {
+  const loc = valor.localizacao_ruidos || {};
+  const temLocalizacaoAntiga = !!(
+    valor.localizacao_difusos ||
+    valor.localizacao_apice ||
+    valor.localizacao_terco_medio ||
+    valor.localizacao_base
+  );
+
+  const marcarAusentes = (checked: boolean) => {
+    const updates: Partial<AuscultaHemitorax> = { ruidos_ausentes: checked };
+    if (checked) {
+      RUIDOS_ADVENTICIOS.forEach((r) => (updates[r.valor] = false));
+      updates.localizacao_ruidos = {};
+      updates.localizacao_difusos = false;
+      updates.localizacao_apice = false;
+      updates.localizacao_terco_medio = false;
+      updates.localizacao_base = false;
+    }
+    onChange(updates);
+  };
+
+  const marcarRuido = (ruido: RuidoAdventicio, checked: boolean) => {
+    const novaLoc = { ...loc };
+    if (!checked) delete novaLoc[ruido];
+    const updates: Partial<AuscultaHemitorax> = {
+      ruidos_ausentes: false,
+      localizacao_ruidos: novaLoc,
+    };
+    updates[ruido] = checked;
+    onChange(updates);
+  };
+
+  // "Difusos" exclui os pontos específicos e vice-versa
+  const alternarLocal = (ruido: RuidoAdventicio, local: LocalizacaoRuido) => {
+    const atual = loc[ruido] || [];
+    let novo: LocalizacaoRuido[];
+    if (atual.includes(local)) novo = atual.filter((l) => l !== local);
+    else if (local === 'difusos') novo = ['difusos'];
+    else novo = [...atual.filter((l) => l !== 'difusos'), local];
+    onChange({ localizacao_ruidos: { ...loc, [ruido]: novo } });
+  };
+
+  return (
+    <div className={cn('border rounded-lg p-4 space-y-4', className)}>
+      <h5 className={cn('font-medium', tituloClassName)}>{titulo}</h5>
+
+      <Field label="Murmúrio Vesicular">
+        <RadioButtonGroup
+          value={valor.murmurio_vesicular}
+          onChange={(v) =>
+            onChange({
+              murmurio_vesicular: v as 'preservado' | 'diminuido' | 'abolido',
+            })
+          }
+          options={[
+            { valor: 'preservado', label: '✅ Preservado' },
+            { valor: 'diminuido', label: '⚠️ Diminuído' },
+            { valor: 'abolido', label: '❌ Abolido' },
+          ]}
+          disabled={disabled}
+        />
+      </Field>
+
+      <div className="space-y-2">
+        <span className="text-sm font-medium">Ruídos Adventícios</span>
+        <div className="space-y-3">
+          <CheckboxField
+            label="Ausentes"
+            checked={valor.ruidos_ausentes || false}
+            onChange={marcarAusentes}
+            disabled={disabled}
+          />
+          {RUIDOS_ADVENTICIOS.map((r) => {
+            const marcado = valor[r.valor] || false;
+            const locais = loc[r.valor] || [];
+            return (
+              <div key={r.valor} className="space-y-2">
+                <CheckboxField
+                  label={r.label}
+                  checked={marcado}
+                  onChange={(checked) => marcarRuido(r.valor, checked)}
+                  disabled={disabled}
+                />
+                {marcado && (
+                  <div
+                    className={cn(
+                      'ml-6 p-2 rounded-lg border space-y-2 bg-background',
+                      locais.length === 0 ? 'border-amber-300' : 'border-border'
+                    )}
+                  >
+                    <span className="text-xs font-medium text-muted-foreground">
+                      📍 Onde estão os {r.label.toLowerCase()}?
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {LOCALIZACOES_RUIDO.map((l) => {
+                        const ativo = locais.includes(l.valor);
+                        return (
+                          <button
+                            key={l.valor}
+                            type="button"
+                            aria-pressed={ativo}
+                            disabled={disabled}
+                            onClick={() => alternarLocal(r.valor, l.valor)}
+                            className={cn(
+                              'min-h-10 px-3 rounded-lg border-2 text-sm font-medium transition-all',
+                              ativo
+                                ? 'bg-primary border-primary text-primary-foreground'
+                                : 'bg-background border-border text-foreground hover:bg-muted',
+                              disabled && 'opacity-50 cursor-not-allowed'
+                            )}
+                          >
+                            {l.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Registro antigo: localização única do hemitórax, sem dizer o ruído */}
+      {temLocalizacaoAntiga && (
+        <div className="space-y-2">
+          <span className="text-sm font-medium">
+            📍 Localização geral (registro antigo)
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <CheckboxField
+              label="Difusos"
+              checked={valor.localizacao_difusos || false}
+              onChange={(checked) => onChange({ localizacao_difusos: checked })}
+              disabled={disabled}
+            />
+            <CheckboxField
+              label="Ápice"
+              checked={valor.localizacao_apice || false}
+              onChange={(checked) => onChange({ localizacao_apice: checked })}
+              disabled={disabled}
+            />
+            <CheckboxField
+              label="Terço Médio"
+              checked={valor.localizacao_terco_medio || false}
+              onChange={(checked) =>
+                onChange({ localizacao_terco_medio: checked })
+              }
+              disabled={disabled}
+            />
+            <CheckboxField
+              label="Base"
+              checked={valor.localizacao_base || false}
+              onChange={(checked) => onChange({ localizacao_base: checked })}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const EvolutionSectionContent: React.FC<
   EvolutionSectionContentProps
@@ -1339,393 +1518,22 @@ export const EvolutionSectionContent: React.FC<
               </p>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Hemitórax Direito */}
-                <div className="border rounded-lg p-4 space-y-4 bg-blue-50/50">
-                  <h5 className="font-medium text-blue-700">
-                    🫁 Hemitórax Direito
-                  </h5>
-
-                  <Field label="Murmúrio Vesicular">
-                    <RadioButtonGroup
-                      value={
-                        avaliacao.ausculta.hemitorax_direito.murmurio_vesicular
-                      }
-                      onChange={(v) =>
-                        updateHemitoraxDireito({
-                          murmurio_vesicular: v as
-                            | 'preservado'
-                            | 'diminuido'
-                            | 'abolido',
-                        })
-                      }
-                      options={[
-                        { valor: 'preservado', label: '✅ Preservado' },
-                        { valor: 'diminuido', label: '⚠️ Diminuído' },
-                        { valor: 'abolido', label: '❌ Abolido' },
-                      ]}
-                      disabled={disabled}
-                    />
-                  </Field>
-
-                  <div className="space-y-2">
-                    <span className="text-sm font-medium">
-                      Ruídos Adventícios
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <CheckboxField
-                        label="Ausentes"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito
-                            .ruidos_ausentes || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            ruidos_ausentes: checked,
-                            sibilos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_direito.sibilos,
-                            roncos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_direito.roncos,
-                            estertores_finos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_direito
-                                  .estertores_finos,
-                            estertores_grossos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_direito
-                                  .estertores_grossos,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Sibilos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito.sibilos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            sibilos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Roncos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito.roncos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            roncos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Roncos de Transmissão"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito
-                            .roncos_transmissao || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            roncos_transmissao: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Estertores finos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito
-                            .estertores_finos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            estertores_finos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Estertores grossos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito
-                            .estertores_grossos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            estertores_grossos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                    </div>
-                  </div>
-
-                  {!avaliacao.ausculta.hemitorax_direito.ruidos_ausentes && (
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium">
-                        📍 Localização
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <CheckboxField
-                          label="Difusos"
-                          checked={
-                            avaliacao.ausculta.hemitorax_direito
-                              .localizacao_difusos || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxDireito({
-                              localizacao_difusos: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Ápice"
-                          checked={
-                            avaliacao.ausculta.hemitorax_direito
-                              .localizacao_apice || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxDireito({
-                              localizacao_apice: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Terço Médio"
-                          checked={
-                            avaliacao.ausculta.hemitorax_direito
-                              .localizacao_terco_medio || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxDireito({
-                              localizacao_terco_medio: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Base"
-                          checked={
-                            avaliacao.ausculta.hemitorax_direito
-                              .localizacao_base || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxDireito({
-                              localizacao_base: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Hemitórax Esquerdo */}
-                <div className="border rounded-lg p-4 space-y-4 bg-green-50/50">
-                  <h5 className="font-medium text-green-700">
-                    🫁 Hemitórax Esquerdo
-                  </h5>
-
-                  <Field label="Murmúrio Vesicular">
-                    <RadioButtonGroup
-                      value={
-                        avaliacao.ausculta.hemitorax_esquerdo.murmurio_vesicular
-                      }
-                      onChange={(v) =>
-                        updateHemitoraxEsquerdo({
-                          murmurio_vesicular: v as
-                            | 'preservado'
-                            | 'diminuido'
-                            | 'abolido',
-                        })
-                      }
-                      options={[
-                        { valor: 'preservado', label: '✅ Preservado' },
-                        { valor: 'diminuido', label: '⚠️ Diminuído' },
-                        { valor: 'abolido', label: '❌ Abolido' },
-                      ]}
-                      disabled={disabled}
-                    />
-                  </Field>
-
-                  <div className="space-y-2">
-                    <span className="text-sm font-medium">
-                      Ruídos Adventícios
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <CheckboxField
-                        label="Ausentes"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo
-                            .ruidos_ausentes || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            ruidos_ausentes: checked,
-                            sibilos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_esquerdo.sibilos,
-                            roncos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_esquerdo.roncos,
-                            estertores_finos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_esquerdo
-                                  .estertores_finos,
-                            estertores_grossos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_esquerdo
-                                  .estertores_grossos,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Sibilos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo.sibilos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            sibilos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Roncos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo.roncos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            roncos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Roncos de Transmissão"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo
-                            .roncos_transmissao || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            roncos_transmissao: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Estertores finos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo
-                            .estertores_finos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            estertores_finos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Estertores grossos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo
-                            .estertores_grossos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            estertores_grossos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                    </div>
-                  </div>
-
-                  {!avaliacao.ausculta.hemitorax_esquerdo.ruidos_ausentes && (
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium">
-                        📍 Localização
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <CheckboxField
-                          label="Difusos"
-                          checked={
-                            avaliacao.ausculta.hemitorax_esquerdo
-                              .localizacao_difusos || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxEsquerdo({
-                              localizacao_difusos: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Ápice"
-                          checked={
-                            avaliacao.ausculta.hemitorax_esquerdo
-                              .localizacao_apice || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxEsquerdo({
-                              localizacao_apice: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Terço Médio"
-                          checked={
-                            avaliacao.ausculta.hemitorax_esquerdo
-                              .localizacao_terco_medio || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxEsquerdo({
-                              localizacao_terco_medio: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Base"
-                          checked={
-                            avaliacao.ausculta.hemitorax_esquerdo
-                              .localizacao_base || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxEsquerdo({
-                              localizacao_base: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <HemitoraxAuscultaCard
+                  titulo="🫁 Hemitórax Direito"
+                  className="bg-blue-50/50"
+                  tituloClassName="text-blue-700"
+                  valor={avaliacao.ausculta.hemitorax_direito}
+                  onChange={updateHemitoraxDireito}
+                  disabled={disabled}
+                />
+                <HemitoraxAuscultaCard
+                  titulo="🫁 Hemitórax Esquerdo"
+                  className="bg-green-50/50"
+                  tituloClassName="text-green-700"
+                  valor={avaliacao.ausculta.hemitorax_esquerdo}
+                  onChange={updateHemitoraxEsquerdo}
+                  disabled={disabled}
+                />
               </div>
 
               {/* Observações da Ausculta */}
@@ -1789,6 +1597,22 @@ export const EvolutionSectionContent: React.FC<
                   checked={intervencao.expiração_lenta_prolongada}
                   onChange={(checked) =>
                     updateIntervencao({ expiração_lenta_prolongada: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Inspiração Forçada"
+                  checked={intervencao.inspiracao_forcada || false}
+                  onChange={(checked) =>
+                    updateIntervencao({ inspiracao_forcada: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Expiração Forçada"
+                  checked={intervencao.expiracao_forcada || false}
+                  onChange={(checked) =>
+                    updateIntervencao({ expiracao_forcada: checked })
                   }
                   disabled={disabled}
                 />
@@ -2160,6 +1984,9 @@ export const EvolutionSectionContent: React.FC<
                       ausculta_melhorou: checked
                         ? false
                         : depois.ausculta_melhorou,
+                      ausculta_pouca_melhora: checked
+                        ? false
+                        : depois.ausculta_pouca_melhora,
                       ausculta_reducao_roncos: checked
                         ? false
                         : depois.ausculta_reducao_roncos,
@@ -2177,6 +2004,22 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                 />
                 <CheckboxField
+                  label="Pouca Melhora"
+                  checked={depois.ausculta_pouca_melhora || false}
+                  onChange={(checked) => {
+                    updateDepois({
+                      ausculta_pouca_melhora: checked,
+                      ausculta_sem_alteracao: checked
+                        ? false
+                        : depois.ausculta_sem_alteracao,
+                      ausculta_melhorou: checked
+                        ? false
+                        : depois.ausculta_melhorou,
+                    });
+                  }}
+                  disabled={disabled}
+                />
+                <CheckboxField
                   label="Houve Melhora"
                   checked={depois.ausculta_melhorou}
                   onChange={(checked) => {
@@ -2185,13 +2028,16 @@ export const EvolutionSectionContent: React.FC<
                       ausculta_sem_alteracao: checked
                         ? false
                         : depois.ausculta_sem_alteracao,
+                      ausculta_pouca_melhora: checked
+                        ? false
+                        : depois.ausculta_pouca_melhora,
                     });
                   }}
                   disabled={disabled}
                 />
               </div>
 
-              {depois.ausculta_melhorou && (
+              {(depois.ausculta_melhorou || depois.ausculta_pouca_melhora) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-4 border-l-2 border-purple-200">
                   <CheckboxField
                     label="Redução de Roncos"
@@ -2631,37 +2477,6 @@ export const EvolutionSectionContent: React.FC<
               disabled={disabled}
             />
 
-            {/* Se MANTER fisioterapia: mostra apenas Frequência Sugerida */}
-            {conduta.manter_fisioterapia && (
-              <div className="pl-4 border-l-2 border-green-200 space-y-4">
-                <Field label="Frequência Sugerida">
-                  <RadioButtonGroup
-                    value={conduta.frequencia_sugerida}
-                    onChange={(v) =>
-                      updateConduta({
-                        frequencia_sugerida: v as
-                          | 'diaria'
-                          | '2x_semana'
-                          | '3x_semana'
-                          | 'semanal'
-                          | 'quinzenal'
-                          | 'mensal',
-                      })
-                    }
-                    options={[
-                      { valor: 'diaria', label: 'Diária' },
-                      { valor: '3x_semana', label: '3x/semana' },
-                      { valor: '2x_semana', label: '2x/semana' },
-                      { valor: 'semanal', label: 'Semanal' },
-                      { valor: 'quinzenal', label: 'Quinzenal' },
-                      { valor: 'mensal', label: 'Mensal' },
-                    ]}
-                    disabled={disabled}
-                  />
-                </Field>
-              </div>
-            )}
-
             {/* Se NÃO manter fisioterapia: mostra opções de Alta */}
             {!conduta.manter_fisioterapia && (
               <div className="pl-4 border-l-2 border-orange-200 space-y-4">
@@ -2679,8 +2494,6 @@ export const EvolutionSectionContent: React.FC<
                         alta: v === 'completa',
                         alta_parcial: v === 'parcial',
                         // Limpa campos quando muda para alta completa
-                        frequencia_sugerida:
-                          v === 'completa' ? null : conduta.frequencia_sugerida,
                         reavaliacao_dias:
                           v === 'completa'
                             ? undefined
@@ -2710,35 +2523,9 @@ export const EvolutionSectionContent: React.FC<
                   />
                 </Field>
 
-                {/* Se Alta Parcial: mostra Frequência e Reavaliação */}
+                {/* Se Alta Parcial: mostra Reavaliação */}
                 {conduta.alta_parcial && (
                   <div className="space-y-4 pl-4 border-l-2 border-yellow-200">
-                    <Field label="Frequência Sugerida para Acompanhamento">
-                      <RadioButtonGroup
-                        value={conduta.frequencia_sugerida}
-                        onChange={(v) =>
-                          updateConduta({
-                            frequencia_sugerida: v as
-                              | 'diaria'
-                              | '2x_semana'
-                              | '3x_semana'
-                              | 'semanal'
-                              | 'quinzenal'
-                              | 'mensal',
-                          })
-                        }
-                        options={[
-                          { valor: 'diaria', label: 'Diária' },
-                          { valor: '3x_semana', label: '3x/semana' },
-                          { valor: '2x_semana', label: '2x/semana' },
-                          { valor: 'semanal', label: 'Semanal' },
-                          { valor: 'quinzenal', label: 'Quinzenal' },
-                          { valor: 'mensal', label: 'Mensal' },
-                        ]}
-                        disabled={disabled}
-                      />
-                    </Field>
-
                     <Field label="Reavaliação em (dias)">
                       <Input
                         type="number"
