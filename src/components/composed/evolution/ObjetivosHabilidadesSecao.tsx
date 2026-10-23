@@ -9,29 +9,18 @@ import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { cn } from '@/lib/utils';
+import { RESULTADOS_FUNCIONAIS } from '@/lib/motora-catalogo';
 import {
-  GRUPOS_HABILIDADE,
-  HABILIDADES,
-  HABILIDADE_POR_ID,
-  RESULTADOS_FUNCIONAIS,
-  ROTULO_ESTADO,
-} from '@/lib/motora-catalogo';
-import {
-  anteriorDe,
   calcularIdade,
   chaveRegistro,
+  criarRegistro,
   dataCurta,
   diferenca,
   fmtValor,
-  habilidadesSugeridas,
-  nomeHabilidade,
   objetivoParaSessao,
   registroDoIndicador,
   situacaoObjetivo,
-  textoMetricasCurto,
-  nomeRegistro,
   ultimoEstadoDoIndicador,
-  ultimosRegistros,
   valorIndicadorNaEvolucao,
   ROTULO_STATUS_OBJETIVO,
   type ObjetivoMotor,
@@ -42,9 +31,9 @@ import type {
   ObjetivoSessao,
   RegistroHabilidade,
 } from '@/types/evolucao-clinica';
-import { HabilidadeCard } from './HabilidadeCard';
+import { HabilidadesRegistro } from './HabilidadesRegistro';
 import { ObjetivoMotorEditor } from './ObjetivoMotorEditor';
-import { chipClasse, opcaoClasse, selectClasse } from './estilos-motora';
+import { chipClasse, opcaoClasse } from './estilos-motora';
 import { usePlanoMotor } from './plano-motor-context';
 import { useMedidasEvolucao } from './medidas-evolucao-context';
 
@@ -308,15 +297,12 @@ export const ObjetivosHabilidadesSecao: React.FC<
   const sessoes = evolucao.objetivos_sessao || [];
   const areas = evolucao.areas || [];
   const [editor, setEditor] = useState<'novo' | ObjetivoMotor | null>(null);
-  const [outra, setOutra] = useState('');
-
-  const ultimos = useMemo(
-    () =>
-      ultimosRegistros(
-        ctx?.historico?.evolucoes ?? [],
-        ctx?.agendamentoId,
-        dataSessao || undefined
-      ),
+  const contexto = useMemo(
+    () => ({
+      evolucoes: ctx?.historico?.evolucoes ?? [],
+      excluirAgendamentoId: ctx?.agendamentoId,
+      ateData: dataSessao || undefined,
+    }),
     [ctx?.historico, ctx?.agendamentoId, dataSessao]
   );
   const idade = useMemo(
@@ -331,45 +317,16 @@ export const ObjetivosHabilidadesSecao: React.FC<
     [ctx?.historico, dataSessao]
   );
   const ativos = (ctx?.objetivos ?? []).filter((o) => o.status === 'ativo');
-  const sugeridas = habilidadesSugeridas({
-    idadeMeses: idade?.meses_para_sugestao,
-    areas,
-    objetivos: ativos,
-    ultimos,
-  }).filter((id) => !registros.some((r) => r.habilidade === id));
 
-  // ------------------------------------------------- ações das habilidades
-  const setRegistros = (novos: RegistroHabilidade[]) =>
-    onChange({ habilidades: novos });
-
+  // Objetivo por habilidade sem o registro de hoje: abre o cartão dela
   const adicionar = (id: string, lado?: RegistroHabilidade['lado']) => {
-    const hab = HABILIDADE_POR_ID[id];
-    if (!hab) return;
-    const l = lado ?? (hab.porLado ? 'ambos' : undefined);
-    const chave = chaveRegistro({ habilidade: id, lado: l });
-    if (registros.some((r) => chaveRegistro(r) === chave)) return;
-    const anterior = anteriorDe(ultimos.get(chave));
-    setRegistros([
-      ...registros,
-      {
-        habilidade: id,
-        ...(l ? { lado: l } : {}),
-        estado: 'nao_observado',
-        ...(anterior ? { anterior } : {}),
-      },
-    ]);
-  };
-
-  const atualizar = (i: number, r: RegistroHabilidade) => {
-    const antigo = registros[i];
-    let novo = r;
-    if (antigo && antigo.lado !== r.lado) {
-      const anterior = anteriorDe(ultimos.get(chaveRegistro(r)));
-      novo = { ...r };
-      if (anterior) novo.anterior = anterior;
-      else delete novo.anterior;
-    }
-    setRegistros(registros.map((x, j) => (j === i ? novo : x)));
+    const novo = criarRegistro(id, lado, contexto);
+    if (
+      !novo ||
+      registros.some((r) => chaveRegistro(r) === chaveRegistro(novo))
+    )
+      return;
+    onChange({ habilidades: [...registros, novo] });
   };
 
   const setSessao = (id: string, s: ObjetivoSessao | undefined) => {
@@ -475,99 +432,15 @@ export const ObjetivosHabilidadesSecao: React.FC<
       )}
 
       {/* Habilidades */}
-      <section className="space-y-3">
-        <h3 className="font-semibold">Habilidades observadas hoje</h3>
-        {registros.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Toque em uma habilidade abaixo para registrar. Só o que foi
-            observado hoje.
-          </p>
-        )}
-        {registros.map((r, i) => (
-          <HabilidadeCard
-            key={chaveRegistro(r) + i}
-            registro={r}
-            onChange={(novo) => atualizar(i, novo)}
-            onRemover={() => setRegistros(registros.filter((_, j) => j !== i))}
-            disabled={disabled}
-          />
-        ))}
-
-        {!disabled && sugeridas.length > 0 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">
-              Acompanhadas e típicas da idade
-            </Label>
-            <div className="rounded-lg border divide-y">
-              {sugeridas.map((id) => {
-                const hab = HABILIDADE_POR_ID[id];
-                const u =
-                  ultimos.get(
-                    chaveRegistro({
-                      habilidade: id,
-                      lado: hab.porLado ? 'ambos' : undefined,
-                    })
-                  ) ??
-                  [...ultimos.values()].find(
-                    (x) => x.registro.habilidade === id
-                  );
-                const metricas = textoMetricasCurto(u?.registro.metricas);
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => adicionar(id, u?.registro.lado)}
-                    className="w-full text-left px-3 py-2 hover:bg-muted flex items-center justify-between gap-2"
-                  >
-                    <span className="min-w-0">
-                      <span className="text-sm">
-                        {u ? nomeRegistro(u.registro) : nomeHabilidade(id)}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        {u
-                          ? `Último: ${ROTULO_ESTADO[u.registro.estado].toLowerCase()}${metricas ? ` · ${metricas}` : ''} em ${dataCurta(u.data)}`
-                          : 'Sem registro anterior'}
-                      </span>
-                    </span>
-                    <Plus className="h-4 w-4 shrink-0 text-primary" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {!disabled && (
-          <label className="block space-y-1 text-sm">
-            <span className="text-xs text-muted-foreground">
-              Outra habilidade
-            </span>
-            <select
-              className={selectClasse}
-              value={outra}
-              onChange={(e) => {
-                if (e.target.value) adicionar(e.target.value);
-                setOutra('');
-              }}
-            >
-              <option value="">Escolher no catálogo…</option>
-              {GRUPOS_HABILIDADE.map((g) => (
-                <optgroup key={g.id} label={g.nome}>
-                  {HABILIDADES.filter((h) => h.grupo === g.id).map((h) => (
-                    <option key={h.id} value={h.id}>
-                      {h.nome}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
-        )}
-        <p className="text-xs text-muted-foreground">
-          Checklist clínica da Respira Kids para acompanhar o desempenho. Não é
-          escala padronizada nem gera pontuação de desenvolvimento.
-        </p>
-      </section>
+      <HabilidadesRegistro
+        registros={registros}
+        onChange={(novos) => onChange({ habilidades: novos })}
+        contexto={contexto}
+        idadeMeses={idade?.meses_para_sugestao}
+        areas={areas}
+        objetivos={ativos}
+        disabled={disabled}
+      />
     </div>
   );
 };

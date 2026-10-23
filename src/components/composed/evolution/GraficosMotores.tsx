@@ -320,6 +320,18 @@ export const GraficosMotores: React.FC<{
   );
   const mfsD = serieDeMedida(h, 'mfs', gonio('mfs_direito'));
   const mfsE = serieDeMedida(h, 'mfs', gonio('mfs_esquerdo'));
+  // FSOS-2: o total só é comparável entre registros com os mesmos itens;
+  // a origem e o número de itens vão junto de cada ponto
+  const fsos = serieDeMedida(h, 'fsos2', gonio('total'), (v) =>
+    typeof v.itens === 'number' ? `${v.itens} itens` : undefined
+  );
+  const tensao = serieDeMedida(
+    h,
+    'tensao_neuromeningea',
+    gonio('alterados'),
+    (v) =>
+      typeof v.testados === 'number' ? `de ${v.testados} testes` : undefined
+  );
   const prot = (v: Record<string, unknown>) =>
     typeof v.protocolo === 'string'
       ? (PROTOCOLO[v.protocolo] ?? v.protocolo)
@@ -368,7 +380,7 @@ export const GraficosMotores: React.FC<{
           if (!g.series.has(nome)) g.series.set(nome, []);
           g.series
             .get(nome)!
-            .push({ data: ev.data, valor: v, fonte: 'evolucao' });
+            .push({ data: ev.data, valor: v, fonte: ev.fonte ?? 'evolucao' });
         }
       }
     }
@@ -409,7 +421,9 @@ export const GraficosMotores: React.FC<{
           rotPassE.length +
           rotAtD.length +
           rotAtE.length +
-          mfsD.length >
+          mfsD.length +
+          fsos.length +
+          tensao.length >
         0,
     },
     {
@@ -501,6 +515,18 @@ export const GraficosMotores: React.FC<{
               ].filter((x) => x.pontos.length)}
               inteiro
             />
+            <GraficoLinha
+              titulo="FSOS-2 (total)"
+              unidade=""
+              series={[{ nome: 'Total', pontos: fsos }]}
+              inteiro
+            />
+            <GraficoLinha
+              titulo="Tensão neuromeníngea: testes alterados"
+              unidade=""
+              series={[{ nome: 'Alterados', pontos: tensao }]}
+              inteiro
+            />
           </>
         )}
 
@@ -547,7 +573,7 @@ export const GraficosMotores: React.FC<{
                 <th className="text-left font-normal py-1 pr-2">Habilidade</th>
                 {linhaTempo.evs.map((e) => (
                   <th
-                    key={e.agendamento_id}
+                    key={e.agendamento_id ?? e.avaliacao_id}
                     className="text-left font-normal py-1 px-2 whitespace-nowrap"
                   >
                     {dataCurta(e.data).slice(0, 5)}
@@ -565,7 +591,7 @@ export const GraficosMotores: React.FC<{
                     );
                     return (
                       <td
-                        key={e.agendamento_id}
+                        key={e.agendamento_id ?? e.avaliacao_id}
                         className="py-1 px-2 whitespace-nowrap"
                       >
                         {r && r.estado !== 'nao_observado'

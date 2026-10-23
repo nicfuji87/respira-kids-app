@@ -37,7 +37,11 @@ import type {
 // ------------------------------------------------------------------ tipos
 
 export interface EvolucaoHistorico {
-  agendamento_id: string;
+  // null nas entradas que vêm de uma avaliação
+  agendamento_id: string | null;
+  avaliacao_id?: string;
+  fonte?: 'evolucao' | 'avaliacao';
+  tipo_avaliacao?: 'inicial' | 'reavaliacao';
   data: string;
   profissional: string | null;
   versao: string | null;
@@ -53,11 +57,20 @@ export interface MedidaHistorico {
   fonte: 'evolucao' | 'avaliacao';
 }
 
+export interface AvaliacaoHistorico {
+  id: string;
+  data: string;
+  tipo: 'inicial' | 'reavaliacao';
+  status: string;
+}
+
 export interface HistoricoMotor {
   data_nascimento: string | null;
   idade_gestacional_semanas: number | null;
+  /** Evoluções e avaliações com habilidades, em ordem de data */
   evolucoes: EvolucaoHistorico[];
   medidas: MedidaHistorico[];
+  avaliacoes?: AvaliacaoHistorico[];
 }
 
 export type StatusObjetivo = 'ativo' | 'atingido' | 'suspenso' | 'encerrado';
@@ -223,12 +236,15 @@ export interface UltimoRegistro {
 export function ultimosRegistros(
   evolucoes: EvolucaoHistorico[],
   excluirAgendamentoId?: string,
-  ateData?: string
+  ateData?: string,
+  excluirAvaliacaoId?: string
 ): Map<string, UltimoRegistro> {
   const mapa = new Map<string, UltimoRegistro>();
   const ordenadas = [...evolucoes].sort((a, b) => a.data.localeCompare(b.data));
   for (const ev of ordenadas) {
-    if (ev.agendamento_id === excluirAgendamentoId) continue;
+    if (excluirAgendamentoId && ev.agendamento_id === excluirAgendamentoId)
+      continue;
+    if (excluirAvaliacaoId && ev.avaliacao_id === excluirAvaliacaoId) continue;
     if (ateData && ev.data > ateData) continue;
     for (const r of ev.habilidades || []) {
       if (!r?.habilidade || r.estado === 'nao_observado') continue;
@@ -236,6 +252,95 @@ export function ultimosRegistros(
     }
   }
   return mapa;
+}
+
+/**
+ * Registro da avaliação para a habilidade (registro zero): a avaliação
+ * inicial mais antiga que registrou a habilidade; sem inicial, a primeira
+ * reavaliação. Ignora "não observado".
+ */
+export function registroNaAvaliacao(
+  evolucoes: EvolucaoHistorico[],
+  chave: string
+): UltimoRegistro | undefined {
+  const avals = evolucoes
+    .filter((e) => e.fonte === 'avaliacao')
+    .sort(
+      (a, b) =>
+        (a.tipo_avaliacao === 'reavaliacao' ? 1 : 0) -
+          (b.tipo_avaliacao === 'reavaliacao' ? 1 : 0) ||
+        a.data.localeCompare(b.data)
+    );
+  for (const e of avals) {
+    const r = (e.habilidades || []).find(
+      (x) => chaveRegistro(x) === chave && x.estado !== 'nao_observado'
+    );
+    if (r) return { data: e.data, registro: r };
+  }
+  return undefined;
+}
+
+export interface ContextoRegistro {
+  evolucoes: EvolucaoHistorico[];
+  excluirAgendamentoId?: string;
+  excluirAvaliacaoId?: string;
+  ateData?: string;
+}
+
+/**
+ * Compara um registro com o histórico: copia o último registro e, quando é
+ * outro, o da avaliação (registro zero). Usado ao abrir a habilidade e ao
+ * trocar o lado.
+ */
+export function comComparacoes(
+  r: RegistroHabilidade,
+  ctx: ContextoRegistro
+): RegistroHabilidade {
+  const chave = chaveRegistro(r);
+  const ult = ultimosRegistros(
+    ctx.evolucoes,
+    ctx.excluirAgendamentoId,
+    ctx.ateData,
+    ctx.excluirAvaliacaoId
+  ).get(chave);
+  const aval = registroNaAvaliacao(
+    ctx.evolucoes.filter(
+      (e) =>
+        (!ctx.excluirAvaliacaoId ||
+          e.avaliacao_id !== ctx.excluirAvaliacaoId) &&
+        (!ctx.ateData || e.data <= ctx.ateData)
+    ),
+    chave
+  );
+  const novo: RegistroHabilidade = { ...r };
+  delete novo.anterior;
+  delete novo.avaliacao;
+  const anterior = anteriorDe(ult);
+  if (anterior) novo.anterior = anterior;
+  // a avaliação só entra quando não é o próprio último registro
+  if (
+    aval &&
+    !(ult && ult.data === aval.data && ult.registro === aval.registro)
+  ) {
+    const a = anteriorDe(aval);
+    if (a) novo.avaliacao = a;
+  }
+  return novo;
+}
+
+/** Registro novo de uma habilidade, já com as comparações */
+export function criarRegistro(
+  habilidade: string,
+  lado: LadoHabilidade | undefined,
+  ctx: ContextoRegistro
+): RegistroHabilidade | null {
+  const hab = HABILIDADE_POR_ID[habilidade];
+  if (!hab) return null;
+  const l = lado ?? (hab.porLado ? 'ambos' : undefined);
+  return comComparacoes(
+    { habilidade, ...(l ? { lado: l } : {}), estado: 'nao_observado' },
+    ctx
+  );
 }
 
 /** Cópia do último registro para gravar junto do registro de hoje */
@@ -401,6 +506,12 @@ export function textoRegistroHabilidade(r: RegistroHabilidade): string {
     partes.push(
       `antes: ${ROTULO_ESTADO[r.anterior.estado].toLowerCase()} em ${dataCurta(r.anterior.data)}`
     );
+  if (r.avaliacao && r.estado !== 'nao_observado') {
+    const m = textoMetricasCurto(r.avaliacao.metricas);
+    partes.push(
+      `na avaliação (${dataCurta(r.avaliacao.data)}): ${ROTULO_ESTADO[r.avaliacao.estado].toLowerCase()}${m ? `, ${m}` : ''}`
+    );
+  }
   let t = `${nomeRegistro(r)}: ${partes.join('; ')}`;
   if (r.observacao?.trim()) t += `. ${r.observacao.trim()}`;
   return t;
@@ -538,7 +649,7 @@ export function serieIndicador(
       const r = registroDoIndicador(ind, ev.habilidades || []);
       const v = r?.metricas?.[ind.metrica];
       if (ehNumero(v))
-        pontos.push({ data: ev.data, valor: v, fonte: 'evolucao' });
+        pontos.push({ data: ev.data, valor: v, fonte: ev.fonte ?? 'evolucao' });
     }
   } else {
     const tipo = TIPO_DA_MEDIDA[ind.medida];
@@ -593,6 +704,65 @@ export function ultimoEstadoDoIndicador(
     ? ` (${ASSISTENCIAS.find((a) => a.id === u.assistencia)?.rotulo.toLowerCase()})`
     : '';
   return `Último: ${ROTULO_ESTADO[u.estado].toLowerCase()}${assist} em ${dataCurta(u.data)}`;
+}
+
+/** Primeira medida registrada numa avaliação (registro zero) */
+export function medidaNaAvaliacao(
+  medidas: MedidaHistorico[],
+  tipo: string
+): MedidaHistorico | undefined {
+  return medidas
+    .filter((m) => m.tipo === tipo && m.fonte === 'avaliacao' && m.valores)
+    .sort((a, b) => a.data.localeCompare(b.data))[0];
+}
+
+/** Valor curto de uma medida para comparação ("rotação passiva D 60° / E 80°") */
+export function textoMedidaCurto(
+  tipo: string,
+  v: Record<string, unknown> | null | undefined
+): string {
+  if (!v) return '';
+  const n = (x: unknown) => (ehNumero(x) ? fmt(x) : '—');
+  switch (tipo) {
+    case 'goniometria':
+      if (
+        ehNumero(v.rotacao_passiva_direita) ||
+        ehNumero(v.rotacao_passiva_esquerda)
+      )
+        return `rotação passiva D ${n(v.rotacao_passiva_direita)}° / E ${n(v.rotacao_passiva_esquerda)}°`;
+      if (
+        ehNumero(v.rotacao_ativa_direita) ||
+        ehNumero(v.rotacao_ativa_esquerda)
+      )
+        return `rotação ativa D ${n(v.rotacao_ativa_direita)}° / E ${n(v.rotacao_ativa_esquerda)}°`;
+      return 'inclinação registrada';
+    case 'craniometria':
+      return [
+        ehNumero(v.cvai_percentual) ? `CVAI ${fmt(v.cvai_percentual)}%` : '',
+        ehNumero(v.ci_percentual) ? `CI ${fmt(v.ci_percentual)}%` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    case 'mfs':
+      return `D ${n(v.mfs_direito)} / E ${n(v.mfs_esquerdo)}`;
+    case 'perimetro_cefalico':
+      return ehNumero(v.perimetro_cefalico_cm)
+        ? `${fmt(v.perimetro_cefalico_cm)} cm`
+        : '';
+    case 'desenvolvimento_motor':
+      return ehNumero(v.percentil)
+        ? `AIMS percentil ${fmt(v.percentil)}`
+        : 'marcos registrados';
+    case 'fsos2':
+      return ehNumero(v.total)
+        ? `total ${fmt(v.total)} em ${n(v.itens)} itens`
+        : '';
+    case 'tensao_neuromeningea':
+      return ehNumero(v.testados)
+        ? `${n(v.alterados)} de ${fmt(v.testados)} testes alterados`
+        : '';
+  }
+  return '';
 }
 
 /**
@@ -746,6 +916,7 @@ export async function fetchHistoricoMotor(
     idade_gestacional_semanas: h.idade_gestacional_semanas ?? null,
     evolucoes: h.evolucoes ?? [],
     medidas: h.medidas ?? [],
+    avaliacoes: h.avaliacoes ?? [],
   };
 }
 

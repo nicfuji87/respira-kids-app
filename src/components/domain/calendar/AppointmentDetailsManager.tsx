@@ -1,3 +1,4 @@
+import { AvaliacaoMotoraAgenda } from './AvaliacaoMotoraAgenda';
 import { usePlanoMotorDados } from '@/hooks/usePlanoMotorDados';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -2628,6 +2629,19 @@ export const AppointmentDetailsManager =
                         </Button>
                       </div>
                     )}
+
+                    {/* Avaliação/reavaliação motora e anamnese pelos pais */}
+                    <AvaliacaoMotoraAgenda
+                      agendamentoId={appointment.id}
+                      dataHora={appointment.data_hora}
+                      servicoNome={appointment.servico_nome}
+                      pacienteId={appointment.paciente_id}
+                      pacienteNome={appointment.paciente_nome}
+                      pacienteNascimento={appointment.paciente_data_nascimento}
+                      pacienteTelefone={appointment.paciente_telefone}
+                      userRole={userRole}
+                      currentUserId={user?.pessoa?.id}
+                    />
 
                     {/* Mídias da Sessão (Fotos e Vídeos) */}
                     <SessionMediaManager

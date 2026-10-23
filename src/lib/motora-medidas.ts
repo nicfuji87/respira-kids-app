@@ -153,7 +153,57 @@ export const MEDIDAS_SEM_SECAO: TipoMedidaMotora[] = [
   'perimetro_cefalico',
   'desenvolvimento_motor',
   'outra',
+  'fsos2',
+  'tensao_neuromeningea',
 ];
+
+// ------------------------------------------- escalas iguais às da avaliação
+
+const POSICOES_FSOS2 = ['supino', 'prono', 'sentado', 'em_pe'] as const;
+const NOME_POSICAO_FSOS2: Record<string, string> = {
+  supino: 'supino',
+  prono: 'prono',
+  sentado: 'sentado',
+  em_pe: 'em pé',
+};
+const ITENS_POR_POSICAO_FSOS2 = 7;
+
+/** FSOS-2: total dos itens pontuados e posições com os 7 itens pontuados */
+export function resumoFsos2(d: Record<string, unknown> | null | undefined) {
+  let total = 0;
+  let itens = 0;
+  const completas: string[] = [];
+  for (const p of POSICOES_FSOS2) {
+    const pos = (d?.[p] ?? {}) as Record<string, unknown>;
+    const nums = Object.entries(pos).filter(
+      ([k, v]) => k !== 'observacoes' && temNumero(v)
+    );
+    itens += nums.length;
+    total += nums.reduce((s, [, v]) => s + (v as number), 0);
+    if (nums.length >= ITENS_POR_POSICAO_FSOS2) completas.push(p);
+  }
+  return { total, itens, completas };
+}
+
+const TESTES_TENSAO: Record<string, string> = {
+  membro_superior_direito: 'membro superior direito',
+  membro_superior_esquerdo: 'membro superior esquerdo',
+  membro_inferior_direito: 'membro inferior direito',
+  membro_inferior_esquerdo: 'membro inferior esquerdo',
+  flexao_passiva_pescoco: 'flexão passiva do pescoço',
+};
+
+/** Tensão neuromeníngea: testes realizados e os alterados */
+export function resumoTensao(d: Record<string, unknown> | null | undefined) {
+  const alterados: string[] = [];
+  let testados = 0;
+  for (const [k, nome] of Object.entries(TESTES_TENSAO)) {
+    const st = (d?.[k] as { status?: string } | undefined)?.status;
+    if (st === 'normal' || st === 'alterado') testados++;
+    if (st === 'alterado') alterados.push(nome);
+  }
+  return { testados, alterados };
+}
 
 export const INSTRUMENTOS_DESENVOLVIMENTO: { valor: string; label: string }[] =
   [
@@ -188,6 +238,10 @@ export function resultadoCompleto(
       return true;
     case 'outra':
       return !!texto(v.descricao);
+    case 'fsos2':
+      return resumoFsos2(v).completas.length > 0;
+    case 'tensao_neuromeningea':
+      return resumoTensao(v).testados > 0;
     default:
       return true;
   }
@@ -213,7 +267,7 @@ export function pendenciasDasMedicoes(
   ][]) {
     if (m?.situacao !== 'medido') continue;
     const ok = MEDIDAS_SEM_SECAO.includes(tipo)
-      ? resultadoCompleto(tipo, m.valores) || comValores.has(tipo)
+      ? resultadoCompleto(tipo, m.dados ?? m.valores) || comValores.has(tipo)
       : comValores.has(tipo);
     if (ok) continue;
     const nome = NOME_MEDIDA_MOTORA[tipo];
@@ -229,7 +283,11 @@ export function pendenciasDasMedicoes(
               : `${nome}: escolha o instrumento usado`
           : tipo === 'mfs'
             ? `${nome}: marque os dois lados (0 a 5)`
-            : `${nome}: preencha o resultado ou desmarque "Medi hoje"`,
+            : tipo === 'fsos2'
+              ? `${nome}: pontue os 7 itens de pelo menos uma posição`
+              : tipo === 'tensao_neuromeningea'
+                ? `${nome}: marque o resultado de pelo menos um teste`
+                : `${nome}: preencha o resultado ou desmarque "Medi hoje"`,
     });
   }
   return pend;
@@ -260,7 +318,7 @@ export function chamadasDaEvolucao(
       // sem seção: só com o resultado registrado no bloco
       if (
         MEDIDAS_SEM_SECAO.includes(tipo) &&
-        resultadoCompleto(tipo, m.valores)
+        resultadoCompleto(tipo, m.dados ?? m.valores)
       )
         feitas.add(tipo);
     } else {
@@ -334,6 +392,17 @@ export function resultadoEmTexto(
       return [texto(v.descricao), texto(v.resultado)]
         .filter(Boolean)
         .join(': ');
+    case 'fsos2': {
+      const r = resumoFsos2(v);
+      const pos = r.completas.map((p) => NOME_POSICAO_FSOS2[p]).join(', ');
+      return `total ${r.total} em ${r.itens} itens${pos ? ` (posições completas: ${pos})` : ''}`;
+    }
+    case 'tensao_neuromeningea': {
+      const r = resumoTensao(v);
+      return r.alterados.length
+        ? `${r.alterados.length} de ${r.testados} testes alterados (${r.alterados.join(', ')})`
+        : `${r.testados} ${r.testados === 1 ? 'teste normal' : 'testes normais'}`;
+    }
     default:
       return '';
   }
@@ -352,8 +421,9 @@ export function linhasMedidasDoResumo(ev: EvolucaoMotoraAssimetria): string[] {
     const motivo = m.motivo ? ` (${m.motivo})` : '';
     if (m.situacao === 'medido' && !temValores.has(tipo)) {
       const r =
-        MEDIDAS_SEM_SECAO.includes(tipo) && resultadoCompleto(tipo, m.valores)
-          ? resultadoEmTexto(tipo, m.valores)
+        MEDIDAS_SEM_SECAO.includes(tipo) &&
+        resultadoCompleto(tipo, m.dados ?? m.valores)
+          ? resultadoEmTexto(tipo, m.dados ?? m.valores)
           : '';
       if (r) linhas.push(`${nome}: ${r}`);
     }

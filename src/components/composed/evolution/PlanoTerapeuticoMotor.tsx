@@ -24,6 +24,10 @@ import {
   type StatusObjetivo,
 } from '@/lib/motora-plano';
 import { AREAS_MOTORAS, type AreaMotora } from '@/types/evolucao-clinica';
+import type {
+  IndicadorObjetivo,
+  SugestaoObjetivo,
+} from '@/lib/motora-catalogo';
 import { ObjetivoMotorEditor } from './ObjetivoMotorEditor';
 import { GraficosMotores } from './GraficosMotores';
 import { chipClasse } from './estilos-motora';
@@ -222,6 +226,10 @@ export interface PlanoTerapeuticoMotorProps {
   ocultarSeVazio?: boolean;
   mostrarGraficos?: boolean;
   areasSugeridas?: AreaMotora[];
+  /** Avaliação: valor já medido do indicador vira o registro inicial */
+  valorInicialPara?: (ind: IndicadorObjetivo) => number | undefined;
+  /** Avaliação: sugestões a partir dos achados */
+  sugestoesExtras?: SugestaoObjetivo[];
   className?: string;
 }
 
@@ -232,6 +240,8 @@ export const PlanoTerapeuticoMotor: React.FC<PlanoTerapeuticoMotorProps> = ({
   ocultarSeVazio = false,
   mostrarGraficos = true,
   areasSugeridas,
+  valorInicialPara,
+  sugestoesExtras,
   className,
 }) => {
   const plano = usePlanoMotorDados({
@@ -303,6 +313,8 @@ export const PlanoTerapeuticoMotor: React.FC<PlanoTerapeuticoMotorProps> = ({
           pacienteId={pacienteId}
           inicial={editor === 'novo' ? undefined : editor}
           areasSugeridas={areasSugeridas}
+          valorInicialPara={valorInicialPara}
+          sugestoesExtras={sugestoesExtras}
           jaNoPlano={objetivos
             .filter((o) => o.status === 'ativo')
             .map((o) => o.descricao)}

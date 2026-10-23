@@ -2737,6 +2737,13 @@ export interface AvaliacaoClinica {
   // Seção 25: Observações Gerais
   observacoes_gerais?: string | null;
 
+  // Integração com a evolução motora
+  // Habilidades no mesmo catálogo da evolução (registro zero da criança)
+  habilidades?: import('@/types/evolucao-clinica').RegistroHabilidade[] | null;
+  tipo_avaliacao?: 'inicial' | 'reavaliacao';
+  avaliacao_anterior_id?: string | null;
+  agendamento_id?: string | null;
+
   // Metadados
   avaliador_id?: string | null;
   criado_por?: string | null;
@@ -2771,6 +2778,8 @@ export interface AvaliacaoClinicaListItem {
   tipo_torcicolo?: TipoTorcicolo | null;
   avaliador_id?: string | null;
   avaliador_nome?: string;
+  tipo_avaliacao?: 'inicial' | 'reavaliacao';
+  agendamento_id?: string | null;
   created_at: string;
   updated_at: string;
 }

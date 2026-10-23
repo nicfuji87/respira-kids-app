@@ -30,6 +30,8 @@ export async function fetchAvaliacoesByPaciente(
       grau_severidade,
       tipo_torcicolo,
       avaliador_id,
+      tipo_avaliacao,
+      agendamento_id,
       created_at,
       updated_at,
       avaliador:pessoas!avaliacoes_clinicas_avaliador_id_fkey(nome)
