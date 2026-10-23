@@ -101,7 +101,7 @@ export function calcularOpcoesPagamento(
 // default da coluna pessoa_empresas.taxas_cartao. Ajustável por empresa.
 export function gerarTaxasCartaoPadrao(): TaxasCartaoConfig {
   return {
-    max_parcelas: 6,
+    max_parcelas: 12,
     pix: { percent: 0, fixo: 0 },
     imposto: { percent: 0 },
     cartao: {
@@ -109,6 +109,7 @@ export function gerarTaxasCartaoPadrao(): TaxasCartaoConfig {
       faixas: [
         { min: 1, max: 1, mdr: 2.99, antecipacao_mes: 1.15, meses: 1 },
         { min: 2, max: 6, mdr: 3.49, antecipacao_mes: 1.6, meses: null },
+        { min: 7, max: 12, mdr: 3.99, antecipacao_mes: 1.6, meses: null },
       ],
     },
   };
