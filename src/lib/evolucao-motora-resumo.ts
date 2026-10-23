@@ -18,6 +18,7 @@ import {
   type EvolucaoMotoraAssimetria,
   type RespostaObservada,
 } from '@/types/evolucao-clinica';
+import { linhasMedidasDoResumo } from '@/lib/motora-medidas';
 
 /**
  * Prepara a evolução motora para gravar: identifica a profissional logada
@@ -413,6 +414,9 @@ export function gerarResumoEvolucaoMotora(
       conduta.push(`Observações: ${cd.observacoes.trim()}`);
   }
   texto += secao('✅ Conduta', conduta);
+
+  // Medidas previstas que não foram feitas, e próximas reavaliações
+  texto += secao('📏 Medidas e reavaliações', linhasMedidasDoResumo(ev));
 
   // Identificação de quem registrou (não é assinatura eletrônica)
   const responsavel = linhaAutoria('Profissional responsável', ev.autor);

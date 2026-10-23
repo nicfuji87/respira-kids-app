@@ -62,6 +62,8 @@ import {
   SECOES_REAPROVEITAVEIS_RESPIRATORIA,
 } from '@/types/evolucao-clinica';
 import { EvolutionSectionContent } from './EvolutionSectionContent';
+import { MedidasEvolucaoContext } from './medidas-evolucao-context';
+import type { MedidaPaciente } from '@/lib/motora-medidas';
 
 // AI dev note: EvolutionFormModal - Modal de formulário de evolução estruturada
 // Suporta evolução respiratória e motora/assimetria
@@ -91,6 +93,10 @@ export interface EvolutionFormModalProps {
   // Evolução motora: áreas da última evolução da criança, já marcadas ao
   // abrir uma evolução nova (a fisio só desmarca ou acrescenta)
   areasSugeridas?: AreaMotora[];
+  // Medidas programadas da criança (situação e último registro) e o dia da
+  // sessão 'YYYY-MM-DD'. null = não carregado ou sem permissão.
+  medidas?: MedidaPaciente[] | null;
+  dataSessao?: string;
   mode?: 'create' | 'edit' | 'view';
 }
 
@@ -138,6 +144,8 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   previousData,
   previousDate,
   areasSugeridas,
+  medidas = null,
+  dataSessao = '',
   mode = 'create',
 }) => {
   // Chave única para autosave baseada no agendamento
@@ -607,457 +615,479 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     onClose();
   }, [lastSaved, isReadOnly, onClose]);
 
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-[95vw] sm:max-w-[900px] h-[95vh] sm:h-[90vh] flex flex-col p-0">
-        {/* pr-12 no celular: espaço para o X de fechar do próprio dialog */}
-        <DialogHeader className="pl-4 pr-12 py-3 sm:px-6 sm:py-4 border-b flex-shrink-0 space-y-0">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex flex-col gap-1 min-w-0">
-              <div className="flex items-center justify-between sm:justify-start gap-2">
-                <DialogTitle className="text-base sm:text-lg font-semibold truncate">
-                  {getTipoLabel()}
-                </DialogTitle>
-                <Badge
-                  variant="secondary"
-                  className="sm:hidden text-xs shrink-0"
-                  aria-label={progressoLongo}
-                >
-                  {progressoCurto}
-                </Badge>
-              </div>
-              {patientName && (
-                <span className="text-xs sm:text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-none">
-                  Paciente: {patientName}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1 sm:pb-0">
-              {/* Seletor de tipo - Compacto em mobile */}
-              <div className="flex gap-1 shrink-0">
-                <Button
-                  variant={
-                    tipoEvolucao === 'respiratoria' ? 'default' : 'outline'
-                  }
-                  size="sm"
-                  onClick={() => !isReadOnly && setTipoEvolucao('respiratoria')}
-                  disabled={isReadOnly}
-                  className="h-7 text-xs sm:h-9 sm:text-sm px-2 sm:px-4"
-                >
-                  <span className="sm:hidden">Resp.</span>
-                  <span className="hidden sm:inline">🫁 Respiratória</span>
-                </Button>
-                <Button
-                  variant={
-                    tipoEvolucao === 'motora_assimetria' ? 'default' : 'outline'
-                  }
-                  size="sm"
-                  onClick={() =>
-                    !isReadOnly && setTipoEvolucao('motora_assimetria')
-                  }
-                  disabled={isReadOnly}
-                  className="h-7 text-xs sm:h-9 sm:text-sm px-2 sm:px-4"
-                >
-                  <span className="sm:hidden">Motora</span>
-                  <span className="hidden sm:inline">🦴 Motora</span>
-                </Button>
-              </div>
-              <Badge variant="secondary" className="hidden sm:inline-flex">
-                {progressoLongo}
-              </Badge>
-              {temComplementares && complementaresPreenchidas > 0 && (
-                <span className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap">
-                  + {complementaresPreenchidas} complementar
-                  {complementaresPreenchidas > 1 ? 'es' : ''}
-                </span>
-              )}
-              {/* Indicador de autosave */}
-              {lastSaved && !isReadOnly && (
-                <Badge
-                  variant="outline"
-                  className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground"
-                >
-                  <Cloud className="h-3 w-3 text-green-500" />
-                  Rascunho salvo
-                </Badge>
-              )}
-            </div>
-          </div>
-          <Progress value={progresso} className="h-1 mt-2 hidden sm:block" />
-        </DialogHeader>
+  const contextoMedidas = useMemo(
+    () => ({ medidas, dataSessao }),
+    [medidas, dataSessao]
+  );
 
-        {/* Conteúdo principal - sem sidebar */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header da seção com indicadores de progresso */}
-          <div className="px-4 py-2 sm:px-6 sm:py-3 border-b bg-muted/20 flex-shrink-0">
-            {/* Evolução motora: áreas trabalhadas hoje (uma ou mais) */}
-            {ehMotora && (
-              <div className="mb-3 space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Áreas trabalhadas hoje
-                </p>
-                <div
-                  className="flex flex-wrap gap-2"
-                  role="group"
-                  aria-label="Áreas trabalhadas hoje"
-                >
-                  {AREAS_MOTORAS.map((area) => {
-                    const marcada = areasMarcadas.includes(area.id);
-                    return (
-                      <button
-                        key={area.id}
-                        type="button"
-                        aria-pressed={marcada}
-                        disabled={isReadOnly}
-                        onClick={() => alternarArea(area.id)}
-                        title={area.descricao}
-                        className={cn(
-                          'min-h-9 px-3 rounded-full border-2 text-sm font-medium transition-colors inline-flex items-center gap-1.5',
-                          marcada
-                            ? 'bg-primary border-primary text-primary-foreground'
-                            : 'bg-background border-border text-muted-foreground hover:bg-muted',
-                          isReadOnly && 'opacity-60 cursor-not-allowed'
-                        )}
-                      >
-                        {marcada && <CheckCircle2 className="h-3.5 w-3.5" />}
-                        <span className="sm:hidden">{area.curto}</span>
-                        <span className="hidden sm:inline">{area.titulo}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {areasMarcadas.length === 0 && (
-                  <p
-                    className={cn(
-                      'text-xs',
-                      avisoAreas
-                        ? 'text-destructive font-medium'
-                        : 'text-muted-foreground'
-                    )}
-                    role={avisoAreas ? 'alert' : undefined}
+  return (
+    <MedidasEvolucaoContext.Provider value={contextoMedidas}>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+        <DialogContent className="max-w-[95vw] sm:max-w-[900px] h-[95vh] sm:h-[90vh] flex flex-col p-0">
+          {/* pr-12 no celular: espaço para o X de fechar do próprio dialog */}
+          <DialogHeader className="pl-4 pr-12 py-3 sm:px-6 sm:py-4 border-b flex-shrink-0 space-y-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-col gap-1 min-w-0">
+                <div className="flex items-center justify-between sm:justify-start gap-2">
+                  <DialogTitle className="text-base sm:text-lg font-semibold truncate">
+                    {getTipoLabel()}
+                  </DialogTitle>
+                  <Badge
+                    variant="secondary"
+                    className="sm:hidden text-xs shrink-0"
+                    aria-label={progressoLongo}
                   >
-                    {avisoAreas
-                      ? 'Marque pelo menos uma área antes de salvar.'
-                      : 'Marque as áreas trabalhadas: só as seções delas aparecem.'}
-                  </p>
+                    {progressoCurto}
+                  </Badge>
+                </div>
+                {patientName && (
+                  <span className="text-xs sm:text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-none">
+                    Paciente: {patientName}
+                  </span>
                 )}
               </div>
-            )}
-            <div className="flex items-center justify-between mb-2 sm:mb-3">
-              <div className="flex items-center gap-2 overflow-hidden">
-                <span className="text-xl sm:text-2xl shrink-0">
-                  {currentSectionData?.icone}
-                </span>
-                <h3 className="text-base sm:text-lg font-medium truncate">
-                  {currentSectionData?.titulo}
-                </h3>
-                {ehMotora && currentSectionData?.areas && (
+              <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1 sm:pb-0">
+                {/* Seletor de tipo - Compacto em mobile */}
+                <div className="flex gap-1 shrink-0">
+                  <Button
+                    variant={
+                      tipoEvolucao === 'respiratoria' ? 'default' : 'outline'
+                    }
+                    size="sm"
+                    onClick={() =>
+                      !isReadOnly && setTipoEvolucao('respiratoria')
+                    }
+                    disabled={isReadOnly}
+                    className="h-7 text-xs sm:h-9 sm:text-sm px-2 sm:px-4"
+                  >
+                    <span className="sm:hidden">Resp.</span>
+                    <span className="hidden sm:inline">🫁 Respiratória</span>
+                  </Button>
+                  <Button
+                    variant={
+                      tipoEvolucao === 'motora_assimetria'
+                        ? 'default'
+                        : 'outline'
+                    }
+                    size="sm"
+                    onClick={() =>
+                      !isReadOnly && setTipoEvolucao('motora_assimetria')
+                    }
+                    disabled={isReadOnly}
+                    className="h-7 text-xs sm:h-9 sm:text-sm px-2 sm:px-4"
+                  >
+                    <span className="sm:hidden">Motora</span>
+                    <span className="hidden sm:inline">🦴 Motora</span>
+                  </Button>
+                </div>
+                <Badge variant="secondary" className="hidden sm:inline-flex">
+                  {progressoLongo}
+                </Badge>
+                {temComplementares && complementaresPreenchidas > 0 && (
+                  <span className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap">
+                    + {complementaresPreenchidas} complementar
+                    {complementaresPreenchidas > 1 ? 'es' : ''}
+                  </span>
+                )}
+                {/* Indicador de autosave */}
+                {lastSaved && !isReadOnly && (
                   <Badge
                     variant="outline"
-                    className="hidden sm:inline-flex shrink-0 text-xs font-normal"
+                    className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground"
                   >
-                    {currentSectionData.areas
-                      .filter((a) => areasMarcadas.includes(a))
-                      .map((a) => AREAS_MOTORAS.find((x) => x.id === a)?.titulo)
-                      .join(' · ')}
+                    <Cloud className="h-3 w-3 text-green-500" />
+                    Rascunho salvo
                   </Badge>
                 )}
               </div>
-              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap ml-2">
-                {currentSection + 1} / {secoes.length}
-              </span>
             </div>
-            {/* Indicadores de seção (bolinhas) */}
-            <div className="flex items-center justify-start sm:justify-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
-              {secoes.map((secao, index) => (
-                <TooltipProvider key={secao.id}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentSection(index)}
-                        aria-label={`Seção ${index + 1}: ${secao.titulo} — ${getStatusLabel(secao.id)}${
-                          secoesPendentesRevisao.includes(secao.id)
-                            ? ', copiada da evolução anterior, aguardando conferência'
-                            : ''
-                        }`}
-                        aria-current={
-                          currentSection === index ? 'step' : undefined
-                        }
-                        className={cn(
-                          'flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all shrink-0',
-                          currentSection === index
-                            ? 'bg-primary text-primary-foreground scale-110'
-                            : 'bg-muted hover:bg-muted',
-                          // Complementar: borda tracejada ("quando indicado")
-                          secaoComplementar(secao.id) &&
-                            currentSection !== index &&
-                            'border border-dashed border-muted-foreground/40 bg-transparent',
-                          secoesPendentesRevisao.includes(secao.id) &&
-                            'ring-2 ring-amber-400 ring-offset-1'
-                        )}
-                      >
-                        {getStatusIcon(secao.id, 'h-3 w-3 sm:h-4 sm:w-4')}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {secao.icone} {secao.titulo}
-                      {secaoComplementar(secao.id) ? ' (quando indicado)' : ''}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
-            </div>
-          </div>
+            <Progress value={progresso} className="h-1 mt-2 hidden sm:block" />
+          </DialogHeader>
 
-          {/* Conteúdo da seção */}
-          <ScrollArea className="flex-1" ref={scrollAreaRef}>
-            <div className="p-4 sm:p-6">
-              {podeReaproveitar && (
-                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-blue-800">
-                      Repetir última evolução
-                    </p>
-                    <p className="text-xs text-blue-700">
-                      {previousDate
-                        ? `Última em ${new Date(previousDate).toLocaleDateString('pt-BR')}. `
-                        : ''}
-                      Traz quadro, exame, técnicas, orientações e conduta como
-                      ponto de partida. Sinais vitais e resposta ao tratamento
-                      seguem em branco — e você confere seção por seção.
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={aplicarReaproveitamento}
-                    className="flex-shrink-0"
+          {/* Conteúdo principal - sem sidebar */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Header da seção com indicadores de progresso */}
+            <div className="px-4 py-2 sm:px-6 sm:py-3 border-b bg-muted/20 flex-shrink-0">
+              {/* Evolução motora: áreas trabalhadas hoje (uma ou mais) */}
+              {ehMotora && (
+                <div className="mb-3 space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Áreas trabalhadas hoje
+                  </p>
+                  <div
+                    className="flex flex-wrap gap-2"
+                    role="group"
+                    aria-label="Áreas trabalhadas hoje"
                   >
-                    Repetir
-                  </Button>
+                    {AREAS_MOTORAS.map((area) => {
+                      const marcada = areasMarcadas.includes(area.id);
+                      return (
+                        <button
+                          key={area.id}
+                          type="button"
+                          aria-pressed={marcada}
+                          disabled={isReadOnly}
+                          onClick={() => alternarArea(area.id)}
+                          title={area.descricao}
+                          className={cn(
+                            'min-h-9 px-3 rounded-full border-2 text-sm font-medium transition-colors inline-flex items-center gap-1.5',
+                            marcada
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'bg-background border-border text-muted-foreground hover:bg-muted',
+                            isReadOnly && 'opacity-60 cursor-not-allowed'
+                          )}
+                        >
+                          {marcada && <CheckCircle2 className="h-3.5 w-3.5" />}
+                          <span className="sm:hidden">{area.curto}</span>
+                          <span className="hidden sm:inline">
+                            {area.titulo}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {areasMarcadas.length === 0 && (
+                    <p
+                      className={cn(
+                        'text-xs',
+                        avisoAreas
+                          ? 'text-destructive font-medium'
+                          : 'text-muted-foreground'
+                      )}
+                      role={avisoAreas ? 'alert' : undefined}
+                    >
+                      {avisoAreas
+                        ? 'Marque pelo menos uma área antes de salvar.'
+                        : 'Marque as áreas trabalhadas: só as seções delas aparecem.'}
+                    </p>
+                  )}
                 </div>
               )}
-
-              {/* Seção veio da última evolução e ainda não foi conferida */}
-              {currentSectionData &&
-                secoesPendentesRevisao.includes(currentSectionData.id) && (
-                  <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-amber-900">
-                        Copiado da evolução anterior
-                        {dataReaproveitadaLabel
-                          ? ` de ${dataReaproveitadaLabel}`
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <span className="text-xl sm:text-2xl shrink-0">
+                    {currentSectionData?.icone}
+                  </span>
+                  <h3 className="text-base sm:text-lg font-medium truncate">
+                    {currentSectionData?.titulo}
+                  </h3>
+                  {ehMotora && currentSectionData?.areas && (
+                    <Badge
+                      variant="outline"
+                      className="hidden sm:inline-flex shrink-0 text-xs font-normal"
+                    >
+                      {currentSectionData.areas
+                        .filter((a) => areasMarcadas.includes(a))
+                        .map(
+                          (a) => AREAS_MOTORAS.find((x) => x.id === a)?.titulo
+                        )
+                        .join(' · ')}
+                    </Badge>
+                  )}
+                </div>
+                <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap ml-2">
+                  {currentSection + 1} / {secoes.length}
+                </span>
+              </div>
+              {/* Indicadores de seção (bolinhas) */}
+              <div className="flex items-center justify-start sm:justify-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+                {secoes.map((secao, index) => (
+                  <TooltipProvider key={secao.id}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentSection(index)}
+                          aria-label={`Seção ${index + 1}: ${secao.titulo} — ${getStatusLabel(secao.id)}${
+                            secoesPendentesRevisao.includes(secao.id)
+                              ? ', copiada da evolução anterior, aguardando conferência'
+                              : ''
+                          }`}
+                          aria-current={
+                            currentSection === index ? 'step' : undefined
+                          }
+                          className={cn(
+                            'flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all shrink-0',
+                            currentSection === index
+                              ? 'bg-primary text-primary-foreground scale-110'
+                              : 'bg-muted hover:bg-muted',
+                            // Complementar: borda tracejada ("quando indicado")
+                            secaoComplementar(secao.id) &&
+                              currentSection !== index &&
+                              'border border-dashed border-muted-foreground/40 bg-transparent',
+                            secoesPendentesRevisao.includes(secao.id) &&
+                              'ring-2 ring-amber-400 ring-offset-1'
+                          )}
+                        >
+                          {getStatusIcon(secao.id, 'h-3 w-3 sm:h-4 sm:w-4')}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {secao.icone} {secao.titulo}
+                        {secaoComplementar(secao.id)
+                          ? ' (quando indicado)'
                           : ''}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
+            </div>
+
+            {/* Conteúdo da seção */}
+            <ScrollArea className="flex-1" ref={scrollAreaRef}>
+              <div className="p-4 sm:p-6">
+                {podeReaproveitar && (
+                  <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-blue-800">
+                        Repetir última evolução
                       </p>
-                      <p className="text-xs text-amber-800">
-                        Confira se ainda descreve a criança hoje. Qualquer
-                        ajuste já marca esta seção como conferida.
+                      <p className="text-xs text-blue-700">
+                        {previousDate
+                          ? `Última em ${new Date(previousDate).toLocaleDateString('pt-BR')}. `
+                          : ''}
+                        Traz quadro, exame, técnicas, orientações e conduta como
+                        ponto de partida. Sinais vitais e resposta ao tratamento
+                        seguem em branco — e você confere seção por seção.
                       </p>
                     </div>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => marcarSecaoRevisada(currentSectionData.id)}
-                      className="flex-shrink-0 border-amber-400 text-amber-900 hover:bg-amber-100"
+                      onClick={aplicarReaproveitamento}
+                      className="flex-shrink-0"
                     >
-                      Conferi
+                      Repetir
                     </Button>
                   </div>
                 )}
-              <EvolutionSectionContent
-                tipoEvolucao={tipoEvolucao}
-                secaoId={currentSectionData?.id || ''}
-                evolucaoRespiratoria={evolucaoRespiratoria}
-                evolucaoMotora={evolucaoMotora}
-                onRespiratoriaChange={handleRespiratoriaChange}
-                onMotoraChange={handleMotoraChange}
-                disabled={isReadOnly}
-              />
-            </div>
-          </ScrollArea>
 
-          {/* Footer com navegação */}
-          <div className="px-4 py-3 sm:px-6 sm:py-4 border-t bg-background flex-shrink-0">
-            <div className="flex items-center justify-between gap-2">
-              <Button
-                variant="outline"
-                onClick={goToPrev}
-                disabled={currentSection === 0}
-                className="flex-1 sm:flex-none"
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                <span className="sm:inline">Anterior</span>
-              </Button>
+                {/* Seção veio da última evolução e ainda não foi conferida */}
+                {currentSectionData &&
+                  secoesPendentesRevisao.includes(currentSectionData.id) && (
+                    <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-amber-900">
+                          Copiado da evolução anterior
+                          {dataReaproveitadaLabel
+                            ? ` de ${dataReaproveitadaLabel}`
+                            : ''}
+                        </p>
+                        <p className="text-xs text-amber-800">
+                          Confira se ainda descreve a criança hoje. Qualquer
+                          ajuste já marca esta seção como conferida.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          marcarSecaoRevisada(currentSectionData.id)
+                        }
+                        className="flex-shrink-0 border-amber-400 text-amber-900 hover:bg-amber-100"
+                      >
+                        Conferi
+                      </Button>
+                    </div>
+                  )}
+                <EvolutionSectionContent
+                  tipoEvolucao={tipoEvolucao}
+                  secaoId={currentSectionData?.id || ''}
+                  evolucaoRespiratoria={evolucaoRespiratoria}
+                  evolucaoMotora={evolucaoMotora}
+                  onRespiratoriaChange={handleRespiratoriaChange}
+                  onMotoraChange={handleMotoraChange}
+                  disabled={isReadOnly}
+                />
+              </div>
+            </ScrollArea>
 
-              <div className="hidden sm:flex items-center gap-2">
+            {/* Footer com navegação */}
+            <div className="px-4 py-3 sm:px-6 sm:py-4 border-t bg-background flex-shrink-0">
+              <div className="flex items-center justify-between gap-2">
                 <Button
                   variant="outline"
-                  onClick={handleClose}
-                  disabled={isSaving}
+                  onClick={goToPrev}
+                  disabled={currentSection === 0}
+                  className="flex-1 sm:flex-none"
                 >
-                  <X className="h-4 w-4 mr-1" />
-                  Cancelar
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  <span className="sm:inline">Anterior</span>
                 </Button>
 
-                {!isReadOnly && (
-                  <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-2" />
-                    )}
-                    Salvar Evolução
+                <div className="hidden sm:flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleClose}
+                    disabled={isSaving}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancelar
                   </Button>
-                )}
-              </div>
 
-              {/* Mobile Action Button (Next or Save) */}
-              <div className="flex sm:hidden flex-1 gap-2">
-                {currentSection === secoes.length - 1 ? (
-                  !isReadOnly && (
-                    <Button
-                      onClick={handleSave}
-                      disabled={isSaving}
-                      className="flex-1"
-                    >
+                  {!isReadOnly && (
+                    <Button onClick={handleSave} disabled={isSaving}>
                       {isSaving ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       ) : (
                         <Save className="h-4 w-4 mr-2" />
                       )}
-                      Salvar
+                      Salvar Evolução
                     </Button>
-                  )
-                ) : (
-                  <Button
-                    variant="default" // Mudado para default para destacar "Próximo" em mobile
-                    onClick={goToNext}
-                    disabled={currentSection === secoes.length - 1}
-                    className="flex-1"
-                  >
-                    Próximo
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                )}
-              </div>
+                  )}
+                </div>
 
-              <Button
-                variant="outline"
-                onClick={goToNext}
-                disabled={currentSection === secoes.length - 1}
-                className="hidden sm:flex"
-              >
-                Próximo
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
+                {/* Mobile Action Button (Next or Save) */}
+                <div className="flex sm:hidden flex-1 gap-2">
+                  {currentSection === secoes.length - 1 ? (
+                    !isReadOnly && (
+                      <Button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="flex-1"
+                      >
+                        {isSaving ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4 mr-2" />
+                        )}
+                        Salvar
+                      </Button>
+                    )
+                  ) : (
+                    <Button
+                      variant="default" // Mudado para default para destacar "Próximo" em mobile
+                      onClick={goToNext}
+                      disabled={currentSection === secoes.length - 1}
+                      className="flex-1"
+                    >
+                      Próximo
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={goToNext}
+                  disabled={currentSection === secoes.length - 1}
+                  className="hidden sm:flex"
+                >
+                  Próximo
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Confirmação de recuperação de rascunho (antes: window.confirm) */}
-        <AlertDialog
-          open={!!pendingDraft}
-          onOpenChange={(open) => {
-            // Escape/clique fora: mantém o rascunho salvo para depois
-            if (!open) setPendingDraft(null);
-          }}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Recuperar rascunho?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Encontramos um rascunho desta evolução salvo há{' '}
-                {pendingDraftTimeLabel}. Deseja recuperá-lo?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel
-                onClick={() => {
-                  clearDraft();
-                  setPendingDraft(null);
-                }}
-              >
-                Descartar rascunho
-              </AlertDialogCancel>
-              <AlertDialogAction onClick={applyPendingDraft}>
-                Recuperar
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+          {/* Confirmação de recuperação de rascunho (antes: window.confirm) */}
+          <AlertDialog
+            open={!!pendingDraft}
+            onOpenChange={(open) => {
+              // Escape/clique fora: mantém o rascunho salvo para depois
+              if (!open) setPendingDraft(null);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Recuperar rascunho?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Encontramos um rascunho desta evolução salvo há{' '}
+                  {pendingDraftTimeLabel}. Deseja recuperá-lo?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel
+                  onClick={() => {
+                    clearDraft();
+                    setPendingDraft(null);
+                  }}
+                >
+                  Descartar rascunho
+                </AlertDialogCancel>
+                <AlertDialogAction onClick={applyPendingDraft}>
+                  Recuperar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
-        {/* Bloqueio de salvamento com seções copiadas ainda não conferidas */}
-        <AlertDialog
-          open={showRevisaoPendente}
-          onOpenChange={setShowRevisaoPendente}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confira antes de salvar</AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div>
-                  <p>
-                    Estas seções vieram da evolução anterior
-                    {dataReaproveitadaLabel
-                      ? ` de ${dataReaproveitadaLabel}`
-                      : ''}{' '}
-                    e ainda não foram conferidas:
-                  </p>
-                  <ul className="mt-2 list-disc pl-5">
-                    {secoes
-                      .filter((s) => secoesPendentesRevisao.includes(s.id))
-                      .map((s) => (
-                        <li key={s.id}>
-                          {s.icone} {s.titulo}
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Voltar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  const primeira = secoes.findIndex((s) =>
-                    secoesPendentesRevisao.includes(s.id)
-                  );
-                  if (primeira >= 0) setCurrentSection(primeira);
-                  setShowRevisaoPendente(false);
-                }}
-              >
-                Ir para a primeira
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+          {/* Bloqueio de salvamento com seções copiadas ainda não conferidas */}
+          <AlertDialog
+            open={showRevisaoPendente}
+            onOpenChange={setShowRevisaoPendente}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confira antes de salvar</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div>
+                    <p>
+                      Estas seções vieram da evolução anterior
+                      {dataReaproveitadaLabel
+                        ? ` de ${dataReaproveitadaLabel}`
+                        : ''}{' '}
+                      e ainda não foram conferidas:
+                    </p>
+                    <ul className="mt-2 list-disc pl-5">
+                      {secoes
+                        .filter((s) => secoesPendentesRevisao.includes(s.id))
+                        .map((s) => (
+                          <li key={s.id}>
+                            {s.icone} {s.titulo}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Voltar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    const primeira = secoes.findIndex((s) =>
+                      secoesPendentesRevisao.includes(s.id)
+                    );
+                    if (primeira >= 0) setCurrentSection(primeira);
+                    setShowRevisaoPendente(false);
+                  }}
+                >
+                  Ir para a primeira
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
-        {/* Confirmação de saída com alterações não salvas (antes: window.confirm) */}
-        <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Sair da evolução?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Você tem alterações não salvas. O rascunho foi salvo
-                automaticamente e poderá ser recuperado ao reabrir.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Continuar editando</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  setShowCloseConfirm(false);
-                  onClose();
-                }}
-              >
-                Sair
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </DialogContent>
-    </Dialog>
+          {/* Confirmação de saída com alterações não salvas (antes: window.confirm) */}
+          <AlertDialog
+            open={showCloseConfirm}
+            onOpenChange={setShowCloseConfirm}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Sair da evolução?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Você tem alterações não salvas. O rascunho foi salvo
+                  automaticamente e poderá ser recuperado ao reabrir.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Continuar editando</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setShowCloseConfirm(false);
+                    onClose();
+                  }}
+                >
+                  Sair
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </DialogContent>
+      </Dialog>
+    </MedidasEvolucaoContext.Provider>
   );
 };
 

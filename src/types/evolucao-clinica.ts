@@ -477,12 +477,63 @@ export interface AutoriaEvolucao {
  */
 export const VERSAO_FORMULARIO_MOTORA = '1.2';
 
+// -------------------------------------------------------------------------
+// Medidas programadas (craniometria, goniometria, MFS…)
+// -------------------------------------------------------------------------
+
+/** Mesmos tipos da tabela motora_medida_config */
+export type TipoMedidaMotora =
+  | 'craniometria'
+  | 'goniometria'
+  | 'mfs'
+  | 'desenvolvimento_motor'
+  | 'perimetro_cefalico'
+  | 'outra';
+
+export const NOME_MEDIDA_MOTORA: Record<TipoMedidaMotora, string> = {
+  craniometria: 'Craniometria',
+  goniometria: 'Goniometria cervical',
+  mfs: 'MFS',
+  desenvolvimento_motor: 'Reavaliação do desenvolvimento motor',
+  perimetro_cefalico: 'Perímetro cefálico',
+  outra: 'Outra reavaliação',
+};
+
+/**
+ * O que a fisio registrou sobre uma medida nesta sessão. Ausente = "sem
+ * registro nesta evolução" (NÃO quer dizer que não mediu).
+ * - medido: mediu e registrou (abre os campos, quando a medida tem campos)
+ * - adiado: estava prevista e não ocorreu; exige nova data
+ * - dispensado: a fisio julgou desnecessária nesta ocasião; nova data opcional
+ * - nao_aplicavel: a medida não se aplica ao caso; para de lembrar
+ */
+export type SituacaoMedicao =
+  | 'medido'
+  | 'adiado'
+  | 'dispensado'
+  | 'nao_aplicavel';
+
+export interface MedicaoSessao {
+  situacao: SituacaoMedicao;
+  nova_data?: string; // YYYY-MM-DD
+  motivo?: string;
+}
+
+export interface ProximaReavaliacao {
+  data: string; // YYYY-MM-DD
+  descricao?: string; // para "outra"
+}
+
 export interface EvolucaoMotoraAssimetria {
   versao_formulario?: string;
   // Áreas trabalhadas na sessão (desde a versão 1.2). Ausente = registro
   // anterior às áreas: mostra todas as seções. Lista vazia = ainda não
   // escolhidas.
   areas?: AreaMotora[];
+  // Medidas: o que foi feito com cada medida hoje e a próxima reavaliação
+  // programada na conduta (aplicados na programação do paciente ao salvar)
+  medicoes?: Partial<Record<TipoMedidaMotora, MedicaoSessao>>;
+  proximas_reavaliacoes?: Partial<Record<TipoMedidaMotora, ProximaReavaliacao>>;
   autor?: AutoriaEvolucao;
   ultima_edicao?: AutoriaEvolucao;
   craniometria?: CraniometriaEvolucao;
