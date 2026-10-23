@@ -39,6 +39,7 @@ import { useCalendarFormData } from '@/hooks/useCalendarData';
 import { updateAgendamentoDetails } from '@/lib/calendar-services';
 import { useToast } from '@/components/primitives/use-toast';
 import { MedidasPrevistasAgendaProvider } from '@/components/composed/MedidasPrevistasAgenda';
+import { useMedidasLiberadas } from '@/hooks/useMedidasLiberadas';
 
 // AI dev note: CalendarTemplate combina componentes Domain do calendário
 // Template base que gerencia estado e comunicação entre componentes
@@ -370,7 +371,10 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           .map((e) => e.id),
       [getFilteredEvents]
     );
-    const mostraMedidas = userRole === 'admin' || userRole === 'profissional';
+    // Piloto: só quem está liberado vê o lembrete de medida
+    const mostraMedidas = useMedidasLiberadas(
+      userRole === 'admin' || userRole === 'profissional'
+    );
 
     // Render current view
     const renderCurrentView = () => {

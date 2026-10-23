@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useMedidasEvolucao } from './medidas-evolucao-context';
 import {
   NOME_MEDIDA_MOTORA,
+  type DesfechoDispensa,
   type MedicaoSessao,
   type ProximaReavaliacao,
   type SituacaoMedicao,
@@ -22,7 +23,9 @@ import {
 import {
   dataBR,
   descreverEstado,
+  INSTRUMENTOS_DESENVOLVIMENTO,
   medidaPendente,
+  resultadoCompleto,
   somarDias,
 } from '@/lib/motora-medidas';
 
@@ -68,6 +71,220 @@ export interface MedicaoSessaoBlocoProps {
   children?: React.ReactNode;
 }
 
+const DESFECHOS: { valor: DesfechoDispensa; label: string }[] = [
+  { valor: 'nova_data', label: 'Programar outra data' },
+  { valor: 'periodicidade', label: 'Voltar à periodicidade' },
+  { valor: 'suspender', label: 'Suspender acompanhamento' },
+];
+
+const chipClasse = (sel: boolean) =>
+  cn(
+    'rounded-full border px-2.5 py-1 text-xs',
+    sel
+      ? 'bg-primary text-primary-foreground border-primary'
+      : 'bg-background text-muted-foreground'
+  );
+
+const MotivoCampo: React.FC<{
+  motivo: string | undefined;
+  onChange: (m: string | undefined) => void;
+  disabled?: boolean;
+}> = ({ motivo, onChange, disabled }) => (
+  <div className="space-y-1.5">
+    <Label className="text-sm">Motivo (opcional)</Label>
+    <div className="flex flex-wrap gap-1.5">
+      {MOTIVOS_RAPIDOS.map((m) => (
+        <button
+          key={m}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(motivo === m ? undefined : m)}
+          className={chipClasse(motivo === m)}
+        >
+          {m}
+        </button>
+      ))}
+    </div>
+    <Input
+      value={motivo && !MOTIVOS_RAPIDOS.includes(motivo) ? motivo : ''}
+      onChange={(e) => onChange(e.target.value || undefined)}
+      placeholder="Outro motivo"
+      disabled={disabled}
+    />
+  </div>
+);
+
+/** Resultado das medidas sem seção própria (MFS, perímetro, desenvolvimento, outra) */
+const CamposResultado: React.FC<{
+  tipo: TipoMedidaMotora;
+  valores: Record<string, string | number>;
+  onChange: (v: Record<string, string | number>) => void;
+  disabled?: boolean;
+}> = ({ tipo, valores, onChange, disabled }) => {
+  const set = (k: string, v: string | number | undefined) => {
+    const novo = { ...valores };
+    if (v === undefined || v === '') delete novo[k];
+    else novo[k] = v;
+    onChange(novo);
+  };
+  const completo = resultadoCompleto(tipo, valores);
+
+  if (tipo === 'mfs') {
+    return (
+      <div className="space-y-2">
+        {(
+          [
+            ['mfs_direito', 'Lado direito'],
+            ['mfs_esquerdo', 'Lado esquerdo'],
+          ] as const
+        ).map(([k, rotulo]) => (
+          <div key={k} className="space-y-1">
+            <Label className="text-sm">{rotulo} (0 a 5)</Label>
+            <div
+              className="flex flex-wrap gap-1.5"
+              role="radiogroup"
+              aria-label={`MFS ${rotulo}`}
+            >
+              {[0, 1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  role="radio"
+                  aria-checked={valores[k] === n}
+                  disabled={disabled}
+                  onClick={() => set(k, valores[k] === n ? undefined : n)}
+                  className={cn(
+                    'h-9 w-9 rounded-lg border-2 text-sm font-medium',
+                    valores[k] === n
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'bg-background border-border text-muted-foreground'
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {!completo && (
+          <p className="text-xs text-amber-700">
+            Marque os dois lados para registrar a MFS.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (tipo === 'perimetro_cefalico') {
+    return (
+      <div className="space-y-1 sm:max-w-xs">
+        <Label className="text-sm">Perímetro cefálico (cm)</Label>
+        <Input
+          type="number"
+          step={0.1}
+          min={0}
+          value={valores.perimetro_cefalico_cm ?? ''}
+          onChange={(e) =>
+            set(
+              'perimetro_cefalico_cm',
+              e.target.value ? Number(e.target.value) : undefined
+            )
+          }
+          disabled={disabled}
+        />
+      </div>
+    );
+  }
+
+  if (tipo === 'desenvolvimento_motor') {
+    return (
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <Label className="text-sm">Instrumento ou procedimento usado</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {INSTRUMENTOS_DESENVOLVIMENTO.map((i) => (
+              <button
+                key={i.valor}
+                type="button"
+                disabled={disabled}
+                onClick={() =>
+                  set(
+                    'instrumento',
+                    valores.instrumento === i.valor ? undefined : i.valor
+                  )
+                }
+                className={chipClasse(valores.instrumento === i.valor)}
+              >
+                {i.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {valores.instrumento === 'outro' && (
+          <Input
+            value={valores.instrumento_outro ?? ''}
+            onChange={(e) => set('instrumento_outro', e.target.value)}
+            placeholder="Qual instrumento"
+            disabled={disabled}
+          />
+        )}
+        {valores.instrumento === 'aims' && (
+          <div className="space-y-1 sm:max-w-xs">
+            <Label className="text-sm">Percentil da AIMS</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={valores.percentil ?? ''}
+              onChange={(e) =>
+                set(
+                  'percentil',
+                  e.target.value ? Number(e.target.value) : undefined
+                )
+              }
+              disabled={disabled}
+            />
+          </div>
+        )}
+        <div className="space-y-1">
+          <Label className="text-sm">Resultado (opcional)</Label>
+          <Input
+            value={valores.resultado ?? ''}
+            onChange={(e) => set('resultado', e.target.value)}
+            placeholder="Ex.: senta sem apoio, inicia engatinhar"
+            disabled={disabled}
+          />
+        </div>
+        {!completo && (
+          <p className="text-xs text-amber-700">
+            {valores.instrumento === 'aims'
+              ? 'Informe o percentil: a AIMS só conta como feita com o resultado.'
+              : 'Escolha o instrumento usado para registrar a reavaliação.'}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // outra
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <Input
+        value={valores.descricao ?? ''}
+        onChange={(e) => set('descricao', e.target.value)}
+        placeholder="O que foi reavaliado"
+        disabled={disabled}
+      />
+      <Input
+        value={valores.resultado ?? ''}
+        onChange={(e) => set('resultado', e.target.value)}
+        placeholder="Resultado (opcional)"
+        disabled={disabled}
+      />
+    </div>
+  );
+};
+
 export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
   tipo,
   valor,
@@ -78,10 +295,14 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
   children,
 }) => {
   const { medidas, dataSessao } = useMedidasEvolucao();
-  const medida = medidas?.find((m) => m.tipo === tipo);
+  // Fora do piloto (ou sem permissão): a evolução fica como antes
+  if (medidas === null) return <>{children ?? null}</>;
+
+  const medida = medidas.find((m) => m.tipo === tipo);
   const temCampos = !!children;
   const situacao = valor?.situacao ?? (temValores ? 'medido' : undefined);
   const mostraCampos = temCampos && situacao === 'medido';
+  const intervalo = medida?.intervalo_dias ?? null;
 
   const escolher = (s: SituacaoMedicao) => {
     if (disabled) return;
@@ -96,6 +317,21 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
 
   const atualizar = (parcial: Partial<MedicaoSessao>) =>
     valor && onChange({ ...valor, ...parcial });
+
+  const escolherDesfecho = (d: DesfechoDispensa) => {
+    if (!valor) return;
+    if (d === 'periodicidade')
+      atualizar({
+        desfecho: d,
+        nova_data:
+          intervalo && dataSessao
+            ? somarDias(dataSessao, intervalo)
+            : undefined,
+      });
+    else if (d === 'suspender')
+      atualizar({ desfecho: d, nova_data: undefined });
+    else atualizar({ desfecho: d, nova_data: undefined });
+  };
 
   return (
     <div className="space-y-4">
@@ -117,9 +353,7 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
         <p className="text-xs text-muted-foreground">
           {medida?.ultima_data
             ? `Último registro: ${dataBR(medida.ultima_data)} (${FONTE[medida.ultima_fonte ?? ''] ?? 'registro'})`
-            : medidas
-              ? 'Nenhum registro anterior desta medida.'
-              : ''}
+            : 'Nenhum registro anterior desta medida.'}
           {!situacao && ' · Sem registro nesta evolução.'}
         </p>
 
@@ -154,15 +388,99 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
           })}
         </div>
 
-        {valor &&
-          (valor.situacao === 'adiado' || valor.situacao === 'dispensado') && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-sm">
-                  {valor.situacao === 'adiado'
-                    ? 'Nova data prevista'
-                    : 'Reprogramar para (opcional)'}
-                </Label>
+        {/* Feita hoje, medida sem seção: o resultado fica aqui mesmo */}
+        {valor?.situacao === 'medido' && !temCampos && (
+          <CamposResultado
+            tipo={tipo}
+            valores={valor.valores ?? {}}
+            onChange={(v) => atualizar({ valores: v })}
+            disabled={disabled}
+          />
+        )}
+
+        {valor?.situacao === 'adiado' && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-sm">Nova data prevista</Label>
+              <Input
+                type="date"
+                value={valor.nova_data ?? ''}
+                min={dataSessao ? somarDias(dataSessao, 1) : undefined}
+                onChange={(e) =>
+                  atualizar({ nova_data: e.target.value || undefined })
+                }
+                disabled={disabled}
+              />
+              {!valor.nova_data && (
+                <p className="text-xs text-amber-700">
+                  Obrigatória: é nela que o lembrete volta.
+                </p>
+              )}
+            </div>
+            <MotivoCampo
+              motivo={valor.motivo}
+              onChange={(m) => atualizar({ motivo: m })}
+              disabled={disabled}
+            />
+          </div>
+        )}
+
+        {valor?.situacao === 'dispensado' && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">E depois?</Label>
+              <div
+                className="flex flex-wrap gap-1.5"
+                role="radiogroup"
+                aria-label="O que fazer depois da dispensa"
+              >
+                {DESFECHOS.map((d) => {
+                  const semIntervalo =
+                    d.valor === 'periodicidade' && !intervalo;
+                  return (
+                    <button
+                      key={d.valor}
+                      type="button"
+                      role="radio"
+                      aria-checked={valor.desfecho === d.valor}
+                      disabled={disabled || semIntervalo}
+                      title={
+                        semIntervalo
+                          ? 'Esta medida não tem periodicidade definida'
+                          : undefined
+                      }
+                      onClick={() => escolherDesfecho(d.valor)}
+                      className={cn(
+                        chipClasse(valor.desfecho === d.valor),
+                        semIntervalo && 'opacity-50 cursor-not-allowed'
+                      )}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {!valor.desfecho && (
+                <p className="text-xs text-amber-700">
+                  Obrigatório, para o lembrete não voltar sozinho na próxima
+                  sessão.
+                </p>
+              )}
+              {valor.desfecho === 'periodicidade' && valor.nova_data && (
+                <p className="text-xs text-muted-foreground">
+                  Próxima pela periodicidade ({intervalo} dias a partir de
+                  hoje): {dataBR(valor.nova_data)}.
+                </p>
+              )}
+              {valor.desfecho === 'suspender' && (
+                <p className="text-xs text-muted-foreground">
+                  Deixa de lembrar até alguém reativar na conduta.
+                </p>
+              )}
+            </div>
+            {valor.desfecho === 'nova_data' && (
+              <div className="space-y-1.5 sm:max-w-xs">
+                <Label className="text-sm">Próxima data</Label>
                 <Input
                   type="date"
                   value={valor.nova_data ?? ''}
@@ -172,57 +490,21 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
                   }
                   disabled={disabled}
                 />
-                {valor.situacao === 'adiado' && !valor.nova_data && (
-                  <p className="text-xs text-amber-700">
-                    Informe quando medir, para o lembrete voltar na data certa.
-                  </p>
-                )}
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm">Motivo (opcional)</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {MOTIVOS_RAPIDOS.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() =>
-                        atualizar({
-                          motivo: valor.motivo === m ? undefined : m,
-                        })
-                      }
-                      className={cn(
-                        'rounded-full border px-2.5 py-1 text-xs',
-                        valor.motivo === m
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background text-muted-foreground'
-                      )}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-                <Input
-                  value={
-                    valor.motivo && !MOTIVOS_RAPIDOS.includes(valor.motivo)
-                      ? valor.motivo
-                      : ''
-                  }
-                  onChange={(e) =>
-                    atualizar({ motivo: e.target.value || undefined })
-                  }
-                  placeholder="Outro motivo"
-                  disabled={disabled}
-                />
-              </div>
-            </div>
-          )}
+            )}
+            <MotivoCampo
+              motivo={valor.motivo}
+              onChange={(m) => atualizar({ motivo: m })}
+              disabled={disabled}
+            />
+          </div>
+        )}
 
         {valor?.situacao === 'nao_aplicavel' && (
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">
               Esta medida deixa de ser lembrada para esta criança. Dá para
-              voltar a programar depois, na conduta.
+              reativar depois, na conduta.
             </p>
             <Input
               value={valor.motivo ?? ''}
@@ -279,12 +561,16 @@ export const ReavaliacoesConduta: React.FC<ReavaliacoesCondutaProps> = ({
   disabled,
 }) => {
   const { medidas, dataSessao } = useMedidasEvolucao();
-  const pendentesSemSecao = (medidas ?? []).filter(
+  // Fora do piloto: a conduta fica como antes
+  if (medidas === null) return null;
+
+  const pendentesSemSecao = medidas.filter(
     (m) => medidaPendente(m.estado) && !tiposComSecao.includes(m.tipo)
   );
 
   return (
-    <div className="space-y-6">
+    <div className="border-t pt-6 space-y-6">
+      <h3 className="text-base font-semibold">Medidas e reavaliações</h3>
       {pendentesSemSecao.length > 0 && (
         <div className="space-y-3">
           <h4 className="font-medium">Medidas previstas para esta sessão</h4>
@@ -309,9 +595,11 @@ export const ReavaliacoesConduta: React.FC<ReavaliacoesCondutaProps> = ({
           </p>
         </div>
         {TIPOS_PROGRAMAVEIS.map((tipo) => {
-          const medida = medidas?.find((m) => m.tipo === tipo);
+          const medida = medidas.find((m) => m.tipo === tipo);
           const prox = proximas[tipo];
           const ativo = !!prox;
+          const inativa =
+            medida?.status === 'nao_aplicavel' || medida?.status === 'suspensa';
           return (
             <div key={tipo} className="rounded-lg border p-3 space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -347,9 +635,18 @@ export const ReavaliacoesConduta: React.FC<ReavaliacoesCondutaProps> = ({
                       : 'bg-background border-border text-muted-foreground hover:bg-muted'
                   )}
                 >
-                  {ativo ? 'Programada' : 'Programar'}
+                  {ativo
+                    ? 'Programada'
+                    : inativa
+                      ? 'Reativar e programar'
+                      : 'Programar'}
                 </button>
               </div>
+              {prox && inativa && (
+                <p className="text-xs text-muted-foreground">
+                  Ao salvar, o acompanhamento desta medida volta a ficar ativo.
+                </p>
+              )}
               {prox && (
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-1.5">
@@ -363,12 +660,7 @@ export const ReavaliacoesConduta: React.FC<ReavaliacoesCondutaProps> = ({
                           onClick={() =>
                             onProximaChange(tipo, { ...prox, data: d })
                           }
-                          className={cn(
-                            'rounded-full border px-2.5 py-1 text-xs',
-                            prox.data === d
-                              ? 'bg-primary text-primary-foreground border-primary'
-                              : 'bg-background text-muted-foreground'
-                          )}
+                          className={chipClasse(prox.data === d)}
                         >
                           Em {s} semanas
                         </button>

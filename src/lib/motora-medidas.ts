@@ -156,18 +156,122 @@ export function medidasComValores(
   return tipos;
 }
 
+/** Medidas que não têm seção própria na evolução: o resultado vai no bloco */
+export const MEDIDAS_SEM_SECAO: TipoMedidaMotora[] = [
+  'mfs',
+  'perimetro_cefalico',
+  'desenvolvimento_motor',
+  'outra',
+];
+
+export const INSTRUMENTOS_DESENVOLVIMENTO: { valor: string; label: string }[] =
+  [
+    { valor: 'aims', label: 'AIMS' },
+    { valor: 'marcos', label: 'Checklist de marcos motores' },
+    { valor: 'observacao', label: 'Observação funcional estruturada' },
+    { valor: 'outro', label: 'Outro instrumento' },
+  ];
+
+const texto = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * Se o resultado registrado no bloco basta para considerar a medida feita.
+ * Medidas com seção própria (craniometria, goniometria) contam pelos campos
+ * da seção; aqui só as que não têm seção.
+ */
+export function resultadoCompleto(
+  tipo: TipoMedidaMotora,
+  valores: Record<string, unknown> | undefined
+): boolean {
+  const v = valores || {};
+  switch (tipo) {
+    case 'mfs':
+      return temNumero(v.mfs_direito) && temNumero(v.mfs_esquerdo);
+    case 'perimetro_cefalico':
+      return temNumero(v.perimetro_cefalico_cm);
+    case 'desenvolvimento_motor':
+      // AIMS só conta com o percentil; "outro" exige o nome do instrumento
+      if (!texto(v.instrumento)) return false;
+      if (v.instrumento === 'aims') return temNumero(v.percentil);
+      if (v.instrumento === 'outro') return !!texto(v.instrumento_outro);
+      return true;
+    case 'outra':
+      return !!texto(v.descricao);
+    default:
+      return true;
+  }
+}
+
+export interface PendenciaMedicao {
+  tipo: TipoMedidaMotora;
+  problema: string;
+}
+
+/**
+ * O que impede salvar: "feita" sem resultado, "adiada" sem data, "dispensada"
+ * sem desfecho (ou com "outra data" sem a data). Evita lembrete em ciclo e
+ * medida dada como feita sem registro.
+ */
+export function pendenciasDasMedicoes(
+  ev: EvolucaoMotoraAssimetria
+): PendenciaMedicao[] {
+  const pend: PendenciaMedicao[] = [];
+  const comValores = new Set(medidasComValores(ev));
+  for (const [tipo, m] of Object.entries(ev.medicoes || {}) as [
+    TipoMedidaMotora,
+    NonNullable<EvolucaoMotoraAssimetria['medicoes']>[TipoMedidaMotora],
+  ][]) {
+    if (!m) continue;
+    const nome = NOME_MEDIDA_MOTORA[tipo];
+    if (m.situacao === 'medido') {
+      const ok = MEDIDAS_SEM_SECAO.includes(tipo)
+        ? resultadoCompleto(tipo, m.valores) || comValores.has(tipo)
+        : comValores.has(tipo);
+      if (!ok)
+        pend.push({
+          tipo,
+          problema:
+            tipo === 'desenvolvimento_motor'
+              ? m.valores?.instrumento === 'aims'
+                ? `${nome}: informe o percentil da AIMS`
+                : m.valores?.instrumento === 'outro'
+                  ? `${nome}: informe qual instrumento foi usado`
+                  : `${nome}: escolha o instrumento usado`
+              : tipo === 'mfs'
+                ? `${nome}: marque os dois lados (0 a 5)`
+                : `${nome}: preencha o resultado ou desmarque "feita hoje"`,
+        });
+    }
+    if (m.situacao === 'adiado' && !m.nova_data)
+      pend.push({
+        tipo,
+        problema: `${nome}: informe a nova data do adiamento`,
+      });
+    if (m.situacao === 'dispensado') {
+      if (!m.desfecho)
+        pend.push({
+          tipo,
+          problema: `${nome}: escolha o que fazer depois da dispensa (nova data, periodicidade ou suspender)`,
+        });
+      else if (m.desfecho !== 'suspender' && !m.nova_data)
+        pend.push({ tipo, problema: `${nome}: informe a próxima data` });
+    }
+  }
+  return pend;
+}
+
 /**
  * O que gravar na programação do paciente a partir da evolução salva.
  * Ordem: primeiro as feitas (cumprem a programação vencida), depois "não se
- * aplica" e por último as novas datas, para a próxima data não ser apagada
- * pela medida de hoje.
+ * aplica"/"suspender" e por último as novas datas, para a próxima data não
+ * ser apagada pela medida de hoje.
  */
 export function chamadasDaEvolucao(
   ev: EvolucaoMotoraAssimetria,
   dataSessao: string
 ): ChamadaProgramacao[] {
   const feitas = new Set<TipoMedidaMotora>(medidasComValores(ev));
-  const naoAplica: ChamadaProgramacao[] = [];
+  const encerrar: ChamadaProgramacao[] = [];
   const programar = new Map<TipoMedidaMotora, ChamadaProgramacao>();
 
   for (const [tipo, m] of Object.entries(ev.medicoes || {}) as [
@@ -175,9 +279,17 @@ export function chamadasDaEvolucao(
     NonNullable<EvolucaoMotoraAssimetria['medicoes']>[TipoMedidaMotora],
   ][]) {
     if (!m) continue;
-    if (m.situacao === 'medido') feitas.add(tipo);
-    // escolheu adiar/dispensar/não se aplica: valores esquecidos não contam
-    else feitas.delete(tipo);
+    if (m.situacao === 'medido') {
+      // sem seção própria: só conta com o resultado registrado no bloco
+      if (
+        !MEDIDAS_SEM_SECAO.includes(tipo) ||
+        resultadoCompleto(tipo, m.valores)
+      )
+        feitas.add(tipo);
+    } else {
+      // escolheu adiar/dispensar/não se aplica: valores esquecidos não contam
+      feitas.delete(tipo);
+    }
     if (m.situacao === 'adiado' && m.nova_data)
       programar.set(tipo, {
         tipo,
@@ -185,15 +297,19 @@ export function chamadasDaEvolucao(
         data: m.nova_data,
         motivo: m.motivo,
       });
-    if (m.situacao === 'dispensado' && m.nova_data)
-      programar.set(tipo, {
-        tipo,
-        acao: 'programar',
-        data: m.nova_data,
-        motivo: m.motivo,
-      });
+    if (m.situacao === 'dispensado') {
+      if (m.desfecho === 'suspender')
+        encerrar.push({ tipo, acao: 'suspender', motivo: m.motivo });
+      else if (m.nova_data)
+        programar.set(tipo, {
+          tipo,
+          acao: 'programar',
+          data: m.nova_data,
+          motivo: m.motivo,
+        });
+    }
     if (m.situacao === 'nao_aplicavel')
-      naoAplica.push({ tipo, acao: 'nao_aplicavel', motivo: m.motivo });
+      encerrar.push({ tipo, acao: 'nao_aplicavel', motivo: m.motivo });
   }
 
   // Próxima reavaliação escolhida na conduta prevalece sobre a nova data do adiamento
@@ -212,8 +328,8 @@ export function chamadasDaEvolucao(
     });
   }
 
-  // "Não se aplica" e nova data na mesma medida: vale o "não se aplica"
-  for (const n of naoAplica) programar.delete(n.tipo);
+  // "Não se aplica"/"suspender" e nova data na mesma medida: vale o encerramento
+  for (const n of encerrar) programar.delete(n.tipo);
 
   return [
     ...[...feitas].map((tipo) => ({
@@ -221,9 +337,48 @@ export function chamadasDaEvolucao(
       acao: 'feita' as const,
       data: dataSessao,
     })),
-    ...naoAplica,
+    ...encerrar,
     ...programar.values(),
   ];
+}
+
+const fmtNum = (n: number, casas = 0) =>
+  n.toLocaleString('pt-BR', {
+    minimumFractionDigits: casas,
+    maximumFractionDigits: casas,
+  });
+
+/** Resultado do bloco em texto (MFS D/E, perímetro, instrumento…) */
+export function resultadoEmTexto(
+  tipo: TipoMedidaMotora,
+  valores: Record<string, unknown> | undefined
+): string {
+  const v = valores || {};
+  switch (tipo) {
+    case 'mfs':
+      return `D ${v.mfs_direito} / E ${v.mfs_esquerdo}`;
+    case 'perimetro_cefalico':
+      return temNumero(v.perimetro_cefalico_cm)
+        ? `${fmtNum(v.perimetro_cefalico_cm as number, 1)} cm`
+        : '';
+    case 'desenvolvimento_motor': {
+      const inst =
+        v.instrumento === 'outro'
+          ? texto(v.instrumento_outro)
+          : (INSTRUMENTOS_DESENVOLVIMENTO.find((i) => i.valor === v.instrumento)
+              ?.label ?? '');
+      const partes = [inst];
+      if (temNumero(v.percentil)) partes.push(`percentil ${v.percentil}`);
+      if (texto(v.resultado)) partes.push(texto(v.resultado));
+      return partes.filter(Boolean).join(', ');
+    }
+    case 'outra':
+      return [texto(v.descricao), texto(v.resultado)]
+        .filter(Boolean)
+        .join(': ');
+    default:
+      return '';
+  }
 }
 
 /** Linhas do texto da evolução sobre medidas e próximas reavaliações */
@@ -237,16 +392,28 @@ export function linhasMedidasDoResumo(ev: EvolucaoMotoraAssimetria): string[] {
     if (!m) continue;
     const nome = NOME_MEDIDA_MOTORA[tipo];
     const motivo = m.motivo ? ` (${m.motivo})` : '';
-    if (m.situacao === 'medido' && !temValores.has(tipo))
-      linhas.push(`${nome}: realizada nesta sessão`);
+    if (m.situacao === 'medido' && !temValores.has(tipo)) {
+      const r =
+        MEDIDAS_SEM_SECAO.includes(tipo) && resultadoCompleto(tipo, m.valores)
+          ? resultadoEmTexto(tipo, m.valores)
+          : '';
+      if (r) linhas.push(`${nome}: ${r}`);
+    }
     if (m.situacao === 'adiado')
       linhas.push(
         `${nome}: prevista, adiada${m.nova_data ? ` para ${dataBR(m.nova_data)}` : ''}${motivo}`
       );
-    if (m.situacao === 'dispensado')
-      linhas.push(
-        `${nome}: dispensada nesta ocasião${motivo}${m.nova_data ? `; reprogramada para ${dataBR(m.nova_data)}` : ''}`
-      );
+    if (m.situacao === 'dispensado') {
+      const depois =
+        m.desfecho === 'suspender'
+          ? '; acompanhamento suspenso'
+          : m.desfecho === 'periodicidade' && m.nova_data
+            ? `; volta à periodicidade (próxima em ${dataBR(m.nova_data)})`
+            : m.nova_data
+              ? `; reprogramada para ${dataBR(m.nova_data)}`
+              : '';
+      linhas.push(`${nome}: dispensada nesta ocasião${motivo}${depois}`);
+    }
     if (m.situacao === 'nao_aplicavel')
       linhas.push(`${nome}: não se aplica a este caso${motivo}`);
   }
@@ -257,6 +424,13 @@ export function linhasMedidasDoResumo(ev: EvolucaoMotoraAssimetria): string[] {
     >[TipoMedidaMotora],
   ][]) {
     if (!p?.data) continue;
+    // encerrada nesta evolução: a nova data não é gravada (chamadasDaEvolucao)
+    const m = ev.medicoes?.[tipo];
+    if (
+      m?.situacao === 'nao_aplicavel' ||
+      (m?.situacao === 'dispensado' && m.desfecho === 'suspender')
+    )
+      continue;
     const nome =
       tipo === 'outra' && p.descricao ? p.descricao : NOME_MEDIDA_MOTORA[tipo];
     linhas.push(`Próxima reavaliação: ${nome} em ${dataBR(p.data)}`);
@@ -322,6 +496,45 @@ export async function aplicarProgramacaoDaEvolucao(
     }
   }
   return falhas;
+}
+
+/** O usuário logado está no piloto da programação de medidas? (admin: sempre) */
+export async function fetchMedidasLiberado(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('fn_motora_medidas_liberado');
+  if (error) throw error;
+  return data === true;
+}
+
+export async function fetchPilotoMedidas(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('motora_medida_piloto')
+    .select('pessoa_id');
+  if (error) throw error;
+  return (data ?? []).map((r: { pessoa_id: string }) => r.pessoa_id);
+}
+
+export async function fetchProfissionaisParaPiloto(): Promise<
+  { id: string; nome: string }[]
+> {
+  const { data, error } = await supabase
+    .from('pessoas')
+    .select('id, nome')
+    .eq('role', 'profissional')
+    .eq('ativo', true)
+    .order('nome');
+  if (error) throw error;
+  return (data ?? []) as { id: string; nome: string }[];
+}
+
+export async function definirPilotoMedidas(
+  pessoaId: string,
+  liberado: boolean
+): Promise<void> {
+  const { error } = await supabase.rpc('fn_motora_definir_piloto', {
+    p_pessoa_id: pessoaId,
+    p_liberado: liberado,
+  });
+  if (error) throw error;
 }
 
 export async function fetchConfigMedidas(): Promise<ConfigMedida[]> {

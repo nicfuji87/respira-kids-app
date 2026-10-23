@@ -63,7 +63,10 @@ import {
 } from '@/types/evolucao-clinica';
 import { EvolutionSectionContent } from './EvolutionSectionContent';
 import { MedidasEvolucaoContext } from './medidas-evolucao-context';
-import type { MedidaPaciente } from '@/lib/motora-medidas';
+import {
+  pendenciasDasMedicoes,
+  type MedidaPaciente,
+} from '@/lib/motora-medidas';
 
 // AI dev note: EvolutionFormModal - Modal de formulário de evolução estruturada
 // Suporta evolução respiratória e motora/assimetria
@@ -185,6 +188,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   // A fisio já mexeu nas áreas: a sugestão que chega depois não sobrescreve
   const areasTocadasRef = useRef(false);
   const [avisoAreas, setAvisoAreas] = useState(false);
+  const [pendenciasMedidas, setPendenciasMedidas] = useState<string[]>([]);
 
   const [currentSection, setCurrentSection] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -392,6 +396,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       );
       areasTocadasRef.current = false;
       setAvisoAreas(false);
+      setPendenciasMedidas([]);
       setCurrentSection(0);
       // AI dev note: sem este reset o carry-forward de um atendimento vazaria
       // para o próximo (o modal não desmonta entre aberturas)
@@ -482,6 +487,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     (updates: Partial<EvolucaoMotoraAssimetria>) => {
       if (isReadOnly) return;
       setEvolucaoMotora((prev) => ({ ...prev, ...updates }));
+      setPendenciasMedidas([]);
     },
     [isReadOnly]
   );
@@ -497,6 +503,18 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     if (tipoEvolucao === 'motora_assimetria' && areasMarcadas.length === 0) {
       setAvisoAreas(true);
       return;
+    }
+    // Medidas (piloto): "feita" sem resultado, adiada sem data e dispensada
+    // sem desfecho não salvam, para não gerar registro vazio nem lembrete em ciclo
+    if (tipoEvolucao === 'motora_assimetria' && medidas !== null) {
+      const pend = pendenciasDasMedicoes(evolucaoMotora);
+      if (pend.length > 0) {
+        setPendenciasMedidas(pend.map((p) => p.problema));
+        scrollAreaRef.current
+          ?.querySelector('[data-radix-scroll-area-viewport]')
+          ?.scrollTo({ top: 0 });
+        return;
+      }
     }
     setIsSaving(true);
     try {
@@ -837,6 +855,21 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
             {/* Conteúdo da seção */}
             <ScrollArea className="flex-1" ref={scrollAreaRef}>
               <div className="p-4 sm:p-6">
+                {pendenciasMedidas.length > 0 && (
+                  <div
+                    className="mb-4 rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-1"
+                    role="alert"
+                  >
+                    <p className="text-sm font-medium text-destructive">
+                      Antes de salvar, complete as medidas:
+                    </p>
+                    <ul className="list-disc pl-5 text-sm text-destructive">
+                      {pendenciasMedidas.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {podeReaproveitar && (
                   <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
                     <div className="flex-1 min-w-0">

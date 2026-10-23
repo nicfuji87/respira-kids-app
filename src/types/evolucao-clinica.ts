@@ -513,10 +513,24 @@ export type SituacaoMedicao =
   | 'dispensado'
   | 'nao_aplicavel';
 
+/**
+ * Dispensada nesta ocasião: o que acontece com o acompanhamento. Obrigatório,
+ * para o lembrete não voltar sozinho na sessão seguinte.
+ * - nova_data: programa outra data (nova_data)
+ * - periodicidade: volta ao intervalo da medida contado a partir de hoje
+ *   (a data calculada vai em nova_data)
+ * - suspender: suspende o acompanhamento desta medida
+ */
+export type DesfechoDispensa = 'nova_data' | 'periodicidade' | 'suspender';
+
 export interface MedicaoSessao {
   situacao: SituacaoMedicao;
   nova_data?: string; // YYYY-MM-DD
   motivo?: string;
+  desfecho?: DesfechoDispensa;
+  // Medidas sem seção própria (MFS, perímetro, desenvolvimento, outra):
+  // resultado registrado no próprio bloco ao marcar "Feita hoje"
+  valores?: Record<string, string | number>;
 }
 
 export interface ProximaReavaliacao {

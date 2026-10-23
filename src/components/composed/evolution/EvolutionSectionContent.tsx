@@ -4062,24 +4062,20 @@ export const EvolutionSectionContent: React.FC<
               </Field>
             )}
 
-            <div className="border-t pt-6 space-y-2">
-              <h3 className="text-base font-semibold">
-                Medidas e reavaliações
-              </h3>
-              <ReavaliacoesConduta
-                medicoes={medicoes}
-                proximas={proximas}
-                onMedicaoChange={setMedicao}
-                onProximaChange={setProxima}
-                tiposComSecao={secoesMotorasVisiveis(evolucao.areas)
-                  .map((sec) => sec.id)
-                  .filter(
-                    (id): id is TipoMedidaMotora =>
-                      id === 'craniometria' || id === 'goniometria'
-                  )}
-                disabled={disabled}
-              />
-            </div>
+            {/* Some sozinho para quem não está no piloto das medidas */}
+            <ReavaliacoesConduta
+              medicoes={medicoes}
+              proximas={proximas}
+              onMedicaoChange={setMedicao}
+              onProximaChange={setProxima}
+              tiposComSecao={secoesMotorasVisiveis(evolucao.areas)
+                .map((sec) => sec.id)
+                .filter(
+                  (id): id is TipoMedidaMotora =>
+                    id === 'craniometria' || id === 'goniometria'
+                )}
+              disabled={disabled}
+            />
 
             <Field label="Observações da Conduta">
               <Textarea

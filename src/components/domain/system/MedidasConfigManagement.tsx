@@ -9,10 +9,14 @@ import { Input } from '@/components/primitives/input';
 import { Switch } from '@/components/primitives/switch';
 import { useToast } from '@/components/primitives/use-toast';
 import {
+  definirPilotoMedidas,
   fetchConfigMedidas,
+  fetchPilotoMedidas,
+  fetchProfissionaisParaPiloto,
   salvarConfigMedida,
   type ConfigMedida,
 } from '@/lib/motora-medidas';
+import { esquecerMedidasLiberadas } from '@/hooks/useMedidasLiberadas';
 
 export const MedidasConfigManagement: React.FC = () => {
   const { toast } = useToast();
@@ -137,6 +141,90 @@ export const MedidasConfigManagement: React.FC = () => {
       <Button onClick={salvar} disabled={salvando || alteradas.length === 0}>
         {salvando ? 'Salvando…' : 'Salvar intervalos'}
       </Button>
+
+      <PilotoMedidas />
+    </div>
+  );
+};
+
+// Quem usa a programação de medidas no piloto. Admin sempre vê; quem não está
+// aqui continua com a evolução e a agenda de antes.
+const PilotoMedidas: React.FC = () => {
+  const { toast } = useToast();
+  const [profissionais, setProfissionais] = useState<
+    { id: string; nome: string }[]
+  >([]);
+  const [liberados, setLiberados] = useState<Set<string>>(new Set());
+  const [ocupado, setOcupado] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([fetchProfissionaisParaPiloto(), fetchPilotoMedidas()])
+      .then(([ps, ids]) => {
+        setProfissionais(ps);
+        setLiberados(new Set(ids));
+      })
+      .catch((e) => {
+        console.error(e);
+        toast({
+          title: 'Não foi possível carregar o piloto',
+          variant: 'destructive',
+        });
+      });
+  }, [toast]);
+
+  const alternar = async (id: string, v: boolean) => {
+    setOcupado(id);
+    try {
+      await definirPilotoMedidas(id, v);
+      setLiberados((s) => {
+        const n = new Set(s);
+        if (v) n.add(id);
+        else n.delete(id);
+        return n;
+      });
+      esquecerMedidasLiberadas();
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: 'Erro ao alterar o piloto',
+        description: e instanceof Error ? e.message : undefined,
+        variant: 'destructive',
+      });
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3 pt-4 border-t">
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold">Piloto</h3>
+        <p className="text-sm text-muted-foreground">
+          Só as profissionais marcadas usam o lembrete e o registro de medidas.
+          As demais continuam com a evolução de antes. Admin sempre vê. A
+          mudança vale quando a pessoa recarrega o app.
+        </p>
+      </div>
+      <div className="rounded-lg border divide-y">
+        {profissionais.map((p) => (
+          <label
+            key={p.id}
+            className="flex items-center justify-between gap-3 p-3 text-sm"
+          >
+            <span>{p.nome}</span>
+            <Switch
+              checked={liberados.has(p.id)}
+              disabled={ocupado === p.id}
+              onCheckedChange={(v) => alternar(p.id, v)}
+            />
+          </label>
+        ))}
+        {profissionais.length === 0 && (
+          <p className="p-3 text-sm text-muted-foreground">
+            Nenhuma profissional ativa encontrada.
+          </p>
+        )}
+      </div>
     </div>
   );
 };
