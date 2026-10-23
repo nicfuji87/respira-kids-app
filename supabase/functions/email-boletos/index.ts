@@ -1076,6 +1076,9 @@ interface PedidoGrupo {
   arquivo_url: string | null;
   mime: string | null;
   forma: 'inter' | 'asaas' | null;
+  // pedido em mensagem separada do arquivo: o PDF já está no Storage e a conta já existe
+  anexo_storage: string | null;
+  lancamento_hint: string | null;
 }
 
 type ItemGrupo = Record<string, unknown> & {
@@ -1164,25 +1167,45 @@ async function lerPedidoGrupo(
   };
   let anexo: string | null = null;
 
-  if (p.arquivo_url) {
-    if (!p.arquivo_url.startsWith(ARQUIVOS_UAZAPI))
-      throw new Error('O endereço do arquivo não é do WhatsApp');
-    const r = await fetch(p.arquivo_url, {
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!r.ok) throw new Error(`Não consegui baixar o arquivo (${r.status})`);
-    const bytes = new Uint8Array(await r.arrayBuffer());
+  if (p.arquivo_url || p.anexo_storage) {
+    let bytes: Uint8Array;
+    let tipoInformado = p.mime || '';
+    if (p.anexo_storage) {
+      // arquivo que já entrou como nota (texto "pagar com..." veio em outra mensagem)
+      const [bucket, ...resto] = p.anexo_storage.split('/');
+      const { data: blob, error } = await admin.storage
+        .from(bucket)
+        .download(resto.join('/'));
+      if (error || !blob)
+        throw new Error(
+          `Não consegui abrir o arquivo guardado (${error?.message ?? 'vazio'})`
+        );
+      bytes = new Uint8Array(await blob.arrayBuffer());
+      tipoInformado = blob.type || tipoInformado;
+      anexo = p.anexo_storage;
+    } else {
+      if (!p.arquivo_url!.startsWith(ARQUIVOS_UAZAPI))
+        throw new Error('O endereço do arquivo não é do WhatsApp');
+      const r = await fetch(p.arquivo_url!, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!r.ok) throw new Error(`Não consegui baixar o arquivo (${r.status})`);
+      bytes = new Uint8Array(await r.arrayBuffer());
+      tipoInformado = tipoInformado || r.headers.get('content-type') || '';
+    }
     if (bytes.length > 15_000_000) throw new Error('Arquivo grande demais');
     const ehPdf = new TextDecoder().decode(bytes.subarray(0, 5)) === '%PDF-';
     const mime = ehPdf
       ? 'application/pdf'
-      : (p.mime || r.headers.get('content-type') || 'image/jpeg').split(';')[0];
-    const ext = ehPdf ? 'pdf' : mime.includes('png') ? 'png' : 'jpg';
-    const caminho = `boletos/grupo/${p.id}.${ext}`;
-    await admin.storage
-      .from(BUCKET)
-      .upload(caminho, bytes, { contentType: mime, upsert: true });
-    anexo = `${BUCKET}/${caminho}`;
+      : (tipoInformado || 'image/jpeg').split(';')[0];
+    if (!anexo) {
+      const ext = ehPdf ? 'pdf' : mime.includes('png') ? 'png' : 'jpg';
+      const caminho = `boletos/grupo/${p.id}.${ext}`;
+      await admin.storage
+        .from(BUCKET)
+        .upload(caminho, bytes, { contentType: mime, upsert: true });
+      anexo = `${BUCKET}/${caminho}`;
+    }
 
     if (ehPdf) {
       const lido = await textoDoPdf(bytes, senhasCandidatas(null, cnpjsNossos));
@@ -1226,6 +1249,7 @@ async function lerPedidoGrupo(
         beneficiario_nome: benef.nome,
         anexo_path: anexo,
         descricao_hint: dicaDaLegenda(legenda),
+        lancamento_hint: p.lancamento_hint,
       },
     });
     if (error) throw new Error(`registrar boleto: ${error.message}`);
@@ -1259,7 +1283,7 @@ async function processarGrupo(
     .update({ status: 'processando', tentativa_em: new Date().toISOString() })
     .eq('status', 'recebido')
     .select(
-      'id, chatid, messageid, remetente, legenda, arquivo_url, mime, forma'
+      'id, chatid, messageid, remetente, legenda, arquivo_url, mime, forma, anexo_storage, lancamento_hint'
     );
 
   const lidos: { p: PedidoGrupo; itens: ItemGrupo[]; anexo: string | null }[] =
