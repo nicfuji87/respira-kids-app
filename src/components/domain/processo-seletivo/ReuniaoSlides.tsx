@@ -316,7 +316,7 @@ const SlideCobertura: React.FC<SlideProps> = ({ slide, vivo }) => {
         <Titulo>{s.titulo}</Titulo>
         {d && (
           <p className="text-lg text-muted-foreground">
-            Sessões de {nomeMes(d.mes)} que já passaram de 24h (sem domiciliar)
+            Sessões de {nomeMes(d.mes)} com o prazo já vencido (sem domiciliar)
           </p>
         )}
       </div>
@@ -330,7 +330,7 @@ const SlideCobertura: React.FC<SlideProps> = ({ slide, vivo }) => {
               evolução
             </span>
             <span className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-verde-pipa" /> Em até 24h
+              <span className="w-3 h-3 rounded-full bg-verde-pipa" /> No prazo
             </span>
           </div>
           {d.por_grupo.map((g) => (
@@ -406,7 +406,7 @@ const SlideBonusRegra: React.FC<SlideProps> = ({ slide, reuniao }) => {
     },
     {
       valor: `− ${brl(5)}`,
-      texto: 'para cada evolução que passar de 24h',
+      texto: 'para cada evolução que passar do prazo',
       cor: 'bg-amarelo-pipa/25',
     },
     {
@@ -421,6 +421,7 @@ const SlideBonusRegra: React.FC<SlideProps> = ({ slide, reuniao }) => {
         <Kicker texto={s.kicker} />
         <Titulo>{s.titulo}</Titulo>
         <p className="text-lg text-muted-foreground">
+          Prazo: 24h depois da sessão. Sábado e domingo: até o fim da segunda.
           Vale a partir de 1º de {nomeMes(reuniao.bonusInicio)}.
         </p>
       </div>
@@ -448,8 +449,8 @@ const SlideBonusRegra: React.FC<SlideProps> = ({ slide, reuniao }) => {
           <p className="font-semibold text-roxo-titulo">Conta</p>
           <p>Toda sessão da clínica: respiratória, motora e avaliação.</p>
           <p>
-            Evolução feita depois de 24h conta como perdida. Faça mesmo assim: é
-            o prontuário da criança.
+            Evolução feita depois do prazo conta como perdida. Faça mesmo assim:
+            é o prontuário da criança.
           </p>
         </div>
         <div className="rounded-2xl bg-card/80 border border-border/60 p-5 space-y-1.5">
@@ -533,13 +534,13 @@ const SlideBonusAoVivo: React.FC<SlideProps> = ({ slide, reuniao, vivo }) => {
               />
               <p className="text-sm text-muted-foreground">
                 {d.sem_evolucao} ainda sem evolução · {d.feitas_atrasadas}{' '}
-                feitas depois de 24h
+                feitas depois do prazo
               </p>
             </div>
             <div className="rounded-2xl bg-card/80 border border-border/60 p-5 space-y-3">
               <div className="flex items-baseline justify-between">
                 <p className="text-lg font-semibold text-roxo-titulo">
-                  No prazo de 24h
+                  No prazo
                 </p>
                 <p className="text-2xl font-bold tabular-nums">
                   {pct(d.no_prazo, d.contadas)}%
@@ -605,7 +606,7 @@ const SlideEmRisco: React.FC<SlideProps> = ({ slide, vivo }) => {
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-vermelho-kids text-lg font-semibold">
             <AlertTriangle className="w-5 h-5" />
-            {d.em_risco} sessões dentro da janela de 24h
+            {d.em_risco} sessões sem evolução, ainda no prazo
           </div>
           <div className="grid md:grid-cols-2 gap-2">
             {visiveis.map((r, i) => {
@@ -625,6 +626,7 @@ const SlideEmRisco: React.FC<SlideProps> = ({ slide, vivo }) => {
                     <p className="text-sm text-muted-foreground truncate">
                       Sessão {inicio.dia} {inicio.hora}
                       {r.profissional ? ` com ${r.profissional}` : ''}
+                      {r.fim_de_semana ? ' · fim de semana' : ''}
                     </p>
                   </div>
                   <p className="text-sm font-semibold text-right shrink-0">
