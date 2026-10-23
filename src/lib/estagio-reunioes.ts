@@ -121,7 +121,7 @@ export const REUNIOES: Reuniao[] = [
       {
         tipo: 'bonus-regra',
         kicker: 'A nova meta',
-        titulo: '100% das evoluções em até 24h',
+        titulo: '100% das evoluções no prazo',
       },
       {
         tipo: 'bonus-ao-vivo',
@@ -131,7 +131,7 @@ export const REUNIOES: Reuniao[] = [
       {
         tipo: 'em-risco',
         kicker: 'Ainda dá tempo',
-        titulo: 'Sessões que vencem nas próximas 24h',
+        titulo: 'Sessões ainda dentro do prazo',
       },
       {
         tipo: 'lista',
@@ -146,6 +146,11 @@ export const REUNIOES: Reuniao[] = [
             titulo: 'Manhã cobre a tarde, tarde cobre a manhã',
             texto:
               'Vytoria deixou alguma de manhã? Avisa a Larissa, que faz à tarde. Larissa deixou? A Vytoria resolve na manhã seguinte, ainda dentro das 24h.',
+          },
+          {
+            titulo: 'Segunda fecha o fim de semana',
+            texto:
+              'Sessões de sábado e domingo vencem no fim da segunda. De manhã, a Vytoria confere com as profissionais o que ficou sem evolução. À tarde, a Larissa fecha o que faltar.',
           },
           {
             titulo: 'Profissional que prefere evoluir sozinha',
@@ -262,6 +267,7 @@ export const REUNIOES: Reuniao[] = [
           'Ponto batido pronta para trabalhar, e saída todo dia',
           'Conversa com a família guiada pelo responsável',
           'Checklist de saída só com o que foi feito',
+          'Segunda-feira fecha as sessões do fim de semana',
           'Próxima conversa para ver os números',
         ],
       },

@@ -74,7 +74,7 @@ export const ReunioesTab: React.FC = () => {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground/80 font-medium">
-                Bônus por evolução em até 24h
+                Bônus por evolução no prazo
                 {dados ? ` · ${nomeMes(dados.mes)}` : ''}
               </p>
               {simulacao && inicioBonus && (
@@ -135,7 +135,7 @@ export const ReunioesTab: React.FC = () => {
                   valor={`${dados.no_prazo} de ${dados.contadas}`}
                 />
                 <Numero
-                  rotulo="Dentro das 24h, sem evolução"
+                  rotulo="Ainda no prazo, sem evolução"
                   valor={String(dados.em_risco)}
                 />
                 <Numero

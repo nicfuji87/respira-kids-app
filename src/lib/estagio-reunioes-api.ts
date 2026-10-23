@@ -1,7 +1,8 @@
 // AI dev note: Dados ao vivo das reuniões com as estagiárias. A regra do bônus
-// (R$100/mês, -R$5 por sessão sem evolução em até 24h, domiciliar liberado)
-// mora no servidor: fn_estagio_bonus_evolucoes (migration
-// estagio_bonus_evolucoes.sql). O front só exibe.
+// (R$100/mês, -R$5 por sessão sem evolução no prazo, domiciliar liberado;
+// prazo = 24h, mas sábado e domingo vencem no fim da segunda) mora no
+// servidor: fn_estagio_bonus_evolucoes (migrations estagio_bonus_evolucoes.sql
+// e estagio_bonus_prazo_fim_de_semana.sql). O front só exibe.
 
 import { supabase } from './supabase';
 
@@ -26,6 +27,7 @@ export interface SessaoEmRisco {
   inicio: string; // hora de parede, sem fuso
   prazo: string; // hora de parede, sem fuso
   grupo: GrupoServico;
+  fim_de_semana?: boolean; // sábado/domingo: prazo até o fim da segunda
   paciente: string;
   profissional: string;
 }
