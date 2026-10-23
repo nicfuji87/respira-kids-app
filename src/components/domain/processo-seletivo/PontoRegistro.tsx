@@ -2,6 +2,9 @@
 // "Ponto eletrônico" e também em tela cheia no tablet). Passos:
 //   lista de estagiários -> [se SAÍDA: checklist do turno] -> câmera (foto-
 //   comprovante + GPS; se ENTRADA mostra lembrete curto) -> confirmação.
+// Recados entre turnos: na SAÍDA a estagiária pode deixar um recado; na ENTRADA
+// aparecem os recados das outras que ela ainda não leu (bater = ciente). É o
+// mesmo recado do ponto pelo celular (#/ponto), tabela estagio_recados.
 // Roda sob a sessão logada (admin/secretaria); o estagiário não tem acesso.
 // registradoPor = qual acesso registrou (auditoria). Checklist só na saída.
 
@@ -22,6 +25,7 @@ import {
   ClipboardCheck,
   ListChecks,
   Ban,
+  MessageSquareText,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Textarea } from '@/components/primitives/textarea';
@@ -45,6 +49,12 @@ import {
   LEMBRETE_ENTRADA,
   type ChecklistData,
 } from '@/lib/estagio-ponto-checklist';
+import {
+  criarRecado,
+  fetchRecadosPendentes,
+  marcarRecadosLidos,
+  type RecadoPendente,
+} from '@/lib/estagio-celular-api';
 
 interface Props {
   registradoPor: string | null;
@@ -86,7 +96,8 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
     'pendente'
   );
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
-  const [observacao, setObservacao] = useState('');
+  const [recado, setRecado] = useState('');
+  const [recados, setRecados] = useState<RecadoPendente[]>([]);
   const [camAttempt, setCamAttempt] = useState(0);
   const [geofence, setGeofence] = useState<GeofenceConfig | null>(null);
   const [bloqueio, setBloqueio] = useState<{
@@ -191,7 +202,8 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
     setView('lista');
     setSelected(null);
     setChecklist({});
-    setObservacao('');
+    setRecado('');
+    setRecados([]);
     setErro(null);
     setBloqueio(null);
   }, [stopCamera]);
@@ -203,7 +215,7 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
         init[i.id] = false;
       });
       setChecklist(init);
-      setObservacao('');
+      setRecado('');
       setView('checklist');
     } else {
       setView('camera');
@@ -217,6 +229,7 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
       setBloqueio(null);
       setCoords(null);
       setGeoStatus('pendente');
+      setRecados([]);
       let t: PontoTipo = 'entrada';
       try {
         const hoje = await fetchPontosHoje(e.id);
@@ -225,6 +238,9 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
         t = 'entrada';
       }
       setTipo(t);
+      if (t === 'entrada') {
+        void fetchRecadosPendentes(e.id).then(setRecados);
+      }
 
       // Cerca ativa: valida a localização ANTES de abrir a câmera.
       if (geofence?.ativo) {
@@ -278,10 +294,8 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
     try {
       const path = await uploadPontoFoto(selected.id, blob);
       const checklistData: ChecklistData | null =
-        tipo === 'saida'
-          ? { items: checklist, observacao: observacao.trim() || undefined }
-          : null;
-      await registrarPonto({
+        tipo === 'saida' ? { items: checklist } : null;
+      const pontoId = await registrarPonto({
         candidaturaId: selected.id,
         tipo,
         fotoPath: path,
@@ -289,6 +303,20 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
         coords,
         checklist: checklistData,
       });
+      // Recados são complemento: se falharem, o ponto já valeu.
+      try {
+        if (tipo === 'saida' && recado.trim()) {
+          await criarRecado(selected.id, pontoId, recado);
+        }
+        if (tipo === 'entrada' && recados.length) {
+          await marcarRecadosLidos(
+            selected.id,
+            recados.map((r) => r.id)
+          );
+        }
+      } catch {
+        // segue
+      }
       stopCamera();
       setDoneAt(new Date());
       setView('ok');
@@ -301,7 +329,8 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
     selected,
     tipo,
     checklist,
-    observacao,
+    recado,
+    recados,
     registradoPor,
     coords,
     stopCamera,
@@ -412,14 +441,16 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
               })}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm text-muted-foreground">
-                Observações do turno (opcional)
+              <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <MessageSquareText className="w-4 h-4 text-azul-respira" />
+                Recado para o próximo turno (opcional)
               </label>
               <Textarea
-                value={observacao}
-                onChange={(e) => setObservacao(e.target.value)}
-                placeholder="Algo que a equipe precise saber?"
+                value={recado}
+                onChange={(e) => setRecado(e.target.value)}
+                placeholder="Ex.: lembrar de finalizar as evoluções da tarde"
                 rows={2}
+                maxLength={1000}
               />
             </div>
             <div className="flex gap-3">
@@ -500,6 +531,24 @@ export const PontoRegistro: React.FC<Props> = ({ registradoPor, onClose }) => {
             <p className="text-lg font-bold text-foreground text-center">
               {selected.nome}
             </p>
+
+            {/* Recados do turno anterior (só na entrada) */}
+            {tipo === 'entrada' && recados.length > 0 && (
+              <div className="w-full rounded-xl border-2 border-amarelo-pipa bg-amarelo-pipa/15 p-3 space-y-1.5">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-roxo-titulo">
+                  <MessageSquareText className="w-3.5 h-3.5" />
+                  Recado do turno anterior
+                </p>
+                {recados.map((r) => (
+                  <p key={r.id} className="text-sm text-foreground">
+                    {r.texto}{' '}
+                    <span className="text-xs text-muted-foreground">
+                      ({r.autor})
+                    </span>
+                  </p>
+                ))}
+              </div>
+            )}
 
             {/* Lembrete das atividades (só na entrada) */}
             {tipo === 'entrada' && (

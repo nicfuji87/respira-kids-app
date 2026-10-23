@@ -401,13 +401,20 @@ export const ValeTransportePainel: React.FC = () => {
                                       manual
                                     </span>
                                   )}
+                                  {p.origem === 'celular' && (
+                                    <span className="px-1.5 py-0.5 rounded bg-roxo-titulo/10 text-roxo-titulo font-medium">
+                                      celular
+                                    </span>
+                                  )}
                                   <span>
                                     acesso:{' '}
                                     <span className="text-foreground">
-                                      {p.registrado_por
-                                        ? (staffNomes[p.registrado_por] ??
-                                          'acesso removido')
-                                        : '—'}
+                                      {p.origem === 'celular'
+                                        ? 'próprio (login dela)'
+                                        : p.registrado_por
+                                          ? (staffNomes[p.registrado_por] ??
+                                            'acesso removido')
+                                          : '—'}
                                     </span>
                                   </span>
                                   {p.lat != null && p.lng != null ? (

@@ -14,6 +14,8 @@ import { PontoRegistro } from './PontoRegistro';
 import { GeofenceConfig } from './GeofenceConfig';
 import { KioskPinConfig } from './KioskPinConfig';
 import { KioskExitDialog } from './KioskExitDialog';
+import { AcessoCelularConfig } from './AcessoCelularConfig';
+import { RecadosTurnoCard } from './RecadosTurnoCard';
 
 async function enterBrowserFullscreen() {
   try {
@@ -85,6 +87,8 @@ export const PontoEletronicoTab: React.FC = () => {
     <div className="space-y-3">
       {isAdmin && <GeofenceConfig />}
       {isAdmin && <KioskPinConfig onChange={refreshLock} />}
+      {isAdmin && <AcessoCelularConfig />}
+      <RecadosTurnoCard />
       <div className="flex justify-end">
         <Button
           variant="outline"
