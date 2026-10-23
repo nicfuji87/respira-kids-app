@@ -58,7 +58,9 @@ import type {
   EvolucaoRespiratoria,
   EvolucaoMotoraAssimetria,
   AutoriaEvolucao,
+  AreaMotora,
 } from '@/types/evolucao-clinica';
+import { inferirAreasMotoras } from '@/types/evolucao-clinica';
 import {
   gerarResumoEvolucaoMotora,
   prepararEvolucaoMotoraParaSalvar,
@@ -71,6 +73,7 @@ import {
   fetchTiposServico,
   fetchRelatoriosEvolucao,
   fetchUltimaEvolucaoRespiratoriaPaciente,
+  fetchUltimaEvolucaoMotoraPaciente,
   saveRelatorioEvolucao,
   updateRelatorioEvolucao,
   updateRelatorioEvolucaoCompleta,
@@ -238,6 +241,10 @@ export const AppointmentDetailsManager =
         evolucao_respiratoria?: EvolucaoRespiratoria;
         date?: string;
       } | null>(null);
+      // Áreas da última evolução motora da criança: já vêm marcadas na nova
+      const [areasMotorasSugeridas, setAreasMotorasSugeridas] = useState<
+        AreaMotora[] | undefined
+      >(undefined);
 
       // Busca a última evolução do paciente ao abrir o modal p/ nova evolução
       useEffect(() => {
@@ -245,6 +252,16 @@ export const AppointmentDetailsManager =
         const pacienteId = appointment?.paciente_id;
         if (!pacienteId) return;
         let cancelado = false;
+        setAreasMotorasSugeridas(undefined);
+        fetchUltimaEvolucaoMotoraPaciente(pacienteId, appointment?.id)
+          .then((rel) => {
+            if (cancelado || !rel?.evolucao_motora_assimetria) return;
+            const areas = inferirAreasMotoras(
+              rel.evolucao_motora_assimetria as unknown as EvolucaoMotoraAssimetria
+            );
+            if (areas.length) setAreasMotorasSugeridas(areas);
+          })
+          .catch(() => undefined);
         fetchUltimaEvolucaoRespiratoriaPaciente(pacienteId, appointment?.id)
           .then((rel) => {
             if (cancelado) return;
@@ -2704,6 +2721,7 @@ export const AppointmentDetailsManager =
                 : undefined
             }
             previousDate={previousEvolucao?.date}
+            areasSugeridas={areasMotorasSugeridas}
             mode={editingEvolucaoData ? 'edit' : 'create'}
           />
 

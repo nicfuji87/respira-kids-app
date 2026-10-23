@@ -6,8 +6,10 @@
 //   formulário ele vinha marcado por padrão, então não prova uma decisão).
 
 import {
+  AREAS_MOTORAS,
   classificarDiferencaCervical,
   ladoMenorAmplitude,
+  limparAreasNaoTrabalhadas,
   ROTULO_BRAQUICEFALIA,
   ROTULO_PLAGIOCEFALIA,
   VERSAO_FORMULARIO_MOTORA,
@@ -25,12 +27,14 @@ import {
  *   (sem versão) continua sem versão, porque nele o "não" do encaminhamento
  *   médico pode ser só o valor padrão do formulário antigo.
  * Isso identifica quem registrou; não é uma assinatura eletrônica verificável.
+ * Antes, tira o que pertence a áreas desmarcadas (limparAreasNaoTrabalhadas).
  */
 export function prepararEvolucaoMotoraParaSalvar(
-  ev: EvolucaoMotoraAssimetria,
+  evOriginal: EvolucaoMotoraAssimetria,
   profissional: AutoriaEvolucao,
   editando: boolean
 ): EvolucaoMotoraAssimetria {
+  const ev = limparAreasNaoTrabalhadas(evOriginal);
   if (editando) return { ...ev, ultima_edicao: profissional };
   return {
     ...ev,
@@ -143,6 +147,14 @@ export function gerarResumoEvolucaoMotora(
   ev: EvolucaoMotoraAssimetria
 ): string {
   let texto = '';
+
+  // Áreas trabalhadas na sessão (registros antigos não têm)
+  if (Array.isArray(ev.areas) && ev.areas.length > 0) {
+    const nomes = AREAS_MOTORAS.filter((a) => ev.areas!.includes(a.id)).map(
+      (a) => a.titulo
+    );
+    texto += `🎯 Áreas trabalhadas: ${nomes.join(', ')}\n\n`;
+  }
 
   // Medidas craniométricas
   const c = ev.craniometria || {};
