@@ -29,6 +29,7 @@ import { MetaCard } from '@/components/composed/MetaCard';
 import { MetasOverview } from '@/components/composed/MetasOverview';
 import { CreateMetaDialog } from '@/components/composed/CreateMetaDialog';
 import { ConfirmActionDialog } from '@/components/composed/ConfirmActionDialog';
+import { BonusEstagiariasCard } from '@/components/composed/BonusEstagiariasCard';
 import { useToast } from '@/components/primitives/use-toast';
 import {
   Plus,
@@ -298,6 +299,9 @@ export const MetasPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="clinica" className="mt-4">
+          {(isAdmin || userRole === 'secretaria') && (
+            <BonusEstagiariasCard mes={mes} ano={ano} />
+          )}
           <MetasGrid
             metas={metasClinica}
             loading={loading}
@@ -357,8 +361,16 @@ export const MetasPage: React.FC = () => {
           </p>
           <p>
             <strong className="text-foreground">Evoluções (clínica):</strong>{' '}
-            porcentagem das sessões realizadas com evolução, e das escritas em
-            até 24h. Conta sessões de até ontem. Faltas marcadas não entram.
+            porcentagem das sessões realizadas com evolução, e das escritas no
+            prazo: 24h depois da sessão; sábado e domingo vencem segunda às
+            23h59. Só entram sessões com o prazo já vencido. Faltas e
+            cancelamentos não entram.
+          </p>
+          <p>
+            <strong className="text-foreground">Bônus das estagiárias:</strong>{' '}
+            R$ 100 por mês, menos R$ 5 por sessão sem evolução no prazo (mesma
+            regra acima). Domiciliar não conta e a meta é da dupla. Aparece na
+            aba Clínica e na aba Reuniões dos Estagiários.
           </p>
           <p>
             Os valores são recalculados de hora em hora (8h às 20h). O botão{' '}
