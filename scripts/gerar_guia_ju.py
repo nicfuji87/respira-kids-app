@@ -124,6 +124,9 @@ s += section('2. O que ela resolve sozinha', table([
     ['Link de pagamento', 'Se o link venceu, renova por mais 5 dias, com o mesmo valor.'],
     ['Atestado', 'Faz e manda o atestado de comparecimento de uma sessão que já aconteceu, depois de confirmar a data '
                  'e quem acompanhou a criança.'],
+    ['Cancelar consulta', 'Cancela sozinha quando a família pede com 6 h ou mais de antecedência (se o pedido não '
+                          'estiver claro, pergunta antes). A fisio e o grupo de atendimentos são avisados. Com menos de '
+                          '6 h, com o horário já passado ou com cobrança gerada, passa para a recepção, sem falar de multa.'],
     ['Áudio, foto e PDF', 'Entende áudios (e manda o texto do áudio na conversa), fotos e documentos, como pedido médico '
                           'e comprovante.'],
 ], [38, 136]))
@@ -148,15 +151,16 @@ s += section('4. Quando ela chama a equipe', keep=3, *[P(
         ['Etiqueta', 'Quando aparece'],
         ['Encaixe urgente', 'Assunto clínico urgente. Para as fisios.'],
         ['Lead sem agendar', 'Pedido de agendamento.'],
-        ['Remarcar/cancelar', 'Remarcação ou cancelamento.'],
+        ['Remarcar/cancelar', 'Remarcação, ou cancelamento que a Ju não pôde fazer (menos de 6 h).'],
         ['Revisar cobrança', 'Pagamento: comprovante, desconto, cobrança errada.'],
         ['NF pendente', 'Nota fiscal ou contrato.'],
         ['Responder', 'Todo o resto: dúvida clínica, reclamação, quem pediu para falar com uma pessoa, currículo, '
                       'fornecedor, assunto que a Ju não entendeu.'],
     ], [38, 136]),
     Spacer(1, 6),
-    P('<b>Enquanto o pedido está aberto</b>, a Ju não responde mais a família naquela conversa. Se a família mandar algo '
-      'novo, a Ju anota no grupo, às vezes já com a resposta pronta.'),
+    P('<b>Enquanto o pedido está aberto</b>, a Ju só responde dúvidas simples (valor, endereço, convênio) se a recepção '
+      'ainda não entrou na conversa. O resto ela anota no próprio pedido no grupo: a mensagem antiga some e o pedido '
+      'volta para o fim do grupo com a novidade. Ao tocar em Concluído, o pedido sai do grupo.'),
     Spacer(1, 4),
     P('<b>Lembretes</b> (no máximo 2 por pedido, no grupo, com o nome da criança e o resumo):'),
     Spacer(1, 3),
