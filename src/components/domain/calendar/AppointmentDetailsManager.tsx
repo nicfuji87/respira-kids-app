@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MapPin,
   Edit,
@@ -11,6 +11,7 @@ import {
   Bell,
 } from 'lucide-react';
 import { useToast } from '@/components/primitives/use-toast';
+import { useMedidasLiberadas } from '@/hooks/useMedidasLiberadas';
 import { ToastAction } from '@/components/primitives/toast';
 import { parseSupabaseDatetime } from '@/lib/calendar-mappers';
 
@@ -60,7 +61,20 @@ import type {
   AutoriaEvolucao,
   AreaMotora,
 } from '@/types/evolucao-clinica';
-import { inferirAreasMotoras } from '@/types/evolucao-clinica';
+import {
+  inferirAreasMotoras,
+  NOME_MEDIDA_MOTORA,
+  descreverRuidosHemitorax,
+} from '@/types/evolucao-clinica';
+import {
+  aplicarProgramacaoDaEvolucao,
+  dataBR,
+  descreverEstado,
+  diaDeParede,
+  fetchMedidasPaciente,
+  medidaPendente,
+  type MedidaPaciente,
+} from '@/lib/motora-medidas';
 import {
   gerarResumoEvolucaoMotora,
   prepararEvolucaoMotoraParaSalvar,
@@ -245,6 +259,48 @@ export const AppointmentDetailsManager =
       const [areasMotorasSugeridas, setAreasMotorasSugeridas] = useState<
         AreaMotora[] | undefined
       >(undefined);
+
+      // Medidas programadas da criança (craniometria, goniometria, MFS…):
+      // situação nesta data e último registro, de qualquer profissional.
+      // Só admin e profissional veem; secretaria não recebe dado clínico.
+      const [medidasPaciente, setMedidasPaciente] = useState<
+        MedidaPaciente[] | null
+      >(null);
+      // Piloto: só quem está liberado usa a programação de medidas
+      const podeVerMedidas = useMedidasLiberadas(
+        isOpen && (userRole === 'admin' || userRole === 'profissional')
+      );
+      const dataSessao = diaDeParede(appointment?.data_hora);
+      const carregarMedidas = useCallback(async () => {
+        if (!podeVerMedidas || !appointment?.paciente_id || !dataSessao) {
+          setMedidasPaciente(null);
+          return;
+        }
+        try {
+          setMedidasPaciente(
+            await fetchMedidasPaciente(
+              appointment.paciente_id,
+              dataSessao,
+              appointment.id
+            )
+          );
+        } catch (e) {
+          console.error('Erro ao carregar medidas programadas:', e);
+          setMedidasPaciente(null);
+        }
+      }, [
+        podeVerMedidas,
+        appointment?.paciente_id,
+        appointment?.id,
+        dataSessao,
+      ]);
+      useEffect(() => {
+        if (isOpen) void carregarMedidas();
+        else setMedidasPaciente(null);
+      }, [isOpen, carregarMedidas]);
+      const medidasPendentes = (medidasPaciente ?? []).filter((m) =>
+        medidaPendente(m.estado)
+      );
 
       // Busca a última evolução do paciente ao abrir o modal p/ nova evolução
       useEffect(() => {
@@ -1155,13 +1211,7 @@ export const AppointmentDetailsManager =
             if (hd.murmurio_vesicular) {
               conteudoResumo += `     • MV: ${mvMap[hd.murmurio_vesicular] || hd.murmurio_vesicular}\n`;
             }
-            const ruidosD = [];
-            if (hd.ruidos_ausentes) ruidosD.push('Sem ruídos adventícios');
-            if (hd.sibilos) ruidosD.push('Sibilos');
-            if (hd.roncos) ruidosD.push('Roncos');
-            if (hd.roncos_transmissao) ruidosD.push('Roncos de Transmissão');
-            if (hd.estertores_finos) ruidosD.push('Estertores finos');
-            if (hd.estertores_grossos) ruidosD.push('Estertores grossos');
+            const ruidosD = descreverRuidosHemitorax(hd);
             if (ruidosD.length > 0) {
               conteudoResumo += `     • Ruídos: ${ruidosD.join(', ')}\n`;
             }
@@ -1179,13 +1229,7 @@ export const AppointmentDetailsManager =
             if (he.murmurio_vesicular) {
               conteudoResumo += `     • MV: ${mvMap[he.murmurio_vesicular] || he.murmurio_vesicular}\n`;
             }
-            const ruidosE = [];
-            if (he.ruidos_ausentes) ruidosE.push('Sem ruídos adventícios');
-            if (he.sibilos) ruidosE.push('Sibilos');
-            if (he.roncos) ruidosE.push('Roncos');
-            if (he.roncos_transmissao) ruidosE.push('Roncos de Transmissão');
-            if (he.estertores_finos) ruidosE.push('Estertores finos');
-            if (he.estertores_grossos) ruidosE.push('Estertores grossos');
+            const ruidosE = descreverRuidosHemitorax(he);
             if (ruidosE.length > 0) {
               conteudoResumo += `     • Ruídos: ${ruidosE.join(', ')}\n`;
             }
@@ -1215,6 +1259,10 @@ export const AppointmentDetailsManager =
               tecnicas.push('Vibrocompressão');
             if (ev.intervencao.expiração_lenta_prolongada)
               tecnicas.push('Expiração Lenta Prolongada');
+            if (ev.intervencao.inspiracao_forcada)
+              tecnicas.push('Inspiração Forçada');
+            if (ev.intervencao.expiracao_forcada)
+              tecnicas.push('Expiração Forçada');
             if (ev.intervencao.rta) tecnicas.push('RTA');
             if (ev.intervencao.epap) tecnicas.push('EPAP');
             if (ev.intervencao.epap_selo_dagua)
@@ -1359,6 +1407,8 @@ export const AppointmentDetailsManager =
               const mudancasAusculta = [];
               if (ev.avaliacao_depois.ausculta_melhorou)
                 mudancasAusculta.push('Melhora geral');
+              if (ev.avaliacao_depois.ausculta_pouca_melhora)
+                mudancasAusculta.push('Pouca melhora');
               if (ev.avaliacao_depois.ausculta_reducao_roncos)
                 mudancasAusculta.push('↓ Redução de roncos');
               if (ev.avaliacao_depois.ausculta_reducao_sibilos)
@@ -1684,6 +1734,34 @@ export const AppointmentDetailsManager =
           // Recarregar evoluções
           const evolucoesList = await fetchRelatoriosEvolucao(appointment.id);
           setEvolucoes(evolucoesList);
+
+          // Medidas: grava o que foi feito hoje e a próxima reavaliação na
+          // programação da criança. Falha aqui não desfaz a evolução salva.
+          if (
+            dados.tipo_evolucao === 'motora_assimetria' &&
+            dados.evolucao_motora_assimetria &&
+            podeVerMedidas &&
+            appointment.paciente_id &&
+            dataSessao
+          ) {
+            const falhas = await aplicarProgramacaoDaEvolucao(
+              appointment.paciente_id,
+              dados.evolucao_motora_assimetria,
+              dataSessao
+            );
+            if (falhas.length > 0) {
+              toast({
+                title: 'Evolução salva, mas a programação de medidas falhou',
+                description: `${falhas
+                  .map((f) => NOME_MEDIDA_MOTORA[f.tipo])
+                  .join(
+                    ', '
+                  )}. Abra a evolução e salve de novo para tentar outra vez.`,
+                variant: 'destructive',
+              });
+            }
+            void carregarMedidas();
+          }
 
           // Limpar estado de edição
           setEditingEvolucaoData(null);
@@ -2019,6 +2097,30 @@ export const AppointmentDetailsManager =
 
               <ScrollArea className="max-h-[calc(100vh-200px)] sm:max-h-[600px]">
                 <div className="space-y-6 px-4 py-4 sm:px-6">
+                  {/* Medidas previstas para esta sessão (só admin/profissional) */}
+                  {medidasPendentes.length > 0 && (
+                    <div
+                      className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1.5"
+                      role="status"
+                    >
+                      <p className="text-sm font-medium text-amber-900">
+                        📐 Medidas previstas para esta sessão
+                      </p>
+                      <ul className="space-y-1">
+                        {medidasPendentes.map((m) => (
+                          <li key={m.tipo} className="text-sm text-amber-900">
+                            <span className="font-medium">{m.nome}</span>
+                            {' · '}
+                            {descreverEstado(m)}
+                            {m.ultima_data
+                              ? ` · último registro ${dataBR(m.ultima_data)}`
+                              : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {/* Paciente */}
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
@@ -2722,6 +2824,8 @@ export const AppointmentDetailsManager =
             }
             previousDate={previousEvolucao?.date}
             areasSugeridas={areasMotorasSugeridas}
+            medidas={medidasPaciente}
+            dataSessao={dataSessao}
             mode={editingEvolucaoData ? 'edit' : 'create'}
           />
 

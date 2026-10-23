@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   addDays,
   startOfDay,
@@ -44,6 +44,8 @@ import type { AppointmentUpdateData } from '@/components/domain/calendar/Appoint
 import { useCalendarFormData } from '@/hooks/useCalendarData';
 import { updateAgendamentoDetails } from '@/lib/calendar-services';
 import { useToast } from '@/components/primitives/use-toast';
+import { MedidasPrevistasAgendaProvider } from '@/components/composed/MedidasPrevistasAgenda';
+import { useMedidasLiberadas } from '@/hooks/useMedidasLiberadas';
 
 // AI dev note: CalendarTemplate combina componentes Domain do calendário
 // Template base que gerencia estado e comunicação entre componentes
@@ -464,6 +466,20 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       return filteredEvents;
     }, [events, currentView, currentDate, gruposOcultos]);
 
+    // Lembrete de medida (📐) nas consultas visíveis: uma busca por tela,
+    // só para admin e profissional
+    const idsConsultasVisiveis = useMemo(
+      () =>
+        getFilteredEvents()
+          .filter((e) => !!e.metadata?.pacienteId)
+          .map((e) => e.id),
+      [getFilteredEvents]
+    );
+    // Piloto: só quem está liberado vê o lembrete de medida
+    const mostraMedidas = useMedidasLiberadas(
+      userRole === 'admin' || userRole === 'profissional'
+    );
+
     // Render current view
     const renderCurrentView = () => {
       const filteredEvents = getFilteredEvents();
@@ -513,18 +529,61 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     };
 
     return (
-      <div className={cn('w-full max-w-none', className)}>
-        {/* Tabs: Agenda vs Agenda Compartilhada */}
-        {showSharedSchedulesTab && profissionalId && userId ? (
-          <Tabs defaultValue="calendar" className="w-full">
-            <TabsList className="mb-3 md:mb-4">
-              <TabsTrigger value="calendar">Agenda</TabsTrigger>
-              <TabsTrigger value="shared-schedules">
-                Agenda Compartilhada
-              </TabsTrigger>
-            </TabsList>
+      <MedidasPrevistasAgendaProvider
+        agendamentoIds={idsConsultasVisiveis}
+        ativo={mostraMedidas}
+      >
+        <div className={cn('w-full max-w-none', className)}>
+          {/* Tabs: Agenda vs Agenda Compartilhada */}
+          {showSharedSchedulesTab && profissionalId && userId ? (
+            <Tabs defaultValue="calendar" className="w-full">
+              <TabsList className="mb-3 md:mb-4">
+                <TabsTrigger value="calendar">Agenda</TabsTrigger>
+                <TabsTrigger value="shared-schedules">
+                  Agenda Compartilhada
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="calendar" className="mt-0">
+              <TabsContent value="calendar" className="mt-0">
+                {/* Calendar Header */}
+                <div className="mb-3 md:mb-4">
+                  <CalendarHeader
+                    currentDate={currentDate}
+                    currentView={currentView}
+                    onPrevious={handlePreviousClick}
+                    onNext={handleNextClick}
+                    onToday={handleTodayClick}
+                    onDateChange={handleDateChange}
+                    onViewChange={handleViewChange}
+                    onNewEvent={
+                      canCreateEvents ? handleNewEventClick : undefined
+                    }
+                    onNewCompromisso={
+                      canCreateCompromissos
+                        ? handleNovoCompromissoClick
+                        : undefined
+                    }
+                  />
+                  <FiltroTiposAgenda
+                    ocultos={gruposOcultos}
+                    onToggle={toggleGrupo}
+                    className="mt-2"
+                  />
+                </div>
+
+                {/* Calendar Content */}
+                <div className="w-full max-w-none">{renderCurrentView()}</div>
+              </TabsContent>
+
+              <TabsContent value="shared-schedules" className="mt-0">
+                <SharedSchedulesList
+                  profissionalId={profissionalId}
+                  userId={userId}
+                />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <>
               {/* Calendar Header */}
               <div className="mb-3 md:mb-4">
                 <CalendarHeader
@@ -549,148 +608,116 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                 />
               </div>
 
-              {/* Calendar Content */}
+              {/* Calendar Content - expandido para largura total */}
               <div className="w-full max-w-none">{renderCurrentView()}</div>
-            </TabsContent>
+            </>
+          )}
 
-            <TabsContent value="shared-schedules" className="mt-0">
-              <SharedSchedulesList
-                profissionalId={profissionalId}
-                userId={userId}
-              />
-            </TabsContent>
-          </Tabs>
-        ) : (
-          <>
-            {/* Calendar Header */}
-            <div className="mb-3 md:mb-4">
-              <CalendarHeader
-                currentDate={currentDate}
-                currentView={currentView}
-                onPrevious={handlePreviousClick}
-                onNext={handleNextClick}
-                onToday={handleTodayClick}
-                onDateChange={handleDateChange}
-                onViewChange={handleViewChange}
-                onNewEvent={canCreateEvents ? handleNewEventClick : undefined}
-                onNewCompromisso={
-                  canCreateCompromissos ? handleNovoCompromissoClick : undefined
-                }
-              />
-              <FiltroTiposAgenda
-                ocultos={gruposOcultos}
-                onToggle={toggleGrupo}
-                className="mt-2"
-              />
-            </div>
-
-            {/* Calendar Content - expandido para largura total */}
-            <div className="w-full max-w-none">{renderCurrentView()}</div>
-          </>
-        )}
-
-        {/* Appointment Details Modal - Para editar agendamentos existentes */}
-        {showEventManager && (
-          <AppointmentDetailsManager
-            isOpen={isEventManagerOpen}
-            onClose={handleEventManagerClose}
-            appointment={
-              selectedEvent?.metadata?.appointmentData as
-                | SupabaseAgendamentoCompletoFlat
-                | undefined
-            }
-            userRole={userRole || null}
-            locaisAtendimento={formData.locaisAtendimento || locaisAtendimento}
-            isLoadingLocais={isLoadingLocais}
-            onSave={async (data: AppointmentUpdateData) => {
-              // AI dev note: Bypass específico para AppointmentDetailsManager - usar updateAgendamentoDetails diretamente
-              try {
-                await updateAgendamentoDetails(data);
-
-                // Show success toast
-                toast({
-                  title: 'Agendamento atualizado',
-                  description: 'As alterações foram salvas com sucesso',
-                  variant: 'default',
-                });
-
-                // AI dev note: Não trigger handleEventSave para evitar double update
-                // O updateAgendamentoDetails já salvou tudo necessário.
-                // Recarregar os eventos para refletir edição/mudança de status
-                // no calendário sem F5 (bug P0 corrigido).
-                onRefreshNeeded?.();
-                handleEventManagerClose();
-              } catch (error) {
-                console.error(
-                  '[ERROR] CalendarTemplate - Erro ao salvar appointment details:',
-                  error
-                );
-
-                // Tratar erro RLS especificamente
-                let errorMessage =
-                  'Não foi possível salvar as alterações. Tente novamente.';
-
-                if (
-                  error &&
-                  typeof error === 'object' &&
-                  'code' in error &&
-                  error.code === '42501'
-                ) {
-                  errorMessage =
-                    'Você não tem permissão para salvar evolução. Contate o administrador.';
-                } else if (error instanceof Error) {
-                  errorMessage = error.message;
-                }
-
-                // Show error toast
-                toast({
-                  title: 'Erro ao salvar',
-                  description: errorMessage,
-                  variant: 'destructive',
-                });
+          {/* Appointment Details Modal - Para editar agendamentos existentes */}
+          {showEventManager && (
+            <AppointmentDetailsManager
+              isOpen={isEventManagerOpen}
+              onClose={handleEventManagerClose}
+              appointment={
+                selectedEvent?.metadata?.appointmentData as
+                  | SupabaseAgendamentoCompletoFlat
+                  | undefined
               }
-            }}
-            onNfeAction={onNfeAction}
-            onPatientClick={onPatientClick}
-            onProfessionalClick={onProfessionalClick}
+              userRole={userRole || null}
+              locaisAtendimento={
+                formData.locaisAtendimento || locaisAtendimento
+              }
+              isLoadingLocais={isLoadingLocais}
+              onSave={async (data: AppointmentUpdateData) => {
+                // AI dev note: Bypass específico para AppointmentDetailsManager - usar updateAgendamentoDetails diretamente
+                try {
+                  await updateAgendamentoDetails(data);
+
+                  // Show success toast
+                  toast({
+                    title: 'Agendamento atualizado',
+                    description: 'As alterações foram salvas com sucesso',
+                    variant: 'default',
+                  });
+
+                  // AI dev note: Não trigger handleEventSave para evitar double update
+                  // O updateAgendamentoDetails já salvou tudo necessário.
+                  // Recarregar os eventos para refletir edição/mudança de status
+                  // no calendário sem F5 (bug P0 corrigido).
+                  onRefreshNeeded?.();
+                  handleEventManagerClose();
+                } catch (error) {
+                  console.error(
+                    '[ERROR] CalendarTemplate - Erro ao salvar appointment details:',
+                    error
+                  );
+
+                  // Tratar erro RLS especificamente
+                  let errorMessage =
+                    'Não foi possível salvar as alterações. Tente novamente.';
+
+                  if (
+                    error &&
+                    typeof error === 'object' &&
+                    'code' in error &&
+                    error.code === '42501'
+                  ) {
+                    errorMessage =
+                      'Você não tem permissão para salvar evolução. Contate o administrador.';
+                  } else if (error instanceof Error) {
+                    errorMessage = error.message;
+                  }
+
+                  // Show error toast
+                  toast({
+                    title: 'Erro ao salvar',
+                    description: errorMessage,
+                    variant: 'destructive',
+                  });
+                }
+              }}
+              onNfeAction={onNfeAction}
+              onPatientClick={onPatientClick}
+              onProfessionalClick={onProfessionalClick}
+            />
+          )}
+
+          {/* Appointment Form Modal - Para criar novos agendamentos */}
+          <AppointmentFormManager
+            isOpen={isAppointmentFormOpen}
+            onClose={handleAppointmentFormClose}
+            initialDate={newEventDate}
+            initialTime={newEventTime}
+            onSave={handleAppointmentFormSave}
           />
-        )}
 
-        {/* Appointment Form Modal - Para criar novos agendamentos */}
-        <AppointmentFormManager
-          isOpen={isAppointmentFormOpen}
-          onClose={handleAppointmentFormClose}
-          initialDate={newEventDate}
-          initialTime={newEventTime}
-          onSave={handleAppointmentFormSave}
-        />
+          {/* Escolha ao clicar num horário vazio */}
+          <NovoEventoEscolhaDialog
+            slot={slotEscolha}
+            onClose={() => setSlotEscolha(null)}
+            onAgendamento={(date, time) => {
+              setSlotEscolha(null);
+              abrirAgendamento(date, time);
+            }}
+            onCompromisso={(date, time) => {
+              setSlotEscolha(null);
+              abrirCompromisso(date, time);
+            }}
+          />
 
-        {/* Escolha ao clicar num horário vazio */}
-        <NovoEventoEscolhaDialog
-          slot={slotEscolha}
-          onClose={() => setSlotEscolha(null)}
-          onAgendamento={(date, time) => {
-            setSlotEscolha(null);
-            abrirAgendamento(date, time);
-          }}
-          onCompromisso={(date, time) => {
-            setSlotEscolha(null);
-            abrirCompromisso(date, time);
-          }}
-        />
-
-        {/* Compromisso (almoço, reunião, férias...) — criar/editar */}
-        <CompromissoDialog
-          isOpen={isCompromissoOpen}
-          onClose={() => {
-            setIsCompromissoOpen(false);
-            setCompromissoToEdit(null);
-          }}
-          initialStart={compromissoRange.start}
-          initialEnd={compromissoRange.end}
-          editCompromisso={compromissoToEdit}
-        />
-      </div>
+          {/* Compromisso (almoço, reunião, férias...) — criar/editar */}
+          <CompromissoDialog
+            isOpen={isCompromissoOpen}
+            onClose={() => {
+              setIsCompromissoOpen(false);
+              setCompromissoToEdit(null);
+            }}
+            initialStart={compromissoRange.start}
+            initialEnd={compromissoRange.end}
+            editCompromisso={compromissoToEdit}
+          />
+        </div>
+      </MedidasPrevistasAgendaProvider>
     );
   }
 );

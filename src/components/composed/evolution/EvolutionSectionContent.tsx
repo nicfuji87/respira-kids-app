@@ -17,6 +17,8 @@ import type {
   RitmoRespiratorio,
   AuscultaPulmonar,
   AuscultaHemitorax,
+  RuidoAdventicio,
+  LocalizacaoRuido,
   IntervencaoRespiratoria,
   AvaliacaoRespiratoriaDepois,
   OrientacoesRespiratoria,
@@ -31,8 +33,19 @@ import type {
   CondutaMotoraAssimetria,
   RespostaObservada,
   AdesaoDomiciliar,
+  TipoMedidaMotora,
+  MedicaoSessao,
+  ProximaReavaliacao,
 } from '@/types/evolucao-clinica';
+import { medidasComValores } from '@/lib/motora-medidas';
 import {
+  MedicaoSessaoBloco,
+  ReavaliacoesConduta,
+  ComparacaoCraniometria,
+  ComparacaoGoniometria,
+} from './MedicoesMotoras';
+import {
+  secoesMotorasVisiveis,
   calcularMetricasCraniometriaEvolucao,
   calcularDiferencasGoniometria,
   classificarDiferencaCervical,
@@ -45,6 +58,8 @@ import {
   calcularClassificacaoClinica,
   getTextoClassificacaoClinica,
   getAvaliacaoRespiratoriaNormal,
+  RUIDOS_ADVENTICIOS,
+  LOCALIZACOES_RUIDO,
 } from '@/types/evolucao-clinica';
 
 // AI dev note: EvolutionSectionContent - Renderiza conteúdo de cada seção da evolução
@@ -253,6 +268,181 @@ const RespostaField: React.FC<{
   disabled?: boolean;
   ajuda?: string;
 }> = (props) => <EscolhaField {...props} opcoes={OPCOES_RESPOSTA} />;
+
+// Ausculta de um hemitórax. Cada ruído marcado abre logo abaixo a pergunta
+// "onde?" (ex.: marcou roncos → onde estão os roncos?), em vez de uma
+// localização única que não dizia qual ruído estava onde.
+const HemitoraxAuscultaCard: React.FC<{
+  titulo: string;
+  className?: string;
+  tituloClassName?: string;
+  valor: AuscultaHemitorax;
+  onChange: (updates: Partial<AuscultaHemitorax>) => void;
+  disabled?: boolean;
+}> = ({ titulo, className, tituloClassName, valor, onChange, disabled }) => {
+  const loc = valor.localizacao_ruidos || {};
+  const temLocalizacaoAntiga = !!(
+    valor.localizacao_difusos ||
+    valor.localizacao_apice ||
+    valor.localizacao_terco_medio ||
+    valor.localizacao_base
+  );
+
+  const marcarAusentes = (checked: boolean) => {
+    const updates: Partial<AuscultaHemitorax> = { ruidos_ausentes: checked };
+    if (checked) {
+      RUIDOS_ADVENTICIOS.forEach((r) => (updates[r.valor] = false));
+      updates.localizacao_ruidos = {};
+      updates.localizacao_difusos = false;
+      updates.localizacao_apice = false;
+      updates.localizacao_terco_medio = false;
+      updates.localizacao_base = false;
+    }
+    onChange(updates);
+  };
+
+  const marcarRuido = (ruido: RuidoAdventicio, checked: boolean) => {
+    const novaLoc = { ...loc };
+    if (!checked) delete novaLoc[ruido];
+    const updates: Partial<AuscultaHemitorax> = {
+      ruidos_ausentes: false,
+      localizacao_ruidos: novaLoc,
+    };
+    updates[ruido] = checked;
+    onChange(updates);
+  };
+
+  // "Difusos" exclui os pontos específicos e vice-versa
+  const alternarLocal = (ruido: RuidoAdventicio, local: LocalizacaoRuido) => {
+    const atual = loc[ruido] || [];
+    let novo: LocalizacaoRuido[];
+    if (atual.includes(local)) novo = atual.filter((l) => l !== local);
+    else if (local === 'difusos') novo = ['difusos'];
+    else novo = [...atual.filter((l) => l !== 'difusos'), local];
+    onChange({ localizacao_ruidos: { ...loc, [ruido]: novo } });
+  };
+
+  return (
+    <div className={cn('border rounded-lg p-4 space-y-4', className)}>
+      <h5 className={cn('font-medium', tituloClassName)}>{titulo}</h5>
+
+      <Field label="Murmúrio Vesicular">
+        <RadioButtonGroup
+          value={valor.murmurio_vesicular}
+          onChange={(v) =>
+            onChange({
+              murmurio_vesicular: v as 'preservado' | 'diminuido' | 'abolido',
+            })
+          }
+          options={[
+            { valor: 'preservado', label: '✅ Preservado' },
+            { valor: 'diminuido', label: '⚠️ Diminuído' },
+            { valor: 'abolido', label: '❌ Abolido' },
+          ]}
+          disabled={disabled}
+        />
+      </Field>
+
+      <div className="space-y-2">
+        <span className="text-sm font-medium">Ruídos Adventícios</span>
+        <div className="space-y-3">
+          <CheckboxField
+            label="Ausentes"
+            checked={valor.ruidos_ausentes || false}
+            onChange={marcarAusentes}
+            disabled={disabled}
+          />
+          {RUIDOS_ADVENTICIOS.map((r) => {
+            const marcado = valor[r.valor] || false;
+            const locais = loc[r.valor] || [];
+            return (
+              <div key={r.valor} className="space-y-2">
+                <CheckboxField
+                  label={r.label}
+                  checked={marcado}
+                  onChange={(checked) => marcarRuido(r.valor, checked)}
+                  disabled={disabled}
+                />
+                {marcado && (
+                  <div
+                    className={cn(
+                      'ml-6 p-2 rounded-lg border space-y-2 bg-background',
+                      locais.length === 0 ? 'border-amber-300' : 'border-border'
+                    )}
+                  >
+                    <span className="text-xs font-medium text-muted-foreground">
+                      📍 Onde estão os {r.label.toLowerCase()}?
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {LOCALIZACOES_RUIDO.map((l) => {
+                        const ativo = locais.includes(l.valor);
+                        return (
+                          <button
+                            key={l.valor}
+                            type="button"
+                            aria-pressed={ativo}
+                            disabled={disabled}
+                            onClick={() => alternarLocal(r.valor, l.valor)}
+                            className={cn(
+                              'min-h-10 px-3 rounded-lg border-2 text-sm font-medium transition-all',
+                              ativo
+                                ? 'bg-primary border-primary text-primary-foreground'
+                                : 'bg-background border-border text-foreground hover:bg-muted',
+                              disabled && 'opacity-50 cursor-not-allowed'
+                            )}
+                          >
+                            {l.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Registro antigo: localização única do hemitórax, sem dizer o ruído */}
+      {temLocalizacaoAntiga && (
+        <div className="space-y-2">
+          <span className="text-sm font-medium">
+            📍 Localização geral (registro antigo)
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <CheckboxField
+              label="Difusos"
+              checked={valor.localizacao_difusos || false}
+              onChange={(checked) => onChange({ localizacao_difusos: checked })}
+              disabled={disabled}
+            />
+            <CheckboxField
+              label="Ápice"
+              checked={valor.localizacao_apice || false}
+              onChange={(checked) => onChange({ localizacao_apice: checked })}
+              disabled={disabled}
+            />
+            <CheckboxField
+              label="Terço Médio"
+              checked={valor.localizacao_terco_medio || false}
+              onChange={(checked) =>
+                onChange({ localizacao_terco_medio: checked })
+              }
+              disabled={disabled}
+            />
+            <CheckboxField
+              label="Base"
+              checked={valor.localizacao_base || false}
+              onChange={(checked) => onChange({ localizacao_base: checked })}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const EvolutionSectionContent: React.FC<
   EvolutionSectionContentProps
@@ -1339,393 +1529,22 @@ export const EvolutionSectionContent: React.FC<
               </p>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Hemitórax Direito */}
-                <div className="border rounded-lg p-4 space-y-4 bg-blue-50/50">
-                  <h5 className="font-medium text-blue-700">
-                    🫁 Hemitórax Direito
-                  </h5>
-
-                  <Field label="Murmúrio Vesicular">
-                    <RadioButtonGroup
-                      value={
-                        avaliacao.ausculta.hemitorax_direito.murmurio_vesicular
-                      }
-                      onChange={(v) =>
-                        updateHemitoraxDireito({
-                          murmurio_vesicular: v as
-                            | 'preservado'
-                            | 'diminuido'
-                            | 'abolido',
-                        })
-                      }
-                      options={[
-                        { valor: 'preservado', label: '✅ Preservado' },
-                        { valor: 'diminuido', label: '⚠️ Diminuído' },
-                        { valor: 'abolido', label: '❌ Abolido' },
-                      ]}
-                      disabled={disabled}
-                    />
-                  </Field>
-
-                  <div className="space-y-2">
-                    <span className="text-sm font-medium">
-                      Ruídos Adventícios
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <CheckboxField
-                        label="Ausentes"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito
-                            .ruidos_ausentes || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            ruidos_ausentes: checked,
-                            sibilos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_direito.sibilos,
-                            roncos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_direito.roncos,
-                            estertores_finos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_direito
-                                  .estertores_finos,
-                            estertores_grossos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_direito
-                                  .estertores_grossos,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Sibilos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito.sibilos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            sibilos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Roncos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito.roncos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            roncos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Roncos de Transmissão"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito
-                            .roncos_transmissao || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            roncos_transmissao: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Estertores finos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito
-                            .estertores_finos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            estertores_finos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Estertores grossos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_direito
-                            .estertores_grossos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxDireito({
-                            estertores_grossos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                    </div>
-                  </div>
-
-                  {!avaliacao.ausculta.hemitorax_direito.ruidos_ausentes && (
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium">
-                        📍 Localização
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <CheckboxField
-                          label="Difusos"
-                          checked={
-                            avaliacao.ausculta.hemitorax_direito
-                              .localizacao_difusos || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxDireito({
-                              localizacao_difusos: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Ápice"
-                          checked={
-                            avaliacao.ausculta.hemitorax_direito
-                              .localizacao_apice || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxDireito({
-                              localizacao_apice: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Terço Médio"
-                          checked={
-                            avaliacao.ausculta.hemitorax_direito
-                              .localizacao_terco_medio || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxDireito({
-                              localizacao_terco_medio: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Base"
-                          checked={
-                            avaliacao.ausculta.hemitorax_direito
-                              .localizacao_base || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxDireito({
-                              localizacao_base: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Hemitórax Esquerdo */}
-                <div className="border rounded-lg p-4 space-y-4 bg-green-50/50">
-                  <h5 className="font-medium text-green-700">
-                    🫁 Hemitórax Esquerdo
-                  </h5>
-
-                  <Field label="Murmúrio Vesicular">
-                    <RadioButtonGroup
-                      value={
-                        avaliacao.ausculta.hemitorax_esquerdo.murmurio_vesicular
-                      }
-                      onChange={(v) =>
-                        updateHemitoraxEsquerdo({
-                          murmurio_vesicular: v as
-                            | 'preservado'
-                            | 'diminuido'
-                            | 'abolido',
-                        })
-                      }
-                      options={[
-                        { valor: 'preservado', label: '✅ Preservado' },
-                        { valor: 'diminuido', label: '⚠️ Diminuído' },
-                        { valor: 'abolido', label: '❌ Abolido' },
-                      ]}
-                      disabled={disabled}
-                    />
-                  </Field>
-
-                  <div className="space-y-2">
-                    <span className="text-sm font-medium">
-                      Ruídos Adventícios
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <CheckboxField
-                        label="Ausentes"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo
-                            .ruidos_ausentes || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            ruidos_ausentes: checked,
-                            sibilos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_esquerdo.sibilos,
-                            roncos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_esquerdo.roncos,
-                            estertores_finos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_esquerdo
-                                  .estertores_finos,
-                            estertores_grossos: checked
-                              ? false
-                              : avaliacao.ausculta.hemitorax_esquerdo
-                                  .estertores_grossos,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Sibilos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo.sibilos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            sibilos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Roncos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo.roncos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            roncos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Roncos de Transmissão"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo
-                            .roncos_transmissao || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            roncos_transmissao: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Estertores finos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo
-                            .estertores_finos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            estertores_finos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                      <CheckboxField
-                        label="Estertores grossos"
-                        checked={
-                          avaliacao.ausculta.hemitorax_esquerdo
-                            .estertores_grossos || false
-                        }
-                        onChange={(checked) =>
-                          updateHemitoraxEsquerdo({
-                            estertores_grossos: checked,
-                            ruidos_ausentes: false,
-                          })
-                        }
-                        disabled={disabled}
-                      />
-                    </div>
-                  </div>
-
-                  {!avaliacao.ausculta.hemitorax_esquerdo.ruidos_ausentes && (
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium">
-                        📍 Localização
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <CheckboxField
-                          label="Difusos"
-                          checked={
-                            avaliacao.ausculta.hemitorax_esquerdo
-                              .localizacao_difusos || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxEsquerdo({
-                              localizacao_difusos: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Ápice"
-                          checked={
-                            avaliacao.ausculta.hemitorax_esquerdo
-                              .localizacao_apice || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxEsquerdo({
-                              localizacao_apice: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Terço Médio"
-                          checked={
-                            avaliacao.ausculta.hemitorax_esquerdo
-                              .localizacao_terco_medio || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxEsquerdo({
-                              localizacao_terco_medio: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                        <CheckboxField
-                          label="Base"
-                          checked={
-                            avaliacao.ausculta.hemitorax_esquerdo
-                              .localizacao_base || false
-                          }
-                          onChange={(checked) =>
-                            updateHemitoraxEsquerdo({
-                              localizacao_base: checked,
-                            })
-                          }
-                          disabled={disabled}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <HemitoraxAuscultaCard
+                  titulo="🫁 Hemitórax Direito"
+                  className="bg-blue-50/50"
+                  tituloClassName="text-blue-700"
+                  valor={avaliacao.ausculta.hemitorax_direito}
+                  onChange={updateHemitoraxDireito}
+                  disabled={disabled}
+                />
+                <HemitoraxAuscultaCard
+                  titulo="🫁 Hemitórax Esquerdo"
+                  className="bg-green-50/50"
+                  tituloClassName="text-green-700"
+                  valor={avaliacao.ausculta.hemitorax_esquerdo}
+                  onChange={updateHemitoraxEsquerdo}
+                  disabled={disabled}
+                />
               </div>
 
               {/* Observações da Ausculta */}
@@ -1789,6 +1608,22 @@ export const EvolutionSectionContent: React.FC<
                   checked={intervencao.expiração_lenta_prolongada}
                   onChange={(checked) =>
                     updateIntervencao({ expiração_lenta_prolongada: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Inspiração Forçada"
+                  checked={intervencao.inspiracao_forcada || false}
+                  onChange={(checked) =>
+                    updateIntervencao({ inspiracao_forcada: checked })
+                  }
+                  disabled={disabled}
+                />
+                <CheckboxField
+                  label="Expiração Forçada"
+                  checked={intervencao.expiracao_forcada || false}
+                  onChange={(checked) =>
+                    updateIntervencao({ expiracao_forcada: checked })
                   }
                   disabled={disabled}
                 />
@@ -2160,6 +1995,9 @@ export const EvolutionSectionContent: React.FC<
                       ausculta_melhorou: checked
                         ? false
                         : depois.ausculta_melhorou,
+                      ausculta_pouca_melhora: checked
+                        ? false
+                        : depois.ausculta_pouca_melhora,
                       ausculta_reducao_roncos: checked
                         ? false
                         : depois.ausculta_reducao_roncos,
@@ -2177,6 +2015,22 @@ export const EvolutionSectionContent: React.FC<
                   disabled={disabled}
                 />
                 <CheckboxField
+                  label="Pouca Melhora"
+                  checked={depois.ausculta_pouca_melhora || false}
+                  onChange={(checked) => {
+                    updateDepois({
+                      ausculta_pouca_melhora: checked,
+                      ausculta_sem_alteracao: checked
+                        ? false
+                        : depois.ausculta_sem_alteracao,
+                      ausculta_melhorou: checked
+                        ? false
+                        : depois.ausculta_melhorou,
+                    });
+                  }}
+                  disabled={disabled}
+                />
+                <CheckboxField
                   label="Houve Melhora"
                   checked={depois.ausculta_melhorou}
                   onChange={(checked) => {
@@ -2185,13 +2039,16 @@ export const EvolutionSectionContent: React.FC<
                       ausculta_sem_alteracao: checked
                         ? false
                         : depois.ausculta_sem_alteracao,
+                      ausculta_pouca_melhora: checked
+                        ? false
+                        : depois.ausculta_pouca_melhora,
                     });
                   }}
                   disabled={disabled}
                 />
               </div>
 
-              {depois.ausculta_melhorou && (
+              {(depois.ausculta_melhorou || depois.ausculta_pouca_melhora) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-4 border-l-2 border-purple-200">
                   <CheckboxField
                     label="Redução de Roncos"
@@ -2631,37 +2488,6 @@ export const EvolutionSectionContent: React.FC<
               disabled={disabled}
             />
 
-            {/* Se MANTER fisioterapia: mostra apenas Frequência Sugerida */}
-            {conduta.manter_fisioterapia && (
-              <div className="pl-4 border-l-2 border-green-200 space-y-4">
-                <Field label="Frequência Sugerida">
-                  <RadioButtonGroup
-                    value={conduta.frequencia_sugerida}
-                    onChange={(v) =>
-                      updateConduta({
-                        frequencia_sugerida: v as
-                          | 'diaria'
-                          | '2x_semana'
-                          | '3x_semana'
-                          | 'semanal'
-                          | 'quinzenal'
-                          | 'mensal',
-                      })
-                    }
-                    options={[
-                      { valor: 'diaria', label: 'Diária' },
-                      { valor: '3x_semana', label: '3x/semana' },
-                      { valor: '2x_semana', label: '2x/semana' },
-                      { valor: 'semanal', label: 'Semanal' },
-                      { valor: 'quinzenal', label: 'Quinzenal' },
-                      { valor: 'mensal', label: 'Mensal' },
-                    ]}
-                    disabled={disabled}
-                  />
-                </Field>
-              </div>
-            )}
-
             {/* Se NÃO manter fisioterapia: mostra opções de Alta */}
             {!conduta.manter_fisioterapia && (
               <div className="pl-4 border-l-2 border-orange-200 space-y-4">
@@ -2679,8 +2505,6 @@ export const EvolutionSectionContent: React.FC<
                         alta: v === 'completa',
                         alta_parcial: v === 'parcial',
                         // Limpa campos quando muda para alta completa
-                        frequencia_sugerida:
-                          v === 'completa' ? null : conduta.frequencia_sugerida,
                         reavaliacao_dias:
                           v === 'completa'
                             ? undefined
@@ -2710,35 +2534,9 @@ export const EvolutionSectionContent: React.FC<
                   />
                 </Field>
 
-                {/* Se Alta Parcial: mostra Frequência e Reavaliação */}
+                {/* Se Alta Parcial: mostra Reavaliação */}
                 {conduta.alta_parcial && (
                   <div className="space-y-4 pl-4 border-l-2 border-yellow-200">
-                    <Field label="Frequência Sugerida para Acompanhamento">
-                      <RadioButtonGroup
-                        value={conduta.frequencia_sugerida}
-                        onChange={(v) =>
-                          updateConduta({
-                            frequencia_sugerida: v as
-                              | 'diaria'
-                              | '2x_semana'
-                              | '3x_semana'
-                              | 'semanal'
-                              | 'quinzenal'
-                              | 'mensal',
-                          })
-                        }
-                        options={[
-                          { valor: 'diaria', label: 'Diária' },
-                          { valor: '3x_semana', label: '3x/semana' },
-                          { valor: '2x_semana', label: '2x/semana' },
-                          { valor: 'semanal', label: 'Semanal' },
-                          { valor: 'quinzenal', label: 'Quinzenal' },
-                          { valor: 'mensal', label: 'Mensal' },
-                        ]}
-                        disabled={disabled}
-                      />
-                    </Field>
-
                     <Field label="Reavaliação em (dias)">
                       <Input
                         type="number"
@@ -2826,6 +2624,28 @@ export const EvolutionSectionContent: React.FC<
 
   if (tipoEvolucao === 'motora_assimetria') {
     const evolucao = evolucaoMotora;
+    // Medidas programadas: o que foi feito hoje e a próxima reavaliação
+    const medicoes = evolucao.medicoes || {};
+    const setMedicao = (
+      tipo: TipoMedidaMotora,
+      m: MedicaoSessao | undefined
+    ) => {
+      const novo = { ...medicoes };
+      if (m) novo[tipo] = m;
+      else delete novo[tipo];
+      onMotoraChange({ medicoes: novo });
+    };
+    const proximas = evolucao.proximas_reavaliacoes || {};
+    const setProxima = (
+      tipo: TipoMedidaMotora,
+      p: ProximaReavaliacao | undefined
+    ) => {
+      const novo = { ...proximas };
+      if (p) novo[tipo] = p;
+      else delete novo[tipo];
+      onMotoraChange({ proximas_reavaliacoes: novo });
+    };
+    const comValores = medidasComValores(evolucao);
 
     switch (secaoId) {
       // -----------------------------------------------------------------
@@ -2844,183 +2664,198 @@ export const EvolutionSectionContent: React.FC<
         };
 
         return (
-          <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800">
-                📐 Medidas para acompanhar a evolução da assimetria craniana.
-                CVA, CVAI e CI são calculados automaticamente. Preencha quando a
-                medição estiver indicada.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Diagonal A (mm)" ajuda="diagonal_a">
-                <Input
-                  type="number"
-                  min={0}
-                  value={craniometria.diagonal_a_mm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      diagonal_a_mm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 145"
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="Diagonal B (mm)" ajuda="diagonal_b">
-                <Input
-                  type="number"
-                  min={0}
-                  value={craniometria.diagonal_b_mm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      diagonal_b_mm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 135"
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="Comprimento AP (mm)" ajuda="comprimento_ap">
-                <Input
-                  type="number"
-                  min={0}
-                  value={craniometria.comprimento_ap_mm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      comprimento_ap_mm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 120"
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="Largura ML (mm)" ajuda="largura_ml">
-                <Input
-                  type="number"
-                  min={0}
-                  value={craniometria.largura_ml_mm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      largura_ml_mm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 110"
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="Perímetro Cefálico (cm)" ajuda="perimetro_cefalico">
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={craniometria.perimetro_cefalico_cm || ''}
-                  onChange={(e) =>
-                    updateCraniometria({
-                      perimetro_cefalico_cm: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="Ex: 42.5"
-                  disabled={disabled}
-                />
-              </Field>
-            </div>
-
-            {/* Métricas Calculadas */}
-            {(craniometria.cva_mm !== undefined ||
-              craniometria.cvai_percentual !== undefined) && (
-              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-                <TituloComAjuda
-                  ajuda="metricas_cranio"
-                  className="text-gray-700"
-                >
-                  📊 Métricas Calculadas
-                </TituloComAjuda>
-
-                <div className="grid grid-cols-3 gap-4">
-                  {craniometria.cva_mm !== undefined && (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {craniometria.cva_mm.toFixed(1)} mm
-                      </div>
-                      <div className="text-xs text-muted-foreground">CVA</div>
-                    </div>
-                  )}
-                  {craniometria.cvai_percentual !== undefined && (
-                    <div className="text-center">
-                      <div
-                        className={cn(
-                          'text-2xl font-bold',
-                          craniometria.cvai_percentual < 3.5
-                            ? 'text-green-600'
-                            : craniometria.cvai_percentual < 6.25
-                              ? 'text-yellow-600'
-                              : craniometria.cvai_percentual < 8.75
-                                ? 'text-orange-600'
-                                : 'text-red-600'
-                        )}
-                      >
-                        {craniometria.cvai_percentual.toFixed(1)}%
-                      </div>
-                      <div className="text-xs text-muted-foreground">CVAI</div>
-                      {craniometria.plagiocefalia_severidade && (
-                        <div className="text-xs font-medium first-letter:uppercase">
-                          {ROTULO_PLAGIOCEFALIA[
-                            craniometria.plagiocefalia_severidade
-                          ] || craniometria.plagiocefalia_severidade}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {craniometria.ci_percentual !== undefined && (
-                    <div className="text-center">
-                      <div
-                        className={cn(
-                          'text-2xl font-bold',
-                          craniometria.ci_percentual >= 75 &&
-                            craniometria.ci_percentual < 85
-                            ? 'text-green-600'
-                            : craniometria.ci_percentual < 75
-                              ? 'text-blue-600'
-                              : 'text-orange-600'
-                        )}
-                      >
-                        {craniometria.ci_percentual.toFixed(1)}%
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        CI (índice cefálico)
-                      </div>
-                      {craniometria.braquicefalia_severidade && (
-                        <div className="text-xs font-medium first-letter:uppercase">
-                          {ROTULO_BRAQUICEFALIA[
-                            craniometria.braquicefalia_severidade
-                          ] || craniometria.braquicefalia_severidade}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  CVAI calculado sobre a maior diagonal, faixas da escala de
-                  Atlanta (CHOA). CI: normal de 75% a menos de 85%. Mesma
-                  convenção da avaliação. A classificação apoia a leitura dos
-                  números: não substitui o exame do formato do crânio nem indica
-                  capacete sozinha.
+          <MedicaoSessaoBloco
+            tipo="craniometria"
+            valor={medicoes.craniometria}
+            onChange={(m) => setMedicao('craniometria', m)}
+            temValores={comValores.includes('craniometria')}
+            onDescartarValores={() => onMotoraChange({ craniometria: {} })}
+            disabled={disabled}
+          >
+            <div className="space-y-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  📐 Medidas para acompanhar a evolução da assimetria craniana.
+                  CVA, CVAI e CI são calculados automaticamente. Preencha quando
+                  a medição estiver indicada.
                 </p>
               </div>
-            )}
-          </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Diagonal A (mm)" ajuda="diagonal_a">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={craniometria.diagonal_a_mm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        diagonal_a_mm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 145"
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field label="Diagonal B (mm)" ajuda="diagonal_b">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={craniometria.diagonal_b_mm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        diagonal_b_mm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 135"
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field label="Comprimento AP (mm)" ajuda="comprimento_ap">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={craniometria.comprimento_ap_mm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        comprimento_ap_mm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 120"
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field label="Largura ML (mm)" ajuda="largura_ml">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={craniometria.largura_ml_mm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        largura_ml_mm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 110"
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field
+                  label="Perímetro Cefálico (cm)"
+                  ajuda="perimetro_cefalico"
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={craniometria.perimetro_cefalico_cm || ''}
+                    onChange={(e) =>
+                      updateCraniometria({
+                        perimetro_cefalico_cm: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="Ex: 42.5"
+                    disabled={disabled}
+                  />
+                </Field>
+              </div>
+
+              {/* Métricas Calculadas */}
+              {(craniometria.cva_mm !== undefined ||
+                craniometria.cvai_percentual !== undefined) && (
+                <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+                  <TituloComAjuda
+                    ajuda="metricas_cranio"
+                    className="text-gray-700"
+                  >
+                    📊 Métricas Calculadas
+                  </TituloComAjuda>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    {craniometria.cva_mm !== undefined && (
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {craniometria.cva_mm.toFixed(1)} mm
+                        </div>
+                        <div className="text-xs text-muted-foreground">CVA</div>
+                      </div>
+                    )}
+                    {craniometria.cvai_percentual !== undefined && (
+                      <div className="text-center">
+                        <div
+                          className={cn(
+                            'text-2xl font-bold',
+                            craniometria.cvai_percentual < 3.5
+                              ? 'text-green-600'
+                              : craniometria.cvai_percentual < 6.25
+                                ? 'text-yellow-600'
+                                : craniometria.cvai_percentual < 8.75
+                                  ? 'text-orange-600'
+                                  : 'text-red-600'
+                          )}
+                        >
+                          {craniometria.cvai_percentual.toFixed(1)}%
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          CVAI
+                        </div>
+                        {craniometria.plagiocefalia_severidade && (
+                          <div className="text-xs font-medium first-letter:uppercase">
+                            {ROTULO_PLAGIOCEFALIA[
+                              craniometria.plagiocefalia_severidade
+                            ] || craniometria.plagiocefalia_severidade}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {craniometria.ci_percentual !== undefined && (
+                      <div className="text-center">
+                        <div
+                          className={cn(
+                            'text-2xl font-bold',
+                            craniometria.ci_percentual >= 75 &&
+                              craniometria.ci_percentual < 85
+                              ? 'text-green-600'
+                              : craniometria.ci_percentual < 75
+                                ? 'text-blue-600'
+                                : 'text-orange-600'
+                          )}
+                        >
+                          {craniometria.ci_percentual.toFixed(1)}%
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          CI (índice cefálico)
+                        </div>
+                        {craniometria.braquicefalia_severidade && (
+                          <div className="text-xs font-medium first-letter:uppercase">
+                            {ROTULO_BRAQUICEFALIA[
+                              craniometria.braquicefalia_severidade
+                            ] || craniometria.braquicefalia_severidade}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    CVAI calculado sobre a maior diagonal, faixas da escala de
+                    Atlanta (CHOA). CI: normal de 75% a menos de 85%. Mesma
+                    convenção da avaliação. A classificação apoia a leitura dos
+                    números: não substitui o exame do formato do crânio nem
+                    indica capacete sozinha.
+                  </p>
+                </div>
+              )}
+              <ComparacaoCraniometria atual={craniometria} />
+            </div>
+          </MedicaoSessaoBloco>
         );
       }
 
@@ -3086,210 +2921,224 @@ export const EvolutionSectionContent: React.FC<
         };
 
         return (
-          <div className="space-y-6">
-            <div className="border rounded-lg p-4 space-y-4">
-              <TituloComAjuda ajuda="rotacao" className="text-blue-700">
-                Rotação Cervical (graus)
-              </TituloComAjuda>
+          <MedicaoSessaoBloco
+            tipo="goniometria"
+            valor={medicoes.goniometria}
+            onChange={(m) => setMedicao('goniometria', m)}
+            temValores={comValores.includes('goniometria')}
+            onDescartarValores={() => onMotoraChange({ goniometria: {} })}
+            disabled={disabled}
+          >
+            <div className="space-y-6">
+              <div className="border rounded-lg p-4 space-y-4">
+                <TituloComAjuda ajuda="rotacao" className="text-blue-700">
+                  Rotação Cervical (graus)
+                </TituloComAjuda>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Field label="Ativa D">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={goniometria.rotacao_ativa_direita ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        rotacao_ativa_direita: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Ativa E">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={goniometria.rotacao_ativa_esquerda ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        rotacao_ativa_esquerda: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Passiva D">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={goniometria.rotacao_passiva_direita ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        rotacao_passiva_direita: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Passiva E">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={goniometria.rotacao_passiva_esquerda ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        rotacao_passiva_esquerda: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-              </div>
-            </div>
-
-            <div className="border rounded-lg p-4 space-y-4">
-              <TituloComAjuda ajuda="inclinacao" className="text-purple-700">
-                Inclinação Lateral (graus)
-              </TituloComAjuda>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Field label="Ativa D">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={90}
-                    value={goniometria.inclinacao_ativa_direita ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        inclinacao_ativa_direita: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Ativa E">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={90}
-                    value={goniometria.inclinacao_ativa_esquerda ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        inclinacao_ativa_esquerda: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Passiva D">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={90}
-                    value={goniometria.inclinacao_passiva_direita ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        inclinacao_passiva_direita: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-                <Field label="Passiva E">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={90}
-                    value={goniometria.inclinacao_passiva_esquerda ?? ''}
-                    onChange={(e) =>
-                      updateGoniometria({
-                        inclinacao_passiva_esquerda: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </Field>
-              </div>
-            </div>
-
-            {diferencas.length > 0 && (
-              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-                <h4 className="font-medium text-gray-700">
-                  📊 Diferença entre os lados
-                </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {diferencas.map((d) => {
-                    const classe = d.classifica
-                      ? classificarDiferencaCervical(d.valor)
-                      : undefined;
-                    return (
-                      <div key={d.label} className="text-center">
-                        <div
-                          className={cn(
-                            'text-2xl font-bold',
-                            classe ? corClassificacao[classe] : 'text-blue-600'
-                          )}
-                        >
-                          {d.valor}°
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {d.label}
-                        </div>
-                        {classe && (
-                          <div className="text-xs font-medium capitalize">
-                            {classe}
-                          </div>
-                        )}
-                        {d.lado && (
-                          <div className="text-xs text-muted-foreground">
-                            menor para a {d.lado}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <Field label="Ativa D">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={180}
+                      value={goniometria.rotacao_ativa_direita ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          rotacao_ativa_direita: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Ativa E">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={180}
+                      value={goniometria.rotacao_ativa_esquerda ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          rotacao_ativa_esquerda: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Passiva D">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={180}
+                      value={goniometria.rotacao_passiva_direita ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          rotacao_passiva_direita: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Passiva E">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={180}
+                      value={goniometria.rotacao_passiva_esquerda ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          rotacao_passiva_esquerda: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Rotação classificada com as mesmas faixas da avaliação:{' '}
-                  {TEXTO_FAIXAS_DIFERENCA_CERVICAL}. A classificação apoia a
-                  leitura dos números e não é um diagnóstico por si só.
-                </p>
               </div>
-            )}
 
-            <Field label="Observações">
-              <Textarea
-                value={goniometria.observacoes || ''}
-                onChange={(e) =>
-                  updateGoniometria({ observacoes: e.target.value })
-                }
-                placeholder="Observações sobre amplitude de movimento..."
-                disabled={disabled}
-                rows={2}
+              <div className="border rounded-lg p-4 space-y-4">
+                <TituloComAjuda ajuda="inclinacao" className="text-purple-700">
+                  Inclinação Lateral (graus)
+                </TituloComAjuda>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Field label="Ativa D">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={goniometria.inclinacao_ativa_direita ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          inclinacao_ativa_direita: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Ativa E">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={goniometria.inclinacao_ativa_esquerda ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          inclinacao_ativa_esquerda: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Passiva D">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={goniometria.inclinacao_passiva_direita ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          inclinacao_passiva_direita: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="Passiva E">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={goniometria.inclinacao_passiva_esquerda ?? ''}
+                      onChange={(e) =>
+                        updateGoniometria({
+                          inclinacao_passiva_esquerda: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              {diferencas.length > 0 && (
+                <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+                  <h4 className="font-medium text-gray-700">
+                    📊 Diferença entre os lados
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {diferencas.map((d) => {
+                      const classe = d.classifica
+                        ? classificarDiferencaCervical(d.valor)
+                        : undefined;
+                      return (
+                        <div key={d.label} className="text-center">
+                          <div
+                            className={cn(
+                              'text-2xl font-bold',
+                              classe
+                                ? corClassificacao[classe]
+                                : 'text-blue-600'
+                            )}
+                          >
+                            {d.valor}°
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {d.label}
+                          </div>
+                          {classe && (
+                            <div className="text-xs font-medium capitalize">
+                              {classe}
+                            </div>
+                          )}
+                          {d.lado && (
+                            <div className="text-xs text-muted-foreground">
+                              menor para a {d.lado}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Rotação classificada com as mesmas faixas da avaliação:{' '}
+                    {TEXTO_FAIXAS_DIFERENCA_CERVICAL}. A classificação apoia a
+                    leitura dos números e não é um diagnóstico por si só.
+                  </p>
+                </div>
+              )}
+
+              <Field label="Observações">
+                <Textarea
+                  value={goniometria.observacoes || ''}
+                  onChange={(e) =>
+                    updateGoniometria({ observacoes: e.target.value })
+                  }
+                  placeholder="Observações sobre amplitude de movimento..."
+                  disabled={disabled}
+                  rows={2}
+                />
+              </Field>
+              <ComparacaoGoniometria
+                atual={goniometria as Record<string, unknown>}
               />
-            </Field>
-          </div>
+            </div>
+          </MedicaoSessaoBloco>
         );
       }
 
@@ -3999,6 +3848,21 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
             )}
+
+            {/* Some sozinho para quem não está no piloto das medidas */}
+            <ReavaliacoesConduta
+              medicoes={medicoes}
+              proximas={proximas}
+              onMedicaoChange={setMedicao}
+              onProximaChange={setProxima}
+              tiposComSecao={secoesMotorasVisiveis(evolucao.areas)
+                .map((sec) => sec.id)
+                .filter(
+                  (id): id is TipoMedidaMotora =>
+                    id === 'craniometria' || id === 'goniometria'
+                )}
+              disabled={disabled}
+            />
 
             <Field label="Observações da Conduta">
               <Textarea

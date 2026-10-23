@@ -10,6 +10,11 @@ import { cn } from '@/lib/utils';
 import type { CalendarEvent, EventColor } from '@/types/calendar';
 import { isCompromissoEvent } from '@/lib/agenda-bloqueios-api';
 import { CompromissoEventCard } from './CompromissoEventCard';
+import {
+  IconeMedidaPrevista,
+  SeloMedidaPrevista,
+} from './MedidasPrevistasAgenda';
+import { useMedidasPrevistasDoEvento } from './medidas-previstas-agenda-context';
 
 import {
   eventColorMap,
@@ -58,6 +63,8 @@ export const EventCard = React.memo<EventCardProps>(
   }) => {
     // AI dev note: userRole será usado para controlar visualizações específicas por role no futuro
     void userRole;
+    // Medidas previstas para esta consulta (vazio fora da agenda ou para secretaria)
+    const medidasPrevistas = useMedidasPrevistasDoEvento(event.id);
 
     // Compromissos (almoço, férias...) têm visual próprio em todas as variantes
     if (isCompromissoEvent(event)) {
@@ -234,6 +241,8 @@ export const EventCard = React.memo<EventCardProps>(
             </span>
           )}
 
+          <IconeMedidaPrevista itens={medidasPrevistas} />
+
           {/* Nome do paciente */}
           <span
             className={cn(
@@ -322,6 +331,10 @@ export const EventCard = React.memo<EventCardProps>(
                   <span className="sr-only">Pagamento: {statusPagamento}</span>
                 </span>
               )}
+              <IconeMedidaPrevista
+                itens={medidasPrevistas}
+                className="mt-0.5"
+              />
               <div
                 className={cn(
                   // AI dev note: 11px mínimo + truncate para caber no bloco de 30min (~24px)
@@ -497,6 +510,7 @@ export const EventCard = React.memo<EventCardProps>(
                   Evoluir
                 </Badge>
               )}
+              <SeloMedidaPrevista itens={medidasPrevistas} />
             </div>
 
             {/* Linha 5: Profissional */}
@@ -677,6 +691,7 @@ export const EventCard = React.memo<EventCardProps>(
                       Evoluir
                     </Badge>
                   )}
+                  <SeloMedidaPrevista itens={medidasPrevistas} />
                 </div>
 
                 <div className="flex items-center gap-3 md:gap-4 text-xs text-muted-foreground flex-wrap">

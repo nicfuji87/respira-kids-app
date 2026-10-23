@@ -25,7 +25,7 @@ export interface PontoRow {
   registrado_em: string;
   foto_path: string | null;
   dispositivo: string | null;
-  origem: 'kiosk' | 'manual';
+  origem: 'kiosk' | 'manual' | 'celular';
   observacao: string | null;
   registrado_por: string | null;
   lat: number | null;
@@ -152,7 +152,7 @@ export function getGeolocation(timeoutMs = 8000): Promise<Coords | null> {
   });
 }
 
-/** Registra uma batida (chamado pelo quiosque). */
+/** Registra uma batida (chamado pelo quiosque). Devolve o id da batida. */
 export async function registrarPonto(params: {
   candidaturaId: string;
   tipo: PontoTipo;
@@ -160,23 +160,28 @@ export async function registrarPonto(params: {
   registradoPor: string | null;
   coords?: Coords | null;
   checklist?: ChecklistData | null;
-}): Promise<void> {
-  const { error } = await supabase.from(TABLE).insert({
-    candidatura_id: params.candidaturaId,
-    tipo: params.tipo,
-    foto_path: params.fotoPath,
-    dispositivo:
-      typeof navigator !== 'undefined'
-        ? navigator.userAgent.slice(0, 200)
-        : null,
-    origem: 'kiosk',
-    registrado_por: params.registradoPor,
-    lat: params.coords?.lat ?? null,
-    lng: params.coords?.lng ?? null,
-    precisao_m: params.coords?.precisao ?? null,
-    checklist: params.checklist ?? null,
-  });
+}): Promise<string | null> {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .insert({
+      candidatura_id: params.candidaturaId,
+      tipo: params.tipo,
+      foto_path: params.fotoPath,
+      dispositivo:
+        typeof navigator !== 'undefined'
+          ? navigator.userAgent.slice(0, 200)
+          : null,
+      origem: 'kiosk',
+      registrado_por: params.registradoPor,
+      lat: params.coords?.lat ?? null,
+      lng: params.coords?.lng ?? null,
+      precisao_m: params.coords?.precisao ?? null,
+      checklist: params.checklist ?? null,
+    })
+    .select('id')
+    .single();
   if (error) throw error;
+  return (data?.id as string | undefined) ?? null;
 }
 
 // =====================================================

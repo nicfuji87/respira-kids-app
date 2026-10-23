@@ -104,6 +104,32 @@ export interface SinaisDispneia {
   tempo_expiratorio_prolongado: boolean; // Tempo expiratório prolongado
 }
 
+// Ruídos adventícios que pedem localização (cada um tem a sua)
+export type RuidoAdventicio =
+  | 'sibilos'
+  | 'roncos'
+  | 'roncos_transmissao'
+  | 'estertores_finos'
+  | 'estertores_grossos';
+
+export type LocalizacaoRuido = 'difusos' | 'apice' | 'terco_medio' | 'base';
+
+export const RUIDOS_ADVENTICIOS: { valor: RuidoAdventicio; label: string }[] = [
+  { valor: 'sibilos', label: 'Sibilos' },
+  { valor: 'roncos', label: 'Roncos' },
+  { valor: 'roncos_transmissao', label: 'Roncos de Transmissão' },
+  { valor: 'estertores_finos', label: 'Estertores finos' },
+  { valor: 'estertores_grossos', label: 'Estertores grossos' },
+];
+
+export const LOCALIZACOES_RUIDO: { valor: LocalizacaoRuido; label: string }[] =
+  [
+    { valor: 'difusos', label: 'Difusos' },
+    { valor: 'apice', label: 'Ápice' },
+    { valor: 'terco_medio', label: 'Terço médio' },
+    { valor: 'base', label: 'Base' },
+  ];
+
 // Ausculta Pulmonar por Hemitórax
 export interface AuscultaHemitorax {
   // Murmúrio Vesicular (escolha única)
@@ -117,7 +143,12 @@ export interface AuscultaHemitorax {
   estertores_finos?: boolean;
   estertores_grossos?: boolean;
 
-  // Localização dos Ruídos (múltipla escolha)
+  // Onde está cada ruído (ex.: roncos na base, sibilos difusos).
+  // Desde 23/10/2026 a localização é por ruído, não mais uma só por hemitórax.
+  localizacao_ruidos?: Partial<Record<RuidoAdventicio, LocalizacaoRuido[]>>;
+
+  // @deprecated Localização única por hemitórax (registros antigos). Não
+  // preencher em novos: use `localizacao_ruidos`.
   localizacao_difusos?: boolean;
   localizacao_apice?: boolean;
   localizacao_terco_medio?: boolean;
@@ -218,6 +249,8 @@ export interface IntervencaoRespiratoria {
   afe: boolean; // Aumento do Fluxo Expiratório
   vibrocompressao: boolean;
   expiração_lenta_prolongada: boolean;
+  inspiracao_forcada?: boolean;
+  expiracao_forcada?: boolean;
   rta: boolean; // Reequilíbrio Toracoabdominal
   epap: boolean; // EPAP
   epap_selo_dagua: boolean; // EPAP selo d'água
@@ -251,6 +284,7 @@ export interface AvaliacaoRespiratoriaDepois {
   // Mudança na Ausculta - opções selecionáveis
   ausculta_sem_alteracao: boolean; // Ausculta igual, sem melhora nem piora
   ausculta_melhorou: boolean;
+  ausculta_pouca_melhora?: boolean; // Melhora discreta (entre "igual" e "houve melhora")
   ausculta_reducao_roncos: boolean;
   ausculta_reducao_sibilos: boolean;
   ausculta_reducao_estertores: boolean;
@@ -299,6 +333,8 @@ export interface OrientacoesRespiratoria {
 
 export interface CondutaRespiratoria {
   manter_fisioterapia: boolean;
+  // @deprecated Saiu do formulário em 23/10/2026: a frequência real se mede
+  // pelas sessões feitas na agenda. Mantido para ler registros antigos.
   frequencia_sugerida?:
     | 'diaria'
     | '2x_semana'
@@ -477,12 +513,77 @@ export interface AutoriaEvolucao {
  */
 export const VERSAO_FORMULARIO_MOTORA = '1.2';
 
+// -------------------------------------------------------------------------
+// Medidas programadas (craniometria, goniometria, MFS…)
+// -------------------------------------------------------------------------
+
+/** Mesmos tipos da tabela motora_medida_config */
+export type TipoMedidaMotora =
+  | 'craniometria'
+  | 'goniometria'
+  | 'mfs'
+  | 'desenvolvimento_motor'
+  | 'perimetro_cefalico'
+  | 'outra';
+
+export const NOME_MEDIDA_MOTORA: Record<TipoMedidaMotora, string> = {
+  craniometria: 'Craniometria',
+  goniometria: 'Goniometria cervical',
+  mfs: 'MFS',
+  desenvolvimento_motor: 'Reavaliação do desenvolvimento motor',
+  perimetro_cefalico: 'Perímetro cefálico',
+  outra: 'Outra reavaliação',
+};
+
+/**
+ * O que a fisio registrou sobre uma medida nesta sessão. Ausente = "sem
+ * registro nesta evolução" (NÃO quer dizer que não mediu).
+ * - medido: mediu e registrou (abre os campos, quando a medida tem campos)
+ * - adiado: estava prevista e não ocorreu; exige nova data
+ * - dispensado: a fisio julgou desnecessária nesta ocasião; nova data opcional
+ * - nao_aplicavel: a medida não se aplica ao caso; para de lembrar
+ */
+export type SituacaoMedicao =
+  | 'medido'
+  | 'adiado'
+  | 'dispensado'
+  | 'nao_aplicavel';
+
+/**
+ * Dispensada nesta ocasião: o que acontece com o acompanhamento. Obrigatório,
+ * para o lembrete não voltar sozinho na sessão seguinte.
+ * - nova_data: programa outra data (nova_data)
+ * - periodicidade: volta ao intervalo da medida contado a partir de hoje
+ *   (a data calculada vai em nova_data)
+ * - suspender: suspende o acompanhamento desta medida
+ */
+export type DesfechoDispensa = 'nova_data' | 'periodicidade' | 'suspender';
+
+export interface MedicaoSessao {
+  situacao: SituacaoMedicao;
+  nova_data?: string; // YYYY-MM-DD
+  motivo?: string;
+  desfecho?: DesfechoDispensa;
+  // Medidas sem seção própria (MFS, perímetro, desenvolvimento, outra):
+  // resultado registrado no próprio bloco ao marcar "Feita hoje"
+  valores?: Record<string, string | number>;
+}
+
+export interface ProximaReavaliacao {
+  data: string; // YYYY-MM-DD
+  descricao?: string; // para "outra"
+}
+
 export interface EvolucaoMotoraAssimetria {
   versao_formulario?: string;
   // Áreas trabalhadas na sessão (desde a versão 1.2). Ausente = registro
   // anterior às áreas: mostra todas as seções. Lista vazia = ainda não
   // escolhidas.
   areas?: AreaMotora[];
+  // Medidas: o que foi feito com cada medida hoje e a próxima reavaliação
+  // programada na conduta (aplicados na programação do paciente ao salvar)
+  medicoes?: Partial<Record<TipoMedidaMotora, MedicaoSessao>>;
+  proximas_reavaliacoes?: Partial<Record<TipoMedidaMotora, ProximaReavaliacao>>;
   autor?: AutoriaEvolucao;
   ultima_edicao?: AutoriaEvolucao;
   craniometria?: CraniometriaEvolucao;
@@ -749,6 +850,8 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       afe: false,
       vibrocompressao: false,
       expiração_lenta_prolongada: false,
+      inspiracao_forcada: false,
+      expiracao_forcada: false,
       rta: false,
       epap: false,
       epap_selo_dagua: false,
@@ -768,6 +871,7 @@ export function criarEvolucaoRespiratoriaVazia(): EvolucaoRespiratoria {
       melhora_padrao_respiratorio: false,
       ausculta_sem_alteracao: false,
       ausculta_melhorou: false,
+      ausculta_pouca_melhora: false,
       ausculta_reducao_roncos: false,
       ausculta_reducao_sibilos: false,
       ausculta_reducao_estertores: false,
@@ -805,6 +909,7 @@ export function getAvaliacaoRespiratoriaNormal(): AvaliacaoRespiratoriaAntes {
     roncos_transmissao: false,
     estertores_finos: false,
     estertores_grossos: false,
+    localizacao_ruidos: {},
     localizacao_difusos: false,
     localizacao_apice: false,
     localizacao_terco_medio: false,
@@ -833,6 +938,23 @@ export function getAvaliacaoRespiratoriaNormal(): AvaliacaoRespiratoriaAntes {
       hemitorax_esquerdo: hemitoraxNormal(),
     },
   };
+}
+
+/**
+ * Ruídos de um hemitórax para o texto da evolução, cada um com a sua
+ * localização: ["Roncos (ápice, base)", "Sibilos (difusos)"].
+ */
+export function descreverRuidosHemitorax(h: AuscultaHemitorax): string[] {
+  const ruidos: string[] = [];
+  if (h.ruidos_ausentes) ruidos.push('Sem ruídos adventícios');
+  RUIDOS_ADVENTICIOS.forEach(({ valor, label }) => {
+    if (!h[valor]) return;
+    const locais = (h.localizacao_ruidos?.[valor] || [])
+      .map((l) => LOCALIZACOES_RUIDO.find((o) => o.valor === l)?.label || l)
+      .map((l) => l.toLowerCase());
+    ruidos.push(locais.length > 0 ? `${label} (${locais.join(', ')})` : label);
+  });
+  return ruidos;
 }
 
 /**
@@ -865,6 +987,22 @@ export const SECOES_REAPROVEITAVEIS_RESPIRATORIA = [
  * (ver SECOES_REAPROVEITAVEIS_RESPIRATORIA) — o objetivo é encurtar o
  * preenchimento, não documentar achado que ninguém examinou.
  */
+// Copia a ausculta de um hemitórax sem a localização antiga (única por
+// hemitórax), que não diz qual ruído estava onde.
+function copiarHemitorax(h: AuscultaHemitorax): AuscultaHemitorax {
+  const loc = h.localizacao_ruidos || {};
+  return {
+    ...h,
+    localizacao_ruidos: Object.fromEntries(
+      Object.entries(loc).map(([k, v]) => [k, [...(v || [])]])
+    ),
+    localizacao_difusos: false,
+    localizacao_apice: false,
+    localizacao_terco_medio: false,
+    localizacao_base: false,
+  };
+}
+
 export function criarEvolucaoRespiratoriaDeAnterior(
   anterior: EvolucaoRespiratoria
 ): EvolucaoRespiratoria {
@@ -890,12 +1028,12 @@ export function criarEvolucaoRespiratoriaDeAnterior(
       padrao_respiratorio: { ...anterior.avaliacao_antes.padrao_respiratorio },
       sinais_dispneia: { ...anterior.avaliacao_antes.sinais_dispneia },
       ausculta: {
-        hemitorax_direito: {
-          ...anterior.avaliacao_antes.ausculta.hemitorax_direito,
-        },
-        hemitorax_esquerdo: {
-          ...anterior.avaliacao_antes.ausculta.hemitorax_esquerdo,
-        },
+        hemitorax_direito: copiarHemitorax(
+          anterior.avaliacao_antes.ausculta.hemitorax_direito
+        ),
+        hemitorax_esquerdo: copiarHemitorax(
+          anterior.avaliacao_antes.ausculta.hemitorax_esquerdo
+        ),
       },
     };
   }
@@ -913,7 +1051,8 @@ export function criarEvolucaoRespiratoriaDeAnterior(
   }
 
   // Plano terapêutico (estável)
-  if (anterior.conduta) nova.conduta = { ...anterior.conduta };
+  if (anterior.conduta)
+    nova.conduta = { ...anterior.conduta, frequencia_sugerida: null };
   if (anterior.orientacoes) nova.orientacoes = { ...anterior.orientacoes };
   return nova;
 }
@@ -1208,6 +1347,8 @@ export function verificarSecaoEvolucaoCompleta(
           i.afe ||
           i.vibrocompressao ||
           i.expiração_lenta_prolongada ||
+          i.inspiracao_forcada ||
+          i.expiracao_forcada ||
           i.rta ||
           i.epap ||
           i.epap_selo_dagua ||
