@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Card,
@@ -63,6 +64,8 @@ export const PatientClinicalEvaluations: React.FC<
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>(
     'create'
   );
+  // Reavaliação: a avaliação mais recente vira a "anterior" da nova
+  const [reavaliacaoDe, setReavaliacaoDe] = useState<string | null>(null);
 
   const canEdit = userRole === 'admin' || userRole === 'profissional';
 
@@ -86,17 +89,27 @@ export const PatientClinicalEvaluations: React.FC<
 
   const handleNovaAvaliacao = () => {
     setSelectedAvaliacaoId(null);
+    setReavaliacaoDe(null);
+    setModalMode('create');
+    setIsModalOpen(true);
+  };
+
+  const handleNovaReavaliacao = () => {
+    setSelectedAvaliacaoId(null);
+    setReavaliacaoDe(avaliacoes[0]?.id ?? null);
     setModalMode('create');
     setIsModalOpen(true);
   };
 
   const handleVerAvaliacao = (id: string) => {
+    setReavaliacaoDe(null);
     setSelectedAvaliacaoId(id);
     setModalMode('view');
     setIsModalOpen(true);
   };
 
   const handleEditarAvaliacao = (id: string) => {
+    setReavaliacaoDe(null);
     setSelectedAvaliacaoId(id);
     setModalMode('edit');
     setIsModalOpen(true);
@@ -181,17 +194,30 @@ export const PatientClinicalEvaluations: React.FC<
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-4">
           <CardTitle className="flex items-center gap-2 text-lg">
             <ClipboardList className="h-5 w-5 text-primary" />
-            Avaliações Clínicas TM/AC
+            Avaliações motoras
           </CardTitle>
           {canEdit && (
-            <Button
-              onClick={handleNovaAvaliacao}
-              size="sm"
-              aria-label="Nova Avaliação"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Nova Avaliação</span>
-            </Button>
+            <div className="flex gap-2">
+              {avaliacoes.length > 0 && (
+                <Button
+                  onClick={handleNovaReavaliacao}
+                  size="sm"
+                  variant="outline"
+                  aria-label="Nova reavaliação"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span className="hidden sm:inline">Reavaliação</span>
+                </Button>
+              )}
+              <Button
+                onClick={handleNovaAvaliacao}
+                size="sm"
+                aria-label="Nova Avaliação"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Nova Avaliação</span>
+              </Button>
+            </div>
           )}
         </CardHeader>
 
@@ -221,6 +247,9 @@ export const PatientClinicalEvaluations: React.FC<
                         {formatDate(avaliacao.data_avaliacao)}
                       </span>
                       {getStatusBadge(avaliacao.status)}
+                      {avaliacao.tipo_avaliacao === 'reavaliacao' && (
+                        <Badge variant="secondary">Reavaliação</Badge>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -292,6 +321,7 @@ export const PatientClinicalEvaluations: React.FC<
         patientBirthDate={patientBirthDate}
         currentUserId={currentUserId}
         mode={modalMode}
+        reavaliacaoDe={reavaliacaoDe}
       />
     </>
   );

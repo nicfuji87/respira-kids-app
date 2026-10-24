@@ -9,6 +9,7 @@ import { PagamentoProdutoPublicoPage } from '@/pages/PagamentoProdutoPublicoPage
 import { PesquisaExperienciaPage } from '@/pages/PesquisaExperienciaPage';
 import { ProcessoSeletivoPage } from '@/pages/ProcessoSeletivoPage';
 import { PontoCelularPage } from '@/pages/PontoCelularPage';
+import { AnamnesePaisPage } from '@/pages/AnamnesePaisPage';
 import { Toaster } from '@/components/primitives/toaster';
 
 // AI dev note: PublicRouter - Roteamento para páginas públicas (sem autenticação)
@@ -57,6 +58,9 @@ export const PublicRouter: React.FC = () => {
 
         {/* Ponto das estagiárias pelo celular (login próprio, sem conta no app) */}
         <Route path="/ponto" element={<PontoCelularPage />} />
+
+        {/* Anamnese respondida pelos pais antes da avaliação motora */}
+        <Route path="/anamnese/:token" element={<AnamnesePaisPage />} />
 
         {/* Redirect padrão APENAS para root */}
         <Route

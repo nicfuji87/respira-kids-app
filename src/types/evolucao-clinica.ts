@@ -546,7 +546,9 @@ export type TipoMedidaMotora =
   | 'mfs'
   | 'desenvolvimento_motor'
   | 'perimetro_cefalico'
-  | 'outra';
+  | 'outra'
+  | 'fsos2'
+  | 'tensao_neuromeningea';
 
 export const NOME_MEDIDA_MOTORA: Record<TipoMedidaMotora, string> = {
   craniometria: 'Craniometria',
@@ -555,6 +557,8 @@ export const NOME_MEDIDA_MOTORA: Record<TipoMedidaMotora, string> = {
   desenvolvimento_motor: 'Reavaliação do desenvolvimento motor',
   perimetro_cefalico: 'Perímetro cefálico',
   outra: 'Outra reavaliação',
+  fsos2: 'FSOS-2',
+  tensao_neuromeningea: 'Tensão neuromeníngea',
 };
 
 /**
@@ -573,6 +577,9 @@ export interface MedicaoSessao {
   // Medidas sem seção própria (MFS, perímetro, desenvolvimento, outra):
   // resultado registrado no próprio bloco ao marcar "Medi hoje"
   valores?: Record<string, string | number>;
+  // Escalas com a mesma estrutura da avaliação (FSOS-2, tensão
+  // neuromeníngea), para comparar com ela item a item
+  dados?: Record<string, unknown>;
 }
 
 // -------------------------------------------------------------------------
@@ -600,6 +607,14 @@ export interface RegistroHabilidade {
   // Último registro anterior (copiado ao abrir), para o texto e a comparação
   // não mudarem se o histórico for editado depois
   anterior?: {
+    data: string;
+    estado: EstadoHabilidade;
+    assistencia?: NivelAssistencia;
+    metricas?: MetricasHabilidade;
+  };
+  // Registro da avaliação (registro zero), copiado ao abrir, quando é
+  // diferente do último registro
+  avaliacao?: {
     data: string;
     estado: EstadoHabilidade;
     assistencia?: NivelAssistencia;

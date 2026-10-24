@@ -2,7 +2,7 @@
 // na ficha do paciente e na avaliação. Meta numérica e data-limite NÃO são
 // obrigatórias: objetivo funcional pode ser só descrito.
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
@@ -17,6 +17,7 @@ import {
   SUGESTOES_OBJETIVO,
   UNIDADE_METRICA,
   type IndicadorObjetivo,
+  type SugestaoObjetivo,
   type LadoHabilidade,
   type MedidaIndicador,
   type MetricaHabilidade,
@@ -40,6 +41,10 @@ export interface ObjetivoMotorEditorProps {
   areasSugeridas?: AreaMotora[];
   /** descrições dos objetivos ativos: a sugestão igual não aparece */
   jaNoPlano?: string[];
+  /** Valor já medido do indicador (ex.: na avaliação) para o registro inicial */
+  valorInicialPara?: (ind: IndicadorObjetivo) => number | undefined;
+  /** Sugestões a partir dos achados (aparecem primeiro) */
+  sugestoesExtras?: SugestaoObjetivo[];
   origem: 'evolucao' | 'avaliacao' | 'plano';
   origemId?: string;
   onSalvar: (o: ObjetivoParaSalvar) => Promise<void>;
@@ -51,6 +56,8 @@ export const ObjetivoMotorEditor: React.FC<ObjetivoMotorEditorProps> = ({
   inicial,
   areasSugeridas = [],
   jaNoPlano = [],
+  valorInicialPara,
+  sugestoesExtras = [],
   origem,
   origemId,
   onSalvar,
@@ -104,17 +111,30 @@ export const ObjetivoMotorEditor: React.FC<ObjetivoMotorEditorProps> = ({
   const info = infoIndicador(indicador);
   const hab = habilidade ? HABILIDADE_POR_ID[habilidade] : undefined;
 
+  const foraDoPlano = (s: SugestaoObjetivo) =>
+    !jaNoPlano.some(
+      (d) => d.trim().toLowerCase() === s.descricao.toLowerCase()
+    );
+  const achados = sugestoesExtras.filter(foraDoPlano);
   const sugestoes = SUGESTOES_OBJETIVO.filter(
     (s) =>
-      !jaNoPlano.some(
-        (d) => d.trim().toLowerCase() === s.descricao.toLowerCase()
-      ) &&
+      foraDoPlano(s) &&
+      !achados.some((x) => x.descricao === s.descricao) &&
       (areasSugeridas.length === 0 ||
         s.areas.some((a) => areasSugeridas.includes(a)))
   );
 
-  const aplicarSugestao = (i: number) => {
-    const s = sugestoes[i];
+  // Registro inicial vindo do que já foi medido (só se a fisio não digitou)
+  const inicialDigitado = useRef(!!inicial);
+  const chaveIndicador = JSON.stringify(indicador);
+  useEffect(() => {
+    if (inicialDigitado.current || !valorInicialPara || !indicador) return;
+    const v = valorInicialPara(indicador);
+    setValorInicial(v !== undefined ? String(v) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveIndicador]);
+
+  const aplicarSugestao = (s: SugestaoObjetivo) => {
     setDescricao(s.descricao);
     setAreas(
       s.areas.filter(
@@ -163,15 +183,36 @@ export const ObjetivoMotorEditor: React.FC<ObjetivoMotorEditorProps> = ({
     <div className="rounded-lg border p-3 space-y-4 bg-muted/20">
       {!inicial && (
         <div className="space-y-1.5">
+          {achados.length > 0 && (
+            <>
+              <Label className="text-sm">
+                Pelos achados da avaliação (toque para usar e adaptar)
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {achados.map((s) => (
+                  <button
+                    key={s.descricao}
+                    type="button"
+                    onClick={() => aplicarSugestao(s)}
+                    className={chipClasse(descricao === s.descricao)}
+                  >
+                    {s.descricao}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           <Label className="text-sm">
-            Sugestões (toque para usar e adaptar)
+            {achados.length > 0
+              ? 'Outras sugestões'
+              : 'Sugestões (toque para usar e adaptar)'}
           </Label>
           <div className="flex flex-wrap gap-1.5">
-            {sugestoes.map((s, i) => (
+            {sugestoes.map((s) => (
               <button
                 key={s.descricao}
                 type="button"
-                onClick={() => aplicarSugestao(i)}
+                onClick={() => aplicarSugestao(s)}
                 className={chipClasse(descricao === s.descricao)}
               >
                 {s.descricao}
@@ -343,7 +384,10 @@ export const ObjetivoMotorEditor: React.FC<ObjetivoMotorEditorProps> = ({
               type="number"
               inputMode="decimal"
               value={valorInicial}
-              onChange={(e) => setValorInicial(e.target.value)}
+              onChange={(e) => {
+                inicialDigitado.current = true;
+                setValorInicial(e.target.value);
+              }}
             />
           </label>
         </div>

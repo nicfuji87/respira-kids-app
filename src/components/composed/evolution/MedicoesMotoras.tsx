@@ -28,6 +28,16 @@ import {
   somarDias,
 } from '@/lib/motora-medidas';
 import { MOTIVOS_NAO_MEDIU } from '@/lib/motora-catalogo';
+import { medidaNaAvaliacao, textoMedidaCurto } from '@/lib/motora-plano';
+import { usePlanoMotor } from './plano-motor-context';
+import {
+  FSOS2Bloco,
+  TensaoNeuromeningeaBloco,
+} from '@/components/composed/evaluation/BlocosMedidaAvaliacao';
+import type {
+  FSOS2,
+  TensaoNeuromeningeaDetalhada,
+} from '@/types/avaliacoes-clinicas';
 
 const FONTE: Record<string, string> = {
   evolucao: 'evolução',
@@ -280,10 +290,15 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
   children,
 }) => {
   const { medidas } = useMedidasEvolucao();
+  const plano = usePlanoMotor();
   // Sem permissão (secretaria) ou sem dados: a evolução fica como antes
   if (medidas === null) return <>{children ?? null}</>;
 
   const medida = medidas.find((m) => m.tipo === tipo);
+  // Registro zero: o que a avaliação mediu, para comparar com hoje
+  const naAvaliacao = plano?.historico
+    ? medidaNaAvaliacao(plano.historico.medidas, tipo)
+    : undefined;
   const temCampos = !!children;
   const situacao = valor?.situacao ?? (temValores ? 'medido' : undefined);
   const mostraCampos = temCampos && situacao === 'medido';
@@ -325,6 +340,12 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
             : 'Nenhum registro anterior desta medida.'}
           {!situacao && ' · Sem registro nesta evolução.'}
         </p>
+        {naAvaliacao && naAvaliacao.data !== medida?.ultima_data && (
+          <p className="text-xs text-muted-foreground">
+            Na avaliação ({dataBR(naAvaliacao.data)}):{' '}
+            {textoMedidaCurto(tipo, naAvaliacao.valores) || 'registrada'}
+          </p>
+        )}
 
         <div
           className="grid grid-cols-3 gap-2"
@@ -357,15 +378,34 @@ export const MedicaoSessaoBloco: React.FC<MedicaoSessaoBlocoProps> = ({
           })}
         </div>
 
-        {/* Medi hoje, medida sem seção: o resultado fica aqui mesmo */}
-        {valor?.situacao === 'medido' && !temCampos && (
-          <CamposResultado
-            tipo={tipo}
-            valores={valor.valores ?? {}}
-            onChange={(v) => atualizar({ valores: v })}
-            disabled={disabled}
+        {/* FSOS-2 e tensão: o mesmo formulário da avaliação */}
+        {valor?.situacao === 'medido' && tipo === 'fsos2' && (
+          <FSOS2Bloco
+            dados={valor.dados as FSOS2 | undefined}
+            onChange={(d) => atualizar({ dados: d as Record<string, unknown> })}
+            isReadOnly={disabled}
           />
         )}
+        {valor?.situacao === 'medido' && tipo === 'tensao_neuromeningea' && (
+          <TensaoNeuromeningeaBloco
+            dados={valor.dados as TensaoNeuromeningeaDetalhada | undefined}
+            onChange={(d) => atualizar({ dados: d as Record<string, unknown> })}
+            isReadOnly={disabled}
+          />
+        )}
+
+        {/* Medi hoje, medida sem seção: o resultado fica aqui mesmo */}
+        {valor?.situacao === 'medido' &&
+          !temCampos &&
+          tipo !== 'fsos2' &&
+          tipo !== 'tensao_neuromeningea' && (
+            <CamposResultado
+              tipo={tipo}
+              valores={valor.valores ?? {}}
+              onChange={(v) => atualizar({ valores: v })}
+              disabled={disabled}
+            />
+          )}
 
         {valor?.situacao === 'nao_medido' && (
           <div className="space-y-3">
@@ -429,6 +469,8 @@ const TIPOS_PROGRAMAVEIS: TipoMedidaMotora[] = [
   'mfs',
   'desenvolvimento_motor',
   'perimetro_cefalico',
+  'fsos2',
+  'tensao_neuromeningea',
   'outra',
 ];
 

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from 'react';
 import {
   Save,
   CheckCircle2,
@@ -11,6 +17,8 @@ import {
   PanelLeft,
   List,
   Trash2,
+  FileText,
+  Send,
 } from 'lucide-react';
 import {
   Dialog,
@@ -52,7 +60,6 @@ import {
   calcularIdadeSemanas,
   verificarSecaoCompletaDetalhado,
   getNomeCampo,
-  calcularProgressoAvaliacao,
   finalizarAvaliacao,
   deleteAvaliacao,
   formatarIdade,
@@ -68,6 +75,26 @@ import {
   getCorCategoria,
 } from '@/types/avaliacoes-clinicas';
 import { EvaluationSectionContent } from './EvaluationSectionContent';
+import { LaudoAvaliacaoDialog } from './LaudoAvaliacaoDialog';
+import { EnviarAnamneseDialog } from './EnviarAnamneseDialog';
+import { PlanoMotorContext } from '@/components/composed/evolution/plano-motor-context';
+import { usePlanoMotorDados } from '@/hooks/usePlanoMotorDados';
+import { calcularIdade, dataCurta } from '@/lib/motora-plano';
+import {
+  aplicarRespostasAnamnese,
+  fetchAnamnesePendente,
+  gerarLaudoAvaliacao,
+  marcarAnamneseAplicada,
+  secoesDaAvaliacao,
+  severidadeDaAvaliacao,
+  type ConviteAnamnese,
+} from '@/lib/avaliacao-motora';
+
+const hojeParede = () => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
 
 // AI dev note: EvaluationFormModal - Modal de formulário de avaliação com navegação por índice
 // Usa sidebar/índice lateral para navegação rápida entre seções
@@ -83,6 +110,11 @@ interface EvaluationFormModalProps {
   patientBirthDate?: string | null;
   currentUserId?: string;
   mode: 'create' | 'edit' | 'view';
+  /** Avaliação aberta pela consulta da agenda: liga e usa a data dela */
+  agendamentoId?: string | null;
+  dataAvaliacao?: string;
+  /** Criar uma reavaliação desta avaliação */
+  reavaliacaoDe?: string | null;
 }
 
 export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
@@ -95,6 +127,9 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
   patientBirthDate,
   currentUserId,
   mode,
+  agendamentoId = null,
+  dataAvaliacao,
+  reavaliacaoDe = null,
 }) => {
   const [avaliacao, setAvaliacao] = useState<AvaliacaoClinica | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -127,11 +162,14 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
             : null;
           const novaAvaliacao = await createAvaliacao({
             pessoa_id: patientId,
-            data_avaliacao: new Date().toISOString().split('T')[0],
+            data_avaliacao: dataAvaliacao || hojeParede(),
             idade_semanas: idadeSemanas,
             status: 'rascunho',
             avaliador_id: currentUserId || undefined,
             criado_por: currentUserId || undefined,
+            tipo_avaliacao: reavaliacaoDe ? 'reavaliacao' : 'inicial',
+            avaliacao_anterior_id: reavaliacaoDe,
+            agendamento_id: agendamentoId,
           });
           setAvaliacao(novaAvaliacao);
         }
@@ -151,7 +189,65 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, avaliacaoId, patientId, patientBirthDate, currentUserId]);
+
+  // Seções desta avaliação (inicial ou reavaliação; dados antigos preservados)
+  const secoes = useMemo(
+    () => (avaliacao ? secoesDaAvaliacao(avaliacao) : AVALIACOES_SECOES),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      avaliacao?.id,
+      avaliacao?.tipo_avaliacao,
+      avaliacao?.marcos_motores_atingidos,
+      avaliacao?.funcionalidade_cervical,
+    ]
+  );
+
+  // Histórico e plano da criança (habilidades, objetivos, comparações)
+  const plano = usePlanoMotorDados({
+    pacienteId: patientId,
+    ativo: isOpen,
+    dataSessao: avaliacao?.data_avaliacao,
+  });
+
+  // Idade no dia da avaliação (não no dia de hoje)
+  const idade = useMemo(
+    () =>
+      avaliacao
+        ? calcularIdade(
+            patientBirthDate,
+            avaliacao.idade_gestacional_semanas ??
+              plano?.historico?.idade_gestacional_semanas,
+            avaliacao.data_avaliacao
+          )
+        : null,
+    [avaliacao, patientBirthDate, plano?.historico]
+  );
+
+  // Reavaliação: a avaliação anterior, para a comparação e o laudo
+  const [anterior, setAnterior] = useState<AvaliacaoClinica | null>(null);
+  useEffect(() => {
+    const id = avaliacao?.avaliacao_anterior_id;
+    if (!isOpen || !id) {
+      setAnterior(null);
+      return;
+    }
+    fetchAvaliacaoById(id)
+      .then(setAnterior)
+      .catch(() => setAnterior(null));
+  }, [isOpen, avaliacao?.avaliacao_anterior_id]);
+
+  // Anamnese respondida pelos pais e ainda não aplicada
+  const [anamnese, setAnamnese] = useState<ConviteAnamnese | null>(null);
+  useEffect(() => {
+    if (!isOpen || isReadOnly) return;
+    fetchAnamnesePendente(patientId)
+      .then(setAnamnese)
+      .catch(() => setAnamnese(null));
+  }, [isOpen, isReadOnly, patientId]);
+  const [showEnviarAnamnese, setShowEnviarAnamnese] = useState(false);
+  const [showLaudo, setShowLaudo] = useState(false);
 
   // Auto-save com debounce
   const scheduleAutoSave = useCallback(() => {
@@ -186,6 +282,34 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
     },
     [isReadOnly, scheduleAutoSave]
   );
+
+  // Grau de severidade: calculado e gravado sozinho quando há dados
+  const grauCalculado = avaliacao
+    ? severidadeDaAvaliacao(avaliacao, idade?.cronologica_meses)
+    : null;
+  useEffect(() => {
+    if (
+      !avaliacao ||
+      isReadOnly ||
+      grauCalculado === null ||
+      grauCalculado === avaliacao.grau_severidade
+    )
+      return;
+    handleFieldChange({ grau_severidade: grauCalculado });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grauCalculado]);
+
+  const aplicarAnamnese = async () => {
+    if (!avaliacao || !anamnese?.respostas) return;
+    const updates = aplicarRespostasAnamnese(avaliacao, anamnese.respostas);
+    if (Object.keys(updates).length) handleFieldChange(updates);
+    try {
+      await marcarAnamneseAplicada(anamnese.id, avaliacao.id);
+    } catch (e) {
+      console.error('Erro ao marcar anamnese aplicada:', e);
+    }
+    setAnamnese(null);
+  };
 
   // Salvar e fechar
   const handleSaveAndClose = async () => {
@@ -251,7 +375,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
     secaoIndex: number
   ): 'completo' | 'parcial' | 'vazio' => {
     if (!avaliacao) return 'vazio';
-    const secao = AVALIACOES_SECOES[secaoIndex];
+    const secao = secoes[secaoIndex];
     const resultado = verificarSecaoCompletaDetalhado(avaliacao, secao.campos);
     return resultado.status;
   };
@@ -261,7 +385,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
     secaoIndex: number
   ): { camposFaltantes: string[]; total: number; preenchidos: number } => {
     if (!avaliacao) return { camposFaltantes: [], total: 0, preenchidos: 0 };
-    const secao = AVALIACOES_SECOES[secaoIndex];
+    const secao = secoes[secaoIndex];
     const resultado = verificarSecaoCompletaDetalhado(avaliacao, secao.campos);
     return {
       camposFaltantes: resultado.camposFaltantes,
@@ -271,7 +395,23 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
   };
 
   // Calcular progresso geral
-  const progresso = avaliacao ? calcularProgressoAvaliacao(avaliacao) : null;
+  const progresso = avaliacao
+    ? (() => {
+        const contaveis = secoes.filter((s) => s.campos.length > 0);
+        const preenchidas = contaveis.filter(
+          (s) =>
+            verificarSecaoCompletaDetalhado(avaliacao, s.campos).status !==
+            'vazio'
+        ).length;
+        return {
+          total: contaveis.length,
+          preenchidos: preenchidas,
+          percentual: contaveis.length
+            ? Math.round((preenchidas / contaveis.length) * 100)
+            : 0,
+        };
+      })()
+    : null;
 
   // Navegação entre seções
   const handlePreviousSection = () => {
@@ -279,9 +419,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
   };
 
   const handleNextSection = () => {
-    setCurrentSection((prev) =>
-      Math.min(AVALIACOES_SECOES.length - 1, prev + 1)
-    );
+    setCurrentSection((prev) => Math.min(secoes.length - 1, prev + 1));
   };
 
   const handleSectionClick = (index: number) => {
@@ -323,7 +461,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
   // Agrupa as seções por grupo
   const secoesAgrupadas = GRUPOS_SECOES.map((grupo) => ({
     ...grupo,
-    secoes: AVALIACOES_SECOES.filter((s) => s.grupo === grupo.id),
+    secoes: secoes.filter((s) => s.grupo === grupo.id),
   }));
 
   // Componente do índice lateral - versão completa para mobile sheet
@@ -363,16 +501,14 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
             const isCollapsed = collapsedGroups.has(grupo.id);
             const grupoTemSecaoAtiva = grupo.secoes.some(
               (s) =>
-                AVALIACOES_SECOES.findIndex((sec) => sec.id === s.id) ===
-                currentSection
+                secoes.findIndex((sec) => sec.id === s.id) === currentSection
             );
 
             // Calcular progresso do grupo
             const secoesCompletas = grupo.secoes.filter(
               (s) =>
-                getSectionStatus(
-                  AVALIACOES_SECOES.findIndex((sec) => sec.id === s.id)
-                ) === 'completo'
+                getSectionStatus(secoes.findIndex((sec) => sec.id === s.id)) ===
+                'completo'
             ).length;
             const progressoGrupo = Math.round(
               (secoesCompletas / grupo.secoes.length) * 100
@@ -419,9 +555,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                 {!isCollapsed && (
                   <div className="border-t bg-background p-1 space-y-0.5">
                     {grupo.secoes.map((secao) => {
-                      const index = AVALIACOES_SECOES.findIndex(
-                        (s) => s.id === secao.id
-                      );
+                      const index = secoes.findIndex((s) => s.id === secao.id);
                       const status = getSectionStatus(index);
                       const isActive = currentSection === index;
                       const corCategoria = getCorCategoria(secao.categoria);
@@ -609,7 +743,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                   const isCollapsed = collapsedGroups.has(grupo.id);
                   const grupoTemSecaoAtiva = grupo.secoes.some(
                     (s) =>
-                      AVALIACOES_SECOES.findIndex((sec) => sec.id === s.id) ===
+                      secoes.findIndex((sec) => sec.id === s.id) ===
                       currentSection
                   );
 
@@ -649,7 +783,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
                       {!isCollapsed && (
                         <div className="bg-background p-0.5 space-y-0.5">
                           {grupo.secoes.map((secao) => {
-                            const index = AVALIACOES_SECOES.findIndex(
+                            const index = secoes.findIndex(
                               (s) => s.id === secao.id
                             );
                             const status = getSectionStatus(index);
@@ -714,9 +848,7 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
 
                     {/* Números das seções */}
                     {grupo.secoes.map((secao) => {
-                      const index = AVALIACOES_SECOES.findIndex(
-                        (s) => s.id === secao.id
-                      );
+                      const index = secoes.findIndex((s) => s.id === secao.id);
                       const status = getSectionStatus(index);
                       const isActive = currentSection === index;
 
@@ -816,226 +948,289 @@ export const EvaluationFormModal: React.FC<EvaluationFormModalProps> = ({
   );
 
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => !open && handleSaveAndClose()}
-    >
-      <DialogContent className="w-[95vw] max-w-[95vw] md:w-[90vw] md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl h-[95vh] md:h-[90vh] p-0 gap-0 flex flex-col">
-        {/* Header */}
-        <DialogHeader className="p-4 border-b flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Botão do menu em mobile */}
-              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="md:hidden">
-                    <List className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-72 p-0">
-                  <SidebarContentFull />
-                </SheetContent>
-              </Sheet>
+    <PlanoMotorContext.Provider value={plano}>
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => !open && handleSaveAndClose()}
+      >
+        <DialogContent className="w-[95vw] max-w-[95vw] md:w-[90vw] md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl h-[95vh] md:h-[90vh] p-0 gap-0 flex flex-col">
+          {/* Header */}
+          <DialogHeader className="p-4 border-b flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {/* Botão do menu em mobile */}
+                <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="md:hidden">
+                      <List className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-72 p-0">
+                    <SidebarContentFull />
+                  </SheetContent>
+                </Sheet>
 
-              <div>
-                <DialogTitle className="text-lg">
-                  {mode === 'create'
-                    ? 'Nova Avaliação TM/AC'
-                    : mode === 'edit'
-                      ? 'Editar Avaliação TM/AC'
-                      : 'Visualizar Avaliação TM/AC'}
-                </DialogTitle>
-                {patientName && (
-                  <p className="text-sm text-muted-foreground">
-                    Paciente: {patientName}
-                    {patientBirthDate &&
-                      ` • ${formatarIdade(patientBirthDate)}`}
-                  </p>
+                <div>
+                  <DialogTitle className="text-lg">
+                    {(avaliacao?.tipo_avaliacao ??
+                      (reavaliacaoDe ? 'reavaliacao' : 'inicial')) ===
+                    'reavaliacao'
+                      ? 'Reavaliação Motora'
+                      : 'Avaliação Motora'}
+                  </DialogTitle>
+                  {patientName && (
+                    <p className="text-sm text-muted-foreground">
+                      Paciente: {patientName}
+                      {idade
+                        ? ` • ${idade.cronologica_texto}${idade.corrigida_texto ? ` (corrigida: ${idade.corrigida_texto})` : ''}`
+                        : patientBirthDate &&
+                          ` • ${formatarIdade(patientBirthDate)}`}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!isReadOnly && avaliacao?.status !== 'finalizada' && (
+                  <Badge variant="outline" className="gap-1 hidden sm:flex">
+                    <Circle className="h-2 w-2 fill-amber-500 text-amber-500" />
+                    Rascunho
+                  </Badge>
+                )}
+                {avaliacao?.status === 'finalizada' && (
+                  <Badge variant="default" className="bg-emerald-500 gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Finalizada
+                  </Badge>
                 )}
               </div>
             </div>
+          </DialogHeader>
 
-            <div className="flex items-center gap-2">
-              {!isReadOnly && avaliacao?.status !== 'finalizada' && (
-                <Badge variant="outline" className="gap-1 hidden sm:flex">
-                  <Circle className="h-2 w-2 fill-amber-500 text-amber-500" />
-                  Rascunho
-                </Badge>
+          {/* Conteúdo */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Sidebar - Desktop (colapsável) */}
+            <div
+              className={cn(
+                'hidden md:block border-r bg-muted/30 transition-all duration-200',
+                sidebarExpanded ? 'w-56' : 'w-14'
               )}
-              {avaliacao?.status === 'finalizada' && (
-                <Badge variant="default" className="bg-emerald-500 gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Finalizada
-                </Badge>
-              )}
+            >
+              <SidebarContentCollapsible expanded={sidebarExpanded} />
             </div>
-          </div>
-        </DialogHeader>
 
-        {/* Conteúdo */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar - Desktop (colapsável) */}
-          <div
-            className={cn(
-              'hidden md:block border-r bg-muted/30 transition-all duration-200',
-              sidebarExpanded ? 'w-56' : 'w-14'
-            )}
-          >
-            <SidebarContentCollapsible expanded={sidebarExpanded} />
-          </div>
-
-          {/* Área Principal */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {isLoading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : avaliacao ? (
-              <>
-                {/* Conteúdo da Seção */}
-                <ScrollArea className="flex-1 p-4 md:p-6">
-                  <EvaluationSectionContent
-                    secao={AVALIACOES_SECOES[currentSection]}
-                    avaliacao={avaliacao}
-                    onChange={handleFieldChange}
-                    isReadOnly={isReadOnly}
-                    patientName={patientName}
-                    patientAgeInMonths={
-                      patientBirthDate
-                        ? Math.floor(
-                            (new Date().getTime() -
-                              new Date(patientBirthDate).getTime()) /
-                              (1000 * 60 * 60 * 24 * 30.44)
-                          )
-                        : 0
-                    }
-                  />
-                </ScrollArea>
-
-                {/* Footer com Navegação */}
-                <div className="flex-shrink-0 border-t bg-background">
-                  {/* Layout em duas linhas para caber tudo */}
-                  <div className="p-2 space-y-2">
-                    {/* Linha 1: Navegação entre seções */}
-                    <div className="flex items-center justify-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handlePreviousSection}
-                        disabled={currentSection === 0}
-                        className="h-8 px-2"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        <span className="hidden sm:inline ml-1">Anterior</span>
-                      </Button>
-                      <span className="text-sm text-muted-foreground font-medium min-w-[50px] text-center">
-                        {currentSection + 1} / {AVALIACOES_SECOES.length}
+            {/* Área Principal */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {isLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : avaliacao ? (
+                <>
+                  {anamnese?.respostas && !isReadOnly && (
+                    <div className="mx-4 mt-3 md:mx-6 rounded-lg border border-sky-300 bg-sky-50 dark:bg-sky-950/30 p-3 text-sm flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                      <span>
+                        Os pais responderam a anamnese em{' '}
+                        {dataCurta(anamnese.respondido_em ?? '')} (
+                        {Object.keys(anamnese.respostas).length} respostas).
+                        Aplicar preenche só o que está em branco.
                       </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleNextSection}
-                        disabled={
-                          currentSection === AVALIACOES_SECOES.length - 1
-                        }
-                        className="h-8 px-2"
-                      >
-                        <span className="hidden sm:inline mr-1">Próxima</span>
-                        <ChevronRight className="h-4 w-4" />
+                      <Button size="sm" onClick={aplicarAnamnese}>
+                        Aplicar respostas
                       </Button>
                     </div>
+                  )}
+                  {/* Conteúdo da Seção */}
+                  <ScrollArea className="flex-1 p-4 md:p-6">
+                    <EvaluationSectionContent
+                      secao={
+                        secoes[Math.min(currentSection, secoes.length - 1)]
+                      }
+                      avaliacao={avaliacao}
+                      onChange={handleFieldChange}
+                      isReadOnly={isReadOnly}
+                      patientName={patientName}
+                      patientAgeInMonths={idade?.cronologica_meses ?? 0}
+                      idadeSugestaoMeses={idade?.meses_para_sugestao}
+                      avaliacaoAnterior={anterior}
+                    />
+                  </ScrollArea>
 
-                    {/* Linha 2: Ações */}
-                    <div className="flex items-center justify-center gap-2">
-                      {/* Botão Excluir - apenas para rascunhos */}
-                      {!isReadOnly && avaliacao.status === 'rascunho' && (
+                  {/* Footer com Navegação */}
+                  <div className="flex-shrink-0 border-t bg-background">
+                    {/* Layout em duas linhas para caber tudo */}
+                    <div className="p-2 space-y-2">
+                      {/* Linha 1: Navegação entre seções */}
+                      <div className="flex items-center justify-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setShowDeleteDialog(true)}
-                          disabled={isDeleting}
-                          className="h-8 px-3 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={handlePreviousSection}
+                          disabled={currentSection === 0}
+                          className="h-8 px-2"
                         >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="hidden sm:inline ml-1.5">
-                            Excluir
+                          <ChevronLeft className="h-4 w-4" />
+                          <span className="hidden sm:inline ml-1">
+                            Anterior
                           </span>
                         </Button>
-                      )}
-
-                      {/* Botão Salvar */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSaveAndClose}
-                        disabled={isSaving}
-                        className="h-8 px-3"
-                      >
-                        {isSaving ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4" />
-                        )}
-                        <span className="ml-1.5">
-                          {isReadOnly ? 'Fechar' : 'Salvar'}
+                        <span className="text-sm text-muted-foreground font-medium min-w-[50px] text-center">
+                          {currentSection + 1} / {secoes.length}
                         </span>
-                      </Button>
-
-                      {/* Botão Finalizar - apenas para não finalizadas */}
-                      {!isReadOnly && avaliacao.status !== 'finalizada' && (
                         <Button
+                          variant="outline"
                           size="sm"
-                          onClick={handleFinalizar}
-                          disabled={isSaving}
-                          className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700"
+                          onClick={handleNextSection}
+                          disabled={currentSection === secoes.length - 1}
+                          className="h-8 px-2"
                         >
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span className="ml-1.5">Finalizar</span>
+                          <span className="hidden sm:inline mr-1">Próxima</span>
+                          <ChevronRight className="h-4 w-4" />
                         </Button>
-                      )}
+                      </div>
+
+                      {/* Linha 2: Ações */}
+                      <div className="flex items-center justify-center gap-2">
+                        {/* Botão Excluir - apenas para rascunhos */}
+                        {!isReadOnly && avaliacao.status === 'rascunho' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowDeleteDialog(true)}
+                            disabled={isDeleting}
+                            className="h-8 px-3 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span className="hidden sm:inline ml-1.5">
+                              Excluir
+                            </span>
+                          </Button>
+                        )}
+
+                        {/* Laudo gerado por regras */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowLaudo(true)}
+                          className="h-8 px-3"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span className="ml-1.5">Laudo</span>
+                        </Button>
+
+                        {/* Anamnese pelos pais (link no WhatsApp) */}
+                        {!isReadOnly &&
+                          avaliacao.tipo_avaliacao !== 'reavaliacao' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowEnviarAnamnese(true)}
+                              className="h-8 px-3"
+                            >
+                              <Send className="h-4 w-4" />
+                              <span className="hidden sm:inline ml-1.5">
+                                Anamnese aos pais
+                              </span>
+                            </Button>
+                          )}
+
+                        {/* Botão Salvar */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleSaveAndClose}
+                          disabled={isSaving}
+                          className="h-8 px-3"
+                        >
+                          {isSaving ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          <span className="ml-1.5">
+                            {isReadOnly ? 'Fechar' : 'Salvar'}
+                          </span>
+                        </Button>
+
+                        {/* Botão Finalizar - apenas para não finalizadas */}
+                        {!isReadOnly && avaliacao.status !== 'finalizada' && (
+                          <Button
+                            size="sm"
+                            onClick={handleFinalizar}
+                            disabled={isSaving}
+                            className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700"
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span className="ml-1.5">Finalizar</span>
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                Erro ao carregar avaliação
-              </div>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-
-      {/* Dialog de confirmação de exclusão */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir avaliação?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. A avaliação será permanentemente
-              excluída do sistema.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                </>
               ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
+                <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                  Erro ao carregar avaliação
+                </div>
               )}
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Dialog>
+            </div>
+          </div>
+        </DialogContent>
+
+        {/* Dialog de confirmação de exclusão */}
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir avaliação?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. A avaliação será
+                permanentemente excluída do sistema.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {avaliacao && (
+          <LaudoAvaliacaoDialog
+            open={showLaudo}
+            onOpenChange={setShowLaudo}
+            texto={gerarLaudoAvaliacao(avaliacao, {
+              nomePaciente: patientName,
+              idadeTexto: idade
+                ? `${idade.cronologica_texto}${idade.corrigida_texto ? ` (corrigida: ${idade.corrigida_texto})` : ''}`
+                : undefined,
+              anterior,
+              objetivos: plano?.objetivos ?? [],
+            })}
+            nomeArquivo={`laudo-avaliacao-${avaliacao.data_avaliacao}`}
+          />
+        )}
+        <EnviarAnamneseDialog
+          open={showEnviarAnamnese}
+          onOpenChange={setShowEnviarAnamnese}
+          pacienteId={patientId}
+          pacienteNome={patientName}
+          agendamentoId={avaliacao?.agendamento_id ?? agendamentoId}
+        />
+      </Dialog>
+    </PlanoMotorContext.Provider>
   );
 };
 

@@ -78,6 +78,13 @@ function Escolha<T extends string>({
   );
 }
 
+const resumoComparacao = (c: NonNullable<RegistroHabilidade['anterior']>) =>
+  `${ROTULO_ESTADO[c.estado].toLowerCase()}${
+    c.assistencia
+      ? ` (${ASSISTENCIAS.find((a) => a.id === c.assistencia)?.rotulo.toLowerCase()})`
+      : ''
+  }${textoMetricasCurto(c.metricas) ? ` · ${textoMetricasCurto(c.metricas)}` : ''} em ${dataCurta(c.data)}`;
+
 export interface HabilidadeCardProps {
   registro: RegistroHabilidade;
   onChange: (r: RegistroHabilidade) => void;
@@ -125,13 +132,14 @@ export const HabilidadeCard: React.FC<HabilidadeCardProps> = ({
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {ant
-              ? `Último: ${ROTULO_ESTADO[ant.estado].toLowerCase()}${
-                  ant.assistencia
-                    ? ` (${ASSISTENCIAS.find((a) => a.id === ant.assistencia)?.rotulo.toLowerCase()})`
-                    : ''
-                }${textoMetricasCurto(ant.metricas) ? ` · ${textoMetricasCurto(ant.metricas)}` : ''} em ${dataCurta(ant.data)}`
+              ? `Último: ${resumoComparacao(ant)}`
               : 'Primeiro registro desta habilidade'}
           </p>
+          {r.avaliacao && (
+            <p className="text-xs text-muted-foreground">
+              Na avaliação: {resumoComparacao(r.avaliacao)}
+            </p>
+          )}
         </div>
         <button
           type="button"
