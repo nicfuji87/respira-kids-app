@@ -28,6 +28,7 @@ import {
   CoortesTab,
   FunilTab,
   JornadasTab,
+  OtimizacaoTab,
   QualidadeTab,
   VisaoGeralTab,
 } from '@/components/domain/marketing';
@@ -54,6 +55,7 @@ type Aba =
   | 'campanhas'
   | 'jornadas'
   | 'coortes'
+  | 'otimizacao'
   | 'qualidade';
 
 const Filtro: React.FC<{
@@ -286,6 +288,7 @@ export const MarketingPage: React.FC = () => {
             <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
             <TabsTrigger value="jornadas">Jornadas</TabsTrigger>
             <TabsTrigger value="coortes">Receita e coortes</TabsTrigger>
+            <TabsTrigger value="otimizacao">Otimização</TabsTrigger>
             <TabsTrigger value="qualidade">Qualidade dos dados</TabsTrigger>
           </TabsList>
           <TabsContent value="visao" className="mt-4">
@@ -302,6 +305,9 @@ export const MarketingPage: React.FC = () => {
           </TabsContent>
           <TabsContent value="coortes" className="mt-4">
             <CoortesTab r={r} />
+          </TabsContent>
+          <TabsContent value="otimizacao" className="mt-4">
+            {aba === 'otimizacao' && <OtimizacaoTab r={r} />}
           </TabsContent>
           <TabsContent value="qualidade" className="mt-4">
             <QualidadeTab q={qualidade} erro={erroQ} />

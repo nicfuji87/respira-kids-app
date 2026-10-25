@@ -158,6 +158,28 @@ Sem mídia paga no período (até 21/10 nunca houve), o painel não mostra inves
 CAC e ROAS e trata os números como **linha de base** para medir o que a campanha
 acrescentar. O filtro de canal tem os três grupos.
 
+## Otimização: convênio, palavras-chave e termos (25/10/2026, `atribuicao_v2_otimizacao.sql`)
+
+- **Sinal "citou convênio"**: gatilho em `ju_mensagens` (só CLIENTE, inclusive áudio
+  transcrito) grava em `atrib_sinais` só o rótulo (operadora, `convenio` genérico ou
+  `reembolso`), nunca o texto — sobrevive à limpeza de 90 dias das mensagens. Regras em
+  `fn_atrib_convenio_detalhes` (palavra inteira: "família" não vira Amil; "Bradesco"
+  sozinho é o banco). Backfill de 25/10: 11 conversas.
+- **Detalhe do Google Ads**: `scripts/google-ads/atrib-detalhe.js` (diário, mesmo token
+  do script de custos) → `fn_atrib_ads_detalhe_receber` → `atrib_ads_palavras_diarias`
+  (custo por palavra-chave) e `atrib_ads_termos_diarios` (termos de pesquisa, com coluna
+  `convenio` calculada). Substitui a janela enviada (idempotente).
+- **Aba Marketing → Otimização** (`fn_atrib_otimizacao`, admin): convênio citou × não citou
+  (anúncio e linha de base), gasto em buscas com operadora, recomendação; grupos/palavras
+  × conversas, agendamentos, pacientes, receita 30d, CAC e ROAS (crédito: último toque do
+  Google antes da conversa); termos de pesquisa. Regras em `src/lib/marketing-otimizacao.ts`.
+- **Alerta semanal** (`atrib_alerta_convenio`, segunda 9h): com ≥ 10 contatos de anúncio que
+  citaram convênio, se agendarem < metade dos demais → recomenda `NEGAR_OPERADORAS = true`
+  no WhatsApp do dono (fila `ju_avisos_grupo`, origem `MARKETING_CONVENIO`); avisa também
+  quando a amostra basta e a regra manda manter. Não repete em 7 dias.
+- Linha de base (out/26, todos os contatos novos): quem citou convênio agendou 43% (3/7)
+  × 19% (6/32) quem não citou — amostra pequena, mas não sustenta negar operadoras.
+
 ## Testes
 
 `supabase/tests/atribuicao_v2_cenarios.sql` — 36 verificações com dados fictícios,
