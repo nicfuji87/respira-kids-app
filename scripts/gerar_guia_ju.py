@@ -2,7 +2,7 @@
 
 Uso: python scripts/gerar_guia_ju.py docs/Guia_da_Ju.pdf
 Linguagem simples, sem termos técnicos: o público é a equipe (recepção e fisios).
-Atualizado em 23/10/2026: @ju na conversa para a Ju agendar.
+Atualizado em 25/10/2026: @ju também no WhatsApp da Bruna (pelo Chatwoot).
 """
 import sys
 from reportlab.lib.pagesizes import A4
@@ -261,6 +261,10 @@ s += section('10. Pedir para a Ju agendar: @ju', bullets([
     'A família também vê a mensagem com @ju. Só funciona quando quem escreve é a clínica; se a família escrever '
     '@ju, nada acontece.',
     'Por enquanto o @ju só agenda. Remarcar, cancelar, nota e atestado continuam como antes.',
+    '<b>No WhatsApp da Bruna</b> funciona igual: ela escreve <b>@ju agenda</b> na conversa dela com a família. '
+    'Se o pedido não disser outra fisio, a consulta fica com a própria Bruna. A resposta da Ju sai do número '
+    'da Bruna, sem o sinal verde de certo. A Ju só lê a mensagem do @ju e a conversa daquela família; o '
+    'restante do WhatsApp da Bruna ela não lê.',
 ]))
 
 # 11

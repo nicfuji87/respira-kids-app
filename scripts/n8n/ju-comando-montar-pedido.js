@@ -1,7 +1,22 @@
 // n8n "RK Ju - Comando" → nó "Montar pedido" (Code, uma vez para todos os itens).
 // Monta o pedido à OpenAI (/v1/responses, saída JSON estrita). A IA só PROPÕE; quem confere e
 // cria a consulta é o banco (fn_ju_agendar). Cópia deste código no repositório: manter igual.
-const ctx = $('Contexto').first().json;
+const ctx = { ...$('Contexto').first().json };
+const rec = $('Recebe').first().json;
+
+// @ju vindo do WhatsApp de uma fisio pelo Chatwoot (25/10/2026): o histórico vem do Chatwoot na hora
+// (não fica gravado no banco) e a fisio padrão é quem pediu.
+let extra = '';
+if (rec.canal === 'chatwoot') {
+  let ext = null;
+  try { ext = JSON.parse(rec.historico_externo || 'null'); } catch (e) { ext = null; }
+  if (Array.isArray(ext)) ctx.historico = ext;
+  const quem = rec.quem_pediu || 'fisio';
+  ctx.quem_pediu = quem;
+  extra = `
+
+Neste pedido quem escreveu o "@ju" não foi a recepção: foi a fisio ${quem}, no WhatsApp dela com a família. No histórico as mensagens dela aparecem como "${quem}". Onde o texto acima fala em recepção, entenda ${quem}. Fisio: a do pedido; senão a combinada na conversa; senão é a própria ${quem} (aqui não use a fisio da ultima_consulta).`;
+}
 
 const PROMPT = `Você é a Ju, assistente da recepção da Respira Kids (clínica de fisioterapia pediátrica em Brasília).
 Na conversa de WhatsApp com uma família, alguém da recepção escreveu uma mensagem começando com "@ju". Isso é um pedido da recepção para você. Sua tarefa é entender o pedido usando a mensagem e o histórico da conversa e devolver o JSON pedido.
@@ -45,7 +60,7 @@ return [{
       model: 'gpt-6.1-sol',
       reasoning: { effort: 'low' },
       input: [
-        { role: 'system', content: PROMPT },
+        { role: 'system', content: PROMPT + extra },
         { role: 'user', content: JSON.stringify(ctx) },
       ],
       text: { format: { type: 'json_schema', name: 'comando_ju', strict: true, schema } },
