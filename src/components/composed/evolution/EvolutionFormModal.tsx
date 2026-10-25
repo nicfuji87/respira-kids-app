@@ -37,6 +37,7 @@ import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { Progress } from '@/components/primitives/progress';
 import { ScrollArea } from '@/components/primitives/scroll-area';
+import { useToast } from '@/components/primitives/use-toast';
 import {
   Tooltip,
   TooltipContent,
@@ -199,6 +200,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
   const [currentSection, setCurrentSection] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const isReadOnly = mode === 'view';
@@ -547,7 +549,20 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       clearDraft();
       onClose();
     } catch (error) {
+      // Antes a falha só ia para o console e o botão parecia não funcionar.
+      // O rascunho continua guardado: dá para tentar de novo sem perder nada.
       console.error('Erro ao salvar evolução:', error);
+      const detalhe =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'object' && error && 'message' in error
+            ? String((error as { message: unknown }).message)
+            : '';
+      toast({
+        title: 'A evolução não foi salva',
+        description: `${detalhe ? `${detalhe}. ` : ''}O que você preencheu continua aqui. Confira a internet e toque em Salvar de novo.`,
+        variant: 'destructive',
+      });
     } finally {
       setIsSaving(false);
     }

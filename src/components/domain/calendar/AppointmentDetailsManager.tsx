@@ -556,7 +556,6 @@ export const AppointmentDetailsManager =
             const { data, error } = await supabase
               .from('pagamento_status')
               .select('id, codigo, descricao')
-              .eq('ativo', true)
               .order('descricao');
 
             if (error) {
