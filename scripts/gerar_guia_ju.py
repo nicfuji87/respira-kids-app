@@ -2,7 +2,7 @@
 
 Uso: python scripts/gerar_guia_ju.py docs/Guia_da_Ju.pdf
 Linguagem simples, sem termos técnicos: o público é a equipe (recepção e fisios).
-Atualizado em 25/10/2026: @ju também no WhatsApp da Bruna (pelo Chatwoot).
+Atualizado em 25/10/2026: @ju cobra, cuida da nota, conta a situação do paciente e funciona no WhatsApp da Bruna.
 """
 import sys
 from reportlab.lib.pagesizes import A4
@@ -245,26 +245,33 @@ s += section('9. O que aparece no grupo RK · Notificações', table([
 ], [64, 110]))
 
 # 10
-s += section('10. Pedir para a Ju agendar: @ju', bullets([
-    'Na conversa com a família, quando o horário estiver combinado, escreva uma mensagem começando com <b>@ju</b>. '
-    'Exemplos: <b>@ju agenda</b>, <b>@ju agenda para a Bruna</b>, <b>@ju agende o Pedro amanhã às 9h</b>.',
-    'A Ju lê a conversa e lança a consulta na agenda: a criança, o dia, a hora, a fisio e o tipo de atendimento '
-    '(sábado, domingo e feriado já entram com o valor de fim de semana). A sala segue o padrão: Bruna sala 2, '
-    'Flávia sala 1, as demais sala 3.',
-    'Depois ela reage com o sinal verde de certo na sua mensagem do @ju e escreve para a família só "Pronto, consulta agendada! '
-    'Vocês vão receber a confirmação em seguida". Os dados da consulta chegam pela mensagem automática de '
-    'sempre; vale conferir a consulta na agenda.',
-    'Se faltar alguma coisa (qual criança, qual horário, qual atendimento), a Ju pergunta ali mesmo. Responda '
-    'começando de novo com <b>@ju</b>, por exemplo <b>@ju o Pedro</b> ou <b>@ju isso</b>.',
-    'Ela não agenda se o horário já estiver ocupado, se a criança já tiver consulta perto desse horário ou se a '
-    'família ainda não tiver cadastro. Nesses casos ela avisa na conversa.',
-    'A família também vê a mensagem com @ju. Só funciona quando quem escreve é a clínica; se a família escrever '
-    '@ju, nada acontece.',
-    'Por enquanto o @ju só agenda. Remarcar, cancelar, nota e atestado continuam como antes.',
-    '<b>No WhatsApp da Bruna</b> funciona igual: ela escreve <b>@ju agenda</b> na conversa dela com a família. '
-    'Se o pedido não disser outra fisio, a consulta fica com a própria Bruna. A resposta da Ju sai do número '
-    'da Bruna, sem o sinal verde de certo. A Ju só lê a mensagem do @ju e a conversa daquela família; o '
-    'restante do WhatsApp da Bruna ela não lê.',
+s += section('10. Pedir coisas para a Ju: @ju', bullets([
+    'Na conversa com a família, escreva uma mensagem começando com <b>@ju</b> e diga o que precisa, do seu jeito. '
+    'Não existe palavra certa: a Ju entende pelo sentido.',
+    '<b>Agendar:</b> <b>@ju agenda</b>, <b>@ju marca para a Bruna</b>, <b>@ju agende o Pedro amanhã às 9h</b>. '
+    'A Ju lê a conversa e lança a consulta (criança, dia, hora, fisio e tipo de atendimento; sábado, domingo e feriado '
+    'já entram com o valor de fim de semana; sala padrão: Bruna sala 2, Flávia sala 1, as demais sala 3). Ela reage '
+    'com o sinal verde de certo e escreve "Pronto, consulta agendada! Vocês vão receber a confirmação em seguida".',
+    '<b>Cobrar:</b> <b>@ju gera a cobrança</b> cobra todas as sessões que já aconteceram e ainda não têm cobrança '
+    '(falta entra, porque o contrato cobra a falta). Dá para escolher: <b>@ju gera o pagamento do mês passado</b>, '
+    '<b>@ju cobra só a do dia 13</b>, <b>@ju cobra as do Pedro</b>. É uma cobrança por criança, igual ao app, e o link '
+    'sai na hora (fora das 8h às 20h, sai às 8h). Se faltar algum dado do responsável financeiro, a Ju diz qual.',
+    '<b>Nota fiscal:</b> <b>@ju manda a nota</b>, <b>@ju reenvia a nota de setembro</b>, <b>@ju a nota deu erro</b>. '
+    'Nota já emitida: a Ju manda o link. Com erro: ela pede a reemissão. Não emitida: ela pede a emissão. '
+    'A nota chega na conversa quando a prefeitura autorizar.',
+    '<b>Situação do paciente:</b> <b>@ju me diz tudo desse paciente</b>, <b>@ju tem algo em aberto?</b>, '
+    '<b>@ju o contrato está assinado?</b>. A Ju responde com o que está no sistema: consultas, sessões sem '
+    'cobrança, cobranças em aberto, notas e contrato.',
+    '<b>Ajuda:</b> <b>@ju o que você faz?</b> e ela explica com exemplos.',
+    'Se faltar alguma coisa, a Ju pergunta ali mesmo. Responda começando de novo com <b>@ju</b>, por exemplo '
+    '<b>@ju o Pedro</b> ou <b>@ju isso</b>.',
+    'Tudo que a Ju responde aparece na conversa com "Ju:", e <b>a família também lê</b>. Ela escreve de forma '
+    'neutra, mas evite pedir pelo @ju o que a família não deve ver.',
+    'Só funciona quando quem escreve é a clínica; se a família escrever @ju, nada acontece. Remarcar, cancelar e '
+    'atestado pelo @ju ainda não.',
+    '<b>No WhatsApp da Bruna</b> funciona igual. Se o pedido não disser outra fisio, a consulta fica com a própria '
+    'Bruna. A resposta sai do número dela, sem o sinal verde de certo; o link de pagamento chega pelo número da '
+    'clínica, como sempre. A Ju só lê a mensagem do @ju e a conversa daquela família.',
 ]))
 
 # 11
