@@ -1161,18 +1161,24 @@ export function criarEvolucaoRespiratoriaDeAnterior(
     observacoes: undefined,
   };
 
-  // Exame respiratório (padrão, sinais de esforço e ausculta)
+  // Exame respiratório (padrão, sinais de esforço e ausculta). Registros
+  // antigos podem vir sem um hemitórax: o que faltar fica no padrão vazio.
   if (anterior.avaliacao_antes) {
+    const ant = anterior.avaliacao_antes;
+    const vazia = nova.avaliacao_antes;
     nova.avaliacao_antes = {
-      padrao_respiratorio: { ...anterior.avaliacao_antes.padrao_respiratorio },
-      sinais_dispneia: { ...anterior.avaliacao_antes.sinais_dispneia },
+      padrao_respiratorio: {
+        ...vazia.padrao_respiratorio,
+        ...ant.padrao_respiratorio,
+      },
+      sinais_dispneia: { ...vazia.sinais_dispneia, ...ant.sinais_dispneia },
       ausculta: {
-        hemitorax_direito: copiarHemitorax(
-          anterior.avaliacao_antes.ausculta.hemitorax_direito
-        ),
-        hemitorax_esquerdo: copiarHemitorax(
-          anterior.avaliacao_antes.ausculta.hemitorax_esquerdo
-        ),
+        hemitorax_direito: ant.ausculta?.hemitorax_direito
+          ? copiarHemitorax(ant.ausculta.hemitorax_direito)
+          : vazia.ausculta.hemitorax_direito,
+        hemitorax_esquerdo: ant.ausculta?.hemitorax_esquerdo
+          ? copiarHemitorax(ant.ausculta.hemitorax_esquerdo)
+          : vazia.ausculta.hemitorax_esquerdo,
       },
     };
   }
