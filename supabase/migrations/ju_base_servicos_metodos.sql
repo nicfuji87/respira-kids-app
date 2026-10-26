@@ -29,3 +29,10 @@ UPDATE public.ju_conhecimento
    SET texto = 'A Respira Kids é uma clínica de fisioterapia pediátrica em Brasília, especializada no atendimento de recém-nascidos, bebês e crianças. Os principais cuidados são fisioterapia respiratória (RTA), desenvolvimento motor (Conceito Bobath), torcicolo e assimetrias posturais e cranianas, como plagiocefalia e braquicefalia (Método Busquet).',
        updated_at = now()
  WHERE id = 'SERVICOS_GERAIS';
+
+-- a Ju diz que é a Bruna quem vai falar com a família (no teste ela dizia "a secretaria segue")
+UPDATE public.ju_conhecimento
+   SET texto = replace(texto, 'A Ju explica isso em uma frase, sem avaliar o caso, e chama a equipe (CLINICO)',
+                              'A Ju explica isso em uma frase, sem avaliar o caso, diz que a Bruna vai falar com a família por ali e chama a equipe (CLINICO)'),
+       updated_at = now()
+ WHERE id = 'CONVERSA_BRUNA' AND texto NOT LIKE '%vai falar com a família%';
