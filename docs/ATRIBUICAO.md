@@ -180,6 +180,37 @@ acrescentar. O filtro de canal tem os três grupos.
 - Linha de base (out/26, todos os contatos novos): quem citou convênio agendou 43% (3/7)
   × 19% (6/32) quem não citou — amostra pequena, mas não sustenta negar operadoras.
 
+## Código curto, vínculo por horário e contagem anônima (26/10/2026, `atribuicao_v2_janela_contagem.sql`)
+
+Par do `site_04_contagem_janela.sql` do repositório do site. Motivo: no 1º dia de anúncio
+os cliques pagos não apareciam no GA4 (só registra quem aceita cookies) e uma pessoa
+apagou o "Referência: RK-…" do fim da mensagem.
+
+- **Código curto no começo**: o site manda "Vim pelo site (cód. 7K4Q9P)" — 6 caracteres
+  logo depois de "Vim pelo site", trecho que quem edita costuma manter. Internamente é
+  `RK-7K4Q9P`; o formato antigo de 8 caracteres continua aceito. Extração em
+  `fn_atrib_extrair_codigos`.
+- **Vínculo por horário** (`atrib_toques.vinculo = 'janela'`): conversa NOVA cuja primeira
+  mensagem é do cliente e veio sem código entra em `atrib_janela_avaliacoes`; 15 min depois
+  o job pede ao site (`contato_cliques_janela_app`) os cliques no WhatsApp ainda sem par no
+  intervalo (15 min antes se a mensagem fala em "site", 5 min se não). Liga só com UM clique
+  e UMA conversa candidata; senão fica `ambiguo`/`sem_clique`. Se depois chegar uma mensagem
+  com o código daquele clique em outra conversa, o código vence: o toque muda de dono e a
+  troca fica em `atrib_eventos` (só de inserção). Quem recusou cookies não tem clique
+  individual no site, então nunca é ligado por horário.
+- **Contagem anônima**: o site soma visitas de anúncio pago e cliques no WhatsApp por dia,
+  campanha, grupo, palavra, página e escolha no banner, de TODOS os visitantes (inclusive
+  quem escolheu "Só o necessário"), sem código, IP, cookie ou gclid. O job copia os últimos
+  7 dias a cada 30 min para `atrib_anuncio_contagem_diaria` (hora do pedido em
+  `atrib_config.contagem_pedida_em`).
+- **Aba Otimização**: seção "Funil do anúncio" (cliques no anúncio → chegaram → WhatsApp →
+  conversas, com quantas foram por horário e quantos recusaram cookies) e colunas "Chegaram"
+  e "WhatsApp" por palavra-chave. A contagem anônima não diz qual conversa veio de qual
+  clique, e nem todo clique no WhatsApp vira mensagem — não subtrair uma da outra.
+- Testado em transação desfeita (extração, captura, candidato, vínculo, código vencendo o
+  horário, caso ambíguo, rollback) e com a conversa real 4191 (26/10 11:04: clique às
+  11:04:07, mensagem sem código às 11:04:22).
+
 ## Testes
 
 `supabase/tests/atribuicao_v2_cenarios.sql` — 36 verificações com dados fictícios,
