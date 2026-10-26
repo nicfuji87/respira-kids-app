@@ -18,6 +18,7 @@ Luciana (Pedro): pediu horário amanhã (sábado) com a Flávia ou a Beatriz. Se
 Gabriela (João, paciente novo): quer remarcar para uma sexta de manhã em novembro. Sem resposta desde 8h23.
 (61) 99649-0326, sem cadastro: perguntou o valor da respiratória para bebê de 6 meses; a Ju respondeu, falta oferecer horário. Sem resposta desde 15h51.
 Mensagem de dia anterior: "desde ontem 18h03" ou "desde 21/10". Paciente novo = ja_atendido false.
+Mensagens com quem "mensagem_automatica" são do sistema (link de pagamento, confirmação, lembrete, cancelamento): se a família pediu o link e depois veio a mensagem automática do link, o pedido está atendido.
 Conversa com no_resumo_desde já apareceu em resumo anterior e a Lolô ainda não respondeu: mantenha a linha (só tire se a Ju resolveu por completo, se a consulta pedida já está em proximas_consultas ou se a família só agradeceu), marque urgente e termine com "No resumo desde DD/MM.". Família esperando há mais de 24 horas (horas_esperando) também é urgente.
 urgente = true quando envolve hoje ou amanhã (consulta, encaixe, cancelamento de última hora), reclamação ou cobrança contestada.
 Não coloque o telefone na linha de quem tem cadastro (o sistema acrescenta). Sem markdown, sem negrito, sem travessão. Português do Brasil, sem diminutivos. Ordem: urgentes primeiro, depois do mais antigo para o mais novo.`;
