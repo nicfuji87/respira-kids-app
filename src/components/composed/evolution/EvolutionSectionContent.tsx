@@ -3,6 +3,7 @@ import { Label } from '@/components/primitives/label';
 import { Textarea } from '@/components/primitives/textarea';
 import { Input } from '@/components/primitives/input';
 import { Checkbox } from '@/components/primitives/checkbox';
+import { Button } from '@/components/primitives/button';
 import { RadioButtonGroup } from '@/components/composed/evaluation/inputs/RadioButtonGroup';
 import { BooleanToggle } from '@/components/composed/evaluation/inputs/BooleanToggle';
 import { cn } from '@/lib/utils';
@@ -66,6 +67,9 @@ import {
   getAvaliacaoRespiratoriaNormal,
   RUIDOS_ADVENTICIOS,
   LOCALIZACOES_RUIDO,
+  auscultaInicialLimpa,
+  MOTIVOS_SEM_ORIENTACAO,
+  type MotivoSemOrientacao,
 } from '@/types/evolucao-clinica';
 
 // AI dev note: EvolutionSectionContent - Renderiza conteúdo de cada seção da evolução
@@ -167,6 +171,51 @@ const CheckboxField: React.FC<{
     />
     <Label className="text-sm cursor-pointer">{label}</Label>
     {ajuda && <AjudaParametroBotao id={ajuda} />}
+  </div>
+);
+
+// "Nenhuma orientação nesta sessão": distingue "não orientou" de esquecido.
+// Marcar desliga as orientações da lista; o motivo é opcional.
+const SemOrientacaoBloco: React.FC<{
+  marcado: boolean;
+  motivo?: MotivoSemOrientacao | null;
+  onMarcar: (marcado: boolean) => void;
+  onMotivo: (m: MotivoSemOrientacao | null) => void;
+  disabled?: boolean;
+}> = ({ marcado, motivo, onMarcar, onMotivo, disabled }) => (
+  <div
+    className={cn(
+      'rounded-lg border p-4 space-y-3',
+      marcado ? 'border-amber-300 bg-amber-50' : 'bg-muted/20'
+    )}
+  >
+    <CheckboxField
+      label="Nenhuma orientação nesta sessão"
+      checked={marcado}
+      onChange={onMarcar}
+      disabled={disabled}
+    />
+    {marcado && (
+      <div className="space-y-1.5 pl-6">
+        <p className="text-xs text-muted-foreground">Motivo (opcional)</p>
+        <div className="flex flex-wrap gap-2">
+          {MOTIVOS_SEM_ORIENTACAO.map((m) => (
+            <Button
+              key={m.valor}
+              type="button"
+              size="sm"
+              variant={motivo === m.valor ? 'default' : 'outline'}
+              aria-pressed={motivo === m.valor}
+              onClick={() => onMotivo(motivo === m.valor ? null : m.valor)}
+              disabled={disabled}
+              className="h-8"
+            >
+              {m.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+    )}
   </div>
 );
 
@@ -607,7 +656,7 @@ export const EvolutionSectionContent: React.FC<
 
               {/* Temperatura — chips de atalho em 2 níveis (inteiro + decimal),
                   passo 0,1; input preciso continua p/ edição direta */}
-              <Field label="Temperatura (°C)">
+              <Field label="Temperatura (°C)" required>
                 <div className="flex flex-wrap items-center gap-2">
                   <RadioButtonGroup
                     value={tempInt != null ? String(tempInt) : null}
@@ -703,27 +752,47 @@ export const EvolutionSectionContent: React.FC<
                 </div>
               </Field>
 
-              <Field label="FC (bpm)">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={40}
-                  max={220}
-                  value={estado.frequencia_cardiaca || ''}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    updateEstado({
-                      frequencia_cardiaca: value ? Number(value) : undefined,
-                    });
-                  }}
-                  placeholder="120"
-                  disabled={disabled}
-                  className="w-full sm:w-32"
-                />
+              <Field label="FC (bpm)" required>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={40}
+                    max={220}
+                    value={estado.frequencia_cardiaca || ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      updateEstado({
+                        frequencia_cardiaca: value ? Number(value) : undefined,
+                        frequencia_cardiaca_nao_aferida: value
+                          ? false
+                          : estado.frequencia_cardiaca_nao_aferida,
+                      });
+                    }}
+                    placeholder="120"
+                    disabled={
+                      disabled || estado.frequencia_cardiaca_nao_aferida
+                    }
+                    className="w-full sm:w-32"
+                  />
+                  <CheckboxField
+                    label="Não aferida"
+                    checked={estado.frequencia_cardiaca_nao_aferida || false}
+                    onChange={(checked) =>
+                      updateEstado({
+                        frequencia_cardiaca_nao_aferida: checked,
+                        frequencia_cardiaca: checked
+                          ? undefined
+                          : estado.frequencia_cardiaca,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
               </Field>
 
               {/* SpO₂ com chips de atalho + campo p/ valores fora da faixa */}
-              <Field label="SpO₂ (%) (inicial)">
+              <Field label="SpO₂ (%) (inicial)" required>
                 <RadioButtonGroup
                   value={
                     estado.saturacao_o2 != null
@@ -994,7 +1063,7 @@ export const EvolutionSectionContent: React.FC<
                 ⚠️ Sinais e Sintomas Respiratórios
               </h4>
 
-              <Field label="Tosse">
+              <Field label="Tosse" required>
                 <RadioButtonGroup
                   value={estado.tosse}
                   onChange={(v) => {
@@ -1313,7 +1382,7 @@ export const EvolutionSectionContent: React.FC<
                 🔹 Padrão Respiratório
               </h4>
 
-              <Field label="Tipo">
+              <Field label="Tipo" required>
                 <RadioButtonGroup
                   value={avaliacao.padrao_respiratorio.tipo}
                   onChange={(v) =>
@@ -1961,7 +2030,7 @@ export const EvolutionSectionContent: React.FC<
                 />
               </Field>
 
-              <Field label="Choro Durante Atendimento">
+              <Field label="Choro Durante Atendimento" required>
                 <RadioButtonGroup
                   value={depois.choro_durante_atendimento}
                   onChange={(v) =>
@@ -1988,7 +2057,16 @@ export const EvolutionSectionContent: React.FC<
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-medium text-purple-700">
                 🩺 Mudança na Ausculta Pulmonar
+                {!auscultaInicialLimpa(evolucao) && (
+                  <span className="text-destructive ml-1">*</span>
+                )}
               </h4>
+              {auscultaInicialLimpa(evolucao) && (
+                <p className="text-sm text-muted-foreground">
+                  Ausculta inicial sem ruídos e com murmúrio preservado: não se
+                  aplica. Marque só se algo mudou.
+                </p>
+              )}
 
               <div className="flex flex-wrap gap-4">
                 <CheckboxField
@@ -2098,14 +2176,19 @@ export const EvolutionSectionContent: React.FC<
                 🌡️ Sinais Vitais Após Intervenção
               </h4>
               {/* SpO₂ com chips de atalho + campo p/ valores fora da faixa */}
-              <Field label="SpO₂ (%) (pós-atendimento)">
+              <Field label="SpO₂ (%) (pós-atendimento)" required>
                 <RadioButtonGroup
                   value={
                     depois.saturacao_o2 != null
                       ? String(depois.saturacao_o2)
                       : null
                   }
-                  onChange={(v) => updateDepois({ saturacao_o2: Number(v) })}
+                  onChange={(v) =>
+                    updateDepois({
+                      saturacao_o2: Number(v),
+                      saturacao_nao_aferida: false,
+                    })
+                  }
                   options={[
                     { valor: '94', label: '94' },
                     { valor: '95', label: '95' },
@@ -2116,73 +2199,113 @@ export const EvolutionSectionContent: React.FC<
                     { valor: '100', label: '100' },
                   ]}
                   size="sm"
-                  disabled={disabled}
+                  disabled={disabled || depois.saturacao_nao_aferida}
                 />
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={100}
-                  value={depois.saturacao_o2 || ''}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    updateDepois({
-                      saturacao_o2: value ? Number(value) : undefined,
-                    });
-                  }}
-                  placeholder="Outro valor"
-                  disabled={disabled}
-                  className="w-full sm:w-40"
-                />
-              </Field>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="FC (bpm) (pós-atendimento)">
+                <div className="flex flex-wrap items-center gap-3">
                   <Input
                     type="number"
                     inputMode="numeric"
-                    min={40}
-                    max={220}
-                    value={depois.frequencia_cardiaca || ''}
+                    min={0}
+                    max={100}
+                    value={depois.saturacao_o2 || ''}
                     onChange={(e) => {
                       const value = e.target.value.replace(/[^0-9]/g, '');
                       updateDepois({
-                        frequencia_cardiaca: value ? Number(value) : undefined,
+                        saturacao_o2: value ? Number(value) : undefined,
+                        saturacao_nao_aferida: value
+                          ? false
+                          : depois.saturacao_nao_aferida,
                       });
                     }}
-                    onKeyDown={(e) => {
-                      if (
-                        [
-                          'Backspace',
-                          'Delete',
-                          'Tab',
-                          'Escape',
-                          'Enter',
-                        ].includes(e.key) ||
-                        (e.ctrlKey &&
-                          ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) ||
-                        [
-                          'ArrowLeft',
-                          'ArrowRight',
-                          'ArrowUp',
-                          'ArrowDown',
-                        ].includes(e.key)
-                      ) {
-                        return;
-                      }
-                      if (!/[0-9]/.test(e.key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="115"
-                    disabled={disabled}
-                    className="w-full"
+                    placeholder="Outro valor"
+                    disabled={disabled || depois.saturacao_nao_aferida}
+                    className="w-full sm:w-40"
                   />
+                  <CheckboxField
+                    label="Não aferida"
+                    checked={depois.saturacao_nao_aferida || false}
+                    onChange={(checked) =>
+                      updateDepois({
+                        saturacao_nao_aferida: checked,
+                        saturacao_o2: checked ? undefined : depois.saturacao_o2,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              </Field>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="FC (bpm) (pós-atendimento)" required>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={40}
+                      max={220}
+                      value={depois.frequencia_cardiaca || ''}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        updateDepois({
+                          frequencia_cardiaca: value
+                            ? Number(value)
+                            : undefined,
+                          frequencia_cardiaca_nao_aferida: value
+                            ? false
+                            : depois.frequencia_cardiaca_nao_aferida,
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (
+                          [
+                            'Backspace',
+                            'Delete',
+                            'Tab',
+                            'Escape',
+                            'Enter',
+                          ].includes(e.key) ||
+                          (e.ctrlKey &&
+                            ['a', 'c', 'v', 'x'].includes(
+                              e.key.toLowerCase()
+                            )) ||
+                          [
+                            'ArrowLeft',
+                            'ArrowRight',
+                            'ArrowUp',
+                            'ArrowDown',
+                          ].includes(e.key)
+                        ) {
+                          return;
+                        }
+                        if (!/[0-9]/.test(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
+                      placeholder="115"
+                      disabled={
+                        disabled || depois.frequencia_cardiaca_nao_aferida
+                      }
+                      className="w-full sm:w-32"
+                    />
+                    <CheckboxField
+                      label="Não aferida"
+                      checked={depois.frequencia_cardiaca_nao_aferida || false}
+                      onChange={(checked) =>
+                        updateDepois({
+                          frequencia_cardiaca_nao_aferida: checked,
+                          frequencia_cardiaca: checked
+                            ? undefined
+                            : depois.frequencia_cardiaca,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </div>
                 </Field>
               </div>
             </div>
 
-            <Field label="Comportamento da Criança Após a Sessão">
+            <Field label="Comportamento da Criança Após a Sessão" required>
               <RadioButtonGroup
                 value={depois.comportamento_crianca}
                 onChange={(v) =>
@@ -2232,6 +2355,8 @@ export const EvolutionSectionContent: React.FC<
             orientacoes: { ...orientacoes, ...updates },
           });
         };
+        // "Nenhuma orientação" marcada trava a lista
+        const travado = disabled || !!orientacoes.sem_orientacao;
 
         return (
           <div className="space-y-6">
@@ -2245,6 +2370,26 @@ export const EvolutionSectionContent: React.FC<
               </p>
             </div>
 
+            <SemOrientacaoBloco
+              marcado={!!orientacoes.sem_orientacao}
+              motivo={orientacoes.sem_orientacao_motivo}
+              onMarcar={(marcado) =>
+                updateOrientacoes(
+                  marcado
+                    ? {
+                        sem_orientacao: true,
+                        higiene_nasal: false,
+                        posicionamento_dormir: false,
+                        sinais_alerta: false,
+                        outras: '',
+                      }
+                    : { sem_orientacao: false, sem_orientacao_motivo: null }
+                )
+              }
+              onMotivo={(m) => updateOrientacoes({ sem_orientacao_motivo: m })}
+              disabled={disabled}
+            />
+
             {/* Higiene Nasal */}
             <div className="border rounded-lg p-4 space-y-4">
               <CheckboxField
@@ -2253,7 +2398,7 @@ export const EvolutionSectionContent: React.FC<
                 onChange={(checked) =>
                   updateOrientacoes({ higiene_nasal: checked })
                 }
-                disabled={disabled}
+                disabled={travado}
               />
               {orientacoes.higiene_nasal && (
                 <div className="pl-6 border-l-2 border-blue-200 space-y-2">
@@ -2267,7 +2412,7 @@ export const EvolutionSectionContent: React.FC<
                         higiene_nasal_tecnica_demonstrada: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Frequência orientada conforme idade"
@@ -2279,7 +2424,7 @@ export const EvolutionSectionContent: React.FC<
                         higiene_nasal_frequencia_orientada: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Frequência orientada conforme necessidade"
@@ -2292,7 +2437,7 @@ export const EvolutionSectionContent: React.FC<
                         higiene_nasal_frequencia_conforme_necessidade: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                 </div>
               )}
@@ -2306,7 +2451,7 @@ export const EvolutionSectionContent: React.FC<
                 onChange={(checked) =>
                   updateOrientacoes({ posicionamento_dormir: checked })
                 }
-                disabled={disabled}
+                disabled={travado}
               />
               {orientacoes.posicionamento_dormir && (
                 <div className="pl-6 border-l-2 border-blue-200 space-y-2">
@@ -2318,7 +2463,7 @@ export const EvolutionSectionContent: React.FC<
                         posicionamento_cabeca_elevada: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Alternância de decúbitos"
@@ -2330,7 +2475,7 @@ export const EvolutionSectionContent: React.FC<
                         posicionamento_alternancia_decubitos: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Prono (barriga para baixo)"
@@ -2340,7 +2485,7 @@ export const EvolutionSectionContent: React.FC<
                         posicionamento_prono: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Decúbito lateral direito"
@@ -2353,7 +2498,7 @@ export const EvolutionSectionContent: React.FC<
                         posicionamento_decubito_lateral_direito: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Decúbito lateral esquerdo"
@@ -2366,7 +2511,7 @@ export const EvolutionSectionContent: React.FC<
                         posicionamento_decubito_lateral_esquerdo: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                 </div>
               )}
@@ -2380,7 +2525,7 @@ export const EvolutionSectionContent: React.FC<
                 onChange={(checked) =>
                   updateOrientacoes({ sinais_alerta: checked })
                 }
-                disabled={disabled}
+                disabled={travado}
               />
               {orientacoes.sinais_alerta && (
                 <div className="pl-6 border-l-2 border-orange-200 space-y-2">
@@ -2394,7 +2539,7 @@ export const EvolutionSectionContent: React.FC<
                         sinais_alerta_esforco_respiratorio: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Piora da tosse ou chiado"
@@ -2406,7 +2551,7 @@ export const EvolutionSectionContent: React.FC<
                         sinais_alerta_piora_tosse_chiado: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Queda de saturação (quando monitorada)"
@@ -2416,7 +2561,7 @@ export const EvolutionSectionContent: React.FC<
                         sinais_alerta_queda_saturacao: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Piora da diurese"
@@ -2426,7 +2571,7 @@ export const EvolutionSectionContent: React.FC<
                         sinais_alerta_piora_diurese: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Febre"
@@ -2436,7 +2581,7 @@ export const EvolutionSectionContent: React.FC<
                         sinais_alerta_febre: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                   <CheckboxField
                     label="Prostração"
@@ -2446,7 +2591,7 @@ export const EvolutionSectionContent: React.FC<
                         sinais_alerta_prostracao: checked,
                       })
                     }
-                    disabled={disabled}
+                    disabled={travado}
                   />
                 </div>
               )}
@@ -2457,7 +2602,7 @@ export const EvolutionSectionContent: React.FC<
                 value={orientacoes.outras || ''}
                 onChange={(e) => updateOrientacoes({ outras: e.target.value })}
                 placeholder="Outras orientações específicas..."
-                disabled={disabled}
+                disabled={travado}
                 rows={2}
               />
             </Field>
@@ -3710,9 +3855,33 @@ export const EvolutionSectionContent: React.FC<
             orientacoes: { ...orientacoes, ...updates },
           });
         };
+        // "Nenhuma orientação" marcada trava a lista
+        const travado = disabled || !!orientacoes.sem_orientacao;
 
         return (
           <div className="space-y-6">
+            <SemOrientacaoBloco
+              marcado={!!orientacoes.sem_orientacao}
+              motivo={orientacoes.sem_orientacao_motivo}
+              onMarcar={(marcado) =>
+                updateOrientacoes(
+                  marcado
+                    ? {
+                        sem_orientacao: true,
+                        posicionamento_sono: false,
+                        posicionamento_vigilia: false,
+                        exercicios_domiciliares: false,
+                        sinais_alerta: false,
+                        uso_capacete: false,
+                        tummy_time_frequencia: '',
+                        outras: '',
+                      }
+                    : { sem_orientacao: false, sem_orientacao_motivo: null }
+                )
+              }
+              onMotivo={(m) => updateOrientacoes({ sem_orientacao_motivo: m })}
+              disabled={disabled}
+            />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <CheckboxField
                 label="Sono seguro (de barriga para cima, sem posicionadores)"
@@ -3720,7 +3889,7 @@ export const EvolutionSectionContent: React.FC<
                 onChange={(checked) =>
                   updateOrientacoes({ posicionamento_sono: checked })
                 }
-                disabled={disabled}
+                disabled={travado}
               />
               <CheckboxField
                 label="Posicionamento e brincadeiras acordado (estimular o lado não preferido)"
@@ -3728,7 +3897,7 @@ export const EvolutionSectionContent: React.FC<
                 onChange={(checked) =>
                   updateOrientacoes({ posicionamento_vigilia: checked })
                 }
-                disabled={disabled}
+                disabled={travado}
               />
               <CheckboxField
                 label="Exercícios Domiciliares"
@@ -3736,7 +3905,7 @@ export const EvolutionSectionContent: React.FC<
                 onChange={(checked) =>
                   updateOrientacoes({ exercicios_domiciliares: checked })
                 }
-                disabled={disabled}
+                disabled={travado}
               />
               <CheckboxField
                 label="Sinais de Alerta"
@@ -3744,7 +3913,7 @@ export const EvolutionSectionContent: React.FC<
                 onChange={(checked) =>
                   updateOrientacoes({ sinais_alerta: checked })
                 }
-                disabled={disabled}
+                disabled={travado}
               />
               {capaceteVisivel(evolucao.areas) && (
                 <CheckboxField
@@ -3753,7 +3922,7 @@ export const EvolutionSectionContent: React.FC<
                   onChange={(checked) =>
                     updateOrientacoes({ uso_capacete: checked })
                   }
-                  disabled={disabled}
+                  disabled={travado}
                 />
               )}
             </div>
@@ -3765,7 +3934,7 @@ export const EvolutionSectionContent: React.FC<
                   updateOrientacoes({ tummy_time_frequencia: e.target.value })
                 }
                 placeholder="Ex: 3x ao dia, 10-15 min cada"
-                disabled={disabled}
+                disabled={travado}
               />
             </Field>
 
@@ -3774,7 +3943,7 @@ export const EvolutionSectionContent: React.FC<
                 value={orientacoes.outras || ''}
                 onChange={(e) => updateOrientacoes({ outras: e.target.value })}
                 placeholder="Outras orientações específicas..."
-                disabled={disabled}
+                disabled={travado}
                 rows={3}
               />
             </Field>

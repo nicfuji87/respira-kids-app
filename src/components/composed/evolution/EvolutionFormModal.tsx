@@ -62,7 +62,16 @@ import {
   getTipoEvolucaoPorServico,
   SECOES_REAPROVEITAVEIS_RESPIRATORIA,
   ehFormatoMotoraV13,
+  pendenciasEvolucaoRespiratoria,
+  pendenciasEvolucaoMotora,
+  type PendenciaEvolucao,
 } from '@/types/evolucao-clinica';
+import {
+  apagarRascunhoEvolucao,
+  buscarRascunhoEvolucao,
+  quandoRascunho,
+  salvarRascunhoEvolucao,
+} from '@/lib/evolucao-rascunho-api';
 import { EvolutionSectionContent } from './EvolutionSectionContent';
 import { MedidasEvolucaoContext } from './medidas-evolucao-context';
 import { PlanoMotorContext, type PlanoMotorValor } from './plano-motor-context';
@@ -173,6 +182,17 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   const [pendingDraft, setPendingDraft] = useState<AutosaveData | null>(null);
   // Confirmação de saída com alterações não salvas (antes window.confirm)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  // Rascunho no servidor ("Salvar e continuar depois"): abre em qualquer
+  // aparelho. Só "Finalizar" grava a evolução (e finaliza a consulta).
+  const [rascunhoServidor, setRascunhoServidor] = useState<{
+    em: string;
+    por: string | null;
+  } | null>(null);
+  const [salvandoRascunho, setSalvandoRascunho] = useState(false);
+  // Itens sem resposta: impedem finalizar (na edição, só avisam)
+  const [pendenciasCampos, setPendenciasCampos] = useState<
+    PendenciaEvolucao[] | null
+  >(null);
   // Determinar tipo de evolução baseado no serviço
   const determinarTipoEvolucao = useCallback((): TipoEvolucao => {
     if (existingData?.tipo_evolucao) return existingData.tipo_evolucao;
@@ -309,35 +329,38 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     return null;
   }, [autosaveKey]);
 
+  // O que vai no rascunho (local e no servidor)
+  const montarRascunho = useCallback(
+    (): AutosaveData => ({
+      tipo_evolucao: tipoEvolucao,
+      evolucao_respiratoria:
+        tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : undefined,
+      evolucao_motora_assimetria:
+        tipoEvolucao === 'motora_assimetria' ? evolucaoMotora : undefined,
+      savedAt: new Date().toISOString(),
+      secoes_pendentes_revisao: secoesPendentesRevisao,
+      reaproveitado_de: reaproveitadoDe,
+    }),
+    [
+      tipoEvolucao,
+      evolucaoRespiratoria,
+      evolucaoMotora,
+      secoesPendentesRevisao,
+      reaproveitadoDe,
+    ]
+  );
+
   // Função para salvar rascunho no localStorage
   const saveDraft = useCallback(() => {
     if (!autosaveKey || isReadOnly) return;
 
     try {
-      const data: AutosaveData = {
-        tipo_evolucao: tipoEvolucao,
-        evolucao_respiratoria:
-          tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : undefined,
-        evolucao_motora_assimetria:
-          tipoEvolucao === 'motora_assimetria' ? evolucaoMotora : undefined,
-        savedAt: new Date().toISOString(),
-        secoes_pendentes_revisao: secoesPendentesRevisao,
-        reaproveitado_de: reaproveitadoDe,
-      };
-      localStorage.setItem(autosaveKey, JSON.stringify(data));
+      localStorage.setItem(autosaveKey, JSON.stringify(montarRascunho()));
       setLastSaved(new Date());
     } catch (e) {
       console.warn('Erro ao salvar rascunho:', e);
     }
-  }, [
-    autosaveKey,
-    tipoEvolucao,
-    evolucaoRespiratoria,
-    evolucaoMotora,
-    isReadOnly,
-    secoesPendentesRevisao,
-    reaproveitadoDe,
-  ]);
+  }, [autosaveKey, isReadOnly, montarRascunho]);
 
   // Função para limpar rascunho
   const clearDraft = useCallback(() => {
@@ -415,10 +438,13 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       setCarryApplied(false);
       setSecoesPendentesRevisao([]);
       setReaproveitadoDe(null);
+      setRascunhoServidor(null);
+      setPendenciasCampos(null);
     } else {
       setPendingDraft(null);
       setShowCloseConfirm(false);
       setShowRevisaoPendente(false);
+      setPendenciasCampos(null);
     }
   }, [
     isOpen,
@@ -442,29 +468,60 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     );
   }, [isOpen, mode, areasSugeridas]);
 
-  // Aplicar o rascunho pendente (ação "Recuperar" do AlertDialog)
-  const applyPendingDraft = useCallback(() => {
-    if (!pendingDraft) return;
-    setTipoEvolucao(pendingDraft.tipo_evolucao);
-    if (pendingDraft.evolucao_respiratoria) {
-      setEvolucaoRespiratoria(pendingDraft.evolucao_respiratoria);
+  // Aplica um rascunho (do aparelho ou do servidor) por cima do formulário
+  const aplicarRascunho = useCallback((d: AutosaveData) => {
+    setTipoEvolucao(d.tipo_evolucao);
+    if (d.evolucao_respiratoria) {
+      setEvolucaoRespiratoria(d.evolucao_respiratoria);
     }
-    if (pendingDraft.evolucao_motora_assimetria) {
-      setEvolucaoMotora(
-        comAreasParaEdicao(pendingDraft.evolucao_motora_assimetria)
-      );
+    if (d.evolucao_motora_assimetria) {
+      setEvolucaoMotora(comAreasParaEdicao(d.evolucao_motora_assimetria));
       // rascunho já traz a escolha de áreas: não sobrescrever com sugestão
       areasTocadasRef.current = true;
     }
-    setLastSaved(new Date(pendingDraft.savedAt));
+    setLastSaved(new Date(d.savedAt));
     setCurrentSection(0);
-    if (pendingDraft.secoes_pendentes_revisao?.length) {
-      setSecoesPendentesRevisao(pendingDraft.secoes_pendentes_revisao);
-      setReaproveitadoDe(pendingDraft.reaproveitado_de ?? null);
+    if (d.secoes_pendentes_revisao?.length) {
+      setSecoesPendentesRevisao(d.secoes_pendentes_revisao);
+      setReaproveitadoDe(d.reaproveitado_de ?? null);
       setCarryApplied(true);
     }
+  }, []);
+
+  // Aplicar o rascunho pendente (ação "Recuperar" do AlertDialog)
+  const applyPendingDraft = useCallback(() => {
+    if (!pendingDraft) return;
+    aplicarRascunho(pendingDraft);
     setPendingDraft(null);
-  }, [pendingDraft]);
+  }, [pendingDraft, aplicarRascunho]);
+
+  // Rascunho salvo no servidor: abre direto, a não ser que o deste aparelho
+  // seja mais novo (aí fica a pergunta de recuperar o local).
+  useEffect(() => {
+    if (!isOpen || mode !== 'create' || !appointmentId) return;
+    let cancelado = false;
+    buscarRascunhoEvolucao(appointmentId)
+      .then((r) => {
+        if (cancelado || !r) return;
+        const local = loadDraft();
+        if (
+          local &&
+          new Date(local.savedAt).getTime() >
+            new Date(r.atualizado_em).getTime()
+        )
+          return;
+        aplicarRascunho(r.dados);
+        setPendingDraft(null);
+        setRascunhoServidor({
+          em: r.atualizado_em,
+          por: r.atualizado_por_nome,
+        });
+      })
+      .catch((e) => console.warn('Erro ao buscar rascunho:', e));
+    return () => {
+      cancelado = true;
+    };
+  }, [isOpen, mode, appointmentId, loadDraft, aplicarRascunho]);
 
   // Rótulo "há X minutos/horas" do rascunho pendente
   const pendingDraftTimeLabel = useMemo(() => {
@@ -504,8 +561,39 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     [isReadOnly]
   );
 
-  // Salvar
-  const handleSave = async () => {
+  // "Salvar e continuar depois": guarda no servidor e fecha, sem finalizar
+  const salvarRascunho = async () => {
+    if (!appointmentId || isReadOnly) return;
+    setSalvandoRascunho(true);
+    try {
+      saveDraft();
+      await salvarRascunhoEvolucao(appointmentId, montarRascunho());
+      toast({
+        title: 'Rascunho salvo',
+        description:
+          'Dá para continuar depois, em qualquer aparelho. A evolução só conta quando for finalizada.',
+      });
+      setPendenciasCampos(null);
+      setShowCloseConfirm(false);
+      onClose();
+    } catch (error) {
+      console.error('Erro ao salvar rascunho:', error);
+      const detalhe =
+        typeof error === 'object' && error && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : '';
+      toast({
+        title: 'O rascunho não foi salvo',
+        description: `${detalhe ? `${detalhe}. ` : ''}O que você preencheu continua aqui e guardado neste aparelho. Tente de novo.`,
+        variant: 'destructive',
+      });
+    } finally {
+      setSalvandoRascunho(false);
+    }
+  };
+
+  // Finalizar (ou salvar a edição). `mesmoAssim` só vale na edição.
+  const handleSave = async (mesmoAssim = false) => {
     // Bloqueia salvar enquanto houver seção reaproveitada sem conferência
     if (secoesPendentesRevisao.length > 0) {
       setShowRevisaoPendente(true);
@@ -527,6 +615,16 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
         return;
       }
     }
+    // Item sem resposta: não finaliza (cada um tem a opção de "não fiz")
+    const pend =
+      tipoEvolucao === 'respiratoria'
+        ? pendenciasEvolucaoRespiratoria(evolucaoRespiratoria)
+        : pendenciasEvolucaoMotora(evolucaoMotora);
+    if (pend.length > 0 && !(mode === 'edit' && mesmoAssim)) {
+      setPendenciasCampos(pend);
+      return;
+    }
+    setPendenciasCampos(null);
     setIsSaving(true);
     try {
       await onSave({
@@ -547,6 +645,10 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       });
       // Limpar rascunho após salvar com sucesso
       clearDraft();
+      if (mode === 'create' && appointmentId)
+        apagarRascunhoEvolucao(appointmentId).catch((e) =>
+          console.warn('Erro ao apagar rascunho:', e)
+        );
       onClose();
     } catch (error) {
       // Antes a falha só ia para o console e o botão parecia não funcionar.
@@ -586,8 +688,26 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   // aparecem com outro ícone quando preenchidas.
   const dadosAtuais =
     tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : evolucaoMotora;
-  const statusDaSecao = (secaoId: string) =>
-    verificarSecaoEvolucaoCompleta(tipoEvolucao, secaoId, dadosAtuais);
+  // A bolinha segue a mesma lista do "falta responder": seção com item sem
+  // resposta não fica verde
+  const pendenciasAtuais = useMemo(
+    () =>
+      tipoEvolucao === 'respiratoria'
+        ? pendenciasEvolucaoRespiratoria(evolucaoRespiratoria)
+        : pendenciasEvolucaoMotora(evolucaoMotora),
+    [tipoEvolucao, evolucaoRespiratoria, evolucaoMotora]
+  );
+  const statusDaSecao = (secaoId: string) => {
+    const st = verificarSecaoEvolucaoCompleta(
+      tipoEvolucao,
+      secaoId,
+      dadosAtuais
+    );
+    return st === 'completo' &&
+      pendenciasAtuais.some((p) => p.secaoId === secaoId)
+      ? 'parcial'
+      : st;
+  };
   // Na motora, ser essencial depende das áreas (controle motor só conta
   // quando desenvolvimento motor foi trabalhado)
   const ehComplementar = (s: (typeof secoes)[number]) =>
@@ -909,6 +1029,16 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                       </ul>
                     </div>
                   )}
+                  {rascunhoServidor && (
+                    <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+                      Continuando o rascunho salvo
+                      {rascunhoServidor.por
+                        ? ` por ${rascunhoServidor.por}`
+                        : ''}{' '}
+                      em {quandoRascunho(rascunhoServidor.em)}. A evolução só
+                      conta quando for finalizada.
+                    </div>
+                  )}
                   {podeReaproveitar && (
                     <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
                       <div className="flex-1 min-w-0">
@@ -978,6 +1108,22 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
 
               {/* Footer com navegação */}
               <div className="px-4 py-3 sm:px-6 sm:py-4 border-t bg-background flex-shrink-0">
+                {!isReadOnly && mode === 'create' && appointmentId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={salvarRascunho}
+                    disabled={isSaving || salvandoRascunho}
+                    className="sm:hidden w-full mb-2 h-8 text-muted-foreground"
+                  >
+                    {salvandoRascunho ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Cloud className="h-4 w-4 mr-2" />
+                    )}
+                    Salvar e continuar depois
+                  </Button>
+                )}
                 <div className="flex items-center justify-between gap-2">
                   <Button
                     variant="outline"
@@ -999,14 +1145,34 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                       Cancelar
                     </Button>
 
+                    {!isReadOnly && mode === 'create' && appointmentId && (
+                      <Button
+                        variant="outline"
+                        onClick={salvarRascunho}
+                        disabled={isSaving || salvandoRascunho}
+                      >
+                        {salvandoRascunho ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Cloud className="h-4 w-4 mr-2" />
+                        )}
+                        Salvar rascunho
+                      </Button>
+                    )}
+
                     {!isReadOnly && (
-                      <Button onClick={handleSave} disabled={isSaving}>
+                      <Button
+                        onClick={() => handleSave()}
+                        disabled={isSaving || salvandoRascunho}
+                      >
                         {isSaving ? (
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         ) : (
                           <Save className="h-4 w-4 mr-2" />
                         )}
-                        Salvar Evolução
+                        {mode === 'edit'
+                          ? 'Salvar alterações'
+                          : 'Finalizar evolução'}
                       </Button>
                     )}
                   </div>
@@ -1016,8 +1182,8 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                     {currentSection === secoes.length - 1 ? (
                       !isReadOnly && (
                         <Button
-                          onClick={handleSave}
-                          disabled={isSaving}
+                          onClick={() => handleSave()}
+                          disabled={isSaving || salvandoRascunho}
                           className="flex-1"
                         >
                           {isSaving ? (
@@ -1025,7 +1191,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                           ) : (
                             <Save className="h-4 w-4 mr-2" />
                           )}
-                          Salvar
+                          {mode === 'edit' ? 'Salvar' : 'Finalizar'}
                         </Button>
                       )
                     ) : (
@@ -1132,6 +1298,86 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
               </AlertDialogContent>
             </AlertDialog>
 
+            {/* Itens sem resposta: não finaliza (na edição, avisa) */}
+            <AlertDialog
+              open={!!pendenciasCampos}
+              onOpenChange={(open) => !open && setPendenciasCampos(null)}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {mode === 'edit'
+                      ? 'Ficaram itens sem resposta'
+                      : 'Falta responder para finalizar'}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-2">
+                      <p>
+                        Quando algo não foi feito, marque a opção própria
+                        (&quot;não aferida&quot;, &quot;nenhuma
+                        orientação&quot;).
+                        {mode === 'create'
+                          ? ' Se precisar parar agora, salve o rascunho e termine depois.'
+                          : ''}
+                      </p>
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                        {secoes
+                          .filter((s) =>
+                            (pendenciasCampos ?? []).some(
+                              (p) => p.secaoId === s.id
+                            )
+                          )
+                          .map((s) => (
+                            <div key={s.id}>
+                              <p className="font-medium text-foreground">
+                                {s.icone} {s.titulo}
+                              </p>
+                              <ul className="list-disc pl-5">
+                                {(pendenciasCampos ?? [])
+                                  .filter((p) => p.secaoId === s.id)
+                                  .map((p) => (
+                                    <li key={p.item}>{p.item}</li>
+                                  ))}
+                              </ul>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  {mode === 'edit' ? (
+                    <AlertDialogCancel onClick={() => handleSave(true)}>
+                      Salvar mesmo assim
+                    </AlertDialogCancel>
+                  ) : appointmentId ? (
+                    <AlertDialogCancel
+                      onClick={(e) => {
+                        e.preventDefault();
+                        salvarRascunho();
+                      }}
+                      disabled={salvandoRascunho}
+                    >
+                      Salvar rascunho
+                    </AlertDialogCancel>
+                  ) : (
+                    <AlertDialogCancel>Voltar</AlertDialogCancel>
+                  )}
+                  <AlertDialogAction
+                    onClick={() => {
+                      const primeira = secoes.findIndex((s) =>
+                        (pendenciasCampos ?? []).some((p) => p.secaoId === s.id)
+                      );
+                      if (primeira >= 0) setCurrentSection(primeira);
+                      setPendenciasCampos(null);
+                    }}
+                  >
+                    Ir para o primeiro
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             {/* Confirmação de saída com alterações não salvas (antes: window.confirm) */}
             <AlertDialog
               open={showCloseConfirm}
@@ -1141,20 +1387,33 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Sair da evolução?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Você tem alterações não salvas. O rascunho foi salvo
-                    automaticamente e poderá ser recuperado ao reabrir.
+                    {mode === 'create' && appointmentId
+                      ? 'A evolução ainda não foi finalizada. O que você preencheu fica guardado só neste aparelho; para continuar em outro, salve o rascunho.'
+                      : 'Você tem alterações não salvas. O rascunho foi salvo automaticamente neste aparelho e poderá ser recuperado ao reabrir.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Continuar editando</AlertDialogCancel>
-                  <AlertDialogAction
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       setShowCloseConfirm(false);
                       onClose();
                     }}
                   >
                     Sair
-                  </AlertDialogAction>
+                  </Button>
+                  {mode === 'create' && appointmentId && (
+                    <AlertDialogAction
+                      onClick={(e) => {
+                        e.preventDefault();
+                        salvarRascunho();
+                      }}
+                      disabled={salvandoRascunho}
+                    >
+                      Salvar rascunho e sair
+                    </AlertDialogAction>
+                  )}
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
