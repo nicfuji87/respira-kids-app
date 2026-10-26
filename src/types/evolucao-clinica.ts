@@ -210,6 +210,7 @@ export interface EstadoGeralAntes {
   temperatura_aferida?: number; // em graus Celsius
   temperatura_nao_aferida?: boolean; // marca explícita "não medido" (distingue de esquecido)
   frequencia_cardiaca?: number; // bpm
+  frequencia_cardiaca_nao_aferida?: boolean; // marca explícita "não medido"
   saturacao_o2?: number; // percentual em ar ambiente
   saturacao_nao_aferida?: boolean; // marca explícita "não medido"
   necessita_suporte_o2?: boolean; // Se necessita de suporte de O2
@@ -306,7 +307,9 @@ export interface AvaliacaoRespiratoriaDepois {
   reducao_desconforto: boolean;
   // Sinais Vitais Após
   saturacao_o2?: number;
+  saturacao_nao_aferida?: boolean; // marca explícita "não medido"
   frequencia_cardiaca?: number; // FC após intervenção
+  frequencia_cardiaca_nao_aferida?: boolean; // marca explícita "não medido"
   comportamento_crianca?:
     | 'calmo'
     | 'sonolento'
@@ -342,6 +345,30 @@ export interface OrientacoesRespiratoria {
   sinais_alerta_prostracao?: boolean; // Prostração
 
   outras?: string;
+
+  // Marca explícita de que não houve orientação (distingue de esquecido)
+  sem_orientacao?: boolean;
+  sem_orientacao_motivo?: MotivoSemOrientacao | null;
+}
+
+/** Por que a sessão terminou sem orientação aos responsáveis. */
+export type MotivoSemOrientacao =
+  | 'mantem_anteriores'
+  | 'responsavel_ausente'
+  | 'sem_necessidade';
+
+export const MOTIVOS_SEM_ORIENTACAO: {
+  valor: MotivoSemOrientacao;
+  label: string;
+}[] = [
+  { valor: 'mantem_anteriores', label: 'Mantém as orientações já dadas' },
+  { valor: 'responsavel_ausente', label: 'Responsável não estava' },
+  { valor: 'sem_necessidade', label: 'Sem necessidade hoje' },
+];
+
+export function textoSemOrientacao(motivo?: MotivoSemOrientacao | null) {
+  const m = MOTIVOS_SEM_ORIENTACAO.find((x) => x.valor === motivo);
+  return `Nenhuma orientação nesta sessão${m ? ` (${m.label.toLowerCase()})` : ''}`;
 }
 
 export interface CondutaRespiratoria {
@@ -494,6 +521,9 @@ export interface OrientacoesMotoraAssimetria {
   sinais_alerta: boolean;
   uso_capacete?: boolean;
   outras?: string;
+  // Marca explícita de que não houve orientação (distingue de esquecido)
+  sem_orientacao?: boolean;
+  sem_orientacao_motivo?: MotivoSemOrientacao | null;
 }
 
 export interface CondutaMotoraAssimetria {
@@ -1155,6 +1185,7 @@ export function criarEvolucaoRespiratoriaDeAnterior(
     temperatura_aferida: undefined,
     temperatura_nao_aferida: undefined,
     frequencia_cardiaca: undefined,
+    frequencia_cardiaca_nao_aferida: undefined,
     saturacao_o2: undefined,
     saturacao_nao_aferida: undefined,
     saturacao_com_suporte: undefined,
@@ -1525,7 +1556,11 @@ export function verificarSecaoEvolucaoCompleta(
       case 'orientacoes': {
         const o = evolucao.orientacoes;
         const temOrientacao =
-          o.higiene_nasal || o.posicionamento_dormir || o.sinais_alerta;
+          o.higiene_nasal ||
+          o.posicionamento_dormir ||
+          o.sinais_alerta ||
+          o.sem_orientacao ||
+          temTexto(o.outras);
         return temOrientacao ? 'completo' : 'vazio';
       }
       case 'conduta': {
@@ -1661,6 +1696,7 @@ function verificarSecaoMotoraCompleta(
         o.exercicios_domiciliares ||
         o.sinais_alerta ||
         o.uso_capacete ||
+        o.sem_orientacao ||
         temTexto(o.tummy_time_frequencia) ||
         temTexto(o.outras)
         ? 'completo'
@@ -1710,6 +1746,123 @@ export function secaoMotoraEssencial(
   if (secao.id === 'controle_motor' || secao.id === 'objetivos_habilidades')
     return areaAtiva(areas, 'desenvolvimento_motor');
   return true;
+}
+
+// -------------------------------------------------------------------------
+// O que ficou em branco: lista mostrada antes de salvar
+// -------------------------------------------------------------------------
+
+export interface PendenciaEvolucao {
+  secaoId: string;
+  item: string;
+}
+
+const ORIENTACAO_PENDENTE =
+  'Orientações (ou marque "Nenhuma orientação nesta sessão")';
+
+/** Hemitórax sem ruído e com murmúrio preservado. */
+const hemitoraxLimpo = (h?: AuscultaHemitorax) =>
+  !!h &&
+  h.murmurio_vesicular === 'preservado' &&
+  !RUIDOS_ADVENTICIOS.some(({ valor }) => h[valor]);
+
+/**
+ * Ausculta inicial sem nada a melhorar: a "mudança na ausculta" depois da
+ * sessão não se aplica.
+ */
+export function auscultaInicialLimpa(ev: EvolucaoRespiratoria): boolean {
+  const a = ev.avaliacao_antes?.ausculta;
+  return (
+    hemitoraxLimpo(a?.hemitorax_direito) &&
+    hemitoraxLimpo(a?.hemitorax_esquerdo)
+  );
+}
+
+/**
+ * Itens da evolução respiratória sem resposta. Cada um tem uma resposta
+ * possível mesmo quando nada foi feito ("não aferida", "nenhuma orientação"),
+ * então a lista sempre pode ser zerada.
+ */
+export function pendenciasEvolucaoRespiratoria(
+  ev: EvolucaoRespiratoria
+): PendenciaEvolucao[] {
+  const p: PendenciaEvolucao[] = [];
+  const add = (secaoId: string, item: string) => p.push({ secaoId, item });
+  const vazio = (v: unknown) => v === undefined || v === null || v === '';
+
+  const e = ev.estado_geral_antes || ({} as EstadoGeralAntes);
+  if (!e.nivel_consciencia) add('estado_geral_antes', 'Nível de consciência');
+  if (vazio(e.temperatura_aferida) && !e.temperatura_nao_aferida)
+    add('estado_geral_antes', 'Temperatura (valor ou "não aferida")');
+  if (vazio(e.frequencia_cardiaca) && !e.frequencia_cardiaca_nao_aferida)
+    add('estado_geral_antes', 'FC (valor ou "não aferida")');
+  if (vazio(e.saturacao_o2) && !e.saturacao_nao_aferida)
+    add('estado_geral_antes', 'SpO₂ (valor ou "não aferida")');
+  if (vazio(e.tosse) && !e.tosse_seca_referida && !e.tosse_produtiva_referida)
+    add('estado_geral_antes', 'Tosse');
+
+  const a = ev.avaliacao_antes;
+  if (!a?.padrao_respiratorio?.tipo)
+    add('avaliacao_antes', 'Tipo de respiração (nasal, oral, misto…)');
+  if (!a?.padrao_respiratorio?.ritmo_respiratorio)
+    add('avaliacao_antes', 'Ritmo respiratório');
+  if (!a?.ausculta?.hemitorax_direito?.murmurio_vesicular)
+    add('avaliacao_antes', 'Murmúrio vesicular do hemitórax direito');
+  if (!a?.ausculta?.hemitorax_esquerdo?.murmurio_vesicular)
+    add('avaliacao_antes', 'Murmúrio vesicular do hemitórax esquerdo');
+
+  if (
+    verificarSecaoEvolucaoCompleta('respiratoria', 'intervencao', ev) ===
+    'vazio'
+  )
+    add('intervencao', 'Nenhuma técnica marcada');
+
+  const d = ev.avaliacao_depois || ({} as AvaliacaoRespiratoriaDepois);
+  if (!d.tolerancia_manuseio) add('avaliacao_depois', 'Tolerância ao manuseio');
+  if (!d.choro_durante_atendimento)
+    add('avaliacao_depois', 'Choro durante o atendimento');
+  if (
+    !auscultaInicialLimpa(ev) &&
+    !d.ausculta_sem_alteracao &&
+    !d.ausculta_melhorou &&
+    !d.ausculta_pouca_melhora
+  )
+    add('avaliacao_depois', 'Mudança na ausculta pulmonar');
+  if (vazio(d.saturacao_o2) && !d.saturacao_nao_aferida)
+    add('avaliacao_depois', 'SpO₂ após (valor ou "não aferida")');
+  if (vazio(d.frequencia_cardiaca) && !d.frequencia_cardiaca_nao_aferida)
+    add('avaliacao_depois', 'FC após (valor ou "não aferida")');
+  if (!d.comportamento_crianca)
+    add('avaliacao_depois', 'Comportamento da criança após a sessão');
+
+  if (
+    verificarSecaoEvolucaoCompleta('respiratoria', 'orientacoes', ev) ===
+    'vazio'
+  )
+    add('orientacoes', ORIENTACAO_PENDENTE);
+  return p;
+}
+
+/**
+ * Seções da evolução motora sem resposta: as essenciais das áreas marcadas e
+ * as orientações (que agora têm "Nenhuma orientação nesta sessão"). As
+ * medidas têm a própria checagem ("Medi hoje" sem resultado).
+ */
+export function pendenciasEvolucaoMotora(
+  ev: EvolucaoMotoraAssimetria
+): PendenciaEvolucao[] {
+  const p: PendenciaEvolucao[] = [];
+  for (const s of secoesMotorasVisiveis(ev.areas, ehFormatoMotoraV13(ev))) {
+    if (s.id === 'orientacoes') {
+      if (verificarSecaoMotoraCompleta('orientacoes', ev) === 'vazio')
+        p.push({ secaoId: s.id, item: ORIENTACAO_PENDENTE });
+      continue;
+    }
+    if (!secaoMotoraEssencial(s, ev.areas)) continue;
+    if (verificarSecaoMotoraCompleta(s.id, ev) === 'vazio')
+      p.push({ secaoId: s.id, item: s.titulo });
+  }
+  return p;
 }
 
 /** Perguntas de "melhora" da resposta e as áreas em que fazem sentido. */

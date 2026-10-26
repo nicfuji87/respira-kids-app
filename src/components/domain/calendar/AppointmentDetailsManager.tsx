@@ -76,6 +76,11 @@ import {
   medidaPendente,
   type MedidaPaciente,
 } from '@/lib/motora-medidas';
+import { textoSemOrientacao } from '@/types/evolucao-clinica';
+import {
+  buscarRascunhoEvolucao,
+  quandoRascunho,
+} from '@/lib/evolucao-rascunho-api';
 import {
   gerarResumoEvolucaoMotora,
   prepararEvolucaoMotoraParaSalvar,
@@ -252,6 +257,29 @@ export const AppointmentDetailsManager =
       } | null>(null);
       // AI dev note: última evolução do paciente p/ carry-forward (oferecida no
       // modal ao iniciar uma NOVA evolução respiratória).
+      // Rascunho de evolução não finalizada desta consulta (salvo no servidor)
+      const [rascunhoEvolucao, setRascunhoEvolucao] = useState<{
+        em: string;
+        por: string | null;
+      } | null>(null);
+      useEffect(() => {
+        if (!isOpen || !appointment?.id || showEvolutionModal) return;
+        if (userRole === 'secretaria') return;
+        let cancelado = false;
+        buscarRascunhoEvolucao(appointment.id)
+          .then(
+            (r) =>
+              !cancelado &&
+              setRascunhoEvolucao(
+                r ? { em: r.atualizado_em, por: r.atualizado_por_nome } : null
+              )
+          )
+          .catch(() => !cancelado && setRascunhoEvolucao(null));
+        return () => {
+          cancelado = true;
+        };
+      }, [isOpen, appointment?.id, showEvolutionModal, userRole]);
+
       const [previousEvolucao, setPreviousEvolucao] = useState<{
         evolucao_respiratoria?: EvolucaoRespiratoria;
         date?: string;
@@ -991,20 +1019,30 @@ export const AppointmentDetailsManager =
             }
 
             // 2. Sinais Vitais
+            const eg = ev.estado_geral_antes;
             const temSinaisVitais =
-              ev.estado_geral_antes.temperatura_aferida ||
-              ev.estado_geral_antes.frequencia_cardiaca ||
-              ev.estado_geral_antes.saturacao_o2;
+              eg.temperatura_aferida ||
+              eg.temperatura_nao_aferida ||
+              eg.frequencia_cardiaca ||
+              eg.frequencia_cardiaca_nao_aferida ||
+              eg.saturacao_o2 ||
+              eg.saturacao_nao_aferida;
             if (temSinaisVitais) {
               conteudoResumo += `\n🌡️ Sinais Vitais\n`;
-              if (ev.estado_geral_antes.temperatura_aferida) {
-                conteudoResumo += `   • Temperatura: ${ev.estado_geral_antes.temperatura_aferida}°C\n`;
+              if (eg.temperatura_aferida) {
+                conteudoResumo += `   • Temperatura: ${eg.temperatura_aferida}°C\n`;
+              } else if (eg.temperatura_nao_aferida) {
+                conteudoResumo += `   • Temperatura: não aferida\n`;
               }
-              if (ev.estado_geral_antes.frequencia_cardiaca) {
-                conteudoResumo += `   • FC: ${ev.estado_geral_antes.frequencia_cardiaca} bpm\n`;
+              if (eg.frequencia_cardiaca) {
+                conteudoResumo += `   • FC: ${eg.frequencia_cardiaca} bpm\n`;
+              } else if (eg.frequencia_cardiaca_nao_aferida) {
+                conteudoResumo += `   • FC: não aferida\n`;
               }
-              if (ev.estado_geral_antes.saturacao_o2) {
-                conteudoResumo += `   • SpO₂ (inicial): ${ev.estado_geral_antes.saturacao_o2}%\n`;
+              if (eg.saturacao_o2) {
+                conteudoResumo += `   • SpO₂ (inicial): ${eg.saturacao_o2}%\n`;
+              } else if (eg.saturacao_nao_aferida) {
+                conteudoResumo += `   • SpO₂ (inicial): não aferida\n`;
               }
               if (
                 ev.estado_geral_antes.necessita_suporte_o2 &&
@@ -1199,9 +1237,14 @@ export const AppointmentDetailsManager =
             }
 
             // Ausculta Pulmonar - por hemitórax
+            // Registro antigo pode vir sem um hemitórax: trata como vazio
             const ausculta = ev.avaliacao_antes.ausculta;
-            const hd = ausculta.hemitorax_direito;
-            const he = ausculta.hemitorax_esquerdo;
+            const hd =
+              ausculta.hemitorax_direito ??
+              ({} as typeof ausculta.hemitorax_direito);
+            const he =
+              ausculta.hemitorax_esquerdo ??
+              ({} as typeof ausculta.hemitorax_esquerdo);
 
             const mvMap: Record<string, string> = {
               preservado: 'Preservado',
@@ -1348,16 +1391,23 @@ export const AppointmentDetailsManager =
             conteudoResumo += `─────────────────────\n\n`;
 
             // Sinais Vitais Após
+            const dp = ev.avaliacao_depois;
             const temSinaisVitaisApos =
-              ev.avaliacao_depois.saturacao_o2 ||
-              ev.avaliacao_depois.frequencia_cardiaca;
+              dp.saturacao_o2 ||
+              dp.saturacao_nao_aferida ||
+              dp.frequencia_cardiaca ||
+              dp.frequencia_cardiaca_nao_aferida;
             if (temSinaisVitaisApos) {
               conteudoResumo += `🌡️ Sinais Vitais Após Intervenção\n`;
-              if (ev.avaliacao_depois.saturacao_o2) {
-                conteudoResumo += `   • SpO₂: ${ev.avaliacao_depois.saturacao_o2}%\n`;
+              if (dp.saturacao_o2) {
+                conteudoResumo += `   • SpO₂: ${dp.saturacao_o2}%\n`;
+              } else if (dp.saturacao_nao_aferida) {
+                conteudoResumo += `   • SpO₂: não aferida\n`;
               }
-              if (ev.avaliacao_depois.frequencia_cardiaca) {
-                conteudoResumo += `   • FC: ${ev.avaliacao_depois.frequencia_cardiaca} bpm\n`;
+              if (dp.frequencia_cardiaca) {
+                conteudoResumo += `   • FC: ${dp.frequencia_cardiaca} bpm\n`;
+              } else if (dp.frequencia_cardiaca_nao_aferida) {
+                conteudoResumo += `   • FC: não aferida\n`;
               }
             }
 
@@ -1434,10 +1484,18 @@ export const AppointmentDetailsManager =
             }
 
             // ORIENTAÇÕES
+            // "Outras" sozinha também conta (antes ficava fora do texto)
             const temOrientacoes =
               ev.orientacoes.higiene_nasal ||
               ev.orientacoes.posicionamento_dormir ||
-              ev.orientacoes.sinais_alerta;
+              ev.orientacoes.sinais_alerta ||
+              !!ev.orientacoes.outras?.trim();
+            if (ev.orientacoes.sem_orientacao && !temOrientacoes) {
+              conteudoResumo += `\n─────────────────────\n`;
+              conteudoResumo += `📚 ORIENTAÇÕES AOS RESPONSÁVEIS\n`;
+              conteudoResumo += `─────────────────────\n\n`;
+              conteudoResumo += `   ${textoSemOrientacao(ev.orientacoes.sem_orientacao_motivo)}\n`;
+            }
             if (temOrientacoes) {
               conteudoResumo += `\n─────────────────────\n`;
               conteudoResumo += `📚 ORIENTAÇÕES FORNECIDAS AOS RESPONSÁVEIS\n`;
@@ -1563,8 +1621,11 @@ export const AppointmentDetailsManager =
             dados.evolucao_respiratoria
           ) {
             const ev = dados.evolucao_respiratoria;
-            const hd = ev.avaliacao_antes.ausculta.hemitorax_direito;
-            const he = ev.avaliacao_antes.ausculta.hemitorax_esquerdo;
+            const aus = ev.avaliacao_antes.ausculta;
+            const hd =
+              aus.hemitorax_direito ?? ({} as typeof aus.hemitorax_direito);
+            const he =
+              aus.hemitorax_esquerdo ?? ({} as typeof aus.hemitorax_esquerdo);
             analyticsData = {
               // Estado Geral da Criança
               nivel_consciencia:
@@ -2622,10 +2683,21 @@ export const AppointmentDetailsManager =
                           className="flex items-center gap-2 w-full"
                         >
                           <FileText className="h-4 w-4" />
-                          {evolucoes.length > 0
-                            ? 'Adicionar Nova Evolução'
-                            : 'Registrar Evolução'}
+                          {rascunhoEvolucao
+                            ? 'Continuar evolução (rascunho)'
+                            : evolucoes.length > 0
+                              ? 'Adicionar Nova Evolução'
+                              : 'Registrar Evolução'}
                         </Button>
+                        {rascunhoEvolucao && (
+                          <p className="text-xs text-amber-700">
+                            Evolução não finalizada: rascunho salvo
+                            {rascunhoEvolucao.por
+                              ? ` por ${rascunhoEvolucao.por}`
+                              : ''}{' '}
+                            em {quandoRascunho(rascunhoEvolucao.em)}.
+                          </p>
+                        )}
                       </div>
                     )}
 

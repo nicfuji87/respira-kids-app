@@ -14,6 +14,7 @@ import {
   ROTULO_PLAGIOCEFALIA,
   VERSAO_FORMULARIO_MOTORA,
   ehFormatoMotoraV13,
+  textoSemOrientacao,
   type AdesaoDomiciliar,
   type AutoriaEvolucao,
   type EvolucaoMotoraAssimetria,
@@ -409,6 +410,8 @@ export function gerarResumoEvolucaoMotora(
     if (o.sinais_alerta) orient.push('Sinais de alerta');
     if (o.uso_capacete) orient.push('Uso do capacete');
     if (temTexto(o.outras)) orient.push(o.outras.trim());
+    if (o.sem_orientacao && orient.length === 0)
+      orient.push(textoSemOrientacao(o.sem_orientacao_motivo));
   }
   texto += secao('📝 Orientações aos responsáveis', orient);
 
