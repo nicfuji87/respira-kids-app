@@ -153,8 +153,16 @@ export function linhasFunil(
     return {
       ...l,
       campanha_nome: nomes.get(f.campanha_id) || f.campanha_id,
-      taxaChegada: razao(l.visitas, l.cliques_anuncio, 'Sem clique no anúncio.'),
-      taxaWhatsapp: razao(l.whatsapp, l.visitas, 'Ninguém chegou ao site ainda.'),
+      taxaChegada: razao(
+        l.visitas,
+        l.cliques_anuncio,
+        'Sem clique no anúncio.'
+      ),
+      taxaWhatsapp: razao(
+        l.whatsapp,
+        l.visitas,
+        'Ninguém chegou ao site ainda.'
+      ),
       taxaConversa: razao(
         l.conversas,
         l.whatsapp,

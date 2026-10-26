@@ -207,7 +207,10 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
             { chave: 'conversas', titulo: 'Conversas com origem' },
             { chave: 'conversas_por_horario', titulo: 'Conversas por horário' },
             { chave: 'agendaram', titulo: 'Agendaram' },
-            { chave: 'visitas_recusaram', titulo: 'Visitas que recusaram cookies' },
+            {
+              chave: 'visitas_recusaram',
+              titulo: 'Visitas que recusaram cookies',
+            },
             { chave: 'whatsapp_recusaram', titulo: 'WhatsApp de quem recusou' },
           ],
         }}
@@ -234,7 +237,10 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
                 formato: (v, l) => (
                   <span>
                     {num(Number(v))}{' '}
-                    <CelulaIndicador ind={l.taxaChegada} formato={(x) => pct(x)} />
+                    <CelulaIndicador
+                      ind={l.taxaChegada}
+                      formato={(x) => pct(x)}
+                    />
                   </span>
                 ),
               },
@@ -245,7 +251,10 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
                 formato: (v, l) => (
                   <span>
                     {num(Number(v))}{' '}
-                    <CelulaIndicador ind={l.taxaWhatsapp} formato={(x) => pct(x)} />
+                    <CelulaIndicador
+                      ind={l.taxaWhatsapp}
+                      formato={(x) => pct(x)}
+                    />
                   </span>
                 ),
               },
@@ -355,7 +364,10 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
                 formato: (v, l) => (
                   <span>
                     {num(Number(v))}{' '}
-                    <CelulaIndicador ind={l.taxaWhatsapp} formato={(x) => pct(x)} />
+                    <CelulaIndicador
+                      ind={l.taxaWhatsapp}
+                      formato={(x) => pct(x)}
+                    />
                   </span>
                 ),
               },
