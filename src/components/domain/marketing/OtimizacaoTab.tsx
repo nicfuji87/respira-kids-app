@@ -23,12 +23,14 @@ import {
 import {
   AMOSTRA_CONVENIO,
   carregarOtimizacao,
+  linhasFunil,
   linhasPalavra,
   periodoDosMeses,
   resumoConvenio,
   ROTULO_CORRESP,
   rotuloDetalhe,
   type DadosOtimizacao,
+  type LinhaFunil,
   type LinhaPalavra,
 } from '@/lib/marketing-otimizacao';
 import {
@@ -102,6 +104,10 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
   const palavras = linhasPalavra(d, nomes).filter(
     (p) =>
       r.filtros.campanha === 'todas' || p.campanha_id === r.filtros.campanha
+  );
+  const funil = linhasFunil(d, nomes).filter(
+    (f) =>
+      r.filtros.campanha === 'todas' || f.campanha_id === r.filtros.campanha
   );
   const semDetalhe = !d.detalhe_ads_ultimo;
 
@@ -180,6 +186,101 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
       </SecaoRelatorio>
 
       <SecaoRelatorio
+        titulo="Funil do anúncio"
+        descricao={`Clique no anúncio (Google Ads) → chegou ao site → clicou no WhatsApp → conversa com origem identificada. "Chegaram" e "WhatsApp" são uma contagem anônima do site: valem para todos os visitantes, inclusive quem escolheu "Só o necessário" nos cookies, mas não dizem qual conversa veio de qual clique — nem todo clique no WhatsApp vira mensagem enviada. Conversas "por horário" foram ligadas ao clique sem o código na mensagem. ${d.contagem_ultima ? `Contagem atualizada ${dataHora(d.contagem_ultima)}.` : 'A contagem anônima ainda não chegou.'}`}
+        csv={{
+          nome: `funil-anuncio_${desde}_${ate}`,
+          linhas: funil.map((f) => ({
+            ...f,
+            taxaChegada: f.taxaChegada.valor,
+            taxaWhatsapp: f.taxaWhatsapp.valor,
+            taxaConversa: f.taxaConversa.valor,
+          })),
+          colunas: [
+            { chave: 'campanha_nome', titulo: 'Campanha' },
+            { chave: 'cliques_anuncio', titulo: 'Cliques no anúncio' },
+            { chave: 'custo', titulo: 'Custo' },
+            { chave: 'visitas', titulo: 'Chegaram ao site' },
+            { chave: 'taxaChegada', titulo: 'Taxa de chegada' },
+            { chave: 'whatsapp', titulo: 'Clicaram no WhatsApp' },
+            { chave: 'taxaWhatsapp', titulo: 'Taxa de clique no WhatsApp' },
+            { chave: 'conversas', titulo: 'Conversas com origem' },
+            { chave: 'conversas_por_horario', titulo: 'Conversas por horário' },
+            { chave: 'agendaram', titulo: 'Agendaram' },
+            {
+              chave: 'visitas_recusaram',
+              titulo: 'Visitas que recusaram cookies',
+            },
+            { chave: 'whatsapp_recusaram', titulo: 'WhatsApp de quem recusou' },
+          ],
+        }}
+      >
+        {funil.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nenhum clique de anúncio no período.
+          </p>
+        ) : (
+          <TabelaRelatorio<LinhaFunil>
+            linhas={funil}
+            colunas={[
+              { chave: 'campanha_nome', titulo: 'Campanha' },
+              {
+                chave: 'cliques_anuncio',
+                titulo: 'Cliques no anúncio',
+                alinhar: 'direita',
+                formato: (v) => num(Number(v)),
+              },
+              {
+                chave: 'visitas',
+                titulo: 'Chegaram',
+                alinhar: 'direita',
+                formato: (v, l) => (
+                  <span>
+                    {num(Number(v))}{' '}
+                    <CelulaIndicador
+                      ind={l.taxaChegada}
+                      formato={(x) => pct(x)}
+                    />
+                  </span>
+                ),
+              },
+              {
+                chave: 'whatsapp',
+                titulo: 'WhatsApp',
+                alinhar: 'direita',
+                formato: (v, l) => (
+                  <span>
+                    {num(Number(v))}{' '}
+                    <CelulaIndicador
+                      ind={l.taxaWhatsapp}
+                      formato={(x) => pct(x)}
+                    />
+                  </span>
+                ),
+              },
+              {
+                chave: 'conversas',
+                titulo: 'Conversas',
+                alinhar: 'direita',
+                formato: (v, l) =>
+                  l.conversas_por_horario > 0
+                    ? `${num(Number(v))} (${num(l.conversas_por_horario)} por horário)`
+                    : num(Number(v)),
+              },
+              { chave: 'agendaram', titulo: 'Agendaram', alinhar: 'direita' },
+              {
+                chave: 'visitas_recusaram',
+                titulo: 'Recusaram cookies',
+                alinhar: 'direita',
+                formato: (v, l) =>
+                  `${num(Number(v))} visita(s) · ${num(l.whatsapp_recusaram)} WhatsApp`,
+              },
+            ]}
+          />
+        )}
+      </SecaoRelatorio>
+
+      <SecaoRelatorio
         titulo="Grupos e palavras-chave"
         descricao={`Custo e cliques do Google Ads × o que aconteceu depois no sistema (crédito: última palavra-chave antes da conversa). ${d.detalhe_ads_ultimo ? `Detalhe do Ads atualizado ${dataHora(d.detalhe_ads_ultimo)}.` : ''} Palavra com custo e nenhuma conversa é candidata a pausar ou a negativar termos.`}
         csv={{
@@ -197,6 +298,8 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
             { chave: 'corresp', titulo: 'Correspondência' },
             { chave: 'impressoes', titulo: 'Impressões' },
             { chave: 'cliques', titulo: 'Cliques' },
+            { chave: 'visitas', titulo: 'Chegaram ao site' },
+            { chave: 'whatsapp', titulo: 'Clicaram no WhatsApp' },
             { chave: 'custo', titulo: 'Custo' },
             { chave: 'conversas', titulo: 'Conversas' },
             { chave: 'agendaram', titulo: 'Agendaram' },
@@ -247,6 +350,26 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
                 titulo: 'Cliques',
                 alinhar: 'direita',
                 formato: (v) => num(Number(v)),
+              },
+              {
+                chave: 'visitas',
+                titulo: 'Chegaram',
+                alinhar: 'direita',
+                formato: (v) => num(Number(v)),
+              },
+              {
+                chave: 'whatsapp',
+                titulo: 'WhatsApp',
+                alinhar: 'direita',
+                formato: (v, l) => (
+                  <span>
+                    {num(Number(v))}{' '}
+                    <CelulaIndicador
+                      ind={l.taxaWhatsapp}
+                      formato={(x) => pct(x)}
+                    />
+                  </span>
+                ),
               },
               {
                 chave: 'ctr',
