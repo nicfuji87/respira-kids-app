@@ -52,6 +52,8 @@ export interface StatusConexao {
 
 const TIMEOUT_MS = 20000;
 
+const ESTADOS_QUEPASA_CONECTADO = ['Ready', 'Connected'];
+
 async function pedir(url: string, init: RequestInit = {}) {
   return await fetch(url, {
     ...init,
@@ -177,11 +179,18 @@ async function statusQuepasa(token: string): Promise<StatusConexao> {
     });
     const j = await r.json().catch(() => null);
     if (!j) return { ...base, erro: `QuePasa respondeu ${r.status}` };
-    const conectado = j.success === true;
+    // `success` não basta: com a sessão parada ("Stopped") o /health devolve
+    // success=true. Conectado de verdade é o estado Ready/Connected.
+    const conectado = j.state
+      ? ESTADOS_QUEPASA_CONECTADO.includes(j.state)
+      : j.success === true;
     const diag = j.diagnostic ?? null;
     let motivo: string | null = null;
     if (diag?.disconnect_cause === 'network') {
       motivo = 'Queda de conexão entre o servidor e o WhatsApp';
+    } else if (diag?.disconnect_cause === 'logged_out') {
+      motivo =
+        'A sessão foi removida no celular (ou por outro aparelho); só volta com QR novo';
     } else if (diag?.message) {
       motivo = diag.message;
     }
@@ -232,13 +241,19 @@ async function qrQuepasa(token: string, user: string) {
     return { ok: true, qrcode: j.qrcode || j.qr };
   }
   const status = String(j?.status ?? '');
-  if (status.includes('no data to encode')) {
+  // "no data to encode" (QR) e "websocket not connected" (código) = o servidor
+  // do QuePasa não consegue abrir conexão com o WhatsApp. Não se resolve pelo
+  // celular; precisa mexer no servidor.
+  if (
+    status.includes('no data to encode') ||
+    status.includes('websocket not connected')
+  ) {
     return {
       ok: false,
       erro:
-        'O servidor do sistema não conseguiu falar com o WhatsApp para gerar o QR. ' +
-        'Clique em "Reiniciar conexão", espere 30 segundos e tente de novo. ' +
-        'Se continuar, o problema é no servidor (avise o Nicolas).',
+        'O servidor do sistema não está conseguindo se comunicar com o WhatsApp, ' +
+        'por isso o QR não sai. Isso não se resolve pelo celular: avise o Nicolas. ' +
+        'Enquanto isso, a uazapi segue funcionando.',
     };
   }
   return {
@@ -252,6 +267,12 @@ async function reiniciarQuepasa(token: string) {
     headers: { 'X-QUEPASA-TOKEN': token, Accept: 'application/json' },
   });
   const j = await r.json().catch(() => null);
+  if (j?.status === 'not verified') {
+    return {
+      ok: false,
+      erro: 'Não dá para reiniciar: a sessão foi removida do celular e só volta lendo um QR novo.',
+    };
+  }
   if (!r.ok || j?.success === false) {
     return {
       ok: false,
