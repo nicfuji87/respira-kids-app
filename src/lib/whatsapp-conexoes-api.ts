@@ -18,10 +18,26 @@ export interface StatusConexaoWhatsApp {
   erro: string | null;
 }
 
+// "Failed to send a request to the Edge Function" = a chamada nem saiu do aparelho
+// (celular sem internet, recém-reiniciado ou voltando de outro app). Acontece
+// bastante aqui, porque o checklist manda reiniciar o celular da recepção.
+const ERRO_REDE = 'FunctionsFetchError';
+const TENTATIVAS = 3;
+
 async function chamar<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('whatsapp-conexoes', {
+  let resposta = await supabase.functions.invoke('whatsapp-conexoes', {
     body,
   });
+  for (let i = 1; i < TENTATIVAS && resposta.error?.name === ERRO_REDE; i++) {
+    await new Promise((r) => setTimeout(r, 1500 * i));
+    resposta = await supabase.functions.invoke('whatsapp-conexoes', { body });
+  }
+  const { data, error } = resposta;
+  if (error?.name === ERRO_REDE) {
+    throw new Error(
+      'Sem conexão com o servidor. Confira a internet deste aparelho e tente de novo.'
+    );
+  }
   if (error) {
     let msg = error.message;
     if ('context' in error) {
