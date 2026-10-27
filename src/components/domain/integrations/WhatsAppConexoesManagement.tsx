@@ -231,6 +231,16 @@ export const WhatsAppConexoesManagement: React.FC = () => {
     carregar();
   }, [carregar]);
 
+  // Quem reconecta costuma sair do navegador (limpar cache, reiniciar o celular).
+  // Ao voltar para a aba, atualiza o status em vez de mostrar o dado velho.
+  useEffect(() => {
+    const aoVoltar = () => {
+      if (document.visibilityState === 'visible') carregar();
+    };
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => document.removeEventListener('visibilitychange', aoVoltar);
+  }, [carregar]);
+
   const reiniciar = async () => {
     setReiniciando(true);
     try {
