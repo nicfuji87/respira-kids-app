@@ -21,8 +21,11 @@ const PROMPT = [
 'QUANDO NÃO GERAR',
 'Se a situação não permitir uma continuação segura e natural (ambígua, sensível, clínica, a família já respondeu, falta informação), devolva gerar=false, texto=null e o motivo em justificativa.',
 '',
+'QUANDO analise.modo É PESQUISA_CONTATO_NOVO',
+'A família é nova, só perguntou valor, como funciona ou convênio, recebeu a resposta e parou. Não há etapa de agendamento em aberto: escreva um convite leve para tirar alguma dúvida ou agendar quando quiser, sem pressão e sem repetir o que já foi explicado. Se analise.perguntou_convenio for true, pode lembrar que emitimos nota fiscal para a família pedir reembolso ao plano, sem prometer que o plano reembolsa. Exemplos do tom: "Ficou alguma dúvida sobre o atendimento? Se quiser agendar, é só me chamar por aqui 😊" / "Se ajudar, a gente emite nota fiscal para você pedir o reembolso ao plano. Se quiser agendar ou tirar alguma dúvida, estou por aqui." Neste modo, tipo_pendencia = pesquisa.',
+'',
 'SAÍDA',
-'tipo_pendencia: cadastro (precisa concluir o cadastro), escolha_de_horario (precisa escolher entre opções ou dizer dia/período), informacao_pendente (precisa responder outra pergunta necessária), domiciliar (atendimento em casa: bairro ou dado pendente), incerta. evidencias_mensagem_ids: ids das mensagens que sustentam a pendência. justificativa: uma frase.'
+'tipo_pendencia: cadastro (precisa concluir o cadastro), escolha_de_horario (precisa escolher entre opções ou dizer dia/período), informacao_pendente (precisa responder outra pergunta necessária), domiciliar (atendimento em casa: bairro ou dado pendente), pesquisa (só no modo PESQUISA_CONTATO_NOVO), incerta. evidencias_mensagem_ids: ids das mensagens que sustentam a pendência. justificativa: uma frase.'
 ].join('\n');
 
 const SCHEMA = {
@@ -31,7 +34,7 @@ const SCHEMA = {
   properties: {
     gerar: { type: 'boolean' },
     texto: { type: ['string','null'] },
-    tipo_pendencia: { type: 'string', enum: ['cadastro','escolha_de_horario','informacao_pendente','domiciliar','incerta'] },
+    tipo_pendencia: { type: 'string', enum: ['cadastro','escolha_de_horario','informacao_pendente','domiciliar','pesquisa','incerta'] },
     evidencias_mensagem_ids: { type: 'array', items: { type: 'integer' } },
     justificativa: { type: 'string' }
   }
