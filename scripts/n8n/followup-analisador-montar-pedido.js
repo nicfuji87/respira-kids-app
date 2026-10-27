@@ -17,6 +17,7 @@ const PROMPT = [
 'MODO (campo modo da entrada)',
 'RETOMADA_AGENDAMENTO: o padrão, como descrito acima.',
 'PESQUISA_CONTATO_NOVO: família nova (nunca agendou) que só perguntou valor, como funciona o atendimento ou convênio/plano, recebeu a resposta da clínica e parou. Neste modo, "só perguntou valor" ou "só perguntou convênio" NÃO torna NAO_ELEGIVEL: se a clínica respondeu o que foi perguntado e a família não falou mais, é CANDIDATA com cenario PESQUISA_RESPONDIDA e quem_deve_agir FAMILIA. Continua valendo: BLOQUEADA nos sinais sensíveis; AGUARDANDO_CLINICA se a família perguntou algo que ficou sem resposta; NAO_ELEGIVEL se a família disse que vai pensar, ver ou conversar com alguém, se despediu encerrando o assunto, disse que só faria pelo plano, ou se o contato não é de uma família buscando atendimento (emprego, fornecedor, engano). perguntou_convenio indica que a pergunta foi sobre convênio.',
+'familia_so_agradeceu = true: contato novo cuja última fala foi só um agradecimento ou ok depois da resposta da clínica ("obrigada", "perfeito, agradeço"). Isso não deixa a clínica devendo resposta e não é despedida que encerra o assunto: trate como se a família tivesse parado depois da resposta (pode ser CANDIDATA). Mas se junto com o agradecimento ela disse que vai pensar, ver depois, que só faria pelo plano ou que não precisa mais, é NAO_ELEGIVEL.',
 'Em qualquer modo: se a clínica (inclusive a Ju) disse que passou o assunto para a Lolô, a secretária ou a equipe, ou que elas vão responder, verificar ou confirmar, e ninguém da equipe falou depois, quem deve agir é a CLINICA: AGUARDANDO_CLINICA, nunca CANDIDATA.',
 '',
 'CLASSIFICAÇÕES',
@@ -55,7 +56,7 @@ const SCHEMA = {
 };
 
 const item = $input.first().json;
-const entrada = { hoje: item.hoje, minutos_desde_ultima_fala_da_clinica: item.minutos_desde_ultima_fala_da_clinica, dias_uteis_desde_ultima_fala_da_clinica: item.dias_uteis_desde_ultima_fala_da_clinica, modo: item.modo || 'RETOMADA_AGENDAMENTO', perguntou_convenio: !!item.perguntou_convenio, conversa: item.conversa };
+const entrada = { hoje: item.hoje, minutos_desde_ultima_fala_da_clinica: item.minutos_desde_ultima_fala_da_clinica, dias_uteis_desde_ultima_fala_da_clinica: item.dias_uteis_desde_ultima_fala_da_clinica, modo: item.modo || 'RETOMADA_AGENDAMENTO', perguntou_convenio: !!item.perguntou_convenio, familia_so_agradeceu: !!item.familia_so_agradeceu, conversa: item.conversa };
 return [{ json: {
   avaliacao_id: item.avaliacao_id,
   corpo: {
