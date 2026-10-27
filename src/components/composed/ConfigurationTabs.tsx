@@ -85,9 +85,10 @@ export const ConfigurationTabs = React.memo<ConfigurationTabsProps>(
       {
         id: 'integrations',
         label: 'Integrações',
-        roles: ['admin'],
+        // secretaria só enxerga a sub-aba WhatsApp (reconectar o celular da recepção)
+        roles: ['admin', 'secretaria'],
         icon: Zap,
-        content: <IntegrationsTemplate />,
+        content: <IntegrationsTemplate userRole={userRole} />,
       },
       {
         id: 'users',
