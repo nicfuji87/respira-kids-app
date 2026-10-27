@@ -109,6 +109,30 @@ const tipo = /Audio|Ptt/i.test(messageType)
             : 'OUTRO';
 
 const texto = String(m.text || content.caption || content.Caption || '').trim();
+// 27/10/2026: mensagem que responde a outra (citação). A uazapi manda o id em m.quoted e o
+// conteúdo em content.contextInfo.quotedMessage; vira uma marca no fim do texto para a Ju saber o que foi citado.
+const ctxInfo = content.contextInfo || content.ContextInfo || {};
+const citada = ctxInfo.quotedMessage || ctxInfo.QuotedMessage || null;
+let citacao = '';
+if (m.quoted || citada) {
+  const q = citada || {};
+  const doc = q.documentMessage || (q.documentWithCaptionMessage && q.documentWithCaptionMessage.message && q.documentWithCaptionMessage.message.documentMessage);
+  const qtxt = String(q.conversation || (q.extendedTextMessage && q.extendedTextMessage.text) || (q.imageMessage && q.imageMessage.caption) || (q.videoMessage && q.videoMessage.caption) || (doc && doc.caption) || '').replace(/\s+/g, ' ').trim();
+  if (doc) {
+    const arq = String(doc.fileName || doc.title || '');
+    const nf = arq.match(/^(\d{1,7})-\d{11,14}\.pdf$/i);
+    citacao = nf ? '[respondendo ao PDF da nota fiscal nº ' + nf[1] + ']' : '[respondendo ao arquivo ' + (arq ? '"' + arq.slice(0, 80) + '"' : 'enviado antes') + ']';
+  } else if (qtxt) {
+    citacao = '[respondendo a: "' + qtxt.slice(0, 200) + '"]';
+  } else if (q.imageMessage) {
+    citacao = '[respondendo a uma imagem]';
+  } else if (q.audioMessage) {
+    citacao = '[respondendo a um áudio]';
+  } else {
+    citacao = '[respondendo a uma mensagem anterior]';
+  }
+}
+const comCitacao = (t) => [t, citacao].filter(Boolean).join(' ');
 // Mídia do cliente entra sem conteúdo: a legenda vai junto com a transcrição ou a
 // descrição (fn_ju_midia). Assim o turno espera a leitura da mídia (conteudo NULL).
 const midiaCliente = !fromMe && ['AUDIO', 'IMAGE', 'DOCUMENT'].includes(tipo);
@@ -119,7 +143,7 @@ const conteudo =
       ? `[${messageType || 'mensagem'}]`
       : midiaCliente
         ? ''
-        : texto;
+        : comCitacao(texto);
 
 // Telefone: do chatid quando é número; em chat @lid, do remetente (só vem em mensagem do cliente).
 const digitos = (s) => String(s ?? '').replace(/\D/g, '');
@@ -139,7 +163,7 @@ return [
       via_api: m.wasSentByApi === true,
       tipo,
       conteudo,
-      legenda: tipo === 'TEXT' ? '' : texto,
+      legenda: tipo === 'TEXT' ? '' : comCitacao(texto),
     },
   },
 ];
