@@ -40,13 +40,14 @@ const Textarea = React.forwardRef<
       onChange,
       onCompositionStart,
       onCompositionEnd,
+      onBlur,
       ...props
     },
     ref
   ) => {
     const { ref: nodeRef, ...composable } =
       useComposableField<HTMLTextAreaElement>(
-        { value, onChange, onCompositionStart, onCompositionEnd },
+        { value, onChange, onCompositionStart, onCompositionEnd, onBlur },
         ref
       );
     const stableProps = useStableFunctionProps(props);
