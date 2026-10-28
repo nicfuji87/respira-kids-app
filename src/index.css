@@ -45,6 +45,9 @@
        (dataviz validate_palette); os tons de --chart-1/2 ficam claros demais. */
     --serie-1: 175 84% 32%; /* verde-azulado #0d9488 */
     --serie-2: 13 78% 54%; /* coral #e5572f */
+    /* 3ª e 4ª séries (central de Conversas), validadas em ordem 1-2-3-4. */
+    --serie-3: 282 44% 47%; /* roxo #8e44ad */
+    --serie-4: 43 89% 38%; /* ocre #b8860b */
 
     /* Superfície da navegação (sidebar/topbar/bottom tabs): segunda camada neutra */
     --nav: 0 0% 100%;
@@ -89,6 +92,8 @@
     --chart-5: 292 53% 70%; /* Roxo Claro */
     --serie-1: 173 80% 36%; /* #12a594 */
     --serie-2: 15 79% 58%; /* #e8683f */
+    --serie-3: 281 51% 62%; /* #b06bd0 */
+    --serie-4: 43 87% 35%; /* #a87d0c */
     --nav: 292 53% 10%;
     --rosa-suave: 338 60% 68%;
     /* No escuro o pastel original já contrasta com o fundo roxo */
