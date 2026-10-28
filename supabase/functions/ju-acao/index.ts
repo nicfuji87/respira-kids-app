@@ -7,7 +7,7 @@
 //   { ok:false, parar:true }         a conversa mudou (cliente escreveu de novo
 //                                    ou humano assumiu): o agente não insiste
 // Ações: REENVIAR_CONTRATO, CORRIGIR_CONTATO_CONTRATO, EMITIR_NOTA, RENOVAR_LINK,
-// GERAR_ATESTADO.
+// GERAR_ATESTADO, SUSPENDER_COBRANCA.
 // GERAR_ATESTADO devolve também { documento: { url, nome, legenda } }: o n8n
 // manda o PDF como arquivo na conversa (a família não recebe link).
 // 22/10/2026: o contrato chega só pelo WhatsApp da Assinafy (o fluxo n8n usa
@@ -287,6 +287,44 @@ Deno.serve(async (req: Request) => {
           'OUTRO',
           `Atestado de comparecimento não gerado (${r?.motivo ?? r?.erro ?? 'sem detalhe'}).`,
           'Não foi possível gerar o atestado. A secretaria foi chamada; avise a família que ela vai preparar.'
+        );
+      }
+
+      case 'SUSPENDER_COBRANCA': {
+        // A família diz que já pagou (ou contesta). A Ju NÃO confirma pagamento:
+        // só pausa os lembretes automáticos e o Financeiro confere. O próprio
+        // banco avisa o grupo de Notificações; não precisa escalar de novo.
+        const r = await rpc('fn_ju_cobranca_suspender', {
+          p_conversa_id: conversa,
+          p_versao: versao,
+          p_paciente_id: b.paciente_id,
+          p_motivo: b.motivo ?? 'pagamento_informado',
+          p_detalhe:
+            typeof b.detalhe === 'string' ? b.detalhe.slice(0, 500) : null,
+        });
+        if (r?.ok && Number(r.pausadas) > 0)
+          return json({
+            ok: true,
+            resultado:
+              'Os lembretes automáticos de cobrança deste paciente foram pausados e o financeiro vai conferir. Diga à família que a equipe vai conferir o pagamento e retorna. Não confirme que o pagamento foi recebido.',
+          });
+        if (r?.ok)
+          return json({
+            ok: true,
+            resultado:
+              'Não há cobrança em aberto no sistema para este paciente. Pode tranquilizar a família: não há pendência registrada.',
+          });
+        if (GATE.includes(r?.motivo)) return parar(r.motivo);
+        if (r?.motivo === 'JA_SOLICITADO')
+          return json({
+            ok: true,
+            resultado:
+              'A cobrança já foi pausada para conferência. Diga que a equipe está conferindo e retorna.',
+          });
+        return escalar(
+          'FINANCEIRO',
+          `A família informou pagamento e a Ju não conseguiu pausar a cobrança (${r?.motivo ?? 'sem motivo'}).`,
+          'Não consegui registrar isso agora. A secretaria foi chamada; avise a família que ela vai conferir o pagamento.'
         );
       }
 

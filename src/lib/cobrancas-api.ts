@@ -48,6 +48,13 @@ export interface CobrancaPendente {
   paciente_cpf: string | null;
   responsavel_cpf: string | null;
   responsavel_email: string | null;
+  // Pausa para conferência (cobranca_suspensoes). Em conferência = não cobra.
+  em_analise: boolean;
+  suspensao_id: string | null;
+  suspensao_status: 'ativa' | 'escalada' | null;
+  suspensao_motivo: MotivoSuspensao | null;
+  suspensao_origem: 'ju' | 'equipe' | 'sistema' | null;
+  suspensao_prazo: string | null;
 }
 
 const CAMPOS_COBRANCA =
@@ -57,7 +64,135 @@ const CAMPOS_COBRANCA =
   'descricao, valor, vencimento, dias_atraso, situacao, ' +
   'link_pagamento, link_expirado, lembretes_enviados, ultimo_lembrete_em, ' +
   'criado_em, envios_manuais, ultimo_envio_manual_em, ultimo_envio_manual_por, ' +
-  'paciente_cpf, responsavel_cpf, responsavel_email';
+  'paciente_cpf, responsavel_cpf, responsavel_email, ' +
+  'em_analise, suspensao_id, suspensao_status, suspensao_motivo, suspensao_origem, suspensao_prazo';
+
+// =====================================================================
+// Pausa de cobrança (conferência pelo Financeiro)
+// =====================================================================
+// AI dev note: pausar só congela os lembretes automáticos; quem decide é o
+// Financeiro. O banco (fn_cobranca_pode_lembrar) é o porteiro de toda régua:
+// régua de pré-cobrança, n8n "Asaas Inadimplencia 3" e a Ju. Encerrar a pausa
+// só um admin logado consegue (fn_cobranca_encerrar_suspensao recusa o resto).
+
+export type MotivoSuspensao =
+  | 'pagamento_informado'
+  | 'pagamento_fora_asaas'
+  | 'contestacao'
+  | 'duplicidade'
+  | 'teto_lembretes'
+  | 'outro';
+
+export type ResultadoSuspensao =
+  | 'pagamento_confirmado'
+  | 'divida_confirmada'
+  | 'cobranca_cancelada';
+
+export const MOTIVO_SUSPENSAO_LABEL: Record<MotivoSuspensao, string> = {
+  pagamento_informado: 'Família diz que pagou',
+  pagamento_fora_asaas: 'Pagou fora do link (Pix, dinheiro)',
+  contestacao: 'Família contesta a cobrança',
+  duplicidade: 'Cobrança em duplicidade',
+  teto_lembretes: 'Limite de lembretes atingido',
+  outro: 'Outro motivo',
+};
+
+export const RESULTADO_SUSPENSAO_LABEL: Record<ResultadoSuspensao, string> = {
+  pagamento_confirmado: 'Pagamento confirmado',
+  divida_confirmada: 'Dívida confirmada: retomar lembretes',
+  cobranca_cancelada: 'Cobrança cancelada',
+};
+
+export interface SuspensaoCobranca {
+  id: string;
+  status: 'ativa' | 'escalada' | 'encerrada';
+  motivo: MotivoSuspensao;
+  detalhe: string | null;
+  origem: 'ju' | 'equipe' | 'sistema';
+  resultado: ResultadoSuspensao | null;
+  criado_em: string;
+  criado_por_nome: string | null;
+  prazo_verificacao: string;
+  prazo_vencido: boolean;
+  encerrada_em: string | null;
+  encerrada_por_nome: string | null;
+  observacao_encerramento: string | null;
+  fatura_id: string | null;
+  pagamento_link_id: string | null;
+  origem_cobranca: 'fatura' | 'pre_cobranca';
+  valor: number | null;
+  descricao: string | null;
+  vencimento: string | null;
+  status_cobranca: string | null;
+  invoice_url: string | null;
+  paciente_id: string | null;
+  paciente_nome: string | null;
+  responsavel_nome: string | null;
+  responsavel_telefone: number | null;
+  lembretes_bloqueados: number;
+}
+
+export async function fetchSuspensoesCobranca(): Promise<
+  ApiResponse<SuspensaoCobranca[]>
+> {
+  const { data, error } = await supabase
+    .from('vw_cobranca_suspensoes')
+    .select('*')
+    .order('criado_em', { ascending: false });
+  if (error) {
+    console.error('❌ Erro ao carregar pausas de cobrança:', error);
+    return { success: false, error: error.message };
+  }
+  return { success: true, data: (data || []) as SuspensaoCobranca[] };
+}
+
+export async function pausarCobranca(
+  cobranca: Pick<CobrancaPendente, 'fatura_id' | 'pagamento_link_id'>,
+  motivo: MotivoSuspensao,
+  detalhe: string
+): Promise<ApiResponse<{ suspensao_id: string; prazo: string }>> {
+  const { data, error } = await supabase.rpc('fn_cobranca_suspender', {
+    p_fatura_id: cobranca.fatura_id,
+    p_pagamento_link_id: cobranca.fatura_id ? null : cobranca.pagamento_link_id,
+    p_motivo: motivo,
+    p_detalhe: detalhe.trim() || null,
+    p_origem: 'equipe',
+  });
+  if (error) {
+    console.error('❌ Erro ao pausar cobrança:', error);
+    return { success: false, error: error.message };
+  }
+  if (!data?.ok) {
+    return {
+      success: false,
+      error:
+        data?.motivo === 'COBRANCA_NAO_ESTA_EM_ABERTO'
+          ? 'Essa cobrança não está mais em aberto.'
+          : `Não foi possível pausar (${data?.motivo ?? 'sem motivo'}).`,
+    };
+  }
+  return { success: true, data };
+}
+
+export async function encerrarSuspensaoCobranca(
+  suspensaoId: string,
+  resultado: ResultadoSuspensao,
+  observacao: string
+): Promise<ApiResponse<true>> {
+  const { data, error } = await supabase.rpc('fn_cobranca_encerrar_suspensao', {
+    p_suspensao_id: suspensaoId,
+    p_resultado: resultado,
+    p_observacao: observacao.trim() || null,
+  });
+  if (error) {
+    console.error('❌ Erro ao encerrar pausa:', error);
+    return { success: false, error: error.message };
+  }
+  if (!data?.ok) {
+    return { success: false, error: 'Essa pausa já foi encerrada.' };
+  }
+  return { success: true, data: true };
+}
 
 export async function fetchCobrancasPendentes(): Promise<
   ApiResponse<CobrancaPendente[]>

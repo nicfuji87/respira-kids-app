@@ -96,6 +96,8 @@ export const FOLLOWUP_STATUS_LABELS: Record<FollowupStatus, string> = {
   concluido: 'Concluído',
   ignorado: 'Ignorado',
   nao_aplicavel: 'Não aplicável',
+  resolvido_sistema: 'Resolvido (sistema)',
+  em_revisao: 'Em revisão',
 };
 
 export function labelFor(

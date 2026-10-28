@@ -138,9 +138,11 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
     const arr = filteredRows.filter((r) => r.necessita_followup);
     const order: Record<FollowupStatus, number> = {
       pendente: 0,
-      nao_aplicavel: 1,
-      ignorado: 2,
-      concluido: 3,
+      em_revisao: 1,
+      nao_aplicavel: 2,
+      ignorado: 3,
+      concluido: 4,
+      resolvido_sistema: 5,
     };
     return [...arr].sort(
       (a, b) => order[a.followup_status] - order[b.followup_status]
@@ -519,12 +521,22 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
 
           {/* ============================ FOLLOW-UP ============================ */}
           <TabsContent value="followup" className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <WhatsAppStatCard
                 icon={ListChecks}
                 tone="amarelo"
                 label="Pendentes"
                 value={stats.followupsPendentes}
+              />
+              <WhatsAppStatCard
+                icon={Scale}
+                tone="roxo"
+                label="Para revisar"
+                value={
+                  followupRows.filter((r) => r.followup_status === 'em_revisao')
+                    .length
+                }
+                hint="sem prova no sistema de que foi resolvido"
               />
               <WhatsAppStatCard
                 icon={Clock}

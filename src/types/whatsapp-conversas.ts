@@ -10,7 +10,11 @@ export type FollowupStatus =
   | 'pendente'
   | 'concluido'
   | 'ignorado'
-  | 'nao_aplicavel';
+  | 'nao_aplicavel'
+  // 28/10/2026: fechado por regra com prova no sistema (nota emitida, pagamento
+  // baixado, consulta lançada, contrato assinado) e fila de revisão humana.
+  | 'resolvido_sistema'
+  | 'em_revisao';
 
 export type IntencaoConversa =
   | 'agendamento'
@@ -174,6 +178,11 @@ export interface WhatsAppConversaRow {
   followup_concluido_em: string | null;
   followup_concluido_por: string | null;
   followup_lembrete_enviado_em: string | null;
+  /** Tipo da ação pendente (nota_fiscal, pagamento, agenda, contrato...). */
+  followup_tipo_acao: string | null;
+  /** Por que a fila classificou assim (evidência do sistema). */
+  followup_motivo: string | null;
+  followup_reclassificado_em: string | null;
 
   // Meta
   created_at: string;
