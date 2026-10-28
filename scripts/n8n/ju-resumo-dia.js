@@ -49,7 +49,7 @@ const schema = {
 return [{
   json: {
     body: {
-      model: 'gpt-6.1-sol',
+      model: 'gpt-6.1-terra',
       reasoning: { effort: 'low' },
       input: [
         { role: 'system', content: PROMPT },
