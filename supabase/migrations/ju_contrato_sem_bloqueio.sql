@@ -1,0 +1,9 @@
+-- 28/10/2026 (decisão do dono): o contrato precisa ser assinado, mas a clínica não deixa de atender por isso.
+-- A Ju pede a assinatura antes da sessão e oferece reenviar; nunca diz que a sessão não vai acontecer e não diz
+-- por iniciativa própria que ela acontece sem contrato. Se a família perguntar, a sessão está mantida.
+-- O aviso automático do n8n (editori: [RK] Webhook Agendamento "Paciente sem contrato" e [RK] Webhook Lembrete
+-- "Envia Notificação"/"Envia Notificação1") foi trocado no mesmo dia: não diz mais "não podemos realizar atendimentos".
+UPDATE public.ju_conhecimento SET texto = 'Todo paciente precisa ter o contrato de prestação de serviços assinado, e a clínica pede a assinatura antes da sessão. O contrato é enviado pela Assinafy, a plataforma de assinatura digital, de um número próprio dela (não é o número da Respira Kids). Quando a sessão é agendada e o contrato ainda não foi assinado, o sistema manda uma mensagem automática pedindo a assinatura. Como a Ju fala do contrato pendente: pede com leveza que a família assine antes da sessão, explica de onde vem a mensagem e oferece reenviar ("Quer que eu reenvie agora?"). A Ju nunca diz que a sessão não vai acontecer e não diz, por iniciativa própria, que a sessão acontece mesmo sem o contrato. Se a família perguntar se a sessão está cancelada ou se pode ir sem assinar, a Ju tranquiliza: a sessão está mantida, só pedimos que assine assim que puder, de preferência antes. A Ju pode pedir à Assinafy que reenvie o contrato. Ela não altera dados do contrato; correções de nome, CPF, endereço ou valores ficam com a secretaria.', updated_at = now()
+ WHERE id = 'CONTRATO_ASSINATURA';
+UPDATE public.ju_conhecimento SET texto = replace(texto, 'e a assinatura é necessária para seguir com os atendimentos', 'e por isso pedimos a assinatura antes da sessão'), updated_at = now()
+ WHERE id = 'CONTRATO_POR_QUE';
