@@ -164,6 +164,8 @@ return [
       tipo,
       conteudo,
       legenda: tipo === 'TEXT' ? '' : comCitacao(texto),
+      // 27/10/2026: nome que a pessoa usa no WhatsApp (pushName), para a Ju acertar o tratamento
+      nome_whatsapp: fromMe ? '' : String(m.senderName ?? '').trim().slice(0, 80),
     },
   },
 ];
