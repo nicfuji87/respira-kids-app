@@ -410,10 +410,37 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
             </div>
           )}
 
+          {/* Por que a fila classificou assim (reclassificação de 28/10/2026) */}
+          {row.followup_motivo && row.necessita_followup && (
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Sistema:</span>{' '}
+              {row.followup_motivo}
+            </p>
+          )}
+
           {/* Ações de follow-up */}
           {showFollowupActions && (
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {row.followup_status === 'concluido' ? (
+              {row.followup_status === 'resolvido_sistema' ? (
+                <>
+                  <Badge className="bg-verde-pipa/30 text-roxo-titulo hover:bg-verde-pipa/30">
+                    <Check className="w-3 h-3 mr-1" />
+                    Resolvido (conferido no sistema)
+                  </Badge>
+                  {onReabrir && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => onReabrir(row)}
+                      className="h-8 gap-1 text-muted-foreground"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Reabrir
+                    </Button>
+                  )}
+                </>
+              ) : row.followup_status === 'concluido' ? (
                 <>
                   <Badge className="bg-verde-pipa/30 text-roxo-titulo hover:bg-verde-pipa/30">
                     <Check className="w-3 h-3 mr-1" />
@@ -453,6 +480,14 @@ export const WhatsAppConversaCard = React.memo<WhatsAppConversaCardProps>(
                 </>
               ) : (
                 <>
+                  {row.followup_status === 'em_revisao' && (
+                    <Badge
+                      variant="outline"
+                      className="border-amarelo-pipa/60 bg-amarelo-pipa/15"
+                    >
+                      Revisar: ainda precisa de ação?
+                    </Badge>
+                  )}
                   {onConcluir && (
                     <Button
                       size="sm"

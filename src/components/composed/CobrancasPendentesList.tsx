@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Loader2,
   MessageCircle,
+  PauseCircle,
   RefreshCw,
   Search,
   Stethoscope,
@@ -33,14 +34,27 @@ import {
 } from '@/components/primitives/select';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
+import { Textarea } from '@/components/primitives/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/primitives/dialog';
+import { CobrancaSuspensoesPanel } from '@/components/composed/CobrancaSuspensoesPanel';
 import { useToast } from '@/components/primitives/use-toast';
 import { cn, normalizeText } from '@/lib/utils';
 import {
   buildWhatsAppUrl,
   conferirStatusAsaas,
   fetchCobrancasPendentes,
+  MOTIVO_SUSPENSAO_LABEL,
+  pausarCobranca,
   registrarDisparoManual,
   type CobrancaPendente,
+  type MotivoSuspensao,
 } from '@/lib/cobrancas-api';
 import {
   buildMensagemCobranca,
@@ -118,6 +132,14 @@ const FILTROS: { value: FiltroSituacao; label: string }[] = [
 
 const TODOS = '__todos__';
 
+const MOTIVOS_PAUSA: MotivoSuspensao[] = [
+  'pagamento_informado',
+  'pagamento_fora_asaas',
+  'contestacao',
+  'duplicidade',
+  'outro',
+];
+
 export interface CobrancasPendentesListProps {
   className?: string;
 }
@@ -132,6 +154,17 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processando, setProcessando] = useState<string | null>(null);
+  // Asaas não respondeu: o envio fica travado até a pessoa dizer que conferiu.
+  const [liberadoSemAsaas, setLiberadoSemAsaas] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [pausaAlvo, setPausaAlvo] = useState<CobrancaPendente | null>(null);
+  const [pausaMotivo, setPausaMotivo] = useState<MotivoSuspensao>(
+    'pagamento_informado'
+  );
+  const [pausaDetalhe, setPausaDetalhe] = useState('');
+  const [pausando, setPausando] = useState(false);
+  const [painelKey, setPainelKey] = useState(0);
 
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<FiltroSituacao>('todas');
@@ -263,19 +296,30 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
   // AI dev note: Confere no Asaas se já foi paga/excluída. Só faturas têm o que
   // conferir — pré-cobrança ainda nem existe lá. Retorna true se pode cobrar.
   const podeCobrar = async (cobranca: CobrancaPendente): Promise<boolean> => {
+    if (cobranca.em_analise) {
+      toast({
+        title: 'Cobrança em conferência',
+        description:
+          'O Financeiro está conferindo essa cobrança. Ela volta a ser cobrada só depois do resultado.',
+        variant: 'destructive',
+      });
+      return false;
+    }
     if (cobranca.origem !== 'fatura' || !cobranca.fatura_id) return true;
+    if (liberadoSemAsaas.has(cobranca.cobranca_id)) return true;
 
     const check = await conferirStatusAsaas(cobranca.fatura_id);
 
     if (!check.success || !check.data) {
-      // Falha ao consultar não bloqueia: o status local continua valendo e
-      // travar aqui deixaria a secretária sem ação nenhuma.
+      // 28/10/2026: na dúvida, não cobra. Sem a confirmação do Asaas o botão
+      // vira "Conferi o pagamento, enviar" e só um segundo clique envia.
+      setLiberadoSemAsaas((prev) => new Set(prev).add(cobranca.cobranca_id));
       toast({
         title: 'Não deu para conferir no Asaas',
-        description: `${check.error || 'Erro na consulta'}. Confira o pagamento antes de enviar.`,
+        description: `${check.error || 'Erro na consulta'}. Confira o pagamento no Asaas e, se ainda estiver em aberto, toque de novo para enviar.`,
         variant: 'destructive',
       });
-      return true;
+      return false;
     }
 
     const { status, requerAjusteManual } = check.data;
@@ -311,6 +355,30 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
     }
 
     return true;
+  };
+
+  const confirmarPausa = async () => {
+    if (!pausaAlvo) return;
+    setPausando(true);
+    const r = await pausarCobranca(pausaAlvo, pausaMotivo, pausaDetalhe);
+    setPausando(false);
+    if (!r.success) {
+      toast({
+        title: 'Não foi possível pausar',
+        description: r.error,
+        variant: 'destructive',
+      });
+      return;
+    }
+    toast({
+      title: 'Cobrança pausada',
+      description:
+        'Os lembretes automáticos pararam e o Financeiro foi avisado no grupo de Notificações.',
+    });
+    setPausaAlvo(null);
+    setPausaDetalhe('');
+    setPainelKey((k) => k + 1);
+    await carregar();
   };
 
   const handleEnviar = async (cobranca: CobrancaPendente) => {
@@ -394,6 +462,8 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
 
   return (
     <div className={cn('space-y-4', className)}>
+      <CobrancaSuspensoesPanel onChanged={carregar} reloadKey={painelKey} />
+
       {/* Resumo — acompanha o filtro, senão o número da tela não bate com a lista */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
@@ -550,7 +620,8 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
         {listaFiltrada.map((c) => {
           const ocupado = processando === c.cobranca_id;
           const semTelefone = !c.responsavel_telefone;
-          const bloqueado = c.link_expirado || semTelefone;
+          const bloqueado = c.link_expirado || semTelefone || c.em_analise;
+          const precisaConfirmar = liberadoSemAsaas.has(c.cobranca_id);
 
           return (
             <Card key={c.cobranca_id}>
@@ -583,6 +654,14 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                     <Badge variant="secondary" className="text-xs">
                       {c.origem === 'fatura' ? 'Asaas' : 'Pré-cobrança'}
                     </Badge>
+                    {c.em_analise && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs border-amarelo-pipa/60 bg-amarelo-pipa/15"
+                      >
+                        Em conferência
+                      </Badge>
+                    )}
                     {c.empresa_nome && (
                       <Badge variant="outline" className="text-xs">
                         {c.empresa_nome}
@@ -654,6 +733,19 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                   </Alert>
                 )}
 
+                {c.em_analise && (
+                  <Alert className="py-2">
+                    <PauseCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      {c.suspensao_motivo
+                        ? `${MOTIVO_SUSPENSAO_LABEL[c.suspensao_motivo]}. `
+                        : ''}
+                      Lembretes parados até o Financeiro registrar o resultado
+                      no painel acima.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {c.link_expirado && (
                   <Alert className="py-2">
                     <AlertCircle className="h-4 w-4" />
@@ -675,8 +767,28 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                     ) : (
                       <MessageCircle className="h-4 w-4" />
                     )}
-                    {ocupado ? 'Conferindo no Asaas...' : 'Enviar cobrança'}
+                    {ocupado
+                      ? 'Conferindo no Asaas...'
+                      : precisaConfirmar
+                        ? 'Conferi o pagamento, enviar'
+                        : 'Enviar cobrança'}
                   </Button>
+
+                  {!c.em_analise && (
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => {
+                        setPausaMotivo('pagamento_informado');
+                        setPausaDetalhe('');
+                        setPausaAlvo(c);
+                      }}
+                      title="Parar os lembretes automáticos e pedir conferência ao Financeiro"
+                    >
+                      <PauseCircle className="h-4 w-4" />
+                      Pausar cobrança
+                    </Button>
+                  )}
 
                   {c.link_pagamento && (
                     <Button
@@ -707,6 +819,59 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
           );
         })}
       </div>
+
+      <Dialog open={!!pausaAlvo} onOpenChange={(o) => !o && setPausaAlvo(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pausar cobrança</DialogTitle>
+            <DialogDescription>
+              {pausaAlvo?.paciente_nome} ·{' '}
+              {formatCurrency(pausaAlvo?.valor ?? 0)}. Os lembretes automáticos
+              param e o Financeiro recebe a tarefa de conferir. A cobrança não
+              volta sozinha.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Motivo</Label>
+              <Select
+                value={pausaMotivo}
+                onValueChange={(v) => setPausaMotivo(v as MotivoSuspensao)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MOTIVOS_PAUSA.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {MOTIVO_SUSPENSAO_LABEL[m]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pausa-detalhe">O que a família disse</Label>
+              <Textarea
+                id="pausa-detalhe"
+                value={pausaDetalhe}
+                onChange={(e) => setPausaDetalhe(e.target.value)}
+                placeholder="Ex.: pagou R$ 260 por Pix direto ontem e mandou o comprovante."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPausaAlvo(null)}>
+              Voltar
+            </Button>
+            <Button onClick={confirmarPausa} disabled={pausando}>
+              {pausando && <Loader2 className="h-4 w-4 animate-spin" />}
+              Pausar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
