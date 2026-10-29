@@ -1,41 +1,33 @@
-// AI dev note: Dashboard de Análise de Conversas (WhatsApp/Chatwoot).
-// Acesso: admin + secretaria (rota protegida + RLS na tabela whatsapp_conversas).
-// Estrutura: filtros globais + tabs (Visão Geral / Conversas / Follow-up / Reclamações / Insights).
-// As análises são gravadas pelo n8n; aqui lemos e gerenciamos follow-ups.
+// AI dev note: Central de Conversas (WhatsApp). Admin + secretaria.
+// Reformulada em 28/10/2026: deixou de ser relatório da IA e virou central de
+// ação e gestão, em quatro abas:
+//   Hoje        o que precisa ser feito e por quem (HojeTab)
+//   Desempenho  atendimento, demanda, funil e Ju (DesempenhoTab)
+//   Qualidade   falhas da operação, atrito, automação, sentimento (QualidadeTab)
+//   Conversas   busca, filtros e revisão (lista com as análises da IA)
+// Hoje/Desempenho/Qualidade vêm agregados do banco (conversas_central.sql).
+// A lista completa (get_whatsapp_conversas_enriquecidas, ~2 MB) só carrega
+// quando a aba Conversas é aberta.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/primitives/card';
-import { Button } from '@/components/primitives/button';
-import { Skeleton } from '@/components/primitives/skeleton';
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@/components/primitives/tabs';
+import { Button } from '@/components/primitives/button';
+import { Card, CardContent } from '@/components/primitives/card';
+import { Skeleton } from '@/components/primitives/skeleton';
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from '@/components/ui/chart';
-import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import {
-  WhatsAppStatCard,
-  WhatsAppDistribuicaoBarras,
   WhatsAppDashboardFilters,
   WhatsAppConversasList,
 } from '@/components/domain/whatsapp-conversas';
+import { HojeTab } from '@/components/domain/whatsapp-conversas/central/HojeTab';
+import { DesempenhoTab } from '@/components/domain/whatsapp-conversas/central/DesempenhoTab';
+import { QualidadeTab } from '@/components/domain/whatsapp-conversas/central/QualidadeTab';
 import {
   applyFilters,
-  computeConciliacao,
-  computeInsights,
-  computeStats,
   fetchWhatsAppConversas,
   updateFollowupStatus,
 } from '@/lib/whatsapp-conversas-api';
@@ -49,124 +41,91 @@ import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
 import {
   AlertCircle,
-  AlertTriangle,
-  Bot,
-  CalendarCheck,
-  CheckCircle2,
-  Clock,
-  DollarSign,
-  FileText,
-  Flame,
-  Home,
-  Inbox,
-  LayoutDashboard,
-  Lightbulb,
-  ListChecks,
+  BarChart3,
+  ListTodo,
   MessagesSquare,
   RefreshCw,
-  Scale,
-  ShieldAlert,
-  Stethoscope,
-  TrendingUp,
-  UserCheck,
-  Users,
+  ShieldCheck,
 } from 'lucide-react';
 import { PageHeader } from '@/components/composed/PageHeader';
 
-const chartConfig = {
-  total: {
-    label: 'Conversas',
-    color: 'hsl(var(--azul-respira))',
-  },
-} satisfies ChartConfig;
+type Aba = 'hoje' | 'desempenho' | 'qualidade' | 'conversas';
+type Segmento = 'todas' | 'revisao' | 'fila' | 'reclamacoes';
 
-function formatMinutes(min: number | null): string {
-  if (min === null || min === undefined) return '—';
-  if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m > 0 ? `${h}h ${m}min` : `${h}h`;
-}
-
-function formatBRL(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-}
+const SEGMENTOS: Array<{ valor: Segmento; label: string }> = [
+  { valor: 'todas', label: 'Todas' },
+  { valor: 'revisao', label: 'Para revisar' },
+  { valor: 'fila', label: 'Follow-up pendente' },
+  { valor: 'reclamacoes', label: 'Reclamações' },
+];
 
 export const WhatsAppConversasDashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [allRows, setAllRows] = useState<WhatsAppConversaRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [aba, setAba] = useState<Aba>('hoje');
+  const [segmento, setSegmento] = useState<Segmento>('todas');
+
+  // Aba Conversas (lista completa, carregada sob demanda)
+  const [rows, setRows] = useState<WhatsAppConversaRow[] | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const carregarConversas = useCallback(async () => {
+    setCarregando(true);
+    setErro(null);
     try {
-      const data = await fetchWhatsAppConversas();
-      setAllRows(data);
+      setRows(await fetchWhatsAppConversas());
     } catch (err) {
-      console.error('[WhatsAppConversasDashboard] erro ao carregar:', err);
-      setError(
-        'Não conseguimos carregar as conversas. Verifique sua conexão e tente novamente.'
-      );
+      console.error('[Conversas] erro ao carregar:', err);
+      setErro('Não conseguimos carregar as conversas. Tente de novo.');
     } finally {
-      setLoading(false);
+      setCarregando(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    if (aba === 'conversas' && rows === null && !carregando) {
+      void carregarConversas();
+    }
+  }, [aba, rows, carregando, carregarConversas]);
 
-  const filteredRows = useMemo(
-    () => applyFilters(allRows, filters),
-    [allRows, filters]
-  );
-  const stats = useMemo(() => computeStats(filteredRows), [filteredRows]);
-  const insights = useMemo(() => computeInsights(filteredRows), [filteredRows]);
-
-  // Follow-up: pendentes primeiro
-  const followupRows = useMemo(() => {
-    const arr = filteredRows.filter((r) => r.necessita_followup);
-    const order: Record<FollowupStatus, number> = {
-      pendente: 0,
-      em_revisao: 1,
-      nao_aplicavel: 2,
-      ignorado: 3,
-      concluido: 4,
-      resolvido_sistema: 5,
-    };
-    return [...arr].sort(
-      (a, b) => order[a.followup_status] - order[b.followup_status]
+  const filtradas = useMemo(() => {
+    const base = applyFilters(rows ?? [], filters);
+    const porSegmento = base.filter((r) => {
+      if (segmento === 'revisao') return r.followup_status === 'em_revisao';
+      if (segmento === 'fila')
+        return r.necessita_followup && r.followup_status === 'pendente';
+      if (segmento === 'reclamacoes') return r.reclamacao_identificada;
+      return true;
+    });
+    return [...porSegmento].sort(
+      (a, b) =>
+        new Date(b.ultima_mensagem_em ?? b.created_at).getTime() -
+        new Date(a.ultima_mensagem_em ?? a.created_at).getTime()
     );
-  }, [filteredRows]);
+  }, [rows, filters, segmento]);
 
-  const reclamacaoRows = useMemo(
-    () => filteredRows.filter((r) => r.reclamacao_identificada),
-    [filteredRows]
-  );
+  const contagemSegmento = useMemo(() => {
+    const base = applyFilters(rows ?? [], filters);
+    return {
+      todas: base.length,
+      revisao: base.filter((r) => r.followup_status === 'em_revisao').length,
+      fila: base.filter(
+        (r) => r.necessita_followup && r.followup_status === 'pendente'
+      ).length,
+      reclamacoes: base.filter((r) => r.reclamacao_identificada).length,
+    } as Record<Segmento, number>;
+  }, [rows, filters]);
 
-  // Conciliação: conversas com divergência conversa x sistema
-  const conciliacaoRows = useMemo(
-    () => filteredRows.filter((r) => computeConciliacao(r).length > 0),
-    [filteredRows]
-  );
-
-  const handleFollowupChange = useCallback(
+  const mudarFollowup = useCallback(
     async (row: WhatsAppConversaRow, status: FollowupStatus) => {
       setBusyId(row.id);
       try {
         await updateFollowupStatus(row.id, status, user?.pessoa?.id);
-        setAllRows((prev) =>
-          prev.map((r) =>
+        setRows((prev) =>
+          (prev ?? []).map((r) =>
             r.id === row.id
               ? {
                   ...r,
@@ -180,18 +139,16 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
           )
         );
         toast({
-          title: 'Follow-up atualizado',
-          description:
+          title:
             status === 'concluido'
-              ? 'Conversa marcada como concluída.'
+              ? 'Marcada como concluída'
               : status === 'ignorado'
-                ? 'Conversa ignorada.'
-                : 'Conversa reaberta.',
+                ? 'Marcada como sem necessidade'
+                : 'Reaberta',
         });
       } catch {
         toast({
-          title: 'Erro',
-          description: 'Não foi possível atualizar o follow-up.',
+          title: 'Não foi possível atualizar',
           variant: 'destructive',
         });
       } finally {
@@ -201,616 +158,131 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
     [toast, user?.pessoa?.id]
   );
 
-  const onConcluir = useCallback(
-    (row: WhatsAppConversaRow) => handleFollowupChange(row, 'concluido'),
-    [handleFollowupChange]
-  );
-  const onIgnorar = useCallback(
-    (row: WhatsAppConversaRow) => handleFollowupChange(row, 'ignorado'),
-    [handleFollowupChange]
-  );
-  const onReabrir = useCallback(
-    (row: WhatsAppConversaRow) => handleFollowupChange(row, 'pendente'),
-    [handleFollowupChange]
-  );
-
   return (
-    <div className="space-y-6">
-      {/* Cabeçalho */}
-      <PageHeader
-        description="Atendimentos do WhatsApp: volume, qualidade, follow-ups e alertas."
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void loadData()}
-            disabled={loading}
-          >
-            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-            Atualizar
-          </Button>
-        }
-      />
+    <div className="space-y-5">
+      <PageHeader description="O que precisa de atenção agora, como está o atendimento e onde estamos falhando com as famílias." />
 
-      {/* Erros */}
-      {error && (
-        <Card className="border-destructive/40 bg-destructive/5">
-          <CardContent className="p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-            <p className="text-sm text-foreground flex-1">{error}</p>
-            <Button variant="ghost" size="sm" onClick={() => void loadData()}>
-              Tentar novamente
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <Tabs
+        value={aba}
+        onValueChange={(v) => setAba(v as Aba)}
+        className="space-y-4"
+      >
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="hoje" className="gap-2">
+            <ListTodo className="h-4 w-4" />
+            Hoje
+          </TabsTrigger>
+          <TabsTrigger value="desempenho" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Desempenho
+          </TabsTrigger>
+          <TabsTrigger value="qualidade" className="gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Qualidade
+          </TabsTrigger>
+          <TabsTrigger value="conversas" className="gap-2">
+            <MessagesSquare className="h-4 w-4" />
+            Conversas
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Filtros */}
-      <WhatsAppDashboardFilters filters={filters} onChange={setFilters} />
+        <TabsContent value="hoje">
+          <HojeTab
+            onVerRevisao={() => {
+              setSegmento('revisao');
+              setAba('conversas');
+            }}
+          />
+        </TabsContent>
 
-      {/* Loading inicial */}
-      {loading && allRows.length === 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          {[0, 1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-5">
-                <Skeleton className="h-4 w-24 mb-3" />
-                <Skeleton className="h-8 w-16" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+        <TabsContent value="desempenho">
+          <DesempenhoTab />
+        </TabsContent>
 
-      {/* Sem dados */}
-      {!loading && allRows.length === 0 && !error && (
-        <Card className="bg-bege-fundo/30 border-azul-respira/20">
-          <CardContent className="p-8 text-center space-y-3">
-            <Inbox className="w-12 h-12 text-azul-respira mx-auto" />
-            <p className="text-base text-foreground font-medium">
-              Ainda não há conversas analisadas
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Assim que o fluxo do n8n processar as conversas do WhatsApp, elas
-              aparecerão aqui.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+        <TabsContent value="qualidade">
+          <QualidadeTab />
+        </TabsContent>
 
-      {allRows.length > 0 && (
-        <Tabs defaultValue="visao_geral" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="visao_geral" className="gap-2">
-              <LayoutDashboard className="w-4 h-4" />
-              Visão Geral
-            </TabsTrigger>
-            <TabsTrigger value="conversas" className="gap-2">
-              <MessagesSquare className="w-4 h-4" />
-              Conversas
-              <span className="ml-1 text-xs text-muted-foreground">
-                ({filteredRows.length})
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="followup" className="gap-2">
-              <ListChecks className="w-4 h-4" />
-              Follow-up
-              {stats.followupsPendentes > 0 && (
-                <span className="ml-1 rounded-full bg-amarelo-pipa/30 text-roxo-titulo text-xs px-1.5">
-                  {stats.followupsPendentes}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="conciliacao" className="gap-2">
-              <Scale className="w-4 h-4" />
-              Conciliação
-              {stats.conversasComDivergencia > 0 && (
-                <span className="ml-1 rounded-full bg-vermelho-kids/20 text-vermelho-kids text-xs px-1.5">
-                  {stats.conversasComDivergencia}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="reclamacoes" className="gap-2">
-              <AlertTriangle className="w-4 h-4" />
-              Reclamações
-              {stats.reclamacoes > 0 && (
-                <span className="ml-1 rounded-full bg-vermelho-kids/20 text-vermelho-kids text-xs px-1.5">
-                  {stats.reclamacoes}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="insights" className="gap-2">
-              <Lightbulb className="w-4 h-4" />
-              Insights
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ============================ VISÃO GERAL ============================ */}
-          <TabsContent value="visao_geral" className="space-y-6">
-            {/* KPIs principais */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              <WhatsAppStatCard
-                icon={MessagesSquare}
-                tone="azul"
-                label="Conversas"
-                value={stats.totalConversas}
-                hint={`${stats.conversasUltimos7Dias} nos últimos 7 dias`}
-              />
-              <WhatsAppStatCard
-                icon={Flame}
-                tone="vermelho"
-                label="Leads quentes"
-                value={stats.leadsQuentes}
-                hint={`${insights.leadsQuentesSemAgendamento} sem agendamento`}
-              />
-              <WhatsAppStatCard
-                icon={CalendarCheck}
-                tone="verde"
-                label="Agendamentos"
-                value={stats.agendamentosRealizados}
-                hint={`Conversão de leads: ${insights.taxaConversaoLeadAgendamento}%`}
-              />
-              <WhatsAppStatCard
-                icon={ListChecks}
-                tone="amarelo"
-                label="Follow-ups pendentes"
-                value={stats.followupsPendentes}
-                hint={`${stats.pendentesAtendente} aguardando atendente`}
-              />
-            </div>
-
-            {/* KPIs secundários */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              <WhatsAppStatCard
-                icon={Clock}
-                tone="roxo"
-                label="1ª resposta (média)"
-                value={formatMinutes(stats.tempoMedioPrimeiraResposta)}
-                hint="tempo até o atendente responder"
-              />
-              <WhatsAppStatCard
-                icon={AlertTriangle}
-                tone="vermelho"
-                label="Reclamações"
-                value={stats.reclamacoes}
-                hint={`${stats.reclamacoesAtencaoAdmin} requerem atenção`}
-              />
-              <WhatsAppStatCard
-                icon={DollarSign}
-                tone="verde"
-                label="Pagamentos confirmados"
-                value={stats.pagamentosConfirmados}
-                hint={`${stats.pagamentosSolicitados} cobranças solicitadas`}
-              />
-              <WhatsAppStatCard
-                icon={Stethoscope}
-                tone="azul"
-                label="Conteúdo clínico"
-                value={stats.conteudoClinico}
-                hint="conversas com discussão clínica"
-              />
-            </div>
-
-            {/* KPIs de cadastro / conciliação / serviço */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              <WhatsAppStatCard
-                icon={UserCheck}
-                tone="verde"
-                label="Clientes cadastrados"
-                value={stats.clientesCadastrados}
-                hint={`${stats.clientesNaoCadastrados} não cadastrados`}
-              />
-              <WhatsAppStatCard
-                icon={Scale}
-                tone="vermelho"
-                label="Com divergência"
-                value={stats.conversasComDivergencia}
-                hint={`${stats.divergenciasCobranca} de cobrança · ${stats.divergenciasAgendamento} de agenda`}
-              />
-              <WhatsAppStatCard
-                icon={Home}
-                tone="roxo"
-                label="Atend. domiciliar"
-                value={stats.atendimentosDomiciliares}
-                hint="conversas sobre atendimento em casa"
-              />
-              <WhatsAppStatCard
-                icon={DollarSign}
-                tone="verde"
-                label="Valores mencionados"
-                value={formatBRL(stats.valorMencionadoTotal)}
-                hint={`${stats.resolvidosPrimeiroContato} resolvidos no 1º contato`}
-              />
-            </div>
-
-            {/* Volume por dia */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base md:text-lg font-semibold flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-azul-respira" />
-                  Conversas por dia (últimos 30 dias)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[240px]">
-                  <ChartContainer
-                    config={chartConfig}
-                    className="h-full w-full"
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={stats.conversasPorDia}
-                        margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
-                      >
-                        <XAxis
-                          dataKey="data"
-                          tickLine={false}
-                          axisLine={false}
-                          className="text-xs"
-                          tickFormatter={(value: string) =>
-                            value.slice(8, 10) + '/' + value.slice(5, 7)
-                          }
-                          minTickGap={16}
-                        />
-                        <YAxis
-                          tickLine={false}
-                          axisLine={false}
-                          allowDecimals={false}
-                          className="text-xs"
-                          width={28}
-                        />
-                        <Bar
-                          dataKey="total"
-                          fill="hsl(var(--azul-respira))"
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Distribuições */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <WhatsAppDistribuicaoBarras
-                title="Motivo do contato"
-                subtitle="Intenção principal identificada pela IA"
-                items={stats.distribuicaoIntencao}
-                barColor="azul"
-                maxItems={10}
-              />
-              <WhatsAppDistribuicaoBarras
-                title="Status das conversas"
-                items={stats.distribuicaoStatus}
-                barColor="roxo"
-              />
-              <WhatsAppDistribuicaoBarras
-                title="Tipo de demanda"
-                items={stats.distribuicaoTipoDemanda}
-                barColor="verde"
-              />
-              <WhatsAppDistribuicaoBarras
-                title="Sentimento do cliente"
-                items={stats.distribuicaoSentimento}
-                barColor="amarelo"
-              />
-              <WhatsAppDistribuicaoBarras
-                title="Tipo de serviço"
-                subtitle="Fisioterapia respiratória, motora, avaliação"
-                items={stats.distribuicaoTipoServico}
-                barColor="azul"
-                emptyLabel="Tipo de serviço não informado"
-              />
-            </div>
-          </TabsContent>
-
-          {/* ============================ CONVERSAS ============================ */}
-          <TabsContent value="conversas" className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {filteredRows.length} conversa
-              {filteredRows.length !== 1 ? 's' : ''} (use os filtros acima para
-              refinar).
-            </p>
-            <WhatsAppConversasList
-              rows={filteredRows}
-              emptyMessage="Nenhuma conversa corresponde aos filtros."
-            />
-          </TabsContent>
-
-          {/* ============================ FOLLOW-UP ============================ */}
-          <TabsContent value="followup" className="space-y-4">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <WhatsAppStatCard
-                icon={ListChecks}
-                tone="amarelo"
-                label="Pendentes"
-                value={stats.followupsPendentes}
-              />
-              <WhatsAppStatCard
-                icon={Scale}
-                tone="roxo"
-                label="Para revisar"
-                value={
-                  followupRows.filter((r) => r.followup_status === 'em_revisao')
-                    .length
-                }
-                hint="sem prova no sistema de que foi resolvido"
-              />
-              <WhatsAppStatCard
-                icon={Clock}
-                tone="roxo"
-                label="Aguardando atendente"
-                value={stats.pendentesAtendente}
-              />
-              <WhatsAppStatCard
-                icon={CheckCircle2}
-                tone="verde"
-                label="Concluídos (no filtro)"
-                value={
-                  followupRows.filter((r) => r.followup_status === 'concluido')
-                    .length
-                }
-              />
-            </div>
-
-            {stats.distribuicaoResponsavel.length > 0 && (
-              <WhatsAppDistribuicaoBarras
-                title="Follow-ups por responsável sugerido"
-                items={stats.distribuicaoResponsavel}
-                barColor="azul"
-              />
-            )}
-
-            <WhatsAppConversasList
-              rows={followupRows}
-              emptyMessage="Nenhum follow-up para os filtros atuais. 🎉"
-              busyId={busyId}
-              onConcluir={onConcluir}
-              onIgnorar={onIgnorar}
-              onReabrir={onReabrir}
-            />
-          </TabsContent>
-
-          {/* ============================ CONCILIAÇÃO ============================ */}
-          <TabsContent value="conciliacao" className="space-y-4">
-            <Card className="bg-bege-fundo/40 border-azul-respira/30">
+        <TabsContent value="conversas" className="space-y-4">
+          {erro && (
+            <Card className="border-destructive/40 bg-destructive/5">
               <CardContent className="p-4 flex items-start gap-3">
-                <Scale className="w-5 h-5 text-azul-respira shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    Conciliação conversa × sistema
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Compara o que a conversa diz (agendamento, nota fiscal,
-                    pagamento) com o que existe no sistema para o cliente
-                    cadastrado, e acusa as divergências nos dois sentidos. Só
-                    avalia conversas de clientes cadastrados.
-                  </p>
-                </div>
+                <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                <p className="text-sm flex-1">{erro}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void carregarConversas()}
+                >
+                  Tentar de novo
+                </Button>
               </CardContent>
             </Card>
+          )}
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              <WhatsAppStatCard
-                icon={Scale}
-                tone="vermelho"
-                label="Conversas com divergência"
-                value={stats.conversasComDivergencia}
-              />
-              <WhatsAppStatCard
-                icon={CalendarCheck}
-                tone="amarelo"
-                label="Divergências de agenda"
-                value={stats.divergenciasAgendamento}
-              />
-              <WhatsAppStatCard
-                icon={FileText}
-                tone="roxo"
-                label="Divergências de NF"
-                value={stats.divergenciasNotaFiscal}
-              />
-              <WhatsAppStatCard
-                icon={DollarSign}
-                tone="vermelho"
-                label="Divergências de cobrança"
-                value={stats.divergenciasCobranca}
-              />
-            </div>
+          <WhatsAppDashboardFilters filters={filters} onChange={setFilters} />
 
-            <WhatsAppConversasList
-              rows={conciliacaoRows}
-              emptyMessage="Nenhuma divergência entre conversa e sistema. 🎉"
-              busyId={busyId}
-              onConcluir={onConcluir}
-              onIgnorar={onIgnorar}
-              onReabrir={onReabrir}
-            />
-          </TabsContent>
-
-          {/* ============================ RECLAMAÇÕES ============================ */}
-          <TabsContent value="reclamacoes" className="space-y-4">
-            <Card className="bg-vermelho-kids/5 border-vermelho-kids/30">
-              <CardContent className="p-4 flex items-start gap-3">
-                <ShieldAlert className="w-5 h-5 text-vermelho-kids shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    Reclamações e insatisfações identificadas
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Conversas marcadas como insatisfação. As que requerem
-                    atenção são enviadas automaticamente aos administradores
-                    pelo cron.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <WhatsAppStatCard
-                icon={AlertTriangle}
-                tone="vermelho"
-                label="Total de reclamações"
-                value={stats.reclamacoes}
-              />
-              <WhatsAppStatCard
-                icon={ShieldAlert}
-                tone="vermelho"
-                label="Requerem atenção do admin"
-                value={stats.reclamacoesAtencaoAdmin}
-              />
-            </div>
-
-            {insights.topMotivosInsatisfacao.length > 0 && (
-              <WhatsAppDistribuicaoBarras
-                title="Principais motivos de insatisfação"
-                items={insights.topMotivosInsatisfacao}
-                barColor="vermelho"
-              />
-            )}
-
-            <WhatsAppConversasList
-              rows={reclamacaoRows}
-              emptyMessage="Nenhuma reclamação no período. 🎉"
-              busyId={busyId}
-              onConcluir={onConcluir}
-              onIgnorar={onIgnorar}
-              onReabrir={onReabrir}
-            />
-          </TabsContent>
-
-          {/* ============================ INSIGHTS ============================ */}
-          <TabsContent value="insights" className="space-y-6">
-            <Card className="bg-bege-fundo/40 border-azul-respira/30">
-              <CardContent className="p-4 flex items-start gap-3">
-                <Lightbulb className="w-5 h-5 text-amarelo-pipa shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    Insights estratégicos
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Funil de agendamento, gargalos de atendimento, oportunidades
-                    perdidas e sugestões da IA.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Funil */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              <WhatsAppStatCard
-                icon={DollarSign}
-                tone="azul"
-                label="Perguntaram valor"
-                value={insights.funilPerguntouValor}
-              />
-              <WhatsAppStatCard
-                icon={CalendarCheck}
-                tone="amarelo"
-                label="Perguntaram disponibilidade"
-                value={insights.funilPerguntouDisponibilidade}
-              />
-              <WhatsAppStatCard
-                icon={CheckCircle2}
-                tone="verde"
-                label="Agendaram"
-                value={insights.funilAgendou}
-                hint={`Conversão: ${insights.taxaConversaoLeadAgendamento}%`}
-              />
-              <WhatsAppStatCard
-                icon={Flame}
-                tone="vermelho"
-                label="Leads quentes sem resposta"
-                value={insights.leadsQuentesSemResposta}
-                hint={`${insights.leadsQuentesSemAgendamento} sem agendamento`}
-              />
-            </div>
-
-            {/* Resolução */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              <WhatsAppStatCard
-                icon={CheckCircle2}
-                tone="verde"
-                label="Taxa de resolução"
-                value={`${insights.taxaResolucao}%`}
-                hint="conversas finalizadas"
-              />
-              <WhatsAppStatCard
-                icon={Clock}
-                tone="amarelo"
-                label="Pendente atendente"
-                value={`${insights.taxaPendenteAtendente}%`}
-                hint="aguardando a equipe"
-              />
-              <WhatsAppStatCard
-                icon={Bot}
-                tone="roxo"
-                label="Conversas com automação"
-                value={stats.conversasComAutomacao}
-                hint="receberam mensagens automáticas"
-              />
-              <WhatsAppStatCard
-                icon={Clock}
-                tone="amarelo"
-                label="Fora do horário comercial"
-                value={stats.foraHorarioComercial}
-                hint="clientes que escreveram fora do expediente"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <WhatsAppDistribuicaoBarras
-                title="Principais pontos de atrito"
-                subtitle="Onde as conversas travam"
-                items={insights.topPontosAtrito}
-                barColor="vermelho"
-              />
-              <WhatsAppDistribuicaoBarras
-                title="Resolução por tipo de serviço"
-                subtitle="% de conversas finalizadas por tipo de serviço"
-                items={insights.resolucaoPorTipoServico}
-                barColor="verde"
-                emptyLabel="Tipo de serviço não informado"
-              />
-              <WhatsAppDistribuicaoBarras
-                title="Profissionais mais mencionados"
-                subtitle="Citados nas conversas"
-                items={insights.topProfissionais}
-                barColor="roxo"
-                emptyLabel="Nenhum profissional mencionado"
-              />
-              <Card className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base md:text-lg font-semibold flex items-center gap-2">
-                    <Lightbulb className="w-5 h-5 text-amarelo-pipa" />
-                    Sugestões de melhoria (IA)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {insights.sugestoesMelhoria.length === 0 ? (
-                    <p className="text-sm text-muted-foreground/80 py-4 text-center">
-                      Sem sugestões no período
-                    </p>
-                  ) : (
-                    <ul className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-                      {insights.sugestoesMelhoria.map((s, i) => (
-                        <li
-                          key={i}
-                          className="text-sm text-muted-foreground flex items-start gap-2"
-                        >
-                          <Users className="w-3.5 h-3.5 text-azul-respira shrink-0 mt-1" />
-                          <span>{s}</span>
-                        </li>
-                      ))}
-                    </ul>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {SEGMENTOS.map((s) => (
+                <Button
+                  key={s.valor}
+                  size="sm"
+                  variant={segmento === s.valor ? 'default' : 'outline'}
+                  onClick={() => setSegmento(s.valor)}
+                  className="gap-1.5"
+                >
+                  {s.label}
+                  {rows && (
+                    <span className="text-xs opacity-80 tabular-nums">
+                      {contagemSegmento[s.valor]}
+                    </span>
                   )}
-                </CardContent>
-              </Card>
+                </Button>
+              ))}
             </div>
-          </TabsContent>
-        </Tabs>
-      )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void carregarConversas()}
+              disabled={carregando}
+              className="gap-1.5 text-muted-foreground"
+            >
+              <RefreshCw
+                className={cn('h-4 w-4', carregando && 'animate-spin')}
+              />
+              Atualizar
+            </Button>
+          </div>
+
+          {segmento === 'revisao' && (
+            <p className="text-sm text-muted-foreground">
+              Follow-ups antigos sem prova no sistema de que foram resolvidos.
+              Para cada um:
+              <strong> Concluir</strong> se já foi tratado,{' '}
+              <strong>Ignorar</strong> se não precisa mais. Se a família
+              escrever de novo pedindo algo, ele volta sozinho para a fila.
+            </p>
+          )}
+
+          {rows === null ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-48" />
+              ))}
+            </div>
+          ) : (
+            <WhatsAppConversasList
+              rows={filtradas}
+              emptyMessage="Nenhuma conversa para esses filtros."
+              busyId={busyId}
+              onConcluir={(r) => void mudarFollowup(r, 'concluido')}
+              onIgnorar={(r) => void mudarFollowup(r, 'ignorado')}
+              onReabrir={(r) => void mudarFollowup(r, 'pendente')}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
