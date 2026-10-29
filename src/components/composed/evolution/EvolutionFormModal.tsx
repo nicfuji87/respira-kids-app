@@ -63,6 +63,7 @@ import {
   SECOES_REAPROVEITAVEIS_RESPIRATORIA,
   ehFormatoMotoraV13,
   normalizarAreas,
+  rascunhoMotorParaV14,
   pendenciasEvolucaoRespiratoria,
   pendenciasEvolucaoMotora,
   type PendenciaEvolucao,
@@ -490,7 +491,10 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       setEvolucaoRespiratoria(d.evolucao_respiratoria);
     }
     if (d.evolucao_motora_assimetria) {
-      setEvolucaoMotora(comAreasParaEdicao(d.evolucao_motora_assimetria));
+      // Rascunho do formato anterior abre na tela nova
+      setEvolucaoMotora(
+        comAreasParaEdicao(rascunhoMotorParaV14(d.evolucao_motora_assimetria))
+      );
       // rascunho já traz a escolha de áreas: não sobrescrever com sugestão
       areasTocadasRef.current = true;
     }
