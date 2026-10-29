@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import {
   AlertTriangle,
   BookmarkCheck,
@@ -42,7 +41,7 @@ import type {
 
 // AI dev note: RESERVA de horário. Segura o horário de um profissional até alguém
 // confirmar a consulta. Observação obrigatória, paciente opcional (com ou sem
-// cadastro). Vence às 00:00 do dia da reserva; reserva para hoje não vence.
+// cadastro). Não vence sozinha (decisão de 29/10/2026): sai ao confirmar ou excluir.
 // "Confirmar agendamento" devolve os dados ao CalendarTemplate, que abre o
 // formulário de consulta com reservaId (o banco encerra a reserva ao salvar).
 
@@ -75,23 +74,11 @@ function combine(dateStr: string, timeStr: string): Date {
   return new Date(y, m - 1, d, hh || 0, mm || 0, 0, 0);
 }
 
+// 29/10/2026 (dono): reserva não vence sozinha (tem família que só faz o cadastro
+// depois da sessão). Fica na agenda até alguém confirmar ou excluir.
 function textoVencimento(inicio: Date | null): string | null {
   if (!inicio) return null;
-  const hoje = new Date();
-  const diaHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  const diaReserva = new Date(
-    inicio.getFullYear(),
-    inicio.getMonth(),
-    inicio.getDate()
-  );
-  if (diaReserva <= diaHoje)
-    return 'Reserva para hoje: fica na agenda até alguém confirmar ou excluir.';
-  const vespera = new Date(diaReserva.getTime() - 24 * 60 * 60 * 1000);
-  return `Se não for confirmada, sai da agenda no fim de ${format(
-    vespera,
-    'EEEE, dd/MM',
-    { locale: ptBR }
-  )}.`;
+  return 'A reserva fica na agenda até alguém confirmar ou excluir.';
 }
 
 export const ReservaDialog = React.memo<ReservaDialogProps>(
