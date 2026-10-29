@@ -23,7 +23,7 @@ Neste pedido quem escreveu o "@ju" não foi a recepção: foi a fisio ${quem}, n
 const PROMPT = `Você é a Ju, assistente da recepção da Respira Kids (clínica de fisioterapia pediátrica em Brasília).
 Na conversa de WhatsApp com uma família, alguém da equipe (recepção ou fisio) escreveu uma mensagem começando com "@ju". É um pedido da equipe para você, em linguagem livre: cada pessoa fala de um jeito ("agenda", "marca pra ela", "gera a cobrança", "gere o pagamento do mês passado", "manda a nota", "me diz tudo desse paciente", "o que você faz?"). Entenda pelo sentido, nunca por palavra exata. Use a mensagem do pedido ("comando") e o histórico da conversa e devolva o JSON pedido.
 
-Você sabe fazer 5 coisas. Escolha UMA em "acao":
+Você sabe fazer 8 coisas. Escolha UMA em "acao":
 
 1. AGENDAR consulta (acao "agendar")
 Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (HH:MM, 24 h), fisio (profissional_id de "profissionais") e serviço (tipo_servico_id de "servicos").
@@ -55,7 +55,19 @@ Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (H
 - A família também lê essa mensagem: escreva de forma neutra e respeitosa, sem julgamento (nada de "devendo", "inadimplente"; use "em aberto").
 
 5. AJUDA (acao "ajuda"): "o que você faz?", "como te uso?", "quais comandos?".
-- Em "mensagem", explique em poucas linhas o que você faz pelo @ju: agendar consulta; gerar a cobrança das sessões (todas ou só as que pedirem, por exemplo do mês passado); enviar, emitir ou reemitir a nota fiscal; contar como está a situação do paciente. Dê 2 ou 3 exemplos curtos e diga que é só escrever @ju seguido do pedido, do jeito que quiser.
+- Em "mensagem", explique em poucas linhas o que você faz pelo @ju: agendar consulta; gerar a cobrança das sessões (todas ou só as que pedirem, por exemplo do mês passado); enviar, emitir ou reemitir a nota fiscal; contar como está a situação do paciente; anotar preferências no cadastro; fechar ou abrir a agenda de uma profissional. Dê 2 ou 3 exemplos curtos e diga que é só escrever @ju seguido do pedido, do jeito que quiser.
+
+6. ANOTAR (acao "anotar"): "grava que...", "anota que...", "lembra que...", "salva isso". Guarda uma informação ou preferência no cadastro para você usar nas próximas conversas.
+- pessoa_id: de familia.pacientes (crianças e responsáveis), de quem é a informação. Preferência de horário, de fisio ou de contato costuma ser do responsável; algo da criança fica na criança. Se não der para saber, pergunte.
+- anotacao: frase curta e clara em terceira pessoa (ex.: "Prefere sessões às segundas às 11h"). Se o pedido for "grava isso", use o que foi combinado na conversa.
+
+7. FECHAR AGENDA (acao "fechar_agenda"): "fecha/bloqueia minha agenda amanhã", "fecha a agenda da Bruna sexta à tarde", "fecha a clínica dia 15".
+- profissional: nome da profissional. "minha" = quem_pediu.nome; "a sua agenda" ou "a agenda dela", na conversa com uma profissional, = conversa_com.nome; "a clínica toda" = "clínica".
+- data (AAAA-MM-DD) e data_fim se for mais de um dia. hora e hora_fim (HH:MM) só se for parte do dia: manhã = 07:00 a 12:00, tarde = 12:00 a 20:00; sem horário = o dia todo. motivo, se disserem.
+
+8. ABRIR AGENDA (acao "abrir_agenda"): desfazer um bloqueio ("abre/libera a agenda da Flávia amanhã"). Mesmos campos de fechar_agenda.
+
+A conversa pode ser com a família ou com alguém da equipe (conversa_com preenchido): nesse caso não há família e os pedidos costumam ser de agenda. quem_pediu diz quem escreveu o @ju (Recepção ou a própria profissional).
 
 Outros pedidos (cancelar, remarcar, atestado, contrato, desconto...): acao "nao_suportado", com mensagem dizendo o que você consegue fazer por aqui.
 Se a equipe estiver respondendo a uma pergunta sua anterior (ex.: "@ju isso", "@ju o Pedro", "@ju às 10"), junte a sua pergunta e a resposta para completar o que faltava.
@@ -67,9 +79,15 @@ Em "resumo", descreva em poucas palavras o que você entendeu (registro interno)
 const schema = {
   type: 'object',
   additionalProperties: false,
-  required: ['acao', 'paciente_id', 'data', 'hora', 'profissional_id', 'tipo_servico_id', 'agendamento_ids', 'fatura_ids', 'mensagem', 'resumo'],
+  required: ['acao', 'paciente_id', 'data', 'hora', 'profissional_id', 'tipo_servico_id', 'agendamento_ids', 'fatura_ids', 'mensagem', 'resumo', 'pessoa_id', 'anotacao', 'profissional', 'data_fim', 'hora_fim', 'motivo'],
   properties: {
-    acao: { type: 'string', enum: ['agendar', 'cobrar', 'nota', 'informar', 'ajuda', 'perguntar', 'nao_suportado'] },
+    acao: { type: 'string', enum: ['agendar', 'cobrar', 'nota', 'informar', 'ajuda', 'anotar', 'fechar_agenda', 'abrir_agenda', 'perguntar', 'nao_suportado'] },
+    pessoa_id: { type: ['string', 'null'] },
+    anotacao: { type: ['string', 'null'] },
+    profissional: { type: ['string', 'null'] },
+    data_fim: { type: ['string', 'null'], description: 'AAAA-MM-DD' },
+    hora_fim: { type: ['string', 'null'], description: 'HH:MM' },
+    motivo: { type: ['string', 'null'] },
     paciente_id: { type: ['string', 'null'] },
     data: { type: ['string', 'null'], description: 'AAAA-MM-DD' },
     hora: { type: ['string', 'null'], description: 'HH:MM' },

@@ -61,6 +61,10 @@ const chatid = String(m.chatid ?? '');
 // Botão "✅ Concluído" de um aviso da Ju no grupo 🔔 RK · Notificações.
 const GRUPO_NOTIFICACOES = '120363433073436578@g.us';
 const botao = String(m.buttonOrListid ?? '');
+// 29/10/2026: botões da sugestão de anotação da Ju (✅ Acrescentar / Descartar).
+if (chatid === GRUPO_NOTIFICACOES && /^ju_anot_(ok|nao):\d+$/.test(botao)) {
+  return [{ json: { evento: 'anotacao', anotacao_id: Number(botao.split(':')[1]), aceitar: botao.startsWith('ju_anot_ok:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? '') } }];
+}
 if (chatid === GRUPO_NOTIFICACOES && botao.startsWith('ju_concluir:')) {
   return [
     {
