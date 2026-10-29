@@ -213,6 +213,9 @@ export interface SupabaseAgendamentoCompletoFlat {
 
   // Agenda Compartilhada (NOVO)
   agenda_compartilhada_id: string | null;
+
+  // Agenda Expressa: consulta de onde foi marcada (não nulo = criada por ela)
+  agenda_expressa_origem_id?: string | null;
 }
 
 // Interfaces para dados enriquecidos (com joins) - MANTIDO PARA COMPATIBILIDADE
