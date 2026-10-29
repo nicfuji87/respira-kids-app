@@ -52,6 +52,7 @@ import {
   LocationSelect,
   SessionMediaManager,
   EvolutionFormModal,
+  AgendaExpressa,
   AttendanceStatementGenerator,
   type LocationOption,
 } from '@/components/composed';
@@ -131,6 +132,8 @@ export interface AppointmentDetailsManagerProps {
   onNfeAction?: (appointmentId: string, linkNfe?: string) => void;
   onPatientClick?: (patientId: string | null) => void;
   onProfessionalClick?: (professionalId: string) => void;
+  /** Chamado quando a Agenda Expressa marca a próxima sessão (recarregar agenda). */
+  onAgendaExpressaCreated?: () => void;
   className?: string;
 }
 
@@ -172,6 +175,7 @@ export const AppointmentDetailsManager =
       onNfeAction,
       onPatientClick,
       onProfessionalClick,
+      onAgendaExpressaCreated,
       className,
     }) => {
       const [formData, setFormData] = useState<FormData>({
@@ -2131,6 +2135,15 @@ export const AppointmentDetailsManager =
                         🔗 Agenda Compartilhada
                       </Badge>
                     )}
+                    {appointment?.agenda_expressa_origem_id && (
+                      <Badge
+                        variant="secondary"
+                        className="text-xs"
+                        title="Marcada pela Agenda Expressa, a partir de outra sessão"
+                      >
+                        ⚡ Agenda Expressa
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Botão Atestado - apenas admin/secretaria */}
@@ -2163,6 +2176,12 @@ export const AppointmentDetailsManager =
 
               <ScrollArea className="max-h-[calc(100vh-200px)] sm:max-h-[600px]">
                 <div className="space-y-6 px-4 py-4 sm:px-6">
+                  {/* Agenda Expressa: marcar a próxima sessão a partir desta */}
+                  <AgendaExpressa
+                    agendamentoId={appointment.id}
+                    onCreated={() => onAgendaExpressaCreated?.()}
+                  />
+
                   {/* Medidas previstas para esta sessão (só admin/profissional) */}
                   {medidasPendentes.length > 0 && (
                     <div
@@ -2737,6 +2756,10 @@ export const AppointmentDetailsManager =
                               'Sistema'}
                           </strong>{' '}
                           em {formatDateTimeBR(appointment.created_at)}
+                          {appointment.agenda_expressa_origem_id &&
+                            ' pela Agenda Expressa'}
+                          {appointment.agenda_compartilhada_id &&
+                            ' pela Agenda Compartilhada'}
                         </div>
                         {appointment.updated_at &&
                           appointment.created_at !== appointment.updated_at && (

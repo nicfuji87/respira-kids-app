@@ -624,6 +624,7 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                 formData.locaisAtendimento || locaisAtendimento
               }
               isLoadingLocais={isLoadingLocais}
+              onAgendaExpressaCreated={() => onRefreshNeeded?.()}
               onSave={async (data: AppointmentUpdateData) => {
                 // AI dev note: Bypass específico para AppointmentDetailsManager - usar updateAgendamentoDetails diretamente
                 try {

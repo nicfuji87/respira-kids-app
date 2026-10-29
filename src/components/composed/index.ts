@@ -137,6 +137,8 @@ export { EvaluationSectionContent } from './evaluation';
 
 // Clinical Evolution Components (Respiratory and Motor/Asymmetry)
 export { EvolutionFormModal } from './evolution';
+export { AgendaExpressa } from './AgendaExpressa';
+export type { AgendaExpressaProps } from './AgendaExpressa';
 export { EvolutionSectionContent } from './evolution';
 export type { EvolutionFormModalProps } from './evolution';
 
