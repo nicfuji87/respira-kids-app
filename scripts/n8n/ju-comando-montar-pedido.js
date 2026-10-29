@@ -72,6 +72,7 @@ Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (H
 - data (AAAA-MM-DD), hora (HH:MM) e hora_fim só se disserem (sem fim = 1 hora).
 - pessoa_id: a criança de familia.pacientes, se a reserva for para uma delas; se a família ainda não tem cadastro, null.
 - motivo: para quem é a reserva, só se o pedido disser um nome diferente da conversa; senão null (o sistema usa o nome do WhatsApp).
+- tipo_servico_id (de "servicos"): o serviço da futura consulta, pelas mesmas regras de AGENDAR (o pedido e a conversa dizem se é respiratória, motora ou avaliação; domiciliar só se falarem em casa). Com ele, a equipe transforma a reserva em consulta com um toque. Se não der para saber, null.
 
 A conversa pode ser com a família ou com alguém da equipe (conversa_com preenchido): nesse caso não há família e os pedidos costumam ser de agenda. quem_pediu diz quem escreveu o @ju (Recepção ou a própria profissional).
 

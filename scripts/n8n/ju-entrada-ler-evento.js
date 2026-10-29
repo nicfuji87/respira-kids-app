@@ -65,9 +65,13 @@ const botao = String(m.buttonOrListid ?? '');
 if (chatid === GRUPO_NOTIFICACOES && /^ju_anot_(ok|nao):\d+$/.test(botao)) {
   return [{ json: { evento: 'anotacao', anotacao_id: Number(botao.split(':')[1]), aceitar: botao.startsWith('ju_anot_ok:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? '') } }];
 }
-// 29/10/2026: botões da reserva de horário da Ju (✅ Confirmar / ❌ Recusar).
-if (chatid === GRUPO_NOTIFICACOES && /^ju_res_(ok|nao):\d+$/.test(botao)) {
-  return [{ json: { evento: 'reserva', reserva_id: Number(botao.split(':')[1]), aceitar: botao.startsWith('ju_res_ok:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? '') } }];
+// 29/10/2026: botões de reserva (✅ Confirmar/❌ Recusar da reserva da Ju; ✅ Agendar/❌ Liberar da reserva do @ju),
+// no grupo ou no privado da profissional. Quem pode clicar o banco confere (fn_ju_reserva_botao).
+const resJu = botao.match(/^ju_res_(ok|nao):(\d+)$/);
+const resAg = botao.match(/^ju_rag_(ok|nao):([0-9a-f-]{36})$/i);
+if ((resJu || resAg) && (chatid === GRUPO_NOTIFICACOES || /@(s\.whatsapp\.net|lid)$/.test(chatid))) {
+  const chatClique = chatid.endsWith('@lid') ? String(m.sender_pn || chatid) : chatid;
+  return [{ json: { evento: 'reserva', reserva_id: resJu ? Number(resJu[2]) : null, bloqueio_id: resAg ? resAg[2] : null, aceitar: (resJu || resAg)[1] === 'ok', quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? ''), chatid: chatClique } }];
 }
 if (chatid === GRUPO_NOTIFICACOES && botao.startsWith('ju_concluir:')) {
   return [
