@@ -13,6 +13,11 @@ import { cn } from '@/lib/utils';
 import {
   OBJETIVOS_CATALOGO,
   RESULTADOS_FUNCIONAIS,
+  RECURSOS,
+  RECURSOS_ANTIGOS,
+  FINALIDADE_POR_ID,
+  REGIOES,
+  nomeDe,
   type ObjetivoCatalogo,
 } from '@/lib/motora-catalogo';
 import {
@@ -49,7 +54,7 @@ import {
 import { HabilidadeCard } from './HabilidadeCard';
 import { MedicaoSessaoBloco } from './MedicoesMotoras';
 import { ObjetivoMotorEditor } from './ObjetivoMotorEditor';
-import { opcaoClasse } from './estilos-motora';
+import { chipClasse, opcaoClasse } from './estilos-motora';
 import { usePlanoMotor } from './plano-motor-context';
 import { useMedidasEvolucao } from './medidas-evolucao-context';
 
@@ -73,6 +78,23 @@ const registroDaHabilidade = (
   if (ind.lado) return daHab.find((r) => (r.lado ?? 'ambos') === ind.lado);
   return daHab.find((r) => !r.lado || r.lado === 'ambos') ?? daHab[0];
 };
+
+/** O que foi feito na última sessão em que o objetivo foi trabalhado */
+function ultimosRecursos(
+  item: { cat?: ObjetivoCatalogo; plano?: ObjetivoMotor },
+  evolucoes: { data: string; objetivos_sessao: ObjetivoSessao[] | null }[]
+): string[] | undefined {
+  const ordenadas = [...evolucoes].sort((a, b) => b.data.localeCompare(a.data));
+  for (const e of ordenadas) {
+    const s = (e.objetivos_sessao || []).find(
+      (x) =>
+        (item.plano && x.objetivo_id === item.plano.id) ||
+        (item.cat && x.catalogo_id === item.cat.id)
+    );
+    if (s?.recursos?.length) return s.recursos;
+  }
+  return undefined;
+}
 
 interface ItemObjetivo {
   chave: string;
@@ -174,6 +196,47 @@ const DetalheObjetivo: React.FC<{
           disabled={disabled}
         />
       )}
+
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">
+          O que foi feito <span className="text-destructive">*</span>
+        </Label>
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="group"
+          aria-label={`O que foi feito: ${o.descricao}`}
+        >
+          {RECURSOS.map((r) => {
+            const sel = !!sessao.recursos?.includes(r.id);
+            return (
+              <button
+                key={r.id}
+                type="button"
+                aria-pressed={sel}
+                disabled={disabled}
+                onClick={() => {
+                  const atuais = sessao.recursos || [];
+                  const novos = sel
+                    ? atuais.filter((x) => x !== r.id)
+                    : [...atuais, r.id];
+                  const n = { ...sessao };
+                  if (novos.length) n.recursos = novos;
+                  else delete n.recursos;
+                  onSessao(n);
+                }}
+                className={chipClasse(sel)}
+              >
+                {r.nome}
+              </button>
+            );
+          })}
+        </div>
+        {sessao.recursos_da_ultima && (
+          <p className="text-xs text-muted-foreground">
+            Marcado como na última sessão. Toque para trocar.
+          </p>
+        )}
+      </div>
 
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">
@@ -364,9 +427,17 @@ export const ObjetivosHabilidadesSecao: React.FC<
     }
     const o = objetivoDe(item);
     const h = ctx?.historico ?? { evolucoes: [], medidas: [] };
+    const ultimos = ultimosRecursos(item, h.evolucoes);
     const s: ObjetivoSessao = {
       ...objetivoParaSessao(o, evolucao, h, dataSessao, ctx?.agendamentoId),
-      ...(item.cat ? { catalogo_id: item.cat.id, area: item.cat.area } : {}),
+      ...(item.cat
+        ? {
+            catalogo_id: item.cat.id,
+            area: item.cat.area,
+            regiao: item.cat.regiao,
+          }
+        : {}),
+      ...(ultimos ? { recursos: ultimos, recursos_da_ultima: true } : {}),
       ...(!item.plano && item.cat
         ? {
             novo_no_plano: {
@@ -393,10 +464,25 @@ export const ObjetivosHabilidadesSecao: React.FC<
     onChange({ objetivos_sessao: [...sessoes, s], habilidades });
   };
 
-  const atualizarSessao = (antiga: ObjetivoSessao, nova: ObjetivoSessao) =>
+  const atualizarSessao = (antiga: ObjetivoSessao, nova: ObjetivoSessao) => {
+    // Mexeu no que foi feito: deixa de ser a cópia da última sessão
+    const n = { ...nova };
+    if (n.recursos !== antiga.recursos) delete n.recursos_da_ultima;
     onChange({
-      objetivos_sessao: sessoes.map((s) => (s === antiga ? nova : s)),
+      objetivos_sessao: sessoes.map((s) => (s === antiga ? n : s)),
     });
+  };
+
+  // Outra intervenção (fora de objetivo) e o quadro antigo, se veio de
+  // rascunho do formato anterior
+  const is = evolucao.intervencao_sessao || {};
+  const quadroAntigo = [
+    ...(is.finalidades || []).map((f) => FINALIDADE_POR_ID[f]?.nome ?? f),
+    ...(is.regioes || []).map((r) => nomeDe(REGIOES, r)),
+    ...(is.recursos || []).map((r) =>
+      nomeDe([...RECURSOS, ...RECURSOS_ANTIGOS], r)
+    ),
+  ];
 
   const atualizarRegistro = (
     antigo: RegistroHabilidade,
@@ -564,6 +650,30 @@ export const ObjetivosHabilidadesSecao: React.FC<
             />
           )}
         </div>
+      )}
+
+      {areasOrdenadas.length > 0 && (
+        <section className="space-y-2">
+          <Label className="text-sm font-medium">
+            Outra intervenção (opcional)
+          </Label>
+          {quadroAntigo.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Do rascunho anterior: {quadroAntigo.join(', ')}.
+            </p>
+          )}
+          <Input
+            value={is.detalhe ?? ''}
+            onChange={(e) => {
+              const n = { ...is };
+              if (e.target.value) n.detalhe = e.target.value;
+              else delete n.detalhe;
+              onChange({ intervencao_sessao: n });
+            }}
+            placeholder="O que mais foi feito, fora dos objetivos acima"
+            disabled={disabled}
+          />
+        </section>
       )}
 
       {/* Medidas dos objetivos de hoje */}

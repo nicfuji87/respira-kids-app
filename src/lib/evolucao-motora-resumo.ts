@@ -523,6 +523,10 @@ function blocosObjetivosHabilidades(ev: EvolucaoMotoraAssimetria): string {
   for (const o of ev.objetivos_sessao || []) {
     const partes: string[] = [];
     if (o.resultado) partes.push(ROTULO_RESULTADO[o.resultado] ?? o.resultado);
+    if (o.recursos?.length)
+      partes.push(
+        `feito: ${o.recursos.map((x) => nomeDe(TODOS_RECURSOS, x).toLowerCase()).join(', ')}`
+      );
     const un = o.unidade ?? '';
     if (ehNumero(o.valor)) {
       let v = `hoje ${fmtValor(o.valor, un)}`;
@@ -597,7 +601,12 @@ function blocosIntervencaoResposta(ev: EvolucaoMotoraAssimetria): string {
       interv.push(
         `Recursos: ${is.recursos.map((x) => nomeDe(TODOS_RECURSOS, x).toLowerCase()).join(', ')}`
       );
-    if (temTexto(is.detalhe)) interv.push(is.detalhe.trim());
+    if (temTexto(is.detalhe))
+      interv.push(
+        fins.length || is.regioes?.length || is.recursos?.length
+          ? is.detalhe.trim()
+          : `Outra intervenção: ${is.detalhe.trim()}`
+      );
   }
   texto += secao('🩺 Intervenções realizadas', interv);
 

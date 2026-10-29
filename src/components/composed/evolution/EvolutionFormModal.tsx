@@ -63,6 +63,7 @@ import {
   SECOES_REAPROVEITAVEIS_RESPIRATORIA,
   ehFormatoMotoraV13,
   normalizarAreas,
+  rascunhoMotorParaV14,
   pendenciasEvolucaoRespiratoria,
   pendenciasEvolucaoMotora,
   type PendenciaEvolucao,
@@ -74,6 +75,7 @@ import {
   salvarRascunhoEvolucao,
 } from '@/lib/evolucao-rascunho-api';
 import { EvolutionSectionContent } from './EvolutionSectionContent';
+import { AgendaExpressa } from '../AgendaExpressa';
 import { MedidasEvolucaoContext } from './medidas-evolucao-context';
 import { PlanoMotorContext, type PlanoMotorValor } from './plano-motor-context';
 import { prepararSessaoV13 } from '@/lib/motora-plano';
@@ -299,6 +301,21 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   const currentSectionData =
     secoes[Math.min(currentSection, secoes.length - 1)];
 
+  // AI dev note: Agenda Expressa abre sozinha quando a conduta diz que a
+  // criança continua (ao chegar na seção Conduta com "Manter Fisioterapia" =
+  // sim, ou ao mudar de não para sim). Vale para respiratória e motora.
+  const manterFisioterapia =
+    tipoEvolucao === 'respiratoria'
+      ? evolucaoRespiratoria.conduta?.manter_fisioterapia
+      : evolucaoMotora.conduta?.manter_fisioterapia;
+  const naSecaoConduta = currentSectionData?.id === 'conduta';
+  const [abrirAgendaSinal, setAbrirAgendaSinal] = useState(0);
+  useEffect(() => {
+    if (!isReadOnly && naSecaoConduta && manterFisioterapia === true) {
+      setAbrirAgendaSinal((s) => s + 1);
+    }
+  }, [isReadOnly, naSecaoConduta, manterFisioterapia]);
+
   const alternarArea = useCallback(
     (area: AreaMotora) => {
       if (isReadOnly) return;
@@ -490,7 +507,10 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       setEvolucaoRespiratoria(d.evolucao_respiratoria);
     }
     if (d.evolucao_motora_assimetria) {
-      setEvolucaoMotora(comAreasParaEdicao(d.evolucao_motora_assimetria));
+      // Rascunho do formato anterior abre na tela nova
+      setEvolucaoMotora(
+        comAreasParaEdicao(rascunhoMotorParaV14(d.evolucao_motora_assimetria))
+      );
       // rascunho já traz a escolha de áreas: não sobrescrever com sugestão
       areasTocadasRef.current = true;
     }
@@ -928,6 +948,18 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                 className="h-1 mt-2 hidden sm:block"
               />
             </DialogHeader>
+
+            {/* AI dev note: Agenda Expressa no TOPO (não no fim): o fim só chega
+                com tudo preenchido, e a família decide o retorno na saída.
+                Salva sozinha, sem depender de finalizar a evolução. */}
+            {appointmentId && (
+              <div className="px-4 py-2 sm:px-6 border-b flex-shrink-0 max-h-[50%] overflow-y-auto">
+                <AgendaExpressa
+                  agendamentoId={appointmentId}
+                  abrirSinal={abrirAgendaSinal}
+                />
+              </div>
+            )}
 
             {/* Conteúdo principal - sem sidebar */}
             <div className="flex-1 flex flex-col overflow-hidden">
