@@ -11,6 +11,9 @@ import {
   HABILIDADE_POR_ID,
   HABILIDADES,
   MEDIDAS_INDICADOR,
+  OBJETIVOS_CATALOGO,
+  OBJETIVO_CATALOGO_POR_ID,
+  type ObjetivoCatalogo,
   ROTULO_ESTADO,
   UNIDADE_METRICA,
   ASSISTENCIAS,
@@ -27,6 +30,7 @@ import {
 } from '@/lib/motora-catalogo';
 import type {
   AreaMotora,
+  TipoMedidaMotora,
   EvolucaoMotoraAssimetria,
   IdadeSessao,
   MetricasHabilidade,
@@ -579,6 +583,10 @@ function valorDaMedida(
       return tipo === 'craniometria' && ehNumero(v.cva_mm)
         ? v.cva_mm
         : undefined;
+    case 'ci':
+      return tipo === 'craniometria' && ehNumero(v.ci_percentual)
+        ? v.ci_percentual
+        : undefined;
   }
   return undefined;
 }
@@ -590,6 +598,7 @@ const TIPO_DA_MEDIDA: Record<string, string> = {
   mfs_dif: 'mfs',
   cvai: 'craniometria',
   cva: 'craniometria',
+  ci: 'craniometria',
 };
 
 /** Registro de hoje que corresponde ao indicador (respeita o lado, se houver) */
@@ -804,6 +813,68 @@ export function situacaoObjetivo(
   };
 }
 
+// ------------------------------------------------ objetivos x catálogo (1.4)
+
+const igualJson = (a: unknown, b: unknown) =>
+  JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** Item do catálogo que corresponde a um objetivo do plano (ou undefined). */
+export function catalogoDoObjetivo(
+  o: Pick<ObjetivoMotor, 'descricao' | 'indicador'>
+): ObjetivoCatalogo | undefined {
+  return (
+    OBJETIVOS_CATALOGO.find((c) => c.descricao === o.descricao) ??
+    (o.indicador
+      ? OBJETIVOS_CATALOGO.find((c) => igualJson(c.indicador, o.indicador))
+      : undefined)
+  );
+}
+
+/** Medidas que um objetivo puxa: as do catálogo, ou a do seu indicador. */
+export function medidasDoObjetivo(
+  o: Pick<ObjetivoMotor, 'descricao' | 'indicador'>
+): TipoMedidaMotora[] {
+  const c = catalogoDoObjetivo(o);
+  if (c) return c.medidas;
+  if (o.indicador?.tipo === 'medida') {
+    const t = TIPO_DA_MEDIDA[o.indicador.medida];
+    return t ? [t as TipoMedidaMotora] : [];
+  }
+  return [];
+}
+
+/** Área em que o objetivo aparece agrupado. */
+export function areaDoObjetivo(
+  o: Pick<ObjetivoMotor, 'descricao' | 'indicador' | 'areas'>
+): AreaMotora | undefined {
+  return catalogoDoObjetivo(o)?.area ?? o.areas?.[0];
+}
+
+/** Objetivo do catálogo ainda fora do plano, como se já estivesse nele. */
+export function objetivoProvisorio(
+  c: ObjetivoCatalogo,
+  pacienteId: string,
+  id: string = novoIdObjetivo()
+): ObjetivoMotor {
+  const agora = new Date().toISOString();
+  return {
+    id,
+    paciente_id: pacienteId,
+    descricao: c.descricao,
+    areas: [c.area],
+    indicador: c.indicador,
+    valor_inicial: null,
+    meta: null,
+    meta_texto: null,
+    status: 'ativo',
+    motivo_status: null,
+    origem: 'evolucao',
+    criado_em: agora,
+    atualizado_em: agora,
+    encerrado_em: null,
+  };
+}
+
 /**
  * Cópia do objetivo para a sessão: descrição, valor de hoje e o anterior.
  * O resultado (progresso/manteve…) é escolhido pela fisio, nunca deduzido.
@@ -827,9 +898,15 @@ export function objetivoParaSessao(
   );
   const anterior = anteriores[anteriores.length - 1];
   const valor = valorIndicadorNaEvolucao(o.indicador, ev);
+  const cat = catalogoDoObjetivo(o);
+  const area = areaDoObjetivo(o);
+  const medidas = medidasDoObjetivo(o);
   return {
     objetivo_id: o.id,
     descricao: o.descricao,
+    ...(cat ? { catalogo_id: cat.id } : {}),
+    ...(area ? { area } : {}),
+    ...(medidas.length ? { medidas } : {}),
     ...(info?.numerico
       ? { rotulo_indicador: info.rotulo, unidade: info.unidade }
       : {}),
@@ -857,7 +934,14 @@ export function prepararSessaoV13(
 ): EvolucaoMotoraAssimetria {
   const h = ctx.historico ?? { evolucoes: [], medidas: [] };
   const objetivos_sessao = (ev.objetivos_sessao || []).map((s) => {
-    const o = ctx.objetivos?.find((x) => x.id === s.objetivo_id);
+    // Objetivo do catálogo recém-entrado no plano ainda pode não estar na
+    // lista carregada: usa o do catálogo para recalcular os valores
+    const cat = s.catalogo_id
+      ? OBJETIVO_CATALOGO_POR_ID[s.catalogo_id]
+      : undefined;
+    const o =
+      ctx.objetivos?.find((x) => x.id === s.objetivo_id) ??
+      (cat ? objetivoProvisorio(cat, '', s.objetivo_id) : undefined);
     if (!o) return s;
     const novo = objetivoParaSessao(
       o,

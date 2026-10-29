@@ -88,7 +88,8 @@ const resumoComparacao = (c: NonNullable<RegistroHabilidade['anterior']>) =>
 export interface HabilidadeCardProps {
   registro: RegistroHabilidade;
   onChange: (r: RegistroHabilidade) => void;
-  onRemover: () => void;
+  /** Sem ele, o cartão não mostra o X (habilidade presa a um objetivo) */
+  onRemover?: () => void;
   disabled?: boolean;
 }
 
@@ -141,15 +142,17 @@ export const HabilidadeCard: React.FC<HabilidadeCardProps> = ({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onRemover}
-          disabled={disabled}
-          aria-label={`Tirar ${nomeHabilidade(r.habilidade)} desta evolução`}
-          className="p-1 rounded text-muted-foreground hover:bg-muted"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {onRemover && (
+          <button
+            type="button"
+            onClick={onRemover}
+            disabled={disabled}
+            aria-label={`Tirar ${nomeHabilidade(r.habilidade)} desta evolução`}
+            className="p-1 rounded text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {hab?.porLado && (

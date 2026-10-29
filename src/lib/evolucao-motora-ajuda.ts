@@ -4,10 +4,14 @@
 // Texto clínico: revisar com a equipe antes de mudar. Para editar uma
 // explicação, basta alterar o texto aqui; a tela não precisa mudar.
 
+import type { FiguraId } from '@/components/composed/evolution/FiguraAjuda';
+
 export interface AjudaParametro {
   titulo: string;
   oQueE: string;
   comoMedir?: string;
+  // Desenho explicativo mostrado no topo da explicação
+  figura?: FiguraId;
   // Significado de cada opção, quando o campo é de escolha
   opcoes?: [string, string][];
 }
@@ -19,18 +23,21 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   // ---------------------------------------------------------------- Crânio
   diagonal_a: {
     titulo: 'Diagonal A',
+    figura: 'cranio_diagonais',
     oQueE:
-      'Uma das duas diagonais cruzadas do crânio. A diferença entre as duas diagonais mostra o quanto a cabeça está assimétrica (plagiocefalia).',
+      'Uma das duas diagonais cruzadas do crânio. A diferença entre as duas mostra o quanto a cabeça está assimétrica (plagiocefalia). A diagonal que termina no lado achatado da nuca é a menor.',
     comoMedir: `Com o craniômetro, da testa do lado esquerdo até a nuca do lado direito. Marcar os pontos com fita dermatográfica aumenta a precisão. ${MESMO_METODO}`,
   },
   diagonal_b: {
     titulo: 'Diagonal B',
+    figura: 'cranio_diagonais',
     oQueE:
       'A outra diagonal cruzada do crânio, que é comparada com a diagonal A.',
     comoMedir: `Com o craniômetro, da testa do lado direito até a nuca do lado esquerdo, na mesma altura usada na diagonal A. ${MESMO_METODO}`,
   },
   comprimento_ap: {
     titulo: 'Comprimento AP',
+    figura: 'cranio_ap_ml',
     oQueE:
       'Comprimento da cabeça de frente para trás. Junto com a largura, forma o índice cefálico (CI).',
     comoMedir:
@@ -38,6 +45,7 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   },
   largura_ml: {
     titulo: 'Largura ML',
+    figura: 'cranio_ap_ml',
     oQueE:
       'Largura da cabeça de um lado ao outro. Junto com o comprimento, forma o índice cefálico (CI).',
     comoMedir:
@@ -45,6 +53,7 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   },
   perimetro_cefalico: {
     titulo: 'Perímetro cefálico',
+    figura: 'perimetro',
     oQueE:
       'A volta da cabeça. Acompanha o crescimento do crânio; não entra no cálculo do CVAI nem do CI.',
     comoMedir:
@@ -52,6 +61,7 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   },
   metricas_cranio: {
     titulo: 'CVA, CVAI e CI',
+    figura: 'cranio_diagonais',
     oQueE:
       'São calculados pelo sistema a partir das medidas acima; não precisa calcular nada.',
     opcoes: [
@@ -70,12 +80,14 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   // ----------------------------------------------------------- Goniometria
   rotacao: {
     titulo: 'Rotação cervical',
+    figura: 'rotacao',
     oQueE:
       'Quanto a cabeça gira para cada lado, em graus. D = virando para a direita (bochecha em direção ao ombro direito); E = para a esquerda. O lado com o número menor é o lado mais limitado.',
     comoMedir: `Criança em supino, ombros estabilizados, cabeça apoiada no occipital. Ativa: atraia o olhar com um brinquedo ou som e meça até onde ela vira sozinha. Passiva: você conduz o movimento até o fim da amplitude, sem forçar; é a medida mais importante no torcicolo. Referência média por idade: cerca de 105° a 112° (Klackenberg, 2005). ${MESMO_METODO}`,
   },
   inclinacao: {
     titulo: 'Inclinação lateral',
+    figura: 'inclinacao',
     oQueE:
       'Quanto a cabeça inclina para cada lado, em graus. D = orelha em direção ao ombro direito; E = ao ombro esquerdo.',
     comoMedir: `Criança em supino, ombros estabilizados, cabeça apoiada no occipital. Ativa: a criança faz sozinha. Passiva: você conduz até o fim da amplitude, sem forçar. Referência média por idade: cerca de 68° a 70° (Klackenberg, 2005). ${MESMO_METODO}`,
@@ -84,6 +96,7 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   // --------------------------------------------------------------- Palpação
   ecom_tonus: {
     titulo: 'Tônus do ECOM',
+    figura: 'ecom',
     oQueE:
       'Como o músculo esternocleidomastoideo está ao toque, comparando os dois lados.',
     comoMedir:
@@ -96,10 +109,27 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   },
   nodulo: {
     titulo: 'Nódulo no ECOM',
+    figura: 'ecom',
     oQueE:
       'Massa firme palpável dentro do músculo, típica do torcicolo muscular congênito com nódulo.',
     comoMedir:
       'Percorra o músculo inteiro. Anote o tamanho aproximado e em que terço está: superior (perto da orelha), médio ou inferior (perto da clavícula).',
+  },
+
+  cervical_tensao: {
+    titulo: 'Musculatura cervical',
+    figura: 'cervical',
+    oQueE:
+      'Tônus dos músculos da frente (anterior) e de trás do pescoço (posterior), além do ECOM. Ajuda a entender o que mantém a cabeça inclinada ou girada.',
+    comoMedir:
+      'Com a cabeça na linha média, palpe dos dois lados e compare. Se estiver tensa, marque o lado mais tenso (ou ambos).',
+  },
+  bloqueio_articular: {
+    titulo: 'Bloqueio articular',
+    oQueE:
+      'Restrição de mobilidade numa articulação que interfere na postura da cabeça e do tronco.',
+    comoMedir:
+      'Teste a mobilidade do crânio, da escápula e do quadril dos dois lados. Marque onde há bloqueio e o lado mais tenso.',
   },
 
   // ---------------------------------------------------------- Controle motor
@@ -188,6 +218,13 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   },
 
   // ---------------------------------------------------------------- Conduta
+  tummy_time: {
+    titulo: 'Tummy time',
+    oQueE:
+      'Tempo de barriga para baixo com a criança acordada e alguém olhando. Fortalece pescoço, ombros e tronco e tira o apoio da parte achatada da cabeça.',
+    comoMedir:
+      'Escolha quantas vezes por dia e quanto tempo cada vez foi combinado com a família. Comece com pouco e aumente conforme a tolerância.',
+  },
   reavaliacao_dias: {
     titulo: 'Reavaliação',
     oQueE:

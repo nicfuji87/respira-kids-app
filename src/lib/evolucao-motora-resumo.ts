@@ -30,14 +30,29 @@ import {
 } from '@/lib/motora-plano';
 import {
   ABORDAGEM_CURTA,
+  EXERCICIOS_DOMICILIARES,
   FINALIDADE_POR_ID,
   OCORRENCIAS_SESSAO,
   PARTICIPACOES_SESSAO,
   RECURSOS,
+  RECURSOS_ANTIGOS,
   REGIOES,
   RESULTADOS_FUNCIONAIS,
   nomeDe,
+  textoTummyTime,
 } from '@/lib/motora-catalogo';
+
+const TODOS_RECURSOS = [...RECURSOS, ...RECURSOS_ANTIGOS];
+const LADO_TENSO: Record<string, string> = {
+  direito: 'mais tenso à direita',
+  esquerdo: 'mais tenso à esquerda',
+  ambos: 'tenso dos dois lados',
+};
+const LOCAL_BLOQUEIO: Record<string, string> = {
+  cranio: 'crânio',
+  escapula: 'escápula',
+  quadril: 'quadril',
+};
 
 /**
  * Prepara a evolução motora para gravar: identifica a profissional logada
@@ -314,9 +329,34 @@ export function gerarResumoEvolucaoMotora(
       .join(', ');
     palp.push(`Nódulo no ECOM ${lados}${detalhes ? ` (${detalhes})` : ''}`);
   }
+  for (const [rot, reg] of [
+    ['Musculatura cervical posterior', p.cervical_posterior],
+    ['Musculatura cervical anterior', p.cervical_anterior],
+  ] as const) {
+    if (!reg) continue;
+    palp.push(
+      reg.tonus === 'normal'
+        ? `${rot}: normal`
+        : `${rot}: tensa${reg.lado ? ` (${LADO_TENSO[reg.lado]})` : ''}`
+    );
+  }
+  if ((p.bloqueios || []).length)
+    palp.push(
+      `Bloqueio articular: ${(p.bloqueios || [])
+        .map(
+          (b) =>
+            LOCAL_BLOQUEIO[b.local] + (b.lado ? ` (${LADO_TENSO[b.lado]})` : '')
+        )
+        .join(', ')}`
+    );
   if (temTexto(p.observacoes))
     palp.push(`Observações: ${p.observacoes.trim()}`);
-  texto += secao('👋 Palpação do ECOM', palp);
+  texto += secao(
+    p.cervical_posterior || p.cervical_anterior || (p.bloqueios || []).length
+      ? '👋 Palpação'
+      : '👋 Palpação do ECOM',
+    palp
+  );
 
   // Controle motor
   const cm = ev.controle_motor || {};
@@ -402,11 +442,18 @@ export function gerarResumoEvolucaoMotora(
       orient.push(
         'Posicionamento e brincadeiras acordado, estimulando o lado não preferido'
       );
-    if (temTexto(o.tummy_time_frequencia))
-      orient.push(
-        `Tummy time (acordado e supervisionado): ${o.tummy_time_frequencia.trim()}`
-      );
+    const tummy =
+      textoTummyTime(o.tummy_time_vezes, o.tummy_time_minutos) ||
+      (temTexto(o.tummy_time_frequencia) ? o.tummy_time_frequencia.trim() : '');
+    if (tummy) orient.push(`Tummy time (acordado e supervisionado): ${tummy}`);
+    if (o.colo_alternando) orient.push('Colo alternando os lados');
+    if (o.tempo_no_chao)
+      orient.push('Mais tempo no chão (menos bebê-conforto e cadeirinha)');
     if (o.exercicios_domiciliares) orient.push('Exercícios domiciliares');
+    const exs = (o.exercicios || []).map(
+      (x) => EXERCICIOS_DOMICILIARES.find((e) => e.id === x)?.nome ?? x
+    );
+    if (exs.length) orient.push(`Exercícios para casa: ${exs.join('; ')}`);
     if (o.sinais_alerta) orient.push('Sinais de alerta');
     if (o.uso_capacete) orient.push('Uso do capacete');
     if (temTexto(o.outras)) orient.push(o.outras.trim());
@@ -529,11 +576,28 @@ function blocosIntervencaoResposta(ev: EvolucaoMotoraAssimetria): string {
       );
     if (it.recursos?.length)
       partes.push(
-        `recursos: ${it.recursos.map((x) => nomeDe(RECURSOS, x).toLowerCase()).join(', ')}`
+        `recursos: ${it.recursos.map((x) => nomeDe(TODOS_RECURSOS, x).toLowerCase()).join(', ')}`
       );
     let l = nome + (partes.length ? ` (${partes.join('; ')})` : '');
     if (temTexto(it.detalhe)) l += `. ${it.detalhe.trim()}`;
     interv.push(l);
+  }
+  const is = ev.intervencao_sessao;
+  if (is) {
+    const fins = [
+      ...(is.finalidades || []).map((f) => FINALIDADE_POR_ID[f]?.nome ?? f),
+      ...(temTexto(is.finalidade_outra) ? [is.finalidade_outra.trim()] : []),
+    ];
+    if (fins.length) interv.push(`Trabalhado: ${fins.join(', ')}`);
+    if (is.regioes?.length)
+      interv.push(
+        `Região: ${is.regioes.map((x) => nomeDe(REGIOES, x).toLowerCase()).join(', ')}`
+      );
+    if (is.recursos?.length)
+      interv.push(
+        `Recursos: ${is.recursos.map((x) => nomeDe(TODOS_RECURSOS, x).toLowerCase()).join(', ')}`
+      );
+    if (temTexto(is.detalhe)) interv.push(is.detalhe.trim());
   }
   texto += secao('🩺 Intervenções realizadas', interv);
 

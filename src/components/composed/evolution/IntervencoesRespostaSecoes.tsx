@@ -20,6 +20,7 @@ import type {
   AdesaoDomiciliar,
   EvolucaoMotoraAssimetria,
   IntervencaoFinalidade,
+  IntervencaoSessaoMotora,
   RespostaSessaoMotora,
 } from '@/types/evolucao-clinica';
 import { chipClasse, opcaoClasse } from './estilos-motora';
@@ -203,6 +204,76 @@ export const IntervencoesSecao: React.FC<{
           disabled={disabled}
         />
       </div>
+    </div>
+  );
+};
+
+// --------------------------------------------- intervenção num quadro (1.4)
+
+/**
+ * Um quadro só: o que foi trabalhado (finalidades, várias), onde (região) e
+ * com o quê (recursos). A abordagem saiu da tela no 1.4.
+ */
+export const IntervencaoSessaoSecao: React.FC<{
+  evolucao: EvolucaoMotoraAssimetria;
+  onChange: (u: Partial<EvolucaoMotoraAssimetria>) => void;
+  disabled?: boolean;
+}> = ({ evolucao, onChange, disabled }) => {
+  const i = evolucao.intervencao_sessao || {};
+  const areas = evolucao.areas || [];
+  const set = (p: Partial<IntervencaoSessaoMotora>) => {
+    const novo = { ...i, ...p };
+    for (const k of Object.keys(p) as (keyof IntervencaoSessaoMotora)[])
+      if (novo[k] === undefined) delete novo[k];
+    onChange({ intervencao_sessao: novo });
+  };
+  // Finalidades das áreas da sessão primeiro
+  const finalidades = [...FINALIDADES]
+    .sort((a, b) => {
+      const pa = !a.areas || a.areas.some((x) => areas.includes(x)) ? 0 : 1;
+      const pb = !b.areas || b.areas.some((x) => areas.includes(x)) ? 0 : 1;
+      return pa - pb;
+    })
+    .map((f) => ({ id: f.id, nome: f.nome }));
+
+  return (
+    <div className="rounded-lg border p-4 space-y-4">
+      <Chips
+        rotulo="O que foi trabalhado (marque quantos quiser)"
+        opcoes={finalidades}
+        valor={i.finalidades}
+        onChange={(v) => set({ finalidades: v })}
+        disabled={disabled}
+      />
+      <Input
+        value={i.finalidade_outra ?? ''}
+        onChange={(e) => set({ finalidade_outra: e.target.value || undefined })}
+        placeholder="Outra finalidade (opcional)"
+        disabled={disabled}
+      />
+      <Chips
+        rotulo="Região"
+        opcoes={REGIOES}
+        valor={i.regioes}
+        onChange={(v) => set({ regioes: v })}
+        disabled={disabled}
+      />
+      <Chips
+        rotulo="Recursos"
+        opcoes={RECURSOS}
+        valor={i.recursos}
+        onChange={(v) => set({ recursos: v })}
+        disabled={disabled}
+      />
+      <Input
+        value={i.detalhe ?? ''}
+        onChange={(e) => set({ detalhe: e.target.value || undefined })}
+        placeholder="O que foi feito, em poucas palavras (opcional)"
+        disabled={disabled}
+      />
+      <p className="text-xs text-muted-foreground">
+        A orientação à família fica em Orientações.
+      </p>
     </div>
   );
 };

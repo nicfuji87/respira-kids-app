@@ -12,6 +12,9 @@ import type {
   LadoHabilidade,
   MetricaHabilidade,
   ResultadoFuncional,
+  IndicadorObjetivo,
+  TummyVezes,
+  TummyMinutos,
 } from '@/lib/motora-catalogo';
 
 // =========================================================================
@@ -462,7 +465,39 @@ export interface PalpacaoECOMEvolucao {
     | 'terco_medio'
     | 'terco_superior'
     | null;
+  // Desde 1.4: musculatura cervical posterior e anterior, e bloqueios
+  cervical_posterior?: TensaoRegiao;
+  cervical_anterior?: TensaoRegiao;
+  bloqueios?: BloqueioArticular[];
   observacoes?: string;
+}
+
+export type LadoMaisTenso = 'direito' | 'esquerdo' | 'ambos';
+
+/** Tônus de uma região e, se tensa, o lado mais tenso */
+export interface TensaoRegiao {
+  tonus: 'normal' | 'tensa';
+  lado?: LadoMaisTenso;
+}
+
+export type LocalBloqueio = 'quadril' | 'escapula' | 'cranio';
+
+export const LOCAIS_BLOQUEIO: { id: LocalBloqueio; nome: string }[] = [
+  { id: 'cranio', nome: 'Crânio' },
+  { id: 'escapula', nome: 'Escápula' },
+  { id: 'quadril', nome: 'Quadril' },
+];
+
+export const LADOS_MAIS_TENSO: { id: LadoMaisTenso; nome: string }[] = [
+  { id: 'direito', nome: 'Direito' },
+  { id: 'esquerdo', nome: 'Esquerdo' },
+  { id: 'ambos', nome: 'Ambos' },
+];
+
+/** Bloqueio articular: onde e o lado mais tenso */
+export interface BloqueioArticular {
+  local: LocalBloqueio;
+  lado?: LadoMaisTenso;
 }
 
 export interface ControleMotorEvolucao {
@@ -521,6 +556,12 @@ export interface OrientacoesMotoraAssimetria {
   sinais_alerta: boolean;
   uso_capacete?: boolean;
   outras?: string;
+  // Desde 1.4 (capacete e "exercícios domiciliares" genérico saíram da tela)
+  colo_alternando?: boolean;
+  tempo_no_chao?: boolean;
+  exercicios?: string[]; // ids em EXERCICIOS_DOMICILIARES
+  tummy_time_vezes?: TummyVezes | null;
+  tummy_time_minutos?: TummyMinutos | null;
   // Marca explícita de que não houve orientação (distingue de esquecido)
   sem_orientacao?: boolean;
   sem_orientacao_motivo?: MotivoSemOrientacao | null;
@@ -554,7 +595,7 @@ export interface AutoriaEvolucao {
  * são da versão original: neles, "encaminhamento médico = não" pode ser só o
  * valor padrão do formulário, e não uma decisão clínica.
  */
-export const VERSAO_FORMULARIO_MOTORA = '1.3';
+export const VERSAO_FORMULARIO_MOTORA = '1.4';
 
 /**
  * Formato 1.3: objetivos + habilidades + intervenções por finalidade +
@@ -564,6 +605,21 @@ export const VERSAO_FORMULARIO_MOTORA = '1.3';
 export const ehFormatoMotoraV13 = (
   ev: Pick<EvolucaoMotoraAssimetria, 'versao_formulario'> | null | undefined
 ) => Number(ev?.versao_formulario ?? 0) >= 1.3;
+
+/**
+ * Formato 1.4: objetivos por área (do catálogo) puxam a habilidade e as
+ * medidas; intervenção num quadro só; orientações e palpação ampliadas.
+ */
+export const ehFormatoMotoraV14 = (
+  ev: Pick<EvolucaoMotoraAssimetria, 'versao_formulario'> | null | undefined
+) => Number(ev?.versao_formulario ?? 0) >= 1.4;
+
+/** Toda assimetria craniana vem com torcicolo (o inverso não). */
+export function normalizarAreas(areas: AreaMotora[]): AreaMotora[] {
+  const set = new Set(areas);
+  if (set.has('assimetria_craniana')) set.add('torcicolo');
+  return AREAS_MOTORAS.map((a) => a.id).filter((id) => set.has(id));
+}
 
 // -------------------------------------------------------------------------
 // Medidas programadas (craniometria, goniometria, MFS…)
@@ -656,6 +712,16 @@ export interface RegistroHabilidade {
 export interface ObjetivoSessao {
   objetivo_id: string;
   descricao: string;
+  // Desde 1.4: de onde veio no catálogo, área e medidas que ele puxa
+  catalogo_id?: string;
+  area?: AreaMotora;
+  medidas?: TipoMedidaMotora[];
+  // Escolhido do catálogo nesta sessão: entra no plano ao salvar
+  novo_no_plano?: {
+    descricao: string;
+    areas: AreaMotora[];
+    indicador: IndicadorObjetivo | null;
+  };
   resultado?: ResultadoFuncional;
   rotulo_indicador?: string;
   unidade?: string;
@@ -672,6 +738,15 @@ export interface IntervencaoFinalidade {
   finalidade_outra?: string;
   abordagens?: string[];
   abordagem_outra?: string;
+  regioes?: string[];
+  recursos?: string[];
+  detalhe?: string;
+}
+
+/** Intervenção da sessão num quadro só (1.4): finalidades, regiões, recursos */
+export interface IntervencaoSessaoMotora {
+  finalidades?: string[]; // ids em FINALIDADES
+  finalidade_outra?: string;
   regioes?: string[];
   recursos?: string[];
   detalhe?: string;
@@ -718,6 +793,7 @@ export interface EvolucaoMotoraAssimetria {
   habilidades?: RegistroHabilidade[];
   objetivos_sessao?: ObjetivoSessao[];
   intervencoes?: IntervencaoFinalidade[];
+  intervencao_sessao?: IntervencaoSessaoMotora;
   resposta_sessao?: RespostaSessaoMotora;
   autor?: AutoriaEvolucao;
   ultima_edicao?: AutoriaEvolucao;
@@ -829,7 +905,7 @@ export const EVOLUCAO_MOTORA_ASSIMETRIA_SECOES: EvolucaoSecao[] = [
   },
   {
     id: 'palpacao',
-    titulo: 'Palpação ECOM',
+    titulo: 'Palpação (ECOM e cervical)',
     icone: '👋',
     campos: ['tonus', 'nodulo'],
     ordem: 2,
@@ -1628,6 +1704,9 @@ function verificarSecaoMotoraCompleta(
         p.ecom_esquerdo_tonus ||
         p.nodulo_direito ||
         p.nodulo_esquerdo ||
+        p.cervical_posterior ||
+        p.cervical_anterior ||
+        (p.bloqueios || []).length > 0 ||
         temTexto(p.observacoes)
         ? 'parcial'
         : 'vazio';
@@ -1671,13 +1750,25 @@ function verificarSecaoMotoraCompleta(
       return respondidos > 0 || temTexto(r.observacoes) ? 'parcial' : 'vazio';
     }
     case 'objetivos_habilidades': {
+      if (ehFormatoMotoraV14(ev)) {
+        const objs = ev.objetivos_sessao || [];
+        if (objs.length === 0) return 'vazio';
+        return objs.every((o) => !!o.resultado) ? 'completo' : 'parcial';
+      }
       const registrou =
         (ev.habilidades || []).length > 0 ||
         (ev.objetivos_sessao || []).some((o) => !!o.resultado);
       return registrou ? 'completo' : 'vazio';
     }
-    case 'intervencoes':
-      return (ev.intervencoes || []).length > 0 ? 'completo' : 'vazio';
+    case 'intervencoes': {
+      const i = ev.intervencao_sessao;
+      if ((i?.finalidades || []).length > 0 || temTexto(i?.finalidade_outra))
+        return 'completo';
+      if ((ev.intervencoes || []).length > 0) return 'completo';
+      return (i?.regioes || []).length || (i?.recursos || []).length
+        ? 'parcial'
+        : 'vazio';
+    }
     case 'resposta_sessao': {
       const r = ev.resposta_sessao || {};
       if (r.participacao) return 'completo';
@@ -1696,6 +1787,11 @@ function verificarSecaoMotoraCompleta(
         o.exercicios_domiciliares ||
         o.sinais_alerta ||
         o.uso_capacete ||
+        o.colo_alternando ||
+        o.tempo_no_chao ||
+        (o.exercicios || []).length > 0 ||
+        !!o.tummy_time_vezes ||
+        !!o.tummy_time_minutos ||
         o.sem_orientacao ||
         temTexto(o.tummy_time_frequencia) ||
         temTexto(o.outras)
@@ -1724,14 +1820,41 @@ export function temAreasDefinidas(ev: EvolucaoMotoraAssimetria): boolean {
 const areaAtiva = (areas: AreaMotora[] | undefined, a: AreaMotora) =>
   areas === undefined || areas.includes(a);
 
-/** Seções da evolução motora que aparecem para as áreas marcadas. */
+/** Medidas puxadas pelos objetivos trabalhados hoje (formato 1.4). */
+export function medidasDoDia(
+  ev: Pick<EvolucaoMotoraAssimetria, 'objetivos_sessao'>
+): TipoMedidaMotora[] {
+  const set = new Set<TipoMedidaMotora>();
+  for (const o of ev.objetivos_sessao || [])
+    for (const m of o.medidas || []) set.add(m);
+  return [...set];
+}
+
+const temAlgumNumero = (o: object | undefined) =>
+  !!o && Object.values(o).some((v) => typeof v === 'number');
+
+/**
+ * Seções da evolução motora que aparecem para as áreas marcadas. No 1.4
+ * (com a evolução), goniometria e craniometria só aparecem quando um objetivo
+ * trabalhado hoje pede a medida, ou se já têm valores.
+ */
 export function secoesMotorasVisiveis(
   areas: AreaMotora[] | undefined,
-  v13 = false
+  v13 = false,
+  ev?: EvolucaoMotoraAssimetria
 ): EvolucaoSecao[] {
-  return (
+  const porArea = (
     v13 ? EVOLUCAO_MOTORA_SECOES_V13 : EVOLUCAO_MOTORA_ASSIMETRIA_SECOES
   ).filter((s) => !s.areas || s.areas.some((a) => areaAtiva(areas, a)));
+  if (!ev || !ehFormatoMotoraV14(ev)) return porArea;
+  const doDia = medidasDoDia(ev);
+  return porArea.filter((s) => {
+    if (s.id === 'goniometria')
+      return doDia.includes('goniometria') || temAlgumNumero(ev.goniometria);
+    if (s.id === 'craniometria')
+      return doDia.includes('craniometria') || temAlgumNumero(ev.craniometria);
+    return true;
+  });
 }
 
 /**
@@ -1740,9 +1863,13 @@ export function secoesMotorasVisiveis(
  */
 export function secaoMotoraEssencial(
   secao: EvolucaoSecao,
-  areas: AreaMotora[] | undefined
+  areas: AreaMotora[] | undefined,
+  ev?: Pick<EvolucaoMotoraAssimetria, 'versao_formulario'>
 ): boolean {
   if (secao.opcional) return false;
+  // No 1.4 o objetivo é o eixo da sessão em qualquer área
+  if (secao.id === 'objetivos_habilidades' && ev && ehFormatoMotoraV14(ev))
+    return true;
   if (secao.id === 'controle_motor' || secao.id === 'objetivos_habilidades')
     return areaAtiva(areas, 'desenvolvimento_motor');
   return true;
@@ -1852,15 +1979,26 @@ export function pendenciasEvolucaoMotora(
   ev: EvolucaoMotoraAssimetria
 ): PendenciaEvolucao[] {
   const p: PendenciaEvolucao[] = [];
-  for (const s of secoesMotorasVisiveis(ev.areas, ehFormatoMotoraV13(ev))) {
+  for (const s of secoesMotorasVisiveis(ev.areas, ehFormatoMotoraV13(ev), ev)) {
     if (s.id === 'orientacoes') {
       if (verificarSecaoMotoraCompleta('orientacoes', ev) === 'vazio')
         p.push({ secaoId: s.id, item: ORIENTACAO_PENDENTE });
       continue;
     }
-    if (!secaoMotoraEssencial(s, ev.areas)) continue;
+    if (!secaoMotoraEssencial(s, ev.areas, ev)) continue;
     if (verificarSecaoMotoraCompleta(s.id, ev) === 'vazio')
-      p.push({ secaoId: s.id, item: s.titulo });
+      p.push({
+        secaoId: s.id,
+        item:
+          s.id === 'objetivos_habilidades' && ehFormatoMotoraV14(ev)
+            ? 'Marque pelo menos um objetivo trabalhado hoje'
+            : s.titulo,
+      });
+    // 1.4: cada objetivo trabalhado precisa do resultado
+    if (s.id === 'objetivos_habilidades' && ehFormatoMotoraV14(ev))
+      for (const o of ev.objetivos_sessao || [])
+        if (!o.resultado)
+          p.push({ secaoId: s.id, item: `Resultado: ${o.descricao}` });
   }
   return p;
 }
