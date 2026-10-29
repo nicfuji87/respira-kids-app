@@ -1,7 +1,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarClock, CalendarPlus } from 'lucide-react';
+import { BookmarkCheck, CalendarClock, CalendarPlus } from 'lucide-react';
 
 import {
   Dialog,
@@ -11,14 +11,16 @@ import {
   DialogTitle,
 } from '@/components/primitives/dialog';
 
-// AI dev note: Clique num horário vazio da agenda → escolher entre consulta e
-// compromisso, já com data e hora preenchidas.
+// AI dev note: Clique num horário vazio da agenda → escolher entre consulta,
+// reserva e compromisso, já com data e hora preenchidas. Só aparecem as opções
+// que o papel permite (profissional não cria consulta).
 
 interface NovoEventoEscolhaDialogProps {
   slot: { date: Date; time: string } | null;
   onClose: () => void;
-  onAgendamento: (date: Date, time: string) => void;
-  onCompromisso: (date: Date, time: string) => void;
+  onAgendamento?: (date: Date, time: string) => void;
+  onReserva?: (date: Date, time: string) => void;
+  onCompromisso?: (date: Date, time: string) => void;
 }
 
 const Opcao: React.FC<{
@@ -48,7 +50,7 @@ const Opcao: React.FC<{
 );
 
 export const NovoEventoEscolhaDialog = React.memo<NovoEventoEscolhaDialogProps>(
-  ({ slot, onClose, onAgendamento, onCompromisso }) => (
+  ({ slot, onClose, onAgendamento, onReserva, onCompromisso }) => (
     <Dialog open={!!slot} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
@@ -62,20 +64,33 @@ export const NovoEventoEscolhaDialog = React.memo<NovoEventoEscolhaDialogProps>(
         </DialogHeader>
         {slot && (
           <div className="space-y-2">
-            <Opcao
-              icon={<CalendarPlus className="h-5 w-5" />}
-              iconClass="bg-verde-pipa/40"
-              titulo="Novo agendamento"
-              texto="Atendimento de um paciente"
-              onClick={() => onAgendamento(slot.date, slot.time)}
-            />
-            <Opcao
-              icon={<CalendarClock className="h-5 w-5" />}
-              iconClass="bg-roxo-titulo/10"
-              titulo="Novo compromisso"
-              texto="Almoço, reunião, terapia, férias, assuntos pessoais…"
-              onClick={() => onCompromisso(slot.date, slot.time)}
-            />
+            {onAgendamento && (
+              <Opcao
+                icon={<CalendarPlus className="h-5 w-5" />}
+                iconClass="bg-verde-pipa/40"
+                titulo="Novo agendamento"
+                texto="Atendimento de um paciente"
+                onClick={() => onAgendamento(slot.date, slot.time)}
+              />
+            )}
+            {onReserva && (
+              <Opcao
+                icon={<BookmarkCheck className="h-5 w-5" />}
+                iconClass="border border-dashed border-verde-pipa bg-verde-pipa/20"
+                titulo="Nova reserva"
+                texto="Segura o horário até confirmar o agendamento"
+                onClick={() => onReserva(slot.date, slot.time)}
+              />
+            )}
+            {onCompromisso && (
+              <Opcao
+                icon={<CalendarClock className="h-5 w-5" />}
+                iconClass="bg-roxo-titulo/10"
+                titulo="Novo compromisso"
+                texto="Almoço, reunião, terapia, férias, assuntos pessoais…"
+                onClick={() => onCompromisso(slot.date, slot.time)}
+              />
+            )}
           </div>
         )}
       </DialogContent>

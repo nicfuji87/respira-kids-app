@@ -12,8 +12,11 @@
 import { supabase } from './supabase';
 import { parseSupabaseDatetime } from './calendar-mappers';
 import {
+  CATEGORIA_RESERVA,
+  COR_RESERVA,
   MOTIVO_BLOQUEIO_CORES,
   grupoFiltroCompromisso,
+  isReserva,
   labelCategoria,
   tituloCompromisso,
   type CompromissoAgenda,
@@ -21,6 +24,7 @@ import {
   type ConflitoCompromisso,
   type CreateCompromissoInput,
   type MotivoBloqueio,
+  type ReservaInput,
 } from '@/types/agenda-bloqueios';
 import type { CalendarEvent } from '@/types/calendar';
 
@@ -44,6 +48,7 @@ export const notifyCompromissosChanged = () =>
 // ------------------------------------------------------------------
 export type ErroCompromisso =
   | { tipo: 'conflito'; mensagem: string }
+  | { tipo: 'reserva_conflito'; mensagem: string }
   | { tipo: 'sem_permissao_conflito'; mensagem: string }
   | { tipo: 'outro'; mensagem: string };
 
@@ -56,6 +61,8 @@ export function interpretarErroCompromisso(error: unknown): ErroCompromisso {
         ? error.message
         : 'Erro desconhecido';
   if (e.hint === 'compromisso_conflito') return { tipo: 'conflito', mensagem };
+  if (e.hint === 'reserva_conflito')
+    return { tipo: 'reserva_conflito', mensagem };
   if (e.hint === 'compromisso_conflito_sem_permissao')
     return { tipo: 'sem_permissao_conflito', mensagem };
   return { tipo: 'outro', mensagem };
@@ -204,6 +211,59 @@ export async function deleteCompromissoSerie(
 }
 
 // ------------------------------------------------------------------
+// Reserva de horário (categoria 'reserva')
+// O banco força: não privada, impede agendamento, título "Reserva: Fulano",
+// vencimento e recusa por cima de consulta/compromisso (HINT reserva_conflito).
+// ------------------------------------------------------------------
+function camposReserva(input: ReservaInput) {
+  return {
+    profissional_id: input.profissionalId,
+    inicio: toWallClockString(input.inicio),
+    fim: toWallClockString(input.fim),
+    motivo: CATEGORIA_RESERVA,
+    paciente_id: input.pacienteId,
+    observacao: input.observacao.trim(),
+    dia_inteiro: false,
+    privado: false,
+    impede_agendamento: true,
+  };
+}
+
+export async function createReserva(input: ReservaInput): Promise<string> {
+  const { data, error } = await supabase
+    .from('agenda_bloqueios')
+    .insert(camposReserva(input))
+    .select('id')
+    .single();
+  if (error) throw new CompromissoError(interpretarErroCompromisso(error));
+  return (data as { id: string }).id;
+}
+
+export async function updateReserva(
+  id: string,
+  input: ReservaInput
+): Promise<void> {
+  const { error } = await supabase
+    .from('agenda_bloqueios')
+    .update(camposReserva(input))
+    .eq('id', id);
+  if (error) throw new CompromissoError(interpretarErroCompromisso(error));
+}
+
+// Reserva ainda de pé? (pode ter vencido ou sido confirmada por outra pessoa)
+export async function reservaAtiva(id: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('agenda_bloqueios')
+    .select('id')
+    .eq('id', id)
+    .eq('ativo', true)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error) return true; // na dúvida, o banco decide ao salvar
+  return !!data;
+}
+
+// ------------------------------------------------------------------
 // Leitura
 // ------------------------------------------------------------------
 export async function listCompromissos(params: {
@@ -255,6 +315,7 @@ export interface CompromissoEventMetadata {
   recorrente: boolean;
   conflitos: number;
   impedeAgendamento: boolean;
+  reserva: boolean;
   [key: string]: unknown;
 }
 
@@ -324,6 +385,7 @@ export function mapCompromissoToCalendarEvent(
     recorrente: !!c.recorrencia_id,
     conflitos: c.conflitos,
     impedeAgendamento: c.impede_agendamento,
+    reserva: isReserva(c),
   };
   return {
     id: `bloqueio-${c.id}`,
@@ -334,7 +396,9 @@ export function mapCompromissoToCalendarEvent(
     allDay: c.dia_inteiro,
     color: c.mascarado
       ? 'gray'
-      : (MOTIVO_BLOQUEIO_CORES[c.categoria as MotivoBloqueio] ?? 'gray'),
+      : isReserva(c)
+        ? COR_RESERVA
+        : (MOTIVO_BLOQUEIO_CORES[c.categoria as MotivoBloqueio] ?? 'gray'),
     location:
       c.profissional_id === null
         ? 'Clínica inteira'

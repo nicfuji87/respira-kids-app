@@ -74,6 +74,11 @@ export interface AppointmentFormManagerProps {
   // última consulta da criança (o mesmo pré-preenchimento de quando se escolhe o paciente).
   initialProfessionalId?: string;
   prefillFromLastAppointment?: boolean;
+  // AI dev note: Confirmação de RESERVA de agenda. A consulta é criada com
+  // reserva_id: a checagem de horário ignora essa reserva e o banco encerra a
+  // reserva ao salvar (trg_reserva_confirmar).
+  reservaId?: string;
+  reservaObservacao?: string;
   onSave?: (appointmentId: string) => void;
   className?: string;
 }
@@ -114,6 +119,8 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     initialPatientId,
     initialProfessionalId,
     prefillFromLastAppointment,
+    reservaId,
+    reservaObservacao,
     onSave,
     className,
   }) => {
@@ -172,6 +179,12 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
     // continua editável; autoPrecoRef guarda o último valor que o SISTEMA pôs,
     // e só recalculamos por cima dele — valor digitado à mão nunca é trocado.
     const autoPrecoRef = useRef<number>(0);
+    // Reserva sendo confirmada (ref: checkScheduleConflicts é estável). Depois de
+    // salvar a 1ª consulta ("Salvar e próxima"), as seguintes não levam a reserva.
+    const reservaIdRef = useRef<string | undefined>(reservaId);
+    useEffect(() => {
+      if (isOpen) reservaIdRef.current = reservaId;
+    }, [isOpen, reservaId]);
     const [precoInfo, setPrecoInfo] = useState<string | null>(null);
 
     // Estados para empresas de faturamento
@@ -299,7 +312,9 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           const disponivel = await checkHorarioDisponivel(
             profissional_id,
             inicioIso,
-            fimIso
+            fimIso,
+            undefined,
+            reservaIdRef.current
           );
 
           if (!disponivel) {
@@ -789,9 +804,11 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
             observacao: formData.observacao || undefined,
             agendado_por: user.pessoa.id,
             empresa_fatura: formData.empresa_fatura,
+            reserva_id: reservaIdRef.current,
           };
 
           const newAppointment = await createAgendamento(appointmentData);
+          reservaIdRef.current = undefined;
 
           onSave?.(newAppointment.id);
           // Reset estados de confirmação
@@ -912,14 +929,26 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Novo Agendamento
+              {reservaId ? 'Confirmar reserva' : 'Novo Agendamento'}
             </DialogTitle>
             <DialogDescription>
-              Preencha os dados para criar um novo agendamento médico.
+              {reservaId
+                ? 'Confira os dados e salve: a consulta é criada e a reserva sai da agenda.'
+                : 'Preencha os dados para criar um novo agendamento médico.'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
+            {reservaId && reservaObservacao && (
+              <div className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-sm">
+                <span className="font-medium text-roxo-titulo dark:text-foreground">
+                  Observação da reserva:
+                </span>{' '}
+                <span className="whitespace-pre-line text-muted-foreground">
+                  {reservaObservacao}
+                </span>
+              </div>
+            )}
             {/* Erro geral */}
             {errors.general && (
               <Alert variant="destructive">

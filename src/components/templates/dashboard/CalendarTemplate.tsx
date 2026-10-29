@@ -25,6 +25,10 @@ import {
 import { SharedSchedulesList } from '@/components/domain/calendar/SharedSchedulesList';
 import { CompromissoDialog } from '@/components/domain/calendar/CompromissoDialog';
 import { NovoEventoEscolhaDialog } from '@/components/domain/calendar/NovoEventoEscolhaDialog';
+import {
+  ReservaDialog,
+  type DadosConfirmacaoReserva,
+} from '@/components/domain/calendar/ReservaDialog';
 import { FiltroTiposAgenda } from '@/components/domain/calendar/FiltroTiposAgenda';
 import {
   Tabs,
@@ -34,11 +38,15 @@ import {
 } from '@/components/primitives/tabs';
 
 import type { CalendarEvent, CalendarView } from '@/types/calendar';
-import type {
-  CompromissoAgenda,
-  GrupoFiltroAgenda,
+import {
+  isReserva,
+  type CompromissoAgenda,
+  type GrupoFiltroAgenda,
 } from '@/types/agenda-bloqueios';
-import { isCompromissoEvent } from '@/lib/agenda-bloqueios-api';
+import {
+  isCompromissoEvent,
+  notifyCompromissosChanged,
+} from '@/lib/agenda-bloqueios-api';
 import type { SupabaseAgendamentoCompletoFlat } from '@/types/supabase-calendar';
 import type { AppointmentUpdateData } from '@/components/domain/calendar/AppointmentDetailsManager';
 import { useCalendarFormData } from '@/hooks/useCalendarData';
@@ -167,7 +175,18 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       start?: Date;
       end?: Date;
     }>({});
-    // Clique num horário vazio quando dá para criar os dois tipos
+    // Reserva de horário (criar/editar/confirmar)
+    const [isReservaOpen, setIsReservaOpen] = useState(false);
+    const [reservaToEdit, setReservaToEdit] =
+      useState<CompromissoAgenda | null>(null);
+    const [reservaRange, setReservaRange] = useState<{
+      start?: Date;
+      end?: Date;
+    }>({});
+    // Reserva sendo confirmada no formulário de consulta
+    const [reservaConfirmando, setReservaConfirmando] =
+      useState<DadosConfirmacaoReserva | null>(null);
+    // Clique num horário vazio quando dá para criar mais de um tipo
     const [slotEscolha, setSlotEscolha] = useState<{
       date: Date;
       time: string;
@@ -272,6 +291,16 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
     // Event handlers
     const handleEventClick = useCallback(
       (event: CalendarEvent) => {
+        // Reserva abre o diálogo de reserva (editar / confirmar agendamento)
+        if (
+          isCompromissoEvent(event) &&
+          isReserva(event.metadata.compromisso)
+        ) {
+          setReservaToEdit(event.metadata.compromisso);
+          setReservaRange({});
+          setIsReservaOpen(true);
+          return;
+        }
         // Compromissos abrem o diálogo de compromisso (em edição), não o de consulta
         if (isCompromissoEvent(event)) {
           setCompromissoToEdit(event.metadata.compromisso);
@@ -324,29 +353,59 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       setIsCompromissoOpen(true);
     }, []);
 
-    // Horário vazio: escolhe entre consulta e compromisso (ou vai direto quando só
-    // um dos dois é permitido — profissional não cria consulta).
+    // Reserva: mesma permissão do compromisso (profissional só na própria agenda)
+    const abrirReserva = useCallback((date?: Date, time?: string) => {
+      let start: Date | undefined;
+      let end: Date | undefined;
+      if (date && time) {
+        const [h, m] = time.split(':').map(Number);
+        start = new Date(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate(),
+          h || 0,
+          m || 0
+        );
+        end = new Date(start.getTime() + 60 * 60 * 1000);
+      } else if (date) {
+        start = date;
+      }
+      setReservaToEdit(null);
+      setReservaRange({ start, end });
+      setIsReservaOpen(true);
+    }, []);
+
+    // Confirmar reserva → formulário de consulta pré-preenchido com reservaId
+    const confirmarReserva = useCallback((dados: DadosConfirmacaoReserva) => {
+      setIsReservaOpen(false);
+      setReservaToEdit(null);
+      setReservaConfirmando(dados);
+      setNewEventDate(dados.data);
+      setNewEventTime(dados.hora);
+      setIsAppointmentFormOpen(true);
+    }, []);
+
+    // Horário vazio: escolhe entre consulta, reserva e compromisso (ou vai direto
+    // quando só um é permitido).
     const handleTimeSlotClick = useCallback(
       (time: string, date: Date) => {
-        if (canCreateEvents && canCreateCompromissos) {
+        if (canCreateCompromissos) {
           setSlotEscolha({ date, time });
         } else if (canCreateEvents) {
           abrirAgendamento(date, time);
-        } else if (canCreateCompromissos) {
-          abrirCompromisso(date, time);
         }
       },
-      [
-        canCreateEvents,
-        canCreateCompromissos,
-        abrirAgendamento,
-        abrirCompromisso,
-      ]
+      [canCreateEvents, canCreateCompromissos, abrirAgendamento]
     );
 
     const handleNovoCompromissoClick = useCallback(() => {
       abrirCompromisso(currentView === 'agenda' ? new Date() : currentDate);
     }, [abrirCompromisso, currentView, currentDate]);
+
+    const handleNovaReservaClick = useCallback(() => {
+      const base = currentView === 'agenda' ? new Date() : currentDate;
+      abrirReserva(base, '08:00');
+    }, [abrirReserva, currentView, currentDate]);
 
     // AI dev note: handleEventSave temporariamente comentado para evitar double update flow
     // const handleEventSave = useCallback(
@@ -367,13 +426,16 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
       setIsAppointmentFormOpen(false);
       setNewEventDate(undefined);
       setNewEventTime(undefined);
+      setReservaConfirmando(null);
     }, []);
 
     const handleAppointmentFormSave = useCallback(() => {
       // AI dev note: Recarrega os eventos do calendário para o novo
       // agendamento aparecer sem precisar de F5 (bug P0 corrigido).
       onRefreshNeeded?.();
-    }, [onRefreshNeeded]);
+      // A reserva confirmada sai da agenda (o banco a encerrou)
+      if (reservaConfirmando) notifyCompromissosChanged();
+    }, [onRefreshNeeded, reservaConfirmando]);
 
     // Filter events based on current view and date
     // AI dev note: Mesmo filtro em dev e produção — o que se testa é o que roda.
@@ -559,6 +621,9 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                         ? handleNovoCompromissoClick
                         : undefined
                     }
+                    onNewReserva={
+                      canCreateCompromissos ? handleNovaReservaClick : undefined
+                    }
                   />
                   <FiltroTiposAgenda
                     ocultos={gruposOcultos}
@@ -595,6 +660,9 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
                     canCreateCompromissos
                       ? handleNovoCompromissoClick
                       : undefined
+                  }
+                  onNewReserva={
+                    canCreateCompromissos ? handleNovaReservaClick : undefined
                   }
                 />
                 <FiltroTiposAgenda
@@ -685,6 +753,11 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
             onClose={handleAppointmentFormClose}
             initialDate={newEventDate}
             initialTime={newEventTime}
+            initialPatientId={reservaConfirmando?.pacienteId ?? undefined}
+            initialProfessionalId={reservaConfirmando?.profissionalId}
+            prefillFromLastAppointment={!!reservaConfirmando?.pacienteId}
+            reservaId={reservaConfirmando?.reservaId}
+            reservaObservacao={reservaConfirmando?.observacao}
             onSave={handleAppointmentFormSave}
           />
 
@@ -692,14 +765,44 @@ export const CalendarTemplate = React.memo<CalendarTemplateProps>(
           <NovoEventoEscolhaDialog
             slot={slotEscolha}
             onClose={() => setSlotEscolha(null)}
-            onAgendamento={(date, time) => {
-              setSlotEscolha(null);
-              abrirAgendamento(date, time);
+            onAgendamento={
+              canCreateEvents
+                ? (date, time) => {
+                    setSlotEscolha(null);
+                    abrirAgendamento(date, time);
+                  }
+                : undefined
+            }
+            onReserva={
+              canCreateCompromissos
+                ? (date, time) => {
+                    setSlotEscolha(null);
+                    abrirReserva(date, time);
+                  }
+                : undefined
+            }
+            onCompromisso={
+              canCreateCompromissos
+                ? (date, time) => {
+                    setSlotEscolha(null);
+                    abrirCompromisso(date, time);
+                  }
+                : undefined
+            }
+          />
+
+          {/* Reserva de horário — criar/editar/confirmar */}
+          <ReservaDialog
+            isOpen={isReservaOpen}
+            onClose={() => {
+              setIsReservaOpen(false);
+              setReservaToEdit(null);
             }}
-            onCompromisso={(date, time) => {
-              setSlotEscolha(null);
-              abrirCompromisso(date, time);
-            }}
+            initialStart={reservaRange.start}
+            initialEnd={reservaRange.end}
+            editReserva={reservaToEdit}
+            podeConfirmar={canCreateEvents}
+            onConfirmar={confirmarReserva}
           />
 
           {/* Compromisso (almoço, reunião, férias...) — criar/editar */}

@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   AlertTriangle,
+  BookmarkCheck,
   Building2,
   Coffee,
   HeartPulse,
@@ -23,6 +24,7 @@ import type { CompromissoEventMetadata } from '@/lib/agenda-bloqueios-api';
 // Ocupa a faixa de horário como uma consulta, mas se diferencia por: ícone da
 // categoria, cadeado quando privado/indisponível e listras finas quando o horário
 // fica fechado para novas consultas. Conflito pendente aparece com alerta.
+// RESERVA: ícone de marcador + borda tracejada (horário seguro, falta confirmar).
 
 type Variant = 'week' | 'month' | 'list' | 'strip';
 
@@ -34,6 +36,7 @@ const ICONES: Record<string, React.ComponentType<{ className?: string }>> = {
   ferias: Plane,
   feriado: Building2,
   outro: CalendarClock,
+  reserva: BookmarkCheck,
 };
 
 function iconeCompromisso(m: CompromissoEventMetadata) {
@@ -96,9 +99,12 @@ export const CompromissoEventCard = React.memo<CompromissoEventCardProps>(
         horario,
         quem,
         m.recorrente ? 'Repete' : '',
-        m.impedeAgendamento
-          ? 'Indisponível para novas consultas'
-          : 'Só informativo',
+        m.reserva
+          ? 'Reservado: falta confirmar o agendamento'
+          : m.impedeAgendamento
+            ? 'Indisponível para novas consultas'
+            : 'Só informativo',
+        m.reserva ? (event.description ?? '') : '',
         temConflito ? `⚠ ${m.conflitos} consulta(s) em conflito` : '',
       ]
         .filter(Boolean)
@@ -124,14 +130,18 @@ export const CompromissoEventCard = React.memo<CompromissoEventCardProps>(
         <div
           className={cn(
             'h-full w-full cursor-pointer overflow-hidden rounded-md text-roxo-titulo transition-opacity hover:opacity-90 dark:text-foreground',
-            !m.impedeAgendamento && 'border border-dashed',
+            (!m.impedeAgendamento || m.reserva) && 'border border-dashed',
             focus,
             className
           )}
           style={{
             background: fundo,
             borderLeft: `3px solid ${cor}`,
-            borderColor: m.impedeAgendamento ? undefined : `${cor}99`,
+            borderColor: m.reserva
+              ? cor
+              : m.impedeAgendamento
+                ? undefined
+                : `${cor}99`,
           }}
           onClick={handleClick}
           {...keyboard}
@@ -234,7 +244,13 @@ export const CompromissoEventCard = React.memo<CompromissoEventCardProps>(
               </span>
             )}
             {!m.impedeAgendamento && <span>· só informativo</span>}
+            {m.reserva && <span>· falta confirmar</span>}
           </div>
+          {m.reserva && event.description && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+              {event.description}
+            </p>
+          )}
           {temConflito && (
             <p className="mt-1 flex items-center gap-1 text-xs font-medium text-destructive">
               <AlertTriangle className="h-3.5 w-3.5" />

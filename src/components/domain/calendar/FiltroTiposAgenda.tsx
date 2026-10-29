@@ -13,6 +13,7 @@ import { eventColorHexMap } from '@/types/calendar';
 
 const GRUPOS: Array<{ id: GrupoFiltroAgenda; cor: string }> = [
   { id: 'consultas', cor: eventColorHexMap.blue },
+  { id: 'reservas', cor: eventColorHexMap.green },
   { id: 'compromissos', cor: eventColorHexMap.orange },
   { id: 'ausencias', cor: eventColorHexMap.pink },
   { id: 'fechamentos', cor: eventColorHexMap.red },

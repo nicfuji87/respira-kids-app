@@ -7,6 +7,7 @@ import {
   Plus,
   CalendarPlus,
   CalendarClock,
+  BookmarkCheck,
 } from 'lucide-react';
 
 import { Button } from '@/components/primitives/button';
@@ -35,6 +36,7 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
     onToday,
     onNewEvent,
     onNewCompromisso,
+    onNewReserva,
   }) => {
     const getDateLabel = () => {
       switch (currentView) {
@@ -67,11 +69,45 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
       return format(date, 'yyyy-MM-dd');
     };
 
-    // AI dev note: "+ Novo evento" abre a escolha entre agendamento (paciente) e
-    // compromisso (almoço, reunião, férias...). Quem só pode um deles (profissional
-    // não cria consulta) vê o botão direto.
+    // AI dev note: "+ Novo evento" abre a escolha entre agendamento (paciente),
+    // reserva (segura o horário) e compromisso (almoço, reunião, férias...). Quem
+    // só pode um deles vê o botão direto.
+    const opcoes = [
+      onNewEvent && {
+        key: 'agendamento',
+        onSelect: onNewEvent,
+        icon: <CalendarPlus className="h-4 w-4" />,
+        iconClass: 'bg-verde-pipa/40',
+        titulo: 'Novo agendamento',
+        texto: 'Atendimento de um paciente',
+      },
+      onNewReserva && {
+        key: 'reserva',
+        onSelect: onNewReserva,
+        icon: <BookmarkCheck className="h-4 w-4" />,
+        iconClass: 'border border-dashed border-verde-pipa bg-verde-pipa/20',
+        titulo: 'Nova reserva',
+        texto: 'Segura o horário até confirmar o agendamento',
+      },
+      onNewCompromisso && {
+        key: 'compromisso',
+        onSelect: onNewCompromisso,
+        icon: <CalendarClock className="h-4 w-4" />,
+        iconClass: 'bg-roxo-titulo/10',
+        titulo: 'Novo compromisso',
+        texto: 'Almoço, reunião, terapia, férias, assuntos pessoais…',
+      },
+    ].filter(Boolean) as Array<{
+      key: string;
+      onSelect: () => void;
+      icon: React.ReactNode;
+      iconClass: string;
+      titulo: string;
+      texto: string;
+    }>;
+
     const renderCta = (className: string, labelCurto?: string) => {
-      if (onNewEvent && onNewCompromisso) {
+      if (opcoes.length > 1) {
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -81,34 +117,25 @@ export const CalendarHeader = React.memo<CalendarHeaderProps>(
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72 p-1.5">
-              <DropdownMenuItem
-                onSelect={onNewEvent}
-                className="flex items-start gap-3 rounded-md p-2.5"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-verde-pipa/40 text-roxo-titulo">
-                  <CalendarPlus className="h-4 w-4" />
-                </span>
-                <span>
-                  <span className="block font-medium">Novo agendamento</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Atendimento de um paciente
+              {opcoes.map((o) => (
+                <DropdownMenuItem
+                  key={o.key}
+                  onSelect={o.onSelect}
+                  className="flex items-start gap-3 rounded-md p-2.5"
+                >
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-roxo-titulo ${o.iconClass}`}
+                  >
+                    {o.icon}
                   </span>
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={onNewCompromisso}
-                className="flex items-start gap-3 rounded-md p-2.5"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-roxo-titulo/10 text-roxo-titulo">
-                  <CalendarClock className="h-4 w-4" />
-                </span>
-                <span>
-                  <span className="block font-medium">Novo compromisso</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Almoço, reunião, terapia, férias, assuntos pessoais…
+                  <span>
+                    <span className="block font-medium">{o.titulo}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {o.texto}
+                    </span>
                   </span>
-                </span>
-              </DropdownMenuItem>
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
         );

@@ -40,12 +40,14 @@ export const MOTIVO_BLOQUEIO_CORES: Record<MotivoBloqueio, EventColor> = {
 // Grupos dos filtros visuais do calendário (ocultar NÃO libera o horário)
 export type GrupoFiltroAgenda =
   | 'consultas'
+  | 'reservas'
   | 'compromissos'
   | 'ausencias'
   | 'fechamentos';
 
 export const GRUPO_FILTRO_LABELS: Record<GrupoFiltroAgenda, string> = {
   consultas: 'Consultas',
+  reservas: 'Reservas',
   compromissos: 'Compromissos',
   ausencias: 'Férias e ausências',
   fechamentos: 'Fechamentos da clínica',
@@ -90,6 +92,32 @@ export interface CompromissoAgenda {
   pode_editar: boolean;
   conflitos: number;
   conflito_aceito_em: string | null;
+  // Reserva (categoria 'reserva'); null nos demais compromissos
+  paciente_id: string | null;
+  paciente_nome: string | null;
+  expira_em: string | null; // hora de parede; null = não vence
+}
+
+// ------------------------------------------------------------------
+// RESERVA de horário: compromisso de categoria 'reserva' que segura o horário de
+// um profissional até alguém confirmar a consulta. Observação obrigatória,
+// paciente opcional. Vence às 00:00 do dia da reserva (reserva feita no próprio
+// dia não vence). Confirmar = criar a consulta com agendamentos.reserva_id; o
+// banco encerra a reserva. Título "Reserva: Fulano" é montado pelo banco.
+// ------------------------------------------------------------------
+export const CATEGORIA_RESERVA = 'reserva';
+export const COR_RESERVA: EventColor = 'green';
+
+export function isReserva(c: { categoria?: string | null }): boolean {
+  return c.categoria === CATEGORIA_RESERVA;
+}
+
+export interface ReservaInput {
+  profissionalId: string;
+  inicio: Date;
+  fim: Date;
+  pacienteId: string | null;
+  observacao: string;
 }
 
 export type RecorrenciaTipo = 'nenhuma' | 'diaria' | 'dias_uteis' | 'semanal';
@@ -132,6 +160,7 @@ export interface ConflitoCompromisso {
 
 export function labelCategoria(categoria: string | null | undefined): string {
   if (!categoria) return 'Compromisso';
+  if (categoria === CATEGORIA_RESERVA) return 'Reserva';
   return MOTIVO_BLOQUEIO_LABELS[categoria as MotivoBloqueio] ?? categoria;
 }
 
@@ -153,6 +182,7 @@ export function grupoFiltroCompromisso(c: {
   categoria: string | null;
 }): GrupoFiltroAgenda {
   if (c.profissional_id === null) return 'fechamentos';
+  if (c.categoria === CATEGORIA_RESERVA) return 'reservas';
   if (c.categoria === 'ferias') return 'ausencias';
   return 'compromissos';
 }
