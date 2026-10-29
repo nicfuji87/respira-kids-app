@@ -65,6 +65,10 @@ const botao = String(m.buttonOrListid ?? '');
 if (chatid === GRUPO_NOTIFICACOES && /^ju_anot_(ok|nao):\d+$/.test(botao)) {
   return [{ json: { evento: 'anotacao', anotacao_id: Number(botao.split(':')[1]), aceitar: botao.startsWith('ju_anot_ok:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? '') } }];
 }
+// 29/10/2026: botões da reserva de horário da Ju (✅ Confirmar / ❌ Recusar).
+if (chatid === GRUPO_NOTIFICACOES && /^ju_res_(ok|nao):\d+$/.test(botao)) {
+  return [{ json: { evento: 'reserva', reserva_id: Number(botao.split(':')[1]), aceitar: botao.startsWith('ju_res_ok:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? '') } }];
+}
 if (chatid === GRUPO_NOTIFICACOES && botao.startsWith('ju_concluir:')) {
   return [
     {
