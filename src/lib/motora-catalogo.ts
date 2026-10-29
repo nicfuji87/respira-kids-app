@@ -554,6 +554,7 @@ export const ABORDAGEM_CURTA: Record<string, string> = {
 };
 
 export const REGIOES: { id: string; nome: string }[] = [
+  { id: 'cranio', nome: 'Crânio' },
   { id: 'cervical', nome: 'Cervical' },
   { id: 'tronco', nome: 'Tronco' },
   { id: 'cintura_escapular', nome: 'Cintura escapular' },
@@ -708,6 +709,8 @@ export interface ObjetivoCatalogo {
   indicador: IndicadorObjetivo | null;
   /** Medidas que aparecem quando o objetivo é trabalhado na sessão */
   medidas: TipoMedidaMotora[];
+  /** Região do corpo trabalhada (id em REGIOES); gravada sem aparecer na tela */
+  regiao: string;
 }
 
 const H = (
@@ -731,6 +734,7 @@ const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
     area: 'torcicolo',
     indicador: H('cervical_alinhamento', 'tempo_s'),
     medidas: ['fsos2'],
+    regiao: 'cervical',
   },
   {
     id: 'inclinacao_ativa',
@@ -738,6 +742,7 @@ const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
     area: 'torcicolo',
     indicador: H('cervical_inclinacao_ativa', 'graus'),
     medidas: ['goniometria', 'mfs'],
+    regiao: 'cervical',
   },
   {
     id: 'reduzir_dif_rotacao',
@@ -745,6 +750,7 @@ const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
     area: 'torcicolo',
     indicador: { tipo: 'medida', medida: 'gonio_dif_rotacao_passiva' },
     medidas: ['goniometria', 'tensao_neuromeningea'],
+    regiao: 'cervical',
   },
   {
     id: 'rotacao_ativa',
@@ -752,6 +758,7 @@ const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
     area: 'torcicolo',
     indicador: H('cervical_rotacao_ativa', 'graus'),
     medidas: ['goniometria', 'fsos2'],
+    regiao: 'cervical',
   },
   // Assimetria craniana
   {
@@ -760,6 +767,7 @@ const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
     area: 'assimetria_craniana',
     indicador: { tipo: 'medida', medida: 'ci' },
     medidas: ['craniometria'],
+    regiao: 'cranio',
   },
   {
     id: 'reduzir_plagiocefalia',
@@ -767,6 +775,7 @@ const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
     area: 'assimetria_craniana',
     indicador: { tipo: 'medida', medida: 'cvai' },
     medidas: ['craniometria'],
+    regiao: 'cranio',
   },
   {
     id: 'tempo_prono',
@@ -774,6 +783,7 @@ const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
     area: 'assimetria_craniana',
     indicador: H('prono_permanencia', 'tempo_s'),
     medidas: [],
+    regiao: 'tronco',
   },
   // Desenvolvimento motor
   ...(
@@ -782,78 +792,106 @@ const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
         'acompanhamento_visual',
         'Acompanhamento visual',
         H('visual_acompanhamento'),
+        'cervical',
       ],
-      ['ajoelhado', 'Ajoelhado', H('ajoelhado', 'tempo_s')],
-      ['alcance_objetos', 'Alcance de objetos', H('alcance_objetos')],
+      ['ajoelhado', 'Ajoelhado', H('ajoelhado', 'tempo_s'), 'pelve'],
+      [
+        'alcance_objetos',
+        'Alcance de objetos',
+        H('alcance_objetos'),
+        'membros_superiores',
+      ],
       [
         'controle_cervical_prono',
         'Controle cervical em prono',
         H('cervical_sustentacao_prono', 'tempo_s'),
+        'cervical',
       ],
       [
         'passos_com_apoio',
         'Dar passos com apoio',
         H('marcha_com_apoio', 'passos'),
+        'membros_inferiores',
       ],
       [
         'passos_sem_apoio',
         'Dar passos sem apoio',
         H('marcha_independente', 'passos'),
+        'membros_inferiores',
       ],
-      ['desrolar', 'Desrolar (de prono para supino)', H('rolar_prono_supino')],
-      ['engatinhar', 'Engatinhar', H('deslocamento_engatinhar')],
+      [
+        'desrolar',
+        'Desrolar (de prono para supino)',
+        H('rolar_prono_supino'),
+        'tronco',
+      ],
+      ['engatinhar', 'Engatinhar', H('deslocamento_engatinhar'), 'global'],
       [
         'esfinge',
         'Esfinge (apoio em antebraços)',
         H('prono_apoio_antebracos', 'tempo_s'),
+        'cintura_escapular',
       ],
       [
         'em_pe_com_apoio',
         'Ficar em pé com apoio',
         H('em_pe_com_apoio', 'tempo_s'),
+        'membros_inferiores',
       ],
       [
         'em_pe_sem_apoio',
         'Ficar em pé sem apoio',
         H('em_pe_sem_apoio', 'tempo_s'),
+        'membros_inferiores',
       ],
-      ['mao_na_boca', 'Mão na boca', H('mao_na_boca')],
-      ['pe_na_boca', 'Pé na boca', H('pe_na_boca')],
-      ['pivotear', 'Pivotear', H('deslocamento_pivotear')],
+      ['mao_na_boca', 'Mão na boca', H('mao_na_boca'), 'membros_superiores'],
+      ['pe_na_boca', 'Pé na boca', H('pe_na_boca'), 'membros_inferiores'],
+      ['pivotear', 'Pivotear', H('deslocamento_pivotear'), 'tronco'],
       [
         'postura_gatas',
         'Postura de gatas',
         H('quadrupedia_sustentacao', 'tempo_s'),
+        'cintura_escapular',
       ],
-      ['rolar', 'Rolar para os dois lados', H('rolar_supino_prono')],
-      ['semi_ajoelhado', 'Semiajoelhado', H('semi_ajoelhado', 'tempo_s')],
+      ['rolar', 'Rolar para os dois lados', H('rolar_supino_prono'), 'tronco'],
+      [
+        'semi_ajoelhado',
+        'Semiajoelhado',
+        H('semi_ajoelhado', 'tempo_s'),
+        'pelve',
+      ],
       [
         'sentar_com_apoio',
         'Sentar com apoio',
         H('sentar_com_apoio', 'tempo_s'),
+        'tronco',
       ],
       [
         'sentar_sem_apoio',
         'Sentar sem apoio',
         H('sentar_sem_apoio', 'tempo_s'),
+        'tronco',
       ],
       [
         'deitado_sentado',
         'Transição de deitado para sentado',
         H('transicao_deitado_sentado'),
+        'tronco',
       ],
       [
         'sereia',
         'Transição do sentar para o gatas (sereia)',
         H('transicao_sentado_quatro_apoios'),
+        'pelve',
       ],
-    ] as [string, string, IndicadorObjetivo][]
-  ).map(([id, descricao, indicador]) => ({
+    ] as [string, string, IndicadorObjetivo, string][]
+  ).map(([id, descricao, indicador, regiao]) => ({
     id,
     descricao,
     area: 'desenvolvimento_motor' as AreaMotora,
     indicador,
     medidas: DESENV,
+    regiao,
   })),
 ];
 

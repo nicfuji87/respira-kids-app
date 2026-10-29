@@ -665,7 +665,13 @@ export function rascunhoMotorParaV14(
     if (o.catalogo_id) return o;
     const c = OBJETIVOS_CATALOGO.find((x) => x.descricao === o.descricao);
     return c
-      ? { ...o, catalogo_id: c.id, area: c.area, medidas: c.medidas }
+      ? {
+          ...o,
+          catalogo_id: c.id,
+          area: c.area,
+          medidas: c.medidas,
+          regiao: c.regiao,
+        }
       : o;
   });
   return novo;
@@ -773,6 +779,12 @@ export interface ObjetivoSessao {
   catalogo_id?: string;
   area?: AreaMotora;
   medidas?: TipoMedidaMotora[];
+  // Intervenção no próprio objetivo: o que foi feito (ids em RECURSOS) e a
+  // região, tirada do catálogo (não aparece na tela)
+  recursos?: string[];
+  regiao?: string;
+  // Só na tela: recursos vieram marcados da última sessão (não é gravado)
+  recursos_da_ultima?: boolean;
   // Escolhido do catálogo nesta sessão: entra no plano ao salvar
   novo_no_plano?: {
     descricao: string;
@@ -1810,7 +1822,9 @@ function verificarSecaoMotoraCompleta(
       if (ehFormatoMotoraV14(ev)) {
         const objs = ev.objetivos_sessao || [];
         if (objs.length === 0) return 'vazio';
-        return objs.every((o) => !!o.resultado) ? 'completo' : 'parcial';
+        return objs.every((o) => !!o.resultado && !!o.recursos?.length)
+          ? 'completo'
+          : 'parcial';
       }
       const registrou =
         (ev.habilidades || []).length > 0 ||
@@ -1906,6 +1920,8 @@ export function secoesMotorasVisiveis(
   if (!ev || !ehFormatoMotoraV14(ev)) return porArea;
   const doDia = medidasDoDia(ev);
   return porArea.filter((s) => {
+    // 1.4: a intervenção fica no card de cada objetivo
+    if (s.id === 'intervencoes') return false;
     if (s.id === 'goniometria')
       return doDia.includes('goniometria') || temAlgumNumero(ev.goniometria);
     if (s.id === 'craniometria')
@@ -2051,11 +2067,14 @@ export function pendenciasEvolucaoMotora(
             ? 'Marque pelo menos um objetivo trabalhado hoje'
             : s.titulo,
       });
-    // 1.4: cada objetivo trabalhado precisa do resultado
+    // 1.4: cada objetivo trabalhado precisa do que foi feito e do resultado
     if (s.id === 'objetivos_habilidades' && ehFormatoMotoraV14(ev))
-      for (const o of ev.objetivos_sessao || [])
+      for (const o of ev.objetivos_sessao || []) {
+        if (!(o.recursos || []).length)
+          p.push({ secaoId: s.id, item: `O que foi feito: ${o.descricao}` });
         if (!o.resultado)
           p.push({ secaoId: s.id, item: `Resultado: ${o.descricao}` });
+      }
   }
   return p;
 }

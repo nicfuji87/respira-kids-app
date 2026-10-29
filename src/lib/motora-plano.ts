@@ -904,7 +904,7 @@ export function objetivoParaSessao(
   return {
     objetivo_id: o.id,
     descricao: o.descricao,
-    ...(cat ? { catalogo_id: cat.id } : {}),
+    ...(cat ? { catalogo_id: cat.id, regiao: cat.regiao } : {}),
     ...(area ? { area } : {}),
     ...(medidas.length ? { medidas } : {}),
     ...(info?.numerico
@@ -942,7 +942,11 @@ export function prepararSessaoV13(
     const o =
       ctx.objetivos?.find((x) => x.id === s.objetivo_id) ??
       (cat ? objetivoProvisorio(cat, '', s.objetivo_id) : undefined);
-    if (!o) return s;
+    if (!o) {
+      const sem = { ...s };
+      delete sem.recursos_da_ultima;
+      return sem;
+    }
     const novo = objetivoParaSessao(
       o,
       ev,
@@ -954,6 +958,9 @@ export function prepararSessaoV13(
       ...novo,
       ...(s.resultado ? { resultado: s.resultado } : {}),
       ...(s.observacao?.trim() ? { observacao: s.observacao.trim() } : {}),
+      // o que a fisio marcou na sessão nunca é recalculado
+      ...(s.recursos?.length ? { recursos: s.recursos } : {}),
+      ...(s.novo_no_plano ? { novo_no_plano: s.novo_no_plano } : {}),
     };
   });
   const idade = ctx.historico
