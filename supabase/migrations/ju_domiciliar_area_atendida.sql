@@ -1,0 +1,5 @@
+-- 29/10/2026 (pedido do dono): o domiciliar só atende uma lista fechada de bairros.
+UPDATE public.ju_conhecimento
+   SET texto = 'Atendimento domiciliar: a Ju não oferece. Só se a família perguntar se a clínica atende em casa, a Ju diz que sim. Quem atende em casa é a Beatriz Perissê; a Bruna Cury e a Flávia Pacheco não fazem domiciliar. O valor é fixo, igual em qualquer bairro atendido, e é o do serviço "Domiciliar" correspondente na lista de serviços (avaliação motora, fisioterapia motora, fisioterapia respiratória em dia útil ou no fim de semana). Área atendida, somente estes lugares e nenhum outro: Águas Claras, Guará I e II, Arniqueiras, Sudoeste, Noroeste, Cruzeiro, Park Sul, Vicente Pires, Asa Norte, Asa Sul e Lago Sul. Condomínios do Lago Sul: a secretaria verifica caso a caso. A Ju pergunta o bairro antes de passar para a secretaria (AGENDAMENTO); fora da área, explica com gentileza que o domiciliar não chega lá e oferece o atendimento na clínica.',
+       updated_at = now()
+ WHERE id = 'ATENDIMENTO_DOMICILIAR';
