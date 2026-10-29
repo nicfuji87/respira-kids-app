@@ -1,6 +1,7 @@
 // n8n "RK Ju - Comando": nós Code depois da IA. Cópia; manter igual ao n8n (25/10/2026).
 // 29/10/2026: anotar, fechar_agenda e abrir_agenda vão para o nó "Executar no banco"
 // (rpc fn_ju_comando_executar), que devolve {texto, status} para a conversa.
+// 29/10/2026: reservar_agenda também vai para "Executar no banco" (compromisso categoria reserva).
 
 // ── Nó "Ler decisão" ─────────────────────────────────────────────────────────────────────────────
 // A IA só propõe. Faltou dado = vira pergunta; lista vazia em cobrar/nota = vira informação.
@@ -27,6 +28,10 @@ if (d.acao === 'nota' && !(d.fatura_ids || []).length) {
 if (d.acao === 'anotar' && !(d.pessoa_id && String(d.anotacao || '').trim())) {
   d.acao = 'perguntar';
   d.mensagem = d.mensagem || 'O que exatamente devo anotar, e de quem?';
+}
+if (d.acao === 'reservar_agenda' && !(d.data && d.hora && (d.profissional || d.profissional_id))) {
+  d.acao = 'perguntar';
+  d.mensagem = d.mensagem || 'Qual dia, horário e de qual profissional é a reserva?';
 }
 if (['fechar_agenda', 'abrir_agenda'].includes(d.acao) && !(d.data && (d.profissional || d.profissional_id))) {
   d.acao = 'perguntar';
