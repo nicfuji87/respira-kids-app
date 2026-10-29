@@ -6,6 +6,7 @@ import {
   PopoverTrigger,
 } from '@/components/primitives/popover';
 import { AJUDA_MOTORA } from '@/lib/evolucao-motora-ajuda';
+import { FiguraAjuda } from './FiguraAjuda';
 
 // "?" ao lado do nome do parâmetro. Abre com toque (o tablet não tem hover),
 // e fecha tocando fora. O texto vem de AJUDA_MOTORA.
@@ -27,9 +28,10 @@ export const AjudaParametroBotao: React.FC<{ id: string }> = ({ id }) => {
       <PopoverContent
         align="start"
         collisionPadding={16}
-        className="w-80 max-w-[calc(100vw-32px)] max-h-[60vh] overflow-y-auto space-y-2 text-sm"
+        className="w-80 max-w-[calc(100vw-32px)] max-h-[70vh] overflow-y-auto space-y-2 text-sm"
       >
         <p className="font-semibold">{ajuda.titulo}</p>
+        {ajuda.figura && <FiguraAjuda id={ajuda.figura} />}
         <p className="text-muted-foreground">{ajuda.oQueE}</p>
         {ajuda.opcoes && (
           <dl className="space-y-1">

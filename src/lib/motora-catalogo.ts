@@ -8,7 +8,7 @@
 //
 // Conteúdo clínico revisável pela equipe: mudar aqui muda a tela e o texto.
 
-import type { AreaMotora } from '@/types/evolucao-clinica';
+import type { AreaMotora, TipoMedidaMotora } from '@/types/evolucao-clinica';
 
 // ------------------------------------------------------------- habilidades
 
@@ -136,6 +136,23 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
     areas: ['torcicolo'],
   },
   {
+    id: 'cervical_inclinacao_ativa',
+    nome: 'Inclinação ativa da cabeça',
+    grupo: 'controle_cervical',
+    idade: [0, 8],
+    metricas: [{ id: 'graus', rotulo: 'Amplitude' }],
+    porLado: true,
+    areas: ['torcicolo'],
+  },
+  {
+    id: 'visual_acompanhamento',
+    nome: 'Acompanhamento visual',
+    grupo: 'controle_cervical',
+    idade: [0, 4],
+    metricas: [{ id: 'graus', rotulo: 'Amplitude do acompanhamento' }],
+    porLado: true,
+  },
+  {
     id: 'cervical_tracao_sentar',
     nome: 'Controle cervical na tração para sentar',
     grupo: 'controle_cervical',
@@ -158,6 +175,30 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
     grupo: 'supino',
     idade: [2, 6],
     metricas: [],
+  },
+  {
+    id: 'mao_na_boca',
+    nome: 'Mão na boca',
+    grupo: 'supino',
+    idade: [2, 5],
+    metricas: [],
+    porLado: true,
+  },
+  {
+    id: 'pe_na_boca',
+    nome: 'Pé na boca',
+    grupo: 'supino',
+    idade: [5, 8],
+    metricas: [],
+    porLado: true,
+  },
+  {
+    id: 'alcance_objetos',
+    nome: 'Alcance de objetos',
+    grupo: 'supino',
+    idade: [3, 9],
+    metricas: TENTATIVAS,
+    porLado: true,
   },
   {
     id: 'supino_exploracao_pes',
@@ -193,7 +234,7 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
   },
   {
     id: 'prono_apoio_antebracos',
-    nome: 'Apoio em antebraços',
+    nome: 'Esfinge (apoio em antebraços)',
     grupo: 'prono',
     idade: [2, 6],
     metricas: [TEMPO('Tempo de apoio')],
@@ -240,7 +281,7 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
   },
   {
     id: 'rolar_prono_supino',
-    nome: 'Rolar de prono para supino',
+    nome: 'Desrolar (de prono para supino)',
     grupo: 'rolar',
     idade: [4, 8],
     metricas: TENTATIVAS,
@@ -279,7 +320,7 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
   },
   {
     id: 'transicao_sentado_quatro_apoios',
-    nome: 'Sentado para quatro apoios',
+    nome: 'Do sentar para o gatas (sereia)',
     grupo: 'transicoes',
     idade: [7, 11],
     metricas: TENTATIVAS,
@@ -294,7 +335,7 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
   // Quadrupedia e deslocamento
   {
     id: 'quadrupedia_sustentacao',
-    nome: 'Sustentação em quatro apoios',
+    nome: 'Postura de gatas (quatro apoios)',
     grupo: 'quadrupedia_deslocamento',
     idade: [6, 11],
     metricas: [TEMPO()],
@@ -307,6 +348,14 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
     metricas: [DISTANCIA],
   },
   {
+    id: 'deslocamento_pivotear',
+    nome: 'Pivotear',
+    grupo: 'quadrupedia_deslocamento',
+    idade: [5, 9],
+    metricas: [],
+    porLado: true,
+  },
+  {
     id: 'deslocamento_engatinhar',
     nome: 'Engatinhar',
     grupo: 'quadrupedia_deslocamento',
@@ -314,6 +363,21 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
     metricas: [DISTANCIA],
   },
   // Ortostatismo
+  {
+    id: 'ajoelhado',
+    nome: 'Ajoelhado',
+    grupo: 'ortostatismo',
+    idade: [8, 13],
+    metricas: [TEMPO('Tempo ajoelhado')],
+  },
+  {
+    id: 'semi_ajoelhado',
+    nome: 'Semiajoelhado',
+    grupo: 'ortostatismo',
+    idade: [9, 15],
+    metricas: [TEMPO('Tempo semiajoelhado')],
+    porLado: true,
+  },
   {
     id: 'em_pe_com_apoio',
     nome: 'Em pé com apoio',
@@ -345,7 +409,7 @@ export const HABILIDADES: HabilidadeCatalogo[] = [
   },
   {
     id: 'marcha_independente',
-    nome: 'Marcha independente',
+    nome: 'Passos sem apoio (marcha independente)',
     grupo: 'marcha',
     idade: [9, 18],
     metricas: [PASSOS, DISTANCIA],
@@ -500,7 +564,8 @@ export const REGIOES: { id: string; nome: string }[] = [
 ];
 
 export const RECURSOS: { id: string; nome: string }[] = [
-  { id: 'facilitacao_manual', nome: 'Facilitação manual' },
+  { id: 'terapia_manual', nome: 'Terapia manual' },
+  { id: 'estimulo_motor', nome: 'Estímulo motor' },
   { id: 'posicionamento', nome: 'Posicionamento terapêutico' },
   { id: 'atividade_ludica', nome: 'Atividade lúdica / brinquedos' },
   { id: 'estimulos_visuais_auditivos', nome: 'Estímulos visuais e auditivos' },
@@ -509,6 +574,11 @@ export const RECURSOS: { id: string; nome: string }[] = [
     nome: 'Estímulos táteis e proprioceptivos',
   },
   { id: 'bandagem_elastica', nome: 'Bandagem elástica' },
+];
+
+// Fora da tela, mas lidos em registros antigos
+export const RECURSOS_ANTIGOS: { id: string; nome: string }[] = [
+  { id: 'facilitacao_manual', nome: 'Facilitação manual' },
 ];
 
 export const nomeDe = (lista: { id: string; nome: string }[], id: string) =>
@@ -569,7 +639,8 @@ export type MedidaIndicador =
   | 'gonio_dif_inclinacao_passiva'
   | 'mfs_dif'
   | 'cvai'
-  | 'cva';
+  | 'cva'
+  | 'ci';
 
 export const MEDIDAS_INDICADOR: {
   id: MedidaIndicador;
@@ -603,6 +674,12 @@ export const MEDIDAS_INDICADOR: {
   },
   { id: 'cvai', nome: 'CVAI', unidade: '%', area: 'assimetria_craniana' },
   { id: 'cva', nome: 'CVA', unidade: 'mm', area: 'assimetria_craniana' },
+  {
+    id: 'ci',
+    nome: 'Índice cefálico (CI)',
+    unidade: '%',
+    area: 'assimetria_craniana',
+  },
 ];
 
 export type IndicadorObjetivo =
@@ -620,85 +697,240 @@ export interface SugestaoObjetivo {
   indicador: IndicadorObjetivo | null;
 }
 
-export const SUGESTOES_OBJETIVO: SugestaoObjetivo[] = [
+/**
+ * Objetivo do catálogo. Aparece na área em que é trabalhado; tocar nele
+ * mostra só a habilidade e as medidas que ele acompanha.
+ */
+export interface ObjetivoCatalogo {
+  id: string;
+  descricao: string;
+  area: AreaMotora;
+  indicador: IndicadorObjetivo | null;
+  /** Medidas que aparecem quando o objetivo é trabalhado na sessão */
+  medidas: TipoMedidaMotora[];
+}
+
+const H = (
+  habilidade: string,
+  metrica?: MetricaHabilidade
+): IndicadorObjetivo =>
+  metrica
+    ? { tipo: 'habilidade', habilidade, metrica }
+    : { tipo: 'habilidade', habilidade };
+
+const DESENV: TipoMedidaMotora[] = ['desenvolvimento_motor'];
+
+const ord = (a: ObjetivoCatalogo, b: ObjetivoCatalogo) =>
+  a.descricao.localeCompare(b.descricao, 'pt-BR');
+
+const LISTA_OBJETIVOS: ObjetivoCatalogo[] = [
+  // Torcicolo
   {
+    id: 'cabeca_linha_media',
+    descricao: 'Cabeça alinhada na linha média',
+    area: 'torcicolo',
+    indicador: H('cervical_alinhamento', 'tempo_s'),
+    medidas: ['fsos2'],
+  },
+  {
+    id: 'inclinacao_ativa',
+    descricao: 'Inclinação ativa da cabeça para os dois lados',
+    area: 'torcicolo',
+    indicador: H('cervical_inclinacao_ativa', 'graus'),
+    medidas: ['goniometria', 'mfs'],
+  },
+  {
+    id: 'reduzir_dif_rotacao',
     descricao: 'Reduzir a diferença de rotação cervical entre os lados',
-    areas: ['torcicolo'],
+    area: 'torcicolo',
     indicador: { tipo: 'medida', medida: 'gonio_dif_rotacao_passiva' },
+    medidas: ['goniometria', 'tensao_neuromeningea'],
   },
   {
+    id: 'rotacao_ativa',
     descricao: 'Rotação ativa da cabeça para os dois lados',
-    areas: ['torcicolo'],
-    indicador: { tipo: 'habilidade', habilidade: 'cervical_rotacao_ativa' },
+    area: 'torcicolo',
+    indicador: H('cervical_rotacao_ativa', 'graus'),
+    medidas: ['goniometria', 'fsos2'],
+  },
+  // Assimetria craniana
+  {
+    id: 'reduzir_braquicefalia',
+    descricao: 'Reduzir a braquicefalia (índice cefálico)',
+    area: 'assimetria_craniana',
+    indicador: { tipo: 'medida', medida: 'ci' },
+    medidas: ['craniometria'],
   },
   {
-    descricao: 'Manter a cabeça alinhada na linha média',
-    areas: ['torcicolo', 'assimetria_craniana'],
-    indicador: { tipo: 'habilidade', habilidade: 'cervical_alinhamento' },
-  },
-  {
-    descricao: 'Reduzir a assimetria craniana (CVAI)',
-    areas: ['assimetria_craniana'],
+    id: 'reduzir_plagiocefalia',
+    descricao: 'Reduzir a plagiocefalia (CVAI)',
+    area: 'assimetria_craniana',
     indicador: { tipo: 'medida', medida: 'cvai' },
+    medidas: ['craniometria'],
   },
   {
-    descricao: 'Aumentar o tempo de permanência em prono',
-    areas: ['assimetria_craniana', 'torcicolo', 'desenvolvimento_motor'],
-    indicador: {
-      tipo: 'habilidade',
-      habilidade: 'prono_permanencia',
-      metrica: 'tempo_s',
-    },
+    id: 'tempo_prono',
+    descricao: 'Aumentar o tempo em prono',
+    area: 'assimetria_craniana',
+    indicador: H('prono_permanencia', 'tempo_s'),
+    medidas: [],
+  },
+  // Desenvolvimento motor
+  ...(
+    [
+      [
+        'acompanhamento_visual',
+        'Acompanhamento visual',
+        H('visual_acompanhamento'),
+      ],
+      ['ajoelhado', 'Ajoelhado', H('ajoelhado', 'tempo_s')],
+      ['alcance_objetos', 'Alcance de objetos', H('alcance_objetos')],
+      [
+        'controle_cervical_prono',
+        'Controle cervical em prono',
+        H('cervical_sustentacao_prono', 'tempo_s'),
+      ],
+      [
+        'passos_com_apoio',
+        'Dar passos com apoio',
+        H('marcha_com_apoio', 'passos'),
+      ],
+      [
+        'passos_sem_apoio',
+        'Dar passos sem apoio',
+        H('marcha_independente', 'passos'),
+      ],
+      ['desrolar', 'Desrolar (de prono para supino)', H('rolar_prono_supino')],
+      ['engatinhar', 'Engatinhar', H('deslocamento_engatinhar')],
+      [
+        'esfinge',
+        'Esfinge (apoio em antebraços)',
+        H('prono_apoio_antebracos', 'tempo_s'),
+      ],
+      [
+        'em_pe_com_apoio',
+        'Ficar em pé com apoio',
+        H('em_pe_com_apoio', 'tempo_s'),
+      ],
+      [
+        'em_pe_sem_apoio',
+        'Ficar em pé sem apoio',
+        H('em_pe_sem_apoio', 'tempo_s'),
+      ],
+      ['mao_na_boca', 'Mão na boca', H('mao_na_boca')],
+      ['pe_na_boca', 'Pé na boca', H('pe_na_boca')],
+      ['pivotear', 'Pivotear', H('deslocamento_pivotear')],
+      [
+        'postura_gatas',
+        'Postura de gatas',
+        H('quadrupedia_sustentacao', 'tempo_s'),
+      ],
+      ['rolar', 'Rolar para os dois lados', H('rolar_supino_prono')],
+      ['semi_ajoelhado', 'Semiajoelhado', H('semi_ajoelhado', 'tempo_s')],
+      [
+        'sentar_com_apoio',
+        'Sentar com apoio',
+        H('sentar_com_apoio', 'tempo_s'),
+      ],
+      [
+        'sentar_sem_apoio',
+        'Sentar sem apoio',
+        H('sentar_sem_apoio', 'tempo_s'),
+      ],
+      [
+        'deitado_sentado',
+        'Transição de deitado para sentado',
+        H('transicao_deitado_sentado'),
+      ],
+      [
+        'sereia',
+        'Transição do sentar para o gatas (sereia)',
+        H('transicao_sentado_quatro_apoios'),
+      ],
+    ] as [string, string, IndicadorObjetivo][]
+  ).map(([id, descricao, indicador]) => ({
+    id,
+    descricao,
+    area: 'desenvolvimento_motor' as AreaMotora,
+    indicador,
+    medidas: DESENV,
+  })),
+];
+
+/** Em ordem alfabética dentro de cada área */
+export const OBJETIVOS_CATALOGO: ObjetivoCatalogo[] = [...LISTA_OBJETIVOS].sort(
+  ord
+);
+
+export const OBJETIVO_CATALOGO_POR_ID: Record<string, ObjetivoCatalogo> =
+  Object.fromEntries(OBJETIVOS_CATALOGO.map((o) => [o.id, o]));
+
+/** Para o editor de objetivos (avaliação e plano): o mesmo catálogo */
+export const SUGESTOES_OBJETIVO: SugestaoObjetivo[] = OBJETIVOS_CATALOGO.map(
+  (o) => ({ descricao: o.descricao, areas: [o.area], indicador: o.indicador })
+);
+
+// ------------------------------------------------------------ orientações
+
+/** Exercícios para casa, por área (só os das áreas da sessão aparecem) */
+export const EXERCICIOS_DOMICILIARES: {
+  id: string;
+  nome: string;
+  areas: AreaMotora[];
+}[] = [
+  {
+    id: 'alongamento_cervical',
+    nome: 'Alongamento cervical (inclinação e rotação)',
+    areas: ['torcicolo'],
   },
   {
-    descricao: 'Melhorar o controle cervical em prono',
-    areas: ['desenvolvimento_motor', 'torcicolo'],
-    indicador: {
-      tipo: 'habilidade',
-      habilidade: 'cervical_sustentacao_prono',
-      metrica: 'tempo_s',
-    },
+    id: 'rotacao_com_estimulo',
+    nome: 'Virar a cabeça atrás de brinquedo ou voz',
+    areas: ['torcicolo'],
   },
   {
-    descricao: 'Apoio simétrico em antebraços',
+    id: 'carregar_de_lado',
+    nome: 'Carregar de lado (posição de alongamento)',
+    areas: ['torcicolo'],
+  },
+  {
+    id: 'estimular_rolar',
+    nome: 'Estimular o rolar para os dois lados',
     areas: ['desenvolvimento_motor'],
-    indicador: { tipo: 'habilidade', habilidade: 'prono_apoio_antebracos' },
   },
   {
-    descricao: 'Rolar para os dois lados',
+    id: 'estimular_sentar',
+    nome: 'Estimular o sentar',
     areas: ['desenvolvimento_motor'],
-    indicador: { tipo: 'habilidade', habilidade: 'rolar_supino_prono' },
   },
   {
-    descricao: 'Sentar sem apoio',
+    id: 'estimular_gatas',
+    nome: 'Estimular o gatas e o engatinhar',
     areas: ['desenvolvimento_motor'],
-    indicador: {
-      tipo: 'habilidade',
-      habilidade: 'sentar_sem_apoio',
-      metrica: 'tempo_s',
-    },
   },
   {
-    descricao: 'Realizar a transição de deitado para sentado',
+    id: 'estimular_em_pe',
+    nome: 'Estimular ficar em pé e dar passos',
     areas: ['desenvolvimento_motor'],
-    indicador: { tipo: 'habilidade', habilidade: 'transicao_deitado_sentado' },
-  },
-  {
-    descricao: 'Ficar em pé com apoio',
-    areas: ['desenvolvimento_motor'],
-    indicador: {
-      tipo: 'habilidade',
-      habilidade: 'em_pe_com_apoio',
-      metrica: 'tempo_s',
-    },
-  },
-  {
-    descricao: 'Dar passos com apoio',
-    areas: ['desenvolvimento_motor'],
-    indicador: {
-      tipo: 'habilidade',
-      habilidade: 'marcha_com_apoio',
-      metrica: 'passos',
-    },
   },
 ];
+
+export const TUMMY_VEZES = ['1x', '2x', '3x', '4x ou mais'] as const;
+export const TUMMY_MINUTOS = [
+  '5 min',
+  '10 min',
+  '15 min',
+  '20 min ou mais',
+] as const;
+export type TummyVezes = (typeof TUMMY_VEZES)[number];
+export type TummyMinutos = (typeof TUMMY_MINUTOS)[number];
+
+/** "3x ao dia, 10 min cada" (texto também gravado no campo antigo) */
+export function textoTummyTime(
+  vezes?: TummyVezes | null,
+  minutos?: TummyMinutos | null
+): string {
+  if (!vezes && !minutos) return '';
+  if (vezes && minutos) return `${vezes} ao dia, ${minutos} cada`;
+  return vezes ? `${vezes} ao dia` : `${minutos} cada vez`;
+}

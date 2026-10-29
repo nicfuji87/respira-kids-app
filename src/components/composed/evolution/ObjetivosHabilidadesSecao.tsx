@@ -1,39 +1,55 @@
-// Seção "Objetivos e habilidades" da evolução motora 1.3.
-// Já chega preenchida com o que a criança tem: idade, objetivos ativos,
-// habilidades acompanhadas e últimos valores. A fisio registra só o que
-// trabalhou hoje.
+// Seção "Objetivos" da evolução motora (1.4).
+// Os objetivos ficam agrupados pelas áreas marcadas, em ordem alfabética.
+// Tocar num objetivo marca "trabalhado hoje" e abre só o que ele acompanha:
+// a habilidade (com os números) e as medidas. Goniometria e craniometria
+// abrem nas próximas seções; MFS, FSOS-2, tensão e desenvolvimento ficam aqui.
 
 import React, { useMemo, useState } from 'react';
-import { Plus, Target } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { cn } from '@/lib/utils';
-import { RESULTADOS_FUNCIONAIS } from '@/lib/motora-catalogo';
 import {
+  OBJETIVOS_CATALOGO,
+  RESULTADOS_FUNCIONAIS,
+  type ObjetivoCatalogo,
+} from '@/lib/motora-catalogo';
+import {
+  areaDoObjetivo,
   calcularIdade,
+  catalogoDoObjetivo,
   chaveRegistro,
+  comComparacoes,
   criarRegistro,
   dataCurta,
   diferenca,
   fmtValor,
   objetivoParaSessao,
-  registroDoIndicador,
+  objetivoProvisorio,
   situacaoObjetivo,
   ultimoEstadoDoIndicador,
   valorIndicadorNaEvolucao,
   ROTULO_STATUS_OBJETIVO,
+  type ContextoRegistro,
   type ObjetivoMotor,
   type StatusObjetivo,
 } from '@/lib/motora-plano';
-import type {
-  EvolucaoMotoraAssimetria,
-  ObjetivoSessao,
-  RegistroHabilidade,
+import {
+  AREAS_MOTORAS,
+  NOME_MEDIDA_MOTORA,
+  medidasDoDia,
+  type AreaMotora,
+  type EvolucaoMotoraAssimetria,
+  type MedicaoSessao,
+  type ObjetivoSessao,
+  type RegistroHabilidade,
+  type TipoMedidaMotora,
 } from '@/types/evolucao-clinica';
-import { HabilidadesRegistro } from './HabilidadesRegistro';
+import { HabilidadeCard } from './HabilidadeCard';
+import { MedicaoSessaoBloco } from './MedicoesMotoras';
 import { ObjetivoMotorEditor } from './ObjetivoMotorEditor';
-import { chipClasse, opcaoClasse } from './estilos-motora';
+import { opcaoClasse } from './estilos-motora';
 import { usePlanoMotor } from './plano-motor-context';
 import { useMedidasEvolucao } from './medidas-evolucao-context';
 
@@ -43,7 +59,27 @@ export interface ObjetivosHabilidadesSecaoProps {
   disabled?: boolean;
 }
 
-// ----------------------------------------------------------- um objetivo
+/** Medidas com seção própria: abrem como passo da evolução */
+const COM_SECAO: TipoMedidaMotora[] = ['goniometria', 'craniometria'];
+
+// Registro da habilidade do objetivo, mesmo ainda "não observado hoje"
+// (registroDoIndicador ignora esses, porque não têm valor)
+const registroDaHabilidade = (
+  ind: ObjetivoMotor['indicador'],
+  registros: RegistroHabilidade[]
+): RegistroHabilidade | undefined => {
+  if (ind?.tipo !== 'habilidade') return undefined;
+  const daHab = registros.filter((r) => r.habilidade === ind.habilidade);
+  if (ind.lado) return daHab.find((r) => (r.lado ?? 'ambos') === ind.lado);
+  return daHab.find((r) => !r.lado || r.lado === 'ambos') ?? daHab[0];
+};
+
+interface ItemObjetivo {
+  chave: string;
+  descricao: string;
+  cat?: ObjetivoCatalogo;
+  plano?: ObjetivoMotor;
+}
 
 const BarraMeta: React.FC<{ proporcao?: number }> = ({ proporcao }) =>
   proporcao === undefined ? null : (
@@ -59,184 +95,133 @@ const BarraMeta: React.FC<{ proporcao?: number }> = ({ proporcao }) =>
     </div>
   );
 
-const ObjetivoNaSessao: React.FC<{
+// ------------------------------------------------- objetivo trabalhado hoje
+
+const DetalheObjetivo: React.FC<{
+  item: ItemObjetivo;
   objetivo: ObjetivoMotor;
   evolucao: EvolucaoMotoraAssimetria;
-  sessao: ObjetivoSessao | undefined;
-  onSessao: (s: ObjetivoSessao | undefined) => void;
-  onRegistrarHabilidade: () => void;
+  sessao: ObjetivoSessao;
+  registro: RegistroHabilidade | undefined;
+  onSessao: (s: ObjetivoSessao) => void;
+  onRegistro: (r: RegistroHabilidade) => void;
   onEditar: () => void;
   onStatus: (s: StatusObjetivo, motivo?: string) => Promise<void>;
   disabled?: boolean;
 }> = ({
+  item,
   objetivo: o,
   evolucao,
   sessao,
+  registro,
   onSessao,
-  onRegistrarHabilidade,
+  onRegistro,
   onEditar,
   onStatus,
   disabled,
 }) => {
   const ctx = usePlanoMotor();
   const h = ctx?.historico ?? { evolucoes: [], medidas: [] };
-  const ultimoEstado = ultimoEstadoDoIndicador(
-    o.indicador,
-    h.evolucoes.filter((e) => e.agendamento_id !== ctx?.agendamentoId)
+  const anteriores = h.evolucoes.filter(
+    (e) => e.agendamento_id !== ctx?.agendamentoId
   );
+  const ultimoEstado = ultimoEstadoDoIndicador(o.indicador, anteriores);
   const sit = situacaoObjetivo(o, {
-    evolucoes: h.evolucoes.filter(
-      (e) => e.agendamento_id !== ctx?.agendamentoId
-    ),
+    evolucoes: anteriores,
     medidas: h.medidas,
   });
   const un = sit.info?.unidade ?? '';
   const hoje = valorIndicadorNaEvolucao(o.indicador, evolucao);
-  const antes = sessao?.valor_anterior ?? sit.ultimo?.valor;
+  const antes = sessao.valor_anterior ?? sit.ultimo?.valor;
   const dif = diferenca(hoje, antes, un);
-  const precisaHabilidade =
-    o.indicador?.tipo === 'habilidade' &&
-    !registroDoIndicador(o.indicador, evolucao.habilidades || []);
   const [acao, setAcao] = useState<StatusObjetivo | null>(null);
   const [motivo, setMotivo] = useState('');
   const [mudando, setMudando] = useState(false);
 
   return (
-    <div className="rounded-lg border p-3 space-y-3 bg-background">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
-          <p className="font-medium leading-tight">{o.descricao}</p>
-          {sit.info && (
-            <p className="text-xs text-muted-foreground">
-              Indicador: {sit.info.rotulo}
-            </p>
-          )}
+    <div className="space-y-3 border-t pt-3">
+      {(sit.info?.numerico || ultimoEstado) && (
+        <div className="text-xs text-muted-foreground space-y-0.5">
           {sit.info?.numerico && (
-            <p className="text-xs">
-              {sit.inicial !== undefined && (
-                <>Inicial {fmtValor(sit.inicial, un)} · </>
-              )}
+            <p>
               {sit.ultimo ? (
                 <>
                   Último {fmtValor(sit.ultimo.valor, un)} (
                   {dataCurta(sit.ultimo.data)})
                 </>
               ) : (
-                'Sem registro numérico ainda'
+                'Sem número registrado antes'
               )}
-              {o.meta !== null && <> · Meta {fmtValor(o.meta, un)}</>}
-            </p>
-          )}
-          {ultimoEstado && <p className="text-xs">{ultimoEstado}</p>}
-          {o.meta_texto && (
-            <p className="text-xs text-muted-foreground">
-              Meta: {o.meta_texto}
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          aria-pressed={!!sessao}
-          disabled={disabled}
-          onClick={() =>
-            onSessao(
-              sessao
-                ? undefined
-                : ctx
-                  ? objetivoParaSessao(
-                      o,
-                      evolucao,
-                      h,
-                      ctx.dataSessao,
-                      ctx.agendamentoId
-                    )
-                  : { objetivo_id: o.id, descricao: o.descricao }
-            )
-          }
-          className={cn(chipClasse(!!sessao), 'shrink-0')}
-        >
-          {sessao ? 'Trabalhado hoje' : 'Trabalhei hoje'}
-        </button>
-      </div>
-      <BarraMeta proporcao={sit.proporcao} />
-
-      {sessao && (
-        <div className="space-y-3 border-t pt-3">
-          {sit.info?.numerico && (
-            <p className="text-sm">
-              Hoje:{' '}
-              {hoje !== undefined ? (
-                <strong>{fmtValor(hoje, un)}</strong>
-              ) : (
-                <span className="text-muted-foreground">não mensurado</span>
-              )}
-              {antes !== undefined && <> · antes {fmtValor(antes, un)}</>}
-              {dif && (
+              {o.meta !== null && <> · meta {fmtValor(o.meta, un)}</>}
+              {hoje !== undefined && (
                 <>
                   {' '}
-                  · <strong>{dif}</strong>
+                  · hoje <strong>{fmtValor(hoje, un)}</strong>
+                  {dif && <> ({dif})</>}
                 </>
               )}
             </p>
           )}
-          {precisaHabilidade && (
-            <button
-              type="button"
-              onClick={onRegistrarHabilidade}
-              disabled={disabled}
-              className="text-sm text-primary underline-offset-2 hover:underline"
-            >
-              Registrar a habilidade deste objetivo
-            </button>
-          )}
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">
-              Resultado em relação ao objetivo
-            </Label>
-            <div
-              className="grid grid-cols-2 sm:grid-cols-4 gap-2"
-              role="radiogroup"
-              aria-label={`Resultado: ${o.descricao}`}
-            >
-              {RESULTADOS_FUNCIONAIS.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={sessao.resultado === r.id}
-                  disabled={disabled}
-                  onClick={() =>
-                    onSessao({
-                      ...sessao,
-                      resultado: sessao.resultado === r.id ? undefined : r.id,
-                    })
-                  }
-                  className={opcaoClasse(sessao.resultado === r.id)}
-                >
-                  {r.rotulo}
-                </button>
-              ))}
-            </div>
-          </div>
-          <Input
-            value={sessao.observacao ?? ''}
-            onChange={(e) =>
-              onSessao({ ...sessao, observacao: e.target.value || undefined })
-            }
-            placeholder="Observação sobre o objetivo (opcional)"
-            disabled={disabled}
-          />
+          {ultimoEstado && <p>{ultimoEstado}</p>}
+          <BarraMeta proporcao={sit.proporcao} />
         </div>
       )}
 
-      {!disabled && (
+      {registro && (
+        <HabilidadeCard
+          registro={registro}
+          onChange={onRegistro}
+          disabled={disabled}
+        />
+      )}
+
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">
+          Resultado hoje <span className="text-destructive">*</span>
+        </Label>
+        <div
+          className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+          role="radiogroup"
+          aria-label={`Resultado: ${o.descricao}`}
+        >
+          {RESULTADOS_FUNCIONAIS.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              role="radio"
+              aria-checked={sessao.resultado === r.id}
+              disabled={disabled}
+              onClick={() =>
+                onSessao({
+                  ...sessao,
+                  resultado: sessao.resultado === r.id ? undefined : r.id,
+                })
+              }
+              className={opcaoClasse(sessao.resultado === r.id)}
+            >
+              {r.rotulo}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Input
+        value={sessao.observacao ?? ''}
+        onChange={(e) =>
+          onSessao({ ...sessao, observacao: e.target.value || undefined })
+        }
+        placeholder="Observação (opcional)"
+        disabled={disabled}
+      />
+
+      {/* Plano: só para objetivo que já está no plano da criança */}
+      {!disabled && item.plano && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
           <button
             type="button"
             onClick={onEditar}
             className="text-primary hover:underline"
           >
-            Editar
+            Meta e indicador
           </button>
           {(['atingido', 'suspenso', 'encerrado'] as StatusObjetivo[]).map(
             (s) => (
@@ -297,7 +282,7 @@ export const ObjetivosHabilidadesSecao: React.FC<
   const sessoes = evolucao.objetivos_sessao || [];
   const areas = evolucao.areas || [];
   const [editor, setEditor] = useState<'novo' | ObjetivoMotor | null>(null);
-  const contexto = useMemo(
+  const contexto: ContextoRegistro = useMemo(
     () => ({
       evolucoes: ctx?.historico?.evolucoes ?? [],
       excluirAgendamentoId: ctx?.agendamentoId,
@@ -316,23 +301,140 @@ export const ObjetivosHabilidadesSecao: React.FC<
         : null,
     [ctx?.historico, dataSessao]
   );
-  const ativos = (ctx?.objetivos ?? []).filter((o) => o.status === 'ativo');
+  const ativos = useMemo(
+    () => (ctx?.objetivos ?? []).filter((o) => o.status === 'ativo'),
+    [ctx?.objetivos]
+  );
 
-  // Objetivo por habilidade sem o registro de hoje: abre o cartão dela
-  const adicionar = (id: string, lado?: RegistroHabilidade['lado']) => {
-    const novo = criarRegistro(id, lado, contexto);
-    if (
-      !novo ||
-      registros.some((r) => chaveRegistro(r) === chaveRegistro(novo))
-    )
+  // Catálogo da área + objetivos próprios do plano, em ordem alfabética
+  const itensDaArea = (area: AreaMotora): ItemObjetivo[] => {
+    const itens: ItemObjetivo[] = OBJETIVOS_CATALOGO.filter(
+      (c) => c.area === area
+    ).map((c) => ({
+      chave: c.id,
+      descricao: c.descricao,
+      cat: c,
+      plano: ativos.find((o) => catalogoDoObjetivo(o)?.id === c.id),
+    }));
+    for (const o of ativos)
+      if (!catalogoDoObjetivo(o) && areaDoObjetivo(o) === area)
+        itens.push({ chave: o.id, descricao: o.descricao, plano: o });
+    return itens.sort((a, b) =>
+      a.descricao.localeCompare(b.descricao, 'pt-BR')
+    );
+  };
+
+  const sessaoDe = (item: ItemObjetivo) =>
+    sessoes.find(
+      (s) =>
+        (item.plano && s.objetivo_id === item.plano.id) ||
+        (item.cat && s.catalogo_id === item.cat.id)
+    );
+
+  const objetivoDe = (item: ItemObjetivo, s?: ObjetivoSessao) =>
+    item.plano ??
+    objetivoProvisorio(item.cat!, ctx?.pacienteId ?? '', s?.objetivo_id);
+
+  const registroDe = (o: ObjetivoMotor) =>
+    registroDaHabilidade(o.indicador, registros);
+
+  const alternar = (item: ItemObjetivo) => {
+    if (disabled) return;
+    const atual = sessaoDe(item);
+    if (atual) {
+      // Sai da sessão; a habilidade só sai se ninguém mais a usa e se
+      // continua sem registro
+      const resto = sessoes.filter((s) => s !== atual);
+      const o = objetivoDe(item, atual);
+      const r = registroDe(o);
+      const usadaPorOutro = resto.some((s) => {
+        const it = OBJETIVOS_CATALOGO.find((c) => c.id === s.catalogo_id);
+        return (
+          it?.indicador?.tipo === 'habilidade' &&
+          o.indicador?.tipo === 'habilidade' &&
+          it.indicador.habilidade === o.indicador.habilidade
+        );
+      });
+      const habilidades =
+        r && !usadaPorOutro && r.estado === 'nao_observado' && !r.metricas
+          ? registros.filter((x) => x !== r)
+          : registros;
+      onChange({ objetivos_sessao: resto, habilidades });
       return;
-    onChange({ habilidades: [...registros, novo] });
+    }
+    const o = objetivoDe(item);
+    const h = ctx?.historico ?? { evolucoes: [], medidas: [] };
+    const s: ObjetivoSessao = {
+      ...objetivoParaSessao(o, evolucao, h, dataSessao, ctx?.agendamentoId),
+      ...(item.cat ? { catalogo_id: item.cat.id, area: item.cat.area } : {}),
+      ...(!item.plano && item.cat
+        ? {
+            novo_no_plano: {
+              descricao: item.cat.descricao,
+              areas: [item.cat.area],
+              indicador: item.cat.indicador,
+            },
+          }
+        : {}),
+    };
+    let habilidades = registros;
+    if (o.indicador?.tipo === 'habilidade' && !registroDe(o)) {
+      const novo = criarRegistro(
+        o.indicador.habilidade,
+        o.indicador.lado,
+        contexto
+      );
+      if (
+        novo &&
+        !registros.some((x) => chaveRegistro(x) === chaveRegistro(novo))
+      )
+        habilidades = [...registros, novo];
+    }
+    onChange({ objetivos_sessao: [...sessoes, s], habilidades });
   };
 
-  const setSessao = (id: string, s: ObjetivoSessao | undefined) => {
-    const resto = sessoes.filter((x) => x.objetivo_id !== id);
-    onChange({ objetivos_sessao: s ? [...resto, s] : resto });
+  const atualizarSessao = (antiga: ObjetivoSessao, nova: ObjetivoSessao) =>
+    onChange({
+      objetivos_sessao: sessoes.map((s) => (s === antiga ? nova : s)),
+    });
+
+  const atualizarRegistro = (
+    antigo: RegistroHabilidade,
+    novo: RegistroHabilidade
+  ) => {
+    const r = antigo.lado !== novo.lado ? comComparacoes(novo, contexto) : novo;
+    onChange({ habilidades: registros.map((x) => (x === antigo ? r : x)) });
   };
+
+  // Habilidades registradas que nenhum objetivo de hoje usa (registros
+  // antigos, de antes do 1.4): continuam visíveis para editar ou tirar
+  const usadas = new Set(
+    sessoes
+      .map((s) => {
+        const item = s.catalogo_id
+          ? OBJETIVOS_CATALOGO.find((c) => c.id === s.catalogo_id)
+          : ativos.find((o) => o.id === s.objetivo_id);
+        const r = item
+          ? registroDaHabilidade(item.indicador, registros)
+          : undefined;
+        return r ? chaveRegistro(r) : null;
+      })
+      .filter(Boolean) as string[]
+  );
+  const soltas = registros.filter((r) => !usadas.has(chaveRegistro(r)));
+
+  // Medidas puxadas pelos objetivos de hoje
+  const doDia = medidasDoDia(evolucao);
+  const semSecao = doDia.filter((m) => !COM_SECAO.includes(m));
+  const comSecao = doDia.filter((m) => COM_SECAO.includes(m));
+  const setMedicao = (tipo: TipoMedidaMotora, m: MedicaoSessao | undefined) => {
+    const novo = { ...(evolucao.medicoes || {}) };
+    if (m) novo[tipo] = m;
+    else delete novo[tipo];
+    onChange({ medicoes: novo });
+  };
+
+  const areasOrdenadas = AREAS_MOTORAS.filter((a) => areas.includes(a.id));
 
   return (
     <div className="space-y-6">
@@ -354,49 +456,104 @@ export const ObjetivosHabilidadesSecao: React.FC<
         </div>
       )}
 
-      {/* Plano terapêutico */}
-      {ctx && !ctx.erro && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Target className="h-4 w-4" />
-              Objetivos ativos
-            </h3>
-            {!disabled && editor === null && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setEditor('novo')}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Novo objetivo
-              </Button>
-            )}
+      {areasOrdenadas.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Marque as áreas trabalhadas hoje (acima) para ver os objetivos.
+        </p>
+      )}
+
+      {areasOrdenadas.map((area) => (
+        <section key={area.id} className="space-y-2">
+          <h3 className="font-semibold">{area.titulo}</h3>
+          <div className="rounded-lg border divide-y">
+            {itensDaArea(area.id).map((item) => {
+              const sessao = sessaoDe(item);
+              const o = sessao ? objetivoDe(item, sessao) : undefined;
+              return (
+                <div key={item.chave} className={cn(sessao && 'bg-primary/5')}>
+                  <button
+                    type="button"
+                    aria-pressed={!!sessao}
+                    disabled={disabled}
+                    onClick={() => alternar(item)}
+                    className="w-full text-left px-3 py-2.5 flex items-center gap-3 disabled:cursor-default"
+                  >
+                    <span
+                      className={cn(
+                        'h-5 w-5 shrink-0 rounded border-2 flex items-center justify-center',
+                        sessao
+                          ? 'bg-primary border-primary text-primary-foreground'
+                          : 'border-muted-foreground/40'
+                      )}
+                      aria-hidden
+                    >
+                      {sessao && <Check className="h-3.5 w-3.5" />}
+                    </span>
+                    <span className="flex-1 min-w-0 text-sm">
+                      {item.descricao}
+                    </span>
+                    {item.plano && (
+                      <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+                        no plano
+                      </span>
+                    )}
+                  </button>
+                  {sessao && o && (
+                    <div className="px-3 pb-3">
+                      <DetalheObjetivo
+                        item={item}
+                        objetivo={o}
+                        evolucao={evolucao}
+                        sessao={sessao}
+                        registro={registroDe(o)}
+                        onSessao={(n) => atualizarSessao(sessao, n)}
+                        onRegistro={(r) => {
+                          const antigo = registroDe(o);
+                          if (antigo) atualizarRegistro(antigo, r);
+                        }}
+                        onEditar={() => item.plano && setEditor(item.plano)}
+                        onStatus={async (st, motivo) => {
+                          if (!item.plano || !ctx) return;
+                          await ctx.mudarStatus(item.plano.id, st, motivo);
+                          onChange({
+                            objetivos_sessao: sessoes.filter(
+                              (x) => x !== sessao
+                            ),
+                          });
+                        }}
+                        disabled={disabled}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          {ctx.carregando && ctx.objetivos === null && (
-            <p className="text-sm text-muted-foreground">Carregando o plano…</p>
-          )}
-          {ctx.objetivos !== null && ativos.length === 0 && editor === null && (
-            <div className="rounded-lg border border-dashed p-3 text-sm space-y-2">
-              <p>Esta criança ainda não tem objetivos ativos.</p>
-              {!disabled && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setEditor('novo')}
-                >
-                  Escolher uma sugestão ou criar
-                </Button>
-              )}
-            </div>
-          )}
-          {editor !== null && (
+        </section>
+      ))}
+
+      {/* Objetivo fora do catálogo */}
+      {ctx && !ctx.erro && !disabled && areasOrdenadas.length > 0 && (
+        <div className="space-y-3">
+          {editor === null ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setEditor('novo')}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Outro objetivo
+            </Button>
+          ) : (
             <ObjetivoMotorEditor
               pacienteId={ctx.pacienteId}
               inicial={editor === 'novo' ? undefined : editor}
               areasSugeridas={areas}
-              jaNoPlano={ativos.map((o) => o.descricao)}
+              jaNoPlano={[
+                ...ativos.map((o) => o.descricao),
+                ...OBJETIVOS_CATALOGO.map((c) => c.descricao),
+              ]}
               origem="evolucao"
               origemId={ctx.agendamentoId}
               onSalvar={async (o) => {
@@ -406,41 +563,47 @@ export const ObjetivosHabilidadesSecao: React.FC<
               onCancelar={() => setEditor(null)}
             />
           )}
-          {ativos.map((o) => (
-            <ObjetivoNaSessao
-              key={o.id}
-              objetivo={o}
-              evolucao={evolucao}
-              sessao={sessoes.find((s) => s.objetivo_id === o.id)}
-              onSessao={(s) => setSessao(o.id, s)}
-              onRegistrarHabilidade={() =>
-                o.indicador?.tipo === 'habilidade' &&
-                adicionar(o.indicador.habilidade, o.indicador.lado)
-              }
-              onEditar={() => setEditor(o)}
-              onStatus={(s, motivo) => ctx.mudarStatus(o.id, s, motivo)}
+        </div>
+      )}
+
+      {/* Medidas dos objetivos de hoje */}
+      {(semSecao.length > 0 || comSecao.length > 0) && (
+        <section className="space-y-3">
+          <h3 className="font-semibold">Medidas dos objetivos de hoje</h3>
+          {comSecao.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {comSecao.map((m) => NOME_MEDIDA_MOTORA[m]).join(' e ')}{' '}
+              {comSecao.length > 1 ? 'abrem' : 'abre'} nas próximas seções.
+            </p>
+          )}
+          {semSecao.map((tipo) => (
+            <MedicaoSessaoBloco
+              key={tipo}
+              tipo={tipo}
+              valor={evolucao.medicoes?.[tipo]}
+              onChange={(m) => setMedicao(tipo, m)}
               disabled={disabled}
             />
           ))}
-          {ativos.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Objetivo novo, editado ou encerrado entra no plano da criança na
-              hora, mesmo sem salvar a evolução.
-            </p>
-          )}
         </section>
       )}
 
-      {/* Habilidades */}
-      <HabilidadesRegistro
-        registros={registros}
-        onChange={(novos) => onChange({ habilidades: novos })}
-        contexto={contexto}
-        idadeMeses={idade?.meses_para_sugestao}
-        areas={areas}
-        objetivos={ativos}
-        disabled={disabled}
-      />
+      {soltas.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="font-semibold">Outras habilidades registradas</h3>
+          {soltas.map((r) => (
+            <HabilidadeCard
+              key={chaveRegistro(r)}
+              registro={r}
+              onChange={(novo) => atualizarRegistro(r, novo)}
+              onRemover={() =>
+                onChange({ habilidades: registros.filter((x) => x !== r) })
+              }
+              disabled={disabled}
+            />
+          ))}
+        </section>
+      )}
     </div>
   );
 };

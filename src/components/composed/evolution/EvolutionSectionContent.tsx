@@ -40,6 +40,14 @@ import type {
 } from '@/types/evolucao-clinica';
 import { medidasComValores } from '@/lib/motora-medidas';
 import {
+  EXERCICIOS_DOMICILIARES,
+  TUMMY_MINUTOS,
+  TUMMY_VEZES,
+  textoTummyTime,
+  type TummyMinutos,
+  type TummyVezes,
+} from '@/lib/motora-catalogo';
+import {
   MedicaoSessaoBloco,
   ReavaliacoesConduta,
   ComparacaoCraniometria,
@@ -48,10 +56,17 @@ import {
 import { ObjetivosHabilidadesSecao } from './ObjetivosHabilidadesSecao';
 import {
   IntervencoesSecao,
+  IntervencaoSessaoSecao,
   RespostaSessaoSecao,
 } from './IntervencoesRespostaSecoes';
 import {
   ehFormatoMotoraV13,
+  ehFormatoMotoraV14,
+  LOCAIS_BLOQUEIO,
+  LADOS_MAIS_TENSO,
+  type TensaoRegiao,
+  type LocalBloqueio,
+  type LadoMaisTenso,
   secoesMotorasVisiveis,
   calcularMetricasCraniometriaEvolucao,
   calcularDiferencasGoniometria,
@@ -171,6 +186,84 @@ const CheckboxField: React.FC<{
     />
     <Label className="text-sm cursor-pointer">{label}</Label>
     {ajuda && <AjudaParametroBotao id={ajuda} />}
+  </div>
+);
+
+// Botões pequenos de escolha única (desmarca ao tocar de novo)
+const EscolhaCurta: React.FC<{
+  opcoes: { id: string; nome: string }[];
+  valor?: string | null;
+  onChange: (v: string | undefined) => void;
+  disabled?: boolean;
+  rotulo: string;
+}> = ({ opcoes, valor, onChange, disabled, rotulo }) => (
+  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={rotulo}>
+    {opcoes.map((o) => (
+      <Button
+        key={o.id}
+        type="button"
+        size="sm"
+        role="radio"
+        aria-checked={valor === o.id}
+        variant={valor === o.id ? 'default' : 'outline'}
+        onClick={() => onChange(valor === o.id ? undefined : o.id)}
+        disabled={disabled}
+        className="h-8"
+      >
+        {o.nome}
+      </Button>
+    ))}
+  </div>
+);
+
+// Musculatura cervical (posterior ou anterior): normal ou tensa, e o lado
+const TensaoRegiaoCampo: React.FC<{
+  titulo: string;
+  valor?: TensaoRegiao;
+  onChange: (v: TensaoRegiao | undefined) => void;
+  disabled?: boolean;
+}> = ({ titulo, valor, onChange, disabled }) => (
+  <div className="border rounded-lg p-4 space-y-3">
+    <h4 className="font-medium flex items-center gap-1">
+      {titulo}
+      <AjudaParametroBotao id="cervical_tensao" />
+    </h4>
+    <EscolhaCurta
+      rotulo={`Tônus: ${titulo}`}
+      opcoes={[
+        { id: 'normal', nome: 'Normal' },
+        { id: 'tensa', nome: 'Tensa' },
+      ]}
+      valor={valor?.tonus}
+      onChange={(t) =>
+        onChange(
+          t
+            ? {
+                tonus: t as TensaoRegiao['tonus'],
+                ...(t === 'tensa' && valor?.lado ? { lado: valor.lado } : {}),
+              }
+            : undefined
+        )
+      }
+      disabled={disabled}
+    />
+    {valor?.tonus === 'tensa' && (
+      <div className="space-y-1.5 pl-1">
+        <p className="text-xs text-muted-foreground">Lado mais tenso</p>
+        <EscolhaCurta
+          rotulo={`Lado mais tenso: ${titulo}`}
+          opcoes={LADOS_MAIS_TENSO}
+          valor={valor.lado}
+          onChange={(l) =>
+            onChange({
+              tonus: 'tensa',
+              ...(l ? { lado: l as LadoMaisTenso } : {}),
+            })
+          }
+          disabled={disabled}
+        />
+      </div>
+    )}
   </div>
 );
 
@@ -2811,6 +2904,14 @@ export const EvolutionSectionContent: React.FC<
           />
         );
       case 'intervencoes':
+        if (ehFormatoMotoraV14(evolucao))
+          return (
+            <IntervencaoSessaoSecao
+              evolucao={evolucao}
+              onChange={onMotoraChange}
+              disabled={disabled}
+            />
+          );
         return (
           <IntervencoesSecao
             evolucao={evolucao}
@@ -3453,6 +3554,85 @@ export const EvolutionSectionContent: React.FC<
               </>
             )}
 
+            {/* Desde 1.4: cervical posterior/anterior e bloqueios */}
+            {ehFormatoMotoraV14(evolucao) && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <TensaoRegiaoCampo
+                    titulo="Musculatura cervical posterior"
+                    valor={palpacao.cervical_posterior}
+                    onChange={(v) => updatePalpacao({ cervical_posterior: v })}
+                    disabled={disabled}
+                  />
+                  <TensaoRegiaoCampo
+                    titulo="Musculatura cervical anterior"
+                    valor={palpacao.cervical_anterior}
+                    onChange={(v) => updatePalpacao({ cervical_anterior: v })}
+                    disabled={disabled}
+                  />
+                </div>
+                <div className="border rounded-lg p-4 space-y-3">
+                  <h4 className="font-medium flex items-center gap-1">
+                    Bloqueio articular
+                    <AjudaParametroBotao id="bloqueio_articular" />
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Marque onde há bloqueio e o lado mais tenso.
+                  </p>
+                  {LOCAIS_BLOQUEIO.map((loc) => {
+                    const b = (palpacao.bloqueios || []).find(
+                      (x) => x.local === loc.id
+                    );
+                    const setBloqueio = (
+                      lado: LadoMaisTenso | undefined,
+                      marcado: boolean
+                    ) => {
+                      const resto = (palpacao.bloqueios || []).filter(
+                        (x) => x.local !== loc.id
+                      );
+                      updatePalpacao({
+                        bloqueios: marcado
+                          ? [
+                              ...resto,
+                              {
+                                local: loc.id as LocalBloqueio,
+                                ...(lado ? { lado } : {}),
+                              },
+                            ]
+                          : resto,
+                      });
+                    };
+                    return (
+                      <div key={loc.id} className="space-y-2">
+                        <CheckboxField
+                          label={loc.nome}
+                          checked={!!b}
+                          onChange={(c) => setBloqueio(undefined, c)}
+                          disabled={disabled}
+                        />
+                        {b && (
+                          <div className="pl-6">
+                            <EscolhaCurta
+                              rotulo={`Lado mais tenso: ${loc.nome}`}
+                              opcoes={LADOS_MAIS_TENSO}
+                              valor={b.lado}
+                              onChange={(l) =>
+                                setBloqueio(
+                                  l as LadoMaisTenso | undefined,
+                                  true
+                                )
+                              }
+                              disabled={disabled}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
             <Field label="Observações">
               <Textarea
                 value={palpacao.observacoes || ''}
@@ -3858,6 +4038,167 @@ export const EvolutionSectionContent: React.FC<
         // "Nenhuma orientação" marcada trava a lista
         const travado = disabled || !!orientacoes.sem_orientacao;
 
+        // 1.4: lista enxuta, exercícios por área e tummy time em botões
+        if (ehFormatoMotoraV14(evolucao)) {
+          const exercicios = EXERCICIOS_DOMICILIARES.filter((x) =>
+            x.areas.some((a) => (evolucao.areas || []).includes(a))
+          );
+          const marcados = orientacoes.exercicios || [];
+          const setTummy = (
+            vezes: TummyVezes | null | undefined,
+            minutos: TummyMinutos | null | undefined
+          ) =>
+            updateOrientacoes({
+              tummy_time_vezes: vezes ?? null,
+              tummy_time_minutos: minutos ?? null,
+              tummy_time_frequencia: textoTummyTime(vezes, minutos),
+            });
+          return (
+            <div className="space-y-6">
+              <SemOrientacaoBloco
+                marcado={!!orientacoes.sem_orientacao}
+                motivo={orientacoes.sem_orientacao_motivo}
+                onMarcar={(marcado) =>
+                  updateOrientacoes(
+                    marcado
+                      ? {
+                          sem_orientacao: true,
+                          posicionamento_sono: false,
+                          posicionamento_vigilia: false,
+                          colo_alternando: false,
+                          tempo_no_chao: false,
+                          sinais_alerta: false,
+                          exercicios: [],
+                          tummy_time_vezes: null,
+                          tummy_time_minutos: null,
+                          tummy_time_frequencia: '',
+                          outras: '',
+                        }
+                      : { sem_orientacao: false, sem_orientacao_motivo: null }
+                  )
+                }
+                onMotivo={(m) =>
+                  updateOrientacoes({ sem_orientacao_motivo: m })
+                }
+                disabled={disabled}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <CheckboxField
+                  label="Sono seguro (de barriga para cima, sem posicionadores)"
+                  checked={orientacoes.posicionamento_sono}
+                  onChange={(c) =>
+                    updateOrientacoes({ posicionamento_sono: c })
+                  }
+                  disabled={travado}
+                />
+                <CheckboxField
+                  label="Brinquedos e posicionamentos no lado não preferido"
+                  checked={orientacoes.posicionamento_vigilia || false}
+                  onChange={(c) =>
+                    updateOrientacoes({ posicionamento_vigilia: c })
+                  }
+                  disabled={travado}
+                />
+                <CheckboxField
+                  label="Colo alternando os lados (carregar e mamar)"
+                  checked={orientacoes.colo_alternando || false}
+                  onChange={(c) => updateOrientacoes({ colo_alternando: c })}
+                  disabled={travado}
+                />
+                <CheckboxField
+                  label="Mais tempo no chão (menos bebê-conforto e cadeirinha)"
+                  checked={orientacoes.tempo_no_chao || false}
+                  onChange={(c) => updateOrientacoes({ tempo_no_chao: c })}
+                  disabled={travado}
+                />
+                <CheckboxField
+                  label="Sinais de alerta"
+                  checked={orientacoes.sinais_alerta}
+                  onChange={(c) => updateOrientacoes({ sinais_alerta: c })}
+                  disabled={travado}
+                />
+              </div>
+
+              {exercicios.length > 0 && (
+                <Field label="Exercícios para casa">
+                  <div className="flex flex-wrap gap-2">
+                    {exercicios.map((x) => {
+                      const sel = marcados.includes(x.id);
+                      return (
+                        <Button
+                          key={x.id}
+                          type="button"
+                          size="sm"
+                          variant={sel ? 'default' : 'outline'}
+                          aria-pressed={sel}
+                          disabled={travado}
+                          onClick={() =>
+                            updateOrientacoes({
+                              exercicios: sel
+                                ? marcados.filter((y) => y !== x.id)
+                                : [...marcados, x.id],
+                            })
+                          }
+                          className="h-auto min-h-8 whitespace-normal text-left"
+                        >
+                          {x.nome}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </Field>
+              )}
+
+              <Field
+                label="Tummy time (acordado e supervisionado)"
+                ajuda="tummy_time"
+              >
+                <div className="space-y-2">
+                  <EscolhaCurta
+                    rotulo="Tummy time: vezes ao dia"
+                    opcoes={TUMMY_VEZES.map((v) => ({
+                      id: v,
+                      nome: v + ' ao dia',
+                    }))}
+                    valor={orientacoes.tummy_time_vezes}
+                    onChange={(v) =>
+                      setTummy(
+                        v as TummyVezes | undefined,
+                        orientacoes.tummy_time_minutos
+                      )
+                    }
+                    disabled={travado}
+                  />
+                  <EscolhaCurta
+                    rotulo="Tummy time: minutos cada vez"
+                    opcoes={TUMMY_MINUTOS.map((v) => ({ id: v, nome: v }))}
+                    valor={orientacoes.tummy_time_minutos}
+                    onChange={(v) =>
+                      setTummy(
+                        orientacoes.tummy_time_vezes,
+                        v as TummyMinutos | undefined
+                      )
+                    }
+                    disabled={travado}
+                  />
+                </div>
+              </Field>
+
+              <Field label="Outras orientações">
+                <Textarea
+                  value={orientacoes.outras || ''}
+                  onChange={(e) =>
+                    updateOrientacoes({ outras: e.target.value })
+                  }
+                  placeholder="Outras orientações específicas..."
+                  disabled={travado}
+                  rows={2}
+                />
+              </Field>
+            </div>
+          );
+        }
+
         return (
           <div className="space-y-6">
             <SemOrientacaoBloco
@@ -4000,23 +4341,26 @@ export const EvolutionSectionContent: React.FC<
               </Field>
             )}
 
-            <Field label="Reavaliação em (dias)" ajuda="reavaliacao_dias">
-              <Input
-                type="number"
-                min={1}
-                value={conduta.reavaliacao_dias || ''}
-                onChange={(e) =>
-                  updateConduta({
-                    reavaliacao_dias: e.target.value
-                      ? Number(e.target.value)
-                      : undefined,
-                  })
-                }
-                placeholder="Ex: 30"
-                disabled={disabled}
-                className="w-full sm:w-32"
-              />
-            </Field>
+            {(!ehFormatoMotoraV14(evolucao) ||
+              conduta.manter_fisioterapia === false) && (
+              <Field label="Reavaliação em (dias)" ajuda="reavaliacao_dias">
+                <Input
+                  type="number"
+                  min={1}
+                  value={conduta.reavaliacao_dias || ''}
+                  onChange={(e) =>
+                    updateConduta({
+                      reavaliacao_dias: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
+                    })
+                  }
+                  placeholder="Ex: 30"
+                  disabled={disabled}
+                  className="w-full sm:w-32"
+                />
+              </Field>
+            )}
 
             <BooleanField
               value={conduta.encaminhamento_medico}
@@ -4052,23 +4396,26 @@ export const EvolutionSectionContent: React.FC<
               </Field>
             )}
 
-            {/* Some sozinho para quem não vê medidas (secretaria) */}
-            <ReavaliacoesConduta
-              medicoes={medicoes}
-              proximas={proximas}
-              onMedicaoChange={setMedicao}
-              onProximaChange={setProxima}
-              tiposComSecao={secoesMotorasVisiveis(
-                evolucao.areas,
-                ehFormatoMotoraV13(evolucao)
-              )
-                .map((sec) => sec.id)
-                .filter(
-                  (id): id is TipoMedidaMotora =>
-                    id === 'craniometria' || id === 'goniometria'
-                )}
-              disabled={disabled}
-            />
+            {/* Some sozinho para quem não vê medidas (secretaria). No 1.4 as
+                medidas vêm dos objetivos e "próxima medição" saiu */}
+            {!ehFormatoMotoraV14(evolucao) && (
+              <ReavaliacoesConduta
+                medicoes={medicoes}
+                proximas={proximas}
+                onMedicaoChange={setMedicao}
+                onProximaChange={setProxima}
+                tiposComSecao={secoesMotorasVisiveis(
+                  evolucao.areas,
+                  ehFormatoMotoraV13(evolucao)
+                )
+                  .map((sec) => sec.id)
+                  .filter(
+                    (id): id is TipoMedidaMotora =>
+                      id === 'craniometria' || id === 'goniometria'
+                  )}
+                disabled={disabled}
+              />
+            )}
 
             <Field label="Observações da Conduta">
               <Textarea

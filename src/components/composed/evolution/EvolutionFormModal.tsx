@@ -62,6 +62,7 @@ import {
   getTipoEvolucaoPorServico,
   SECOES_REAPROVEITAVEIS_RESPIRATORIA,
   ehFormatoMotoraV13,
+  normalizarAreas,
   pendenciasEvolucaoRespiratoria,
   pendenciasEvolucaoMotora,
   type PendenciaEvolucao,
@@ -216,6 +217,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   // A fisio já mexeu nas áreas: a sugestão que chega depois não sobrescreve
   const areasTocadasRef = useRef(false);
   const [avisoAreas, setAvisoAreas] = useState(false);
+  const [avisoTorcicolo, setAvisoTorcicolo] = useState(false);
   const [pendenciasMedidas, setPendenciasMedidas] = useState<string[]>([]);
 
   const [currentSection, setCurrentSection] = useState(0);
@@ -282,7 +284,8 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       ? EVOLUCAO_RESPIRATORIA_SECOES
       : secoesMotorasVisiveis(
           evolucaoMotora.areas,
-          ehFormatoMotoraV13(evolucaoMotora)
+          ehFormatoMotoraV13(evolucaoMotora),
+          evolucaoMotora
         );
   const ehMotora = tipoEvolucao === 'motora_assimetria';
   const areasMarcadas = evolucaoMotora.areas ?? [];
@@ -303,13 +306,25 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
       setAvisoAreas(false);
       setEvolucaoMotora((prev) => {
         const atuais = prev.areas ?? [];
+        // Assimetria craniana vem sempre com torcicolo: com ela marcada,
+        // torcicolo não sai
+        if (
+          area === 'torcicolo' &&
+          atuais.includes('torcicolo') &&
+          atuais.includes('assimetria_craniana')
+        ) {
+          setAvisoTorcicolo(true);
+          return prev;
+        }
+        setAvisoTorcicolo(false);
         const novas = atuais.includes(area)
           ? atuais.filter((a) => a !== area)
-          : // mantém a ordem das áreas (torcicolo, crânio, desenvolvimento)
-            AREAS_MOTORAS.map((a) => a.id).filter(
-              (id) => id === area || atuais.includes(id)
-            );
-        return { ...prev, areas: novas };
+          : normalizarAreas([...atuais, area]);
+        // Objetivos de uma área desmarcada saem da sessão
+        const objetivos_sessao = (prev.objetivos_sessao || []).filter(
+          (o) => !o.area || novas.includes(o.area)
+        );
+        return { ...prev, areas: novas, objetivos_sessao };
       });
     },
     [isReadOnly]
@@ -464,7 +479,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     setEvolucaoMotora((prev) =>
       prev.areas && prev.areas.length > 0
         ? prev
-        : { ...prev, areas: [...areasSugeridas] }
+        : { ...prev, areas: normalizarAreas([...areasSugeridas]) }
     );
   }, [isOpen, mode, areasSugeridas]);
 
@@ -561,6 +576,36 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     [isReadOnly]
   );
 
+  // Objetivo escolhido do catálogo nesta sessão entra no plano ao finalizar.
+  // O id já existe (gerado ao escolher): repetir o salvar não duplica.
+  const gravarObjetivosNovos = async (
+    ev: EvolucaoMotoraAssimetria
+  ): Promise<EvolucaoMotoraAssimetria> => {
+    const novos = (ev.objetivos_sessao || []).filter((o) => o.novo_no_plano);
+    if (!novos.length || !planoMotor) return ev;
+    for (const o of novos)
+      await planoMotor.salvarObjetivo({
+        id: o.objetivo_id,
+        paciente_id: planoMotor.pacienteId,
+        descricao: o.novo_no_plano!.descricao,
+        areas: o.novo_no_plano!.areas,
+        indicador: o.novo_no_plano!.indicador,
+        origem: 'evolucao',
+        origem_id: planoMotor.agendamentoId ?? appointmentId ?? null,
+      });
+    const gravado = {
+      ...ev,
+      objetivos_sessao: (ev.objetivos_sessao || []).map((o) => {
+        if (!o.novo_no_plano) return o;
+        const sem = { ...o };
+        delete sem.novo_no_plano;
+        return sem;
+      }),
+    };
+    setEvolucaoMotora(gravado);
+    return gravado;
+  };
+
   // "Salvar e continuar depois": guarda no servidor e fecha, sem finalizar
   const salvarRascunho = async () => {
     if (!appointmentId || isReadOnly) return;
@@ -627,20 +672,23 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     setPendenciasCampos(null);
     setIsSaving(true);
     try {
+      let motora = evolucaoMotora;
+      if (tipoEvolucao === 'motora_assimetria')
+        motora = await gravarObjetivosNovos(evolucaoMotora);
       await onSave({
         tipo_evolucao: tipoEvolucao,
         evolucao_respiratoria:
           tipoEvolucao === 'respiratoria' ? evolucaoRespiratoria : undefined,
         evolucao_motora_assimetria:
           tipoEvolucao === 'motora_assimetria'
-            ? ehFormatoMotoraV13(evolucaoMotora)
-              ? prepararSessaoV13(evolucaoMotora, {
+            ? ehFormatoMotoraV13(motora)
+              ? prepararSessaoV13(motora, {
                   objetivos: planoMotor?.objetivos ?? null,
                   historico: planoMotor?.historico ?? null,
                   dataSessao: planoMotor?.dataSessao || dataSessao,
                   agendamentoId: planoMotor?.agendamentoId ?? appointmentId,
                 })
-              : evolucaoMotora
+              : motora
             : undefined,
       });
       // Limpar rascunho após salvar com sucesso
@@ -711,7 +759,9 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   // Na motora, ser essencial depende das áreas (controle motor só conta
   // quando desenvolvimento motor foi trabalhado)
   const ehComplementar = (s: (typeof secoes)[number]) =>
-    ehMotora ? !secaoMotoraEssencial(s, evolucaoMotora.areas) : !!s.opcional;
+    ehMotora
+      ? !secaoMotoraEssencial(s, evolucaoMotora.areas, evolucaoMotora)
+      : !!s.opcional;
   const temComplementares = ehMotora || secoes.some((s) => s.opcional);
   const essenciais = secoes.filter((s) => !ehComplementar(s));
   const essenciaisFeitas = essenciais.filter(
@@ -923,6 +973,19 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                         );
                       })}
                     </div>
+                    {(avisoTorcicolo ||
+                      areasMarcadas.includes('assimetria_craniana')) && (
+                      <p
+                        className={cn(
+                          'text-xs',
+                          avisoTorcicolo
+                            ? 'text-amber-700 font-medium'
+                            : 'text-muted-foreground'
+                        )}
+                      >
+                        Assimetria craniana vem sempre com torcicolo.
+                      </p>
+                    )}
                     {areasMarcadas.length === 0 && (
                       <p
                         className={cn(

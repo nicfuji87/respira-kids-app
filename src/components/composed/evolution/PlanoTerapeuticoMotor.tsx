@@ -11,6 +11,7 @@ import { Input } from '@/components/primitives/input';
 import { cn } from '@/lib/utils';
 import { usePlanoMotorDados } from '@/hooks/usePlanoMotorDados';
 import {
+  areaDoObjetivo,
   calcularIdade,
   dataCurta,
   fetchHistoricoObjetivo,
@@ -356,16 +357,36 @@ export const PlanoTerapeuticoMotor: React.FC<PlanoTerapeuticoMotorProps> = ({
               : 'Nenhum objetivo encerrado.'}
           </p>
         )}
-        {lista.map((o) => (
-          <ObjetivoResumo
-            key={o.id}
-            o={o}
-            h={h}
-            podeEditar={editor === null}
-            onEditar={() => setEditor(o)}
-            onStatus={(s, m) => plano.mudarStatus(o.id, s, m)}
-          />
-        ))}
+        {/* Agrupados pela área, em ordem alfabética dentro de cada uma */}
+        {[
+          ...AREAS_MOTORAS.map((a) => ({
+            id: a.id as string,
+            titulo: a.titulo,
+          })),
+          { id: 'outras', titulo: 'Sem área' },
+        ].map((grupo) => {
+          const doGrupo = lista
+            .filter((o) => (areaDoObjetivo(o) ?? 'outras') === grupo.id)
+            .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+          if (!doGrupo.length) return null;
+          return (
+            <div key={grupo.id} className="space-y-2">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                {grupo.titulo}
+              </h3>
+              {doGrupo.map((o) => (
+                <ObjetivoResumo
+                  key={o.id}
+                  o={o}
+                  h={h}
+                  podeEditar={editor === null}
+                  onEditar={() => setEditor(o)}
+                  onStatus={(s, m) => plano.mudarStatus(o.id, s, m)}
+                />
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       {mostrarGraficos && (
