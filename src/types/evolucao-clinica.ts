@@ -16,6 +16,8 @@ import type {
   TummyVezes,
   TummyMinutos,
 } from '@/lib/motora-catalogo';
+// Valor (não só tipo): o catálogo só importa tipos daqui, sem ciclo em runtime
+import { OBJETIVOS_CATALOGO } from '@/lib/motora-catalogo';
 
 // =========================================================================
 // TIPOS BASE
@@ -613,6 +615,61 @@ export const ehFormatoMotoraV13 = (
 export const ehFormatoMotoraV14 = (
   ev: Pick<EvolucaoMotoraAssimetria, 'versao_formulario'> | null | undefined
 ) => Number(ev?.versao_formulario ?? 0) >= 1.4;
+
+/**
+ * Rascunho (ainda não finalizado) salvo no formato 1.3: passa para o 1.4 ao
+ * reabrir, para a fisio terminar na tela nova. Evolução já gravada NÃO passa
+ * por aqui (mantém o formato em que foi gravada).
+ * - intervenções por finalidade viram o quadro único (finalidades, regiões e
+ *   recursos somados; "facilitação manual" vira "terapia manual");
+ * - objetivos da sessão ganham área e medidas do catálogo, quando batem;
+ * - assimetria craniana leva torcicolo junto.
+ */
+export function rascunhoMotorParaV14(
+  ev: EvolucaoMotoraAssimetria
+): EvolucaoMotoraAssimetria {
+  if (!ehFormatoMotoraV13(ev) || ehFormatoMotoraV14(ev)) return ev;
+  const uniq = (xs: string[]) => [...new Set(xs)];
+  const ints = ev.intervencoes || [];
+  const { intervencoes: _antigas, ...resto } = ev;
+  void _antigas;
+  const novo: EvolucaoMotoraAssimetria = {
+    ...resto,
+    versao_formulario: VERSAO_FORMULARIO_MOTORA,
+    ...(Array.isArray(ev.areas) ? { areas: normalizarAreas(ev.areas) } : {}),
+  };
+  if (ints.length && !ev.intervencao_sessao) {
+    const sessao: IntervencaoSessaoMotora = {};
+    const fins = uniq(
+      ints.filter((i) => i.finalidade !== 'outra').map((i) => i.finalidade)
+    );
+    if (fins.length) sessao.finalidades = fins;
+    const outra = ints.find((i) => i.finalidade === 'outra')?.finalidade_outra;
+    if (outra?.trim()) sessao.finalidade_outra = outra.trim();
+    const regs = uniq(ints.flatMap((i) => i.regioes || []));
+    if (regs.length) sessao.regioes = regs;
+    const recs = uniq(
+      ints
+        .flatMap((i) => i.recursos || [])
+        .map((r) => (r === 'facilitacao_manual' ? 'terapia_manual' : r))
+    );
+    if (recs.length) sessao.recursos = recs;
+    const det = ints
+      .map((i) => i.detalhe?.trim())
+      .filter(Boolean)
+      .join('; ');
+    if (det) sessao.detalhe = det;
+    novo.intervencao_sessao = sessao;
+  }
+  novo.objetivos_sessao = (ev.objetivos_sessao || []).map((o) => {
+    if (o.catalogo_id) return o;
+    const c = OBJETIVOS_CATALOGO.find((x) => x.descricao === o.descricao);
+    return c
+      ? { ...o, catalogo_id: c.id, area: c.area, medidas: c.medidas }
+      : o;
+  });
+  return novo;
+}
 
 /** Toda assimetria craniana vem com torcicolo (o inverso não). */
 export function normalizarAreas(areas: AreaMotora[]): AreaMotora[] {

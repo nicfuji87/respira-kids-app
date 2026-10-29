@@ -6,6 +6,7 @@ import { LoginPage, ForgotPasswordPage } from '@/components/domain';
 import { AppRouter } from '@/components/AppRouter';
 import { PublicRouter } from '@/components/PublicRouter';
 import { Toaster } from '@/components/primitives/toaster';
+import { AvisoNovaVersao } from '@/components/composed/AvisoNovaVersao';
 
 // AI dev note: prefixos de rota que dispensam login. Ficam numa lista só porque a
 // checagem acontece em dois momentos (estado inicial + listener de hashchange) e,
@@ -119,6 +120,7 @@ function App() {
         <HashRouter>
           <AppRouter />
           <Toaster />
+          <AvisoNovaVersao />
         </HashRouter>
       );
     } else if (canAccessDashboard && user?.pessoa && !user?.pessoa?.role) {
@@ -154,6 +156,7 @@ function App() {
       <HashRouter>
         <AppRouter />
         <Toaster />
+        <AvisoNovaVersao />
       </HashRouter>
     );
   }
