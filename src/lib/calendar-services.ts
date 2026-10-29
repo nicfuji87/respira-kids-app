@@ -540,13 +540,16 @@ export const checkHorarioDisponivel = async (
   profissionalId: string,
   inicio: string,
   fim: string,
-  ignorarAgendamentoId?: string
+  ignorarAgendamentoId?: string,
+  // Reserva que está sendo confirmada: não conta como ocupação
+  ignorarBloqueioId?: string
 ): Promise<boolean> => {
   const { data, error } = await supabase.rpc('fn_horario_disponivel', {
     p_profissional_id: profissionalId,
     p_inicio: inicio,
     p_fim: fim,
     p_ignorar_agendamento_id: ignorarAgendamentoId ?? null,
+    p_ignorar_bloqueio_id: ignorarBloqueioId ?? null,
   });
 
   if (error) {

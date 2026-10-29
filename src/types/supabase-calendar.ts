@@ -260,6 +260,7 @@ export interface CreateAgendamento {
   agendado_por: string;
   empresa_fatura: string;
   agenda_compartilhada_id?: string; // AI dev note: Rastrear origem de agendas compartilhadas
+  reserva_id?: string; // Reserva de agenda que esta consulta confirma (o banco encerra a reserva)
 }
 
 export interface UpdateAgendamento {

@@ -50,6 +50,7 @@ export interface CalendarHeaderProps {
   onNewEvent?: () => void;
   // Novo compromisso (almoço, reunião, férias...). Profissional só tem este.
   onNewCompromisso?: () => void;
+  onNewReserva?: () => void;
 }
 
 // AI dev note: Mapeamento de cores para a paleta Respira Kids (design system).
