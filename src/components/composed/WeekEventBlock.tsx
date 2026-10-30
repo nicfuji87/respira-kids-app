@@ -2,141 +2,79 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { EventCard } from './EventCard';
 import type { CalendarEvent } from '@/types/calendar';
+import { posicaoVertical } from '@/lib/calendar-layout';
 
-// AI dev note: WeekEventBlock é um Composed component
-// Renderiza eventos com altura proporcional à duração na view semana
+// AI dev note: WeekEventBlock posiciona um evento na grade de horas (Semana e
+// Dia). A posição horizontal vem pronta do layoutColunas (coluna/span/colunas):
+// os blocos ficam lado a lado, nunca um por cima do outro. Bloco baixo (< 38px)
+// mostra uma linha só; bloco estreito usa nome curto.
 
 export interface WeekEventBlockProps {
   event: CalendarEvent;
-  startHour?: number; // Hora de início do grid (padrão: 6)
-  endHour?: number; // Hora de fim do grid (padrão: 20)
-  hourHeight?: number; // Altura de cada hora em pixels (padrão: 64)
+  startHour?: number;
+  endHour?: number;
+  hourHeight?: number;
   onClick?: (event: CalendarEvent) => void;
   className?: string;
-  overlapIndex?: number; // Índice para eventos sobrepostos (0, 1, 2...)
-  totalOverlapping?: number; // Total de eventos sobrepostos no mesmo horário
-  zIndex?: number; // Z-index para controle de sobreposição visual
+  coluna?: number;
+  span?: number;
+  colunas?: number;
+  estreito?: boolean;
+  zIndex?: number;
   userRole?: 'admin' | 'profissional' | 'secretaria' | null;
+  segundaLinha?: 'profissional' | 'servico';
 }
 
 export const WeekEventBlock = React.memo<WeekEventBlockProps>(
   ({
     event,
-    startHour = 6,
+    startHour = 7,
     endHour = 20,
-    hourHeight = 64,
+    hourHeight = 56,
     onClick,
     className,
-    overlapIndex = 0,
-    totalOverlapping = 1,
-    zIndex = 1,
+    coluna = 0,
+    span = 1,
+    colunas = 1,
+    estreito = false,
+    zIndex = 10,
     userRole,
+    segundaLinha,
   }) => {
-    const calculatePosition = () => {
-      const eventStart = event.start;
-      const eventEnd = event.end;
+    const pos = posicaoVertical(
+      event.start,
+      event.end,
+      startHour,
+      endHour,
+      hourHeight
+    );
+    if (!pos) return null;
 
-      // Calcula horário de início em minutos desde startHour
-      const startHours = eventStart.getHours();
-      const startMinutes = eventStart.getMinutes();
-      const totalStartMinutes = (startHours - startHour) * 60 + startMinutes;
-
-      // Calcula duração em minutos
-      const endHours = eventEnd.getHours();
-      const endMinutes = eventEnd.getMinutes();
-      const totalEndMinutes = (endHours - startHour) * 60 + endMinutes;
-
-      const durationMinutes = totalEndMinutes - totalStartMinutes;
-
-      // Se evento está fora do range visível, não renderiza
-      if (startHours >= endHour || endHours <= startHour) {
-        return null;
-      }
-
-      // Ajusta para limites do grid
-      const clampedStartMinutes = Math.max(0, totalStartMinutes);
-      const maxMinutes = (endHour - startHour) * 60;
-      const clampedDurationMinutes = Math.min(
-        durationMinutes,
-        maxMinutes - clampedStartMinutes
-      );
-
-      // Calcula posição e altura em pixels
-      const topPosition = (clampedStartMinutes / 60) * hourHeight;
-      const height = Math.max(20, (clampedDurationMinutes / 60) * hourHeight);
-
-      // AI dev note: Estilo Google Agenda - eventos se sobrepõem parcialmente
-      // Cada evento ocupa ~85% da largura e é posicionado com offset
-      // Isso mantém legibilidade e mostra sobreposição visual
-      let width: string;
-      let leftOffset: string;
-
-      if (totalOverlapping === 1) {
-        width = '100%';
-        leftOffset = '0%';
-      } else {
-        // Largura base: eventos ocupam mais espaço, se sobrepondo
-        // Quanto mais eventos, menor a largura mas nunca menos que 50%
-        const baseWidth = Math.max(50, 100 - (totalOverlapping - 1) * 15);
-        width = `${baseWidth}%`;
-
-        // Offset: cada coluna é deslocada proporcionalmente
-        const offsetPercent =
-          (overlapIndex * (100 - baseWidth)) / (totalOverlapping - 1 || 1);
-        leftOffset = `${Math.min(offsetPercent, 100 - baseWidth)}%`;
-      }
-
-      return {
-        top: topPosition,
-        height,
-        width,
-        left: leftOffset,
-      };
-    };
-
-    const position = calculatePosition();
-
-    // Se evento não deve ser renderizado, retorna null
-    if (!position) {
-      return null;
-    }
-
-    const handleClick = () => {
-      onClick?.(event);
-    };
+    const left = (coluna / colunas) * 100;
+    const width = (span / colunas) * 100;
+    const umaLinha = pos.height < 38;
 
     return (
       <div
-        className={cn(
-          'absolute cursor-pointer group',
-          'transition-all duration-200',
-          className
-        )}
+        className={cn('absolute pointer-events-auto', className)}
         style={{
-          top: `${position.top}px`,
-          height: `${position.height}px`,
-          width: position.width,
-          left: position.left,
-          zIndex: zIndex,
-        }}
-        onClick={handleClick}
-        onMouseEnter={(e) => {
-          // Ao passar o mouse, elevar z-index para ficar por cima
-          e.currentTarget.style.zIndex = '100';
-        }}
-        onMouseLeave={(e) => {
-          // Restaurar z-index original
-          e.currentTarget.style.zIndex = String(zIndex);
+          top: `${pos.top}px`,
+          height: `${pos.height}px`,
+          left: `${left}%`,
+          width: `${width}%`,
+          zIndex,
         }}
       >
-        {/* AI dev note: p-0.5 = 2px de respiro entre blocos adjacentes; DS flat,
-            sem sombra em repouso — profundidade via contraste de cor */}
-        <div className="w-full h-full p-0.5">
+        {/* p-px + pr-0.5: respiro entre blocos vizinhos sem perder largura */}
+        <div className="h-full w-full py-px pl-px pr-0.5">
           <EventCard
             event={event}
             variant="week"
-            onClick={handleClick}
+            onClick={onClick}
             userRole={userRole}
+            estreito={estreito}
+            umaLinha={umaLinha}
+            segundaLinha={segundaLinha}
             className="h-full w-full"
           />
         </div>
@@ -146,3 +84,108 @@ export const WeekEventBlock = React.memo<WeekEventBlockProps>(
 );
 
 WeekEventBlock.displayName = 'WeekEventBlock';
+
+// Bloco "+N" quando o horário tem mais eventos do que cabe lado a lado
+export interface WeekOverflowBlockProps {
+  inicio: Date;
+  fim: Date;
+  quantidade: number;
+  coluna: number;
+  colunas: number;
+  startHour?: number;
+  endHour?: number;
+  hourHeight?: number;
+  onClick: () => void;
+}
+
+export const WeekOverflowBlock = React.memo<WeekOverflowBlockProps>(
+  ({
+    inicio,
+    fim,
+    quantidade,
+    coluna,
+    colunas,
+    startHour = 7,
+    endHour = 20,
+    hourHeight = 56,
+    onClick,
+  }) => {
+    const pos = posicaoVertical(inicio, fim, startHour, endHour, hourHeight);
+    if (!pos) return null;
+    return (
+      <div
+        className="absolute pointer-events-auto py-px pl-px pr-0.5"
+        style={{
+          top: `${pos.top}px`,
+          height: `${pos.height}px`,
+          left: `${(coluna / colunas) * 100}%`,
+          width: `${(1 / colunas) * 100}%`,
+          zIndex: 10,
+        }}
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          title={`Mais ${quantidade} neste horário`}
+          aria-label={`Ver mais ${quantidade} eventos neste horário`}
+          className="flex h-full w-full items-start justify-center rounded-md border border-dashed border-roxo-titulo/30 bg-muted/60 pt-0.5 text-[11px] font-semibold text-roxo-titulo transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-foreground"
+        >
+          +{quantidade}
+        </button>
+      </div>
+    );
+  }
+);
+
+WeekOverflowBlock.displayName = 'WeekOverflowBlock';
+
+// Fechamento da clínica com horário (evento, feriado parcial): faixa de fundo
+// listrada atravessando a coluna inteira, com a etiqueta clicável no topo. Fica
+// por baixo das consultas — consulta por cima dela é conflito e deve aparecer.
+export interface WeekClosureBandProps {
+  event: CalendarEvent;
+  startHour?: number;
+  endHour?: number;
+  hourHeight?: number;
+  onClick?: (event: CalendarEvent) => void;
+}
+
+export const WeekClosureBand = React.memo<WeekClosureBandProps>(
+  ({ event, startHour = 7, endHour = 20, hourHeight = 56, onClick }) => {
+    const pos = posicaoVertical(
+      event.start,
+      event.end,
+      startHour,
+      endHour,
+      hourHeight
+    );
+    if (!pos) return null;
+    return (
+      <div
+        className="pointer-events-none absolute inset-x-0 border-y border-vermelho-kids/50"
+        style={{
+          top: `${pos.top}px`,
+          height: `${pos.height}px`,
+          zIndex: 5,
+          background:
+            'repeating-linear-gradient(135deg, rgb(244 162 139 / 0.16) 0 6px, rgb(244 162 139 / 0.06) 6px 12px)',
+        }}
+      >
+        <div className="pointer-events-auto relative z-20 m-0.5 h-5 max-w-full">
+          <EventCard
+            event={event}
+            variant="week"
+            umaLinha
+            onClick={onClick}
+            className="h-full bg-background/90"
+          />
+        </div>
+      </div>
+    );
+  }
+);
+
+WeekClosureBand.displayName = 'WeekClosureBand';
