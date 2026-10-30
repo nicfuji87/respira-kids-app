@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Label } from '@/components/primitives/label';
 import { Input } from '@/components/primitives/input';
 import { Button } from '@/components/primitives/button';
@@ -9,6 +9,10 @@ import { AlertCircle } from 'lucide-react';
 
 // AI dev note: ResponsibleDataStep - Etapa 3 do cadastro público
 // Coleta dados do responsável legal (nome, CPF, email, data nascimento)
+// 27/10/2026: o botão Continuar não fica mais desabilitado. Num Samsung Internet
+// com teclado preditivo o campo podia mostrar o e-mail digitado sem o estado
+// receber o valor, e o botão ficava cinza sem explicação. Agora o clique lê o
+// que está na tela e, se faltar algo, mostra o erro do campo.
 
 export interface ResponsibleData {
   nome: string;
@@ -45,6 +49,9 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
     const [touched, setTouched] = useState<
       Partial<Record<keyof ResponsibleData, boolean>>
     >({});
+
+    const nomeRef = useRef<HTMLInputElement>(null);
+    const emailRef = useRef<HTMLInputElement>(null);
 
     // Validação em tempo real quando campo é tocado
     useEffect(() => {
@@ -98,6 +105,17 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
     };
 
     const handleContinue = () => {
+      // Lê o que está na tela (o estado pode estar atrás do DOM no teclado
+      // Samsung) e limpa espaços que o teclado põe no e-mail.
+      const nomeAtual = capitalize(
+        (nomeRef.current?.value ?? nome).replace(/\s+/g, ' ').trim()
+      );
+      const emailAtual = (emailRef.current?.value ?? email)
+        .replace(/\s+/g, '')
+        .toLowerCase();
+      if (nomeAtual !== nome) setNome(nomeAtual);
+      if (emailAtual !== email) setEmail(emailAtual);
+
       // Marcar todos como tocados
       setTouched({
         nome: true,
@@ -108,7 +126,7 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
       // Validação final
       const finalErrors: Partial<Record<keyof ResponsibleData, string>> = {};
 
-      if (!nome.trim() || nome.trim().length < 3) {
+      if (nomeAtual.length < 3) {
         finalErrors.nome = 'Nome completo é obrigatório';
       }
 
@@ -118,8 +136,11 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!email || !emailRegex.test(email)) {
+      if (!emailRegex.test(emailAtual)) {
         finalErrors.email = 'Email válido é obrigatório';
+      } else if (/[àáâãäåèéêëìíîïòóôõöùúûüç]/i.test(emailAtual)) {
+        finalErrors.email =
+          'Email não pode conter caracteres especiais (ã, ç, é, etc)';
       }
 
       if (Object.keys(finalErrors).length > 0) {
@@ -129,9 +150,9 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
 
       // Prosseguir
       onContinue({
-        nome: nome.trim(),
+        nome: nomeAtual,
         cpf,
-        email: email.toLowerCase(),
+        email: emailAtual,
       });
     };
 
@@ -175,6 +196,7 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
                 Nome completo <span className="text-destructive">*</span>
               </Label>
               <Input
+                ref={nomeRef}
                 id="nome"
                 type="text"
                 value={nome}
@@ -224,6 +246,7 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
                 Email <span className="text-destructive">*</span>
               </Label>
               <Input
+                ref={emailRef}
                 id="email"
                 type="email"
                 inputMode="email"
@@ -262,8 +285,7 @@ export const ResponsibleDataStep = React.memo<ResponsibleDataStepProps>(
           <Button
             type="button"
             onClick={handleContinue}
-            disabled={!isValid}
-            className="flex-1 h-12"
+            className={cn('flex-1 h-12', !isValid && 'opacity-60')}
           >
             Continuar
           </Button>
