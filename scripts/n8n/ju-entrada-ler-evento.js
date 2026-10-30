@@ -73,6 +73,10 @@ if ((resJu || resAg) && (chatid === GRUPO_NOTIFICACOES || /@(s\.whatsapp\.net|li
   const chatClique = chatid.endsWith('@lid') ? String(m.sender_pn || chatid) : chatid;
   return [{ json: { evento: 'reserva', reserva_id: resJu ? Number(resJu[2]) : null, bloqueio_id: resAg ? resAg[2] : null, aceitar: (resJu || resAg)[1] === 'ok', quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? ''), chatid: chatClique } }];
 }
+// 30/10/2026: card do profissional que se apresentou (✅ É ela / ➕ Cadastrar / ❌ Ignorar). Vai pela porta das reservas (p_prof).
+if (chatid === GRUPO_NOTIFICACOES && /^ju_prof_(vinc|novo|nao):\d+(:\d+)?$/.test(botao)) {
+  return [{ json: { evento: 'reserva', reserva_id: null, bloqueio_id: null, prof: botao, aceitar: !botao.startsWith('ju_prof_nao:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? ''), chatid } }];
+}
 if (chatid === GRUPO_NOTIFICACOES && botao.startsWith('ju_concluir:')) {
   return [
     {
