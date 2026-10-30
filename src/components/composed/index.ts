@@ -99,6 +99,7 @@ export { RecentConsultations } from './RecentConsultations';
 export { PatientAnamnesis } from './PatientAnamnesis';
 export { PatientObservations } from './PatientObservations';
 export { PatientAnamnesisWithObservations } from './PatientAnamnesisWithObservations';
+export { AnotacoesJu } from './AnotacoesJu';
 export { PatientMedicalReports } from './PatientMedicalReports';
 export { ClinicalReportGenerator } from './ClinicalReportGenerator';
 export { ManualClinicalReportGenerator } from './ManualClinicalReportGenerator';
