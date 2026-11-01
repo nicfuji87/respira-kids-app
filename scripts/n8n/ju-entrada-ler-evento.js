@@ -74,7 +74,12 @@ if ((resJu || resAg) && (chatid === GRUPO_NOTIFICACOES || /@(s\.whatsapp\.net|li
   return [{ json: { evento: 'reserva', reserva_id: resJu ? Number(resJu[2]) : null, bloqueio_id: resAg ? resAg[2] : null, aceitar: (resJu || resAg)[1] === 'ok', quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? ''), chatid: chatClique } }];
 }
 // 30/10/2026: card do profissional que se apresentou (✅ É ela / ➕ Cadastrar / ❌ Ignorar). Vai pela porta das reservas (p_prof).
-if (chatid === GRUPO_NOTIFICACOES && /^ju_prof_(vinc|novo|nao):\d+(:\d+)?$/.test(botao)) {
+// 01/11/2026: "👀 Estou verificando" no card do pedido: a Ju avisa a família e o card volta só com Concluído.
+if (chatid === GRUPO_NOTIFICACOES && /^ju_verif:\d+$/.test(botao)) {
+  return [{ json: { evento: 'verificar', solicitacao_id: Number(botao.split(':')[1]), quem: String(m.senderName || '').split(' ')[0], wa_message_id: String(m.messageid ?? '') } }];
+}
+// 01/11/2026: o "✅ Ok" do aviso de atraso vai pela mesma porta (só apaga o aviso).
+if (chatid === GRUPO_NOTIFICACOES && /^(ju_prof_(vinc|novo|nao):\d+(:\d+)?|ju_atraso_ok:\d+)$/.test(botao)) {
   return [{ json: { evento: 'reserva', reserva_id: null, bloqueio_id: null, prof: botao, aceitar: !botao.startsWith('ju_prof_nao:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? ''), chatid } }];
 }
 if (chatid === GRUPO_NOTIFICACOES && botao.startsWith('ju_concluir:')) {
