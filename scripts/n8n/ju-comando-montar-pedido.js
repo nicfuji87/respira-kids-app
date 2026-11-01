@@ -23,7 +23,7 @@ Neste pedido quem escreveu o "@ju" não foi a recepção: foi a fisio ${quem}, n
 const PROMPT = `Você é a Ju, assistente da recepção da Respira Kids (clínica de fisioterapia pediátrica em Brasília).
 Na conversa de WhatsApp com uma família, alguém da equipe (recepção ou fisio) escreveu uma mensagem começando com "@ju". É um pedido da equipe para você, em linguagem livre: cada pessoa fala de um jeito ("agenda", "marca pra ela", "gera a cobrança", "gere o pagamento do mês passado", "manda a nota", "me diz tudo desse paciente", "o que você faz?"). Entenda pelo sentido, nunca por palavra exata. Use a mensagem do pedido ("comando") e o histórico da conversa e devolva o JSON pedido.
 
-Você sabe fazer 9 coisas. Escolha UMA em "acao":
+Você sabe fazer 10 coisas. Escolha UMA em "acao":
 
 1. AGENDAR consulta (acao "agendar")
 Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (HH:MM, 24 h), fisio (profissional_id de "profissionais") e serviço (tipo_servico_id de "servicos").
@@ -65,7 +65,7 @@ Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (H
 - profissional: nome da profissional. "minha" = quem_pediu.nome; "a sua agenda" ou "a agenda dela", na conversa com uma profissional, = conversa_com.nome; "a clínica toda" = "clínica".
 - data (AAAA-MM-DD) e data_fim se for mais de um dia. hora e hora_fim (HH:MM) só se for parte do dia: manhã = 07:00 a 12:00, tarde = 12:00 a 20:00; sem horário = o dia todo. motivo, se disserem.
 
-8. ABRIR AGENDA (acao "abrir_agenda"): desfazer um bloqueio ("abre/libera a agenda da Flávia amanhã"). Mesmos campos de fechar_agenda.
+8. ABRIR AGENDA (acao "abrir_agenda"): desfazer um bloqueio ("abre/libera a agenda da Flávia amanhã"). Mesmos campos de fechar_agenda. Só quando o pedido falar em desbloquear, liberar, desfazer ou reabrir; "abrir/ver/mostrar a agenda do dia X" sem falar em bloqueio é a ação 10.
 
 9. RESERVAR HORÁRIO (acao "reservar_agenda"): "reserva/segura/guarda o horário das 16h de amanhã da Beatriz". Reservar NÃO é fechar: é segurar o horário para uma família até virar consulta. Use sempre que o pedido falar em reservar, segurar ou guardar horário; fechar/bloquear agenda é a ação 7.
 - profissional: como em fechar_agenda ("minha" = quem_pediu.nome; senão a citada no pedido ou na conversa).
@@ -73,6 +73,8 @@ Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (H
 - pessoa_id: a criança de familia.pacientes, se a reserva for para uma delas; se a família ainda não tem cadastro, null.
 - motivo: para quem é a reserva, só se o pedido disser um nome diferente da conversa; senão null (o sistema usa o nome do WhatsApp).
 - tipo_servico_id (de "servicos"): o serviço da futura consulta, pelas mesmas regras de AGENDAR (o pedido e a conversa dizem se é respiratória, motora ou avaliação; domiciliar só se falarem em casa). Com ele, a equipe transforma a reserva em consulta com um toque. Se não der para saber, null.
+
+10. VER AGENDA (acao "ver_agenda"): "ver/mostrar/abrir minha agenda do dia 16", "como está minha agenda amanhã?", "quais pacientes tenho segunda?". Campos: profissional ("minha" = quem_pediu.nome; na conversa com uma profissional, a dela), data (AAAA-MM-DD) e data_fim se pedirem um período (até 7 dias). O banco só mostra a agenda da própria profissional, na conversa dela.
 
 A conversa pode ser com a família ou com alguém da equipe (conversa_com preenchido): nesse caso não há família e os pedidos costumam ser de agenda. quem_pediu diz quem escreveu o @ju (Recepção ou a própria profissional).
 
@@ -88,7 +90,7 @@ const schema = {
   additionalProperties: false,
   required: ['acao', 'paciente_id', 'data', 'hora', 'profissional_id', 'tipo_servico_id', 'agendamento_ids', 'fatura_ids', 'mensagem', 'resumo', 'pessoa_id', 'anotacao', 'profissional', 'data_fim', 'hora_fim', 'motivo'],
   properties: {
-    acao: { type: 'string', enum: ['agendar', 'cobrar', 'nota', 'informar', 'ajuda', 'anotar', 'fechar_agenda', 'abrir_agenda', 'reservar_agenda', 'perguntar', 'nao_suportado'] },
+    acao: { type: 'string', enum: ['agendar', 'cobrar', 'nota', 'informar', 'ajuda', 'anotar', 'fechar_agenda', 'abrir_agenda', 'reservar_agenda', 'ver_agenda', 'perguntar', 'nao_suportado'] },
     pessoa_id: { type: ['string', 'null'] },
     anotacao: { type: ['string', 'null'] },
     profissional: { type: ['string', 'null'] },
