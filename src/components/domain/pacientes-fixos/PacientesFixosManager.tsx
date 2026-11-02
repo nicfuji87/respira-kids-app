@@ -57,10 +57,13 @@ import {
   buscarSemanaFixos,
   cancelarFilaEnvios,
   enfileirarEnvios,
+  buscarNaoAgendados,
   buscarSugestoesFixos,
+  retirarDosNaoAgendados,
   dataHoraCarimbo,
   diaMes,
   linkAgendaPublica,
+  mensagemLembreteAgenda,
   mensagemLinkAgenda,
   rotuloFrequencia,
   rotuloSemana,
@@ -70,6 +73,7 @@ import {
   registrarEnvioLink,
   type AgendaPublicaSemana,
   type EnvioSemana,
+  type NaoAgendado,
   type PacienteFixoSemana,
   type SemanaFixos,
   type SituacaoFixo,
@@ -81,8 +85,12 @@ import {
   type ProfissionalPendente,
 } from './CriarAgendasSemanaDialog';
 import { SugestoesFixos } from './SugestoesFixos';
+import { FrequenciaDialog } from './FrequenciaEditor';
 
-const FILTROS: { id: SituacaoFixo | 'todos'; label: string }[] = [
+type FiltroLista = SituacaoFixo | 'todos' | 'nao_agendou';
+
+const FILTROS: { id: FiltroLista; label: string }[] = [
+  { id: 'nao_agendou', label: 'Não agendaram' },
   { id: 'falta', label: 'Falta marcar' },
   { id: 'completo', label: 'Marcados' },
   { id: 'adiado', label: 'Adiados' },
@@ -108,11 +116,18 @@ export const PacientesFixosManager: React.FC = () => {
   const [dados, setDados] = useState<SemanaFixos | null>(null);
   const [sugestoes, setSugestoes] = useState<SugestaoFixo[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [filtro, setFiltro] = useState<SituacaoFixo | 'todos'>('falta');
+  const [filtro, setFiltro] = useState<FiltroLista>('falta');
   const [profFiltro, setProfFiltro] = useState<string | null>(null);
 
   const [adiando, setAdiando] = useState<PacienteFixoSemana | null>(null);
-  const [marcando, setMarcando] = useState<PacienteFixoSemana | null>(null);
+  // Marcar: a partir de hoje ou (adiado) da semana em que volta
+  const [marcando, setMarcando] = useState<
+    (PacienteFixoSemana & { aPartirDe?: string }) | null
+  >(null);
+  const [editandoFreq, setEditandoFreq] = useState<PacienteFixoSemana | null>(
+    null
+  );
+  const [naoAgendados, setNaoAgendados] = useState<NaoAgendado[]>([]);
   // Profissionais do diálogo "Criar agenda" (null = fechado)
   const [criarPara, setCriarPara] = useState<string[] | null>(null);
 
@@ -129,6 +144,10 @@ export const PacientesFixosManager: React.FC = () => {
       const [d, s, e] = await Promise.all([
         buscarSemanaFixos(semana),
         buscarSugestoesFixos(),
+        // quem não agendou independe da semana na tela
+        buscarNaoAgendados()
+          .then((n) => setNaoAgendados(n ?? []))
+          .catch(() => setNaoAgendados([])),
         buscarEnviosSemana(semana).catch(() => ({})),
       ]);
       setDados(d);
@@ -158,11 +177,56 @@ export const PacientesFixosManager: React.FC = () => {
   const pacientes = useMemo(() => dados?.pacientes ?? [], [dados]);
   const agendas = useMemo(() => dados?.agendas ?? [], [dados]);
 
-  const contagem = useMemo(() => {
-    const c: Record<string, number> = { todos: pacientes.length };
-    for (const p of pacientes) c[p.situacao] = (c[p.situacao] ?? 0) + 1;
-    return c;
+  // Alerta: na semana em que deveria vir, a partir de terça, ainda sem horário
+  // (normalmente recebeu o link na semana anterior e não marcou)
+  // A lista vem do banco: a partir da segunda da semana prevista e fica até
+  // marcar (mesmo depois que a semana passa) ou alguém retirar. Só aparece
+  // como alerta na semana atual (o lembrete fala "nesta semana").
+  const naoAgendadoDe = useMemo(() => {
+    const m = new Map<string, NaoAgendado>();
+    for (const n of naoAgendados) m.set(n.paciente_id, n);
+    return m;
+  }, [naoAgendados]);
+  const emAlerta = useCallback(
+    (p: PacienteFixoSemana) =>
+      semana === estaSemana && naoAgendadoDe.has(p.paciente_id),
+    [semana, estaSemana, naoAgendadoDe]
+  );
+
+  // Filtro por profissional (paciente dividido aparece nas duas)
+  const porProf = useMemo(
+    () =>
+      pacientes.filter(
+        (p) =>
+          !profFiltro ||
+          p.profissional_id === profFiltro ||
+          (p.profissionais ?? []).some((x) => x.id === profFiltro)
+      ),
+    [pacientes, profFiltro]
+  );
+
+  const profsDaLista = useMemo(() => {
+    const m = new Map<string, { id: string; nome: string; n: number }>();
+    for (const p of pacientes) {
+      const ids = new Map<string, string>();
+      if (p.profissional_id)
+        ids.set(p.profissional_id, p.profissional_nome ?? 'Sem nome');
+      for (const x of p.profissionais ?? []) ids.set(x.id, x.nome);
+      for (const [id, nome] of ids) {
+        const atual = m.get(id) ?? { id, nome, n: 0 };
+        atual.n += 1;
+        m.set(id, atual);
+      }
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n);
   }, [pacientes]);
+
+  const contagem = useMemo(() => {
+    const c: Record<string, number> = { todos: porProf.length };
+    for (const p of porProf) c[p.situacao] = (c[p.situacao] ?? 0) + 1;
+    c.nao_agendou = porProf.filter(emAlerta).length;
+    return c;
+  }, [porProf, emAlerta]);
 
   const sessoesFaltando = pacientes.reduce((t, p) => t + p.falta, 0);
 
@@ -245,9 +309,10 @@ export const PacientesFixosManager: React.FC = () => {
     [agendasDoPaciente, escolha, escolhaPadrao]
   );
 
+  // Convite (semana que vem) ou lembrete (já é a semana e não marcou)
   const textoDoLink = useCallback(
     (p: PacienteFixoSemana, ags: AgendaPublicaSemana[]) =>
-      mensagemLinkAgenda({
+      (emAlerta(p) ? mensagemLembreteAgenda : mensagemLinkAgenda)({
         responsavelNome: p.responsavel_nome,
         pacienteNome: p.paciente_nome,
         agendas: ags.map((a) => ({
@@ -257,7 +322,7 @@ export const PacientesFixosManager: React.FC = () => {
           link: linkAgendaPublica(a.token),
         })),
       }),
-    []
+    [emAlerta]
   );
 
   const envioDe = useCallback(
@@ -294,17 +359,21 @@ export const PacientesFixosManager: React.FC = () => {
     [agendasDoPaciente, envioDe]
   );
 
+  // Envio em massa respeita o filtro de profissional e o de "Não agendaram"
   const elegiveis = useMemo(
-    () => pacientes.filter(elegivelMassa),
-    [pacientes, elegivelMassa]
+    () =>
+      porProf.filter(
+        (p) => elegivelMassa(p) && (filtro !== 'nao_agendou' || emAlerta(p))
+      ),
+    [porProf, elegivelMassa, filtro, emAlerta]
   );
   const naFila = useMemo(
     () =>
-      pacientes.filter((p) => {
+      porProf.filter((p) => {
         const st = envioDe(p)?.status;
         return st === 'fila' || st === 'enviando';
       }).length,
-    [pacientes, envioDe]
+    [porProf, envioDe]
   );
   const selecionadosValidos = elegiveis.filter((p) =>
     selecionados.has(p.paciente_id)
@@ -369,12 +438,12 @@ export const PacientesFixosManager: React.FC = () => {
     }
   };
 
-  const visiveis = pacientes.filter(
-    (p) =>
-      (filtro === 'todos' || p.situacao === filtro) &&
-      (!profFiltro ||
-        p.profissional_id === profFiltro ||
-        (p.profissionais ?? []).some((x) => x.id === profFiltro))
+  const visiveis = porProf.filter((p) =>
+    filtro === 'todos'
+      ? true
+      : filtro === 'nao_agendou'
+        ? emAlerta(p)
+        : p.situacao === filtro
   );
 
   const enviarLink = async (p: PacienteFixoSemana) => {
@@ -405,6 +474,85 @@ export const PacientesFixosManager: React.FC = () => {
     if (aba) aba.location.href = url;
     else window.location.href = url;
     carregar();
+  };
+
+  const retirarDaLista = async (p: PacienteFixoSemana) => {
+    try {
+      await retirarDosNaoAgendados(p.paciente_id);
+      toast({
+        title: `${primeiroNome(p.paciente_nome)} saiu da lista`,
+        description:
+          'Volta se marcar e depois ficar sem horário de novo. Para parar de acompanhar, tire dos fixos na ficha.',
+      });
+      carregar();
+    } catch (e) {
+      toast({
+        title: 'Não foi possível retirar',
+        description: e instanceof Error ? e.message : undefined,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Adiado: link da agenda da semana em que volta (convite normal)
+  const enviarLinkRetorno = async (p: PacienteFixoSemana) => {
+    if (!p.adiado_ate) return;
+    // Abre a aba DENTRO do clique (senão o navegador bloqueia o pop-up)
+    const aba = window.open('', '_blank');
+    try {
+      const sem = await buscarSemanaFixos(p.adiado_ate);
+      const ids = [
+        p.profissional_id,
+        ...(p.profissionais ?? []).map((x) => x.id),
+      ].filter((id, i, arr): id is string => !!id && arr.indexOf(id) === i);
+      const ags = ids
+        .map((id) => sem.agendas.find((a) => a.profissional_id === id))
+        .filter((a): a is AgendaPublicaSemana => !!a);
+      if (!ags.length) {
+        aba?.close();
+        toast({
+          title: 'Ainda não há agenda pública dessa semana',
+          description: `Crie a agenda de ${rotuloSemana(p.adiado_ate)} na aba das agendas públicas.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      const escolhidas = ags.filter((a) => a.livres > 0).slice(0, 1);
+      const lista = escolhidas.length ? escolhidas : ags.slice(0, 1);
+      const url = buildWhatsAppUrl(
+        p.responsavel_telefone,
+        mensagemLinkAgenda({
+          responsavelNome: p.responsavel_nome,
+          pacienteNome: p.paciente_nome,
+          agendas: lista.map((a) => ({
+            profissionalNome: a.profissional_nome,
+            de: a.data_inicio,
+            ate: a.data_fim,
+            link: linkAgendaPublica(a.token),
+          })),
+        })
+      );
+      if (!url) {
+        aba?.close();
+        toast({ title: 'Sem telefone válido', variant: 'destructive' });
+        return;
+      }
+      await registrarEnvioLink({
+        pacienteId: p.paciente_id,
+        semana: p.adiado_ate,
+        agendaId: lista[0].id,
+        telefone: p.responsavel_telefone,
+      }).catch((e) => console.warn('Envio não registrado:', e));
+      if (aba) aba.location.href = url;
+      else window.location.href = url;
+    } catch (e) {
+      aba?.close();
+      toast({
+        title: 'Não foi possível montar o link',
+        description: e instanceof Error ? e.message : undefined,
+        variant: 'destructive',
+      });
+    }
   };
 
   const desfazerAdiamento = async (p: PacienteFixoSemana) => {
@@ -597,14 +745,78 @@ export const PacientesFixosManager: React.FC = () => {
         </Card>
       )}
 
+      {/* Quem já deveria ter agendado e não agendou (desde a segunda da semana
+          prevista; continua até marcar ou ser retirado) */}
+      {naoAgendados.length > 0 &&
+        !(filtro === 'nao_agendou' && semana === estaSemana) && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <p className="flex-1">
+              {naoAgendados.length} paciente
+              {naoAgendados.length === 1 ? '' : 's'} já deveri
+              {naoAgendados.length === 1 ? 'a' : 'am'} ter agendado e ainda não
+              agend{naoAgendados.length === 1 ? 'ou' : 'aram'}.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-amber-400 bg-transparent"
+              onClick={() => {
+                setSemana(estaSemana);
+                setFiltro('nao_agendou');
+              }}
+            >
+              Ver e lembrar
+            </Button>
+          </div>
+        )}
+
+      {/* Profissional */}
+      {profsDaLista.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-muted-foreground">
+            Profissional
+          </span>
+          {[
+            { id: null as string | null, nome: 'Todas', n: pacientes.length },
+            ...profsDaLista,
+          ].map((p) => (
+            <Button
+              key={p.id ?? 'todas'}
+              size="sm"
+              variant={profFiltro === p.id ? 'default' : 'outline'}
+              className="h-8"
+              onClick={() => setProfFiltro(p.id)}
+            >
+              {p.id ? primeiroNome(p.nome) : p.nome}
+              <span
+                className={cn(
+                  'ml-1.5 tabular-nums',
+                  profFiltro === p.id
+                    ? 'text-primary-foreground/80'
+                    : 'text-muted-foreground'
+                )}
+              >
+                {p.n}
+              </span>
+            </Button>
+          ))}
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-1.5">
-        {FILTROS.map((f) => (
+        {FILTROS.filter(
+          (f) => f.id !== 'nao_agendou' || (contagem.nao_agendou ?? 0) > 0
+        ).map((f) => (
           <Button
             key={f.id}
             size="sm"
             variant={filtro === f.id ? 'secondary' : 'ghost'}
-            className="h-8"
+            className={cn(
+              'h-8',
+              f.id === 'nao_agendou' && 'text-amber-800 dark:text-amber-300'
+            )}
             onClick={() => setFiltro(f.id)}
           >
             {f.label}
@@ -613,19 +825,6 @@ export const PacientesFixosManager: React.FC = () => {
             </span>
           </Button>
         ))}
-        {profFiltro && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 text-primary"
-            onClick={() => setProfFiltro(null)}
-          >
-            {primeiroNome(
-              pendentesPorProf.find((p) => p.id === profFiltro)?.nome
-            )}{' '}
-            ✕
-          </Button>
-        )}
       </div>
 
       {/* Envio em massa */}
@@ -743,9 +942,19 @@ export const PacientesFixosManager: React.FC = () => {
                     >
                       {p.paciente_nome}
                     </button>
-                    <Badge variant="secondary">
-                      {rotuloFrequencia(p.frequencia)}
-                    </Badge>
+                    <button
+                      type="button"
+                      onClick={() => setEditandoFreq(p)}
+                      title="Alterar a frequência"
+                      className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Badge
+                        variant="secondary"
+                        className="cursor-pointer hover:bg-secondary/70"
+                      >
+                        {rotuloFrequencia(p.frequencia, p.intervalo_dias)}
+                      </Badge>
+                    </button>
                     {p.divide && (
                       <Badge
                         variant="outline"
@@ -764,6 +973,14 @@ export const PacientesFixosManager: React.FC = () => {
                       >
                         <ArrowLeftRight className="h-3 w-3" />
                         Divide
+                      </Badge>
+                    )}
+                    {emAlerta(p) && (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                      >
+                        Não agendou
                       </Badge>
                     )}
                     {p.atrasado && (
@@ -820,40 +1037,60 @@ export const PacientesFixosManager: React.FC = () => {
                       Próxima prevista na semana de {diaMes(p.semana_prevista)}
                     </p>
                   )}
-                  {envio && envio.status !== 'cancelado' && (
-                    <p
-                      className={cn(
-                        'text-xs',
-                        envio.status === 'falhou'
-                          ? 'text-destructive'
-                          : naFilaP
-                            ? 'text-sky-700 dark:text-sky-300'
-                            : 'text-muted-foreground'
-                      )}
-                    >
-                      {envio.status === 'fila' && 'Na fila do envio automático'}
-                      {envio.status === 'enviando' && 'Enviando agora…'}
-                      {envio.status === 'falhou' &&
-                        `Envio automático falhou${envio.erro ? `: ${envio.erro}` : ''}`}
-                      {envio.status === 'enviado' &&
-                        `Link enviado ${dataHoraCarimbo(envio.enviado_em)}${
-                          envio.canal === 'whatsapp_auto'
-                            ? ' automaticamente'
-                            : envio.enviado_por_nome
-                              ? ` por ${primeiroNome(envio.enviado_por_nome)}`
-                              : ''
-                        }${envio.vezes > 1 ? ` (${envio.vezes}x)` : ''}`}
-                      {naFilaP && envio.status === 'fila' && (
-                        <button
-                          type="button"
-                          className="ml-2 underline-offset-2 hover:underline"
-                          onClick={() => cancelarFila(p.paciente_id)}
-                        >
-                          Tirar da fila
-                        </button>
-                      )}
-                    </p>
-                  )}
+                  {emAlerta(p) &&
+                    (() => {
+                      const na = naoAgendadoDe.get(p.paciente_id)!;
+                      const link =
+                        na.ultimo_link_em ??
+                        (envio?.status === 'enviado' ? envio.enviado_em : null);
+                      return (
+                        <p className="text-xs text-amber-800 dark:text-amber-300">
+                          {na.semanas_sem_agendar > 1
+                            ? `Sem agendar desde a semana de ${diaMes(na.desde)} (${na.semanas_sem_agendar} semanas).`
+                            : 'Deveria vir nesta semana e ainda não marcou.'}{' '}
+                          {link
+                            ? `Link enviado em ${dataHoraCarimbo(link)}.`
+                            : 'Ainda não recebeu link.'}
+                        </p>
+                      );
+                    })()}
+                  {envio &&
+                    envio.status !== 'cancelado' &&
+                    !(emAlerta(p) && envio.status === 'enviado') && (
+                      <p
+                        className={cn(
+                          'text-xs',
+                          envio.status === 'falhou'
+                            ? 'text-destructive'
+                            : naFilaP
+                              ? 'text-sky-700 dark:text-sky-300'
+                              : 'text-muted-foreground'
+                        )}
+                      >
+                        {envio.status === 'fila' &&
+                          'Na fila do envio automático'}
+                        {envio.status === 'enviando' && 'Enviando agora…'}
+                        {envio.status === 'falhou' &&
+                          `Envio automático falhou${envio.erro ? `: ${envio.erro}` : ''}`}
+                        {envio.status === 'enviado' &&
+                          `Link enviado ${dataHoraCarimbo(envio.enviado_em)}${
+                            envio.canal === 'whatsapp_auto'
+                              ? ' automaticamente'
+                              : envio.enviado_por_nome
+                                ? ` por ${primeiroNome(envio.enviado_por_nome)}`
+                                : ''
+                          }${envio.vezes > 1 ? ` (${envio.vezes}x)` : ''}`}
+                        {naFilaP && envio.status === 'fila' && (
+                          <button
+                            type="button"
+                            className="ml-2 underline-offset-2 hover:underline"
+                            onClick={() => cancelarFila(p.paciente_id)}
+                          >
+                            Tirar da fila
+                          </button>
+                        )}
+                      </p>
+                    )}
                   {envio?.status === 'cancelado' && envio.erro && (
                     <p className="text-xs text-muted-foreground">
                       Saiu da fila: {envio.erro.toLowerCase()}
@@ -916,9 +1153,11 @@ export const PacientesFixosManager: React.FC = () => {
                         onClick={() => enviarLink(p)}
                       >
                         <MessageCircle className="mr-1.5 h-4 w-4" />
-                        {envio?.status === 'enviado'
-                          ? 'Reenviar'
-                          : 'Enviar link'}
+                        {emAlerta(p)
+                          ? 'Lembrar'
+                          : envio?.status === 'enviado'
+                            ? 'Reenviar'
+                            : 'Enviar link'}
                       </Button>
                       <Button
                         size="sm"
@@ -943,15 +1182,58 @@ export const PacientesFixosManager: React.FC = () => {
                       </Button>
                     </>
                   )}
-                  {p.situacao === 'adiado' && (
+                  {emAlerta(p) && (
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => desfazerAdiamento(p)}
+                      className="text-muted-foreground"
+                      onClick={() => retirarDaLista(p)}
+                      title="Some da lista de quem não agendou. Volta se ele marcar e depois ficar sem horário de novo."
                     >
-                      <Undo2 className="mr-1.5 h-4 w-4" />
-                      Desfazer adiamento
+                      Retirar da lista
                     </Button>
+                  )}
+                  {p.situacao === 'adiado' && p.adiado_ate && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!p.responsavel_telefone}
+                        title={
+                          p.responsavel_telefone
+                            ? undefined
+                            : 'Responsável sem telefone'
+                        }
+                        onClick={() => enviarLinkRetorno(p)}
+                      >
+                        <MessageCircle className="mr-1.5 h-4 w-4" />
+                        Link da semana {diaMes(p.adiado_ate)}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!p.origem_agendamento_id}
+                        title={
+                          p.origem_agendamento_id
+                            ? undefined
+                            : 'Sem sessão anterior: marque pela Agenda'
+                        }
+                        onClick={() =>
+                          setMarcando({ ...p, aPartirDe: p.adiado_ate! })
+                        }
+                      >
+                        <CalendarClock className="mr-1.5 h-4 w-4" />
+                        Marcar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => desfazerAdiamento(p)}
+                      >
+                        <Undo2 className="mr-1.5 h-4 w-4" />
+                        Desfazer adiamento
+                      </Button>
+                    </>
                   )}
                 </div>
               </li>
@@ -959,6 +1241,15 @@ export const PacientesFixosManager: React.FC = () => {
           })}
         </ul>
       )}
+
+      <FrequenciaDialog
+        paciente={editandoFreq}
+        onClose={() => setEditandoFreq(null)}
+        onDone={() => {
+          setEditandoFreq(null);
+          carregar();
+        }}
+      />
 
       <SugestoesFixos
         sugestoes={sugestoes}
@@ -1067,12 +1358,15 @@ export const PacientesFixosManager: React.FC = () => {
             </DialogTitle>
             <DialogDescription>
               Mesmo serviço, local e valor da última sessão.
+              {marcando?.aPartirDe &&
+                ` Horários a partir da semana de ${diaMes(marcando.aPartirDe)}, quando volta.`}
             </DialogDescription>
           </DialogHeader>
           {marcando?.origem_agendamento_id && (
             <AgendaExpressa
               agendamentoId={marcando.origem_agendamento_id}
               defaultOpen
+              aPartirDe={marcando.aPartirDe}
               onCreated={() => carregar()}
             />
           )}

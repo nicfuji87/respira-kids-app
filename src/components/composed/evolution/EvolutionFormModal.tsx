@@ -1,3 +1,4 @@
+import { ehFrequenciaPadrao } from '@/lib/pacientes-fixos-api';
 import React, {
   useState,
   useEffect,
@@ -496,7 +497,14 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   // ela na conduta (só se a fisio ainda não escolheu). Mesmo cuidado das
   // áreas: fica DEPOIS do efeito que reinicia o formulário ao abrir.
   useEffect(() => {
-    if (!isOpen || mode !== 'create' || !frequenciaCadastro) return;
+    // "A cada N dias" não existe na conduta: não pré-preenche
+    if (
+      !isOpen ||
+      mode !== 'create' ||
+      !frequenciaCadastro ||
+      !ehFrequenciaPadrao(frequenciaCadastro)
+    )
+      return;
     setEvolucaoMotora((prev) =>
       prev.conduta?.frequencia_sugerida
         ? prev

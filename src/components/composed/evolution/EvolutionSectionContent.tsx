@@ -4343,12 +4343,14 @@ export const EvolutionSectionContent: React.FC<
                 />
                 {!disabled && frequenciaCadastro !== undefined && (
                   <p className="text-xs text-muted-foreground">
-                    {frequenciaCadastro
-                      ? conduta.frequencia_sugerida &&
-                        conduta.frequencia_sugerida !== frequenciaCadastro
-                        ? `No cadastro está ${rotuloFrequencia(frequenciaCadastro)}. Ao finalizar, o cadastro passa para ${rotuloFrequencia(conduta.frequencia_sugerida)}.`
-                        : `Igual ao cadastro de paciente fixo (${rotuloFrequencia(frequenciaCadastro)}).`
-                      : 'Ao finalizar, o paciente entra na lista de Pacientes Fixos com esta frequência.'}
+                    {frequenciaCadastro === 'personalizada'
+                      ? 'No cadastro de paciente fixo o intervalo é próprio (a cada N dias); a frequência daqui não muda o cadastro.'
+                      : frequenciaCadastro
+                        ? conduta.frequencia_sugerida &&
+                          conduta.frequencia_sugerida !== frequenciaCadastro
+                          ? `No cadastro está ${rotuloFrequencia(frequenciaCadastro)}. Ao finalizar, o cadastro passa para ${rotuloFrequencia(conduta.frequencia_sugerida)}.`
+                          : `Igual ao cadastro de paciente fixo (${rotuloFrequencia(frequenciaCadastro)}).`
+                        : 'Ao finalizar, o paciente entra na lista de Pacientes Fixos com esta frequência.'}
                   </p>
                 )}
               </Field>
