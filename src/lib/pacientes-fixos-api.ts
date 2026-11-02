@@ -135,6 +135,8 @@ export interface PacienteFixoSemana {
   observacao: string | null;
   marcadas: SessaoMarcada[];
   ultima_sessao: string | null;
+  /** Próxima consulta marcada a partir da semana (ex.: adiado que já marcou a volta) */
+  proxima_sessao?: string | null;
   /** A da vez (atendeu há mais tempo entre as do paciente) */
   profissional_id: string | null;
   origem_agendamento_id: string | null;

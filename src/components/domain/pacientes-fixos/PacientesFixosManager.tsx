@@ -1007,6 +1007,24 @@ export const PacientesFixosManager: React.FC = () => {
                       ` · última ${rotuloSessao(p.ultima_sessao)}`}
                     {p.observacao && ` · ${p.observacao}`}
                   </p>
+                  {p.marcadas.length === 0 &&
+                    p.situacao === 'completo' &&
+                    p.proxima_sessao && (
+                      <p className="flex flex-wrap gap-1.5 text-xs">
+                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          <Check className="h-3 w-3" />
+                          {rotuloSessao(p.proxima_sessao)}
+                        </span>
+                        {p.adiado_ate && (
+                          <span className="text-muted-foreground">
+                            volta do adiamento
+                            {p.adiado_motivo
+                              ? ` (${p.adiado_motivo.toLowerCase()})`
+                              : ''}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   {p.marcadas.length > 0 && (
                     <p className="flex flex-wrap gap-1.5 text-xs">
                       {p.marcadas.map((m) => (
