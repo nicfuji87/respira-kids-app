@@ -23,7 +23,7 @@ import {
 import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
 import {
-  FREQUENCIAS_FIXO,
+  FREQUENCIAS_ESCOLHA,
   rotuloSessao,
   salvarPacienteFixo,
   type FrequenciaFixo,
@@ -169,7 +169,7 @@ export const SugestoesFixos: React.FC<SugestoesFixosProps> = ({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {FREQUENCIAS_FIXO.map((f) => (
+                      {FREQUENCIAS_ESCOLHA.map((f) => (
                         <SelectItem key={f.valor} value={f.valor}>
                           {f.label}
                         </SelectItem>

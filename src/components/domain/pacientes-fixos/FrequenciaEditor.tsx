@@ -17,7 +17,7 @@ import {
 import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
 import {
-  FREQUENCIAS_FIXO,
+  FREQUENCIAS_ESCOLHA,
   alterarFrequenciaFixo,
   frequenciaValida,
   type FrequenciaFixo,
@@ -43,7 +43,7 @@ export const FrequenciaEditor: React.FC<FrequenciaEditorProps> = ({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {FREQUENCIAS_FIXO.map((f) => (
+        {FREQUENCIAS_ESCOLHA.map((f) => (
           <Button
             key={f.valor}
             type="button"

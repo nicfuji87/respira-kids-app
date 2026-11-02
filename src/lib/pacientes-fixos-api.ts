@@ -26,6 +26,14 @@ export const FREQUENCIAS_FIXO: { valor: FrequenciaFixo; label: string }[] = [
   { valor: 'diaria', label: 'Diária' },
 ];
 
+/**
+ * Opções para escolher (lista, ficha e sugestões). 3x/semana saiu a pedido do
+ * dono (02/11/2026): continua só para exibir quem já está assim.
+ */
+export const FREQUENCIAS_ESCOLHA = FREQUENCIAS_FIXO.filter(
+  (f) => f.valor !== '3x_semana'
+);
+
 export const rotuloFrequencia = (
   f?: string | null,
   intervaloDias?: number | null
