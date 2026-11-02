@@ -571,12 +571,15 @@ export interface OrientacoesMotoraAssimetria {
 
 export interface CondutaMotoraAssimetria {
   manter_fisioterapia: boolean;
+  // Sincroniza com o cadastro de Pacientes Fixos (gatilho no banco): a
+  // evolução da sessão mais recente define a frequência do paciente fixo.
   frequencia_sugerida?:
     | 'diaria'
     | '2x_semana'
     | '3x_semana'
     | 'semanal'
     | 'quinzenal'
+    | 'mensal'
     | null;
   reavaliacao_dias?: number;
   encaminhamento_medico: boolean;

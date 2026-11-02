@@ -1,4 +1,5 @@
 import React from 'react';
+import { rotuloFrequencia } from '@/lib/pacientes-fixos-api';
 import { Label } from '@/components/primitives/label';
 import { Textarea } from '@/components/primitives/textarea';
 import { Input } from '@/components/primitives/input';
@@ -136,6 +137,10 @@ interface EvolutionSectionContentProps {
   onRespiratoriaChange: (updates: Partial<EvolucaoRespiratoria>) => void;
   onMotoraChange: (updates: Partial<EvolucaoMotoraAssimetria>) => void;
   disabled?: boolean;
+  // Frequência do cadastro de Pacientes Fixos (motora). A conduta mostra e,
+  // ao finalizar, a frequência escolhida aqui vira a do cadastro (no banco).
+  // undefined = não consultado (edição): não mostra aviso.
+  frequenciaCadastro?: string | null;
 }
 
 // Componente auxiliar para campos
@@ -602,6 +607,7 @@ export const EvolutionSectionContent: React.FC<
   onRespiratoriaChange,
   onMotoraChange,
   disabled = false,
+  frequenciaCadastro,
 }) => {
   // =========================================================================
   // EVOLUÇÃO RESPIRATÓRIA
@@ -4321,12 +4327,8 @@ export const EvolutionSectionContent: React.FC<
                   value={conduta.frequencia_sugerida}
                   onChange={(v) =>
                     updateConduta({
-                      frequencia_sugerida: v as
-                        | 'diaria'
-                        | '2x_semana'
-                        | '3x_semana'
-                        | 'semanal'
-                        | 'quinzenal',
+                      frequencia_sugerida:
+                        v as CondutaMotoraAssimetria['frequencia_sugerida'],
                     })
                   }
                   options={[
@@ -4335,11 +4337,30 @@ export const EvolutionSectionContent: React.FC<
                     { valor: '2x_semana', label: '2x/semana' },
                     { valor: 'semanal', label: 'Semanal' },
                     { valor: 'quinzenal', label: 'Quinzenal' },
+                    { valor: 'mensal', label: 'Mensal' },
                   ]}
                   disabled={disabled}
                 />
+                {!disabled && frequenciaCadastro !== undefined && (
+                  <p className="text-xs text-muted-foreground">
+                    {frequenciaCadastro
+                      ? conduta.frequencia_sugerida &&
+                        conduta.frequencia_sugerida !== frequenciaCadastro
+                        ? `No cadastro está ${rotuloFrequencia(frequenciaCadastro)}. Ao finalizar, o cadastro passa para ${rotuloFrequencia(conduta.frequencia_sugerida)}.`
+                        : `Igual ao cadastro de paciente fixo (${rotuloFrequencia(frequenciaCadastro)}).`
+                      : 'Ao finalizar, o paciente entra na lista de Pacientes Fixos com esta frequência.'}
+                  </p>
+                )}
               </Field>
             )}
+
+            {!disabled &&
+              conduta.manter_fisioterapia === false &&
+              frequenciaCadastro && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Ao finalizar, o paciente sai da lista de Pacientes Fixos.
+                </p>
+              )}
 
             {(!ehFormatoMotoraV14(evolucao) ||
               conduta.manter_fisioterapia === false) && (
