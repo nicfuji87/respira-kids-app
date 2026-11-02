@@ -5,6 +5,10 @@ import { CheckCircle, Edit } from 'lucide-react';
 import { cn, formatDateBR } from '@/lib/utils';
 import { formatCPF } from '@/lib/profile';
 import type { AdminPatientData } from '@/lib/admin-patient-registration-api';
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from '@/lib/telefone-internacional';
 
 // AI dev note: AdminReviewStep - Revisão do cadastro administrativo ANTES de
 // criar o paciente no banco. Versão enxuta do ReviewStep público, adaptada ao
@@ -73,6 +77,8 @@ const Section: React.FC<SectionProps> = ({
 );
 
 const formatWhatsApp = (phone?: string): string => {
+  // Número estrangeiro (DDI diferente de 55): exibe +DDI em vez da máscara BR
+  if (ehTelefoneEstrangeiro(phone)) return formatarTelefoneInternacional(phone);
   const digits = (phone || '').replace(/\D/g, '');
   if (digits.length === 11) {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;

@@ -137,19 +137,29 @@ Deno.serve(async (req: Request) => {
     // como internacional ("(61) 9xxxx-xxxx" virava +61, Austrália). Por isso o
     // telefone do signatário sai SEMPRE em E.164 (+55 DDD 9 número), não importa
     // o formato impresso no contrato. Mesma regra de src/lib/telefone-br.ts.
+    // Número estrangeiro (pessoas.telefone sem 55, ex.: 972543316400, ou o texto
+    // do contrato "+972 54 331 6400"): sai como "+" + dígitos, sem forçar Brasil.
     const telefoneE164 = (valor: unknown): string | null => {
       if (valor === null || valor === undefined) return null;
-      let d = String(valor).replace(/\D/g, '');
+      const texto = String(valor).trim();
+      const todos = texto.replace(/\D/g, '');
+      const estrangeiro = (): string | null =>
+        todos.length >= 8 && todos.length <= 15 ? `+${todos}` : null;
+      // "+DDI ..." com DDI diferente de 55: já é internacional
+      if (texto.startsWith('+') && !todos.startsWith('55'))
+        return estrangeiro();
+
+      let d = todos;
       if ((d.length === 12 || d.length === 13) && d.startsWith('55')) {
         d = d.slice(2);
       }
       if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
-      if (d.length !== 10 && d.length !== 11) return null;
+      if (d.length !== 10 && d.length !== 11) return estrangeiro();
       const ddd = d.slice(0, 2);
       let numero = d.slice(2);
-      if (ddd.startsWith('0')) return null;
+      if (ddd.startsWith('0')) return estrangeiro();
       if (numero.length === 8 && /^[6-9]/.test(numero)) numero = `9${numero}`;
-      if (numero.length === 9 && !numero.startsWith('9')) return null;
+      if (numero.length === 9 && !numero.startsWith('9')) return estrangeiro();
       return `+55${ddd}${numero}`;
     };
 

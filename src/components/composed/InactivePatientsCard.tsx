@@ -40,6 +40,10 @@ import type {
   ResultadoContato,
 } from '@/types/inatividade';
 import type { MetaDashboard } from '@/types/metas';
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from '@/lib/telefone-internacional';
 
 export interface InactivePatientsCardProps {
   className?: string;
@@ -127,6 +131,8 @@ const formatDateBR = (date: string | null): string => {
 
 const formatPhone = (phone: string | null): string => {
   if (!phone) return 'sem telefone';
+  // Número estrangeiro (DDI diferente de 55): exibe +DDI em vez da máscara BR
+  if (ehTelefoneEstrangeiro(phone)) return formatarTelefoneInternacional(phone);
   const s = phone.replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
   if (s.length === 11) return s.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
   if (s.length === 10) return s.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');

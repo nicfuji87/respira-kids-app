@@ -14,6 +14,7 @@ import type {
   ReativacaoPaciente,
   ResultadoRegistroContato,
 } from '@/types/inatividade';
+import { digitosParaWhatsApp } from './telefone-internacional';
 
 // AI dev note: Lista de reativação v2 (RPC; admin/secretaria). Já vem só com
 // pacientes de 60–540 dias sem sessão realizada e sem nada agendado.
@@ -271,10 +272,9 @@ export function buildWhatsAppLink(
   if (!telefone) return null;
   const onlyDigits = String(telefone).replace(/\D/g, '');
   if (!onlyDigits) return null;
-  // Garantir DDI 55 (Brasil) caso ainda não esteja prefixado
-  const withCountry = onlyDigits.startsWith('55')
-    ? onlyDigits
-    : `55${onlyDigits}`;
+  // Garantir DDI 55 (Brasil) caso ainda não esteja prefixado.
+  // Número estrangeiro (DDI diferente de 55) vai como está.
+  const withCountry = digitosParaWhatsApp(onlyDigits);
   const text = mensagem ? `?text=${encodeURIComponent(mensagem)}` : '';
   return `https://wa.me/${withCountry}${text}`;
 }

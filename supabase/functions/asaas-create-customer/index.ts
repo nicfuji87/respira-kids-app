@@ -24,6 +24,21 @@ interface CreateCustomerResponse {
   error?: string;
 }
 
+// AI dev note: telefone estrangeiro (DDI diferente de 55, ex.: 972543316400).
+// O Asaas só aceita telefone brasileiro: número estrangeiro não é enviado
+// (melhor sem telefone do que com lixo). É Brasil: 55 + 12/13 dígitos, 10
+// dígitos, ou 11 dígitos com 9 na 3ª posição (celular) ou começando com 0.
+// Menos de 10 dígitos segue a regra antiga (passa como está).
+// MANTER IDÊNTICA às cópias em asaas-sync-customer e confirm-payment-link.
+function ehTelefoneEstrangeiroAsaas(p: string): boolean {
+  if (p.length > 15) return true; // não é telefone
+  if (p.length < 10) return false;
+  if (p.startsWith('55') && (p.length === 12 || p.length === 13)) return false;
+  if (p.length === 10) return false;
+  if (p.length === 11 && (p[0] === '0' || p[2] === '9')) return false;
+  return true;
+}
+
 Deno.serve(async (req: Request) => {
   // Configurar CORS
   const corsHeaders = {
@@ -76,6 +91,9 @@ Deno.serve(async (req: Request) => {
     //   insere o 9 que o JID omite. Ex.: 556181257981 -> 61981257981.
     // MANTER IDÊNTICA às cópias em confirm-payment-link e asaas-sync-customer.
     let normalizedPhone = customerData.mobilePhone?.replace(/[^\d]/g, '');
+    if (normalizedPhone && ehTelefoneEstrangeiroAsaas(normalizedPhone)) {
+      normalizedPhone = undefined; // Asaas só aceita telefone brasileiro
+    }
     if (normalizedPhone) {
       if (normalizedPhone.startsWith('55') && normalizedPhone.length > 11) {
         normalizedPhone = normalizedPhone.substring(2); // Remove DDI 55

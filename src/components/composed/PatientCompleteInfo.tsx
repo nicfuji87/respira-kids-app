@@ -72,6 +72,10 @@ import type {
 import { BillingResponsibleSelect } from './BillingResponsibleSelect';
 import { PatientPediatriciansSection } from './PatientPediatriciansSection';
 import { PersonQuickEditDialog } from './PersonQuickEditDialog';
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from '@/lib/telefone-internacional';
 
 // AI dev note: PatientCompleteInfo - Component Composed que une informações pessoais, contato, endereço, responsáveis e consentimentos
 // Substitui múltiplos cards por um único card organizado em seções
@@ -473,6 +477,9 @@ export const PatientCompleteInfo = React.memo<PatientPersonalInfoProps>(
     // Função para formatar telefone
     const formatPhone = (phone: number | bigint | null) => {
       if (!phone) return null;
+      // Número estrangeiro (DDI diferente de 55): exibe +DDI em vez da máscara BR
+      if (ehTelefoneEstrangeiro(phone))
+        return formatarTelefoneInternacional(phone);
       const phoneStr = phone.toString();
 
       if (phoneStr.length === 11) {

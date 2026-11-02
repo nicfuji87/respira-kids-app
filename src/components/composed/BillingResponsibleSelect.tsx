@@ -12,6 +12,10 @@ import { Label } from '@/components/primitives/label';
 import { Badge } from '@/components/primitives/badge';
 import { PhoneInput } from '@/components/primitives/PhoneInput';
 import {
+  lerTelefoneDigitado,
+  telefoneArmazenadoParaInput,
+} from '@/lib/telefone-internacional';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -361,8 +365,8 @@ export const BillingResponsibleSelect: React.FC<
 
   // Validar telefone (WhatsApp)
   useEffect(() => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length !== 11) {
+    // Brasil: 11 dígitos. Exterior: DDI + número entre 8 e 15 dígitos.
+    if (!lerTelefoneDigitado(phone).valido) {
       setPhoneValid(false);
       setValidatedJid(null);
       return;
@@ -391,7 +395,7 @@ export const BillingResponsibleSelect: React.FC<
           }
 
           // Buscar se pessoa já existe por telefone
-          const existingPerson = await findPersonByPhone(cleanPhone);
+          const existingPerson = await findPersonByPhone(phone);
           if (existingPerson) {
             setExistingPersonId(existingPerson.id);
             setNome(existingPerson.nome);
@@ -424,7 +428,9 @@ export const BillingResponsibleSelect: React.FC<
           setNome(existingPerson.nome);
           setEmail(existingPerson.email || '');
           setPhone(
-            existingPerson.telefone ? existingPerson.telefone.toString() : ''
+            existingPerson.telefone
+              ? telefoneArmazenadoParaInput(existingPerson.telefone)
+              : ''
           );
         }
       } catch (error) {

@@ -35,6 +35,10 @@ import type {
   PediatraRelacionamento,
   StatusRelacionamentoPediatra,
 } from '@/types/pediatra-relacionamento';
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from '@/lib/telefone-internacional';
 
 export interface PediatraRelacionamentoCardProps {
   className?: string;
@@ -83,6 +87,8 @@ const formatDate = (date: string | null) => {
 
 const formatPhone = (phone: number | null) => {
   if (!phone) return null;
+  // Número estrangeiro (DDI diferente de 55): exibe +DDI em vez da máscara BR
+  if (ehTelefoneEstrangeiro(phone)) return formatarTelefoneInternacional(phone);
   const s = String(phone);
   if (s.length === 11) return s.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
   if (s.length === 10) return s.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');

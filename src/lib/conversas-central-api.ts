@@ -11,6 +11,7 @@
 // supabase.rpc). Nunca usar { get: true }, que roda em transação só leitura.
 
 import { supabase } from './supabase';
+import { digitosParaWhatsApp } from './telefone-internacional';
 
 export type Prioridade = 'alta' | 'media' | 'baixa';
 export type TipoItem =
@@ -257,7 +258,8 @@ export const chatwootUrl = (id?: string | null) =>
 export function whatsappUrl(telefone?: string | null): string | null {
   const d = String(telefone ?? '').replace(/\D/g, '');
   if (d.length < 10) return null;
-  const numero = d.startsWith('55') ? d : `55${d}`;
+  // Estrangeiro (DDI diferente de 55) vai como está; Brasil ganha o 55 se faltar
+  const numero = digitosParaWhatsApp(d);
   const mobile =
     typeof navigator !== 'undefined' &&
     /android|iphone|ipad|ipod/i.test(navigator.userAgent);

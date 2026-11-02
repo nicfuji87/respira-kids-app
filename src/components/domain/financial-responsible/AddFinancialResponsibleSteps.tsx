@@ -21,6 +21,7 @@ import { FinancialResponsibleSuccessStep } from '@/components/composed/Financial
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/primitives/use-toast';
+import { telefoneParaEdge } from '@/lib/telefone-internacional';
 
 // AI dev note: AddFinancialResponsibleSteps - Domain component gerenciador de fluxo
 // Etapas: 1) Validação telefone, 2) Seleção pacientes, 3) Tipo responsável, 4) Dados (se outra pessoa), 5) Revisão, 6) Sucesso
@@ -149,7 +150,8 @@ export const AddFinancialResponsibleSteps =
 
         // Montar payload para Edge Function
         const payload = {
-          responsiblePhone: data.responsible.telefone,
+          // Estrangeiro vai com "+" para a edge function não pôr 55 na frente
+          responsiblePhone: telefoneParaEdge(data.responsible.telefone),
           patientIds: data.selectedPatients.map((p) => p.id),
           financialResponsible: {
             isSelf: data.responsibleType.isSelf,

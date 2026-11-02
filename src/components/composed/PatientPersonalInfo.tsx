@@ -18,6 +18,10 @@ import { Badge } from '@/components/primitives/badge';
 
 import { cn, formatDateBR } from '@/lib/utils';
 import type { PatientPersonalInfoProps } from '@/types/patient-details';
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from '@/lib/telefone-internacional';
 
 // AI dev note: PatientPersonalInfo - Component Composed para exibir informações pessoais do paciente
 // Combina primitivos Card, Badge, Button para interface organizada
@@ -45,6 +49,9 @@ export const PatientPersonalInfo = React.memo<PatientPersonalInfoProps>(
     // Função para formatar telefone
     const formatPhone = (phone: number | bigint | null) => {
       if (!phone) return null;
+      // Número estrangeiro (DDI diferente de 55): exibe +DDI em vez da máscara BR
+      if (ehTelefoneEstrangeiro(phone))
+        return formatarTelefoneInternacional(phone);
       const phoneStr = phone.toString();
 
       if (phoneStr.length === 11) {

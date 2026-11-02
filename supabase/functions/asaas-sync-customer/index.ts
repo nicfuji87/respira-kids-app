@@ -23,6 +23,21 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// AI dev note: telefone estrangeiro (DDI diferente de 55, ex.: 972543316400).
+// O Asaas só aceita telefone brasileiro: número estrangeiro não é enviado
+// (melhor sem telefone do que com lixo). É Brasil: 55 + 12/13 dígitos, 10
+// dígitos, ou 11 dígitos com 9 na 3ª posição (celular) ou começando com 0.
+// Menos de 10 dígitos segue a regra antiga (passa como está).
+// MANTER IDÊNTICA às cópias em asaas-create-customer e confirm-payment-link.
+function ehTelefoneEstrangeiroAsaas(p: string): boolean {
+  if (p.length > 15) return true; // não é telefone
+  if (p.length < 10) return false;
+  if (p.startsWith('55') && (p.length === 12 || p.length === 13)) return false;
+  if (p.length === 10) return false;
+  if (p.length === 11 && (p[0] === '0' || p[2] === '9')) return false;
+  return true;
+}
+
 // AI dev note: Normaliza telefone p/ o Asaas. O banco guarda o JID do WhatsApp
 // (55 + DDD + local), e o local costuma vir SEM o 9 do celular (556181257981).
 // Sem tratar, o Asaas interpreta o 55 como DDD e corta o número. Aqui:
@@ -34,6 +49,7 @@ const corsHeaders = {
 function normalizePhone(phone?: string | number | null): string | undefined {
   if (phone === null || phone === undefined) return undefined;
   let p = String(phone).replace(/[^\d]/g, '');
+  if (ehTelefoneEstrangeiroAsaas(p)) return undefined;
   if (p.startsWith('55') && p.length > 11) p = p.substring(2);
   if (p.length === 10 && /[6-9]/.test(p[2])) {
     p = p.substring(0, 2) + '9' + p.substring(2);

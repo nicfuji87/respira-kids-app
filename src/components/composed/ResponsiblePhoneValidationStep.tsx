@@ -11,6 +11,7 @@ import {
   type WhatsAppValidationResponse,
 } from '@/lib/patient-registration-api';
 import { WHATSAPP_CODE_VALIDATION_ENABLED } from '@/lib/feature-flags';
+import { lerTelefoneDigitado } from '@/lib/telefone-internacional';
 
 // AI dev note: ResponsiblePhoneValidationStep - Validação de telefone do responsável
 // Reutiliza lógica do WhatsAppValidationStep com foco em identificar responsável
@@ -61,7 +62,8 @@ export const ResponsiblePhoneValidationStep =
           return;
         }
 
-        if (cleanPhone.length !== 11) {
+        // Brasil: 11 dígitos. Exterior: DDI + número entre 8 e 15 dígitos.
+        if (!lerTelefoneDigitado(phoneNumber).valido) {
           setValidationResult(null);
           setErrorMessage('');
           return;

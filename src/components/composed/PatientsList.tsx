@@ -39,6 +39,10 @@ import { cn } from '@/lib/utils';
 import { fetchPatients, type ContractStatusFilter } from '@/lib/patient-api';
 import { fetchPediatras, type Pediatra } from '@/lib/pediatra-api';
 import type { Usuario } from '@/types/usuarios';
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from '@/lib/telefone-internacional';
 
 export interface PatientsListProps {
   className?: string;
@@ -356,6 +360,9 @@ export const PatientsList: React.FC<PatientsListProps> = ({
   // AI dev note: Função para formatar telefone
   const formatPhone = (phone: number | bigint | null) => {
     if (!phone) return null;
+    // Número estrangeiro (DDI diferente de 55): exibe +DDI em vez da máscara BR
+    if (ehTelefoneEstrangeiro(phone))
+      return formatarTelefoneInternacional(phone);
     const phoneStr = phone.toString();
     if (phoneStr.length === 11) {
       return phoneStr.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
