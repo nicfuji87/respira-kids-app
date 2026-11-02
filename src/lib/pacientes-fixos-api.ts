@@ -407,6 +407,42 @@ export const mensagemLinkAgenda = (dados: {
   );
 };
 
+/**
+ * Lembrete para quem recebeu (ou deveria ter recebido) o link e ainda não
+ * marcou na semana em que precisa vir. Mesmo tom do convite, sem cobrança.
+ */
+export const mensagemLembreteAgenda = (dados: {
+  responsavelNome: string | null;
+  pacienteNome: string;
+  agendas: AgendaDoLink[];
+}) => {
+  const saudacao = dados.responsavelNome
+    ? `Olá, ${primeiroNome(dados.responsavelNome)}!`
+    : 'Olá!';
+  const crianca = primeiroNome(dados.pacienteNome);
+  const ate = dados.agendas
+    .map((a) => a.ate)
+    .sort()
+    .slice(-1)[0];
+  const links =
+    dados.agendas.length === 1
+      ? dados.agendas[0].link
+      : dados.agendas
+          .map((a) => `Com a ${primeiroNome(a.profissionalNome)}:\n${a.link}`)
+          .join('\n\n');
+  const com =
+    dados.agendas.length === 1 && dados.agendas[0].profissionalNome
+      ? ` com a ${primeiroNome(dados.agendas[0].profissionalNome)}`
+      : '';
+  return (
+    `${saudacao} Aqui é da Respira Kids.\n\n` +
+    `Ainda não vimos horário marcado para a fisioterapia de ${crianca} nesta semana. ` +
+    `A agenda${com} tem horários até ${diaMes(ate)}:\n\n` +
+    `${links}\n\n` +
+    `Se nesta semana não for possível, nos avise por aqui que a gente reorganiza.`
+  );
+};
+
 /** Carimbo do banco (timestamptz) → 'dd/mm/aaaa' no fuso de Brasília. */
 export const dataCarimbo = (ts?: string | null) =>
   ts

@@ -61,6 +61,7 @@ import {
   dataHoraCarimbo,
   diaMes,
   linkAgendaPublica,
+  mensagemLembreteAgenda,
   mensagemLinkAgenda,
   rotuloFrequencia,
   rotuloSemana,
@@ -82,7 +83,10 @@ import {
 } from './CriarAgendasSemanaDialog';
 import { SugestoesFixos } from './SugestoesFixos';
 
-const FILTROS: { id: SituacaoFixo | 'todos'; label: string }[] = [
+type FiltroLista = SituacaoFixo | 'todos' | 'nao_agendou';
+
+const FILTROS: { id: FiltroLista; label: string }[] = [
+  { id: 'nao_agendou', label: 'Não agendaram' },
   { id: 'falta', label: 'Falta marcar' },
   { id: 'completo', label: 'Marcados' },
   { id: 'adiado', label: 'Adiados' },
@@ -108,7 +112,7 @@ export const PacientesFixosManager: React.FC = () => {
   const [dados, setDados] = useState<SemanaFixos | null>(null);
   const [sugestoes, setSugestoes] = useState<SugestaoFixo[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [filtro, setFiltro] = useState<SituacaoFixo | 'todos'>('falta');
+  const [filtro, setFiltro] = useState<FiltroLista>('falta');
   const [profFiltro, setProfFiltro] = useState<string | null>(null);
 
   const [adiando, setAdiando] = useState<PacienteFixoSemana | null>(null);
@@ -158,11 +162,50 @@ export const PacientesFixosManager: React.FC = () => {
   const pacientes = useMemo(() => dados?.pacientes ?? [], [dados]);
   const agendas = useMemo(() => dados?.agendas ?? [], [dados]);
 
-  const contagem = useMemo(() => {
-    const c: Record<string, number> = { todos: pacientes.length };
-    for (const p of pacientes) c[p.situacao] = (c[p.situacao] ?? 0) + 1;
-    return c;
+  // Alerta: na semana em que deveria vir, a partir de terça, ainda sem horário
+  // (normalmente recebeu o link na semana anterior e não marcou)
+  const diaHoje = new Date().getDay(); // 0 = domingo
+  const passouDeSegunda = diaHoje === 0 || diaHoje >= 2;
+  const emAlerta = useCallback(
+    (p: PacienteFixoSemana) =>
+      semana === estaSemana && passouDeSegunda && p.situacao === 'falta',
+    [semana, estaSemana, passouDeSegunda]
+  );
+
+  // Filtro por profissional (paciente dividido aparece nas duas)
+  const porProf = useMemo(
+    () =>
+      pacientes.filter(
+        (p) =>
+          !profFiltro ||
+          p.profissional_id === profFiltro ||
+          (p.profissionais ?? []).some((x) => x.id === profFiltro)
+      ),
+    [pacientes, profFiltro]
+  );
+
+  const profsDaLista = useMemo(() => {
+    const m = new Map<string, { id: string; nome: string; n: number }>();
+    for (const p of pacientes) {
+      const ids = new Map<string, string>();
+      if (p.profissional_id)
+        ids.set(p.profissional_id, p.profissional_nome ?? 'Sem nome');
+      for (const x of p.profissionais ?? []) ids.set(x.id, x.nome);
+      for (const [id, nome] of ids) {
+        const atual = m.get(id) ?? { id, nome, n: 0 };
+        atual.n += 1;
+        m.set(id, atual);
+      }
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n);
   }, [pacientes]);
+
+  const contagem = useMemo(() => {
+    const c: Record<string, number> = { todos: porProf.length };
+    for (const p of porProf) c[p.situacao] = (c[p.situacao] ?? 0) + 1;
+    c.nao_agendou = porProf.filter(emAlerta).length;
+    return c;
+  }, [porProf, emAlerta]);
 
   const sessoesFaltando = pacientes.reduce((t, p) => t + p.falta, 0);
 
@@ -245,9 +288,10 @@ export const PacientesFixosManager: React.FC = () => {
     [agendasDoPaciente, escolha, escolhaPadrao]
   );
 
+  // Convite (semana que vem) ou lembrete (já é a semana e não marcou)
   const textoDoLink = useCallback(
     (p: PacienteFixoSemana, ags: AgendaPublicaSemana[]) =>
-      mensagemLinkAgenda({
+      (emAlerta(p) ? mensagemLembreteAgenda : mensagemLinkAgenda)({
         responsavelNome: p.responsavel_nome,
         pacienteNome: p.paciente_nome,
         agendas: ags.map((a) => ({
@@ -257,7 +301,7 @@ export const PacientesFixosManager: React.FC = () => {
           link: linkAgendaPublica(a.token),
         })),
       }),
-    []
+    [emAlerta]
   );
 
   const envioDe = useCallback(
@@ -294,17 +338,21 @@ export const PacientesFixosManager: React.FC = () => {
     [agendasDoPaciente, envioDe]
   );
 
+  // Envio em massa respeita o filtro de profissional e o de "Não agendaram"
   const elegiveis = useMemo(
-    () => pacientes.filter(elegivelMassa),
-    [pacientes, elegivelMassa]
+    () =>
+      porProf.filter(
+        (p) => elegivelMassa(p) && (filtro !== 'nao_agendou' || emAlerta(p))
+      ),
+    [porProf, elegivelMassa, filtro, emAlerta]
   );
   const naFila = useMemo(
     () =>
-      pacientes.filter((p) => {
+      porProf.filter((p) => {
         const st = envioDe(p)?.status;
         return st === 'fila' || st === 'enviando';
       }).length,
-    [pacientes, envioDe]
+    [porProf, envioDe]
   );
   const selecionadosValidos = elegiveis.filter((p) =>
     selecionados.has(p.paciente_id)
@@ -369,12 +417,12 @@ export const PacientesFixosManager: React.FC = () => {
     }
   };
 
-  const visiveis = pacientes.filter(
-    (p) =>
-      (filtro === 'todos' || p.situacao === filtro) &&
-      (!profFiltro ||
-        p.profissional_id === profFiltro ||
-        (p.profissionais ?? []).some((x) => x.id === profFiltro))
+  const visiveis = porProf.filter((p) =>
+    filtro === 'todos'
+      ? true
+      : filtro === 'nao_agendou'
+        ? emAlerta(p)
+        : p.situacao === filtro
   );
 
   const enviarLink = async (p: PacienteFixoSemana) => {
@@ -597,14 +645,73 @@ export const PacientesFixosManager: React.FC = () => {
         </Card>
       )}
 
+      {/* Quem deveria vir nesta semana e ainda não marcou (a partir de terça) */}
+      {(contagem.nao_agendou ?? 0) > 0 && filtro !== 'nao_agendou' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <p className="flex-1">
+            {contagem.nao_agendou} paciente
+            {contagem.nao_agendou === 1 ? '' : 's'} deveri
+            {contagem.nao_agendou === 1 ? 'a' : 'am'} vir nesta semana e ainda
+            não agend{contagem.nao_agendou === 1 ? 'ou' : 'aram'}.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 border-amber-400 bg-transparent"
+            onClick={() => setFiltro('nao_agendou')}
+          >
+            Ver e lembrar
+          </Button>
+        </div>
+      )}
+
+      {/* Profissional */}
+      {profsDaLista.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-muted-foreground">
+            Profissional
+          </span>
+          {[
+            { id: null as string | null, nome: 'Todas', n: pacientes.length },
+            ...profsDaLista,
+          ].map((p) => (
+            <Button
+              key={p.id ?? 'todas'}
+              size="sm"
+              variant={profFiltro === p.id ? 'default' : 'outline'}
+              className="h-8"
+              onClick={() => setProfFiltro(p.id)}
+            >
+              {p.id ? primeiroNome(p.nome) : p.nome}
+              <span
+                className={cn(
+                  'ml-1.5 tabular-nums',
+                  profFiltro === p.id
+                    ? 'text-primary-foreground/80'
+                    : 'text-muted-foreground'
+                )}
+              >
+                {p.n}
+              </span>
+            </Button>
+          ))}
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-1.5">
-        {FILTROS.map((f) => (
+        {FILTROS.filter(
+          (f) => f.id !== 'nao_agendou' || (contagem.nao_agendou ?? 0) > 0
+        ).map((f) => (
           <Button
             key={f.id}
             size="sm"
             variant={filtro === f.id ? 'secondary' : 'ghost'}
-            className="h-8"
+            className={cn(
+              'h-8',
+              f.id === 'nao_agendou' && 'text-amber-800 dark:text-amber-300'
+            )}
             onClick={() => setFiltro(f.id)}
           >
             {f.label}
@@ -613,19 +720,6 @@ export const PacientesFixosManager: React.FC = () => {
             </span>
           </Button>
         ))}
-        {profFiltro && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 text-primary"
-            onClick={() => setProfFiltro(null)}
-          >
-            {primeiroNome(
-              pendentesPorProf.find((p) => p.id === profFiltro)?.nome
-            )}{' '}
-            ✕
-          </Button>
-        )}
       </div>
 
       {/* Envio em massa */}
@@ -766,6 +860,14 @@ export const PacientesFixosManager: React.FC = () => {
                         Divide
                       </Badge>
                     )}
+                    {emAlerta(p) && (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                      >
+                        Não agendou
+                      </Badge>
+                    )}
                     {p.atrasado && (
                       <Badge
                         variant="outline"
@@ -820,40 +922,51 @@ export const PacientesFixosManager: React.FC = () => {
                       Próxima prevista na semana de {diaMes(p.semana_prevista)}
                     </p>
                   )}
-                  {envio && envio.status !== 'cancelado' && (
-                    <p
-                      className={cn(
-                        'text-xs',
-                        envio.status === 'falhou'
-                          ? 'text-destructive'
-                          : naFilaP
-                            ? 'text-sky-700 dark:text-sky-300'
-                            : 'text-muted-foreground'
-                      )}
-                    >
-                      {envio.status === 'fila' && 'Na fila do envio automático'}
-                      {envio.status === 'enviando' && 'Enviando agora…'}
-                      {envio.status === 'falhou' &&
-                        `Envio automático falhou${envio.erro ? `: ${envio.erro}` : ''}`}
-                      {envio.status === 'enviado' &&
-                        `Link enviado ${dataHoraCarimbo(envio.enviado_em)}${
-                          envio.canal === 'whatsapp_auto'
-                            ? ' automaticamente'
-                            : envio.enviado_por_nome
-                              ? ` por ${primeiroNome(envio.enviado_por_nome)}`
-                              : ''
-                        }${envio.vezes > 1 ? ` (${envio.vezes}x)` : ''}`}
-                      {naFilaP && envio.status === 'fila' && (
-                        <button
-                          type="button"
-                          className="ml-2 underline-offset-2 hover:underline"
-                          onClick={() => cancelarFila(p.paciente_id)}
-                        >
-                          Tirar da fila
-                        </button>
-                      )}
+                  {emAlerta(p) && (
+                    <p className="text-xs text-amber-800 dark:text-amber-300">
+                      {envio?.status === 'enviado' && envio.enviado_em
+                        ? `Recebeu o link em ${dataHoraCarimbo(envio.enviado_em)} e ainda não marcou.`
+                        : 'Ainda não recebeu o link desta semana.'}{' '}
+                      Toque em Lembrar para avisar a família.
                     </p>
                   )}
+                  {envio &&
+                    envio.status !== 'cancelado' &&
+                    !(emAlerta(p) && envio.status === 'enviado') && (
+                      <p
+                        className={cn(
+                          'text-xs',
+                          envio.status === 'falhou'
+                            ? 'text-destructive'
+                            : naFilaP
+                              ? 'text-sky-700 dark:text-sky-300'
+                              : 'text-muted-foreground'
+                        )}
+                      >
+                        {envio.status === 'fila' &&
+                          'Na fila do envio automático'}
+                        {envio.status === 'enviando' && 'Enviando agora…'}
+                        {envio.status === 'falhou' &&
+                          `Envio automático falhou${envio.erro ? `: ${envio.erro}` : ''}`}
+                        {envio.status === 'enviado' &&
+                          `Link enviado ${dataHoraCarimbo(envio.enviado_em)}${
+                            envio.canal === 'whatsapp_auto'
+                              ? ' automaticamente'
+                              : envio.enviado_por_nome
+                                ? ` por ${primeiroNome(envio.enviado_por_nome)}`
+                                : ''
+                          }${envio.vezes > 1 ? ` (${envio.vezes}x)` : ''}`}
+                        {naFilaP && envio.status === 'fila' && (
+                          <button
+                            type="button"
+                            className="ml-2 underline-offset-2 hover:underline"
+                            onClick={() => cancelarFila(p.paciente_id)}
+                          >
+                            Tirar da fila
+                          </button>
+                        )}
+                      </p>
+                    )}
                   {envio?.status === 'cancelado' && envio.erro && (
                     <p className="text-xs text-muted-foreground">
                       Saiu da fila: {envio.erro.toLowerCase()}
@@ -916,9 +1029,11 @@ export const PacientesFixosManager: React.FC = () => {
                         onClick={() => enviarLink(p)}
                       >
                         <MessageCircle className="mr-1.5 h-4 w-4" />
-                        {envio?.status === 'enviado'
-                          ? 'Reenviar'
-                          : 'Enviar link'}
+                        {emAlerta(p)
+                          ? 'Lembrar'
+                          : envio?.status === 'enviado'
+                            ? 'Reenviar'
+                            : 'Enviar link'}
                       </Button>
                       <Button
                         size="sm"
