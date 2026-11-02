@@ -1,3 +1,4 @@
+// Cópia: scripts/n8n/ju-comando-montar-pedido.js
 // n8n "RK Ju - Comando" → nó "Montar pedido" (Code, uma vez para todos os itens).
 // Monta o pedido à OpenAI (/v1/responses, saída JSON estrita). A IA só PROPÕE; quem confere e
 // executa é o banco (fn_ju_agendar, fn_ju_comando_preparar) e a edge ju-comando.
@@ -11,7 +12,11 @@ const rec = $('Recebe').first().json;
 let extra = '';
 if (rec.canal === 'chatwoot') {
   let ext = null;
-  try { ext = JSON.parse(rec.historico_externo || 'null'); } catch (e) { ext = null; }
+  try {
+    ext = JSON.parse(rec.historico_externo || 'null');
+  } catch (e) {
+    ext = null;
+  }
   if (Array.isArray(ext)) ctx.historico = ext;
   const quem = rec.quem_pediu || 'fisio';
   ctx.quem_pediu = quem;
@@ -23,7 +28,7 @@ Neste pedido quem escreveu o "@ju" não foi a recepção: foi a fisio ${quem}, n
 const PROMPT = `Você é a Ju, assistente da recepção da Respira Kids (clínica de fisioterapia pediátrica em Brasília).
 Na conversa de WhatsApp com uma família, alguém da equipe (recepção ou fisio) escreveu uma mensagem começando com "@ju". É um pedido da equipe para você, em linguagem livre: cada pessoa fala de um jeito ("agenda", "marca pra ela", "gera a cobrança", "gere o pagamento do mês passado", "manda a nota", "me diz tudo desse paciente", "o que você faz?"). Entenda pelo sentido, nunca por palavra exata. Use a mensagem do pedido ("comando") e o histórico da conversa e devolva o JSON pedido.
 
-Você sabe fazer 16 coisas (as de 11 a 16 só na conversa com uma fisio, sobre a agenda e os pacientes dela). Escolha UMA em "acao":
+Você sabe fazer 19 coisas (as de 11 a 16 só na conversa com uma fisio, sobre a agenda e os pacientes dela). Escolha UMA em "acao":
 
 1. AGENDAR consulta (acao "agendar")
 Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (HH:MM, 24 h), fisio (profissional_id de "profissionais") e serviço (tipo_servico_id de "servicos").
@@ -55,7 +60,7 @@ Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (H
 - A família também lê essa mensagem: escreva de forma neutra e respeitosa, sem julgamento (nada de "devendo", "inadimplente"; use "em aberto").
 
 5. AJUDA (acao "ajuda"): "o que você faz?", "como te uso?", "quais comandos?".
-- Em "mensagem", explique em poucas linhas o que você faz pelo @ju: agendar consulta; gerar a cobrança das sessões (todas ou só as que pedirem, por exemplo do mês passado); enviar, emitir ou reemitir a nota fiscal; contar como está a situação do paciente; anotar preferências no cadastro; fechar ou abrir a agenda de uma profissional; reservar um horário para uma família. Dê 2 ou 3 exemplos curtos e diga que é só escrever @ju seguido do pedido, do jeito que quiser.
+- Em "mensagem", explique em poucas linhas o que você faz pelo @ju: agendar consulta; gerar a cobrança das sessões (todas ou só as que pedirem, por exemplo do mês passado); enviar, emitir ou reemitir a nota fiscal; contar como está a situação do paciente; anotar preferências no cadastro; fechar ou abrir a agenda de uma profissional; reservar um horário para uma família; colocar ou tirar alguém da lista de espera. Dê 2 ou 3 exemplos curtos e diga que é só escrever @ju seguido do pedido, do jeito que quiser.
 
 6. ANOTAR (acao "anotar"): "grava que...", "anota que...", "lembra que...", "salva isso". Guarda uma informação ou preferência no cadastro para você usar nas próximas conversas.
 - pessoa_id: de familia.pacientes (crianças e responsáveis), de quem é a informação. Preferência de horário, de fisio ou de contato costuma ser do responsável; algo da criança fica na criança. Se não der para saber, pergunte.
@@ -83,6 +88,11 @@ PEDIDOS DA FISIO (só quando conversa_com for uma profissional; o banco usa semp
 14. EVOLUÇÕES PENDENTES (acao "evolucoes_pendentes"): "tenho evolução pendente?", "o que falta evoluir?".
 15. FICHA DO PACIENTE (acao "paciente"): "me fala do João Luca", "qual a última conduta da Clarice?", "quem é o pediatra da Alice?". Campo: motivo = nome do paciente como escrito.
 16. MEUS NÚMEROS (acao "meus_numeros"): "quantos atendimentos fiz esse mês?", "como foi meu outubro?". Campo: data = um dia do mês pedido (sem mês = o atual). Só contagens, sem valores.
+LISTA DE ESPERA (a recepção ou a equipe pede para colocar, tirar ou ver alguém na lista de espera):
+17. COLOCAR (acao "lista_espera_adicionar"): "coloca na lista de espera", "adiciona a Helena na lista", "põe na espera da respiratória". Campos: espera_nome (nome da criança; se a criança está em criancas, preencha também paciente_id), espera_tipo ("respiratoria" ou "motora", pelo pedido e pela conversa: catarro, chiado, bronquiolite, asma, tosse, pneumonia = respiratoria; torcicolo, assimetria, desenvolvimento, tensões, estimulação = motora; se não der para saber, null), espera_telefone (só se o pedido trouxer um telefone; na conversa da família o banco usa o desta conversa; número estrangeiro com + e o código do país), espera_idade (como foi dito, ex.: "3 meses", "2 anos") e espera_idade_meses (número de meses), espera_pediatra (se aparecer), motivo (a queixa em poucas palavras, ex.: "bronquiolite", "asma sem crise", "assimetria craniana"), espera_urgente e espera_urgencia_motivo. URGÊNCIA: urgente quando a criança tem menos de 6 meses, quando é bronquiolite, ou quando é asma em crise (falta de ar ou chiado forte agora); asma sem crise, rinite, gripe e tosse comum não são urgentes. Use o que a família contou na conversa.
+18. TIRAR (acao "lista_espera_remover"): "tira a Helena da lista de espera", "já resolveu, pode tirar da lista". Campos: espera_nome ou paciente_id; espera_tipo se disserem.
+19. VER (acao "lista_espera_ver"): "como está a lista de espera?", "quem está na lista?".
+
 Na conversa com uma fisio, AJUDA lista o que ela pode pedir: ver a agenda, horários livres, próximo paciente, quem confirmou, evoluções pendentes, ficha de um paciente, números do mês e fechar ou abrir a agenda. Valores, comissão e dados de outras fisios: nao_suportado.
 
 A conversa pode ser com a família ou com alguém da equipe (conversa_com preenchido): nesse caso não há família e os pedidos costumam ser de agenda. quem_pediu diz quem escreveu o @ju (Recepção ou a própria profissional).
@@ -97,15 +107,76 @@ Em "resumo", descreva em poucas palavras o que você entendeu (registro interno)
 const schema = {
   type: 'object',
   additionalProperties: false,
-  required: ['acao', 'paciente_id', 'data', 'hora', 'profissional_id', 'tipo_servico_id', 'agendamento_ids', 'fatura_ids', 'mensagem', 'resumo', 'pessoa_id', 'anotacao', 'profissional', 'data_fim', 'hora_fim', 'motivo'],
+  required: [
+    'acao',
+    'paciente_id',
+    'data',
+    'hora',
+    'profissional_id',
+    'tipo_servico_id',
+    'agendamento_ids',
+    'fatura_ids',
+    'mensagem',
+    'resumo',
+    'pessoa_id',
+    'anotacao',
+    'profissional',
+    'data_fim',
+    'hora_fim',
+    'motivo',
+    'espera_nome',
+    'espera_tipo',
+    'espera_telefone',
+    'espera_idade',
+    'espera_idade_meses',
+    'espera_pediatra',
+    'espera_urgente',
+    'espera_urgencia_motivo',
+  ],
   properties: {
-    acao: { type: 'string', enum: ['agendar', 'cobrar', 'nota', 'informar', 'ajuda', 'anotar', 'fechar_agenda', 'abrir_agenda', 'reservar_agenda', 'ver_agenda', 'horarios_livres', 'proximo_paciente', 'confirmacoes', 'evolucoes_pendentes', 'paciente', 'meus_numeros', 'perguntar', 'nao_suportado'] },
+    acao: {
+      type: 'string',
+      enum: [
+        'agendar',
+        'cobrar',
+        'nota',
+        'informar',
+        'ajuda',
+        'anotar',
+        'fechar_agenda',
+        'abrir_agenda',
+        'reservar_agenda',
+        'ver_agenda',
+        'horarios_livres',
+        'proximo_paciente',
+        'confirmacoes',
+        'evolucoes_pendentes',
+        'paciente',
+        'meus_numeros',
+        'lista_espera_adicionar',
+        'lista_espera_remover',
+        'lista_espera_ver',
+        'perguntar',
+        'nao_suportado',
+      ],
+    },
     pessoa_id: { type: ['string', 'null'] },
     anotacao: { type: ['string', 'null'] },
     profissional: { type: ['string', 'null'] },
     data_fim: { type: ['string', 'null'], description: 'AAAA-MM-DD' },
     hora_fim: { type: ['string', 'null'], description: 'HH:MM' },
     motivo: { type: ['string', 'null'] },
+    espera_nome: { type: ['string', 'null'] },
+    espera_tipo: {
+      type: ['string', 'null'],
+      enum: ['respiratoria', 'motora', null],
+    },
+    espera_telefone: { type: ['string', 'null'] },
+    espera_idade: { type: ['string', 'null'] },
+    espera_idade_meses: { type: ['integer', 'null'] },
+    espera_pediatra: { type: ['string', 'null'] },
+    espera_urgente: { type: ['boolean', 'null'] },
+    espera_urgencia_motivo: { type: ['string', 'null'] },
     paciente_id: { type: ['string', 'null'] },
     data: { type: ['string', 'null'], description: 'AAAA-MM-DD' },
     hora: { type: ['string', 'null'], description: 'HH:MM' },
@@ -118,16 +189,25 @@ const schema = {
   },
 };
 
-return [{
-  json: {
-    body: {
-      model: 'gpt-6.1-sol',
-      reasoning: { effort: 'low' },
-      input: [
-        { role: 'system', content: PROMPT + extra },
-        { role: 'user', content: JSON.stringify(ctx) },
-      ],
-      text: { format: { type: 'json_schema', name: 'comando_ju', strict: true, schema } },
+return [
+  {
+    json: {
+      body: {
+        model: 'gpt-6.1-sol',
+        reasoning: { effort: 'low' },
+        input: [
+          { role: 'system', content: PROMPT + extra },
+          { role: 'user', content: JSON.stringify(ctx) },
+        ],
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'comando_ju',
+            strict: true,
+            schema,
+          },
+        },
+      },
     },
   },
-}];
+];
