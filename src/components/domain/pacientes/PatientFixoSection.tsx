@@ -21,16 +21,17 @@ import { useToast } from '@/components/primitives/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchProfissionaisForUser } from '@/lib/calendar-services';
 import { cn } from '@/lib/utils';
+import { FrequenciaEditor } from '@/components/domain/pacientes-fixos/FrequenciaEditor';
 import {
-  FREQUENCIAS_FIXO,
   buscarPacienteFixo,
+  frequenciaValida,
+  type FrequenciaValor,
   dataCarimbo,
   diaMes,
   encerrarPacienteFixo,
   rotuloFrequencia,
   salvarPacienteFixo,
   type AlternanciaHistorico,
-  type FrequenciaFixo,
   type PacienteFixo,
   type ProfissionalRef,
   type PacienteFixoHistorico,
@@ -50,9 +51,9 @@ const ORIGEM: Record<string, string> = {
 const descreverHistorico = (h: PacienteFixoHistorico): string => {
   switch (h.acao) {
     case 'criado':
-      return `Virou fixo (${rotuloFrequencia(h.frequencia)})`;
+      return `Virou fixo (${rotuloFrequencia(h.frequencia, h.intervalo_dias)})`;
     case 'frequencia':
-      return `Frequência: ${rotuloFrequencia(h.frequencia_antes)} → ${rotuloFrequencia(h.frequencia)}`;
+      return `Frequência: ${rotuloFrequencia(h.frequencia_antes, h.intervalo_dias_antes)} → ${rotuloFrequencia(h.frequencia, h.intervalo_dias)}`;
     case 'adiado':
       return h.adiado_ate
         ? `Adiado para a semana de ${diaMes(h.adiado_ate)}`
@@ -64,7 +65,7 @@ const descreverHistorico = (h: PacienteFixoHistorico): string => {
         ? 'Saiu dos fixos (alta na evolução)'
         : 'Saiu dos fixos';
     case 'reativado':
-      return `Voltou a ser fixo (${rotuloFrequencia(h.frequencia)})`;
+      return `Voltou a ser fixo (${rotuloFrequencia(h.frequencia, h.intervalo_dias)})`;
     default:
       return 'Dados alterados';
   }
@@ -107,7 +108,10 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
   const [salvando, setSalvando] = useState(false);
   const [verHistorico, setVerHistorico] = useState(false);
 
-  const [frequencia, setFrequencia] = useState<FrequenciaFixo | null>(null);
+  const [freq, setFreq] = useState<FrequenciaValor>({
+    frequencia: null,
+    intervaloDias: null,
+  });
   // Profissionais escolhidas (2+ = atendimento dividido); [] = vale o histórico
   const [profissionais, setProfissionais] = useState<string[]>([]);
   const [opcoesProf, setOpcoesProf] = useState<ProfissionalRef[]>([]);
@@ -149,20 +153,24 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
     );
 
   const abrirEdicao = () => {
-    setFrequencia(fixo?.ativo ? fixo.frequencia : (fixo?.frequencia ?? null));
+    setFreq({
+      frequencia: fixo?.frequencia ?? null,
+      intervaloDias: fixo?.intervalo_dias ?? null,
+    });
     setProfissionais((fixo?.profissionais ?? []).map((p) => p.id));
     setObservacao(fixo?.observacao ?? '');
     setEditando(true);
   };
 
   const salvar = async () => {
-    if (!frequencia) return;
+    if (!freq.frequencia || !frequenciaValida(freq)) return;
     setSalvando(true);
     try {
       setFixo(
         await salvarPacienteFixo({
           pacienteId: patientId,
-          frequencia,
+          frequencia: freq.frequencia,
+          intervaloDias: freq.intervaloDias,
           profissionais,
           observacao,
         })
@@ -222,7 +230,7 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
           Paciente fixo
           {ativo && (
             <Badge variant="secondary" className="ml-1">
-              {rotuloFrequencia(fixo!.frequencia)}
+              {rotuloFrequencia(fixo!.frequencia, fixo!.intervalo_dias)}
             </Badge>
           )}
         </CardTitle>
@@ -237,19 +245,7 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Frequência</Label>
-              <div className="flex flex-wrap gap-2">
-                {FREQUENCIAS_FIXO.map((f) => (
-                  <Button
-                    key={f.valor}
-                    type="button"
-                    size="sm"
-                    variant={frequencia === f.valor ? 'default' : 'outline'}
-                    onClick={() => setFrequencia(f.valor)}
-                  >
-                    {f.label}
-                  </Button>
-                ))}
-              </div>
+              <FrequenciaEditor valor={freq} onChange={setFreq} />
             </div>
 
             <div className="space-y-2">
@@ -293,7 +289,10 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button onClick={salvar} disabled={!frequencia || salvando}>
+              <Button
+                onClick={salvar}
+                disabled={!frequenciaValida(freq) || salvando}
+              >
                 {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Salvar
               </Button>

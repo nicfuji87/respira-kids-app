@@ -13,7 +13,9 @@ export type FrequenciaFixo =
   | '2x_semana'
   | 'semanal'
   | 'quinzenal'
-  | 'mensal';
+  | 'mensal'
+  // "a cada N dias" (intervalo_dias, de 7 a 120)
+  | 'personalizada';
 
 export const FREQUENCIAS_FIXO: { valor: FrequenciaFixo; label: string }[] = [
   { valor: '3x_semana', label: '3x/semana' },
@@ -24,8 +26,30 @@ export const FREQUENCIAS_FIXO: { valor: FrequenciaFixo; label: string }[] = [
   { valor: 'diaria', label: 'Diária' },
 ];
 
-export const rotuloFrequencia = (f?: string | null): string =>
-  FREQUENCIAS_FIXO.find((x) => x.valor === f)?.label ?? '—';
+export const rotuloFrequencia = (
+  f?: string | null,
+  intervaloDias?: number | null
+): string =>
+  f === 'personalizada'
+    ? intervaloDias
+      ? `A cada ${intervaloDias} dias`
+      : 'Intervalo próprio'
+    : (FREQUENCIAS_FIXO.find((x) => x.valor === f)?.label ?? '—');
+
+/** Frequência escolhida na tela (personalizada leva o intervalo em dias) */
+export interface FrequenciaValor {
+  frequencia: FrequenciaFixo | null;
+  intervaloDias: number | null;
+}
+
+export const frequenciaValida = (v: FrequenciaValor) =>
+  !!v.frequencia &&
+  (v.frequencia !== 'personalizada' ||
+    (!!v.intervaloDias && v.intervaloDias >= 7 && v.intervaloDias <= 120));
+
+/** Frequências que a conduta da evolução motora conhece */
+export const ehFrequenciaPadrao = (f?: string | null) =>
+  !!f && FREQUENCIAS_FIXO.some((x) => x.valor === f);
 
 export interface PacienteFixoHistorico {
   acao:
@@ -39,6 +63,8 @@ export interface PacienteFixoHistorico {
   origem: 'cadastro' | 'evolucao' | 'lista' | null;
   frequencia: FrequenciaFixo | null;
   frequencia_antes: FrequenciaFixo | null;
+  intervalo_dias?: number | null;
+  intervalo_dias_antes?: number | null;
   adiado_ate: string | null;
   feito_por_nome: string | null;
   feito_em: string;
@@ -65,6 +91,7 @@ export interface PacienteFixo {
   novo?: boolean;
   paciente_id: string;
   frequencia: FrequenciaFixo;
+  intervalo_dias: number | null;
   profissional_id: string | null;
   profissional_nome: string | null;
   /** Profissionais do cadastro (2+ = atendimento dividido) */
@@ -96,6 +123,7 @@ export interface PacienteFixoSemana {
   paciente_nome: string;
   data_nascimento: string | null;
   frequencia: FrequenciaFixo;
+  intervalo_dias: number | null;
   sessoes: number;
   semanas: number;
   situacao: SituacaoFixo;
@@ -215,6 +243,7 @@ export const salvarPacienteFixo = (dados: {
   profissionais?: string[] | null;
   observacao?: string | null;
   origem?: 'cadastro' | 'lista';
+  intervaloDias?: number | null;
 }) =>
   rpc<PacienteFixo>('fn_paciente_fixo_salvar', {
     p_paciente_id: dados.pacienteId,
@@ -223,6 +252,46 @@ export const salvarPacienteFixo = (dados: {
     p_observacao: dados.observacao ?? null,
     p_origem: dados.origem ?? 'cadastro',
     p_profissionais: dados.profissionais ?? null,
+    p_intervalo_dias:
+      dados.frequencia === 'personalizada'
+        ? (dados.intervaloDias ?? null)
+        : null,
+  });
+
+/** Troca só a frequência (lista de fixos). */
+export const alterarFrequenciaFixo = (
+  pacienteId: string,
+  frequencia: FrequenciaFixo,
+  intervaloDias?: number | null
+) =>
+  rpc<PacienteFixo>('fn_paciente_fixo_frequencia', {
+    p_paciente_id: pacienteId,
+    p_frequencia: frequencia,
+    p_intervalo_dias:
+      frequencia === 'personalizada' ? (intervaloDias ?? null) : null,
+  });
+
+// ---------------------------------------------------------------------------
+// Não agendaram: quem está sem horário desde a semana prevista (a partir da
+// segunda dela). Não depende da semana escolhida; sai ao marcar ou retirar.
+// ---------------------------------------------------------------------------
+
+export interface NaoAgendado {
+  paciente_id: string;
+  /** Segunda-feira da semana em que deveria ter vindo */
+  desde: string;
+  semanas_sem_agendar: number;
+  ultima_sessao: string | null;
+  dias_sem_vir: number | null;
+  ultimo_link_em: string | null;
+}
+
+export const buscarNaoAgendados = () =>
+  rpc<NaoAgendado[]>('fn_pacientes_fixos_nao_agendados');
+
+export const retirarDosNaoAgendados = (pacienteId: string) =>
+  rpc<void>('fn_paciente_fixo_retirar_nao_agendados', {
+    p_paciente_id: pacienteId,
   });
 
 export const encerrarPacienteFixo = (

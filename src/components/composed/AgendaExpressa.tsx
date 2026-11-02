@@ -93,6 +93,8 @@ export interface AgendaExpressaProps {
   abrirSinal?: number;
   onCreated?: (novoAgendamentoId: string) => void;
   className?: string;
+  /** "AAAA-MM-DD": mostra os horários a partir desse dia (ex.: volta do adiamento) */
+  aPartirDe?: string;
 }
 
 export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
@@ -101,6 +103,7 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
   abrirSinal = 0,
   onCreated,
   className,
+  aPartirDe,
 }) => {
   const { toast } = useToast();
   const [contexto, setContexto] = useState<AgendaExpressaContexto | null>(null);
@@ -147,7 +150,8 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
       const res = await fetchAgendaExpressaHorarios(
         agendamentoId,
         profissionalId,
-        14
+        14,
+        aPartirDe ?? null
       );
       if (!res.ok) {
         setErroHorarios(
@@ -166,7 +170,7 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
     } finally {
       setCarregandoHorarios(false);
     }
-  }, [agendamentoId, profissionalId]);
+  }, [agendamentoId, profissionalId, aPartirDe]);
 
   useEffect(() => {
     setCarregandoContexto(true);
