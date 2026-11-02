@@ -52,6 +52,8 @@ import {
   type TipoMedidaMotora,
 } from '@/types/evolucao-clinica';
 import { HabilidadeCard } from './HabilidadeCard';
+import { AjudaParametroBotao } from './AjudaParametroBotao';
+import { LIMITE_OBJETIVOS_SESSAO } from '@/lib/evolucao-motora-guia';
 import { MedicaoSessaoBloco } from './MedicoesMotoras';
 import { ObjetivoMotorEditor } from './ObjetivoMotorEditor';
 import { chipClasse, opcaoClasse } from './estilos-motora';
@@ -200,6 +202,7 @@ const DetalheObjetivo: React.FC<{
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">
           O que foi feito <span className="text-destructive">*</span>
+          <AjudaParametroBotao id="o_que_foi_feito" />
         </Label>
         <div
           className="flex flex-wrap gap-1.5"
@@ -241,6 +244,7 @@ const DetalheObjetivo: React.FC<{
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">
           Resultado hoje <span className="text-destructive">*</span>
+          <AjudaParametroBotao id="resultado_objetivo" />
         </Label>
         <div
           className="grid grid-cols-2 sm:grid-cols-4 gap-2"
@@ -266,6 +270,15 @@ const DetalheObjetivo: React.FC<{
             </button>
           ))}
         </div>
+        {registro?.estado === 'nao_observado' &&
+          sessao.resultado &&
+          sessao.resultado !== 'nao_comparavel' && (
+            <p className="text-xs rounded-md bg-amber-50 border border-amber-200 text-amber-900 px-2 py-1">
+              A habilidade ficou &quot;Não observado hoje&quot;. Se você viu a
+              criança fazer, marque como ela fez; se não viu, o resultado é
+              &quot;Não foi possível comparar&quot;.
+            </p>
+          )}
       </div>
       <Input
         value={sessao.observacao ?? ''}
@@ -545,6 +558,17 @@ export const ObjetivosHabilidadesSecao: React.FC<
       {areasOrdenadas.length === 0 && (
         <p className="text-sm text-muted-foreground">
           Marque as áreas trabalhadas hoje (acima) para ver os objetivos.
+        </p>
+      )}
+
+      {sessoes.length >= LIMITE_OBJETIVOS_SESSAO && (
+        <p
+          className="text-sm rounded-md bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2"
+          role="status"
+        >
+          Você marcou {sessoes.length} objetivos. Marque só os que trabalhou
+          nesta sessão (em geral 2 a 4); os outros continuam no plano da criança
+          sem precisar marcar.
         </p>
       )}
 

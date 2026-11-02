@@ -11,6 +11,7 @@ import React from 'react';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { cn } from '@/lib/utils';
+import { MOTIVO_PARECE_NAO_PRECISA } from '@/lib/evolucao-motora-guia';
 import { useMedidasEvolucao } from './medidas-evolucao-context';
 import {
   NOME_MEDIDA_MOTORA,
@@ -106,6 +107,12 @@ const MotivoCampo: React.FC<{
       placeholder="Outro motivo"
       disabled={disabled}
     />
+    {motivo && MOTIVO_PARECE_NAO_PRECISA.test(motivo) && (
+      <p className="text-xs rounded-md bg-amber-50 border border-amber-200 text-amber-900 px-2 py-1">
+        Se essa medida não faz mais sentido para a criança, use &quot;Não
+        precisa mais&quot;: assim ela para de aparecer.
+      </p>
+    )}
   </div>
 );
 

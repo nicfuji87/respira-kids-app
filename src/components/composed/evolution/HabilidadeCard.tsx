@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
+import { AjudaParametroBotao } from './AjudaParametroBotao';
 import { cn } from '@/lib/utils';
 import {
   ASSISTENCIAS,
@@ -165,6 +166,10 @@ export const HabilidadeCard: React.FC<HabilidadeCardProps> = ({
         />
       )}
 
+      <p className="text-xs text-muted-foreground flex items-center gap-1 -mb-1">
+        Como fez hoje
+        <AjudaParametroBotao id="estado_habilidade" />
+      </p>
       <div
         className="grid grid-cols-2 sm:grid-cols-4 gap-2"
         role="radiogroup"
