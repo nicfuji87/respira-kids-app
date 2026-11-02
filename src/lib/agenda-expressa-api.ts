@@ -51,6 +51,7 @@ export interface AgendaExpressaDia {
   data: string; // "AAAA-MM-DD"
   livres: number;
   horarios: AgendaExpressaHorario[];
+  feriado?: string | null; // nome do feriado (o dia aparece mesmo assim)
 }
 
 export interface AgendaExpressaHorarios {
@@ -81,16 +82,35 @@ export const fetchAgendaExpressaContexto = async (
 export const fetchAgendaExpressaHorarios = async (
   agendamentoId: string,
   profissionalId?: string | null,
-  dias = 14
+  dias = 14,
+  de: string | null = null // "AAAA-MM-DD": a partir de outro dia
 ): Promise<AgendaExpressaHorarios> => {
   const { data, error } = await supabase.rpc('fn_agenda_expressa_horarios', {
     p_agendamento_id: agendamentoId,
     p_profissional_id: profissionalId ?? null,
-    p_de: null,
+    p_de: de,
     p_dias: dias,
   });
   if (error) throw error;
   return data as AgendaExpressaHorarios;
+};
+
+// "Outro horário": se a profissional está livre nesse dia e hora
+export const agendaExpressaHorarioLivre = async (
+  agendamentoId: string,
+  dataHora: string, // "AAAA-MM-DDTHH:MM" (hora de parede)
+  profissionalId?: string | null
+): Promise<boolean> => {
+  const { data, error } = await supabase.rpc(
+    'fn_agenda_expressa_horario_livre',
+    {
+      p_agendamento_id: agendamentoId,
+      p_data_hora: dataHora.replace('T', ' '),
+      p_profissional_id: profissionalId ?? null,
+    }
+  );
+  if (error) throw error;
+  return data === true;
 };
 
 export const criarAgendaExpressa = async (

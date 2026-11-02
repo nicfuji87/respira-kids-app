@@ -20,6 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/primitives/button';
+import { Input } from '@/components/primitives/input';
 import {
   Select,
   SelectContent,
@@ -30,6 +31,7 @@ import {
 import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
 import {
+  agendaExpressaHorarioLivre,
   criarAgendaExpressa,
   fetchAgendaExpressaContexto,
   fetchAgendaExpressaHorarios,
@@ -113,6 +115,12 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [marcadas, setMarcadas] = useState<string[]>([]);
+  // "Outra data" (além das 2 semanas) e "Outro horário" (fora da grade)
+  const [buscandoData, setBuscandoData] = useState(false);
+  const [horaOutra, setHoraOutra] = useState('');
+  const [outraLivre, setOutraLivre] = useState<
+    'verificando' | 'livre' | 'ocupado' | null
+  >(null);
 
   const hoje = useMemo(() => diaIso(new Date()), []);
 
@@ -200,10 +208,69 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
 
   const escolherDia = (dia: AgendaExpressaDia) => {
     setErro(null);
+    setHoraOutra('');
+    setOutraLivre(null);
     setDiaSel(dia.data);
     // Mesmo horário de hoje já vem escolhido quando está livre
     const mesmo = dia.horarios.find((h) => h.hora === horaOrigem && h.livre);
     setHoraSel(mesmo ? mesmo.hora : null);
+  };
+
+  // Qualquer data: busca a grade daquele dia e junta à lista
+  const escolherOutraData = async (data: string) => {
+    if (!data || !profissionalId) return;
+    const ja = dias?.find((d) => d.data === data);
+    if (ja) {
+      escolherDia(ja);
+      return;
+    }
+    setBuscandoData(true);
+    setErro(null);
+    try {
+      const res = await fetchAgendaExpressaHorarios(
+        agendamentoId,
+        profissionalId,
+        1,
+        data
+      );
+      const dia = res.ok ? res.dias?.[0] : undefined;
+      if (!dia) {
+        setErro('Não dá para marcar nesse dia (já passou).');
+        return;
+      }
+      setDias((atual) =>
+        [...(atual ?? []), dia].sort((a, b) => a.data.localeCompare(b.data))
+      );
+      escolherDia(dia);
+    } catch (e) {
+      console.error('Agenda Expressa: erro ao buscar a data', e);
+      setErro('Não deu para carregar os horários desse dia.');
+    } finally {
+      setBuscandoData(false);
+    }
+  };
+
+  // Qualquer horário: confere no banco se está livre
+  const escolherOutroHorario = async (hora: string) => {
+    setHoraOutra(hora);
+    setErro(null);
+    if (!diaSel || !/^\d{2}:\d{2}$/.test(hora)) {
+      setOutraLivre(null);
+      return;
+    }
+    setOutraLivre('verificando');
+    setHoraSel(null);
+    try {
+      const livre = await agendaExpressaHorarioLivre(
+        agendamentoId,
+        `${diaSel}T${hora}`,
+        profissionalId
+      );
+      setOutraLivre(livre ? 'livre' : 'ocupado');
+      if (livre) setHoraSel(hora);
+    } catch {
+      setOutraLivre(null);
+    }
   };
 
   const marcar = async () => {
@@ -424,9 +491,30 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
                             ? '+7 dias'
                             : `${dia.livres} livre${dia.livres > 1 ? 's' : ''}`}
                       </div>
+                      {dia.feriado && (
+                        <div
+                          className="text-[10px] leading-tight text-amber-700 max-w-[72px] truncate"
+                          title={dia.feriado}
+                        >
+                          {dia.feriado}
+                        </div>
+                      )}
                     </button>
                   );
                 })}
+                {/* Qualquer outra data */}
+                <label className="flex-shrink-0 min-w-[84px] rounded-md border border-dashed px-2 py-1.5 text-center cursor-pointer hover:bg-muted">
+                  <span className="block text-xs leading-tight text-muted-foreground">
+                    {buscandoData ? 'Buscando…' : 'Outra data'}
+                  </span>
+                  <Input
+                    type="date"
+                    min={hoje}
+                    aria-label="Escolher outra data"
+                    className="h-7 mt-1 px-1 text-xs"
+                    onChange={(e) => escolherOutraData(e.target.value)}
+                  />
+                </label>
               </div>
             )}
           </div>
@@ -451,6 +539,8 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
                       disabled={!h.livre}
                       onClick={() => {
                         setErro(null);
+                        setHoraOutra('');
+                        setOutraLivre(null);
                         setHoraSel(h.hora);
                       }}
                       aria-pressed={sel}
@@ -473,6 +563,37 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
                   );
                 })}
               </div>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <span className="text-xs text-muted-foreground">
+                  Outro horário
+                </span>
+                <Input
+                  type="time"
+                  step={300}
+                  value={horaOutra}
+                  onChange={(e) => escolherOutroHorario(e.target.value)}
+                  aria-label="Outro horário"
+                  className="h-8 w-28"
+                />
+                {outraLivre === 'verificando' && (
+                  <span className="text-xs text-muted-foreground">
+                    Conferindo…
+                  </span>
+                )}
+                {outraLivre === 'livre' && (
+                  <span className="text-xs text-green-700">Livre</span>
+                )}
+                {outraLivre === 'ocupado' && (
+                  <span className="text-xs text-destructive">
+                    Ocupado ou já passou
+                  </span>
+                )}
+              </div>
+              {diaAtual.feriado && (
+                <p className="text-xs text-amber-700 mt-1.5">
+                  {diaAtual.feriado}: confira se haverá atendimento.
+                </p>
+              )}
             </div>
           )}
 
