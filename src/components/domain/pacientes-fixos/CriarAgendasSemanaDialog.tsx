@@ -32,8 +32,9 @@ import {
 export interface ProfissionalPendente {
   id: string;
   nome: string;
-  pacientes: number; // fixos que ainda faltam marcar
+  pacientes: number; // fixos que ainda faltam marcar (vez desta profissional)
   sessoes: number;
+  divididos: number; // divididos com outra profissional que está na vez
 }
 
 interface CriarAgendasSemanaDialogProps {
@@ -200,14 +201,19 @@ export const CriarAgendasSemanaDialog: React.FC<
     <Dialog open={open} onOpenChange={(o) => !o && !criando && onClose()}>
       <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Agendas da semana de {rotuloSemana(semana)}</DialogTitle>
+          <DialogTitle>
+            {profissionais.length === 1
+              ? `Agenda de ${profissionais[0].nome.split(' ')[0]}`
+              : 'Agendas'}{' '}
+            · semana de {rotuloSemana(semana)}
+          </DialogTitle>
           <DialogDescription>
-            Horários livres de cada profissional. Desmarque os que não quer
-            abrir no link.
+            Uma agenda pública por profissional, com os horários livres dela.
+            Desmarque os que não quer abrir no link.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="-mx-6 flex-1 space-y-4 overflow-y-auto px-6">
+        <div className="-mx-4 flex-1 space-y-4 overflow-y-auto px-4 sm:-mx-6 sm:px-6">
           {profissionais.length === 0 && (
             <p className="text-sm text-muted-foreground">
               Nenhum paciente fixo esperando nesta semana.
@@ -240,6 +246,8 @@ export const CriarAgendasSemanaDialog: React.FC<
                       {p.pacientes} paciente{p.pacientes === 1 ? '' : 's'}{' '}
                       esperando ({p.sessoes} sess
                       {p.sessoes === 1 ? 'ão' : 'ões'})
+                      {p.divididos > 0 &&
+                        ` · +${p.divididos} dividido${p.divididos === 1 ? '' : 's'} com outra profissional`}
                       {e && e.selecionados.size > 0 && !existente
                         ? ` · ${e.selecionados.size} horários marcados`
                         : ''}

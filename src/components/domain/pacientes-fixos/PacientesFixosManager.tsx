@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowLeftRight,
   CalendarClock,
   CalendarPlus,
   Check,
@@ -93,7 +94,8 @@ export const PacientesFixosManager: React.FC = () => {
 
   const [adiando, setAdiando] = useState<PacienteFixoSemana | null>(null);
   const [marcando, setMarcando] = useState<PacienteFixoSemana | null>(null);
-  const [criarAgendas, setCriarAgendas] = useState(false);
+  // Profissionais do diálogo "Criar agenda" (null = fechado)
+  const [criarPara, setCriarPara] = useState<string[] | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -130,23 +132,40 @@ export const PacientesFixosManager: React.FC = () => {
 
   const sessoesFaltando = pacientes.reduce((t, p) => t + p.falta, 0);
 
-  // Profissionais com fixos esperando (para o filtro e para criar agendas)
+  // Profissionais com fixos esperando (para o filtro e para criar agendas).
+  // Paciente dividido conta para a da vez; nas outras entra em "divididos".
   const pendentesPorProf = useMemo<ProfissionalPendente[]>(() => {
     const m = new Map<string, ProfissionalPendente>();
-    for (const p of pacientes) {
-      if (p.situacao !== 'falta' || !p.profissional_id) continue;
-      const atual = m.get(p.profissional_id) ?? {
-        id: p.profissional_id,
-        nome: p.profissional_nome ?? 'Sem nome',
+    const pegar = (id: string, nome: string | null) => {
+      const atual = m.get(id) ?? {
+        id,
+        nome: nome ?? 'Sem nome',
         pacientes: 0,
         sessoes: 0,
+        divididos: 0,
       };
-      atual.pacientes += 1;
-      atual.sessoes += p.falta;
-      m.set(p.profissional_id, atual);
+      m.set(id, atual);
+      return atual;
+    };
+    for (const p of pacientes) {
+      if (p.situacao !== 'falta' || !p.profissional_id) continue;
+      const vez = pegar(p.profissional_id, p.profissional_nome);
+      vez.pacientes += 1;
+      vez.sessoes += p.falta;
+      for (const outra of p.profissionais ?? [])
+        if (outra.id !== p.profissional_id)
+          pegar(outra.id, outra.nome).divididos += 1;
     }
-    return [...m.values()].sort((a, b) => b.pacientes - a.pacientes);
+    return [...m.values()].sort(
+      (a, b) => b.pacientes + b.divididos - (a.pacientes + a.divididos)
+    );
   }, [pacientes]);
+
+  // Estável entre renderizações: o diálogo busca horários quando ela muda
+  const profsDoDialogo = useMemo(
+    () => pendentesPorProf.filter((p) => (criarPara ?? []).includes(p.id)),
+    [pendentesPorProf, criarPara]
+  );
 
   const agendaDaProf = useCallback(
     (profId: string | null): AgendaPublicaSemana | undefined =>
@@ -154,24 +173,43 @@ export const PacientesFixosManager: React.FC = () => {
     [agendas]
   );
 
+  // Agendas do paciente na semana: a da vez primeiro, depois as outras
+  const agendasDoPaciente = useCallback(
+    (p: PacienteFixoSemana): AgendaPublicaSemana[] => {
+      const ids = [
+        p.profissional_id,
+        ...(p.profissionais ?? []).map((x) => x.id),
+      ].filter((id, i, arr): id is string => !!id && arr.indexOf(id) === i);
+      return ids
+        .map((id) => agendaDaProf(id))
+        .filter((a): a is AgendaPublicaSemana => !!a);
+    },
+    [agendaDaProf]
+  );
+
   const visiveis = pacientes.filter(
     (p) =>
       (filtro === 'todos' || p.situacao === filtro) &&
-      (!profFiltro || p.profissional_id === profFiltro)
+      (!profFiltro ||
+        p.profissional_id === profFiltro ||
+        (p.profissionais ?? []).some((x) => x.id === profFiltro))
   );
 
   const enviarLink = async (p: PacienteFixoSemana) => {
-    const agenda = agendaDaProf(p.profissional_id);
+    const lista = agendasDoPaciente(p);
+    const agenda = lista[0];
     if (!agenda) return;
     const url = buildWhatsAppUrl(
       p.responsavel_telefone,
       mensagemLinkAgenda({
         responsavelNome: p.responsavel_nome,
         pacienteNome: p.paciente_nome,
-        profissionalNome: agenda.profissional_nome,
-        de: agenda.data_inicio,
-        ate: agenda.data_fim,
-        link: linkAgendaPublica(agenda.token),
+        agendas: lista.map((a) => ({
+          profissionalNome: a.profissional_nome,
+          de: a.data_inicio,
+          ate: a.data_fim,
+          link: linkAgendaPublica(a.token),
+        })),
       })
     );
     if (!url) {
@@ -242,7 +280,7 @@ export const PacientesFixosManager: React.FC = () => {
               />
             </Button>
             <Button
-              onClick={() => setCriarAgendas(true)}
+              onClick={() => setCriarPara(pendentesPorProf.map((p) => p.id))}
               disabled={carregando || pendentesPorProf.length === 0}
             >
               <CalendarPlus className="mr-2 h-4 w-4" />
@@ -342,6 +380,13 @@ export const PacientesFixosManager: React.FC = () => {
                         )}
                       >
                         {primeiroNome(pp.nome)}: {pp.pacientes}
+                        {pp.divididos > 0 && (
+                          <span className="font-normal text-muted-foreground">
+                            {' '}
+                            (+{pp.divididos} dividido
+                            {pp.divididos === 1 ? '' : 's'})
+                          </span>
+                        )}
                       </button>
                       {ag ? (
                         <>
@@ -358,9 +403,20 @@ export const PacientesFixosManager: React.FC = () => {
                           </Button>
                         </>
                       ) : (
-                        <span className="text-muted-foreground">
-                          · sem agenda pública nesta semana
-                        </span>
+                        <>
+                          <span className="text-muted-foreground">
+                            · sem agenda pública nesta semana
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-primary"
+                            onClick={() => setCriarPara([pp.id])}
+                          >
+                            <CalendarPlus className="mr-1 h-3.5 w-3.5" />
+                            Criar agenda
+                          </Button>
+                        </>
                       )}
                     </li>
                   );
@@ -424,7 +480,10 @@ export const PacientesFixosManager: React.FC = () => {
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
           {visiveis.map((p) => {
-            const agenda = agendaDaProf(p.profissional_id);
+            const agendasP = agendasDoPaciente(p);
+            const nomesProfs = (p.profissionais ?? []).map((x) =>
+              primeiroNome(x.nome)
+            );
             return (
               <li
                 key={p.paciente_id}
@@ -442,6 +501,26 @@ export const PacientesFixosManager: React.FC = () => {
                     <Badge variant="secondary">
                       {rotuloFrequencia(p.frequencia)}
                     </Badge>
+                    {p.divide && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-sky-300 text-sky-800 dark:border-sky-800 dark:text-sky-300"
+                        title={
+                          p.divide_origem === 'cadastro'
+                            ? 'Dividido no cadastro'
+                            : `Pelo histórico: ${(
+                                p.historico_profissionais ?? []
+                              )
+                                .map(
+                                  (h) => `${primeiroNome(h.nome)} ${h.sessoes}`
+                                )
+                                .join(', ')} nas últimas sessões`
+                        }
+                      >
+                        <ArrowLeftRight className="h-3 w-3" />
+                        Divide
+                      </Badge>
+                    )}
                     {p.atrasado && (
                       <Badge
                         variant="outline"
@@ -452,9 +531,16 @@ export const PacientesFixosManager: React.FC = () => {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {p.profissional_nome
-                      ? primeiroNome(p.profissional_nome)
-                      : 'Sem profissional'}
+                    {p.divide && nomesProfs.length > 1
+                      ? `${nomesProfs.join(' e ')} · vez da ${primeiroNome(p.profissional_nome)}`
+                      : p.profissional_nome
+                        ? primeiroNome(p.profissional_nome)
+                        : 'Sem profissional'}
+                    {p.divide &&
+                      (p.historico_profissionais ?? []).length > 1 &&
+                      ` (${(p.historico_profissionais ?? [])
+                        .map((h) => `${primeiroNome(h.nome)} ${h.sessoes}`)
+                        .join(', ')} nas últimas sessões)`}
                     {p.ultima_sessao &&
                       ` · última ${rotuloSessao(p.ultima_sessao)}`}
                     {p.observacao && ` · ${p.observacao}`}
@@ -506,13 +592,15 @@ export const PacientesFixosManager: React.FC = () => {
                       <Button
                         size="sm"
                         variant={p.envio ? 'outline' : 'default'}
-                        disabled={!agenda || !p.responsavel_telefone}
+                        disabled={!agendasP.length || !p.responsavel_telefone}
                         title={
-                          !agenda
+                          !agendasP.length
                             ? 'Crie a agenda da semana desta profissional'
                             : !p.responsavel_telefone
                               ? 'Responsável sem telefone'
-                              : undefined
+                              : agendasP.length > 1
+                                ? `Vai com o link de ${agendasP.map((a) => primeiroNome(a.profissional_nome)).join(' e ')}`
+                                : undefined
                         }
                         onClick={() => enviarLink(p)}
                       >
@@ -576,11 +664,11 @@ export const PacientesFixosManager: React.FC = () => {
       />
 
       <CriarAgendasSemanaDialog
-        open={criarAgendas}
+        open={!!criarPara}
         semana={semana}
-        profissionais={pendentesPorProf}
+        profissionais={profsDoDialogo}
         agendas={agendas}
-        onClose={() => setCriarAgendas(false)}
+        onClose={() => setCriarPara(null)}
         onCreated={carregar}
       />
 
