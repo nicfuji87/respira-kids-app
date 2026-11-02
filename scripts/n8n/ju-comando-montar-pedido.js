@@ -89,7 +89,7 @@ PEDIDOS DA FISIO (só quando conversa_com for uma profissional; o banco usa semp
 15. FICHA DO PACIENTE (acao "paciente"): "me fala do João Luca", "qual a última conduta da Clarice?", "quem é o pediatra da Alice?". Campo: motivo = nome do paciente como escrito.
 16. MEUS NÚMEROS (acao "meus_numeros"): "quantos atendimentos fiz esse mês?", "como foi meu outubro?". Campo: data = um dia do mês pedido (sem mês = o atual). Só contagens, sem valores.
 LISTA DE ESPERA (a recepção ou a equipe pede para colocar, tirar ou ver alguém na lista de espera):
-17. COLOCAR (acao "lista_espera_adicionar"): "coloca na lista de espera", "adiciona a Helena na lista", "põe na espera da respiratória". Campos: espera_nome (nome da criança; se a criança está em criancas, preencha também paciente_id), espera_tipo ("respiratoria" ou "motora", pelo pedido e pela conversa: catarro, chiado, bronquiolite, asma, tosse, pneumonia = respiratoria; torcicolo, assimetria, desenvolvimento, tensões, estimulação = motora; se não der para saber, null), espera_telefone (só se o pedido trouxer um telefone; na conversa da família o banco usa o desta conversa; número estrangeiro com + e o código do país), espera_idade (como foi dito, ex.: "3 meses", "2 anos") e espera_idade_meses (número de meses), espera_pediatra (se aparecer), motivo (a queixa em poucas palavras, ex.: "bronquiolite", "asma sem crise", "assimetria craniana"), espera_urgente e espera_urgencia_motivo. URGÊNCIA: urgente quando a criança tem menos de 6 meses, quando é bronquiolite, ou quando é asma em crise (falta de ar ou chiado forte agora); asma sem crise, rinite, gripe e tosse comum não são urgentes. Use o que a família contou na conversa.
+17. COLOCAR (acao "lista_espera_adicionar"): "coloca na lista de espera", "adiciona a Helena na lista", "põe na espera da respiratória". Campos: espera_nome (nome da criança; se a criança está em criancas, preencha também paciente_id), espera_tipo ("respiratoria" ou "motora", pelo pedido e pela conversa: catarro, chiado, bronquiolite, asma, tosse, pneumonia = respiratoria; torcicolo, assimetria, desenvolvimento, tensões, estimulação = motora; se não der para saber, null), espera_telefone (só se o pedido trouxer um telefone; na conversa da família o banco usa o desta conversa; número estrangeiro com + e o código do país), espera_idade (como foi dito, ex.: "3 meses", "2 anos") e espera_idade_meses (número de meses), espera_pediatra (se aparecer), espera_preferencia (dia ou horário que a família prefere, se disserem, ex.: "manhã", "terça às 10h", "depois das 17h"), motivo (a queixa em poucas palavras, ex.: "bronquiolite", "asma sem crise", "assimetria craniana"), espera_urgente e espera_urgencia_motivo. URGÊNCIA: urgente quando a criança tem menos de 6 meses, quando é bronquiolite, ou quando é asma em crise (falta de ar ou chiado forte agora); asma sem crise, rinite, gripe e tosse comum não são urgentes. Use o que a família contou na conversa.
 18. TIRAR (acao "lista_espera_remover"): "tira a Helena da lista de espera", "já resolveu, pode tirar da lista". Campos: espera_nome ou paciente_id; espera_tipo se disserem.
 19. VER (acao "lista_espera_ver"): "como está a lista de espera?", "quem está na lista?".
 
@@ -132,6 +132,7 @@ const schema = {
     'espera_pediatra',
     'espera_urgente',
     'espera_urgencia_motivo',
+    'espera_preferencia',
   ],
   properties: {
     acao: {
@@ -177,6 +178,7 @@ const schema = {
     espera_pediatra: { type: ['string', 'null'] },
     espera_urgente: { type: ['boolean', 'null'] },
     espera_urgencia_motivo: { type: ['string', 'null'] },
+    espera_preferencia: { type: ['string', 'null'] },
     paciente_id: { type: ['string', 'null'] },
     data: { type: ['string', 'null'], description: 'AAAA-MM-DD' },
     hora: { type: ['string', 'null'], description: 'HH:MM' },
