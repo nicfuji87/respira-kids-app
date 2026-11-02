@@ -614,6 +614,8 @@ export const PacientesFixosManager: React.FC = () => {
           { id: estaSemana, label: 'Esta semana' },
           { id: proximaSemana, label: 'Próxima semana' },
           { id: somarDias(estaSemana, 14), label: 'Em 2 semanas' },
+          { id: somarDias(estaSemana, 21), label: 'Em 3 semanas' },
+          { id: somarDias(estaSemana, 28), label: 'Em 4 semanas' },
         ].map((s) => (
           <Button
             key={s.id}
