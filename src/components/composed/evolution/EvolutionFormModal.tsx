@@ -67,6 +67,7 @@ import {
   pendenciasEvolucaoRespiratoria,
   pendenciasEvolucaoMotora,
   type PendenciaEvolucao,
+  type CondutaMotoraAssimetria,
 } from '@/types/evolucao-clinica';
 import {
   apagarRascunhoEvolucao,
@@ -119,6 +120,9 @@ export interface EvolutionFormModalProps {
   // Plano terapêutico e histórico motor da criança (formato 1.3).
   // null = sem permissão ou não carregado: a evolução funciona sem eles.
   planoMotor?: PlanoMotorValor | null;
+  // Frequência do cadastro de Pacientes Fixos (null = não é fixo ativo;
+  // undefined = não consultado, ex.: edição). Evolução nova abre com ela.
+  frequenciaCadastro?: string | null;
   mode?: 'create' | 'edit' | 'view';
 }
 
@@ -169,6 +173,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   medidas = null,
   dataSessao = '',
   planoMotor = null,
+  frequenciaCadastro,
   mode = 'create',
 }) => {
   // Chave única para autosave baseada no agendamento
@@ -486,6 +491,25 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
     autosaveKey,
     loadDraft,
   ]);
+
+  // Frequência do cadastro de Pacientes Fixos: evolução motora nova abre com
+  // ela na conduta (só se a fisio ainda não escolheu). Mesmo cuidado das
+  // áreas: fica DEPOIS do efeito que reinicia o formulário ao abrir.
+  useEffect(() => {
+    if (!isOpen || mode !== 'create' || !frequenciaCadastro) return;
+    setEvolucaoMotora((prev) =>
+      prev.conduta?.frequencia_sugerida
+        ? prev
+        : {
+            ...prev,
+            conduta: {
+              ...prev.conduta,
+              frequencia_sugerida:
+                frequenciaCadastro as CondutaMotoraAssimetria['frequencia_sugerida'],
+            },
+          }
+    );
+  }, [isOpen, mode, frequenciaCadastro]);
 
   // Áreas da última evolução: marcam se a fisio ainda não escolheu nada.
   // Precisa ficar DEPOIS do efeito que reinicia o formulário ao abrir; antes
@@ -1197,6 +1221,7 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                     onRespiratoriaChange={handleRespiratoriaChange}
                     onMotoraChange={handleMotoraChange}
                     disabled={isReadOnly}
+                    frequenciaCadastro={frequenciaCadastro}
                   />
                 </div>
               </ScrollArea>

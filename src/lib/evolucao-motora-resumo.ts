@@ -150,6 +150,7 @@ const FREQUENCIA: Record<string, string> = {
   '2x_semana': '2x por semana',
   semanal: 'semanal',
   quinzenal: 'quinzenal',
+  mensal: 'mensal',
 };
 
 const RESPOSTA: Record<string, string> = {

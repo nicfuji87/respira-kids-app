@@ -16,6 +16,7 @@ import {
   Receipt,
   PhoneCall,
   TrendingUp,
+  Repeat,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -55,6 +56,15 @@ export const navigationConfig: NavigationConfig[] = [
     icon: Users,
     label: 'Pacientes',
     href: '/pacientes',
+    roles: ['admin', 'secretaria'],
+    section: 'principal',
+  },
+  // AI dev note: Pacientes Fixos = motora com frequência combinada: quem falta
+  // marcar na semana, link da agenda pública e adiamentos. Admin + secretaria.
+  {
+    icon: Repeat,
+    label: 'Pacientes Fixos',
+    href: '/pacientes-fixos',
     roles: ['admin', 'secretaria'],
     section: 'principal',
   },

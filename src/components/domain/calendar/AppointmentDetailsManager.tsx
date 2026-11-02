@@ -1,3 +1,4 @@
+import { buscarPacienteFixo } from '@/lib/pacientes-fixos-api';
 import { AvaliacaoMotoraAgenda } from './AvaliacaoMotoraAgenda';
 import { usePlanoMotorDados } from '@/hooks/usePlanoMotorDados';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -289,6 +290,10 @@ export const AppointmentDetailsManager =
         date?: string;
       } | null>(null);
       // Áreas da última evolução motora da criança: já vêm marcadas na nova
+      // Frequência do paciente fixo (cadastro) para pré-preencher a conduta motora
+      const [frequenciaCadastro, setFrequenciaCadastro] = useState<
+        string | null
+      >(null);
       const [areasMotorasSugeridas, setAreasMotorasSugeridas] = useState<
         AreaMotora[] | undefined
       >(undefined);
@@ -347,6 +352,13 @@ export const AppointmentDetailsManager =
         if (!pacienteId) return;
         let cancelado = false;
         setAreasMotorasSugeridas(undefined);
+        setFrequenciaCadastro(null);
+        buscarPacienteFixo(pacienteId)
+          .then((fixo) => {
+            if (!cancelado && fixo?.ativo)
+              setFrequenciaCadastro(fixo.frequencia);
+          })
+          .catch(() => undefined);
         fetchUltimaEvolucaoMotoraPaciente(pacienteId, appointment?.id)
           .then((rel) => {
             if (cancelado || !rel?.evolucao_motora_assimetria) return;
@@ -2917,6 +2929,9 @@ export const AppointmentDetailsManager =
             patientName={appointment.paciente_nome}
             appointmentId={appointment.id}
             planoMotor={planoMotor}
+            frequenciaCadastro={
+              editingEvolucaoData ? undefined : frequenciaCadastro
+            }
             existingData={
               editingEvolucaoData
                 ? {

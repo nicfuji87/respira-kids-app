@@ -21,6 +21,7 @@ import { AppointmentFormManager } from '@/components/domain/calendar/Appointment
 import { PatientConversasSection } from '@/components/domain/whatsapp-conversas';
 import { PatientProdutosSection } from '@/components/domain/produtos';
 import { PatientPrecosSection } from './PatientPrecosSection';
+import { PatientFixoSection } from './PatientFixoSection';
 import { PlanoTerapeuticoMotor } from '@/components/composed/evolution';
 import {
   fetchPatientDetails,
@@ -439,6 +440,19 @@ export const PatientDetailsManager = React.memo<PatientDetailsManagerProps>(
               {/* Contrato do Paciente - apenas para pacientes */}
               {isPatientEntity && (
                 <PatientContractSection
+                  patientId={actualId}
+                  userRole={
+                    (user?.pessoa?.role as
+                      | 'admin'
+                      | 'profissional'
+                      | 'secretaria') || null
+                  }
+                />
+              )}
+
+              {/* Paciente fixo (frequência da motora) - apenas pacientes */}
+              {isPatientEntity && (
+                <PatientFixoSection
                   patientId={actualId}
                   userRole={
                     (user?.pessoa?.role as
