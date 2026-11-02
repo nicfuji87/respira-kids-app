@@ -102,6 +102,28 @@ if (chatid === GRUPO_NOTIFICACOES && m.fromMe === true && m.wasSentByApi === tru
 }
 if (!/@(s\.whatsapp\.net|lid)$/.test(chatid)) return []; // grupo, status, canal, transmissão
 const messageType = String(m.messageType ?? '');
+// 02/11/2026 (caso Camille: 13h editado para 15h e ninguém viu): edição da família vai para
+// fn_ju_mensagem_editada, que avisa o grupo se mudou hora, dia, valor etc. O formato da uazapi não é
+// documentado: procura o texto novo e o id original em vários lugares e guarda o bruto para conferir.
+if (messageType === 'EditedMessage' || (typeof m.edited === 'string' && m.edited)) {
+  if (chatid.endsWith('@g.us')) return [];
+  const cont = m.content && typeof m.content === 'object' ? m.content : {};
+  const achar = (o, chaves, prof = 0) => {
+    if (!o || typeof o !== 'object' || prof > 7) return null;
+    for (const k of Object.keys(o)) {
+      const v = o[k];
+      if (chaves.includes(k) && typeof v === 'string' && v) return v;
+      const r = achar(v, chaves, prof + 1);
+      if (r) return r;
+    }
+    return null;
+  };
+  const novo = String(m.text || (typeof m.content === 'string' ? m.content : '') || achar(cont, ['conversation', 'text', 'caption']) || '').trim();
+  const original = (typeof m.edited === 'string' && m.edited)
+    || cont?.protocolMessage?.key?.id || cont?.protocolMessage?.key?.ID || cont?.key?.id || cont?.key?.ID
+    || achar(cont?.protocolMessage || cont?.key || {}, ['id', 'ID', 'stanzaId']) || '';
+  return [{ json: { evento: 'editada', wa_chatid: chatid, novo, original_id: String(original), from_me: m.fromMe === true, bruto: JSON.stringify(m).slice(0, 4000) } }];
+}
 if (!m.messageid || IGNORAR.test(messageType)) return [];
 
 let content = m.content;
