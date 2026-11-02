@@ -1,6 +1,10 @@
 import { supabase } from './supabase';
 import type { User } from '@supabase/supabase-js';
 import { syncCustomerToAsaasAccounts } from './asaas-api';
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from './telefone-internacional';
 
 // AI dev note: Profile API para CRUD de dados da pessoa
 // Funções centralizadas para gerenciar perfil do usuário
@@ -405,6 +409,8 @@ export function formatPhoneForDatabase(phone: string): bigint {
  */
 export function formatPhoneForDisplay(phone: bigint | number | null): string {
   if (!phone) return '';
+  // Número estrangeiro (DDI diferente de 55): exibe +DDI em vez da máscara BR
+  if (ehTelefoneEstrangeiro(phone)) return formatarTelefoneInternacional(phone);
 
   const phoneStr = phone.toString();
 

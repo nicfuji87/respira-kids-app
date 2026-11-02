@@ -4,6 +4,12 @@
 // ("6186631761") ou já com máscara ("(61) 98663-1761"). Cortar em posições fixas
 // gerava "(55) 98812-41370" (o DDI virava DDD) em quase todos os contratos.
 // pessoas.telefone continua sendo o JID e não deve ser alterado — isto é só exibição.
+// Número estrangeiro (DDI diferente de 55) é formatado como "+972 54 331 6400".
+
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from './telefone-internacional';
 
 export interface TelefoneBR {
   ddd: string;
@@ -50,15 +56,28 @@ export function normalizarTelefoneBR(
 }
 
 /**
- * "(98) 98124-1370" / "(61) 3333-4444". Quando não reconhece (ex.: número
- * estrangeiro), devolve o valor como veio, para não sumir do documento.
+ * "(98) 98124-1370" / "(61) 3333-4444". Número estrangeiro sai como
+ * "+972 54 331 6400". Quando não reconhece nada, devolve o valor como veio,
+ * para não sumir do documento.
  */
 export function formatarTelefoneBR(
   valor: string | number | bigint | null | undefined
 ): string {
+  // Valor do PhoneInput com país escolhido ("+972 543316400"): o "+" decide.
+  if (
+    valor !== null &&
+    valor !== undefined &&
+    valor.toString().trim().startsWith('+') &&
+    ehTelefoneEstrangeiro(valor)
+  ) {
+    return formatarTelefoneInternacional(valor);
+  }
   const tel = normalizarTelefoneBR(valor);
-  if (!tel)
+  if (!tel) {
+    if (ehTelefoneEstrangeiro(valor))
+      return formatarTelefoneInternacional(valor);
     return valor === null || valor === undefined ? '' : valor.toString().trim();
+  }
   const corte = tel.numero.length - 4;
   return `(${tel.ddd}) ${tel.numero.slice(0, corte)}-${tel.numero.slice(corte)}`;
 }

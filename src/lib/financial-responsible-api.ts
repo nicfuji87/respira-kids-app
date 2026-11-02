@@ -1,4 +1,11 @@
 import { supabase } from './supabase';
+import {
+  VERIFICA_WHATSAPP_URL,
+  jidConfereComTelefone,
+  lerTelefoneDigitado,
+  mensagemTelefoneInvalido,
+  montarPayloadVerificaWhatsApp,
+} from './telefone-internacional';
 
 // AI dev note: API para gerenciamento de responsáveis financeiros
 // Funções para buscar pacientes, validar dados e adicionar responsáveis financeiros
@@ -123,31 +130,30 @@ export async function validateWhatsAppOnly(phoneNumber: string): Promise<{
   try {
     console.log('📱 [validateWhatsAppOnly] Validando:', phoneNumber);
 
-    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    // Brasil: 11 dígitos. Exterior: valor do PhoneInput "+972 543316400"
+    const telefone = lerTelefoneDigitado(phoneNumber);
+    const cleanPhone = telefone.nacional;
 
-    if (cleanPhone.length !== 11) {
+    if (!telefone.valido) {
       return {
         exists: false,
-        error: 'Número deve ter 11 dígitos (DDD + telefone)',
+        error: telefone.internacional
+          ? mensagemTelefoneInvalido(telefone)
+          : 'Número deve ter 11 dígitos (DDD + telefone)',
       };
     }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(
-      'https://webhooks-i.infusecomunicacao.online/webhook/verificaWhatsApp',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          whatsapp: cleanPhone,
-        }),
-        signal: controller.signal,
-      }
-    );
+    const response = await fetch(VERIFICA_WHATSAPP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(montarPayloadVerificaWhatsApp(telefone)),
+      signal: controller.signal,
+    });
 
     clearTimeout(timeoutId);
 
@@ -162,8 +168,14 @@ export async function validateWhatsAppOnly(phoneNumber: string): Promise<{
       data.length > 0 &&
       typeof data[0].exists === 'boolean'
     ) {
-      const exists = data[0].exists;
-      const jid = data[0].jid || `55${cleanPhone}@s.whatsapp.net`;
+      const jid =
+        data[0].jid ||
+        (telefone.internacional
+          ? `${telefone.completo}@s.whatsapp.net`
+          : `55${cleanPhone}@s.whatsapp.net`);
+      // Número estrangeiro consultado como "55..." (n8n sem ajuste): não confiar
+      const exists =
+        data[0].exists && jidConfereComTelefone(telefone, jid.split('@')[0]);
 
       console.log('✅ [validateWhatsAppOnly] Válido:', exists);
       return {
@@ -221,13 +233,19 @@ export async function findPersonByCpf(
 
 /**
  * Buscar pessoa por telefone
- * @param phone Telefone para buscar (apenas números, sem código país)
+ * @param phone Telefone para buscar (apenas números, sem código país). Número
+ * estrangeiro vem como valor do PhoneInput ("+972 543316400").
  * @returns Dados da pessoa ou null
  */
 export async function findPersonByPhone(
   phone: string
 ): Promise<PersonBasicData | null> {
   try {
+    // AI dev note: a RPC fn_public_buscar_pessoa_por_telefone sempre põe 55 na
+    // frente e só aceita 12–13 dígitos, então não acha número estrangeiro.
+    // Não chamar para não arriscar casar com outro cadastro.
+    if (lerTelefoneDigitado(phone).internacional) return null;
+
     const cleanPhone = phone.replace(/\D/g, '');
     // AI dev note: Usar JID completo (com código país 55), não remover
     const phoneForDB = cleanPhone.startsWith('55')

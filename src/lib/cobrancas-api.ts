@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { SituacaoCobranca } from './cobranca-mensagens';
+import { digitosParaWhatsApp } from './telefone-internacional';
 
 // AI dev note: API da tela /cobrancas — o canal MANUAL de cobrança pelo WhatsApp.
 // Existe porque a API (não oficial) de WhatsApp usada pelo n8n cai, e com ela o
@@ -228,7 +229,8 @@ const normalizarTelefone = (
   if (telefone === null || telefone === undefined) return null;
   const digitos = String(telefone).replace(/\D/g, '');
   if (digitos.length < 10) return null;
-  return digitos.startsWith('55') ? digitos : `55${digitos}`;
+  // Estrangeiro (DDI diferente de 55) vai como está; Brasil ganha o 55 se faltar
+  return digitosParaWhatsApp(digitos);
 };
 
 const isMobileDevice = (): boolean => {

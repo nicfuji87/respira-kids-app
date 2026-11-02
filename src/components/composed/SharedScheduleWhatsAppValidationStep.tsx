@@ -14,6 +14,7 @@ import {
 } from '@/lib/patient-registration-api';
 import type { ExistingUserFullData } from './WhatsAppValidationStep';
 import { WHATSAPP_CODE_VALIDATION_ENABLED } from '@/lib/feature-flags';
+import { lerTelefoneDigitado } from '@/lib/telefone-internacional';
 
 // AI dev note: SharedScheduleWhatsAppValidationStep - Validação para Agenda Compartilhada
 // Fluxo diferente do cadastro de paciente:
@@ -60,7 +61,8 @@ export const SharedScheduleWhatsAppValidationStep =
           return;
         }
 
-        if (cleanPhone.length !== 11) {
+        // Brasil: 11 dígitos. Exterior: DDI + número entre 8 e 15 dígitos.
+        if (!lerTelefoneDigitado(phoneNumber).valido) {
           setValidationResult(null);
           setErrorMessage('');
           return;

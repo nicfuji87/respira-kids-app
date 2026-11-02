@@ -1,4 +1,11 @@
 import { supabase } from './supabase';
+import {
+  VERIFICA_WHATSAPP_URL,
+  jidConfereComTelefone,
+  lerTelefoneDigitado,
+  mensagemTelefoneInvalido,
+  montarPayloadVerificaWhatsApp,
+} from './telefone-internacional';
 
 // AI dev note: API para cadastro público de pacientes
 // Valida WhatsApp via webhook externo e verifica cadastro prévio no Supabase
@@ -33,20 +40,21 @@ interface WebhookWhatsAppResponse {
 
 /**
  * Valida WhatsApp e verifica se pessoa já está cadastrada
+ * @param phoneFormatted - valor do PhoneInput: "(61) 98144-6666" ou "+972 543316400"
  */
 export async function validateWhatsAppAndCheckRegistration(
   phoneFormatted: string
 ): Promise<WhatsAppValidationResponse> {
   try {
-    // 1. Limpar número: apenas dígitos
-    const cleanPhone = phoneFormatted.replace(/\D/g, '');
+    // 1. Interpretar o número (Brasil: 11 dígitos; exterior: DDI + número)
+    const telefone = lerTelefoneDigitado(phoneFormatted);
 
-    // 2. Validar formato (deve ter 11 dígitos: DDD + número)
-    if (cleanPhone.length !== 11) {
+    // 2. Validar formato
+    if (!telefone.valido) {
       return {
         isValid: false,
         personExists: false,
-        errorMessage: 'Número deve ter 11 dígitos (DDD + número)',
+        errorMessage: mensagemTelefoneInvalido(telefone),
       };
     }
 
@@ -54,19 +62,14 @@ export async function validateWhatsAppAndCheckRegistration(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-    const webhookResponse = await fetch(
-      'https://webhooks-i.infusecomunicacao.online/webhook/verificaWhatsApp',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          whatsapp: cleanPhone,
-        }),
-        signal: controller.signal,
-      }
-    );
+    const webhookResponse = await fetch(VERIFICA_WHATSAPP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(montarPayloadVerificaWhatsApp(telefone)),
+      signal: controller.signal,
+    });
 
     clearTimeout(timeoutId);
 
@@ -96,11 +99,23 @@ export async function validateWhatsAppAndCheckRegistration(
     // Ex: "556181446666@s.whatsapp.net" → remover "@s.whatsapp.net" = "556181446666"
     const jidNumber = whatsappInfo.jid.replace('@s.whatsapp.net', '');
 
+    if (!jidConfereComTelefone(telefone, jidNumber)) {
+      return {
+        isValid: false,
+        personExists: false,
+        errorMessage:
+          'Não foi possível verificar este número estrangeiro. Tente novamente mais tarde.',
+      };
+    }
+
     // 7. AI dev note: IMPORTANTE - Manter código do país (55) para buscar no banco
-    // O banco armazena com código do país, então buscar com o mesmo formato
-    const phoneNumberForDB = jidNumber.startsWith('55')
-      ? jidNumber // Mantém com "55"
-      : `55${jidNumber}`; // Adiciona "55" se não tiver
+    // O banco armazena com código do país, então buscar com o mesmo formato.
+    // Número estrangeiro: o JID já vem com o DDI do país, usar como veio.
+    const phoneNumberForDB = telefone.internacional
+      ? jidNumber
+      : jidNumber.startsWith('55')
+        ? jidNumber // Mantém com "55"
+        : `55${jidNumber}`; // Adiciona "55" se não tiver
 
     // 8. Gerar variações de telefone (com e sem 9º dígito) para busca no banco
     // O sistema antigo salvava sem o 9º dígito, o novo salva com.
@@ -420,7 +435,8 @@ export async function trackRegistrationAttempt(data: {
 
 /**
  * Validar WhatsApp e obter JID (sem enviar código)
- * @param phoneNumber - Número do telefone com DDD (ex: 61981446666)
+ * @param phoneNumber - Número do telefone com DDD (ex: 61981446666) ou o valor
+ * do PhoneInput para número estrangeiro ("+972 543316400")
  * @returns exists: se o WhatsApp é válido, jid: identificador único do WhatsApp
  */
 export async function validateWhatsAppAndGetJID(phoneNumber: string): Promise<{
@@ -434,31 +450,29 @@ export async function validateWhatsAppAndGetJID(phoneNumber: string): Promise<{
       phoneNumber
     );
 
-    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    const telefone = lerTelefoneDigitado(phoneNumber);
+    const cleanPhone = telefone.nacional;
 
-    if (cleanPhone.length !== 11) {
+    if (!telefone.valido) {
       return {
         exists: false,
-        error: 'Número deve ter 11 dígitos (DDD + telefone)',
+        error: telefone.internacional
+          ? mensagemTelefoneInvalido(telefone)
+          : 'Número deve ter 11 dígitos (DDD + telefone)',
       };
     }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-    const response = await fetch(
-      'https://webhooks-i.infusecomunicacao.online/webhook/verificaWhatsApp',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          whatsapp: cleanPhone,
-        }),
-        signal: controller.signal,
-      }
-    );
+    const response = await fetch(VERIFICA_WHATSAPP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(montarPayloadVerificaWhatsApp(telefone)),
+      signal: controller.signal,
+    });
 
     clearTimeout(timeoutId);
 
@@ -474,8 +488,14 @@ export async function validateWhatsAppAndGetJID(phoneNumber: string): Promise<{
       data.length > 0 &&
       typeof data[0].exists === 'boolean'
     ) {
-      const exists = data[0].exists;
-      const jid = data[0].jid || `55${cleanPhone}@s.whatsapp.net`;
+      const jid =
+        data[0].jid ||
+        (telefone.internacional
+          ? `${telefone.completo}@s.whatsapp.net`
+          : `55${cleanPhone}@s.whatsapp.net`);
+      // Número estrangeiro consultado como "55..." (n8n sem ajuste): não confiar
+      const exists =
+        data[0].exists && jidConfereComTelefone(telefone, jid.split('@')[0]);
 
       console.log('✅ [validateWhatsAppAndGetJID] WhatsApp válido:', exists);
       console.log('📱 [validateWhatsAppAndGetJID] JID:', jid);

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Input } from '@/components/primitives/input';
+import { PhoneInput } from '@/components/primitives/PhoneInput';
 import { Label } from '@/components/primitives/label';
 import { Alert, AlertDescription } from '@/components/primitives/alert';
 import { Card, CardContent } from '@/components/primitives/card';
 import { AlertTriangle, CheckCircle, Loader2, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { validateWhatsAppAndGetJID } from '@/lib/patient-registration-api';
+import { lerTelefoneDigitado } from '@/lib/telefone-internacional';
 
 // Hook personalizado para debounce
 function useDebounce<T>(value: T, delay: number): T {
@@ -80,20 +81,6 @@ export const AdminWhatsAppValidationStep: React.FC<
 
   const debouncedWhatsapp = useDebounce(whatsapp, 500);
 
-  // Formatar número de telefone
-  const formatPhoneNumber = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    if (numbers.length <= 11) {
-      return numbers.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-    }
-    return value;
-  };
-
-  // Extrair apenas números para validação
-  const extractNumbers = (value: string) => {
-    return value.replace(/\D/g, '');
-  };
-
   // Buscar pessoa existente pelo telefone (JID sem @)
   const searchExistingPerson = useCallback(async (phoneNumber: string) => {
     try {
@@ -136,10 +123,10 @@ export const AdminWhatsAppValidationStep: React.FC<
   // Validar WhatsApp quando o número mudar
   useEffect(() => {
     const validateNumber = async () => {
-      const numbers = extractNumbers(debouncedWhatsapp);
+      const telefone = lerTelefoneDigitado(debouncedWhatsapp);
 
-      // Se não tem 11 dígitos, não validar ainda
-      if (numbers.length !== 11) {
+      // Brasil: 11 dígitos. Exterior: DDI + número entre 8 e 15 dígitos.
+      if (!telefone.valido) {
         setValidationStatus('idle');
         setValidationMessage('');
         setExistingPerson(null);
@@ -151,7 +138,10 @@ export const AdminWhatsAppValidationStep: React.FC<
 
       try {
         // Validar WhatsApp usando função existente
-        const validation = await validateWhatsAppAndGetJID(numbers);
+        // Brasil: 11 dígitos locais (igual antes). Exterior: "+DDI número".
+        const validation = await validateWhatsAppAndGetJID(
+          telefone.internacional ? debouncedWhatsapp : telefone.nacional
+        );
 
         if (validation.exists && validation.jid) {
           setJid(validation.jid);
@@ -210,7 +200,7 @@ export const AdminWhatsAppValidationStep: React.FC<
 
   const canContinue =
     validationStatus === 'valid' ||
-    (validationStatus === 'invalid' && extractNumbers(whatsapp).length === 11);
+    (validationStatus === 'invalid' && lerTelefoneDigitado(whatsapp).valido);
 
   return (
     <div className="space-y-6">
@@ -226,15 +216,11 @@ export const AdminWhatsAppValidationStep: React.FC<
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="whatsapp">WhatsApp *</Label>
-          <Input
+          <PhoneInput
             id="whatsapp"
-            type="tel"
             placeholder="(11) 98765-4321"
             value={whatsapp}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setWhatsapp(formatPhoneNumber(e.target.value))
-            }
-            maxLength={15}
+            onChange={setWhatsapp}
             className={
               validationStatus === 'valid'
                 ? 'border-green-500'

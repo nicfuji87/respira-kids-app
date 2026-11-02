@@ -23,6 +23,10 @@ import {
 import { cn, normalizeText } from '@/lib/utils';
 import { searchPacientes, fetchPacienteById } from '@/lib/calendar-services';
 import type { SupabasePessoa } from '@/types/supabase-calendar';
+import {
+  ehTelefoneEstrangeiro,
+  formatarTelefoneInternacional,
+} from '@/lib/telefone-internacional';
 
 // AI dev note: PatientSelect com BUSCA SERVER-SIDE
 // A busca é feita diretamente no Supabase, não carrega todos os pacientes no cliente
@@ -158,6 +162,9 @@ export const PatientSelect = React.memo<PatientSelectProps>(
       phone: number | bigint | null | undefined
     ): string => {
       if (!phone) return '';
+      // Número estrangeiro (DDI diferente de 55): exibe +DDI em vez da máscara BR
+      if (ehTelefoneEstrangeiro(phone))
+        return formatarTelefoneInternacional(phone);
       const phoneStr = phone.toString();
       if (phoneStr.length === 11) {
         return `(${phoneStr.slice(0, 2)}) ${phoneStr.slice(2, 7)}-${phoneStr.slice(7)}`;

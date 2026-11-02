@@ -86,10 +86,14 @@ serve(async (req: Request) => {
     // AI dev note: IMPORTANTE - usar JID completo (com código país 55)
     // Ex: usuário digita 61981446666, webhook retorna 556181446666@whatsapp.net
     // Devemos salvar: 556181446666 (JID antes do '@')
+    // Número estrangeiro chega com "+" (ex.: "+972543316400"): já tem DDI,
+    // usar como veio. Sem "+", regra de sempre (põe 55 se faltar).
     const cleanPhone = body.responsiblePhone.replace(/\D/g, '');
-    const phoneForDB = cleanPhone.startsWith('55')
+    const phoneForDB = body.responsiblePhone.trim().startsWith('+')
       ? cleanPhone
-      : `55${cleanPhone}`;
+      : cleanPhone.startsWith('55')
+        ? cleanPhone
+        : `55${cleanPhone}`;
     const phoneBigInt = BigInt(phoneForDB);
 
     console.log('📱 [add-financial-responsible] Telefone para DB:', phoneForDB);
@@ -138,8 +142,13 @@ serve(async (req: Request) => {
       }
 
       // AI dev note: IMPORTANTE - usar JID completo (com código país 55)
+      // Estrangeiro chega com "+": já tem DDI, usar como veio.
       const finPhone = body.financialResponsible.phone.replace(/\D/g, '');
-      finPhoneForDB = finPhone.startsWith('55') ? finPhone : `55${finPhone}`;
+      finPhoneForDB = body.financialResponsible.phone.trim().startsWith('+')
+        ? finPhone
+        : finPhone.startsWith('55')
+          ? finPhone
+          : `55${finPhone}`;
       const finPhoneBigInt = BigInt(finPhoneForDB);
 
       console.log(

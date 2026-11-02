@@ -3,6 +3,10 @@ import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { PhoneInput } from '@/components/primitives/PhoneInput';
+import {
+  lerTelefoneDigitado,
+  telefoneArmazenadoParaInput,
+} from '@/lib/telefone-internacional';
 import { Checkbox } from '@/components/primitives/checkbox';
 import {
   Loader2,
@@ -28,7 +32,7 @@ import {
 // Busca CEP primeiro no Supabase, depois no ViaCEP para reutilizar dados já cadastrados
 
 export interface NewFinancialResponsibleData {
-  phone: string; // Limpo (ex: 61981446666)
+  phone: string; // Limpo (ex: 61981446666). Exterior: "+972543316400"
   nome: string;
   cpf: string; // Limpo (apenas números)
   email: string;
@@ -116,8 +120,8 @@ export const NewFinancialResponsibleFormStep =
 
       // Validar telefone (WhatsApp)
       useEffect(() => {
-        const cleanPhone = phone.replace(/\D/g, '');
-        if (cleanPhone.length !== 11) {
+        // Brasil: 11 dígitos. Exterior: DDI + número entre 8 e 15 dígitos.
+        if (!lerTelefoneDigitado(phone).valido) {
           setPhoneValid(false);
           return;
         }
@@ -135,7 +139,7 @@ export const NewFinancialResponsibleFormStep =
               setErrors((prev) => ({ ...prev, phone: '' }));
 
               // Buscar se pessoa já existe por telefone
-              const existingPerson = await findPersonByPhone(cleanPhone);
+              const existingPerson = await findPersonByPhone(phone);
               if (existingPerson) {
                 setExistingPersonId(existingPerson.id);
                 setNome(existingPerson.nome);
@@ -168,7 +172,7 @@ export const NewFinancialResponsibleFormStep =
               setEmail(existingPerson.email || '');
               setPhone(
                 existingPerson.telefone
-                  ? existingPerson.telefone.toString()
+                  ? telefoneArmazenadoParaInput(existingPerson.telefone)
                   : ''
               );
             }
@@ -279,7 +283,10 @@ export const NewFinancialResponsibleFormStep =
         if (!validateForm()) return;
 
         const data: NewFinancialResponsibleData = {
-          phone: phone.replace(/\D/g, ''),
+          // Exterior vai com "+" para a edge function não pôr 55 na frente
+          phone: lerTelefoneDigitado(phone).internacional
+            ? `+${lerTelefoneDigitado(phone).completo}`
+            : phone.replace(/\D/g, ''),
           nome: nome.trim(),
           cpf: cpf.replace(/\D/g, ''),
           email: email.trim(),

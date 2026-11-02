@@ -3,8 +3,10 @@ import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { cn } from '@/lib/utils';
-import { AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { PhoneInput } from '@/components/primitives/PhoneInput';
 import { validateWhatsAppAndGetJID } from '@/lib/patient-registration-api';
+import { lerTelefoneDigitado } from '@/lib/telefone-internacional';
 
 // AI dev note: FinancialResponsibleDataStep - Cadastro de novo responsável financeiro
 // Diferenças do ResponsibleDataStep:
@@ -41,41 +43,34 @@ export const FinancialResponsibleDataStep =
 
       console.log('💰 [FinancialResponsibleDataStep] Renderizado - CPF:', cpf);
 
-      // Formatar WhatsApp
-      const formatWhatsApp = (value: string) => {
-        const numbers = value.replace(/\D/g, '');
-        if (numbers.length <= 11) {
-          return numbers
-            .replace(/(\d{2})(\d)/, '($1) $2')
-            .replace(/(\d{5})(\d)/, '$1-$2');
-        }
-        return value;
-      };
-
+      // O PhoneInput já aplica a máscara (Brasil) ou monta "+DDI número"
       const handleWhatsAppChange = (value: string) => {
-        const formatted = formatWhatsApp(value);
-        setWhatsapp(formatted);
+        setWhatsapp(value);
         setWhatsappValid(null);
         setWhatsappJid('');
         setErrors((prev) => ({ ...prev, whatsapp: '' }));
       };
 
       const handleWhatsAppBlur = useCallback(async () => {
-        const cleanPhone = whatsapp.replace(/\D/g, '');
+        const telefone = lerTelefoneDigitado(whatsapp);
 
-        if (cleanPhone.length !== 11) {
+        // Brasil: 11 dígitos. Exterior: DDI + número entre 8 e 15 dígitos.
+        if (!telefone.valido) {
           setWhatsappValid(null);
           return;
         }
 
         console.log(
           '📱 [FinancialResponsibleDataStep] Validando WhatsApp:',
-          cleanPhone
+          telefone.completo
         );
         setIsValidatingWhatsApp(true);
 
         try {
-          const result = await validateWhatsAppAndGetJID(cleanPhone);
+          // Brasil: 11 dígitos locais (igual antes). Exterior: "+DDI número".
+          const result = await validateWhatsAppAndGetJID(
+            telefone.internacional ? whatsapp : telefone.nacional
+          );
 
           if (result.error) {
             setErrors((prev) => ({ ...prev, whatsapp: result.error! }));
@@ -130,8 +125,10 @@ export const FinancialResponsibleDataStep =
 
         if (!whatsapp.trim()) {
           newErrors.whatsapp = 'WhatsApp é obrigatório';
-        } else if (whatsapp.replace(/\D/g, '').length !== 11) {
-          newErrors.whatsapp = 'WhatsApp deve ter 11 dígitos';
+        } else if (!lerTelefoneDigitado(whatsapp).valido) {
+          newErrors.whatsapp = lerTelefoneDigitado(whatsapp).internacional
+            ? 'WhatsApp deve ter de 8 a 15 dígitos, contando o código do país'
+            : 'WhatsApp deve ter 11 dígitos';
         } else if (!whatsappValid) {
           newErrors.whatsapp = 'WhatsApp deve ser validado';
         }
@@ -253,29 +250,15 @@ export const FinancialResponsibleDataStep =
               >
                 WhatsApp <span className="text-destructive">*</span>
               </Label>
-              <div className="relative">
-                <Input
-                  id="whatsapp"
-                  type="text"
-                  placeholder="(00) 00000-0000"
-                  value={whatsapp}
-                  onChange={(e) => handleWhatsAppChange(e.target.value)}
-                  onBlur={handleWhatsAppBlur}
-                  className={cn(
-                    'h-11 pr-10',
-                    errors.whatsapp && 'border-destructive',
-                    whatsappValid && 'border-green-500'
-                  )}
-                  maxLength={15}
-                  disabled={isValidatingWhatsApp}
-                />
-                {isValidatingWhatsApp && (
-                  <Loader2 className="w-4 h-4 absolute right-3 top-3.5 animate-spin text-muted-foreground" />
-                )}
-                {whatsappValid && !isValidatingWhatsApp && (
-                  <CheckCircle2 className="w-4 h-4 absolute right-3 top-3.5 text-green-600" />
-                )}
-              </div>
+              <PhoneInput
+                id="whatsapp"
+                placeholder="(00) 00000-0000"
+                value={whatsapp}
+                onChange={handleWhatsAppChange}
+                onBlur={handleWhatsAppBlur}
+                isValidating={isValidatingWhatsApp}
+                isValid={errors.whatsapp ? false : whatsappValid ? true : null}
+              />
               {whatsappValid && (
                 <p className="text-xs text-green-600 flex items-center gap-2">
                   <CheckCircle2 className="w-3 h-3" />

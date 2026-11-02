@@ -6,6 +6,7 @@ import type { ResponsibleData } from './ResponsiblePhoneValidationStep';
 import type { SelectedPatient } from './PatientSelectionStep';
 import type { FinancialResponsibleTypeData } from './FinancialResponsibleTypeStep';
 import type { NewFinancialResponsibleData } from './NewFinancialResponsibleFormStep';
+import { formatarTelefoneInternacional } from '@/lib/telefone-internacional';
 
 // AI dev note: FinancialResponsibleReviewStep - Revisão final dos dados antes de submeter
 // Mostra resumo completo de todos os dados coletados
@@ -130,10 +131,12 @@ export const FinancialResponsibleReviewStep =
                 <div>
                   <p className="text-xs text-respira-text-secondary">
                     Telefone:{' '}
-                    {newResponsibleData.phone.replace(
-                      /(\d{2})(\d{5})(\d{4})/,
-                      '($1) $2-$3'
-                    )}
+                    {newResponsibleData.phone.startsWith('+')
+                      ? formatarTelefoneInternacional(newResponsibleData.phone)
+                      : newResponsibleData.phone.replace(
+                          /(\d{2})(\d{5})(\d{4})/,
+                          '($1) $2-$3'
+                        )}
                   </p>
                   <p className="text-xs text-respira-text-secondary">
                     E-mail: {newResponsibleData.email}
