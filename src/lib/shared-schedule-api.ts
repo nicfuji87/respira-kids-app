@@ -989,6 +989,8 @@ export async function checkExistingAppointment(
       tipo_servico_nome: string;
       local_nome: string | null;
     };
+    /** Limite da semana atingido com horário em OUTRA agenda: só avisa */
+    bloqueadoSemana?: string;
   }>
 > {
   try {
@@ -996,6 +998,22 @@ export async function checkExistingAppointment(
       agendaId,
       pacienteId,
     });
+
+    // AI dev note: Regra do dono (02/11/2026): pela agenda pública é um
+    // horário por semana, exceto quem vem 2x/3x (histórico ou cadastro de
+    // fixo). O banco confere de novo ao criar (fn_criar_agendamento_...).
+    // Ainda pode marcar → segue (mesmo tendo outro horário nesta agenda).
+    const { data: semana } = await supabase.rpc(
+      'fn_public_agenda_semana_paciente',
+      { p_agenda_id: agendaId, p_paciente_id: pacienteId }
+    );
+    const limite = semana as {
+      pode_marcar?: boolean;
+      mensagem?: string | null;
+    } | null;
+    if (limite?.pode_marcar) {
+      return { data: { hasAppointment: false }, error: null, success: true };
+    }
 
     // Buscar status de agendamento "cancelado"
     const { data: statusCancelado } = await supabase
@@ -1032,13 +1050,16 @@ export async function checkExistingAppointment(
 
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
 
-    // Se não encontrou, não há agendamento
+    // Se não encontrou, não há agendamento nesta agenda
     if (!data || !data.agendamento) {
       console.log(
         '✅ [checkExistingAppointment] Nenhum agendamento encontrado'
       );
       return {
-        data: { hasAppointment: false },
+        data: {
+          hasAppointment: false,
+          bloqueadoSemana: limite?.mensagem || undefined,
+        },
         error: null,
         success: true,
       };
@@ -1073,7 +1094,10 @@ export async function checkExistingAppointment(
         '✅ [checkExistingAppointment] Agendamento encontrado mas não está ativo'
       );
       return {
-        data: { hasAppointment: false },
+        data: {
+          hasAppointment: false,
+          bloqueadoSemana: limite?.mensagem || undefined,
+        },
         error: null,
         success: true,
       };
