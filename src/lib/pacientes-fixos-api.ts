@@ -426,3 +426,54 @@ export const dataHoraCarimbo = (ts?: string | null) =>
         minute: '2-digit',
       })
     : '';
+
+// ---------------------------------------------------------------------------
+// Envio em massa (fila no banco; sai pelo número da recepção, 5-9 min entre
+// mensagens, 8h-20h, dividindo o ritmo com as cobranças em lote)
+// ---------------------------------------------------------------------------
+
+export type StatusEnvio =
+  | 'fila'
+  | 'enviando'
+  | 'enviado'
+  | 'falhou'
+  | 'cancelado';
+
+export interface EnvioSemana {
+  status: StatusEnvio;
+  canal: 'whatsapp_manual' | 'whatsapp_auto';
+  enviado_em: string | null;
+  fila_em: string | null;
+  erro: string | null;
+  enviado_por_nome: string | null;
+  agenda_id: string | null;
+  vezes: number;
+}
+
+export const buscarEnviosSemana = (semana: string) =>
+  rpc<Record<string, EnvioSemana>>('fn_pacientes_fixos_envios_semana', {
+    p_semana: semana,
+  });
+
+export const enfileirarEnvios = (
+  itens: {
+    paciente_id: string;
+    semana: string;
+    agendas: string[];
+    telefone: string;
+    texto: string;
+  }[]
+) =>
+  rpc<{ enfileirados: number; ignorados: number; na_fila: number }>(
+    'fn_fixos_enfileirar_envios',
+    { p_itens: itens }
+  );
+
+export const cancelarFilaEnvios = (semana: string, pacienteId?: string) =>
+  rpc<number>('fn_fixos_cancelar_fila', {
+    p_semana: semana,
+    p_paciente_id: pacienteId ?? null,
+  });
+
+/** Intervalo médio do envio automático (5 a 9 min). */
+export const MINUTOS_MEDIOS_POR_ENVIO = 7;

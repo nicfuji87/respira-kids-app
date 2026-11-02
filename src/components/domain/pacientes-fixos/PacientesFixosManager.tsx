@@ -3,7 +3,11 @@
 // - Enviar link: abre o WhatsApp com o link da agenda pública da profissional
 //   da semana e registra o envio (pacientes_fixos_envios);
 // - Marcar: Agenda Expressa a partir da última sessão (copia serviço/local/valor);
-// - Adiar: tira da lista até uma semana (família viajando etc.).
+// - Adiar: tira da lista até uma semana (família viajando etc.);
+// - Envio em massa: os selecionados entram numa fila no banco e saem sozinhos
+//   pelo número da recepção (5-9 min, 8h-20h, junto com as cobranças em lote).
+// Paciente dividido: escolhe de qual profissional vai o link (padrão: a da
+// vez; se a agenda dela está sem horário livre, a outra).
 // O cálculo é todo do banco (fn_pacientes_fixos_semana).
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -15,8 +19,10 @@ import {
   CalendarPlus,
   Check,
   Copy,
+  Loader2,
   MessageCircle,
   RefreshCw,
+  Send,
   Repeat,
   Undo2,
 } from 'lucide-react';
@@ -24,6 +30,14 @@ import { Card, CardContent } from '@/components/primitives/card';
 import { Button } from '@/components/primitives/button';
 import { Badge } from '@/components/primitives/badge';
 import { Skeleton } from '@/components/primitives/skeleton';
+import { Checkbox } from '@/components/primitives/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/primitives/select';
 import {
   Dialog,
   DialogContent,
@@ -37,8 +51,12 @@ import { PageHeader } from '@/components/composed/PageHeader';
 import { cn } from '@/lib/utils';
 import { buildWhatsAppUrl } from '@/lib/cobrancas-api';
 import {
+  MINUTOS_MEDIOS_POR_ENVIO,
   adiarPacienteFixo,
+  buscarEnviosSemana,
   buscarSemanaFixos,
+  cancelarFilaEnvios,
+  enfileirarEnvios,
   buscarSugestoesFixos,
   dataHoraCarimbo,
   diaMes,
@@ -51,6 +69,7 @@ import {
   somarDias,
   registrarEnvioLink,
   type AgendaPublicaSemana,
+  type EnvioSemana,
   type PacienteFixoSemana,
   type SemanaFixos,
   type SituacaoFixo,
@@ -97,15 +116,24 @@ export const PacientesFixosManager: React.FC = () => {
   // Profissionais do diálogo "Criar agenda" (null = fechado)
   const [criarPara, setCriarPara] = useState<string[] | null>(null);
 
+  // Envio: situação por paciente, escolha da profissional e seleção em massa
+  const [envios, setEnvios] = useState<Record<string, EnvioSemana>>({});
+  const [escolha, setEscolha] = useState<Record<string, string>>({});
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [confirmarMassa, setConfirmarMassa] = useState(false);
+  const [enfileirando, setEnfileirando] = useState(false);
+
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const [d, s] = await Promise.all([
+      const [d, s, e] = await Promise.all([
         buscarSemanaFixos(semana),
         buscarSugestoesFixos(),
+        buscarEnviosSemana(semana).catch(() => ({})),
       ]);
       setDados(d);
       setSugestoes(s ?? []);
+      setEnvios(e ?? {});
     } catch (e) {
       toast({
         title: 'Não foi possível carregar os pacientes fixos',
@@ -120,6 +148,12 @@ export const PacientesFixosManager: React.FC = () => {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Trocou de semana: limpa a seleção e as escolhas
+  useEffect(() => {
+    setSelecionados(new Set());
+    setEscolha({});
+  }, [semana]);
 
   const pacientes = useMemo(() => dados?.pacientes ?? [], [dados]);
   const agendas = useMemo(() => dados?.agendas ?? [], [dados]);
@@ -187,6 +221,154 @@ export const PacientesFixosManager: React.FC = () => {
     [agendaDaProf]
   );
 
+  // Profissional do link: escolhida na linha ou, sem escolha, a da vez; se a
+  // agenda da vez está sem horário livre, a primeira outra com horário
+  const escolhaPadrao = useCallback(
+    (p: PacienteFixoSemana): string | undefined => {
+      const lista = agendasDoPaciente(p);
+      if (lista.length <= 1) return lista[0]?.profissional_id;
+      const daVez = lista.find((a) => a.profissional_id === p.profissional_id);
+      if (daVez && daVez.livres > 0) return daVez.profissional_id;
+      return (lista.find((a) => a.livres > 0) ?? lista[0]).profissional_id;
+    },
+    [agendasDoPaciente]
+  );
+
+  const agendasEscolhidas = useCallback(
+    (p: PacienteFixoSemana): AgendaPublicaSemana[] => {
+      const lista = agendasDoPaciente(p);
+      const e = escolha[p.paciente_id] ?? escolhaPadrao(p);
+      if (e === 'todas') return lista;
+      const uma = lista.filter((a) => a.profissional_id === e);
+      return uma.length ? uma : lista.slice(0, 1);
+    },
+    [agendasDoPaciente, escolha, escolhaPadrao]
+  );
+
+  const textoDoLink = useCallback(
+    (p: PacienteFixoSemana, ags: AgendaPublicaSemana[]) =>
+      mensagemLinkAgenda({
+        responsavelNome: p.responsavel_nome,
+        pacienteNome: p.paciente_nome,
+        agendas: ags.map((a) => ({
+          profissionalNome: a.profissional_nome,
+          de: a.data_inicio,
+          ate: a.data_fim,
+          link: linkAgendaPublica(a.token),
+        })),
+      }),
+    []
+  );
+
+  const envioDe = useCallback(
+    (p: PacienteFixoSemana): EnvioSemana | null =>
+      envios[p.paciente_id] ??
+      (p.envio
+        ? {
+            status: 'enviado',
+            canal: 'whatsapp_manual',
+            enviado_em: p.envio.enviado_em,
+            fila_em: null,
+            erro: null,
+            enviado_por_nome: p.envio.enviado_por_nome,
+            agenda_id: p.envio.agenda_id,
+            vezes: p.envio.vezes,
+          }
+        : null),
+    [envios]
+  );
+
+  // Pode ir no envio em massa: falta marcar, tem agenda, tem telefone e não
+  // está na fila
+  const elegivelMassa = useCallback(
+    (p: PacienteFixoSemana) => {
+      const st = envioDe(p)?.status;
+      return (
+        p.situacao === 'falta' &&
+        !!p.responsavel_telefone &&
+        agendasDoPaciente(p).length > 0 &&
+        st !== 'fila' &&
+        st !== 'enviando'
+      );
+    },
+    [agendasDoPaciente, envioDe]
+  );
+
+  const elegiveis = useMemo(
+    () => pacientes.filter(elegivelMassa),
+    [pacientes, elegivelMassa]
+  );
+  const naFila = useMemo(
+    () =>
+      pacientes.filter((p) => {
+        const st = envioDe(p)?.status;
+        return st === 'fila' || st === 'enviando';
+      }).length,
+    [pacientes, envioDe]
+  );
+  const selecionadosValidos = elegiveis.filter((p) =>
+    selecionados.has(p.paciente_id)
+  );
+
+  const alternarSelecao = (id: string) =>
+    setSelecionados((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+
+  const enviarEmMassa = async () => {
+    setEnfileirando(true);
+    try {
+      const r = await enfileirarEnvios(
+        selecionadosValidos.map((p) => {
+          const ags = agendasEscolhidas(p);
+          return {
+            paciente_id: p.paciente_id,
+            semana,
+            agendas: ags.map((a) => a.id),
+            telefone: p.responsavel_telefone ?? '',
+            texto: textoDoLink(p, ags),
+          };
+        })
+      );
+      toast({
+        title: `${r.enfileirados} ${r.enfileirados === 1 ? 'mensagem entrou' : 'mensagens entraram'} na fila`,
+        description: `Saem sozinhas pelo número da recepção, uma a cada 5 a 9 minutos, das 8h às 20h.${
+          r.ignorados ? ` ${r.ignorados} já estavam na fila.` : ''
+        }`,
+      });
+      setSelecionados(new Set());
+      setConfirmarMassa(false);
+      carregar();
+    } catch (e) {
+      toast({
+        title: 'Não foi possível colocar na fila',
+        description: e instanceof Error ? e.message : undefined,
+        variant: 'destructive',
+      });
+    } finally {
+      setEnfileirando(false);
+    }
+  };
+
+  const cancelarFila = async (pacienteId?: string) => {
+    try {
+      const n = await cancelarFilaEnvios(semana, pacienteId);
+      toast({
+        title: n === 1 ? 'Saiu da fila' : `${n} mensagens saíram da fila`,
+      });
+      carregar();
+    } catch (e) {
+      toast({
+        title: 'Não foi possível tirar da fila',
+        description: e instanceof Error ? e.message : undefined,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const visiveis = pacientes.filter(
     (p) =>
       (filtro === 'todos' || p.situacao === filtro) &&
@@ -196,22 +378,10 @@ export const PacientesFixosManager: React.FC = () => {
   );
 
   const enviarLink = async (p: PacienteFixoSemana) => {
-    const lista = agendasDoPaciente(p);
+    const lista = agendasEscolhidas(p);
     const agenda = lista[0];
     if (!agenda) return;
-    const url = buildWhatsAppUrl(
-      p.responsavel_telefone,
-      mensagemLinkAgenda({
-        responsavelNome: p.responsavel_nome,
-        pacienteNome: p.paciente_nome,
-        agendas: lista.map((a) => ({
-          profissionalNome: a.profissional_nome,
-          de: a.data_inicio,
-          ate: a.data_fim,
-          link: linkAgendaPublica(a.token),
-        })),
-      })
-    );
+    const url = buildWhatsAppUrl(p.responsavel_telefone, textoDoLink(p, lista));
     if (!url) {
       toast({
         title: 'Sem telefone válido',
@@ -458,6 +628,59 @@ export const PacientesFixosManager: React.FC = () => {
         )}
       </div>
 
+      {/* Envio em massa */}
+      {(elegiveis.length > 0 || naFila > 0) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+          {elegiveis.length > 0 && (
+            <label className="flex cursor-pointer items-center gap-2">
+              <Checkbox
+                checked={
+                  selecionadosValidos.length === elegiveis.length
+                    ? true
+                    : selecionadosValidos.length > 0
+                      ? 'indeterminate'
+                      : false
+                }
+                onCheckedChange={(c) =>
+                  setSelecionados(
+                    c ? new Set(elegiveis.map((p) => p.paciente_id)) : new Set()
+                  )
+                }
+              />
+              Selecionar todos que podem receber ({elegiveis.length})
+            </label>
+          )}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {naFila > 0 && (
+              <>
+                <span className="text-muted-foreground">
+                  {naFila} na fila de envio
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  onClick={() => cancelarFila()}
+                >
+                  Tirar todos da fila
+                </Button>
+              </>
+            )}
+            <Button
+              size="sm"
+              className="h-8"
+              disabled={selecionadosValidos.length === 0}
+              onClick={() => setConfirmarMassa(true)}
+            >
+              <Send className="mr-1.5 h-4 w-4" />
+              Enviar em massa
+              {selecionadosValidos.length > 0 &&
+                ` (${selecionadosValidos.length})`}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Lista */}
       {carregando && !dados ? (
         <div className="space-y-2">
@@ -484,13 +707,35 @@ export const PacientesFixosManager: React.FC = () => {
             const nomesProfs = (p.profissionais ?? []).map((x) =>
               primeiroNome(x.nome)
             );
+            const envio = envioDe(p);
+            const naFilaP =
+              envio?.status === 'fila' || envio?.status === 'enviando';
+            const escolhaP = escolha[p.paciente_id] ?? escolhaPadrao(p);
             return (
               <li
                 key={p.paciente_id}
                 className="flex flex-col gap-3 p-3 md:flex-row md:items-center"
               >
+                {p.situacao === 'falta' && (
+                  <Checkbox
+                    className="hidden md:block"
+                    checked={selecionados.has(p.paciente_id)}
+                    disabled={!elegivelMassa(p)}
+                    onCheckedChange={() => alternarSelecao(p.paciente_id)}
+                    aria-label={`Selecionar ${p.paciente_nome} para o envio em massa`}
+                  />
+                )}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
+                    {p.situacao === 'falta' && (
+                      <Checkbox
+                        className="md:hidden"
+                        checked={selecionados.has(p.paciente_id)}
+                        disabled={!elegivelMassa(p)}
+                        onCheckedChange={() => alternarSelecao(p.paciente_id)}
+                        aria-label={`Selecionar ${p.paciente_nome} para o envio em massa`}
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => abrirPaciente(p.paciente_id)}
@@ -575,13 +820,43 @@ export const PacientesFixosManager: React.FC = () => {
                       Próxima prevista na semana de {diaMes(p.semana_prevista)}
                     </p>
                   )}
-                  {p.envio && (
+                  {envio && envio.status !== 'cancelado' && (
+                    <p
+                      className={cn(
+                        'text-xs',
+                        envio.status === 'falhou'
+                          ? 'text-destructive'
+                          : naFilaP
+                            ? 'text-sky-700 dark:text-sky-300'
+                            : 'text-muted-foreground'
+                      )}
+                    >
+                      {envio.status === 'fila' && 'Na fila do envio automático'}
+                      {envio.status === 'enviando' && 'Enviando agora…'}
+                      {envio.status === 'falhou' &&
+                        `Envio automático falhou${envio.erro ? `: ${envio.erro}` : ''}`}
+                      {envio.status === 'enviado' &&
+                        `Link enviado ${dataHoraCarimbo(envio.enviado_em)}${
+                          envio.canal === 'whatsapp_auto'
+                            ? ' automaticamente'
+                            : envio.enviado_por_nome
+                              ? ` por ${primeiroNome(envio.enviado_por_nome)}`
+                              : ''
+                        }${envio.vezes > 1 ? ` (${envio.vezes}x)` : ''}`}
+                      {naFilaP && envio.status === 'fila' && (
+                        <button
+                          type="button"
+                          className="ml-2 underline-offset-2 hover:underline"
+                          onClick={() => cancelarFila(p.paciente_id)}
+                        >
+                          Tirar da fila
+                        </button>
+                      )}
+                    </p>
+                  )}
+                  {envio?.status === 'cancelado' && envio.erro && (
                     <p className="text-xs text-muted-foreground">
-                      Link enviado {dataHoraCarimbo(p.envio.enviado_em)}
-                      {p.envio.enviado_por_nome
-                        ? ` por ${primeiroNome(p.envio.enviado_por_nome)}`
-                        : ''}
-                      {p.envio.vezes > 1 ? ` (${p.envio.vezes}x)` : ''}
+                      Saiu da fila: {envio.erro.toLowerCase()}
                     </p>
                   )}
                 </div>
@@ -589,23 +864,61 @@ export const PacientesFixosManager: React.FC = () => {
                 <div className="flex flex-wrap gap-2 md:justify-end">
                   {p.situacao === 'falta' && (
                     <>
+                      {agendasP.length > 1 && (
+                        <Select
+                          value={escolhaP}
+                          onValueChange={(v) =>
+                            setEscolha((e) => ({ ...e, [p.paciente_id]: v }))
+                          }
+                        >
+                          <SelectTrigger
+                            className="h-9 w-auto min-w-[8.5rem] gap-1 text-xs"
+                            aria-label="De qual profissional vai o link"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {agendasP.map((a) => (
+                              <SelectItem
+                                key={a.profissional_id}
+                                value={a.profissional_id}
+                              >
+                                Link da {primeiroNome(a.profissional_nome)}
+                                {a.profissional_id === p.profissional_id
+                                  ? ' (vez dela)'
+                                  : ''}
+                                {a.livres === 0 ? ' · sem horário' : ''}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="todas">
+                              {agendasP.length === 2
+                                ? 'Links das duas'
+                                : 'Links de todas'}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                       <Button
                         size="sm"
-                        variant={p.envio ? 'outline' : 'default'}
-                        disabled={!agendasP.length || !p.responsavel_telefone}
+                        variant={envio ? 'outline' : 'default'}
+                        disabled={
+                          !agendasP.length || !p.responsavel_telefone || naFilaP
+                        }
                         title={
                           !agendasP.length
                             ? 'Crie a agenda da semana desta profissional'
                             : !p.responsavel_telefone
                               ? 'Responsável sem telefone'
-                              : agendasP.length > 1
-                                ? `Vai com o link de ${agendasP.map((a) => primeiroNome(a.profissional_nome)).join(' e ')}`
+                              : naFilaP
+                                ? 'Já está na fila do envio automático'
                                 : undefined
                         }
                         onClick={() => enviarLink(p)}
                       >
                         <MessageCircle className="mr-1.5 h-4 w-4" />
-                        {p.envio ? 'Reenviar' : 'Enviar link'}
+                        {envio?.status === 'enviado'
+                          ? 'Reenviar'
+                          : 'Enviar link'}
                       </Button>
                       <Button
                         size="sm"
@@ -662,6 +975,72 @@ export const PacientesFixosManager: React.FC = () => {
           carregar();
         }}
       />
+
+      <Dialog
+        open={confirmarMassa}
+        onOpenChange={(o) => !o && !enfileirando && setConfirmarMassa(false)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Enviar para {selecionadosValidos.length} família
+              {selecionadosValidos.length === 1 ? '' : 's'}?
+            </DialogTitle>
+            <DialogDescription>
+              As mensagens saem sozinhas pelo número da recepção, uma a cada 5 a
+              9 minutos, só das 8h às 20h e no ritmo das cobranças em lote.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>
+              Previsão: cerca de{' '}
+              {(() => {
+                const min =
+                  selecionadosValidos.length * MINUTOS_MEDIOS_POR_ENVIO;
+                return min < 60
+                  ? `${min} minutos`
+                  : `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
+              })()}{' '}
+              para todas saírem.
+            </p>
+            <p className="text-muted-foreground">
+              Quem marcar antes de chegar a vez não recebe. Dá para tirar da
+              fila a qualquer momento.
+            </p>
+            <ul className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border p-2 text-xs">
+              {selecionadosValidos.map((p) => (
+                <li key={p.paciente_id}>
+                  {p.paciente_nome}
+                  <span className="text-muted-foreground">
+                    {' '}
+                    ·{' '}
+                    {agendasEscolhidas(p)
+                      .map((a) => primeiroNome(a.profissional_nome))
+                      .join(' e ')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmarMassa(false)}
+              disabled={enfileirando}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={enviarEmMassa} disabled={enfileirando}>
+              {enfileirando ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="mr-2 h-4 w-4" />
+              )}
+              Colocar na fila
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <CriarAgendasSemanaDialog
         open={!!criarPara}

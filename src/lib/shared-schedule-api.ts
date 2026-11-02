@@ -836,7 +836,8 @@ export async function removeSlots(
     const { data: selecoes, error: selecoesError } = await supabase
       .from('agenda_selecoes')
       .select('slot_id, agendamento_id')
-      .in('slot_id', slotIds);
+      .in('slot_id', slotIds)
+      .is('liberada_em', null);
 
     if (selecoesError) throw selecoesError;
 
@@ -924,7 +925,9 @@ export async function fetchSlotsWithSelections(
         empresa:pessoa_empresas(razao_social)
       `
       )
-      .eq('agenda_id', agendaId);
+      .eq('agenda_id', agendaId)
+      // Escolha liberada (consulta cancelada/falta) é só histórico: o horário voltou
+      .is('liberada_em', null);
 
     const slotsComSelecao: AgendaSlotComSelecao[] = (slots || []).map(
       (slot) => {
@@ -1021,7 +1024,11 @@ export async function checkExistingAppointment(
       )
       .eq('agenda_id', agendaId)
       .eq('paciente_id', pacienteId)
-      .single();
+      // Escolha liberada não conta; e pode haver mais de uma escolha antiga
+      .is('liberada_em', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
 

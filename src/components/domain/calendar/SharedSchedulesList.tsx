@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Loader2, Trash2, Copy, Pencil, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/primitives/button';
 import { Input } from '@/components/primitives/input';
@@ -21,7 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/primitives/alert-dialog';
-import { ScheduleCard } from '@/components/composed/ScheduleCard';
+import { Badge } from '@/components/primitives/badge';
+import { AgendasAutomaticasConfig } from './AgendasAutomaticasConfig';
 import { SharedScheduleCreatorWizard } from './SharedScheduleCreatorWizard';
 import { SharedScheduleEditorDialog } from './SharedScheduleEditorDialog';
 import { cn } from '@/lib/utils';
@@ -38,8 +39,10 @@ import type {
 } from '@/types/shared-schedule';
 
 // AI dev note: SharedSchedulesList - Domain
-// Lista agendas compartilhadas com filtros, criação e edição
-// Usa ScheduleCard (Composed) para exibir cada agenda
+// Lista agendas compartilhadas com filtros, criação e edição.
+// Lista compacta (uma linha por agenda) em vez de cartões: com as agendas
+// automáticas são ~4 por profissional e os cartões poluíam a tela (dono,
+// 02/11/2026). No topo, a configuração das agendas automáticas.
 
 export interface SharedSchedulesListProps {
   profissionalId: string;
@@ -171,13 +174,29 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
       }
     }, [agendaToDelete, toast, loadAgendas]);
 
-    // Filtrar agendas localmente por busca
-    const filteredAgendas = agendas.filter((agenda) =>
-      agenda.titulo.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Filtrar agendas localmente por busca; ativas na ordem das semanas,
+    // as antigas da mais recente para a mais antiga
+    const filteredAgendas = agendas
+      .filter((agenda) =>
+        agenda.titulo.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .sort((a, b) =>
+        a.ativo !== b.ativo
+          ? a.ativo
+            ? -1
+            : 1
+          : a.ativo
+            ? a.data_inicio.localeCompare(b.data_inicio)
+            : b.data_inicio.localeCompare(a.data_inicio)
+      );
+
+    const periodo = (de: string, ate: string) =>
+      `${de.slice(8, 10)}/${de.slice(5, 7)} a ${ate.slice(8, 10)}/${ate.slice(5, 7)}`;
 
     return (
       <div className={cn('space-y-6', className)}>
+        <AgendasAutomaticasConfig onChanged={loadAgendas} />
+
         {/* Header com filtros */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex-1 space-y-4 sm:max-w-md">
@@ -242,17 +261,83 @@ export const SharedSchedulesList = React.memo<SharedSchedulesListProps>(
             {/* "Nova Agenda Compartilhada" já está no topo da lista */}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredAgendas.map((agenda) => (
-              <ScheduleCard
-                key={agenda.id}
-                agenda={agenda}
-                onCopyLink={handleCopyLink}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
+          <ul className="divide-y rounded-lg border bg-card">
+            {filteredAgendas.map((agenda) => {
+              const ocupados = Number(agenda.slots_ocupados) || 0;
+              const total = Number(agenda.total_slots) || 0;
+              const livres = Number(agenda.slots_disponiveis) || 0;
+              return (
+                <li
+                  key={agenda.id}
+                  className={cn(
+                    'flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center',
+                    !agenda.ativo && 'opacity-60'
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(agenda.id)}
+                        className="truncate text-left text-sm font-medium hover:underline"
+                      >
+                        {agenda.titulo}
+                      </button>
+                      {agenda.automatica && (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 text-[11px] font-normal"
+                          title="Criada sozinha pelas agendas automáticas"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          automática
+                        </Badge>
+                      )}
+                      {!agenda.ativo && (
+                        <Badge variant="secondary" className="text-[11px]">
+                          inativa
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {periodo(agenda.data_inicio, agenda.data_fim)} ·{' '}
+                      {ocupados} de {total} escolhidos · {livres} livre
+                      {livres === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => handleCopyLink(agenda.token)}
+                    >
+                      <Copy className="mr-1 h-3.5 w-3.5" />
+                      Link
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleEdit(agenda.id)}
+                      aria-label={`Editar ${agenda.titulo}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(agenda.id)}
+                      aria-label={`Excluir ${agenda.titulo}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
 
         {/* Creator Wizard */}

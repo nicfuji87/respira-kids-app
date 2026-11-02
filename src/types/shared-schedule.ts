@@ -80,6 +80,8 @@ export interface AgendaCompartilhadaStats extends AgendaCompartilhada {
   total_servicos: number;
   total_locais: number;
   total_empresas: number;
+  /** Criada pelo sistema (agendas automáticas: 4 semanas por profissional) */
+  automatica?: boolean;
 }
 
 // ============================================
