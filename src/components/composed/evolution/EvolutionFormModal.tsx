@@ -17,6 +17,7 @@ import {
   Loader2,
   X,
   Cloud,
+  HelpCircle,
 } from 'lucide-react';
 import {
   Dialog,
@@ -63,6 +64,7 @@ import {
   getTipoEvolucaoPorServico,
   SECOES_REAPROVEITAVEIS_RESPIRATORIA,
   ehFormatoMotoraV13,
+  ehFormatoMotoraV14,
   normalizarAreas,
   rascunhoMotorParaV14,
   pendenciasEvolucaoRespiratoria,
@@ -77,6 +79,8 @@ import {
   salvarRascunhoEvolucao,
 } from '@/lib/evolucao-rascunho-api';
 import { EvolutionSectionContent } from './EvolutionSectionContent';
+import { DicaSecaoMotora, GuiaEvolucaoMotora } from './GuiaEvolucaoMotora';
+import { guiaMotoraJaVisto } from '@/lib/evolucao-motora-guia';
 import { AgendaExpressa } from '../AgendaExpressa';
 import { MedidasEvolucaoContext } from './medidas-evolucao-context';
 import { PlanoMotorContext, type PlanoMotorValor } from './plano-motor-context';
@@ -226,6 +230,8 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
   const areasTocadasRef = useRef(false);
   const [avisoAreas, setAvisoAreas] = useState(false);
   const [avisoTorcicolo, setAvisoTorcicolo] = useState(false);
+  // "Como preencher" da motora (abre sozinho na 1ª vez do aparelho)
+  const [mostrarGuia, setMostrarGuia] = useState(false);
   const [pendenciasMedidas, setPendenciasMedidas] = useState<string[]>([]);
 
   const [currentSection, setCurrentSection] = useState(0);
@@ -518,6 +524,17 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
           }
     );
   }, [isOpen, mode, frequenciaCadastro]);
+
+  // Primeira evolução motora neste aparelho: abre o "Como preencher"
+  useEffect(() => {
+    if (
+      isOpen &&
+      mode === 'create' &&
+      tipoEvolucao === 'motora_assimetria' &&
+      !guiaMotoraJaVisto()
+    )
+      setMostrarGuia(true);
+  }, [isOpen, mode, tipoEvolucao]);
 
   // Áreas da última evolução: marcam se a fisio ainda não escolheu nada.
   // Precisa ficar DEPOIS do efeito que reinicia o formulário ao abrir; antes
@@ -954,6 +971,19 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                       <span className="hidden sm:inline">🦴 Motora</span>
                     </Button>
                   </div>
+                  {ehMotora && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMostrarGuia(true)}
+                      className="h-7 text-xs sm:h-9 sm:text-sm px-2 sm:px-3 shrink-0"
+                    >
+                      <HelpCircle className="h-4 w-4 sm:mr-1" />
+                      <span className="hidden sm:inline">Como preencher</span>
+                      <span className="sm:hidden ml-1">Ajuda</span>
+                    </Button>
+                  )}
                   <Badge variant="secondary" className="hidden sm:inline-flex">
                     {progressoLongo}
                   </Badge>
@@ -1221,6 +1251,12 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                         </Button>
                       </div>
                     )}
+                  {ehMotora &&
+                    !isReadOnly &&
+                    ehFormatoMotoraV14(evolucaoMotora) &&
+                    currentSectionData && (
+                      <DicaSecaoMotora secaoId={currentSectionData.id} />
+                    )}
                   <EvolutionSectionContent
                     tipoEvolucao={tipoEvolucao}
                     secaoId={currentSectionData?.id || ''}
@@ -1425,6 +1461,11 @@ export const EvolutionFormModal: React.FC<EvolutionFormModalProps> = ({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
+            <GuiaEvolucaoMotora
+              open={mostrarGuia}
+              onOpenChange={setMostrarGuia}
+            />
 
             {/* Itens sem resposta: não finaliza (na edição, avisa) */}
             <AlertDialog

@@ -218,6 +218,41 @@ export const AJUDA_MOTORA: Record<string, AjudaParametro> = {
   },
 
   // ---------------------------------------------------------------- Conduta
+  estado_habilidade: {
+    titulo: 'Como a criança fez hoje',
+    oQueE:
+      'O que você viu nesta sessão, não o que a criança costuma fazer. Se não deu para ver, marque "Não observado hoje".',
+    opcoes: [
+      ['Não observado hoje', 'Não deu para ver nesta sessão.'],
+      ['Não realiza', 'Você tentou e a criança não faz.'],
+      [
+        'Com assistência',
+        'Faz com ajuda. Mínima: toque ou apoio leve. Moderada: você sustenta parte. Máxima: você faz quase tudo.',
+      ],
+      ['Independente', 'Faz sozinha.'],
+    ],
+    comoMedir:
+      'Se mediu, anote o número (tempo, graus, tentativas): é ele que mostra a evolução no gráfico. Campo vazio não vira zero.',
+  },
+  o_que_foi_feito: {
+    titulo: 'O que foi feito',
+    oQueE:
+      'Os recursos que você usou para trabalhar este objetivo hoje. Marque quantos forem. Vêm marcados como na última sessão do objetivo: ajuste o que mudou.',
+  },
+  resultado_objetivo: {
+    titulo: 'Resultado hoje',
+    oQueE:
+      'Sempre comparado com a última sessão em que o objetivo foi trabalhado.',
+    opcoes: [
+      ['Progresso observado', 'Fez melhor do que da última vez.'],
+      ['Manteve o desempenho', 'Igual à última vez.'],
+      ['Maior dificuldade', 'Pior do que da última vez.'],
+      [
+        'Não foi possível comparar',
+        'Primeira vez, a criança não colaborou ou você não observou a habilidade.',
+      ],
+    ],
+  },
   tummy_time: {
     titulo: 'Tummy time',
     oQueE:
