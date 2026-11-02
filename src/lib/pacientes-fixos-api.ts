@@ -44,12 +44,32 @@ export interface PacienteFixoHistorico {
   feito_em: string;
 }
 
-export interface PacienteFixo {
+export interface ProfissionalRef {
   id: string;
+  nome: string;
+}
+
+/** Quem atendeu nas últimas 6 sessões motoras (120 dias). */
+export interface AlternanciaHistorico {
+  profissionais: (ProfissionalRef & { sessoes: number; ultima: string })[];
+  total: number;
+  /** 2+ profissionais com 2+ sessões cada (uma sessão só é substituição) */
+  divide: boolean;
+  dividem: string[];
+  da_vez: string | null;
+}
+
+export interface PacienteFixo {
+  /** null quando o paciente ainda não é fixo (vem só o histórico) */
+  id: string | null;
+  novo?: boolean;
   paciente_id: string;
   frequencia: FrequenciaFixo;
   profissional_id: string | null;
   profissional_nome: string | null;
+  /** Profissionais do cadastro (2+ = atendimento dividido) */
+  profissionais: ProfissionalRef[];
+  historico_profissionais: AlternanciaHistorico | null;
   observacao: string | null;
   ativo: boolean;
   adiado_ate: string | null;
@@ -87,10 +107,16 @@ export interface PacienteFixoSemana {
   observacao: string | null;
   marcadas: SessaoMarcada[];
   ultima_sessao: string | null;
+  /** A da vez (atendeu há mais tempo entre as do paciente) */
   profissional_id: string | null;
   origem_agendamento_id: string | null;
   profissional_nome: string | null;
   profissional_fixa: boolean;
+  /** Cadastro > histórico (quando divide) > última sessão */
+  profissionais: ProfissionalRef[];
+  divide: boolean;
+  divide_origem: 'cadastro' | 'historico' | null;
+  historico_profissionais: AlternanciaHistorico['profissionais'];
   responsavel_nome: string | null;
   responsavel_telefone: string | null;
   envio: {
@@ -131,10 +157,13 @@ export interface SemanaFixos {
 export interface SugestaoFixo {
   paciente_id: string;
   paciente_nome: string;
-  sessoes_60d: number;
+  sessoes_90d: number;
   ultima_sessao: string;
   profissional_id: string | null;
   profissional_nome: string | null;
+  divide: boolean;
+  dividem: string[];
+  historico_profissionais: AlternanciaHistorico['profissionais'];
   frequencia_evolucao: string | null;
   frequencia_sugerida: FrequenciaFixo;
 }
@@ -182,6 +211,8 @@ export const salvarPacienteFixo = (dados: {
   pacienteId: string;
   frequencia: FrequenciaFixo;
   profissionalId?: string | null;
+  /** Lista de profissionais (vence profissionalId); [] = vale o histórico */
+  profissionais?: string[] | null;
   observacao?: string | null;
   origem?: 'cadastro' | 'lista';
 }) =>
@@ -191,6 +222,7 @@ export const salvarPacienteFixo = (dados: {
     p_profissional_id: dados.profissionalId ?? null,
     p_observacao: dados.observacao ?? null,
     p_origem: dados.origem ?? 'cadastro',
+    p_profissionais: dados.profissionais ?? null,
   });
 
 export const encerrarPacienteFixo = (
@@ -318,26 +350,59 @@ const primeiroNome = (nome?: string | null) =>
  * Texto do convite para escolher o horário. Curto e direto, sem diminutivo;
  * a secretaria pode ajustar no WhatsApp antes de enviar.
  */
-export const mensagemLinkAgenda = (dados: {
-  responsavelNome: string | null;
-  pacienteNome: string;
+export interface AgendaDoLink {
   profissionalNome: string | null;
   /** Período da agenda ('YYYY-MM-DD'), ex.: 09/11 a 13/11 */
   de: string;
   ate: string;
   link: string;
+}
+
+/**
+ * Texto do convite para escolher o horário. Curto e direto, sem diminutivo;
+ * a secretaria pode ajustar no WhatsApp antes de enviar. Paciente dividido
+ * entre profissionais recebe um link de cada (a da vez primeiro).
+ */
+export const mensagemLinkAgenda = (dados: {
+  responsavelNome: string | null;
+  pacienteNome: string;
+  agendas: AgendaDoLink[];
 }) => {
   const saudacao = dados.responsavelNome
     ? `Olá, ${primeiroNome(dados.responsavelNome)}!`
     : 'Olá!';
-  const com = dados.profissionalNome
-    ? ` com a ${primeiroNome(dados.profissionalNome)}`
-    : '';
+  const crianca = primeiroNome(dados.pacienteNome);
+  const de = dados.agendas.map((a) => a.de).sort()[0];
+  const ate = dados.agendas
+    .map((a) => a.ate)
+    .sort()
+    .slice(-1)[0];
+  const periodo = `de ${diaMes(de)} a ${diaMes(ate)}`;
+
+  if (dados.agendas.length === 1) {
+    const a = dados.agendas[0];
+    const com = a.profissionalNome
+      ? ` com a ${primeiroNome(a.profissionalNome)}`
+      : '';
+    return (
+      `${saudacao} Aqui é da Respira Kids.\n\n` +
+      `A agenda da fisioterapia motora${com} ${periodo} já está aberta. ` +
+      `Para escolher o melhor horário para ${crianca}, é só acessar o link:\n\n` +
+      `${a.link}\n\n` +
+      `Se nesta semana não for possível, nos avise por aqui.`
+    );
+  }
+
+  const nomes = dados.agendas.map((a) => primeiroNome(a.profissionalNome));
+  const lista = `${nomes.slice(0, -1).join(', a ')} e a ${nomes.slice(-1)[0]}`;
+  const links = dados.agendas
+    .map((a) => `Com a ${primeiroNome(a.profissionalNome)}:\n${a.link}`)
+    .join('\n\n');
   return (
     `${saudacao} Aqui é da Respira Kids.\n\n` +
-    `A agenda da fisioterapia motora${com} de ${diaMes(dados.de)} a ${diaMes(dados.ate)} já está aberta. ` +
-    `Para escolher o melhor horário para ${primeiroNome(dados.pacienteNome)}, é só acessar o link:\n\n` +
-    `${dados.link}\n\n` +
+    `A agenda da fisioterapia motora ${periodo} já está aberta. ` +
+    `Os atendimentos de ${crianca} são divididos entre a ${lista}, então dá para escolher o horário com qualquer uma delas:\n\n` +
+    `${links}\n\n` +
     `Se nesta semana não for possível, nos avise por aqui.`
   );
 };
@@ -361,3 +426,54 @@ export const dataHoraCarimbo = (ts?: string | null) =>
         minute: '2-digit',
       })
     : '';
+
+// ---------------------------------------------------------------------------
+// Envio em massa (fila no banco; sai pelo número da recepção, 5-9 min entre
+// mensagens, 8h-20h, dividindo o ritmo com as cobranças em lote)
+// ---------------------------------------------------------------------------
+
+export type StatusEnvio =
+  | 'fila'
+  | 'enviando'
+  | 'enviado'
+  | 'falhou'
+  | 'cancelado';
+
+export interface EnvioSemana {
+  status: StatusEnvio;
+  canal: 'whatsapp_manual' | 'whatsapp_auto';
+  enviado_em: string | null;
+  fila_em: string | null;
+  erro: string | null;
+  enviado_por_nome: string | null;
+  agenda_id: string | null;
+  vezes: number;
+}
+
+export const buscarEnviosSemana = (semana: string) =>
+  rpc<Record<string, EnvioSemana>>('fn_pacientes_fixos_envios_semana', {
+    p_semana: semana,
+  });
+
+export const enfileirarEnvios = (
+  itens: {
+    paciente_id: string;
+    semana: string;
+    agendas: string[];
+    telefone: string;
+    texto: string;
+  }[]
+) =>
+  rpc<{ enfileirados: number; ignorados: number; na_fila: number }>(
+    'fn_fixos_enfileirar_envios',
+    { p_itens: itens }
+  );
+
+export const cancelarFilaEnvios = (semana: string, pacienteId?: string) =>
+  rpc<number>('fn_fixos_cancelar_fila', {
+    p_semana: semana,
+    p_paciente_id: pacienteId ?? null,
+  });
+
+/** Intervalo médio do envio automático (5 a 9 min). */
+export const MINUTOS_MEDIOS_POR_ENVIO = 7;

@@ -261,6 +261,16 @@ export const SharedScheduleSelectorWizard =
               wizardData.paciente_id
             );
 
+            // Já tem horário nesta semana em outra agenda: avisa e para
+            if (checkResult.success && checkResult.data?.bloqueadoSemana) {
+              toast({
+                title: 'Já tem horário nesta semana',
+                description: checkResult.data.bloqueadoSemana,
+                variant: 'destructive',
+              });
+              return;
+            }
+
             if (checkResult.success && checkResult.data?.hasAppointment) {
               const existing = checkResult.data.existingAppointment!;
               setExistingAppointmentId(existing.agendamento_id);
@@ -449,7 +459,9 @@ export const SharedScheduleSelectorWizard =
           if (!result.success || !result.data) {
             // Erro ao reservar slot - pode ser race condition ou conflito de horário
             toast({
-              title: 'Horário não disponível',
+              title: result.error?.includes('nesta semana')
+                ? 'Já tem horário nesta semana'
+                : 'Horário não disponível',
               description:
                 result.error ||
                 'Este horário já foi reservado. Por favor, escolha outro horário disponível.',

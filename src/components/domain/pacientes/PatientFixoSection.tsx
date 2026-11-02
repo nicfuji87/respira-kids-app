@@ -4,7 +4,7 @@
 // fisioterapia = não" tira dos fixos. O histórico mostra de onde veio cada mudança.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { History, Loader2, Repeat } from 'lucide-react';
+import { ArrowLeftRight, History, Loader2, Repeat } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -18,7 +18,8 @@ import { Input } from '@/components/primitives/input';
 import { Label } from '@/components/primitives/label';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { useToast } from '@/components/primitives/use-toast';
-import { ProfessionalSelect } from '@/components/composed';
+import { useAuth } from '@/hooks/useAuth';
+import { fetchProfissionaisForUser } from '@/lib/calendar-services';
 import { cn } from '@/lib/utils';
 import {
   FREQUENCIAS_FIXO,
@@ -28,8 +29,10 @@ import {
   encerrarPacienteFixo,
   rotuloFrequencia,
   salvarPacienteFixo,
+  type AlternanciaHistorico,
   type FrequenciaFixo,
   type PacienteFixo,
+  type ProfissionalRef,
   type PacienteFixoHistorico,
 } from '@/lib/pacientes-fixos-api';
 
@@ -67,11 +70,35 @@ const descreverHistorico = (h: PacienteFixoHistorico): string => {
   }
 };
 
+// O que o histórico mostra: quem atendeu nas últimas sessões e se divide
+const AlternanciaTexto: React.FC<{ alt: AlternanciaHistorico | null }> = ({
+  alt,
+}) => {
+  if (!alt || alt.profissionais.length === 0) return null;
+  const partes = alt.profissionais
+    .map((p) => `${p.nome.split(' ')[0]} ${p.sessoes}`)
+    .join(', ');
+  return (
+    <p
+      className={cn(
+        'flex items-start gap-1.5 text-xs',
+        alt.divide ? 'text-sky-800 dark:text-sky-300' : 'text-muted-foreground'
+      )}
+    >
+      <ArrowLeftRight className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      {alt.divide
+        ? `O histórico mostra atendimento dividido: ${partes} nas últimas ${alt.total} sessões.`
+        : `Nas últimas ${alt.total} sessões: ${partes}.`}
+    </p>
+  );
+};
+
 export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
   patientId,
   userRole,
 }) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const podeEditar = userRole === 'admin' || userRole === 'secretaria';
 
   const [fixo, setFixo] = useState<PacienteFixo | null>(null);
@@ -81,7 +108,9 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
   const [verHistorico, setVerHistorico] = useState(false);
 
   const [frequencia, setFrequencia] = useState<FrequenciaFixo | null>(null);
-  const [profissionalId, setProfissionalId] = useState<string>('');
+  // Profissionais escolhidas (2+ = atendimento dividido); [] = vale o histórico
+  const [profissionais, setProfissionais] = useState<string[]>([]);
+  const [opcoesProf, setOpcoesProf] = useState<ProfissionalRef[]>([]);
   const [observacao, setObservacao] = useState('');
 
   const carregar = useCallback(async () => {
@@ -99,9 +128,29 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
     carregar();
   }, [carregar]);
 
+  // Lista de profissionais só quando abre a edição
+  useEffect(() => {
+    if (!editando || opcoesProf.length || !user?.pessoa?.id || !userRole)
+      return;
+    fetchProfissionaisForUser(user.pessoa.id, userRole)
+      .then((lista) =>
+        setOpcoesProf(
+          lista
+            .filter((p) => p.ativo !== false)
+            .map((p) => ({ id: p.id, nome: p.nome }))
+        )
+      )
+      .catch(() => setOpcoesProf([]));
+  }, [editando, opcoesProf.length, user?.pessoa?.id, userRole]);
+
+  const alternarProf = (id: string) =>
+    setProfissionais((atual) =>
+      atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]
+    );
+
   const abrirEdicao = () => {
     setFrequencia(fixo?.ativo ? fixo.frequencia : (fixo?.frequencia ?? null));
-    setProfissionalId(fixo?.profissional_id ?? '');
+    setProfissionais((fixo?.profissionais ?? []).map((p) => p.id));
     setObservacao(fixo?.observacao ?? '');
     setEditando(true);
   };
@@ -114,7 +163,7 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
         await salvarPacienteFixo({
           pacienteId: patientId,
           frequencia,
-          profissionalId: profissionalId || null,
+          profissionais,
           observacao,
         })
       );
@@ -204,28 +253,33 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
             </div>
 
             <div className="space-y-2">
-              <Label>Profissional (opcional)</Label>
-              <div className="flex gap-2">
-                <ProfessionalSelect
-                  value={profissionalId || undefined}
-                  onValueChange={setProfissionalId}
-                  placeholder="A da última sessão"
-                  className="flex-1"
-                />
-                {profissionalId && (
+              <Label>Profissionais (opcional)</Label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ...opcoesProf,
+                  // escolhida que não está na lista desta pessoa
+                  ...(fixo?.profissionais ?? []).filter(
+                    (p) => !opcoesProf.some((o) => o.id === p.id)
+                  ),
+                ].map((p) => (
                   <Button
+                    key={p.id}
                     type="button"
-                    variant="ghost"
                     size="sm"
-                    onClick={() => setProfissionalId('')}
+                    variant={
+                      profissionais.includes(p.id) ? 'default' : 'outline'
+                    }
+                    onClick={() => alternarProf(p.id)}
                   >
-                    Limpar
+                    {p.nome.split(' ')[0]}
                   </Button>
-                )}
+                ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                Sem profissional escolhida, vale a da última sessão.
+                Marque duas ou mais quando o atendimento é dividido. Sem nenhuma
+                marcada, vale o histórico.
               </p>
+              <AlternanciaTexto alt={fixo?.historico_profissionais ?? null} />
             </div>
 
             <div className="space-y-2">
@@ -256,8 +310,16 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
           <div className="space-y-3 text-sm">
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
-                <span className="text-muted-foreground">Profissional: </span>
-                {fixo!.profissional_nome ?? 'a da última sessão'}
+                <span className="text-muted-foreground">
+                  {fixo!.profissionais.length > 1
+                    ? 'Dividido entre: '
+                    : 'Profissional: '}
+                </span>
+                {fixo!.profissionais.length
+                  ? fixo!.profissionais
+                      .map((p) => p.nome.split(' ')[0])
+                      .join(' e ')
+                  : 'pelo histórico'}
               </div>
               {fixo!.observacao && (
                 <div>
@@ -266,6 +328,7 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
                 </div>
               )}
             </div>
+            <AlternanciaTexto alt={fixo!.historico_profissionais} />
             {fixo!.adiado_ate && (
               <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                 Adiado: volta na semana de {diaMes(fixo!.adiado_ate)}
@@ -307,15 +370,16 @@ export const PatientFixoSection: React.FC<PatientFixoSectionProps> = ({
                   }.`
                 : 'Não é paciente fixo.'}
             </p>
+            <AlternanciaTexto alt={fixo?.historico_profissionais ?? null} />
             {podeEditar && (
               <Button size="sm" onClick={abrirEdicao}>
-                {fixo ? 'Voltar a ser fixo' : 'Tornar paciente fixo'}
+                {fixo?.id ? 'Voltar a ser fixo' : 'Tornar paciente fixo'}
               </Button>
             )}
           </div>
         )}
 
-        {fixo && fixo.historico.length > 0 && !editando && (
+        {fixo && (fixo.historico ?? []).length > 0 && !editando && (
           <div>
             <button
               type="button"

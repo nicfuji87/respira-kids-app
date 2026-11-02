@@ -836,7 +836,8 @@ export async function removeSlots(
     const { data: selecoes, error: selecoesError } = await supabase
       .from('agenda_selecoes')
       .select('slot_id, agendamento_id')
-      .in('slot_id', slotIds);
+      .in('slot_id', slotIds)
+      .is('liberada_em', null);
 
     if (selecoesError) throw selecoesError;
 
@@ -924,7 +925,9 @@ export async function fetchSlotsWithSelections(
         empresa:pessoa_empresas(razao_social)
       `
       )
-      .eq('agenda_id', agendaId);
+      .eq('agenda_id', agendaId)
+      // Escolha liberada (consulta cancelada/falta) é só histórico: o horário voltou
+      .is('liberada_em', null);
 
     const slotsComSelecao: AgendaSlotComSelecao[] = (slots || []).map(
       (slot) => {
@@ -986,6 +989,8 @@ export async function checkExistingAppointment(
       tipo_servico_nome: string;
       local_nome: string | null;
     };
+    /** Limite da semana atingido com horário em OUTRA agenda: só avisa */
+    bloqueadoSemana?: string;
   }>
 > {
   try {
@@ -993,6 +998,22 @@ export async function checkExistingAppointment(
       agendaId,
       pacienteId,
     });
+
+    // AI dev note: Regra do dono (02/11/2026): pela agenda pública é um
+    // horário por semana, exceto quem vem 2x/3x (histórico ou cadastro de
+    // fixo). O banco confere de novo ao criar (fn_criar_agendamento_...).
+    // Ainda pode marcar → segue (mesmo tendo outro horário nesta agenda).
+    const { data: semana } = await supabase.rpc(
+      'fn_public_agenda_semana_paciente',
+      { p_agenda_id: agendaId, p_paciente_id: pacienteId }
+    );
+    const limite = semana as {
+      pode_marcar?: boolean;
+      mensagem?: string | null;
+    } | null;
+    if (limite?.pode_marcar) {
+      return { data: { hasAppointment: false }, error: null, success: true };
+    }
 
     // Buscar status de agendamento "cancelado"
     const { data: statusCancelado } = await supabase
@@ -1021,17 +1042,24 @@ export async function checkExistingAppointment(
       )
       .eq('agenda_id', agendaId)
       .eq('paciente_id', pacienteId)
-      .single();
+      // Escolha liberada não conta; e pode haver mais de uma escolha antiga
+      .is('liberada_em', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
 
-    // Se não encontrou, não há agendamento
+    // Se não encontrou, não há agendamento nesta agenda
     if (!data || !data.agendamento) {
       console.log(
         '✅ [checkExistingAppointment] Nenhum agendamento encontrado'
       );
       return {
-        data: { hasAppointment: false },
+        data: {
+          hasAppointment: false,
+          bloqueadoSemana: limite?.mensagem || undefined,
+        },
         error: null,
         success: true,
       };
@@ -1066,7 +1094,10 @@ export async function checkExistingAppointment(
         '✅ [checkExistingAppointment] Agendamento encontrado mas não está ativo'
       );
       return {
-        data: { hasAppointment: false },
+        data: {
+          hasAppointment: false,
+          bloqueadoSemana: limite?.mensagem || undefined,
+        },
         error: null,
         success: true,
       };

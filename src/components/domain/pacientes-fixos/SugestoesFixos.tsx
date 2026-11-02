@@ -1,4 +1,4 @@
-// AI dev note: Pacientes motores com 3+ sessões em 60 dias que ainda não são
+// AI dev note: Pacientes motores com 3+ sessões em 90 dias que ainda não são
 // fixos. A frequência sugerida vem da última evolução motora; sem ela, do
 // ritmo das sessões. Nada vira fixo sozinho: a secretaria confirma (um a um
 // ou todos de uma vez).
@@ -100,7 +100,7 @@ export const SugestoesFixos: React.FC<SugestoesFixosProps> = ({
               Sugestões ({sugestoes.length})
             </CardTitle>
             <CardDescription className="mt-1">
-              Pacientes motores com 3 ou mais sessões nos últimos 60 dias que
+              Pacientes motores com 3 ou mais sessões nos últimos 90 dias que
               ainda não são fixos.
             </CardDescription>
           </div>
@@ -143,12 +143,16 @@ export const SugestoesFixos: React.FC<SugestoesFixosProps> = ({
                     {s.paciente_nome}
                   </button>
                   <p className="text-xs text-muted-foreground">
-                    {s.sessoes_60d} sessões em 60 dias · última{' '}
+                    {s.sessoes_90d} sessões em 90 dias · última{' '}
                     {rotuloSessao(s.ultima_sessao)}
                     {s.profissional_nome
                       ? ` · ${s.profissional_nome.split(' ')[0]}`
                       : ''}
                     {s.frequencia_evolucao ? ' · frequência da evolução' : ''}
+                    {s.divide &&
+                      ` · divide: ${(s.historico_profissionais ?? [])
+                        .map((h) => `${h.nome.split(' ')[0]} ${h.sessoes}`)
+                        .join(', ')}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
