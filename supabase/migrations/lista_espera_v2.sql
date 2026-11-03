@@ -668,7 +668,7 @@ BEGIN
                             preferencia, pref_data, pref_dias, pref_hora_ini, pref_hora_fim, pref_profissional_id, origem)
   VALUES (v_tipo, v_nome, fn_lista_espera_tel(conv.telefone), nullif(btrim(left(p_res ->> 'idade', 30)), ''), v_meses,
           nullif(btrim(left(p_res ->> 'pediatra', 60)), ''), nullif(btrim(left(p_res ->> 'queixa', 80)), ''), true,
-          nullif(btrim(left(p_res ->> 'motivo', 80)), ''), r.conversa_id, 'Ju', v_pref, v_data, v_dias, v_ini, coalesce(v_fim, v_ini), v_prof, 'urgente')
+          nullif(btrim(left(p_res ->> 'motivo', 80)), ''), r.conversa_id, 'Ju', v_pref, NULL, v_dias, v_ini, coalesce(v_fim, v_ini), v_prof, 'urgente')
   RETURNING id INTO v_le;
   PERFORM fn_lista_espera_marcar();
   INSERT INTO lista_espera_sugestoes (analise_id, conversa_id, tipo, nome, telefone, preferencia, urgente, status, decidido_por, decidido_em, lista_espera_id)

@@ -51,7 +51,7 @@ Responda só JSON:
  "queixa": "curta, ex. 'bronquiolite'", "pediatra": "nome ou vazio",
  "tipo": "respiratoria" ou "motora",
  "preferencia_texto": "dias e horários que a família disse que pode, curto, ou vazio",
- "data": "AAAA-MM-DD ou vazio", "dias_semana": [], "hora_ini": "HH:MM ou vazio", "hora_fim": "HH:MM ou vazio", "profissional": ""}`;
+ "dias_semana": [números de 1=segunda a 7=domingo, só se a família disse dias em que pode], "hora_ini": "HH:MM ou vazio", "hora_fim": "HH:MM ou vazio", "profissional": ""}`;
 
 async function perguntar(chave: string, sistema: string, usuario: string) {
   let ultimoErro = '';
