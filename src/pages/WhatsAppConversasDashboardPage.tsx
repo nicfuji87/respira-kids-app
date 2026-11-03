@@ -5,6 +5,8 @@
 //   Desempenho  atendimento, demanda, funil e Ju (DesempenhoTab)
 //   Qualidade   falhas da operação, atrito, automação, sentimento (QualidadeTab)
 //   Conversas   busca, filtros e revisão (lista com as análises da IA)
+//   Conferência agenda x conversas para a cobrança do mês (ConferenciaTab,
+//               conferencia_agenda.sql; IA lê as conversas todo dia às 5h30)
 // Hoje/Desempenho/Qualidade vêm agregados do banco (conversas_central.sql).
 // A lista completa (get_whatsapp_conversas_enriquecidas, ~2 MB) só carrega
 // quando a aba Conversas é aberta.
@@ -26,6 +28,7 @@ import {
 import { HojeTab } from '@/components/domain/whatsapp-conversas/central/HojeTab';
 import { DesempenhoTab } from '@/components/domain/whatsapp-conversas/central/DesempenhoTab';
 import { QualidadeTab } from '@/components/domain/whatsapp-conversas/central/QualidadeTab';
+import { ConferenciaTab } from '@/components/domain/whatsapp-conversas/central/ConferenciaTab';
 import {
   applyFilters,
   fetchWhatsAppConversas,
@@ -42,6 +45,7 @@ import { cn } from '@/lib/utils';
 import {
   AlertCircle,
   BarChart3,
+  ClipboardCheck,
   ListTodo,
   MessagesSquare,
   RefreshCw,
@@ -49,7 +53,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/composed/PageHeader';
 
-type Aba = 'hoje' | 'desempenho' | 'qualidade' | 'conversas';
+type Aba = 'hoje' | 'desempenho' | 'qualidade' | 'conferencia' | 'conversas';
 type Segmento = 'todas' | 'revisao' | 'fila' | 'reclamacoes';
 
 const SEGMENTOS: Array<{ valor: Segmento; label: string }> = [
@@ -180,6 +184,10 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
             <ShieldCheck className="h-4 w-4" />
             Qualidade
           </TabsTrigger>
+          <TabsTrigger value="conferencia" className="gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            Conferência
+          </TabsTrigger>
           <TabsTrigger value="conversas" className="gap-2">
             <MessagesSquare className="h-4 w-4" />
             Conversas
@@ -201,6 +209,10 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
 
         <TabsContent value="qualidade">
           <QualidadeTab />
+        </TabsContent>
+
+        <TabsContent value="conferencia">
+          <ConferenciaTab />
         </TabsContent>
 
         <TabsContent value="conversas" className="space-y-4">
