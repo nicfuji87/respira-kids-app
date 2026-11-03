@@ -291,6 +291,20 @@ BEGIN
   WHERE data BETWEEN v_ini AND current_date - 1   -- o dia de hoje ainda pode ser lançado
   ORDER BY chave_paciente, data, mensagem_em DESC NULLS LAST, extraido_em DESC;
 
+  -- só o primeiro nome (comum no celular da Bruna, com telefone fora do cadastro): acha a
+  -- criança pela agenda de 3 dias antes a 3 depois, quando só uma tem esse primeiro nome
+  UPDATE _s s SET paciente_id = c.pid, paciente_nome = c.pac, chave_paciente = c.pid::text
+  FROM (
+    SELECT s2.id, min(a.paciente_id::text)::uuid AS pid, min(a.pac) AS pac
+    FROM _s s2
+    JOIN _ag a ON a.dia BETWEEN s2.data - 3 AND s2.data + 3
+     AND unaccent(lower(split_part(a.pac, ' ', 1))) = unaccent(lower(split_part(btrim(s2.paciente_nome), ' ', 1)))
+    WHERE s2.paciente_id IS NULL AND btrim(COALESCE(s2.paciente_nome, '')) <> ''
+    GROUP BY s2.id
+    HAVING count(DISTINCT a.paciente_id) = 1
+  ) c
+  WHERE c.id = s.id;
+
   -- valor de referência do paciente (mediana dos últimos 90 dias)
   CREATE TEMP TABLE _val ON COMMIT DROP AS
   SELECT a.paciente_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY a.valor_servico) AS v
@@ -328,7 +342,9 @@ BEGIN
            || ' e não há consulta do paciente nesse dia.', y.valor_ref),
         -- sem cadastro
         (s.situacao IN ('combinada','realizada') AND s.paciente_id IS NULL,
-         'sem_cadastro:' || s.chave_paciente || ':' || s.data, 'SEM_CADASTRO', 'lancar', NULL::uuid,
+         'sem_cadastro:' || s.chave_paciente || ':' || s.data, 'SEM_CADASTRO',
+         -- nome completo dá para lançar; só primeiro nome ou sem nome vai para conferir
+         CASE WHEN btrim(COALESCE(s.paciente_nome, '')) ~ '\s' THEN 'lancar' ELSE 'conferir' END, NULL::uuid,
          'Sessão na conversa com paciente que não foi achado no cadastro (' || COALESCE(s.paciente_nome, 'nome não dito') || ').', NULL::numeric),
         -- combinada/realizada mas cancelada no sistema
         (s.situacao IN ('combinada','realizada') AND y.ativa IS NULL AND y.inativa IS NOT NULL,
@@ -375,7 +391,7 @@ BEGIN
     FROM _it
     ON CONFLICT (chave) DO UPDATE SET
       detalhe = EXCLUDED.detalhe, evidencia = COALESCE(EXCLUDED.evidencia, c.evidencia),
-      hora = EXCLUDED.hora, valor = EXCLUDED.valor, confianca = EXCLUDED.confianca,
+      hora = EXCLUDED.hora, valor = EXCLUDED.valor, confianca = EXCLUDED.confianca, grupo = EXCLUDED.grupo,
       chatwoot_conversa_id = COALESCE(EXCLUDED.chatwoot_conversa_id, c.chatwoot_conversa_id),
       status = CASE WHEN c.status = 'fechado_auto' THEN 'aberto' ELSE c.status END,
       atualizado_em = CASE WHEN c.detalhe IS DISTINCT FROM EXCLUDED.detalhe OR c.status = 'fechado_auto' THEN now() ELSE c.atualizado_em END,

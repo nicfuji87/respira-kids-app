@@ -36,6 +36,8 @@ Para cada sessão (atendimento de uma criança numa data), dê a situação FINA
 Regras:
 - Só sessões de fisioterapia com a equipe da Respira Kids (Bruna, Beatriz/Bia, Flávia, estagiárias). Consulta ou terapia com fono, médico, psicóloga ou outro profissional de fora NÃO entra.
 - Marcar a PRÓXIMA sessão não muda a sessão atual. "remarcada" é só quando uma sessão já marcada muda de dia ou horário ("trocar", "passar para", "não vai dar, pode ser..."). Mensagem automática "Consulta agendada" de uma data nova não remarca nenhuma outra.
+- Se só o horário mudou no mesmo dia, é uma sessão "combinada" no horário novo (não "remarcada").
+- Pergunta ou pedido de troca sem confirmação ("abriu outro horário?", "tem mais tarde?") não muda nada: vale o que já estava marcado.
 - Para cancelada, remarcada e falta, mensagem_id é a PRIMEIRA mensagem em que a família (ou a clínica) avisou. A mensagem automática "Sua consulta foi cancelada" só vale quando não houver aviso antes dela.
 - Resolva datas relativas ("amanhã", "segunda", "dia 15") pela data da mensagem. Use só datas entre ${agora.minus({ days: 40 }).toISODate()} e ${agora.plus({ days: 14 }).toISODate()}.
 - Pedido de horário sem fechamento, ou oferta da clínica sem aceite da família, NÃO é sessão.
