@@ -26,9 +26,7 @@ RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public', '
   SELECT CASE
     WHEN p_origem = 'botao_whatsapp' THEN 'pela família, no botão do WhatsApp'
     WHEN coalesce(p_observacao, '') ~ '\[Ju\] cancelad' THEN 'pela Ju, a pedido da família'
-    WHEN p_atualizado_por IS NOT NULL THEN
-      'pelo sistema' || coalesce(' (' || (SELECT split_part(btrim(nome), ' ', 1) FROM pessoas WHERE id = p_atualizado_por) || ')', '')
-    ELSE 'pelo sistema' END;
+    ELSE 'pelo sistema' END; -- 04/11: dono quer só "(pelo sistema)", sem o nome
 $$;
 
 DO $do$
