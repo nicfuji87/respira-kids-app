@@ -34,7 +34,7 @@ Você sabe fazer 21 coisas (as de 11 a 16 só na conversa com uma fisio, sobre a
 Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (HH:MM, 24 h), fisio (profissional_id de "profissionais") e serviço (tipo_servico_id de "servicos").
 - O que está escrito no pedido vale mais que o resto da conversa ("para a Bruna", "o Pedro", "amanhã às 9" no pedido substituem o que estiver no histórico).
 - Dia e hora: use o último horário combinado na conversa, isto é, oferecido por um lado e aceito pelo outro. Datas relativas (hoje, amanhã, segunda, dia 28) contam a partir da data da mensagem em que aparecem, não de hoje. Se houver mais de uma opção em aberto ou nada combinado, pergunte.
-- Criança: se houver só uma em "criancas", é ela. Se houver mais de uma e o pedido ou a conversa não deixarem claro, pergunte qual, pelo primeiro nome.
+- Criança: se houver só uma em "criancas", é ela. Se o pedido usar o nome de um responsável ("para a Luiza", quando Luiza é a mãe) ou houver mais de uma criança, use a criança de quem a conversa está tratando agora (citada pela equipe ou pela família nas últimas mensagens, ex.: "Como a Helena está?" e a mãe contando como ela passou a noite). Só pergunte qual, pelo primeiro nome, se a conversa não deixar claro.
 - Fisio: a do pedido; senão a combinada na conversa; senão, se a criança tem ultima_consulta, a mesma fisio dela; senão pergunte.
 - Serviço: se a criança tem ultima_consulta e nada na conversa indica outro tipo, use o mesmo tipo de atendimento. A avaliação acontece uma vez: se a última consulta foi "Avaliação Fisioterapêutica Motora", a próxima é "Fisioterapia Motora" (domiciliar continua domiciliar), a não ser que o pedido ou a conversa falem em nova avaliação. Sem consulta anterior, deduza pela conversa: fisioterapia respiratória; fisioterapia motora (se for a primeira vez na motora, "Avaliação Fisioterapêutica Motora"). Domiciliar só se a conversa falar em atendimento em casa. Nunca escolha SOCIAL. Não se preocupe com dia útil (DU) ou fim de semana/feriado (FDS): o sistema ajusta pelo dia. Se não der para saber o serviço, pergunte confirmando, por exemplo: "Seria avaliação motora com a Bruna?".
 - Se "criancas" estiver vazio, não dá para agendar (sem cadastro não existe paciente): acao "perguntar" com uma mensagem dizendo que ainda não achou o cadastro da criança neste número e que, com o cadastro feito, você agenda. Não peça nome nem dados da criança.
@@ -68,7 +68,7 @@ Precisa de: criança (paciente_id de "criancas"), dia (data AAAA-MM-DD), hora (H
 
 7. FECHAR AGENDA (acao "fechar_agenda"): "fecha/bloqueia minha agenda amanhã", "fecha a agenda da Bruna sexta à tarde", "fecha a clínica dia 15".
 - profissional: nome da profissional. "minha" = quem_pediu.nome; "a sua agenda" ou "a agenda dela", na conversa com uma profissional, = conversa_com.nome; "a clínica toda" = "clínica".
-- data (AAAA-MM-DD) e data_fim se for mais de um dia. hora e hora_fim (HH:MM) só se for parte do dia: manhã = 07:00 a 12:00, tarde = 12:00 a 20:00; sem horário = o dia todo. motivo, se disserem.
+- data (AAAA-MM-DD) e data_fim se for mais de um dia. hora e hora_fim (HH:MM) só se for parte do dia: manhã = 07:00 a 12:00, tarde = 12:00 a 20:00; sem horário = o dia todo. motivo, se disserem. Mais de um intervalo no mesmo pedido ("das 8h às 9h e das 17h às 18h"): preencha intervalos com todos, cada um com hora e hora_fim (hora e hora_fim ficam com o primeiro), e faça tudo de uma vez, sem perguntar. Com um intervalo só, intervalos fica vazio.
 
 8. ABRIR AGENDA (acao "abrir_agenda"): desfazer um bloqueio ("abre/libera a agenda da Flávia amanhã"). Mesmos campos de fechar_agenda. Só quando o pedido falar em desbloquear, liberar, desfazer ou reabrir; "abrir/ver/mostrar a agenda do dia X" sem falar em bloqueio é a ação 10.
 
@@ -146,6 +146,7 @@ const schema = {
     'espera_preferencia',
     'janelas',
     'oferta_pedida_pela_fisio',
+    'intervalos',
   ],
   properties: {
     acao: {
@@ -194,6 +195,18 @@ const schema = {
       },
     },
     oferta_pedida_pela_fisio: { type: ['boolean', 'null'] },
+    intervalos: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['hora', 'hora_fim'],
+        properties: {
+          hora: { type: 'string', description: 'HH:MM' },
+          hora_fim: { type: 'string', description: 'HH:MM' },
+        },
+      },
+    },
     pessoa_id: { type: ['string', 'null'] },
     anotacao: { type: ['string', 'null'] },
     profissional: { type: ['string', 'null'] },
