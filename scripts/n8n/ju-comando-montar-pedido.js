@@ -145,6 +145,7 @@ const schema = {
     'espera_urgencia_motivo',
     'espera_preferencia',
     'janelas',
+    'oferta_pedida_pela_fisio',
   ],
   properties: {
     acao: {
@@ -180,14 +181,19 @@ const schema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['data', 'data_fim', 'periodo'],
+        required: ['data', 'data_fim', 'periodo', 'horas'],
         properties: {
           data: { type: ['string', 'null'], description: 'AAAA-MM-DD' },
           data_fim: { type: ['string', 'null'], description: 'AAAA-MM-DD' },
           periodo: { type: ['string', 'null'], enum: ['manha', 'tarde', null] },
+          horas: {
+            type: ['array', 'null'],
+            items: { type: 'string', description: 'HH:MM' },
+          },
         },
       },
     },
+    oferta_pedida_pela_fisio: { type: ['boolean', 'null'] },
     pessoa_id: { type: ['string', 'null'] },
     anotacao: { type: ['string', 'null'] },
     profissional: { type: ['string', 'null'] },
