@@ -212,6 +212,53 @@ export interface Qualidade {
   }>;
 }
 
+// fn_conversas_atendimento: pedidos que a Ju passou para a equipe. Espera em
+// minutos de expediente (seg–sex 8h–18h); pendentes contam à parte.
+export interface Atendimento {
+  periodo_dias: number;
+  meta_min: number;
+  amostra_minima: number;
+  ju: {
+    respostas: number;
+    mediana_s: number | null;
+    p90_s: number | null;
+    respostas_sem_espera: number;
+    mediana_sem_espera_s: number | null;
+    p90_sem_espera_s: number | null;
+  };
+  equipe: {
+    pedidos: number;
+    respondidos: number;
+    mediana_min: number | null;
+    p90_min: number | null;
+    mediana_corrida_min: number | null;
+    fora_prazo: number;
+    pendentes: number;
+    pendentes_fora_prazo: number;
+    pendente_mais_antigo_min: number | null;
+    novos_pendentes: number;
+  };
+  calor: Array<{
+    dow: number;
+    faixa: number;
+    pedidos: number;
+    mediana_min: number | null;
+  }>;
+  conversao: Array<{
+    grupo: 'novo' | 'paciente';
+    ordem: number;
+    faixa: string;
+    pedidos: number;
+    agendaram: number;
+  }>;
+  tendencia: Array<{
+    dia: string;
+    pedidos: number;
+    mediana_min: number | null;
+    pendentes: number;
+  }>;
+}
+
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args ?? {});
   if (error) {
@@ -224,6 +271,8 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 export const fetchHoje = () => rpc<Hoje>('fn_conversas_hoje');
 export const fetchDesempenho = (dias: number) =>
   rpc<Desempenho>('fn_conversas_desempenho', { p_dias: dias });
+export const fetchAtendimento = (dias: number) =>
+  rpc<Atendimento>('fn_conversas_atendimento', { p_dias: dias });
 export const fetchQualidade = (dias: number) =>
   rpc<Qualidade>('fn_conversas_qualidade', { p_dias: dias });
 

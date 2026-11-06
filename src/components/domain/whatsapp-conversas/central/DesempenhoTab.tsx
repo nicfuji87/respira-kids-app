@@ -43,6 +43,7 @@ import {
   Secao,
   Vazio,
 } from './central-ui';
+import { AtendimentoEquipe } from './AtendimentoEquipe';
 
 const PERIODOS = [7, 30, 90] as const;
 const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -265,6 +266,8 @@ export const DesempenhoTab: React.FC = () => {
           <FaixasChart dados={dados} />
         </Secao>
       </div>
+
+      <AtendimentoEquipe dias={dias} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <Secao
