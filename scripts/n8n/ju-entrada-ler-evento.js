@@ -63,24 +63,79 @@ const GRUPO_NOTIFICACOES = '120363433073436578@g.us';
 const botao = String(m.buttonOrListid ?? '');
 // 29/10/2026: botões da sugestão de anotação da Ju (✅ Acrescentar / Descartar).
 if (chatid === GRUPO_NOTIFICACOES && /^ju_anot_(ok|nao):\d+$/.test(botao)) {
-  return [{ json: { evento: 'anotacao', anotacao_id: Number(botao.split(':')[1]), aceitar: botao.startsWith('ju_anot_ok:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? '') } }];
+  return [
+    {
+      json: {
+        evento: 'anotacao',
+        anotacao_id: Number(botao.split(':')[1]),
+        aceitar: botao.startsWith('ju_anot_ok:'),
+        quem: String(m.senderName || 'alguém').split(' ')[0],
+        wa_message_id: String(m.messageid ?? ''),
+      },
+    },
+  ];
 }
 // 29/10/2026: botões de reserva (✅ Confirmar/❌ Recusar da reserva da Ju; ✅ Agendar/❌ Liberar da reserva do @ju),
 // no grupo ou no privado da profissional. Quem pode clicar o banco confere (fn_ju_reserva_botao).
 const resJu = botao.match(/^ju_res_(ok|nao):(\d+)$/);
 const resAg = botao.match(/^ju_rag_(ok|nao):([0-9a-f-]{36})$/i);
-if ((resJu || resAg) && (chatid === GRUPO_NOTIFICACOES || /@(s\.whatsapp\.net|lid)$/.test(chatid))) {
-  const chatClique = chatid.endsWith('@lid') ? String(m.sender_pn || chatid) : chatid;
-  return [{ json: { evento: 'reserva', reserva_id: resJu ? Number(resJu[2]) : null, bloqueio_id: resAg ? resAg[2] : null, aceitar: (resJu || resAg)[1] === 'ok', quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? ''), chatid: chatClique } }];
+if (
+  (resJu || resAg) &&
+  (chatid === GRUPO_NOTIFICACOES || /@(s\.whatsapp\.net|lid)$/.test(chatid))
+) {
+  const chatClique = chatid.endsWith('@lid')
+    ? String(m.sender_pn || chatid)
+    : chatid;
+  return [
+    {
+      json: {
+        evento: 'reserva',
+        reserva_id: resJu ? Number(resJu[2]) : null,
+        bloqueio_id: resAg ? resAg[2] : null,
+        aceitar: (resJu || resAg)[1] === 'ok',
+        quem: String(m.senderName || 'alguém').split(' ')[0],
+        wa_message_id: String(m.messageid ?? ''),
+        chatid: chatClique,
+      },
+    },
+  ];
 }
 // 30/10/2026: card do profissional que se apresentou (✅ É ela / ➕ Cadastrar / ❌ Ignorar). Vai pela porta das reservas (p_prof).
 // 01/11/2026: "👀 Estou verificando" no card do pedido: a Ju avisa a família e o card volta só com Concluído.
 if (chatid === GRUPO_NOTIFICACOES && /^ju_verif:\d+$/.test(botao)) {
-  return [{ json: { evento: 'verificar', solicitacao_id: Number(botao.split(':')[1]), quem: String(m.senderName || '').split(' ')[0], wa_message_id: String(m.messageid ?? '') } }];
+  return [
+    {
+      json: {
+        evento: 'verificar',
+        solicitacao_id: Number(botao.split(':')[1]),
+        quem: String(m.senderName || '').split(' ')[0],
+        wa_message_id: String(m.messageid ?? ''),
+      },
+    },
+  ];
 }
 // 01/11/2026: o "✅ Ok" do aviso de atraso vai pela mesma porta (só apaga o aviso).
-if (chatid === GRUPO_NOTIFICACOES && /^(ju_prof_(vinc|novo|nao):\d+(:\d+)?|ju_atraso_ok:\d+)$/.test(botao)) {
-  return [{ json: { evento: 'reserva', reserva_id: null, bloqueio_id: null, prof: botao, aceitar: !botao.startsWith('ju_prof_nao:'), quem: String(m.senderName || 'alguém').split(' ')[0], wa_message_id: String(m.messageid ?? ''), chatid } }];
+// 05/11/2026: aviso "Pedido concluído sem resposta" (↩️ Reabrir / 👍 Está certo) vai pela mesma porta.
+if (
+  chatid === GRUPO_NOTIFICACOES &&
+  /^(ju_prof_(vinc|novo|nao):\d+(:\d+)?|ju_atraso_ok:\d+|ju_reab_(sim|ok):\d+)$/.test(
+    botao
+  )
+) {
+  return [
+    {
+      json: {
+        evento: 'reserva',
+        reserva_id: null,
+        bloqueio_id: null,
+        prof: botao,
+        aceitar: !botao.startsWith('ju_prof_nao:'),
+        quem: String(m.senderName || 'alguém').split(' ')[0],
+        wa_message_id: String(m.messageid ?? ''),
+        chatid,
+      },
+    },
+  ];
 }
 if (chatid === GRUPO_NOTIFICACOES && botao.startsWith('ju_concluir:')) {
   return [
@@ -96,8 +151,12 @@ if (chatid === GRUPO_NOTIFICACOES && botao.startsWith('ju_concluir:')) {
 }
 // 23/10/2026: aviso automático da clínica no grupo (pedido, lembrete, aviso) sai do próprio número
 // que a secretaria usa, então não notifica ela. Marca o grupo como não lido. Reação e mensagem apagada (card concluído) não.
-if (chatid === GRUPO_NOTIFICACOES && m.fromMe === true && m.wasSentByApi === true
-    && !/Reaction|Protocol|Revoke|Delete/i.test(String(m.messageType ?? ''))) {
+if (
+  chatid === GRUPO_NOTIFICACOES &&
+  m.fromMe === true &&
+  m.wasSentByApi === true &&
+  !/Reaction|Protocol|Revoke|Delete/i.test(String(m.messageType ?? ''))
+) {
   return [{ json: { evento: 'grupo_nao_lido' } }];
 }
 if (!/@(s\.whatsapp\.net|lid)$/.test(chatid)) return []; // grupo, status, canal, transmissão
@@ -105,7 +164,10 @@ const messageType = String(m.messageType ?? '');
 // 02/11/2026 (caso Camille: 13h editado para 15h e ninguém viu): edição da família vai para
 // fn_ju_mensagem_editada, que avisa o grupo se mudou hora, dia, valor etc. O formato da uazapi não é
 // documentado: procura o texto novo e o id original em vários lugares e guarda o bruto para conferir.
-if (messageType === 'EditedMessage' || (typeof m.edited === 'string' && m.edited)) {
+if (
+  messageType === 'EditedMessage' ||
+  (typeof m.edited === 'string' && m.edited)
+) {
   if (chatid.endsWith('@g.us')) return [];
   const cont = m.content && typeof m.content === 'object' ? m.content : {};
   const achar = (o, chaves, prof = 0) => {
@@ -118,11 +180,32 @@ if (messageType === 'EditedMessage' || (typeof m.edited === 'string' && m.edited
     }
     return null;
   };
-  const novo = String(m.text || (typeof m.content === 'string' ? m.content : '') || achar(cont, ['conversation', 'text', 'caption']) || '').trim();
-  const original = (typeof m.edited === 'string' && m.edited)
-    || cont?.protocolMessage?.key?.id || cont?.protocolMessage?.key?.ID || cont?.key?.id || cont?.key?.ID
-    || achar(cont?.protocolMessage || cont?.key || {}, ['id', 'ID', 'stanzaId']) || '';
-  return [{ json: { evento: 'editada', wa_chatid: chatid, novo, original_id: String(original), from_me: m.fromMe === true, bruto: JSON.stringify(m).slice(0, 4000) } }];
+  const novo = String(
+    m.text ||
+      (typeof m.content === 'string' ? m.content : '') ||
+      achar(cont, ['conversation', 'text', 'caption']) ||
+      ''
+  ).trim();
+  const original =
+    (typeof m.edited === 'string' && m.edited) ||
+    cont?.protocolMessage?.key?.id ||
+    cont?.protocolMessage?.key?.ID ||
+    cont?.key?.id ||
+    cont?.key?.ID ||
+    achar(cont?.protocolMessage || cont?.key || {}, ['id', 'ID', 'stanzaId']) ||
+    '';
+  return [
+    {
+      json: {
+        evento: 'editada',
+        wa_chatid: chatid,
+        novo,
+        original_id: String(original),
+        from_me: m.fromMe === true,
+        bruto: JSON.stringify(m).slice(0, 4000),
+      },
+    },
+  ];
 }
 if (!m.messageid || IGNORAR.test(messageType)) return [];
 
@@ -159,12 +242,29 @@ const citada = ctxInfo.quotedMessage || ctxInfo.QuotedMessage || null;
 let citacao = '';
 if (m.quoted || citada) {
   const q = citada || {};
-  const doc = q.documentMessage || (q.documentWithCaptionMessage && q.documentWithCaptionMessage.message && q.documentWithCaptionMessage.message.documentMessage);
-  const qtxt = String(q.conversation || (q.extendedTextMessage && q.extendedTextMessage.text) || (q.imageMessage && q.imageMessage.caption) || (q.videoMessage && q.videoMessage.caption) || (doc && doc.caption) || '').replace(/\s+/g, ' ').trim();
+  const doc =
+    q.documentMessage ||
+    (q.documentWithCaptionMessage &&
+      q.documentWithCaptionMessage.message &&
+      q.documentWithCaptionMessage.message.documentMessage);
+  const qtxt = String(
+    q.conversation ||
+      (q.extendedTextMessage && q.extendedTextMessage.text) ||
+      (q.imageMessage && q.imageMessage.caption) ||
+      (q.videoMessage && q.videoMessage.caption) ||
+      (doc && doc.caption) ||
+      ''
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
   if (doc) {
     const arq = String(doc.fileName || doc.title || '');
     const nf = arq.match(/^(\d{1,7})-\d{11,14}\.pdf$/i);
-    citacao = nf ? '[respondendo ao PDF da nota fiscal nº ' + nf[1] + ']' : '[respondendo ao arquivo ' + (arq ? '"' + arq.slice(0, 80) + '"' : 'enviado antes') + ']';
+    citacao = nf
+      ? '[respondendo ao PDF da nota fiscal nº ' + nf[1] + ']'
+      : '[respondendo ao arquivo ' +
+        (arq ? '"' + arq.slice(0, 80) + '"' : 'enviado antes') +
+        ']';
   } else if (qtxt) {
     citacao = '[respondendo a: "' + qtxt.slice(0, 200) + '"]';
   } else if (q.imageMessage) {
@@ -208,7 +308,11 @@ return [
       conteudo,
       legenda: tipo === 'TEXT' ? '' : comCitacao(texto),
       // 27/10/2026: nome que a pessoa usa no WhatsApp (pushName), para a Ju acertar o tratamento
-      nome_whatsapp: fromMe ? '' : String(m.senderName ?? '').trim().slice(0, 80),
+      nome_whatsapp: fromMe
+        ? ''
+        : String(m.senderName ?? '')
+            .trim()
+            .slice(0, 80),
     },
   },
 ];
