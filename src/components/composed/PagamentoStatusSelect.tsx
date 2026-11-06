@@ -126,11 +126,14 @@ export const PagamentoStatusSelect = React.memo<PagamentoStatusSelectProps>(
                   : 'Nenhum status disponível.'}
               </div>
             ) : (
-              pagamentoStatuses.map((status) => (
-                <SelectItem key={status.id} value={status.id} className="p-3">
-                  {renderStatusInfo(status)}
-                </SelectItem>
-              ))
+              pagamentoStatuses
+                // Cortesia só pelo botão da consulta (admin/secretaria, com motivo)
+                .filter((s) => s.codigo !== 'cortesia' || s.id === value)
+                .map((status) => (
+                  <SelectItem key={status.id} value={status.id} className="p-3">
+                    {renderStatusInfo(status)}
+                  </SelectItem>
+                ))
             )}
           </SelectContent>
         </Select>

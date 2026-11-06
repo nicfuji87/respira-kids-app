@@ -119,6 +119,8 @@ const podeGerarCobranca = (c: {
   c.status_pagamento_codigo !== 'pago' &&
   c.status_pagamento_codigo !== 'cancelado' &&
   c.status_pagamento_codigo !== 'cobranca_gerada' &&
+  // Cortesia: sessão que aconteceu e não é cobrada (pagamento_sincronia_e_cortesia.sql)
+  c.status_pagamento_codigo !== 'cortesia' &&
   !c.fatura_id;
 
 // AI dev note: Motivo que IMPEDE (ou atrapalha) gerar a cobrança de um paciente,
@@ -898,7 +900,8 @@ export const FinancialConsultationsList: React.FC<
     const unpaidCount = filteredConsultations.filter(
       (item) =>
         item.status_pagamento_codigo !== 'pago' &&
-        item.status_pagamento_codigo !== 'cancelado'
+        item.status_pagamento_codigo !== 'cancelado' &&
+        item.status_pagamento_codigo !== 'cortesia'
     ).length;
     const paidCount = filteredConsultations.filter(
       (item) => item.status_pagamento_codigo === 'pago'
@@ -1047,7 +1050,8 @@ export const FinancialConsultationsList: React.FC<
       group.total_consultas += 1;
       if (
         consulta.status_pagamento_codigo !== 'pago' &&
-        consulta.status_pagamento_codigo !== 'cancelado'
+        consulta.status_pagamento_codigo !== 'cancelado' &&
+        consulta.status_pagamento_codigo !== 'cortesia'
       ) {
         group.consultas_nao_pagas += 1;
       }

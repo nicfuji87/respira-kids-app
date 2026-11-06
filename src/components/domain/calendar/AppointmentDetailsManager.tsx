@@ -1,5 +1,6 @@
 import { buscarPacienteFixo } from '@/lib/pacientes-fixos-api';
 import { AvaliacaoMotoraAgenda } from './AvaliacaoMotoraAgenda';
+import { CortesiaAction } from './CortesiaAction';
 import { usePlanoMotorDados } from '@/hooks/usePlanoMotorDados';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -2434,6 +2435,18 @@ export const AppointmentDetailsManager =
                               userRole === 'admin' || userRole === 'secretaria'
                             }
                             onNfeAction={handleEmitirNfe}
+                          />
+                          <CortesiaAction
+                            key={`${appointment.id}-${appointment.status_pagamento_codigo}`}
+                            agendamentoId={appointment.id}
+                            statusPagamentoCodigo={
+                              appointment.status_pagamento_codigo
+                            }
+                            statusConsultaCodigo={
+                              appointment.status_consulta_codigo
+                            }
+                            userRole={userRole}
+                            onChanged={onAgendaExpressaCreated}
                           />
                         </>
                       ) : null}

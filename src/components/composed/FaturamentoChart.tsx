@@ -55,6 +55,7 @@ const PAGAMENTO_STATUS_OPTIONS = [
   { codigo: 'atrasado', descricao: 'Atrasado' },
   { codigo: 'cancelado', descricao: 'Cancelado' },
   { codigo: 'estornado', descricao: 'Estornado' },
+  { codigo: 'cortesia', descricao: 'Cortesia' },
 ];
 
 // AI dev note: FaturamentoChart - Gráfico comparativo de faturamento mensal

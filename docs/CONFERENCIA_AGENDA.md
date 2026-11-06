@@ -47,8 +47,20 @@ Só a leitura usa IA: cerca de 100 conversas por dia, cada uma com até 120 mens
 
 ## Pontos conhecidos
 
-- `podeGerarCobranca` (FinancialConsultationsList) olha só o status do pagamento. Por isso
-  consulta cancelada com pagamento "Pendente" entra na cobrança e consulta ativa com pagamento
-  "Cancelado" fica de fora. A conferência aponta os dois casos; a regra em si não mudou.
+- **Pagamento acompanha a consulta (06/11/2026, `pagamento_sincronia_e_cortesia.sql`).** O gatilho
+  antigo só cancelava o pagamento quando a consulta _mudava_ para "cancelado". Escapavam
+  consulta criada já cancelada, status "reagendado"/"erro", edição que devolvia o pagamento para
+  "pendente" e consulta reativada. Agora `fn_agendamento_sincronizar_pagamento` (INSERT e UPDATE
+  do status da consulta ou do pagamento) cancela o pagamento de consulta parada (menos pago e
+  estornado) e reabre como "pendente" a consulta que volta a ficar ativa (sem fatura nem link).
+  10 consultas antigas (jul a out/2026) foram corrigidas na hora, com o webhook de alteração
+  desligado para não avisar famílias.
+- **Cortesia:** status de pagamento `cortesia` para sessão que aconteceu e não será cobrada.
+  Só admin e secretaria marcam, pelo botão "Marcar como cortesia" nos detalhes da consulta
+  (`CortesiaAction`, RPC `fn_agendamento_cortesia`, motivo obrigatório). Quando é a secretaria,
+  o aviso vai para o grupo 🩺 RK · Agenda e atendimentos (`ju_avisos_grupo`, origem CORTESIA).
+  Fica fora de `podeGerarCobranca` e não aparece no seletor comum de status.
+- A geração em massa no servidor (`generate-payment-links-bulk`) só confere ativo/fatura/link;
+  quem filtra status é o front (`podeGerarCobranca`).
 - A IA pode confundir marcar a próxima sessão com remarcar a atual. O prompt e o banco
   (desmarcação depois do horário é ignorada) seguram isso; o botão Ignorar existe para o resto.
