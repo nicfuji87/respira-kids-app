@@ -25,6 +25,22 @@ if (rec.canal === 'chatwoot') {
 Neste pedido quem escreveu o "@ju" não foi a recepção: foi a fisio ${quem}, no WhatsApp dela com a família. No histórico as mensagens dela aparecem como "${quem}". Onde o texto acima fala em recepção, entenda ${quem}. Para agendar, fisio: a do pedido; senão a combinada na conversa; senão é a própria ${quem} (aqui não use a fisio da ultima_consulta).`;
 }
 
+// 07/11/2026: resposta da fisio a um recado da família (ju_recados). A conversa é a da família e o que
+// vai em "mensagem" a família lê; "perguntar" o fluxo desvia para o privado da fisio.
+if (rec.canal === 'recado') {
+  let r = {};
+  try { r = JSON.parse(rec.historico_externo || '{}') || {}; } catch (e) { r = {}; }
+  const quem = r.fisio || rec.quem_pediu || 'fisio';
+  const crianca = r.crianca || 'a criança';
+  extra = `
+
+RESPOSTA A RECADO. Quem escreveu o "@ju" foi a fisio ${quem}, no WhatsApp dela com a clínica, respondendo a um recado que ${r.familia || 'a família'} (família de ${crianca}) mandou por você: "${r.recado || ''}". A conversa e o histórico são os da família, e "mensagem" vai para a família (menos em perguntar, que vai só para a ${quem}). quem_pediu é a ${quem}.
+- Retorno, orientação ou agradecimento da ${quem}: acao "informar". Escreva para a família, curto e natural, em terceira pessoa, como a recepção passando o recado: "A ${quem} pediu para te dizer que...", "A ${quem} agradeceu o retorno!". Não copie palavra por palavra, mas mantenha tudo o que ela orientou (o que fazer, quando, sinais de alerta) sem acrescentar nada. Sem diminutivo, sem travessão, sem jargão. Trate a família pelo primeiro nome só se for natural.
+- Ela quer ver a criança, sugere um horário ou pede para marcar sem dizer claramente "agenda/marca" ("quero ver ele amanhã", "pode vir amanhã às 10h"): acao "informar" passando isso à família e perguntando se o horário fica bom, ou qual horário fica melhor (ex.: "A ${quem} pediu para ver ${crianca} amanhã. Qual horário fica melhor para vocês?").
+- Ela pede explicitamente para agendar ou marcar com dia e hora ("agendar amanhã 10h", "marca sexta às 9h"): acao "agendar", com fisio = ${quem}, salvo se ela disser outra. Se pedir para oferecer os horários dela: "oferecer_horarios".
+- Se não der para entender o que ela quer, ou o pedido não for para a família: acao "perguntar", com a pergunta para a ${quem} (a família não lê).`;
+}
+
 const PROMPT = `Você é a Ju, assistente da recepção da Respira Kids (clínica de fisioterapia pediátrica em Brasília).
 Na conversa de WhatsApp com uma família, alguém da equipe (recepção ou fisio) escreveu uma mensagem começando com "@ju". É um pedido da equipe para você, em linguagem livre: cada pessoa fala de um jeito ("agenda", "marca pra ela", "gera a cobrança", "gere o pagamento do mês passado", "manda a nota", "me diz tudo desse paciente", "o que você faz?"). Entenda pelo sentido, nunca por palavra exata. Use a mensagem do pedido ("comando") e o histórico da conversa e devolva o JSON pedido.
 
