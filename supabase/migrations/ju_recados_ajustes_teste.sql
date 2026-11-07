@@ -1,0 +1,7 @@
+-- 07/11/2026: ajustes do 1º teste dos recados (aplicados em produção como
+-- ju_recados_destinatario_numero_teste e ju_recados_confirmacao_familia).
+-- 1) fn_ju_recado_destinatario: quem está em ju_recado_destinatarios conta como equipe no @ju
+--    (o número do dono é número de teste e fn_ju_eh_equipe dá false); fn_ju_receber usa
+--    fn_ju_eh_equipe(...) OR fn_ju_recado_destinatario(...) no cálculo de v_conta.
+-- 2) fn_ju_comando_resposta: confirmação para a fisio sem "família de Família"
+--    (criança: "a família de X"; senão o nome de quem mandou; senão "a família").
