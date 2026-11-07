@@ -204,6 +204,8 @@ export interface AsaasInvoiceTaxes {
   pisCofinsTaxStatus?: string; // CST do PIS/COFINS (ex.: STANDARD_TAXABLE_OPERATION = 01)
   operationPis?: number | null; // alíquota de PIS da operação (declarada, não retida)
   operationCofins?: number | null; // alíquota de COFINS da operação
+  // Portal Nacional: Código de Tributação Nacional (6 dígitos, ex.: 040801)
+  federalServiceTaxCode?: string | null;
 }
 
 export interface ScheduleInvoiceRequest {

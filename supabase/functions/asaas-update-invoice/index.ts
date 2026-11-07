@@ -37,6 +37,7 @@ interface UpdateInvoiceRequest {
       pisCofinsTaxStatus?: string;
       operationPis?: number | null;
       operationCofins?: number | null;
+      federalServiceTaxCode?: string | null;
     };
   };
 }

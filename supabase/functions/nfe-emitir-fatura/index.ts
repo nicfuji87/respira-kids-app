@@ -31,6 +31,12 @@ const PIS_COFINS_LUCRO_PRESUMIDO = {
   operationCofins: 3,
 };
 
+// Portal Nacional — mesma constante de faturas-api.ts. Simples Nacional emite
+// por ele desde 01/11/2026; sem o código a nota volta com "_NFe002".
+const SERVICO_PORTAL_NACIONAL = {
+  federalServiceTaxCode: '040801',
+};
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -173,7 +179,7 @@ Deno.serve(async (req: Request) => {
         ir: 0,
         pis: 0,
         ...(empresa.regime_tributario === 'simples_nacional'
-          ? {}
+          ? SERVICO_PORTAL_NACIONAL
           : { ...IBS_CBS_SERVICOS_SAUDE, ...PIS_COFINS_LUCRO_PRESUMIDO }),
       },
     };

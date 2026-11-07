@@ -1782,6 +1782,14 @@ const PIS_COFINS_LUCRO_PRESUMIDO = {
   operationCofins: 3,
 } as const;
 
+// Portal Nacional da NFS-e: desde 01/11/2026 o Simples Nacional emite por ele
+// (a F.S Pacheco migrou em 06/11). Lá não existe o serviço municipal 290448 —
+// sem o Código de Tributação Nacional a nota volta com "_NFe002: O Código de
+// Serviço municipal deve ser informado". 040801 = item 04.08 (fisioterapia).
+const SERVICO_PORTAL_NACIONAL = {
+  federalServiceTaxCode: '040801',
+} as const;
+
 // === EMITIR NFE PARA FATURA ===
 export async function emitirNfeFatura(
   faturaId: string,
@@ -1898,10 +1906,11 @@ export async function emitirNfeFatura(
         inss: 0,
         ir: 0,
         pis: 0,
-        // Grupo IBSCBS e PIS/COFINS: exigidos de quem está no Regime Normal
+        // Regime Normal: grupo IBSCBS e PIS/COFINS (emite pela prefeitura).
+        // Simples Nacional: código de tributação do Portal Nacional.
         // (ver constantes acima)
         ...(apiConfig.regimeTributario === 'simples_nacional'
-          ? {}
+          ? SERVICO_PORTAL_NACIONAL
           : { ...IBS_CBS_SERVICOS_SAUDE, ...PIS_COFINS_LUCRO_PRESUMIDO }),
       };
 
