@@ -63,8 +63,24 @@ Deno.serve(async (req: Request) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
+    // AI dev note (07/11/2026): cobrança parcelada no cartão = N payments de um
+    // installment. Apagar só o payment da 1ª parcela deixava as outras abertas no
+    // Asaas (caso Ivi, "refazer cobrança" de 6x). Parcelado: apaga o parcelamento.
+    const atual = await fetch(`${apiConfig.baseUrl}/payments/${paymentId}`, {
+      headers: {
+        access_token: apiConfig.apiKey,
+        'User-Agent': 'RespiraKids/1.0',
+      },
+      signal: controller.signal,
+    })
+      .then((r) => r.json())
+      .catch(() => ({}));
+    const alvo = atual?.installment
+      ? `/installments/${atual.installment}`
+      : `/payments/${paymentId}`;
+
     const asaasResponse = await fetch(
-      `${apiConfig.baseUrl}/payments/${paymentId}`,
+      `${apiConfig.baseUrl}${alvo}`,
       {
         method: 'DELETE',
         headers: {
