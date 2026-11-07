@@ -170,6 +170,12 @@ export interface EvolucoesCelular {
     perdidas: number;
     contadas: number;
     valor: number;
+    /** base cheia do mês (a base acima pode vir proporcional) */
+    base_cheia?: number;
+    proporcional?: boolean;
+    /** motora fora da conta do bônus até motora_desde */
+    motora_fora?: boolean;
+    motora_desde?: string;
   };
 }
 

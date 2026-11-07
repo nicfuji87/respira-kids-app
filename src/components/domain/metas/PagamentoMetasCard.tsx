@@ -25,10 +25,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
+  fetchEvolucoesProgresso,
   fetchMetasPagamentos,
   NOME_GRUPO,
   type MetasPagamentos,
 } from '@/lib/metas-pagamentos-api';
+import { EvolucoesProgresso } from '@/components/domain/processo-seletivo/EvolucoesProgresso';
+import type { EvolucoesCelular } from '@/lib/estagio-celular-api';
 
 const brl = (v: number | null | undefined) =>
   Number(v ?? 0).toLocaleString('pt-BR', {
@@ -52,6 +55,11 @@ export const PagamentoMetasCard: React.FC<PagamentoMetasCardProps> = ({
   ano,
 }) => {
   const [dados, setDados] = useState<MetasPagamentos | null>(null);
+  // AI dev note: mesma tela do celular da estagiária (calendário + pendências)
+  const [progresso, setProgresso] = useState<{
+    dados: EvolucoesCelular;
+    recebidoEm: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -59,7 +67,12 @@ export const PagamentoMetasCard: React.FC<PagamentoMetasCardProps> = ({
     setLoading(true);
     setErro(null);
     try {
-      setDados(await fetchMetasPagamentos(mes, ano));
+      const [pag, prog] = await Promise.all([
+        fetchMetasPagamentos(mes, ano),
+        fetchEvolucoesProgresso(mes, ano),
+      ]);
+      setDados(pag);
+      setProgresso({ dados: prog, recebidoEm: Date.now() });
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro ao carregar');
     } finally {
@@ -238,6 +251,14 @@ export const PagamentoMetasCard: React.FC<PagamentoMetasCardProps> = ({
           </p>
         </CardContent>
       </Card>
+
+      {/* Progresso do mês: a mesma tela que a estagiária vê no celular */}
+      {progresso && (
+        <EvolucoesProgresso
+          dados={progresso.dados}
+          recebidoEm={progresso.recebidoEm}
+        />
+      )}
 
       {/* Estagiárias */}
       <Card>
