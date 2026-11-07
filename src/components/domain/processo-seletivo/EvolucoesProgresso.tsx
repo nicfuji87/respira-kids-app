@@ -173,6 +173,22 @@ export const EvolucoesProgresso: React.FC<Props> = ({ dados, recebidoEm }) => {
             {MESES[Number(bonusInicio.split('-')[1]) - 1]}.
           </p>
         )}
+        {dados.bonus.proporcional && dados.bonus.base_cheia != null && (
+          <p className="text-xs text-muted-foreground">
+            Mês proporcional: a regra passou a valer no meio do mês, então a
+            base é R$ {dados.bonus.base.toFixed(0)} em vez de R${' '}
+            {dados.bonus.base_cheia.toFixed(0)}.
+          </p>
+        )}
+        {dados.bonus.motora_fora && (
+          <p className="text-xs text-muted-foreground">
+            A motora ainda não entra no bônus
+            {dados.bonus.motora_desde
+              ? `: passa a contar em ${dataCurta(dados.bonus.motora_desde)}`
+              : ''}
+            . Evoluir continua valendo: é o prontuário da criança.
+          </p>
+        )}
       </div>
 
       {/* Calendário */}
