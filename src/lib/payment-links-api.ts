@@ -40,6 +40,8 @@ export interface CriarLinkPagamentoInput {
   // para espaçar os envios 5–9 min e não sobrecarregar a API não oficial. Ausente =
   // envia na hora (geração de 1 link).
   agendarEnvioEm?: string; // ISO timestamp
+  // Recebido em dinheiro: o link é só o veículo interno, nada vai para a família.
+  semEnvio?: boolean;
 }
 
 export interface LinkPagamentoCriado {
@@ -284,6 +286,10 @@ export async function criarLinkPagamento(
 
     const url = montarUrlPagamento(link.token);
 
+    if (input.semEnvio) {
+      return { success: true, data: { id: link.id, token: link.token, url } };
+    }
+
     // Enfileirar webhook para o n8n enviar o link ao cliente (WhatsApp)
     const { error: webhookError } = await supabase
       .from('webhook_queue')
@@ -399,6 +405,54 @@ export async function confirmarPagamento(
       error: 'Erro inesperado ao confirmar o pagamento',
     };
   }
+}
+
+// === RECEBIDO EM DINHEIRO ===
+// AI dev note (07/11/2026): instrução do dono para quem paga em dinheiro é "gerar no
+// Asaas e dar como recebido", SEM nota. Antes a secretaria fazia isso à mão no Asaas
+// (ou marcava "pago" na consulta, o que deixava a sessão paga sem fatura). Agora:
+// cria o link sem envio, a edge confirm-payment-link (forma 'dinheiro', só
+// admin/secretaria) cria a cobrança, dá baixa em dinheiro e grava a fatura paga com
+// nfe_dispensada. Se o Asaas falhar, o link é cancelado e as consultas voltam a
+// pendente.
+export async function registrarRecebidoEmDinheiro(
+  input: CriarLinkPagamentoInput & { dataPagamento: string },
+  userId: string
+): Promise<ApiResponse<{ idAsaas: string }>> {
+  const link = await criarLinkPagamento({ ...input, semEnvio: true }, userId);
+  if (!link.success || !link.data) {
+    return { success: false, error: link.error };
+  }
+  let mensagem = 'Não foi possível registrar no Asaas';
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      'confirm-payment-link',
+      {
+        body: {
+          token: link.data.token,
+          forma: 'dinheiro',
+          dataPagamento: input.dataPagamento,
+        },
+      }
+    );
+    if (!error && data?.success) {
+      return { success: true, data: { idAsaas: data.idAsaas as string } };
+    }
+    if (data?.error) mensagem = data.error;
+    if (error) {
+      try {
+        const corpo = await (error as { context?: Response }).context?.json();
+        if (corpo?.error) mensagem = corpo.error;
+      } catch {
+        // corpo não-JSON: mantém o genérico
+      }
+    }
+  } catch (e) {
+    console.error('❌ Erro ao registrar recebido em dinheiro:', e);
+  }
+  // devolve as consultas para pendente
+  await cancelarLinkPagamento(link.data.id, userId);
+  return { success: false, error: mensagem };
 }
 
 // === CANCELAR LINK (libera as consultas reservadas) ===

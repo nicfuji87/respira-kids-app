@@ -64,6 +64,7 @@ const TIPO_ICONE: Record<TipoItem, LucideIcon> = {
   followup: MessagesSquare,
   reclamacao: AlertTriangle,
   lead: Flame,
+  inadimplencia: Banknote,
 };
 
 const PRIORIDADE: Record<
@@ -167,12 +168,32 @@ const RESULTADOS: Record<
     },
   ],
   cobranca: [],
+  inadimplencia: [
+    {
+      valor: 'respondeu',
+      label: 'Falei com a família',
+      ajuda:
+        'Some desta etapa. Se a dívida seguir, volta na próxima (30 ou 60 dias).',
+    },
+    {
+      valor: 'resolveu',
+      label: 'Acertado ou decidido',
+      ajuda:
+        'Pagou, combinou acordo (marque Negociação interna em Cobranças) ou a decisão foi tomada.',
+    },
+    {
+      valor: 'nao_se_aplica',
+      label: 'Não se aplica',
+      ajuda: 'Cobrança errada ou já resolvida por outro caminho.',
+    },
+  ],
 };
 
 const URGENCIA_TIPO: Record<TipoItem, number> = {
   familia_aguardando: 0,
   pedido_ju: 1,
   cobranca: 2,
+  inadimplencia: 2,
   reclamacao: 3,
   lead: 4,
   followup: 5,
@@ -321,8 +342,17 @@ export const HojeTab: React.FC<HojeTabProps> = ({ onVerRevisao }) => {
           label="Para o Financeiro"
           value={k.financeiro}
           hint={
-            k.cobrancas_conferencia > 0
-              ? `${k.cobrancas_conferencia} cobrança(s) em conferência`
+            k.cobrancas_conferencia > 0 || (k.inadimplencia ?? 0) > 0
+              ? [
+                  k.cobrancas_conferencia > 0
+                    ? `${k.cobrancas_conferencia} cobrança(s) em conferência`
+                    : null,
+                  (k.inadimplencia ?? 0) > 0
+                    ? `${k.inadimplencia} família(s) em atraso`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
               : 'notas, pagamentos e cobranças a conferir'
           }
         />

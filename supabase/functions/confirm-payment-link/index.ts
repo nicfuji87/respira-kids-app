@@ -9,6 +9,14 @@
 //   4. Cria a FATURA, vincula os agendamentos e enfileira o webhook `fatura_criada`
 //      (mantém o aviso de inadimplência do n8n funcionando exatamente como hoje).
 //   5. Retorna invoiceUrl (checkout hospedado, p/ cartão) e o QR PIX (p/ PIX).
+//
+// 07/11/2026, dois usos internos além da página pública:
+//   * forma 'dinheiro' (botão "Recebido em dinheiro", só admin/secretaria logados): cria a
+//     cobrança no Asaas, dá como recebida em dinheiro (receiveInCash) e grava a fatura já
+//     paga e SEM NOTA por decisão (faturas.nfe_dispensada). Nada é enviado à família.
+//   * origem 'auto_7dias' (cron fn_pre_cobranca_converter_asaas): pré-cobrança vencida há
+//     7 dias vira cobrança Pix no Asaas. Grava o resultado em pagamento_links
+//     (convertido_auto_em ou conversao_erro).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
@@ -26,9 +34,13 @@ const ASAAS_BASE_URL = 'https://api.asaas.com/v3';
 const EMAIL_VALIDO =
   /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 
+type Forma = 'pix' | 'credit_card' | 'dinheiro';
+
 interface RequestBody {
   token: string;
-  forma: 'pix' | 'credit_card';
+  forma: Forma;
+  origem?: string; // 'auto_7dias' quando vem do cron
+  dataPagamento?: string; // YYYY-MM-DD, só p/ forma 'dinheiro'
   parcelas?: number; // nº de parcelas p/ cartão (1 = à vista)
   successUrl?: string; // URL p/ redirecionar após pagar (origin do client)
 }
@@ -130,15 +142,49 @@ serve(async (req: Request) => {
 
   let claimed = false;
   let token = '';
+  let origem = '';
 
   try {
     const body: RequestBody = await req.json();
     token = body.token;
+    origem = body.origem || '';
     const forma = body.forma;
     const parcelas = Math.max(1, body.parcelas || 1);
 
-    if (!token || (forma !== 'pix' && forma !== 'credit_card')) {
+    if (
+      !token ||
+      (forma !== 'pix' && forma !== 'credit_card' && forma !== 'dinheiro')
+    ) {
       return json({ success: false, error: 'Parâmetros inválidos' }, 400);
+    }
+
+    // "Recebido em dinheiro" é ato interno: exige admin/secretaria logado.
+    // AI dev note: pessoas.id != auth.users.id (ligação é pessoas.auth_user_id).
+    let staffPessoaId: string | null = null;
+    if (forma === 'dinheiro') {
+      const jwt = (req.headers.get('Authorization') || '').replace(
+        'Bearer ',
+        ''
+      );
+      const {
+        data: { user },
+      } = await supabase.auth.getUser(jwt);
+      if (!user) return json({ success: false, error: 'Não autenticado' }, 401);
+      const { data: perfil } = await supabase
+        .from('pessoas')
+        .select('id, role')
+        .eq('auth_user_id', user.id)
+        .single();
+      if (!perfil || !['admin', 'secretaria'].includes(perfil.role)) {
+        return json({ success: false, error: 'Sem permissão' }, 403);
+      }
+      staffPessoaId = perfil.id as string;
+      if (
+        body.dataPagamento &&
+        !/^\d{4}-\d{2}-\d{2}$/.test(body.dataPagamento)
+      ) {
+        return json({ success: false, error: 'Data inválida' }, 400);
+      }
     }
 
     // 1. Carregar link
@@ -154,7 +200,7 @@ serve(async (req: Request) => {
     }
 
     // Idempotência: se já confirmado, devolve o invoiceUrl atual do Asaas
-    if (link.status === 'confirmado' && link.id_asaas) {
+    if (link.status === 'confirmado' && link.id_asaas && forma !== 'dinheiro') {
       const apiKeyExisting = await getEmpresaApiKey(supabase, link.empresa_id);
       if (apiKeyExisting) {
         const pay = await asaasFetch(
@@ -188,7 +234,9 @@ serve(async (req: Request) => {
     const opcoes = link.opcoes_snapshot as OpcoesPagamento | null;
     let chargeValue: number;
     let isParcelado = false;
-    if (forma === 'pix') {
+    if (forma === 'dinheiro') {
+      chargeValue = Number(link.valor_base);
+    } else if (forma === 'pix') {
       chargeValue = opcoes?.pix?.total ?? link.valor_base;
     } else {
       const opcao = opcoes?.cartao?.find((c) => c.parcelas === parcelas);
@@ -263,9 +311,11 @@ serve(async (req: Request) => {
     }).format(new Date());
     const vencimentoMinimo = addDaysISO(hojeBR, GRACE_DAYS);
     const dueDate =
-      link.vencimento && link.vencimento > vencimentoMinimo
-        ? (link.vencimento as string)
-        : vencimentoMinimo;
+      forma === 'dinheiro'
+        ? hojeBR
+        : link.vencimento && link.vencimento > vencimentoMinimo
+          ? (link.vencimento as string)
+          : vencimentoMinimo;
 
     // 6. Criar cobrança no Asaas
     // AI dev note: o Asaas limita a description do PARCELAMENTO a 500 chars e RECUSA a
@@ -280,7 +330,7 @@ serve(async (req: Request) => {
       rawDesc.length > 500 ? `${rawDesc.slice(0, 497)}...` : rawDesc;
     const paymentPayload: Record<string, unknown> = {
       customer: customerId,
-      billingType: forma === 'pix' ? 'PIX' : 'CREDIT_CARD',
+      billingType: forma === 'credit_card' ? 'CREDIT_CARD' : 'PIX',
       dueDate,
       description,
       externalReference: `LINK-${String(link.id).slice(0, 8)}`,
@@ -332,6 +382,37 @@ serve(async (req: Request) => {
     }
     const payment = payRes.data;
 
+    // 6b. Dinheiro: dar como recebido no Asaas (sem avisar a família)
+    let dataRecebido: string | null = null;
+    if (forma === 'dinheiro') {
+      dataRecebido =
+        body.dataPagamento && body.dataPagamento <= hojeBR
+          ? body.dataPagamento
+          : hojeBR;
+      const cash = await asaasFetch(
+        apiKey,
+        `/payments/${payment.id}/receiveInCash`,
+        {
+          method: 'POST',
+          body: {
+            paymentDate: dataRecebido,
+            value: chargeValue,
+            notifyCustomer: false,
+          },
+        }
+      );
+      if (!cash.ok) {
+        // não deixa cobrança aberta no Asaas se não deu para dar baixa
+        await asaasFetch(apiKey, `/payments/${payment.id}`, {
+          method: 'DELETE',
+        });
+        throw new Error(
+          cash.data?.errors?.[0]?.description ||
+            `Erro ${cash.status} ao dar como recebido no Asaas`
+        );
+      }
+    }
+
     // 7. Criar fatura + vincular agendamentos + enfileirar webhook
     await registrarFaturaEAgendamentos(
       supabase,
@@ -340,8 +421,23 @@ serve(async (req: Request) => {
       forma,
       parcelas,
       dueDate,
-      chargeValue
+      chargeValue,
+      dataRecebido,
+      staffPessoaId
     );
+
+    if (origem === 'auto_7dias') {
+      await supabase
+        .from('pagamento_links')
+        .update({
+          convertido_auto_em: new Date().toISOString(),
+          conversao_erro: null,
+        })
+        .eq('id', link.id);
+    }
+    if (forma === 'dinheiro') {
+      return json({ success: true, forma: 'dinheiro', idAsaas: payment.id });
+    }
 
     // 8. Resultado p/ a página (QR PIX ou invoiceUrl do cartão)
     const result = await buildPaymentResult(apiKey, forma, payment);
@@ -360,6 +456,15 @@ serve(async (req: Request) => {
         })
         .eq('token', token)
         .eq('status', 'confirmado');
+    }
+    if (origem === 'auto_7dias' && token) {
+      await supabase
+        .from('pagamento_links')
+        .update({
+          conversao_erro:
+            error instanceof Error ? error.message : 'Erro inesperado',
+        })
+        .eq('token', token);
     }
     return json(
       {
@@ -503,11 +608,14 @@ async function registrarFaturaEAgendamentos(
   supabase: ReturnType<typeof createClient>,
   link: Record<string, any>,
   payment: Record<string, any>,
-  forma: 'pix' | 'credit_card',
+  forma: Forma,
   parcelas: number,
   dueDate: string,
-  chargeTotal: number
+  chargeTotal: number,
+  dataRecebido: string | null = null,
+  staffPessoaId: string | null = null
 ): Promise<void> {
+  const emDinheiro = forma === 'dinheiro';
   // valor_total da fatura = valor bruto TOTAL cobrado (base da NFS-e/caixa).
   // AI dev note: no cartão PARCELADO o Asaas devolve `payment.value` = valor de UMA
   // parcela (ex.: 100.65 de 603.91 em 6x). O total é o chargeTotal (opcao.total), que é
@@ -547,7 +655,18 @@ async function registrarFaturaEAgendamentos(
         parcelas: forma === 'credit_card' ? parcelas : 1,
         valor_base: link.valor_base,
       },
-      criado_por: link.criado_por,
+      criado_por: staffPessoaId ?? link.criado_por,
+      // Dinheiro: já nasce paga e sem nota por decisão (a família não quer nota).
+      // pago_em ao meio-dia de Brasília: data pura à meia-noite UTC cai no dia anterior.
+      ...(emDinheiro
+        ? {
+            status: 'pago',
+            pago_em: `${dataRecebido}T12:00:00-03:00`,
+            nfe_dispensada: true,
+            nfe_dispensada_motivo:
+              'Recebido em dinheiro (sem nota por decisão)',
+          }
+        : {}),
     })
     .select()
     .single();
@@ -562,7 +681,7 @@ async function registrarFaturaEAgendamentos(
   const { data: statusCobranca } = await supabase
     .from('pagamento_status')
     .select('id')
-    .eq('codigo', 'cobranca_gerada')
+    .eq('codigo', emDinheiro ? 'pago' : 'cobranca_gerada')
     .single();
 
   await supabase
@@ -585,6 +704,8 @@ async function registrarFaturaEAgendamentos(
       atualizado_em: new Date().toISOString(),
     })
     .eq('id', link.id);
+
+  if (emDinheiro) return;
 
   // Enfileirar webhook fatura_criada (mesmo formato de enfileirarWebhookFatura)
   await supabase.from('webhook_queue').insert({
@@ -624,7 +745,7 @@ async function registrarFaturaEAgendamentos(
 // Monta o retorno p/ a página: PIX -> QR; cartão -> invoiceUrl.
 async function buildPaymentResult(
   apiKey: string,
-  forma: 'pix' | 'credit_card',
+  forma: Forma,
   payment: Record<string, any>
 ): Promise<{ forma: string; invoiceUrl?: string; pix?: unknown }> {
   const invoiceUrl = payment.invoiceUrl as string | undefined;

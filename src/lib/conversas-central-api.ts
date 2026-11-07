@@ -20,7 +20,8 @@ export type TipoItem =
   | 'cobranca'
   | 'followup'
   | 'reclamacao'
-  | 'lead';
+  | 'lead'
+  | 'inadimplencia';
 export type Responsavel =
   | 'Recepção'
   | 'Financeiro'
@@ -60,6 +61,7 @@ export interface KpisHoje {
   pedidos_ju: number;
   financeiro: number;
   cobrancas_conferencia: number;
+  inadimplencia?: number;
   reclamacoes: number;
   oportunidades: number;
   oportunidades_todas: number;

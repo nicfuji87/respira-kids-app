@@ -37,6 +37,7 @@ import {
 import { useToast } from '@/components/primitives/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { DatePicker } from './DatePicker';
+import { EnvioLoteSituacao } from './EnvioLoteSituacao';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import {
@@ -331,6 +332,8 @@ export const FinancialDisparosLog: React.FC<FinancialDisparosLogProps> = ({
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
+        <EnvioLoteSituacao />
+
         {/* Aviso: entregue_n8n sem confirmação do WhatsApp */}
         {!isLoading && !error && resumo.entregue_n8n > 0 && (
           <Alert>

@@ -195,6 +195,77 @@ export async function encerrarSuspensaoCobranca(
   return { success: true, data: true };
 }
 
+// =====================================================================
+// Escada de inadimplência + Negociação interna (07/11/2026)
+// =====================================================================
+// AI dev note: as regras moram no banco (fn_cobranca_pode_lembrar): até 15 dias o
+// robô lembra normal; 15 dias ou 4 lembretes = 1x por semana + tarefa na aba Hoje
+// (Conversas); 30 dias = robô para; 60 dias = decisão do dono. Família em
+// Negociação interna sai do robô, da cobrança automática e dos números de
+// inadimplência. Aqui só mostramos a etapa e marcamos/desmarcamos a negociação.
+
+export type EtapaEscada = 'regua' | 'd15' | 'd30' | 'd60';
+
+export function etapaEscada(
+  dias: number | null,
+  lembretes: number
+): EtapaEscada | null {
+  if (dias === null || dias <= 0) return null;
+  if (dias >= 60) return 'd60';
+  if (dias >= 30) return 'd30';
+  if (dias >= 15 || lembretes >= 4) return 'd15';
+  return 'regua';
+}
+
+export const ETAPA_ESCADA_LABEL: Record<EtapaEscada, string> = {
+  regua: 'Robô lembrando',
+  d15: 'Ligar ou mandar áudio',
+  d30: 'Robô parado (30 dias)',
+  d60: 'Decisão do dono (60 dias)',
+};
+
+export interface NegociacaoInterna {
+  responsavel_cobranca_id: string;
+  motivo: string;
+  criado_por_nome: string | null;
+  criado_em: string;
+}
+
+export async function fetchNegociacoesAbertas(): Promise<
+  ApiResponse<Map<string, NegociacaoInterna>>
+> {
+  const { data, error } = await supabase
+    .from('cobranca_negociacoes')
+    .select('responsavel_cobranca_id, motivo, criado_por_nome, criado_em')
+    .is('encerrada_em', null);
+  if (error) {
+    console.error('❌ Erro ao carregar negociações:', error);
+    return { success: false, error: error.message };
+  }
+  const mapa = new Map<string, NegociacaoInterna>();
+  (data || []).forEach((n) =>
+    mapa.set(n.responsavel_cobranca_id as string, n as NegociacaoInterna)
+  );
+  return { success: true, data: mapa };
+}
+
+export async function definirNegociacaoInterna(
+  responsavelId: string,
+  ativar: boolean,
+  motivo: string
+): Promise<ApiResponse<true>> {
+  const { error } = await supabase.rpc('fn_cobranca_negociacao', {
+    p_responsavel_id: responsavelId,
+    p_ativar: ativar,
+    p_motivo: motivo || null,
+  });
+  if (error) {
+    console.error('❌ Erro na negociação interna:', error);
+    return { success: false, error: error.message };
+  }
+  return { success: true, data: true };
+}
+
 export async function fetchCobrancasPendentes(): Promise<
   ApiResponse<CobrancaPendente[]>
 > {
