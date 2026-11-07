@@ -4,6 +4,7 @@
 // no bônus a partir de 01/12/2026 (decisões do dono em 07/11/2026).
 
 import { supabase } from './supabase';
+import type { EvolucoesCelular } from './estagio-celular-api';
 
 export type GrupoEvolucao = 'respiratoria' | 'motora' | 'avaliacao' | 'outros';
 
@@ -87,3 +88,19 @@ export const NOME_GRUPO: Record<GrupoEvolucao, string> = {
   avaliacao: 'Avaliação',
   outros: 'Outros',
 };
+
+// AI dev note: mesma tela de progresso que a estagiária vê no celular
+// (EvolucoesProgresso), agora no admin e com mês escolhido. Os dados saem de
+// fn_estagio_evolucoes_progresso, que chama a mesma fn_estagio_evolucoes_dados
+// do app dela — calendário, pendências e bônus sempre iguais nos dois lugares.
+export async function fetchEvolucoesProgresso(
+  mes: number,
+  ano: number
+): Promise<EvolucoesCelular> {
+  const p_mes = `${ano}-${String(mes).padStart(2, '0')}-01`;
+  const { data, error } = await supabase.rpc('fn_estagio_evolucoes_progresso', {
+    p_mes,
+  });
+  if (error) throw new Error(error.message);
+  return data as EvolucoesCelular;
+}
