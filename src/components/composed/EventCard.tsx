@@ -9,6 +9,7 @@ import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent, EventColor } from '@/types/calendar';
 import { isCompromissoEvent } from '@/lib/agenda-bloqueios-api';
+import { nomeCurto } from '@/lib/calendar-layout';
 import { CompromissoEventCard } from './CompromissoEventCard';
 import {
   IconeMedidaPrevista,
@@ -47,6 +48,12 @@ export interface EventCardProps {
   // AI dev note: Coluna de ações à direita (variante 'detailed'). Quem renderiza
   // é responsável pelo stopPropagation — o Card inteiro é clicável.
   actions?: React.ReactNode;
+  // Variante 'week' na grade de horas: estreito = divide a largura com outro
+  // bloco (usa nome curto); umaLinha = bloco baixo, tudo numa linha só.
+  estreito?: boolean;
+  umaLinha?: boolean;
+  // Na coluna do profissional (Dia) o nome dele é redundante: mostra o serviço
+  segundaLinha?: 'profissional' | 'servico';
 }
 
 export const EventCard = React.memo<EventCardProps>(
@@ -60,6 +67,9 @@ export const EventCard = React.memo<EventCardProps>(
     showAttendees = false,
     userRole,
     actions,
+    estreito = false,
+    umaLinha = false,
+    segundaLinha = 'profissional',
   }) => {
     // AI dev note: userRole será usado para controlar visualizações específicas por role no futuro
     void userRole;
@@ -73,7 +83,9 @@ export const EventCard = React.memo<EventCardProps>(
           event={event}
           variant={
             variant === 'week'
-              ? 'week'
+              ? umaLinha
+                ? 'strip'
+                : 'week'
               : variant === 'month' || variant === 'compact'
                 ? 'month'
                 : 'list'
@@ -268,6 +280,7 @@ export const EventCard = React.memo<EventCardProps>(
         (event.title.includes(' - ')
           ? event.title.split(' - ').slice(-1)[0]
           : event.title);
+      const nomeExibido = estreito ? nomeCurto(pacienteNome) : pacienteNome;
 
       const profissionalNome =
         (event.metadata?.profissionalNome as string) || '';
@@ -275,6 +288,10 @@ export const EventCard = React.memo<EventCardProps>(
       const statusPagamento =
         (event.metadata?.statusPagamento as string) || 'Pendente';
       const tipoServicoNome = (event.metadata?.tipoServicoNome as string) || '';
+      const textoSegundaLinha =
+        segundaLinha === 'servico'
+          ? tipoServicoNome
+          : profissionalNome.split(' ')[0];
 
       const isCancelado = statusConsulta.toLowerCase() === 'cancelado';
 
@@ -314,9 +331,21 @@ export const EventCard = React.memo<EventCardProps>(
           {/* Conteúdo simplificado: paciente + profissional.
               AI dev note: py-0.5 (não py-1.5) para o bloco de 30min continuar
               legível com 1 linha truncada */}
-          <div className="h-full flex flex-col justify-start px-1.5 py-0.5 overflow-hidden">
+          <div
+            className={cn(
+              'h-full flex justify-start px-1.5 py-0.5 overflow-hidden',
+              umaLinha ? 'flex-row items-center gap-1' : 'flex-col'
+            )}
+          >
             {/* Nome do paciente com ícone de status pagamento */}
-            <div className="flex items-start gap-1 min-w-0">
+            <div
+              className={cn(
+                'flex gap-1 min-w-0',
+                // basis auto: o nome do paciente fica com o espaço; a segunda
+                // informação é que encolhe primeiro
+                umaLinha ? 'items-center flex-[0_1_auto]' : 'items-start'
+              )}
+            >
               {!isCancelado && (
                 <span
                   className="flex-shrink-0 mt-0.5 inline-flex"
@@ -342,19 +371,22 @@ export const EventCard = React.memo<EventCardProps>(
                   isCancelado && 'line-through opacity-75'
                 )}
               >
-                {pacienteNome}
+                {nomeExibido}
               </div>
             </div>
 
-            {/* Nome do profissional - apenas primeiro nome */}
-            {profissionalNome && (
+            {/* Segunda linha: primeiro nome do profissional (ou o serviço, na
+                coluna do profissional). Numa linha só vai depois do paciente e
+                some primeiro quando falta espaço */}
+            {textoSegundaLinha && !(umaLinha && estreito) && (
               <div
                 className={cn(
-                  'text-[11px] leading-tight opacity-80 truncate mt-0.5',
+                  'text-[11px] leading-tight opacity-80 truncate',
+                  umaLinha ? 'shrink-[6] min-w-0' : 'mt-0.5',
                   isCancelado && 'opacity-50'
                 )}
               >
-                {profissionalNome.split(' ')[0]}
+                {textoSegundaLinha}
               </div>
             )}
           </div>
