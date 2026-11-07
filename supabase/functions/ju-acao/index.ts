@@ -7,7 +7,7 @@
 //   { ok:false, parar:true }         a conversa mudou (cliente escreveu de novo
 //                                    ou humano assumiu): o agente não insiste
 // Ações: REENVIAR_CONTRATO, CORRIGIR_CONTATO_CONTRATO, EMITIR_NOTA, RENOVAR_LINK,
-// GERAR_ATESTADO, SUSPENDER_COBRANCA.
+// GERAR_ATESTADO, SUSPENDER_COBRANCA, TROCAR_FORMA_PAGAMENTO.
 // GERAR_ATESTADO devolve também { documento: { url, nome, legenda } }: o n8n
 // manda o PDF como arquivo na conversa (a família não recebe link).
 // 22/10/2026: o contrato chega só pelo WhatsApp da Assinafy (o fluxo n8n usa
@@ -326,6 +326,103 @@ Deno.serve(async (req: Request) => {
           `A família informou pagamento e a Ju não conseguiu pausar a cobrança (${r?.motivo ?? 'sem motivo'}).`,
           'Não consegui registrar isso agora. A secretaria foi chamada; avise a família que ela vai conferir o pagamento.'
         );
+      }
+
+      case 'TROCAR_FORMA_PAGAMENTO': {
+        // 07/11/2026: a família escolheu a forma errada na pré-cobrança. Igual ao
+        // "refazer cobrança" do app: cancela a cobrança do Asaas (o parcelamento
+        // inteiro, se for parcelado) e reabre o MESMO link para escolher de novo.
+        const r = await rpc('fn_ju_trocar_forma_preparar', {
+          p_conversa_id: conversa,
+          p_versao: versao,
+          p_pagamento_link_id: b.pagamento_link_id,
+        });
+        if (!r?.ok) {
+          if (GATE.includes(r?.motivo)) return parar(r.motivo);
+          if (r?.motivo === 'AINDA_SEM_FATURA')
+            return json({
+              ok: false,
+              resultado:
+                'Essa cobrança ainda é a pré-cobrança: a fatura do Asaas ainda não foi gerada, então não há nada para cancelar. Explique que no link a família escolhe a forma de pagamento (Pix ou cartão, à vista ou parcelado) e só depois chega a fatura do Asaas; é só abrir o mesmo link (o de cobrancas_em_aberto) e escolher a forma certa.',
+            });
+          if (r?.motivo === 'JA_SOLICITADO')
+            return json({
+              ok: true,
+              resultado:
+                'A troca já foi pedida há pouco. O link para escolher a forma de novo é o mesmo de antes.',
+            });
+          return escalar(
+            'FINANCEIRO',
+            r?.motivo === 'JA_PAGA'
+              ? 'A família pediu para trocar a forma de pagamento de uma fatura que já está paga.'
+              : `A família pediu para trocar a forma de pagamento e a Ju não pôde refazer a cobrança (${r?.motivo ?? 'sem motivo'}).`,
+            'Não consegui trocar por aqui. A secretaria foi chamada; avise a família que ela vai ajustar a cobrança.'
+          );
+        }
+        const { data: emp } = await supabase
+          .from('pessoa_empresas')
+          .select('api_token_externo')
+          .eq('id', r.empresa_id)
+          .single();
+        const chave = emp?.api_token_externo as string | undefined;
+        const asaas = async (method: string, path: string) => {
+          const res = await fetch(`https://api.asaas.com/v3${path}`, {
+            method,
+            headers: {
+              access_token: chave ?? '',
+              'Content-Type': 'application/json',
+              'User-Agent': 'RespiraKids/1.0',
+            },
+            signal: AbortSignal.timeout(30000),
+          });
+          return {
+            ok: res.ok,
+            status: res.status,
+            data: await res.json().catch(() => ({})),
+          };
+        };
+        const falhou = async (detalhe: string, resumo: string) => {
+          await rpc('fn_ju_trocar_forma_concluir', {
+            p_acao_id: r.acao_id,
+            p_ok: false,
+            p_detalhe: detalhe,
+          });
+          return escalar(
+            'FINANCEIRO',
+            resumo,
+            'Não consegui trocar por aqui. A secretaria foi chamada; avise a família que ela vai ajustar a cobrança.'
+          );
+        };
+        if (!chave)
+          return falhou('sem chave', 'Empresa sem chave do Asaas para refazer a cobrança.');
+        const pg = await asaas('GET', `/payments/${r.id_asaas}`);
+        if (
+          ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(
+            String(pg.data?.status)
+          )
+        )
+          return falhou(
+            'já paga no Asaas',
+            `A família pediu para trocar a forma de pagamento, mas o Asaas já mostra a cobrança como paga (${r.forma}).`
+          );
+        const del = r.installment
+          ? await asaas('DELETE', `/installments/${r.installment}`)
+          : await asaas('DELETE', `/payments/${r.id_asaas}`);
+        if (!del.ok && pg.data?.deleted !== true)
+          return falhou(
+            `Asaas ${del.status}`,
+            `A Ju tentou cancelar a cobrança para trocar a forma e o Asaas recusou: ${del.data?.errors?.[0]?.description ?? del.status}.`
+          );
+        const c = await rpc('fn_ju_trocar_forma_concluir', {
+          p_acao_id: r.acao_id,
+          p_ok: true,
+          p_detalhe: r.forma,
+        });
+        return json({
+          ok: true,
+          link: c?.link,
+          resultado: `A cobrança anterior (${r.forma}) foi cancelada e o link de pré-cobrança foi reaberto, mesmo valor. Envie exatamente este link: ${c?.link}. Explique em uma ou duas frases que nele a família escolhe de novo a forma de pagamento (Pix ou cartão, e as parcelas) e que só depois chega a fatura nova do Asaas.`,
+        });
       }
 
       default:
