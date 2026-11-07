@@ -1,5 +1,6 @@
 import { buscarPacienteFixo } from '@/lib/pacientes-fixos-api';
 import { AvaliacaoMotoraAgenda } from './AvaliacaoMotoraAgenda';
+import { CortesiaAction } from './CortesiaAction';
 import { usePlanoMotorDados } from '@/hooks/usePlanoMotorDados';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -452,6 +453,22 @@ export const AppointmentDetailsManager =
           statusConsulta === 'finalizado' ||
           statusConsulta === 'cancelado' ||
           statusPagamento === 'pago'
+        );
+      }, [appointment]);
+
+      // AI dev note (07/11/2026): consulta já numa cobrança (fatura do Asaas ou link
+      // de pagamento) não muda valor, serviço nem empresa. O banco recusa
+      // (trg_agendamento_trava_cobrada); aqui só travamos os campos e explicamos.
+      // Link reserva a consulta com status "cobrança gerada" (a view não traz o
+      // pagamento_link_id), então esse status também trava.
+      const cobrancaTravada = React.useMemo(() => {
+        if (!appointment) return false;
+        const comFatura = (appointment as { fatura_id?: string | null })
+          .fatura_id;
+        return (
+          !!comFatura ||
+          appointment.status_pagamento_codigo?.toLowerCase() ===
+            'cobranca_gerada'
         );
       }, [appointment]);
 
@@ -2412,7 +2429,16 @@ export const AppointmentDetailsManager =
                               handleInputChange('valorServico', e.target.value)
                             }
                             placeholder="0.00"
+                            disabled={cobrancaTravada}
                           />
+                          {cobrancaTravada && (
+                            <p className="text-xs text-muted-foreground">
+                              Consulta já está numa cobrança. Para mudar valor,
+                              serviço ou empresa, tire a consulta da cobrança
+                              (editar a fatura ou o link no Financeiro) e depois
+                              edite aqui.
+                            </p>
+                          )}
                           <StatusPaymentDisplay
                             status={appointment.status_pagamento_nome}
                             statusColor={appointment.status_pagamento_cor}
@@ -2435,6 +2461,18 @@ export const AppointmentDetailsManager =
                             }
                             onNfeAction={handleEmitirNfe}
                           />
+                          <CortesiaAction
+                            key={`${appointment.id}-${appointment.status_pagamento_codigo}`}
+                            agendamentoId={appointment.id}
+                            statusPagamentoCodigo={
+                              appointment.status_pagamento_codigo
+                            }
+                            statusConsultaCodigo={
+                              appointment.status_consulta_codigo
+                            }
+                            userRole={userRole}
+                            onChanged={onAgendaExpressaCreated}
+                          />
                         </>
                       ) : null}
                       {/* AI dev note: Profissional não visualiza valores ou comissões em detalhes do agendamento */}
@@ -2452,7 +2490,7 @@ export const AppointmentDetailsManager =
                       <Select
                         value={formData.tipoServicoId}
                         onValueChange={handleTipoServicoChange}
-                        disabled={isLoadingTipoServico}
+                        disabled={isLoadingTipoServico || cobrancaTravada}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecionar tipo de serviço..." />
@@ -2569,7 +2607,7 @@ export const AppointmentDetailsManager =
                         onValueChange={(value) =>
                           handleInputChange('empresaFaturaId', value)
                         }
-                        disabled={isLoadingEmpresas}
+                        disabled={isLoadingEmpresas || cobrancaTravada}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecionar empresa para faturamento..." />

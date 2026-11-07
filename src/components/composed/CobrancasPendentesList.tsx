@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CheckCircle2,
   ExternalLink,
+  Handshake,
   Loader2,
   MessageCircle,
   PauseCircle,
@@ -49,13 +50,26 @@ import { cn, normalizeText } from '@/lib/utils';
 import {
   buildWhatsAppUrl,
   conferirStatusAsaas,
+  definirNegociacaoInterna,
+  ETAPA_ESCADA_LABEL,
+  etapaEscada,
   fetchCobrancasPendentes,
+  fetchNegociacoesAbertas,
   MOTIVO_SUSPENSAO_LABEL,
   pausarCobranca,
   registrarDisparoManual,
   type CobrancaPendente,
+  type EtapaEscada,
   type MotivoSuspensao,
+  type NegociacaoInterna,
 } from '@/lib/cobrancas-api';
+
+const ETAPA_STYLES: Record<EtapaEscada, string> = {
+  regua: 'border-border',
+  d15: 'border-amarelo-pipa/60 bg-amarelo-pipa/15',
+  d30: 'border-vermelho-kids/50 bg-vermelho-kids/10',
+  d60: 'border-vermelho-kids/70 bg-vermelho-kids/25',
+};
 import {
   buildMensagemCobranca,
   LABEL_SITUACAO,
@@ -165,6 +179,15 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
   const [pausaDetalhe, setPausaDetalhe] = useState('');
   const [pausando, setPausando] = useState(false);
   const [painelKey, setPainelKey] = useState(0);
+  const [negociacoes, setNegociacoes] = useState<
+    Map<string, NegociacaoInterna>
+  >(() => new Map());
+  const [negAlvo, setNegAlvo] = useState<{
+    cobranca: CobrancaPendente;
+    ativar: boolean;
+  } | null>(null);
+  const [negMotivo, setNegMotivo] = useState('');
+  const [negSalvando, setNegSalvando] = useState(false);
 
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<FiltroSituacao>('todas');
@@ -177,7 +200,11 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchCobrancasPendentes();
+      const [result, neg] = await Promise.all([
+        fetchCobrancasPendentes(),
+        fetchNegociacoesAbertas(),
+      ]);
+      if (neg.success && neg.data) setNegociacoes(neg.data);
       if (result.success && result.data) {
         setCobrancas(result.data);
       } else {
@@ -378,6 +405,36 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
     setPausaAlvo(null);
     setPausaDetalhe('');
     setPainelKey((k) => k + 1);
+    await carregar();
+  };
+
+  const confirmarNegociacao = async () => {
+    if (!negAlvo?.cobranca.responsavel_cobranca_id) return;
+    setNegSalvando(true);
+    const r = await definirNegociacaoInterna(
+      negAlvo.cobranca.responsavel_cobranca_id,
+      negAlvo.ativar,
+      negMotivo.trim()
+    );
+    setNegSalvando(false);
+    if (!r.success) {
+      toast({
+        title: 'Não foi possível salvar',
+        description: r.error,
+        variant: 'destructive',
+      });
+      return;
+    }
+    toast({
+      title: negAlvo.ativar
+        ? 'Família em negociação interna'
+        : 'Negociação encerrada',
+      description: negAlvo.ativar
+        ? 'O robô não cobra mais essa família e ela sai dos números de inadimplência.'
+        : 'A família volta para a régua normal de cobrança.',
+    });
+    setNegAlvo(null);
+    setNegMotivo('');
     await carregar();
   };
 
@@ -622,6 +679,12 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
           const semTelefone = !c.responsavel_telefone;
           const bloqueado = c.link_expirado || semTelefone || c.em_analise;
           const precisaConfirmar = liberadoSemAsaas.has(c.cobranca_id);
+          const negociacao = c.responsavel_cobranca_id
+            ? negociacoes.get(c.responsavel_cobranca_id)
+            : undefined;
+          const etapa = negociacao
+            ? null
+            : etapaEscada(c.dias_atraso, c.lembretes_enviados);
 
           return (
             <Card key={c.cobranca_id}>
@@ -660,6 +723,22 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                         className="text-xs border-amarelo-pipa/60 bg-amarelo-pipa/15"
                       >
                         Em conferência
+                      </Badge>
+                    )}
+                    {negociacao && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs border-verde-pipa/60 bg-verde-pipa/15"
+                      >
+                        Negociação interna
+                      </Badge>
+                    )}
+                    {etapa && etapa !== 'regua' && (
+                      <Badge
+                        variant="outline"
+                        className={cn('text-xs', ETAPA_STYLES[etapa])}
+                      >
+                        {ETAPA_ESCADA_LABEL[etapa]}
                       </Badge>
                     )}
                     {c.empresa_nome && (
@@ -746,6 +825,20 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                   </Alert>
                 )}
 
+                {negociacao && (
+                  <Alert className="py-2">
+                    <Handshake className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      {negociacao.motivo}
+                      {negociacao.criado_por_nome
+                        ? ` (${negociacao.criado_por_nome}, ${formatDate(negociacao.criado_em)})`
+                        : ''}
+                      . O robô não cobra e a família fica fora dos números de
+                      inadimplência.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {c.link_expirado && (
                   <Alert className="py-2">
                     <AlertCircle className="h-4 w-4" />
@@ -790,6 +883,27 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
                     </Button>
                   )}
 
+                  {c.responsavel_cobranca_id && (
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => {
+                        setNegMotivo('');
+                        setNegAlvo({ cobranca: c, ativar: !negociacao });
+                      }}
+                      title={
+                        negociacao
+                          ? 'Voltar a família para a régua normal de cobrança'
+                          : 'Acordo combinado com a família: tira do robô e dos números de inadimplência'
+                      }
+                    >
+                      <Handshake className="h-4 w-4" />
+                      {negociacao
+                        ? 'Encerrar negociação'
+                        : 'Negociação interna'}
+                    </Button>
+                  )}
+
                   {c.link_pagamento && (
                     <Button
                       variant="outline"
@@ -819,6 +933,56 @@ export const CobrancasPendentesList: React.FC<CobrancasPendentesListProps> = ({
           );
         })}
       </div>
+
+      <Dialog open={!!negAlvo} onOpenChange={(o) => !o && setNegAlvo(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {negAlvo?.ativar
+                ? 'Negociação interna'
+                : 'Encerrar negociação interna'}
+            </DialogTitle>
+            <DialogDescription>
+              {negAlvo?.cobranca.responsavel_nome ?? 'Responsável'}.{' '}
+              {negAlvo?.ativar
+                ? 'Vale para todas as cobranças dessa família: o robô para de lembrar, a cobrança automática no Asaas não é gerada e ela sai dos números de inadimplência.'
+                : 'A família volta para a régua normal: lembretes automáticos e escada de inadimplência.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="neg-motivo">
+              {negAlvo?.ativar
+                ? 'O que foi combinado e com quem'
+                : 'Observação (opcional)'}
+            </Label>
+            <Textarea
+              id="neg-motivo"
+              value={negMotivo}
+              onChange={(e) => setNegMotivo(e.target.value)}
+              placeholder={
+                negAlvo?.ativar
+                  ? 'Ex.: Bruna combinou pagar em 3 vezes a partir de dezembro'
+                  : 'Ex.: acordo cumprido'
+              }
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNegAlvo(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={confirmarNegociacao}
+              disabled={
+                negSalvando || (!!negAlvo?.ativar && negMotivo.trim() === '')
+              }
+            >
+              {negSalvando && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {negAlvo?.ativar ? 'Marcar negociação' : 'Encerrar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!pausaAlvo} onOpenChange={(o) => !o && setPausaAlvo(null)}>
         <DialogContent>

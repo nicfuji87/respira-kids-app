@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { PinValidationDialog } from '@/components/composed/PinValidationDialog';
 import { FinancialConsultationsList } from '@/components/composed/FinancialConsultationsList';
 import { FinancialFaturasList } from '@/components/composed/FinancialFaturasList';
+import { FinancialNfePendencias } from '@/components/composed/FinancialNfePendencias';
 import { FinancialPreFaturasList } from '@/components/composed/FinancialPreFaturasList';
 import { FinancialPreCobrancasReport } from '@/components/composed/FinancialPreCobrancasReport';
 import { FinancialDisparosLog } from '@/components/composed/FinancialDisparosLog';
@@ -361,6 +362,10 @@ export const FinanceiroPage: React.FC = () => {
                         <FinancialCicloPagamento />
                         <FinancialDisparosLog />
                         <FinancialPreFaturasList />
+                        {/* AI dev note: pagas sem nota agrupadas por motivo, logo
+                            acima da lista de faturas (onde ficam o filtro de NFS-e
+                            e a emissão em massa). */}
+                        <FinancialNfePendencias />
                         <FinancialFaturasList />
                       </TabsContent>
                     )}

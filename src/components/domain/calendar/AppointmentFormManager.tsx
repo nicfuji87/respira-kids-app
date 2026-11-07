@@ -626,6 +626,44 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
       ]
     );
 
+    // AI dev note (07/11/2026): escada de inadimplência. Família com cobrança
+    // vencida há 30 dias ou mais (fora de Negociação interna) mostra um aviso ao
+    // marcar sessão nova. Não bloqueia. fn_inadimplencia_paciente devolve null para
+    // quem não é admin/secretaria (profissional não vê valores).
+    const [dividaFamilia, setDividaFamilia] = useState<{
+      valor: number;
+      dias: number;
+      n: number;
+    } | null>(null);
+    useEffect(() => {
+      setDividaFamilia(null);
+      if (!isOpen || !formData.paciente_id) return;
+      let cancelado = false;
+      void (async () => {
+        const { data, error } = await supabase.rpc(
+          'fn_inadimplencia_paciente',
+          { p_paciente_id: formData.paciente_id }
+        );
+        if (cancelado || error || !data) return;
+        const d = data as {
+          n: number;
+          valor?: number;
+          dias?: number;
+          negociacao?: boolean;
+        };
+        if (d.n > 0 && !d.negociacao && (d.dias ?? 0) >= 30) {
+          setDividaFamilia({
+            n: d.n,
+            valor: Number(d.valor ?? 0),
+            dias: d.dias ?? 0,
+          });
+        }
+      })();
+      return () => {
+        cancelado = true;
+      };
+    }, [isOpen, formData.paciente_id]);
+
     // Paciente que já vem escolhido: roda o mesmo pré-preenchimento uma vez, depois do reset
     const prefillInicialRef = useRef<string | null>(null);
     useEffect(() => {
@@ -972,6 +1010,24 @@ export const AppointmentFormManager = React.memo<AppointmentFormManagerProps>(
               <Alert className="border-amber-500/50 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-600">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>{conflictDetails}</AlertDescription>
+              </Alert>
+            )}
+
+            {dividaFamilia && (
+              <Alert className="border-amber-500/50 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-600">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Família com{' '}
+                  <strong>
+                    {dividaFamilia.valor.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                  </strong>{' '}
+                  vencido há {dividaFamilia.dias} dias
+                  {dividaFamilia.n > 1 ? ` (${dividaFamilia.n} cobranças)` : ''}
+                  . Vale combinar o pagamento antes de marcar a próxima sessão.
+                </AlertDescription>
               </Alert>
             )}
 

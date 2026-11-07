@@ -6,6 +6,7 @@ import {
   MapPin,
   ChevronRight,
   CreditCard,
+  Banknote,
   X,
   Building2,
   ExternalLink,
@@ -66,6 +67,8 @@ import {
 } from '@/components/primitives/popover';
 import { DatePicker } from './DatePicker';
 import { FinancialPendenciasAlert } from './FinancialPendenciasAlert';
+import { RecebidoEmDinheiroDialog } from './RecebidoEmDinheiroDialog';
+import { EnvioLoteSituacao } from './EnvioLoteSituacao';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { generateChargeDescription } from '@/lib/charge-description';
@@ -119,6 +122,8 @@ const podeGerarCobranca = (c: {
   c.status_pagamento_codigo !== 'pago' &&
   c.status_pagamento_codigo !== 'cancelado' &&
   c.status_pagamento_codigo !== 'cobranca_gerada' &&
+  // Cortesia: sessão que aconteceu e não é cobrada (pagamento_sincronia_e_cortesia.sql)
+  c.status_pagamento_codigo !== 'cortesia' &&
   !c.fatura_id;
 
 // AI dev note: Motivo que IMPEDE (ou atrapalha) gerar a cobrança de um paciente,
@@ -378,6 +383,7 @@ export const FinancialConsultationsList: React.FC<
 
   // Estados de seleção
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [dinheiroAberto, setDinheiroAberto] = useState(false);
   const [selectedConsultations, setSelectedConsultations] = useState<string[]>(
     []
   ); // AI dev note: Mantém IDs selecionados entre páginas
@@ -898,7 +904,8 @@ export const FinancialConsultationsList: React.FC<
     const unpaidCount = filteredConsultations.filter(
       (item) =>
         item.status_pagamento_codigo !== 'pago' &&
-        item.status_pagamento_codigo !== 'cancelado'
+        item.status_pagamento_codigo !== 'cancelado' &&
+        item.status_pagamento_codigo !== 'cortesia'
     ).length;
     const paidCount = filteredConsultations.filter(
       (item) => item.status_pagamento_codigo === 'pago'
@@ -1047,7 +1054,8 @@ export const FinancialConsultationsList: React.FC<
       group.total_consultas += 1;
       if (
         consulta.status_pagamento_codigo !== 'pago' &&
-        consulta.status_pagamento_codigo !== 'cancelado'
+        consulta.status_pagamento_codigo !== 'cancelado' &&
+        consulta.status_pagamento_codigo !== 'cortesia'
       ) {
         group.consultas_nao_pagas += 1;
       }
@@ -1841,6 +1849,21 @@ export const FinancialConsultationsList: React.FC<
                         já foi validada em produção. A capacidade dryRun continua VIVA na
                         edge function (body.dryRun) como rede de segurança, só não exposta. */}
                     <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDinheiroAberto(true)}
+                      disabled={selectedConsultations.length === 0}
+                      title="Família pagou em dinheiro: gera no Asaas e dá como recebido, sem nota"
+                    >
+                      <Banknote className="h-4 w-4 flex-shrink-0" />
+                      <span className="ml-1.5 sm:ml-2">
+                        <span className="sm:hidden">Dinheiro</span>
+                        <span className="hidden sm:inline">
+                          Recebido em dinheiro
+                        </span>
+                      </span>
+                    </Button>
+                    <Button
                       size="sm"
                       onClick={() => handleGenerateClick(false)}
                       disabled={selectedConsultations.length === 0}
@@ -1877,6 +1900,7 @@ export const FinancialConsultationsList: React.FC<
         {/* AI dev note: rede de segurança — a janela "Mês Anterior" do disparo mensal
             nunca revisita o que ficou para trás. O banner só aparece se houver
             pendência e o botão joga o filtro para o histórico não cobrado. */}
+        <EnvioLoteSituacao />
         <FinancialPendenciasAlert
           onVerNaoCobradas={() => {
             // AI dev note: limpa os demais filtros junto. Sem isso um filtro de
@@ -2935,6 +2959,20 @@ export const FinancialConsultationsList: React.FC<
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <RecebidoEmDinheiroDialog
+          open={dinheiroAberto}
+          onOpenChange={setDinheiroAberto}
+          consultas={consultations.filter((c) =>
+            selectedConsultations.includes(c.id)
+          )}
+          userId={user?.pessoa?.id ?? ''}
+          onConcluido={() => {
+            setSelectedConsultations([]);
+            setIsSelectionMode(false);
+            void fetchConsultations();
+          }}
+        />
       </CardContent>
     </Card>
   );
