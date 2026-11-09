@@ -123,15 +123,20 @@ function paraBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+// Nó de um XML fiscal de origem variada (NF-e, NFS-e de vários municípios):
+// a estrutura só é conhecida em tempo de execução.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type NoXml = any;
+
 function parseXml(texto: string): { tipo: string; dados: Extracao } {
   const parser = new XMLParser({
     ignoreAttributes: false, attributeNamePrefix: '@_',
     parseTagValue: false, trimValues: true,
   });
-  const doc = parser.parse(texto) as Record<string, any>;
+  const doc = parser.parse(texto) as Record<string, NoXml>;
 
   const nfeProc = doc?.nfeProc ?? doc;
-  const infNFe = primeiro<any>(nfeProc?.NFe?.infNFe ?? nfeProc?.infNFe);
+  const infNFe = primeiro<NoXml>(nfeProc?.NFe?.infNFe ?? nfeProc?.infNFe);
 
   if (infNFe) {
     const ide = infNFe.ide ?? {};
@@ -151,8 +156,8 @@ function parseXml(texto: string): { tipo: string; dados: Extracao } {
           data_emissao: emissao,
         },
         valores: { total: num(total.vNF), descontos: num(total.vDesc), impostos: num(total.vTotTrib) },
-        vencimentos: dup.map((d: any) => ({ data: d.dVenc ?? null, valor: num(d.vDup) })),
-        itens: dets.map((d: any) => ({
+        vencimentos: dup.map((d: NoXml) => ({ data: d.dVenc ?? null, valor: num(d.vDup) })),
+        itens: dets.map((d: NoXml) => ({
           descricao: d.prod?.xProd ?? null, quantidade: num(d.prod?.qCom),
           valor_unitario: num(d.prod?.vUnCom), valor_total: num(d.prod?.vProd),
         })),
@@ -162,7 +167,7 @@ function parseXml(texto: string): { tipo: string; dados: Extracao } {
     };
   }
 
-  const inf = primeiro<any>(
+  const inf = primeiro<NoXml>(
     doc?.CompNfse?.Nfse?.InfNfse ??
     doc?.ConsultarNfseResposta?.ListaNfse?.CompNfse?.Nfse?.InfNfse ??
     doc?.InfNfse ?? doc?.Nfse?.InfNfse
