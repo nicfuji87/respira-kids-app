@@ -453,7 +453,10 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
                 Nenhum dia com horário nas próximas duas semanas.
               </p>
             ) : (
-              <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+              // Grade, sem rolagem lateral: dentro da evolução (janela) o
+              // deslizar de lado não funcionava no tablet, e no computador a
+              // roda do mouse não rola para o lado. Todos os dias à vista.
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
                 {(dias ?? []).map((dia) => {
                   const sel = dia.data === diaSel;
                   const cheio = dia.livres === 0;
@@ -465,7 +468,7 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
                       onClick={() => escolherDia(dia)}
                       aria-pressed={sel}
                       className={cn(
-                        'flex-shrink-0 min-w-[60px] rounded-md border px-2 py-1.5 text-center transition-colors',
+                        'min-w-0 rounded-md border px-1 py-1.5 text-center transition-colors',
                         sel
                           ? 'border-primary bg-primary/10 ring-1 ring-primary'
                           : 'bg-background hover:bg-muted',
@@ -497,7 +500,7 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
                       </div>
                       {dia.feriado && (
                         <div
-                          className="text-[10px] leading-tight text-amber-700 max-w-[72px] truncate"
+                          className="text-[10px] leading-tight text-amber-700 truncate"
                           title={dia.feriado}
                         >
                           {dia.feriado}
@@ -507,7 +510,7 @@ export const AgendaExpressa: React.FC<AgendaExpressaProps> = ({
                   );
                 })}
                 {/* Qualquer outra data */}
-                <label className="flex-shrink-0 min-w-[84px] rounded-md border border-dashed px-2 py-1.5 text-center cursor-pointer hover:bg-muted">
+                <label className="col-span-2 min-w-0 rounded-md border border-dashed px-2 py-1.5 text-center cursor-pointer hover:bg-muted">
                   <span className="block text-xs leading-tight text-muted-foreground">
                     {buscandoData ? 'Buscando…' : 'Outra data'}
                   </span>

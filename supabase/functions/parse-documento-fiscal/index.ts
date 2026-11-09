@@ -31,9 +31,13 @@ No comprovante, emitente = o RECEBEDOR (quem recebeu), nunca quem pagou.
 Em nota fiscal comum: recebedor = o emitente e pagador = o destinatario, se aparecerem; senao null.`;
 
 const PESSOA = {
-  type: 'object', additionalProperties: false,
-  required: ['cnpj','nome'],
-  properties: { cnpj: { type: ['string','null'] }, nome: { type: ['string','null'] } },
+  type: 'object',
+  additionalProperties: false,
+  required: ['cnpj', 'nome'],
+  properties: {
+    cnpj: { type: ['string', 'null'] },
+    nome: { type: ['string', 'null'] },
+  },
 };
 
 const JSON_SCHEMA = {
@@ -42,53 +46,84 @@ const JSON_SCHEMA = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['emitente','recebedor','pagador','documento','valores','vencimentos','itens','competencia_sugerida','observacoes'],
+    required: [
+      'emitente',
+      'recebedor',
+      'pagador',
+      'documento',
+      'valores',
+      'vencimentos',
+      'itens',
+      'competencia_sugerida',
+      'observacoes',
+    ],
     properties: {
       emitente: {
-        type: 'object', additionalProperties: false,
-        required: ['cnpj','razao_social'],
-        properties: { cnpj: { type: ['string','null'] }, razao_social: { type: ['string','null'] } },
+        type: 'object',
+        additionalProperties: false,
+        required: ['cnpj', 'razao_social'],
+        properties: {
+          cnpj: { type: ['string', 'null'] },
+          razao_social: { type: ['string', 'null'] },
+        },
       },
       recebedor: PESSOA,
       pagador: PESSOA,
       documento: {
-        type: 'object', additionalProperties: false,
-        required: ['tipo','numero','serie','chave_acesso','data_emissao'],
+        type: 'object',
+        additionalProperties: false,
+        required: ['tipo', 'numero', 'serie', 'chave_acesso', 'data_emissao'],
         properties: {
-          tipo: { type: ['string','null'] }, numero: { type: ['string','null'] },
-          serie: { type: ['string','null'] }, chave_acesso: { type: ['string','null'] },
-          data_emissao: { type: ['string','null'] },
+          tipo: { type: ['string', 'null'] },
+          numero: { type: ['string', 'null'] },
+          serie: { type: ['string', 'null'] },
+          chave_acesso: { type: ['string', 'null'] },
+          data_emissao: { type: ['string', 'null'] },
         },
       },
       valores: {
-        type: 'object', additionalProperties: false,
-        required: ['total','descontos','impostos'],
+        type: 'object',
+        additionalProperties: false,
+        required: ['total', 'descontos', 'impostos'],
         properties: {
-          total: { type: ['number','null'] }, descontos: { type: ['number','null'] },
-          impostos: { type: ['number','null'] },
+          total: { type: ['number', 'null'] },
+          descontos: { type: ['number', 'null'] },
+          impostos: { type: ['number', 'null'] },
         },
       },
       vencimentos: {
         type: 'array',
         items: {
-          type: 'object', additionalProperties: false,
-          required: ['data','valor'],
-          properties: { data: { type: ['string','null'] }, valor: { type: ['number','null'] } },
+          type: 'object',
+          additionalProperties: false,
+          required: ['data', 'valor'],
+          properties: {
+            data: { type: ['string', 'null'] },
+            valor: { type: ['number', 'null'] },
+          },
         },
       },
       itens: {
         type: 'array',
         items: {
-          type: 'object', additionalProperties: false,
-          required: ['descricao','quantidade','valor_unitario','valor_total'],
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'descricao',
+            'quantidade',
+            'valor_unitario',
+            'valor_total',
+          ],
           properties: {
-            descricao: { type: ['string','null'] }, quantidade: { type: ['number','null'] },
-            valor_unitario: { type: ['number','null'] }, valor_total: { type: ['number','null'] },
+            descricao: { type: ['string', 'null'] },
+            quantidade: { type: ['number', 'null'] },
+            valor_unitario: { type: ['number', 'null'] },
+            valor_total: { type: ['number', 'null'] },
           },
         },
       },
-      competencia_sugerida: { type: ['string','null'] },
-      observacoes: { type: ['string','null'] },
+      competencia_sugerida: { type: ['string', 'null'] },
+      observacoes: { type: ['string', 'null'] },
     },
   },
 };
@@ -99,7 +134,7 @@ function detectarTipo(nome: string, mime: string | null): string {
   const ext = nome.split('.').pop()?.toLowerCase() || '';
   if (ext === 'xml' || (mime || '').includes('xml')) return 'xml';
   if (ext === 'pdf' || (mime || '').includes('pdf')) return 'pdf';
-  if (['jpg','jpeg','png','webp'].includes(ext)) return 'imagem';
+  if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'imagem';
   if ((mime || '').startsWith('image/')) return 'imagem';
   return 'desconhecido';
 }
@@ -123,38 +158,68 @@ function paraBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+// Nó de um XML fiscal de origem variada (NF-e, NFS-e de vários municípios):
+// a estrutura só é conhecida em tempo de execução.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type NoXml = any;
+
 function parseXml(texto: string): { tipo: string; dados: Extracao } {
   const parser = new XMLParser({
-    ignoreAttributes: false, attributeNamePrefix: '@_',
-    parseTagValue: false, trimValues: true,
+    ignoreAttributes: false,
+    attributeNamePrefix: '@_',
+    parseTagValue: false,
+    trimValues: true,
   });
-  const doc = parser.parse(texto) as Record<string, any>;
+  const doc = parser.parse(texto) as Record<string, NoXml>;
 
   const nfeProc = doc?.nfeProc ?? doc;
-  const infNFe = primeiro<any>(nfeProc?.NFe?.infNFe ?? nfeProc?.infNFe);
+  const infNFe = primeiro<NoXml>(nfeProc?.NFe?.infNFe ?? nfeProc?.infNFe);
 
   if (infNFe) {
     const ide = infNFe.ide ?? {};
     const emit = infNFe.emit ?? {};
     const total = infNFe.total?.ICMSTot ?? {};
-    const dets = infNFe.det ? (Array.isArray(infNFe.det) ? infNFe.det : [infNFe.det]) : [];
-    const dup = infNFe.cobr?.dup ? (Array.isArray(infNFe.cobr.dup) ? infNFe.cobr.dup : [infNFe.cobr.dup]) : [];
+    const dets = infNFe.det
+      ? Array.isArray(infNFe.det)
+        ? infNFe.det
+        : [infNFe.det]
+      : [];
+    const dup = infNFe.cobr?.dup
+      ? Array.isArray(infNFe.cobr.dup)
+        ? infNFe.cobr.dup
+        : [infNFe.cobr.dup]
+      : [];
     const emissao = String(ide.dhEmi ?? ide.dEmi ?? '').slice(0, 10) || null;
 
     return {
       tipo: 'nfe_xml',
       dados: {
-        emitente: { cnpj: emit.CNPJ ?? emit.CPF ?? null, razao_social: emit.xNome ?? null },
+        emitente: {
+          cnpj: emit.CNPJ ?? emit.CPF ?? null,
+          razao_social: emit.xNome ?? null,
+        },
         documento: {
-          tipo: 'nfe', numero: ide.nNF ?? null, serie: ide.serie ?? null,
-          chave_acesso: String(infNFe['@_Id'] ?? '').replace(/^NFe/, '') || null,
+          tipo: 'nfe',
+          numero: ide.nNF ?? null,
+          serie: ide.serie ?? null,
+          chave_acesso:
+            String(infNFe['@_Id'] ?? '').replace(/^NFe/, '') || null,
           data_emissao: emissao,
         },
-        valores: { total: num(total.vNF), descontos: num(total.vDesc), impostos: num(total.vTotTrib) },
-        vencimentos: dup.map((d: any) => ({ data: d.dVenc ?? null, valor: num(d.vDup) })),
-        itens: dets.map((d: any) => ({
-          descricao: d.prod?.xProd ?? null, quantidade: num(d.prod?.qCom),
-          valor_unitario: num(d.prod?.vUnCom), valor_total: num(d.prod?.vProd),
+        valores: {
+          total: num(total.vNF),
+          descontos: num(total.vDesc),
+          impostos: num(total.vTotTrib),
+        },
+        vencimentos: dup.map((d: NoXml) => ({
+          data: d.dVenc ?? null,
+          valor: num(d.vDup),
+        })),
+        itens: dets.map((d: NoXml) => ({
+          descricao: d.prod?.xProd ?? null,
+          quantidade: num(d.prod?.qCom),
+          valor_unitario: num(d.prod?.vUnCom),
+          valor_total: num(d.prod?.vProd),
         })),
         competencia_sugerida: emissao ? emissao.slice(0, 7) + '-01' : null,
         observacoes: infNFe.infAdic?.infCpl ?? null,
@@ -162,36 +227,53 @@ function parseXml(texto: string): { tipo: string; dados: Extracao } {
     };
   }
 
-  const inf = primeiro<any>(
-    doc?.CompNfse?.Nfse?.InfNfse ??
-    doc?.ConsultarNfseResposta?.ListaNfse?.CompNfse?.Nfse?.InfNfse ??
-    doc?.InfNfse ?? doc?.Nfse?.InfNfse
-  ) ?? null;
+  const inf =
+    primeiro<NoXml>(
+      doc?.CompNfse?.Nfse?.InfNfse ??
+        doc?.ConsultarNfseResposta?.ListaNfse?.CompNfse?.Nfse?.InfNfse ??
+        doc?.InfNfse ??
+        doc?.Nfse?.InfNfse
+    ) ?? null;
 
   if (inf) {
     const prest = inf.PrestadorServico ?? inf.IdentificacaoPrestador ?? {};
     const servico = inf.Servico ?? {};
     const valores = servico.Valores ?? {};
     const emissao = String(inf.DataEmissao ?? '').slice(0, 10) || null;
-    const cnpj = prest?.IdentificacaoPrestador?.Cnpj ?? prest?.IdentificacaoPrestador?.CpfCnpj?.Cnpj ?? prest?.Cnpj ?? null;
+    const cnpj =
+      prest?.IdentificacaoPrestador?.Cnpj ??
+      prest?.IdentificacaoPrestador?.CpfCnpj?.Cnpj ??
+      prest?.Cnpj ??
+      null;
 
     return {
       tipo: 'nfse_xml',
       dados: {
-        emitente: { cnpj, razao_social: prest?.RazaoSocial ?? prest?.NomeFantasia ?? null },
+        emitente: {
+          cnpj,
+          razao_social: prest?.RazaoSocial ?? prest?.NomeFantasia ?? null,
+        },
         documento: {
-          tipo: 'nfse', numero: inf.Numero ?? null, serie: null,
-          chave_acesso: inf.CodigoVerificacao ?? null, data_emissao: emissao,
+          tipo: 'nfse',
+          numero: inf.Numero ?? null,
+          serie: null,
+          chave_acesso: inf.CodigoVerificacao ?? null,
+          data_emissao: emissao,
         },
         valores: {
           total: num(valores.ValorLiquidoNfse ?? valores.ValorServicos),
-          descontos: num(valores.DescontoIncondicionado), impostos: num(valores.ValorIss),
+          descontos: num(valores.DescontoIncondicionado),
+          impostos: num(valores.ValorIss),
         },
         vencimentos: [],
-        itens: [{
-          descricao: servico.Discriminacao ?? null, quantidade: 1,
-          valor_unitario: num(valores.ValorServicos), valor_total: num(valores.ValorServicos),
-        }],
+        itens: [
+          {
+            descricao: servico.Discriminacao ?? null,
+            quantidade: 1,
+            valor_unitario: num(valores.ValorServicos),
+            valor_total: num(valores.ValorServicos),
+          },
+        ],
         competencia_sugerida: emissao ? emissao.slice(0, 7) + '-01' : null,
         observacoes: null,
       },
@@ -208,30 +290,40 @@ async function textoDoPdf(bytes: Uint8Array): Promise<string> {
 }
 
 async function extrairComIa(params: {
-  apiKey: string; modelo: string; prompt: string;
+  apiKey: string;
+  modelo: string;
+  prompt: string;
   conteudo:
     | { tipo: 'texto'; valor: string }
     | { tipo: 'imagem'; dataUri: string }
     | { tipo: 'pdf'; dataUri: string; nome: string };
 }): Promise<{ dados: Extracao; tokensIn: number; tokensOut: number }> {
   const c = params.conteudo;
-  const userContent = c.tipo === 'texto'
-    ? [{ type: 'text', text: c.valor.slice(0, 60000) }]
-    : c.tipo === 'imagem'
-      ? [
-          { type: 'text', text: 'Extraia os dados deste documento fiscal.' },
-          { type: 'image_url', image_url: { url: c.dataUri } },
-        ]
-      : [
-          { type: 'text', text: 'Extraia os dados deste documento fiscal (PDF escaneado).' },
-          { type: 'file', file: { filename: c.nome, file_data: c.dataUri } },
-        ];
+  const userContent =
+    c.tipo === 'texto'
+      ? [{ type: 'text', text: c.valor.slice(0, 60000) }]
+      : c.tipo === 'imagem'
+        ? [
+            { type: 'text', text: 'Extraia os dados deste documento fiscal.' },
+            { type: 'image_url', image_url: { url: c.dataUri } },
+          ]
+        : [
+            {
+              type: 'text',
+              text: 'Extraia os dados deste documento fiscal (PDF escaneado).',
+            },
+            { type: 'file', file: { filename: c.nome, file_data: c.dataUri } },
+          ];
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${params.apiKey}`, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${params.apiKey}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({
-      model: params.modelo, temperature: 0,
+      model: params.modelo,
+      temperature: 0,
       messages: [
         { role: 'system', content: params.prompt },
         { role: 'user', content: userContent },
@@ -240,7 +332,10 @@ async function extrairComIa(params: {
     }),
   });
 
-  if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  if (!resp.ok)
+    throw new Error(
+      `OpenAI ${resp.status}: ${(await resp.text()).slice(0, 400)}`
+    );
 
   const json = await resp.json();
   const texto = json?.choices?.[0]?.message?.content;
@@ -254,7 +349,8 @@ async function extrairComIa(params: {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS')
+    return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -269,15 +365,20 @@ Deno.serve(async (req: Request) => {
     if (!documentoId) throw new Error('documento_id e obrigatorio');
 
     const { data: doc, error: docErr } = await supabase
-      .from('documentos_fiscais').select('*').eq('id', documentoId).single();
+      .from('documentos_fiscais')
+      .select('*')
+      .eq('id', documentoId)
+      .single();
     if (docErr || !doc) throw new Error('Documento nao encontrado');
 
-    await supabase.from('documentos_fiscais')
+    await supabase
+      .from('documentos_fiscais')
       .update({ status: 'processando', tentativas: (doc.tentativas ?? 0) + 1 })
       .eq('id', documentoId);
 
     const { data: arquivo, error: dlErr } = await supabase.storage
-      .from(doc.bucket).download(doc.caminho);
+      .from(doc.bucket)
+      .download(doc.caminho);
     if (dlErr || !arquivo) throw new Error('Nao foi possivel baixar o arquivo');
 
     const bytes = new Uint8Array(await arquivo.arrayBuffer());
@@ -295,59 +396,103 @@ Deno.serve(async (req: Request) => {
       tipoDetectado = r.tipo;
       dados = r.dados;
     } else {
-      const { data: chave } = await supabase.from('api_keys')
-        .select('encrypted_key').eq('service_name', 'openai').eq('is_active', true).single();
-      if (!chave?.encrypted_key) throw new Error('Chave OpenAI nao configurada');
+      const { data: chave } = await supabase
+        .from('api_keys')
+        .select('encrypted_key')
+        .eq('service_name', 'openai')
+        .eq('is_active', true)
+        .single();
+      if (!chave?.encrypted_key)
+        throw new Error('Chave OpenAI nao configurada');
 
-      const { data: promptRow } = await supabase.from('ai_prompts')
+      const { data: promptRow } = await supabase
+        .from('ai_prompts')
         .select('prompt_content, openai_model')
-        .eq('prompt_name', 'extrair_documento_fiscal').eq('is_active', true).maybeSingle();
+        .eq('prompt_name', 'extrair_documento_fiscal')
+        .eq('is_active', true)
+        .maybeSingle();
 
       modelo = promptRow?.openai_model || 'gpt-4o';
-      const prompt = (promptRow?.prompt_content || PROMPT_PADRAO) + REGRA_COMPROVANTE;
+      const prompt =
+        (promptRow?.prompt_content || PROMPT_PADRAO) + REGRA_COMPROVANTE;
 
       if (formato === 'pdf') {
         const texto = await textoDoPdf(bytes);
         const escaneado = texto.length < 40;
-        tipoDetectado = escaneado ? 'pdf_escaneado' : (/nfs-?e|servi[cç]o/i.test(texto) ? 'nfse_pdf' : 'danfe_pdf');
+        tipoDetectado = escaneado
+          ? 'pdf_escaneado'
+          : /nfs-?e|servi[cç]o/i.test(texto)
+            ? 'nfse_pdf'
+            : 'danfe_pdf';
         const r = await extrairComIa({
-          apiKey: chave.encrypted_key, modelo, prompt,
+          apiKey: chave.encrypted_key,
+          modelo,
+          prompt,
           conteudo: escaneado
-            ? { tipo: 'pdf', nome: doc.nome_original || 'documento.pdf', dataUri: `data:application/pdf;base64,${paraBase64(bytes)}` }
+            ? {
+                tipo: 'pdf',
+                nome: doc.nome_original || 'documento.pdf',
+                dataUri: `data:application/pdf;base64,${paraBase64(bytes)}`,
+              }
             : { tipo: 'texto', valor: texto },
         });
-        dados = r.dados; tokensIn = r.tokensIn; tokensOut = r.tokensOut; confianca = escaneado ? 0.7 : 0.85;
+        dados = r.dados;
+        tokensIn = r.tokensIn;
+        tokensOut = r.tokensOut;
+        confianca = escaneado ? 0.7 : 0.85;
       } else if (formato === 'imagem') {
         tipoDetectado = 'cupom';
         const b64 = paraBase64(bytes);
         const r = await extrairComIa({
-          apiKey: chave.encrypted_key, modelo, prompt,
-          conteudo: { tipo: 'imagem', dataUri: `data:${doc.mime_type || 'image/jpeg'};base64,${b64}` },
+          apiKey: chave.encrypted_key,
+          modelo,
+          prompt,
+          conteudo: {
+            tipo: 'imagem',
+            dataUri: `data:${doc.mime_type || 'image/jpeg'};base64,${b64}`,
+          },
         });
-        dados = r.dados; tokensIn = r.tokensIn; tokensOut = r.tokensOut; confianca = 0.7;
+        dados = r.dados;
+        tokensIn = r.tokensIn;
+        tokensOut = r.tokensOut;
+        confianca = 0.7;
       } else {
         throw new Error(`Formato nao suportado: ${doc.nome_original}`);
       }
     }
 
-    await supabase.from('documentos_fiscais').update({
-      status: 'extraido', tipo_detectado: tipoDetectado, dados_extraidos: dados,
-      confianca, modelo, tokens_input: tokensIn, tokens_output: tokensOut, erro_msg: null,
-    }).eq('id', documentoId);
+    await supabase
+      .from('documentos_fiscais')
+      .update({
+        status: 'extraido',
+        tipo_detectado: tipoDetectado,
+        dados_extraidos: dados,
+        confianca,
+        modelo,
+        tokens_input: tokensIn,
+        tokens_output: tokensOut,
+        erro_msg: null,
+      })
+      .eq('id', documentoId);
 
-    return new Response(JSON.stringify({ success: true, tipo: tipoDetectado, confianca, dados }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({ success: true, tipo: tipoDetectado, confianca, dados }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('[parse-documento-fiscal]', msg);
 
     if (documentoId) {
-      await supabase.from('documentos_fiscais')
-        .update({ status: 'erro', erro_msg: msg }).eq('id', documentoId);
+      await supabase
+        .from('documentos_fiscais')
+        .update({ status: 'erro', erro_msg: msg })
+        .eq('id', documentoId);
     }
 
     return new Response(JSON.stringify({ success: false, error: msg }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
