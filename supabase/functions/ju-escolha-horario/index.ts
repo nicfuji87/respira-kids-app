@@ -2,6 +2,8 @@
 // Chamada pelo cron ju-escolhas (fn_ju_escolhas_tick), x-cron-token = Vault email_boletos_token.
 // A IA só EXTRAI a oferta da equipe e a escolha da família; quem decide e marca é o banco
 // (fn_ju_escolha_aplicar), com regras fixas e conferência do texto. Nunca manda mensagem daqui.
+// 09/11/2026 (caso Pedro): a IA diz se a oferta substitui uma consulta já marcada ("substitui"); aí o banco remarca
+// essa consulta em vez de criar outra.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -29,6 +31,7 @@ Regras:
 - tipo: "respiratoria" ou "motora", pelo que a conversa diz deste atendimento; vazio se não der para saber.
 - domiciliar: true só se a escolha for atendimento em casa.
 - crianca: nome da criança deste atendimento, se a conversa disser.
+- substitui: se a oferta da equipe era para TROCAR, ADIANTAR, ENCAIXAR ou REMARCAR uma consulta que a criança já tem (veja "Consultas já marcadas"), e não para marcar uma sessão a mais, informe o dia e a hora dessa consulta antiga; senão null. Ex.: a criança tem consulta hoje às 14h e a equipe escreve "preciso encaixar um bebê, vocês conseguiriam vir às 11h?" = substitui a das 14h.
 
 Responda só JSON:
 {"oferta_da_equipe": true|false,
@@ -40,6 +43,7 @@ Responda só JSON:
  "tipo": "respiratoria" | "motora" | "",
  "domiciliar": true|false,
  "crianca": "nome ou vazio",
+ "substitui": {"data": "AAAA-MM-DD", "hora": "HH:MM"} ou null,
  "trecho_oferta": "trecho curto da oferta da equipe, até 120 caracteres",
  "trecho_escolha": "o que a família escreveu, até 100 caracteres",
  "motivo": "uma frase curta"}`;
@@ -100,6 +104,7 @@ serve(async (req: Request) => {
       `Agora: ${d.agora}`,
       `Fisios da clínica: ${(d.fisios ?? []).join(', ')}`,
       `Crianças desta família no cadastro: ${(d.criancas ?? []).map((c: Json) => c.nome).join(', ') || 'nenhuma ainda'}`,
+      `Consultas já marcadas: ${(d.consultas_marcadas ?? []).join('; ') || 'nenhuma'}`,
       'Conversa:',
       ...(d.mensagens ?? []),
     ].join('\n');
