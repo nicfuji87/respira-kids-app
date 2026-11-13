@@ -26,6 +26,7 @@ import type {
   ConsultationToEvolve,
 } from '@/lib/secretaria-dashboard-api';
 import { PageHeader } from '@/components/composed/PageHeader';
+import { RotinaResumoCard } from '@/components/domain/rotina/RotinaResumoCard';
 
 // AI dev note: SecretariaDashboard - Componente Domain específico para role secretaria
 // Interface operacional focada em quantidades e alertas, sem valores financeiros globais
@@ -197,6 +198,8 @@ export const SecretariaDashboard = React.memo<SecretariaDashboardProps>(
             </>
           }
         />
+
+        <RotinaResumoCard />
 
         {/* AI dev note: Métricas operacionais (sem valores financeiros) */}
         {metrics && (
