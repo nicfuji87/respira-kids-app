@@ -39,6 +39,7 @@ interface UseComposableFieldParams<T extends ComposableElement> {
   onChange?: React.ChangeEventHandler<T>;
   onCompositionStart?: React.CompositionEventHandler<T>;
   onCompositionEnd?: React.CompositionEventHandler<T>;
+  onBlur?: React.FocusEventHandler<T>;
 }
 
 interface ComposableFieldBindings<T extends ComposableElement> {
@@ -47,6 +48,7 @@ interface ComposableFieldBindings<T extends ComposableElement> {
   onChange: React.ChangeEventHandler<T>;
   onCompositionStart: React.CompositionEventHandler<T>;
   onCompositionEnd: React.CompositionEventHandler<T>;
+  onBlur: React.FocusEventHandler<T>;
 }
 
 function toDomValue(value: FieldValue): string {
@@ -60,12 +62,15 @@ export function useComposableField<T extends ComposableElement>(
     onChange,
     onCompositionStart,
     onCompositionEnd,
+    onBlur,
   }: UseComposableFieldParams<T>,
   forwardedRef: React.Ref<T>
 ): ComposableFieldBindings<T> {
   const elRef = React.useRef<T | null>(null);
   const isComposingRef = React.useRef(false);
   const pendingEmitsRef = React.useRef<string[]>([]);
+  // Último valor entregue ao pai: o blur só reemite se o DOM estiver diferente.
+  const lastEmittedRef = React.useRef<string | null>(null);
 
   // Props "vivas" em refs: tudo que é entregue ao nó do DOM precisa ter
   // identidade estável entre renders, senão o React.memo do nó não dá bailout.
@@ -77,6 +82,8 @@ export function useComposableField<T extends ComposableElement>(
   onCompositionStartRef.current = onCompositionStart;
   const onCompositionEndRef = React.useRef(onCompositionEnd);
   onCompositionEndRef.current = onCompositionEnd;
+  const onBlurRef = React.useRef(onBlur);
+  onBlurRef.current = onBlur;
 
   // Valor de montagem: é o único `defaultValue` que o nó vai ver na vida dele.
   // Mudanças externas entram pelo useLayoutEffect abaixo (imperativas).
@@ -122,6 +129,7 @@ export function useComposableField<T extends ComposableElement>(
       const pending = pendingEmitsRef.current;
       pending.push(el.value);
       if (pending.length > PENDING_EMITS_LIMIT) pending.shift();
+      lastEmittedRef.current = el.value;
     }
     onChangeRef.current?.(e as React.ChangeEvent<T>);
   }, []);
@@ -154,6 +162,22 @@ export function useComposableField<T extends ComposableElement>(
     [emit]
   );
 
+  // Rede de segurança (27/10/2026, cadastro público travado no Samsung Internet):
+  // com o texto preditivo do teclado Samsung, o campo pode ficar "em composição"
+  // e o compositionend às vezes não chega (sugestão aceita, autopreenchimento).
+  // Aí todo onChange é descartado e o pai fica com o valor velho, embora a tela
+  // mostre o texto certo. Ao sair do campo, a composição acabou de qualquer jeito:
+  // destrava a flag e entrega o valor do DOM se ele ainda não chegou ao pai.
+  const handleBlur = React.useCallback<React.FocusEventHandler<T>>(
+    (e) => {
+      isComposingRef.current = false;
+      const el = elRef.current;
+      if (el && el.value !== lastEmittedRef.current) emit(e);
+      onBlurRef.current?.(e);
+    },
+    [emit]
+  );
+
   return {
     ref: setRef,
     // defaultValue = valor de montagem; atualizações externas vão pelo layout effect
@@ -161,6 +185,7 @@ export function useComposableField<T extends ComposableElement>(
     onChange: handleChange,
     onCompositionStart: handleCompositionStart,
     onCompositionEnd: handleCompositionEnd,
+    onBlur: handleBlur,
   };
 }
 
