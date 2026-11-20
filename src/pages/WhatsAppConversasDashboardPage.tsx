@@ -7,6 +7,8 @@
 //   Conversas   busca, filtros e revisão (lista com as análises da IA)
 //   Conferência agenda x conversas para a cobrança do mês (ConferenciaTab,
 //               conferencia_agenda.sql; IA lê as conversas todo dia às 5h30)
+//   Custo de IA tokens e US$ por período, fluxo e conversa (CustoIaTab, só admin;
+//               ia_uso_tokens_painel.sql)
 // Hoje/Desempenho/Qualidade vêm agregados do banco (conversas_central.sql).
 // A lista completa (get_whatsapp_conversas_enriquecidas, ~2 MB) só carrega
 // quando a aba Conversas é aberta.
@@ -29,6 +31,7 @@ import { HojeTab } from '@/components/domain/whatsapp-conversas/central/HojeTab'
 import { DesempenhoTab } from '@/components/domain/whatsapp-conversas/central/DesempenhoTab';
 import { QualidadeTab } from '@/components/domain/whatsapp-conversas/central/QualidadeTab';
 import { ConferenciaTab } from '@/components/domain/whatsapp-conversas/central/ConferenciaTab';
+import { CustoIaTab } from '@/components/domain/whatsapp-conversas/central/CustoIaTab';
 import {
   applyFilters,
   fetchWhatsAppConversas,
@@ -46,6 +49,7 @@ import {
   AlertCircle,
   BarChart3,
   ClipboardCheck,
+  Coins,
   ListTodo,
   MessagesSquare,
   RefreshCw,
@@ -53,7 +57,13 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/composed/PageHeader';
 
-type Aba = 'hoje' | 'desempenho' | 'qualidade' | 'conferencia' | 'conversas';
+type Aba =
+  | 'hoje'
+  | 'desempenho'
+  | 'qualidade'
+  | 'conferencia'
+  | 'custo_ia'
+  | 'conversas';
 type Segmento = 'todas' | 'revisao' | 'fila' | 'reclamacoes';
 
 const SEGMENTOS: Array<{ valor: Segmento; label: string }> = [
@@ -66,6 +76,7 @@ const SEGMENTOS: Array<{ valor: Segmento; label: string }> = [
 export const WhatsAppConversasDashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const ehAdmin = user?.pessoa?.role === 'admin';
   const [aba, setAba] = useState<Aba>('hoje');
   const [segmento, setSegmento] = useState<Segmento>('todas');
 
@@ -188,6 +199,12 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
             <ClipboardCheck className="h-4 w-4" />
             Conferência
           </TabsTrigger>
+          {ehAdmin && (
+            <TabsTrigger value="custo_ia" className="gap-2">
+              <Coins className="h-4 w-4" />
+              Custo de IA
+            </TabsTrigger>
+          )}
           <TabsTrigger value="conversas" className="gap-2">
             <MessagesSquare className="h-4 w-4" />
             Conversas
@@ -214,6 +231,12 @@ export const WhatsAppConversasDashboardPage: React.FC = () => {
         <TabsContent value="conferencia">
           <ConferenciaTab />
         </TabsContent>
+
+        {ehAdmin && (
+          <TabsContent value="custo_ia">
+            <CustoIaTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="conversas" className="space-y-4">
           {erro && (
