@@ -35,6 +35,7 @@ import {
   Plus,
   RefreshCw,
   Target,
+  Wallet,
   TrendingUp,
   AlertTriangle,
 } from 'lucide-react';
@@ -43,6 +44,7 @@ import {
   fetchMetasDashboard,
   refreshTodasMetasAtivas,
 } from '@/lib/metas-api';
+import { PagamentoMetasCard } from '@/components/domain/metas/PagamentoMetasCard';
 import { useAuth } from '@/hooks/useAuth';
 import type { MetaDashboard, MetasFilters } from '@/types/metas';
 
@@ -63,7 +65,9 @@ export const MetasPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [metaToDelete, setMetaToDelete] = useState<MetaDashboard | null>(null);
-  const [tab, setTab] = useState<'minhas' | 'equipe' | 'clinica'>('minhas');
+  const [tab, setTab] = useState<'minhas' | 'equipe' | 'clinica' | 'pagamento'>(
+    'minhas'
+  );
 
   const now = new Date();
   const [mes, setMes] = useState<number>(now.getMonth() + 1);
@@ -264,7 +268,9 @@ export const MetasPage: React.FC = () => {
 
       <Tabs
         value={tab}
-        onValueChange={(v) => setTab(v as 'minhas' | 'equipe' | 'clinica')}
+        onValueChange={(v) =>
+          setTab(v as 'minhas' | 'equipe' | 'clinica' | 'pagamento')
+        }
       >
         <TabsList>
           <TabsTrigger value="minhas" className="gap-1">
@@ -285,6 +291,13 @@ export const MetasPage: React.FC = () => {
               <Badge variant="secondary" className="ml-1">
                 {metasEquipe.length}
               </Badge>
+            </TabsTrigger>
+          )}
+          {/* AI dev note: Pagamento é só do admin — mostra valores a pagar */}
+          {isAdmin && (
+            <TabsTrigger value="pagamento" className="gap-1">
+              <Wallet className="h-4 w-4" />
+              Pagamento
             </TabsTrigger>
           )}
         </TabsList>
@@ -319,6 +332,11 @@ export const MetasPage: React.FC = () => {
               onDelete={handleDelete}
               showOwner
             />
+          </TabsContent>
+        )}
+        {isAdmin && (
+          <TabsContent value="pagamento" className="mt-4">
+            <PagamentoMetasCard mes={mes} ano={ano} />
           </TabsContent>
         )}
       </Tabs>
