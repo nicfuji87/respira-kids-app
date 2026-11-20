@@ -71,6 +71,49 @@ serve(async (req: Request) => {
   const H = { Authorization: `Bearer ${chave}` };
   const nomes = await nomesDasChaves(H);
 
+  // {minuto: true, desde: <unix>, modelo: 'gpt-5.4'}: diagnóstico minuto a minuto (qual chave fez
+  // cada chamada de um modelo). Usado em 20/11/2026 para descobrir qual chave cada credencial do n8n usa.
+  if (corpo?.minuto === true) {
+    const desde = Number(corpo.desde) || Math.floor(Date.now() / 1000) - 3600;
+    const alvo = String(corpo.modelo ?? '');
+    const achados: Array<{
+      minuto: string;
+      chave: string;
+      modelo: string;
+      req: number;
+    }> = [];
+    let pg: string | null = null;
+    for (let i = 0; i < 10; i++) {
+      const q = new URLSearchParams({
+        start_time: String(desde),
+        bucket_width: '1m',
+        limit: '1440',
+      });
+      q.append('group_by', 'model');
+      q.append('group_by', 'api_key_id');
+      if (pg) q.set('page', pg);
+      const d = await fetch(`${API}/usage/completions?${q}`, { headers: H })
+        .then((r) => r.json())
+        .catch(() => ({}));
+      for (const b of d.data ?? [])
+        for (const r of b.results ?? []) {
+          const m = String(r.model ?? '');
+          if (alvo && m.replace(/-\d{4}-\d{2}-\d{2}$/, '') !== alvo) continue;
+          achados.push({
+            minuto: new Date(Number(b.start_time) * 1000)
+              .toISOString()
+              .slice(0, 16),
+            chave: nomes[`k:${r.api_key_id}`] ?? String(r.api_key_id ?? '?'),
+            modelo: m,
+            req: Number(r.num_model_requests ?? 0),
+          });
+        }
+      pg = d.has_more ? (d.next_page ?? null) : null;
+      if (!pg) break;
+    }
+    return json({ ok: true, achados });
+  }
+
   const linhas: Record<
     string,
     {
