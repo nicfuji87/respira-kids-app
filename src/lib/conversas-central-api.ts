@@ -214,6 +214,80 @@ export interface Qualidade {
   }>;
 }
 
+// fn_conversas_atendimento: pedidos que a Ju passou para a equipe. Espera em
+// minutos de expediente (tabela ju_expediente_cobertura); medianas só dos
+// respondidos (1ª resposta, até o pedido seguinte da conversa); pendentes
+// abertos à parte; conversão só com a janela de 7 dias completa.
+export interface Atendimento {
+  periodo_dias: number;
+  meta_min: number;
+  amostra_minima: number;
+  dados_desde: string | null;
+  expediente: Array<{ dow: number; inicio: string; fim: string }>;
+  ju: {
+    desde: string | null;
+    respostas: number;
+    mediana_s: number | null;
+    p90_s: number | null;
+    respostas_sem_espera: number;
+    mediana_sem_espera_s: number | null;
+    p90_sem_espera_s: number | null;
+  };
+  equipe: {
+    pedidos: number;
+    respondidos: number;
+    mediana_min: number | null;
+    p90_min: number | null;
+    mediana_corrida_min: number | null;
+    respondidos_fora_prazo: number;
+    pendentes: number;
+    pendentes_fora_prazo: number;
+    pendente_mais_antigo_min: number | null;
+    novos_pendentes: number;
+    encerrados_sem_resposta: number;
+  };
+  calor: Array<{
+    dow: number;
+    faixa: number;
+    pedidos: number;
+    respondidos: number;
+    pendentes: number;
+    mediana_min: number | null;
+  }>;
+  conversao_provisoria: {
+    novo_pedidos: number;
+    novo_agendaram: number;
+    paciente_pedidos: number;
+    paciente_agendaram: number;
+  };
+  followup: {
+    desde: string | null;
+    analisadas: number;
+    candidatas: number;
+    enviadas: number;
+    responderam: number;
+    agendaram: number;
+    paradas: Array<{
+      situacao: string;
+      motivo: string | null;
+      conversas: number;
+    }>;
+  };
+  conversao: Array<{
+    grupo: 'novo' | 'paciente';
+    ordem: number;
+    faixa: string;
+    pedidos: number;
+    agendaram: number;
+  }>;
+  tendencia: Array<{
+    dia: string;
+    pedidos: number;
+    mediana_min: number | null;
+    pendentes: number;
+  }>;
+}
+
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args ?? {});
   if (error) {
@@ -226,6 +300,8 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 export const fetchHoje = () => rpc<Hoje>('fn_conversas_hoje');
 export const fetchDesempenho = (dias: number) =>
   rpc<Desempenho>('fn_conversas_desempenho', { p_dias: dias });
+export const fetchAtendimento = (dias: number) =>
+  rpc<Atendimento>('fn_conversas_atendimento', { p_dias: dias });
 export const fetchQualidade = (dias: number) =>
   rpc<Qualidade>('fn_conversas_qualidade', { p_dias: dias });
 
