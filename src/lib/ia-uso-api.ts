@@ -3,8 +3,9 @@
 //   - Atendimento: estimativa do n8n (o nó do modelo não expõe o uso real); "com cache" supõe
 //     que a parte fixa do prompt (~20 mil tokens por chamada) veio do cache.
 //   - @ju e Resumo: números reais devolvidos pela OpenAI.
-//   - openai_oficial: totais por dia/modelo puxados da API de uso da OpenAI (edge ia-uso-openai),
-//     só aparece quando a chave de administrador estiver no Vault ('openai_admin_key').
+//   - openai_oficial: totais por dia/modelo/chave puxados da API de uso da OpenAI (edge ia-uso-openai,
+//     chave de administrador no segredo 'openai_admin_key'). Só as chaves de ia_chaves_rk; as dos
+//     outros projetos do dono vêm somadas em openai_outros_usd.
 
 import { supabase } from './supabase';
 
@@ -54,12 +55,15 @@ export interface IaUsoPainel {
   openai_oficial: Array<{
     dia: string;
     modelo: string;
+    chave: string;
     requisicoes: number;
     tokens_entrada: number;
     tokens_cache: number;
     tokens_saida: number;
     custo_usd: number | null;
   }>;
+  /** Gasto das chaves que não são da Respira Kids (a organização da OpenAI é compartilhada). */
+  openai_outros_usd: number | null;
 }
 
 export async function fetchIaUsoPainel(dias = 30): Promise<IaUsoPainel> {

@@ -292,14 +292,19 @@ export function CustoIaTab() {
       <Secao
         icon={KeyRound}
         titulo="Totais oficiais da OpenAI"
-        subtitulo="Somando todos os fluxos, direto da conta da OpenAI (dia em UTC)."
+        subtitulo={
+          <>
+            Somando todos os fluxos da Respira Kids, direto da conta da OpenAI
+            (dia em UTC). Outros projetos na mesma conta:{' '}
+            {fmtUsd(dados.openai_outros_usd)} no período, fora desta soma.
+          </>
+        }
       >
         {oficialPorDia.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Ainda não configurado. Crie uma chave de administrador da
-            organização na OpenAI (Settings → Organization → Admin keys) e salve
-            no Vault do Supabase com o nome <code>openai_admin_key</code>. Os
-            totais passam a aparecer aqui em até uma hora.
+            Sem dados ainda. A importação roda de hora em hora com a chave de
+            administrador da OpenAI (segredo <code>openai_admin_key</code> das
+            Edge Functions).
           </p>
         ) : (
           <div className="overflow-x-auto">
