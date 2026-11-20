@@ -17,6 +17,7 @@ import {
   PhoneCall,
   TrendingUp,
   Repeat,
+  ListChecks,
 } from 'lucide-react';
 
 // AI dev note: Configuração de navegação baseada em roles
@@ -43,6 +44,15 @@ export const navigationConfig: NavigationConfig[] = [
     label: 'Dashboard',
     href: '/dashboard',
     roles: ['admin', 'profissional', 'secretaria'],
+    section: 'principal',
+  },
+  // AI dev note: Rotina da recepção — checklist do dia, da semana e do mês, com as
+  // metas da secretária e a cota de hoje. Admin acompanha e edita as tarefas.
+  {
+    icon: ListChecks,
+    label: 'Rotina',
+    href: '/rotina',
+    roles: ['admin', 'secretaria'],
     section: 'principal',
   },
   {
