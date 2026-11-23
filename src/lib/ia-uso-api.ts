@@ -1,5 +1,7 @@
 // AI dev note: consumo de IA (tokens e custo em US$) para a aba "Custo de IA" da central de
-// Conversas. Tudo vem do RPC fn_ia_uso_painel (migration ia_uso_tokens_painel.sql, só admin).
+// Conversas. A tela usa fn_ia_uso_painel_filtro (migration ia_uso_painel_filtros.sql, só admin):
+// período livre, fluxo, resultado, busca por nome/final do telefone e ordem das conversas.
+// fn_ia_uso_painel (sem filtros, ia_uso_tokens_painel.sql) ficou para compatibilidade.
 //   - Atendimento: estimativa do n8n (o nó do modelo não expõe o uso real); "com cache" supõe
 //     que a parte fixa do prompt (~20 mil tokens por chamada) veio do cache.
 //   - @ju e Resumo: números reais devolvidos pela OpenAI.
@@ -64,6 +66,60 @@ export interface IaUsoPainel {
   }>;
   /** Gasto das chaves que não são da Respira Kids (a organização da OpenAI é compartilhada). */
   openai_outros_usd: number | null;
+}
+
+export interface IaPeriodo extends Omit<IaTotais, 'chamadas'> {
+  conversas: number;
+  custo_medio_conversa_com_cache: number | null;
+  custo_medio_conversa_sem_cache: number | null;
+}
+
+export interface IaConversaUso {
+  conversa_id: number;
+  nome: string;
+  telefone_final: string;
+  execucoes: number;
+  puladas: number;
+  tokens_entrada: number;
+  custo_usd_sem_cache: number;
+  custo_usd_com_cache: number;
+  /** "DD/MM HH:MI" (Brasília). */
+  ultima: string;
+}
+
+export interface IaUsoPainelFiltrado
+  extends Omit<IaUsoPainel, 'top_conversas'> {
+  de: string;
+  ate: string;
+  periodo: IaPeriodo;
+  conversas: IaConversaUso[];
+}
+
+export type IaOrdem = 'custo' | 'execucoes' | 'recentes';
+
+export interface IaFiltros {
+  /** YYYY-MM-DD (dia de Brasília). */
+  de: string;
+  ate: string;
+  fluxo: string | null;
+  resultado: string | null;
+  busca: string;
+  ordem: IaOrdem;
+}
+
+export async function fetchIaUsoPainelFiltro(
+  f: IaFiltros
+): Promise<IaUsoPainelFiltrado> {
+  const { data, error } = await supabase.rpc('fn_ia_uso_painel_filtro', {
+    p_de: f.de,
+    p_ate: f.ate,
+    p_fluxo: f.fluxo,
+    p_resultado: f.resultado,
+    p_busca: f.busca.trim() || null,
+    p_ordem: f.ordem,
+  });
+  if (error) throw new Error(error.message);
+  return data as IaUsoPainelFiltrado;
 }
 
 export async function fetchIaUsoPainel(dias = 30): Promise<IaUsoPainel> {
