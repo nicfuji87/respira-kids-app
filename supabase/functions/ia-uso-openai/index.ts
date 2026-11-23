@@ -67,7 +67,11 @@ serve(async (req: Request) => {
 
   const corpo = await req.json().catch(() => ({}));
   const dias = Math.min(Math.max(Number(corpo?.dias) || 3, 1), 31);
-  const inicio = Math.floor(Date.now() / 1000) - dias * 86_400;
+  // Começa na meia-noite UTC: com bucket de 1 dia, a OpenAI conta 24 h a partir de start_time, e um
+  // início quebrado gravava meio dia por cima do dia inteiro (bug corrigido em 23/11/2026).
+  const inicio =
+    Math.floor((Math.floor(Date.now() / 1000) - dias * 86_400) / 86_400) *
+    86_400;
   const H = { Authorization: `Bearer ${chave}` };
   const nomes = await nomesDasChaves(H);
 
