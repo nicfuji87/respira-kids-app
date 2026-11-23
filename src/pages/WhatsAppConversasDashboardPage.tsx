@@ -12,6 +12,7 @@
 // quando a aba Conversas é aberta.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Tabs,
   TabsContent,
@@ -66,7 +67,18 @@ const SEGMENTOS: Array<{ valor: Segmento; label: string }> = [
 export const WhatsAppConversasDashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [aba, setAba] = useState<Aba>('hoje');
+  // ?aba=conferencia abre direto na aba (atalho da Rotina da recepção)
+  const [searchParams] = useSearchParams();
+  const [aba, setAba] = useState<Aba>(() => {
+    const a = searchParams.get('aba');
+    return a === 'hoje' ||
+      a === 'desempenho' ||
+      a === 'qualidade' ||
+      a === 'conferencia' ||
+      a === 'conversas'
+      ? a
+      : 'hoje';
+  });
   const [segmento, setSegmento] = useState<Segmento>('todas');
 
   // Aba Conversas (lista completa, carregada sob demanda)

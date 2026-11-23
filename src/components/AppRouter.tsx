@@ -19,6 +19,7 @@ import {
   FinanceiroPage,
   CobrancasPage,
   ReativacaoPage,
+  RotinaPage,
   PacientesFixosPage,
   PixAprovacaoPage,
   BoletoAprovacaoPage,
@@ -252,6 +253,15 @@ export const AppRouter: React.FC = () => {
               currentUserRole={validUserRole}
             >
               <PacientesFixosPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/rotina"
+          element={
+            <ProtectedRoute path="/rotina" currentUserRole={validUserRole}>
+              <RotinaPage />
             </ProtectedRoute>
           }
         />

@@ -14,6 +14,7 @@ export { EstoquePage } from './EstoquePage';
 export { FinanceiroPage } from './FinanceiroPage';
 export { CobrancasPage } from './CobrancasPage';
 export { ReativacaoPage } from './ReativacaoPage';
+export { RotinaPage } from './RotinaPage';
 export { PacientesFixosPage } from './PacientesFixosPage';
 export { PixAprovacaoPage } from './PixAprovacaoPage';
 export { BoletoAprovacaoPage } from './BoletoAprovacaoPage';
