@@ -437,3 +437,8 @@ nenhuma agendada ainda)**
 - 23/11 — **domiciliar continua bloqueado nos anúncios** (dono): o tráfego pago é para levar a
   família até a clínica. A lista "RK NEG | Atendimento em casa" (domiciliar, a domicílio, em casa…)
   fica como está nas campanhas Respiratória e Desenvolvimento.
+- 23/11 (noite) — **preço e "Nota 5,0" nos anúncios atuais** (`ajustes-2026-11-24-precos.js`):
+  visualizado, 10 operações — 6 anúncios sem "Nota 5,0" (título e trechos de descrição), "a partir de
+  R$ 280" → "R$ 260" na Respiratória, Pediátrica e Marca, sitelink "Fisioterapia Respiratória" com
+  R$ 260 (recurso novo + desvincula o antigo) e destaque "Nota 5,0 no Google" desvinculado.
+  **Não executado**: aguarda o "sim" explícito do dono (os anúncios editados voltam para revisão).
