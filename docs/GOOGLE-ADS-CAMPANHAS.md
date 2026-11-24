@@ -441,4 +441,5 @@ nenhuma agendada ainda)**
   visualizado, 10 operações — 6 anúncios sem "Nota 5,0" (título e trechos de descrição), "a partir de
   R$ 280" → "R$ 260" na Respiratória, Pediátrica e Marca, sitelink "Fisioterapia Respiratória" com
   R$ 260 (recurso novo + desvincula o antigo) e destaque "Nota 5,0 no Google" desvinculado.
-  **Não executado**: aguarda o "sim" explícito do dono (os anúncios editados voltam para revisão).
+  **Executado em 23/11 21:12** com o "sim" do dono: 10 alterações concluídas; 2ª visualização "nada a
+  mudar". Os 6 anúncios editados voltam para a revisão do Google. Script "Campanhas" restaurado.

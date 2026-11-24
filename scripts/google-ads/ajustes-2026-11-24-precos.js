@@ -10,7 +10,7 @@
  * Anúncio responsivo: edição no próprio anúncio (mantém o histórico; volta para revisão do Google).
  * Sitelink/frase de destaque: recurso novo com o texto corrigido no mesmo nível + tira o vínculo do
  * antigo (o texto de um recurso não pode ser editado).
- * Visualizar mostra cada troca "antes → depois". Depois de Executar, relê a conta e falha se sobrar
+ * Executado em 23/11/2026 21:12 (10 alterações, conferido). Visualizar mostra cada troca "antes → depois". Depois de Executar, relê a conta e falha se sobrar
  * 280 ou "nota 5,0" onde não devia.
  */
 var CONTA = '8744391492';
