@@ -107,7 +107,8 @@ interface Props {
 export const EvolucoesProgresso: React.FC<Props> = ({ dados, recebidoEm }) => {
   const [agoraLocal, setAgoraLocal] = useState(() => Date.now());
   const [selecionado, setSelecionado] = useState(dados.hoje);
-  const [verVencidas, setVerVencidas] = useState(false);
+  // Abre por padrão: o atraso tem que doer na cara, não ficar escondido.
+  const [verVencidas, setVerVencidas] = useState(true);
 
   useEffect(() => {
     const t = setInterval(() => setAgoraLocal(Date.now()), 30_000);
@@ -175,6 +176,124 @@ export const EvolucoesProgresso: React.FC<Props> = ({ dados, recebidoEm }) => {
         )}
       </div>
 
+      {/* Falta evoluir, ainda no prazo */}
+      <div className="space-y-2">
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          <Clock className="w-4 h-4 text-amarelo-pipa" />
+          Falta evoluir, ainda no prazo ({dados.no_prazo.length})
+        </p>
+        {dados.no_prazo.length === 0 ? (
+          <p className="flex items-center gap-1.5 text-sm text-verde-pipa">
+            <CheckCircle2 className="w-4 h-4" />
+            Nada pendente no prazo. Tudo em dia!
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {dados.no_prazo.map((s) => {
+              const ms = parede(s.prazo).getTime() - agoraServidor;
+              const urgente = ms < 3 * 3_600_000;
+              const atencao = ms < 8 * 3_600_000;
+              return (
+                <li
+                  key={s.id}
+                  className="flex items-start justify-between gap-3 rounded-xl border border-border/60 p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">
+                      {s.paciente} · {s.grupo}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Sessão {dataCurta(s.inicio)} {horaCurta(s.inicio)} com{' '}
+                      {s.profissional}
+                    </p>
+                    {s.rascunho_em && (
+                      <p className="text-xs font-medium text-roxo-titulo">
+                        Começada e não finalizada · rascunho de{' '}
+                        {dataCurta(s.rascunho_em)} {horaCurta(s.rascunho_em)}
+                      </p>
+                    )}
+                    {fimDeSemana(s) && (
+                      <p className="text-xs text-azul-respira">
+                        Fim de semana: vence segunda 23h59
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p
+                      className={cn(
+                        'text-sm font-semibold',
+                        urgente
+                          ? 'text-vermelho-kids'
+                          : atencao
+                            ? 'text-amarelo-pipa'
+                            : 'text-foreground'
+                      )}
+                    >
+                      {tempoRestante(ms)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      até {quandoVence(s.prazo)}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* Vencidas sem evolução (mês inteiro) */}
+      {dados.vencidas_total > 0 && (
+        <div className="rounded-xl border border-vermelho-kids/30">
+          <button
+            type="button"
+            onClick={() => setVerVencidas((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 p-3 text-left"
+          >
+            <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <FileWarning className="w-4 h-4 text-vermelho-kids" />
+              Prazo vencido, ainda sem evolução ({dados.vencidas_total})
+            </span>
+            {verVencidas ? (
+              <ChevronUp className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            )}
+          </button>
+          {verVencidas && (
+            <div className="border-t border-vermelho-kids/20 p-3 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Todas as do mês. Não salvam mais o bônus, mas o prontuário
+                precisa ser feito. As começadas aparecem primeiro: é só
+                terminar.
+              </p>
+              <ul className="space-y-1.5">
+                {dados.vencidas.map((s) => (
+                  <li key={s.id} className="text-sm">
+                    <span className="font-medium text-foreground">
+                      {s.paciente}
+                    </span>{' '}
+                    <span className="text-muted-foreground">
+                      · {s.grupo} · {dataCurta(s.inicio)} {horaCurta(s.inicio)}{' '}
+                      com {s.profissional}
+                    </span>
+                    {s.rascunho_em && (
+                      <span className="ml-1 rounded-full bg-roxo-titulo/10 px-2 py-0.5 text-xs font-medium text-roxo-titulo">
+                        começada
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {dados.vencidas_total > dados.vencidas.length && (
+                <p className="text-xs text-muted-foreground">
+                  e mais {dados.vencidas_total - dados.vencidas.length}.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {/* Calendário */}
       <div>
         <div className="grid grid-cols-7 gap-1 mb-1">
@@ -283,112 +402,6 @@ export const EvolucoesProgresso: React.FC<Props> = ({ dados, recebidoEm }) => {
         </div>
       )}
 
-      {/* Falta evoluir, ainda no prazo */}
-      <div className="space-y-2">
-        <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-          <Clock className="w-4 h-4 text-amarelo-pipa" />
-          Falta evoluir, ainda no prazo ({dados.no_prazo.length})
-        </p>
-        {dados.no_prazo.length === 0 ? (
-          <p className="flex items-center gap-1.5 text-sm text-verde-pipa">
-            <CheckCircle2 className="w-4 h-4" />
-            Nada pendente no prazo. Tudo em dia!
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {dados.no_prazo.map((s) => {
-              const ms = parede(s.prazo).getTime() - agoraServidor;
-              const urgente = ms < 3 * 3_600_000;
-              const atencao = ms < 8 * 3_600_000;
-              return (
-                <li
-                  key={s.id}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-border/60 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">
-                      {s.paciente} · {s.grupo}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Sessão {dataCurta(s.inicio)} {horaCurta(s.inicio)} com{' '}
-                      {s.profissional}
-                    </p>
-                    {fimDeSemana(s) && (
-                      <p className="text-xs text-azul-respira">
-                        Fim de semana: vence segunda 23h59
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p
-                      className={cn(
-                        'text-sm font-semibold',
-                        urgente
-                          ? 'text-vermelho-kids'
-                          : atencao
-                            ? 'text-amarelo-pipa'
-                            : 'text-foreground'
-                      )}
-                    >
-                      {tempoRestante(ms)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      até {quandoVence(s.prazo)}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      {/* Vencidas sem evolução (últimos 7 dias) */}
-      {dados.vencidas_total > 0 && (
-        <div className="rounded-xl border border-vermelho-kids/30">
-          <button
-            type="button"
-            onClick={() => setVerVencidas((v) => !v)}
-            className="w-full flex items-center justify-between gap-2 p-3 text-left"
-          >
-            <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <FileWarning className="w-4 h-4 text-vermelho-kids" />
-              Prazo vencido, ainda sem evolução ({dados.vencidas_total})
-            </span>
-            {verVencidas ? (
-              <ChevronUp className="w-4 h-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-            )}
-          </button>
-          {verVencidas && (
-            <div className="border-t border-vermelho-kids/20 p-3 space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Últimos 7 dias. Não salvam mais o bônus, mas o prontuário
-                precisa ser feito.
-              </p>
-              <ul className="space-y-1.5">
-                {dados.vencidas.map((s) => (
-                  <li key={s.id} className="text-sm">
-                    <span className="font-medium text-foreground">
-                      {s.paciente}
-                    </span>{' '}
-                    <span className="text-muted-foreground">
-                      · {s.grupo} · {dataCurta(s.inicio)} {horaCurta(s.inicio)}{' '}
-                      com {s.profissional}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {dados.vencidas_total > dados.vencidas.length && (
-                <p className="text-xs text-muted-foreground">
-                  e mais {dados.vencidas_total - dados.vencidas.length}.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };
