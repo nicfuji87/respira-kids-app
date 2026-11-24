@@ -154,6 +154,8 @@ export interface SessaoPendente {
   grupo: string;
   paciente: string;
   profissional: string;
+  /** quando o rascunho foi salvo pela ultima vez; null = nem abriu */
+  rascunho_em?: string | null;
 }
 
 export interface EvolucoesCelular {
@@ -164,6 +166,8 @@ export interface EvolucoesCelular {
   no_prazo: SessaoPendente[];
   vencidas: SessaoPendente[];
   vencidas_total: number;
+  /** sessoes com evolucao aberta em rascunho e nao finalizada */
+  rascunhos_abertos?: number;
   bonus: {
     base: number;
     desconto: number;
