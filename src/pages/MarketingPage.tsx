@@ -30,6 +30,7 @@ import {
   JornadasTab,
   OtimizacaoTab,
   QualidadeTab,
+  RetornoTab,
   VisaoGeralTab,
 } from '@/components/domain/marketing';
 import {
@@ -51,6 +52,7 @@ import {
 const INICIO = '2026-10'; // o site passou a gerar o código RK em 14/10/2026
 type Aba =
   | 'visao'
+  | 'retorno'
   | 'funil'
   | 'campanhas'
   | 'jornadas'
@@ -284,6 +286,7 @@ export const MarketingPage: React.FC = () => {
         <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="visao">Visão geral</TabsTrigger>
+            <TabsTrigger value="retorno">Retorno dos anúncios</TabsTrigger>
             <TabsTrigger value="funil">Funil</TabsTrigger>
             <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
             <TabsTrigger value="jornadas">Jornadas</TabsTrigger>
@@ -293,6 +296,9 @@ export const MarketingPage: React.FC = () => {
           </TabsList>
           <TabsContent value="visao" className="mt-4">
             <VisaoGeralTab r={r} />
+          </TabsContent>
+          <TabsContent value="retorno" className="mt-4">
+            {aba === 'retorno' && <RetornoTab r={r} />}
           </TabsContent>
           <TabsContent value="funil" className="mt-4">
             <FunilTab r={r} abrirJornada={abrirJornada} />
