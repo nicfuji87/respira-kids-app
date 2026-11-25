@@ -6,3 +6,4 @@ export { CoortesTab } from './CoortesTab';
 export { QualidadeTab } from './QualidadeTab';
 export { OtimizacaoTab } from './OtimizacaoTab';
 export { RetornoTab } from './RetornoTab';
+export { RetornoCanaisTab } from './RetornoCanaisTab';
