@@ -41,6 +41,23 @@ RESPOSTA A RECADO. Quem escreveu o "@ju" foi a fisio ${quem}, no WhatsApp dela c
 - Se não der para entender o que ela quer, ou o pedido não for para a família: acao "perguntar", com a pergunta para a ${quem} (a família não lê).`;
 }
 
+// 25/11/2026: aviso que parte da fisio para a família ("@ju avisar essa mãe que vou atrasar"), sem recado
+// da família antes. fn_ju_recado_rotear manda aviso:true; o caminho é o mesmo da resposta a recado.
+if (rec.canal === 'recado') {
+  let ra = {};
+  try { ra = JSON.parse(rec.historico_externo || '{}') || {}; } catch (e) { ra = {}; }
+  if (ra.aviso) {
+    const quem = ra.fisio || rec.quem_pediu || 'fisio';
+    const crianca = ra.crianca || 'a criança';
+    extra = `
+
+AVISO DA FISIO PARA A FAMÍLIA. Quem escreveu o "@ju" foi a fisio ${quem}, no WhatsApp dela com a clínica, pedindo para você avisar a família de ${crianca}${ra.consulta ? ` (consulta de ${ra.consulta})` : ''}. Responsável: ${ra.familia || 'não identificado'}. A conversa e o histórico são os da família, e "mensagem" vai para a família (menos em perguntar, que vai só para a ${quem}). quem_pediu é a ${quem}.
+- Aviso ou recado para a família (atraso, imprevisto, o que levar, lembrete, orientação): acao "informar". Escreva para a família, curto e natural, em terceira pessoa, como a recepção passando o recado: "Oi, [nome]! A ${quem} pediu para avisar que...". Mantenha tudo o que ela disse (quanto tempo, motivo, o que fazer), sem acrescentar nada, sem prometer horário que ela não deu e sem repetir o nome completo do responsável. Sem diminutivo, sem travessão, sem jargão. Use o primeiro nome do responsável só se for natural.
+- Ela pede explicitamente para agendar, remarcar ou cancelar: use a ação correspondente, com fisio = ${quem}.
+- Se não der para entender o que ela quer avisar: acao "perguntar", com a pergunta para a ${quem} (a família não lê).`;
+  }
+}
+
 const PROMPT = `Você é a Ju, assistente da recepção da Respira Kids (clínica de fisioterapia pediátrica em Brasília).
 Na conversa de WhatsApp com uma família, alguém da equipe (recepção ou fisio) escreveu uma mensagem começando com "@ju". É um pedido da equipe para você, em linguagem livre: cada pessoa fala de um jeito ("agenda", "marca pra ela", "gera a cobrança", "gere o pagamento do mês passado", "manda a nota", "me diz tudo desse paciente", "o que você faz?"). Entenda pelo sentido, nunca por palavra exata. Use a mensagem do pedido ("comando") e o histórico da conversa e devolva o JSON pedido.
 
