@@ -11,7 +11,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 // deno-lint-ignore no-explicit-any
 type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const MODELOS = ['gpt-6.1-sol', 'gpt-4o-mini'];
+const MODELOS = ['gpt-6.2-sol', 'gpt-4o-mini']; // 25/11/2026: 6.1-sol → 6.2-sol (padrão da Respira Kids)
 
 const json = (corpo: unknown, status = 200) =>
   new Response(JSON.stringify(corpo), {
