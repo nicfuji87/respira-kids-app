@@ -443,3 +443,17 @@ nenhuma agendada ainda)**
   R$ 260 (recurso novo + desvincula o antigo) e destaque "Nota 5,0 no Google" desvinculado.
   **Executado em 23/11 21:12** com o "sim" do dono: 10 alterações concluídas; 2ª visualização "nada a
   mudar". Os 6 anúncios editados voltam para a revisão do Google. Script "Campanhas" restaurado.
+- 25/11 — **análise (só leitura):** os 6 anúncios editados em 23/11 já estão APROVADOS; destaques
+  "Crianças até 12 anos" e "Prematuros e pós-cirurgia" aprovados; sitelinks Fisioterapia Respiratória
+  e Torcicolo "aprovado com restrição" (saúde, normal). 24/11 rodou normal (Desenv 265 imp/13 cl,
+  Resp 47/3). 17–23/11 x 10–16/11: Resp 24 cl/R$ 95/2 conv x 19/R$ 82/1 (IS 79%, perde 20% por
+  classificação, 1% por verba); Desenv 47/R$ 177/3 x 54/R$ 235/4 (IS 53%, perde 38% por
+  classificação, 9% por verba); Marca 5/R$ 6/1. Acumulado 26/10–24/11 (sistema): R$ 1.127, 6
+  pacientes, R$ 5.000 realizados + R$ 880 agendados, R$ 0 recebido (cobrança mensal).
+  Nenhuma alteração na conta.
+- 25/11 07:56 — **teste: palavras genéricas da Pediátrica pausadas** (`ajustes-2026-11-25-pediatrica.js`,
+  executado e conferido, decisão do dono): "fisioterapia infantil", "fisioterapeuta infantil" e
+  "fisioterapia para criança" (frase). Seguem ativas [fisioterapia infantil] exata (controle),
+  "fisioterapia bebê", "fisioterapia para bebê", "fisioterapia pediátrica", "fisioterapia infantil
+  brasília" etc. Comparar 14–30 dias: conversas qualificadas, convênio/fora do escopo e pacientes do
+  grupo. Para desfazer: o mesmo script com ACAO = 'ATIVAR'. Script "Campanhas" restaurado.
