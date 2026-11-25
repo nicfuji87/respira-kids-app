@@ -40,10 +40,16 @@ import { Aviso, CartaoIndicador, ValorIndicador } from './marketing-ui';
 const incluiGoogleAds = (canal: string) =>
   canal === 'todos' || canal === 'google_ads' || canal === 'tipo:pago';
 
-export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
+export const RetornoTab: React.FC<{
+  r: Recorte;
+  /** Campanha aberta no detalhe (grupos, palavras, termos). */
+  campanhaSel?: string | null;
+  onCampanha?: (id: string | null) => void;
+}> = ({ r, campanhaSel, onCampanha }) => {
   const [d, setD] = useState<DadosRetorno | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [comMarca, setComMarca] = useState(true);
+  // Sem a Marca é a referência de aquisição: quem buscou "Respira Kids" já conhecia.
+  const [comMarca, setComMarca] = useState(false);
   const { desde, ate } = periodoDosMeses(r.filtros.mesInicio, r.filtros.mesFim);
   const { canal, campanha, servico } = r.filtros;
   const ativo = incluiGoogleAds(canal);
@@ -80,6 +86,11 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
       conversas: d.conversas.filter((c) => entra(c.campanha_id)),
       t: somar(campanhas, porServico),
       tSemMarca: somar(semMarca, porServico),
+      tComMarca: somar(d.campanhas, porServico),
+      tMarca: somar(
+        d.campanhas.filter((c) => marca.has(c.campanha_id)),
+        porServico
+      ),
       temMarca: marca.size > 0,
     };
   }, [d, comMarca]);
@@ -99,7 +110,7 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
     );
   if (!d || !v) return <Skeleton className="h-64 w-full" />;
 
-  const { t, tSemMarca, nomes } = v;
+  const { t, tSemMarca, tComMarca, tMarca, nomes } = v;
   const nomeCamp = (id: string | null) =>
     id ? (nomes.get(id) ?? id).replace('RK | Pesquisa | ', '') : '—';
   const semBaixa = v.pacientes.reduce((a, p) => a + p.sessoes_sem_baixa, 0);
@@ -174,97 +185,50 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <CartaoIndicador
-          rotulo="Investimento"
+          rotulo={comMarca ? 'Investimento' : 'Investimento, sem Marca'}
           valor={dinheiro(t.investimento)}
-          detalhe={`${qtd(t.cliques)} cliques · ${qtd(t.conversas)} conversas`}
+          detalhe={`${qtd(t.cliques)} cliques · ${qtd(t.conversas)} conversas · ${num(t.agendaram)} agendaram${t.conversas && t.convenio != null ? ` · ${pct(t.convenio / t.conversas)} citaram convênio` : ''}`}
         />
         <CartaoIndicador
-          rotulo="Atendimento confirmado"
-          valor={num(t.pacientes)}
-          detalhe={`${num(t.pacientes_novas)} nova(s) · ${num(aConferir)} com presença a conferir · ${num(porResultado.agendada ?? 0)} com 1ª sessão marcada`}
+          rotulo="Pacientes novos confirmados"
+          valor={num(t.pacientes_novas)}
+          detalhe={`${num(t.pacientes)} atendida(s) no total · ${num(aConferir)} com presença a conferir · ${num(porResultado.agendada ?? 0)} com 1ª sessão marcada`}
         />
         <CartaoIndicador
-          rotulo="Sessões finalizadas"
-          valor={num(t.sessoes_realizadas)}
-          detalhe={
-            <>
-              + {num(t.sessoes_agendadas)} agendada(s) · média{' '}
-              <ValorIndicador
-                ind={t.sessoes_por_paciente}
-                formato={(x) =>
-                  x.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
-                }
-                compacto
-              />{' '}
-              por paciente
-            </>
-          }
-        />
-        <CartaoIndicador
-          rotulo="Receita realizada"
-          valor={brl(t.receita_realizada)}
-          detalhe={`A conferir ${brl(t.receita_a_conferir)} · recebida ${brl(t.receita_recebida)} · agendada ${brl(t.receita_agendada)}`}
-        />
-        <CartaoIndicador
-          rotulo="ROAS realizado"
-          ind={t.roas_realizado}
-          formato={vezes}
-          detalhe={
-            <>
-              Com agendadas{' '}
-              <ValorIndicador
-                ind={t.roas_com_agendadas}
-                formato={vezes}
-                compacto
-              />
-              {v.temMarca && comMarca && (
-                <>
-                  {' '}
-                  · sem marca{' '}
-                  <ValorIndicador
-                    ind={tSemMarca.roas_realizado}
-                    formato={vezes}
-                    compacto
-                  />
-                </>
-              )}
-            </>
-          }
-        />
-        <CartaoIndicador
-          rotulo="ROAS recebido"
-          ind={t.roas_recebido}
-          formato={vezes}
-          detalhe="Só faturas pagas; sobe quando a cobrança do mês é paga."
-        />
-        <CartaoIndicador
-          rotulo="Custo por paciente nova (CAC)"
+          rotulo={comMarca ? 'CAC' : 'CAC, sem Marca'}
           ind={t.cac}
           formato={brl}
           detalhe={
-            v.temMarca && comMarca ? (
+            v.temMarca ? (
               <>
-                Sem marca{' '}
-                <ValorIndicador ind={tSemMarca.cac} formato={brl} compacto />
+                {comMarca ? 'Sem Marca' : 'Com Marca'}{' '}
+                <ValorIndicador
+                  ind={comMarca ? tSemMarca.cac : tComMarca.cac}
+                  formato={brl}
+                  compacto
+                />
               </>
             ) : undefined
           }
         />
         <CartaoIndicador
-          rotulo="Custo por conversa"
-          ind={t.custo_conversa}
-          formato={brl}
+          rotulo="Receita realizada"
+          valor={brl(t.receita_realizada)}
           detalhe={
-            t.conversas == null || t.convenio == null
-              ? 'Conversas não se dividem por serviço.'
-              : `${num(t.convenio)} de ${num(t.conversas)} citaram convênio (${pct(t.conversas ? t.convenio / t.conversas : null)})`
+            <>
+              ROAS realizado{' '}
+              <ValorIndicador ind={t.roas_realizado} formato={vezes} compacto />
+              . A conferir {brl(t.receita_a_conferir)} · recebida{' '}
+              {brl(t.receita_recebida)} (a cobrança é mensal) · agendada{' '}
+              {brl(t.receita_agendada)}
+            </>
           }
         />
       </div>
 
       <SecaoRelatorio
         titulo="Por campanha"
-        descricao="Investimento do período (script de custos do Google Ads) e o que as conversas iniciadas no período renderam até hoje."
+        descricao="Investimento do período (script de custos do Google Ads) e o que as conversas iniciadas no período renderam até hoje. Clique numa campanha para ver grupos, palavras-chave, termos pesquisados e o funil."
         csv={{
           nome: `retorno-campanhas_${desde}_${ate}`,
           linhas: v.campanhas,
@@ -290,7 +254,21 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
             {
               chave: 'nome',
               titulo: 'Campanha',
-              formato: (_, l) => nomeCamp(l.campanha_id),
+              formato: (_, l) => {
+                const ativa = campanhaSel === l.campanha_id;
+                return onCampanha ? (
+                  <button
+                    type="button"
+                    className={`text-left underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none ${ativa ? 'font-semibold' : ''}`}
+                    aria-pressed={ativa}
+                    onClick={() => onCampanha(ativa ? null : l.campanha_id)}
+                  >
+                    {nomeCamp(l.campanha_id)}
+                  </button>
+                ) : (
+                  nomeCamp(l.campanha_id)
+                );
+              },
             },
             {
               chave: 'investimento',
@@ -309,6 +287,11 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
               titulo: 'Conversas',
               alinhar: 'direita',
               formato: (x) => qtd(x as number | null),
+            },
+            {
+              chave: 'agendaram',
+              titulo: 'Agendaram',
+              alinhar: 'direita',
             },
             {
               chave: 'pacientes',
@@ -367,6 +350,7 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
             investimento: dinheiro(t.investimento),
             cliques: qtd(t.cliques),
             conversas: qtd(t.conversas),
+            agendaram: num(t.agendaram),
             pacientes: num(t.pacientes),
             sessoes_realizadas: num(t.sessoes_realizadas),
             receita_realizada: brl(t.receita_realizada),
@@ -377,6 +361,15 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
             cac: <ValorIndicador ind={t.cac} formato={brl} compacto />,
           }}
         />
+        {v.temMarca && !comMarca && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Fora do total: busca pela Marca (quem procurou "Respira Kids" já
+            conhecia a clínica): {dinheiro(tMarca.investimento)},{' '}
+            {num(tMarca.pacientes)} atendida(s), receita realizada{' '}
+            {brl(tMarca.receita_realizada)}. Marque "Incluir busca pela marca"
+            para somar.
+          </p>
+        )}
       </SecaoRelatorio>
 
       <SecaoRelatorio
@@ -524,75 +517,82 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
         )}
       </SecaoRelatorio>
 
-      <SecaoRelatorio
-        titulo="Conversas vindas dos anúncios"
-        descricao={`${num(v.conversas.length)} conversa(s): ${(
-          Object.keys(RESULTADO) as (keyof typeof RESULTADO)[]
-        )
-          .map(
-            (k) =>
-              `${num(porResultado[k] ?? 0)} ${RESULTADO[k].rotulo.toLowerCase()}`
-          )
-          .join(
-            ' · '
-          )}. "Pediu horário" = pediu para agendar e ainda não tem sessão marcada.`}
-        csv={{
-          nome: `retorno-conversas_${desde}_${ate}`,
-          linhas: v.conversas.map((c) => ({
-            ...c,
-            campanha: nomeCamp(c.campanha_id),
-            resultado: RESULTADO[c.resultado].rotulo,
-            convenio: c.convenio ? 'sim' : 'não',
-          })),
-          colunas: [
-            { chave: 'primeira_msg', titulo: '1ª mensagem' },
-            { chave: 'campanha', titulo: 'Campanha' },
-            { chave: 'palavra_chave', titulo: 'Palavra-chave' },
-            { chave: 'pagina', titulo: 'Página' },
-            { chave: 'convenio', titulo: 'Citou convênio' },
-            { chave: 'resultado', titulo: 'Resultado' },
-          ],
-        }}
-      >
-        <TabelaRelatorio<ConversaRetorno>
-          linhas={v.conversas}
-          colunas={[
-            {
-              chave: 'primeira_msg',
-              titulo: '1ª mensagem',
-              formato: (x) => dataParede(x as string | null),
-            },
-            {
-              chave: 'campanha_id',
-              titulo: 'Campanha',
-              formato: (x) => nomeCamp(x as string | null),
-            },
-            {
-              chave: 'palavra_chave',
-              titulo: 'Palavra-chave',
-              formato: (x) => String(x ?? '—'),
-            },
-            {
-              chave: 'pagina',
-              titulo: 'Página',
-              formato: (x) => String(x ?? '—'),
-            },
-            {
-              chave: 'convenio',
-              titulo: 'Convênio',
-              formato: (x) => (x ? 'citou' : '—'),
-            },
-            {
-              chave: 'resultado',
-              titulo: 'Resultado',
-              formato: (x) => {
-                const res = RESULTADO[x as keyof typeof RESULTADO];
-                return <Badge variant={res.variante}>{res.rotulo}</Badge>;
-              },
-            },
-          ]}
-        />
-      </SecaoRelatorio>
+      <details className="group rounded-md border bg-card">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+          Conversas vindas dos anúncios ({num(v.conversas.length)})
+        </summary>
+        <div className="border-t p-2">
+          <SecaoRelatorio
+            titulo="Conversas vindas dos anúncios"
+            descricao={`${num(v.conversas.length)} conversa(s): ${(
+              Object.keys(RESULTADO) as (keyof typeof RESULTADO)[]
+            )
+              .map(
+                (k) =>
+                  `${num(porResultado[k] ?? 0)} ${RESULTADO[k].rotulo.toLowerCase()}`
+              )
+              .join(
+                ' · '
+              )}. "Pediu horário" = pediu para agendar e ainda não tem sessão marcada.`}
+            csv={{
+              nome: `retorno-conversas_${desde}_${ate}`,
+              linhas: v.conversas.map((c) => ({
+                ...c,
+                campanha: nomeCamp(c.campanha_id),
+                resultado: RESULTADO[c.resultado].rotulo,
+                convenio: c.convenio ? 'sim' : 'não',
+              })),
+              colunas: [
+                { chave: 'primeira_msg', titulo: '1ª mensagem' },
+                { chave: 'campanha', titulo: 'Campanha' },
+                { chave: 'palavra_chave', titulo: 'Palavra-chave' },
+                { chave: 'pagina', titulo: 'Página' },
+                { chave: 'convenio', titulo: 'Citou convênio' },
+                { chave: 'resultado', titulo: 'Resultado' },
+              ],
+            }}
+          >
+            <TabelaRelatorio<ConversaRetorno>
+              linhas={v.conversas}
+              colunas={[
+                {
+                  chave: 'primeira_msg',
+                  titulo: '1ª mensagem',
+                  formato: (x) => dataParede(x as string | null),
+                },
+                {
+                  chave: 'campanha_id',
+                  titulo: 'Campanha',
+                  formato: (x) => nomeCamp(x as string | null),
+                },
+                {
+                  chave: 'palavra_chave',
+                  titulo: 'Palavra-chave',
+                  formato: (x) => String(x ?? '—'),
+                },
+                {
+                  chave: 'pagina',
+                  titulo: 'Página',
+                  formato: (x) => String(x ?? '—'),
+                },
+                {
+                  chave: 'convenio',
+                  titulo: 'Convênio',
+                  formato: (x) => (x ? 'citou' : '—'),
+                },
+                {
+                  chave: 'resultado',
+                  titulo: 'Resultado',
+                  formato: (x) => {
+                    const res = RESULTADO[x as keyof typeof RESULTADO];
+                    return <Badge variant={res.variante}>{res.rotulo}</Badge>;
+                  },
+                },
+              ]}
+            />
+          </SecaoRelatorio>
+        </div>
+      </details>
     </div>
   );
 };

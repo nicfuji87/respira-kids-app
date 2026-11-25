@@ -1,3 +1,6 @@
+export { ResumoTab } from './ResumoTab';
+export { CanaisTab } from './CanaisTab';
+export { GoogleAdsTab } from './GoogleAdsTab';
 export { VisaoGeralTab } from './VisaoGeralTab';
 export { FunilTab } from './FunilTab';
 export { CampanhasTab } from './CampanhasTab';
@@ -6,4 +9,3 @@ export { CoortesTab } from './CoortesTab';
 export { QualidadeTab } from './QualidadeTab';
 export { OtimizacaoTab } from './OtimizacaoTab';
 export { RetornoTab } from './RetornoTab';
-export { RetornoCanaisTab } from './RetornoCanaisTab';

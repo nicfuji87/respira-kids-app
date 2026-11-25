@@ -71,7 +71,14 @@ const RECOMENDACAO: Record<
   },
 };
 
-export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
+export type SecaoOtimizacao = 'convenio' | 'funil' | 'palavras' | 'termos';
+
+export const OtimizacaoTab: React.FC<{
+  r: Recorte;
+  /** Partes a mostrar (padrão: todas). A aba Google Ads usa por partes. */
+  secoes?: SecaoOtimizacao[];
+}> = ({ r, secoes }) => {
+  const mostra = (s: SecaoOtimizacao) => !secoes || secoes.includes(s);
   const [d, setD] = useState<DadosOtimizacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const { desde, ate } = periodoDosMeses(r.filtros.mesInicio, r.filtros.mesFim);
@@ -116,6 +123,17 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
       r.filtros.campanha === 'todas' || f.campanha_id === r.filtros.campanha
   );
   const semDetalhe = !d.detalhe_ads_ultimo;
+  // O termo de pesquisa não traz a campanha: com campanha escolhida, ficam os termos
+  // que casaram com palavras-chave dela.
+  const palavrasDaCampanha = new Set(
+    palavras.map((p) => (p.palavra ?? '').toLowerCase()).filter(Boolean)
+  );
+  const termos =
+    r.filtros.campanha === 'todas'
+      ? d.termos
+      : d.termos.filter((t) =>
+          palavrasDaCampanha.has((t.palavra ?? '').toLowerCase())
+        );
 
   return (
     <div className="space-y-4">
@@ -130,373 +148,395 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
         </Aviso>
       )}
 
-      <SecaoRelatorio
-        titulo="Convênio: quem cita agenda menos?"
-        descricao={`Contatos que citaram convênio, plano, operadora ou reembolso na conversa (detecção automática) × os que não citaram. Período ${desde} a ${ate}. Com ${AMOSTRA_CONVENIO}+ contatos de anúncio que citaram e agendamento abaixo da metade dos demais, o diagnóstico depende dos termos de pesquisa: negativar operadora só com gasto em buscas com nome de operadora; sem isso, o problema está na conversa. Diagnóstico semanal no WhatsApp do dono.`}
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <SeloSituacao situacao={rec.situacao}>{rec.selo}</SeloSituacao>
-          <span className="text-sm text-muted-foreground">
-            {rec.texto}
-            {conv.recomendacao === 'amostra_insuficiente' &&
-              ` Faltam ${conv.faltam} contato(s) de anúncio que citem convênio.`}
-          </span>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <CartaoIndicador
-            rotulo="Anúncio · citaram convênio"
-            valor={num(conv.pago.citou.conversas)}
-            detalhe={`${num(conv.pago.citou.agendaram)} agendaram (${pct(conv.pago.citou.taxa)})`}
-          />
-          <CartaoIndicador
-            rotulo="Anúncio · não citaram"
-            valor={num(conv.pago.nao.conversas)}
-            detalhe={`${num(conv.pago.nao.agendaram)} agendaram (${pct(conv.pago.nao.taxa)})`}
-          />
-          <CartaoIndicador
-            rotulo="Gasto em buscas com operadora"
-            valor={semDetalhe ? '—' : brl(conv.termos.custo)}
-            detalhe={
-              semDetalhe
-                ? 'Depende do script de detalhe.'
-                : `${num(conv.termos.termos)} termo(s), ${num(conv.termos.cliques)} clique(s)`
-            }
-          />
-          <CartaoIndicador
-            rotulo="Linha de base · todos os contatos novos"
-            valor={`${pct(conv.novos.citou.taxa)} × ${pct(conv.novos.nao.taxa)}`}
-            detalhe={`Agendamento de quem citou (${num(conv.novos.citou.conversas)}) × não citou (${num(conv.novos.nao.conversas)}), qualquer origem.`}
-          />
-        </div>
-        {d.convenio_detalhes.length > 0 && (
-          <div className="mt-3">
-            <TabelaRelatorio
-              linhas={d.convenio_detalhes}
+      {mostra('convenio') && (
+        <SecaoRelatorio
+          titulo="Convênio: quem cita agenda menos?"
+          descricao={`Contatos que citaram convênio, plano, operadora ou reembolso na conversa (detecção automática) × os que não citaram. Período ${desde} a ${ate}. Com ${AMOSTRA_CONVENIO}+ contatos de anúncio que citaram e agendamento abaixo da metade dos demais, o diagnóstico depende dos termos de pesquisa: negativar operadora só com gasto em buscas com nome de operadora; sem isso, o problema está na conversa. Diagnóstico semanal no WhatsApp do dono.`}
+        >
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <SeloSituacao situacao={rec.situacao}>{rec.selo}</SeloSituacao>
+            <span className="text-sm text-muted-foreground">
+              {rec.texto}
+              {conv.recomendacao === 'amostra_insuficiente' &&
+                ` Faltam ${conv.faltam} contato(s) de anúncio que citem convênio.`}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <CartaoIndicador
+              rotulo="Anúncio · citaram convênio"
+              valor={num(conv.pago.citou.conversas)}
+              detalhe={`${num(conv.pago.citou.agendaram)} agendaram (${pct(conv.pago.citou.taxa)})`}
+            />
+            <CartaoIndicador
+              rotulo="Anúncio · não citaram"
+              valor={num(conv.pago.nao.conversas)}
+              detalhe={`${num(conv.pago.nao.agendaram)} agendaram (${pct(conv.pago.nao.taxa)})`}
+            />
+            <CartaoIndicador
+              rotulo="Gasto em buscas com operadora"
+              valor={semDetalhe ? '—' : brl(conv.termos.custo)}
+              detalhe={
+                semDetalhe
+                  ? 'Depende do script de detalhe.'
+                  : `${num(conv.termos.termos)} termo(s), ${num(conv.termos.cliques)} clique(s)`
+              }
+            />
+            <CartaoIndicador
+              rotulo="Linha de base · todos os contatos novos"
+              valor={`${pct(conv.novos.citou.taxa)} × ${pct(conv.novos.nao.taxa)}`}
+              detalhe={`Agendamento de quem citou (${num(conv.novos.citou.conversas)}) × não citou (${num(conv.novos.nao.conversas)}), qualquer origem.`}
+            />
+          </div>
+          {d.convenio_detalhes.length > 0 && (
+            <div className="mt-3">
+              <TabelaRelatorio
+                linhas={d.convenio_detalhes}
+                colunas={[
+                  {
+                    chave: 'detalhe',
+                    titulo: 'O que citaram',
+                    formato: (v) => rotuloDetalhe(String(v)),
+                  },
+                  {
+                    chave: 'conversas',
+                    titulo: 'Conversas',
+                    alinhar: 'direita',
+                  },
+                  {
+                    chave: 'agendaram',
+                    titulo: 'Agendaram',
+                    alinhar: 'direita',
+                  },
+                  {
+                    chave: 'pagas',
+                    titulo: 'Vindas de anúncio',
+                    alinhar: 'direita',
+                  },
+                ]}
+              />
+            </div>
+          )}
+        </SecaoRelatorio>
+      )}
+
+      {mostra('funil') && (
+        <SecaoRelatorio
+          titulo="Funil do anúncio"
+          descricao={`Clique no anúncio (Google Ads) → chegou ao site → clicou no WhatsApp → conversa com origem identificada. "Chegaram" e "WhatsApp" são uma contagem anônima do site: valem para todos os visitantes, inclusive quem escolheu "Só o necessário" nos cookies, mas não dizem qual conversa veio de qual clique — nem todo clique no WhatsApp vira mensagem enviada. Conversas "por horário" foram ligadas ao clique sem o código na mensagem. ${d.contagem_ultima ? `Contagem atualizada ${dataHora(d.contagem_ultima)}.` : 'A contagem anônima ainda não chegou.'}`}
+          csv={{
+            nome: `funil-anuncio_${desde}_${ate}`,
+            linhas: funil.map((f) => ({
+              ...f,
+              taxaChegada: f.taxaChegada.valor,
+              taxaWhatsapp: f.taxaWhatsapp.valor,
+              taxaConversa: f.taxaConversa.valor,
+            })),
+            colunas: [
+              { chave: 'campanha_nome', titulo: 'Campanha' },
+              { chave: 'cliques_anuncio', titulo: 'Cliques no anúncio' },
+              { chave: 'custo', titulo: 'Custo' },
+              { chave: 'visitas', titulo: 'Chegaram ao site' },
+              { chave: 'taxaChegada', titulo: 'Taxa de chegada' },
+              { chave: 'whatsapp', titulo: 'Clicaram no WhatsApp' },
+              { chave: 'taxaWhatsapp', titulo: 'Taxa de clique no WhatsApp' },
+              { chave: 'conversas', titulo: 'Conversas com origem' },
+              {
+                chave: 'conversas_por_horario',
+                titulo: 'Conversas por horário',
+              },
+              { chave: 'agendaram', titulo: 'Agendaram' },
+              {
+                chave: 'visitas_recusaram',
+                titulo: 'Visitas que recusaram cookies',
+              },
+              {
+                chave: 'whatsapp_recusaram',
+                titulo: 'WhatsApp de quem recusou',
+              },
+            ],
+          }}
+        >
+          {funil.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhum clique de anúncio no período.
+            </p>
+          ) : (
+            <TabelaRelatorio<LinhaFunil>
+              linhas={funil}
               colunas={[
+                { chave: 'campanha_nome', titulo: 'Campanha' },
                 {
-                  chave: 'detalhe',
-                  titulo: 'O que citaram',
-                  formato: (v) => rotuloDetalhe(String(v)),
+                  chave: 'cliques_anuncio',
+                  titulo: 'Cliques no anúncio',
+                  alinhar: 'direita',
+                  formato: (v) => num(Number(v)),
                 },
-                { chave: 'conversas', titulo: 'Conversas', alinhar: 'direita' },
+                {
+                  chave: 'visitas',
+                  titulo: 'Chegaram',
+                  alinhar: 'direita',
+                  formato: (v, l) => (
+                    <span>
+                      {num(Number(v))}{' '}
+                      <CelulaIndicador
+                        ind={l.taxaChegada}
+                        formato={(x) => pct(x)}
+                      />
+                    </span>
+                  ),
+                },
+                {
+                  chave: 'whatsapp',
+                  titulo: 'WhatsApp',
+                  alinhar: 'direita',
+                  formato: (v, l) => (
+                    <span>
+                      {num(Number(v))}{' '}
+                      <CelulaIndicador
+                        ind={l.taxaWhatsapp}
+                        formato={(x) => pct(x)}
+                      />
+                    </span>
+                  ),
+                },
+                {
+                  chave: 'conversas',
+                  titulo: 'Conversas',
+                  alinhar: 'direita',
+                  formato: (v, l) =>
+                    l.conversas_por_horario > 0
+                      ? `${num(Number(v))} (${num(l.conversas_por_horario)} por horário)`
+                      : num(Number(v)),
+                },
                 { chave: 'agendaram', titulo: 'Agendaram', alinhar: 'direita' },
                 {
-                  chave: 'pagas',
-                  titulo: 'Vindas de anúncio',
+                  chave: 'visitas_recusaram',
+                  titulo: 'Recusaram cookies',
+                  alinhar: 'direita',
+                  formato: (v, l) =>
+                    `${num(Number(v))} visita(s) · ${num(l.whatsapp_recusaram)} WhatsApp`,
+                },
+              ]}
+            />
+          )}
+        </SecaoRelatorio>
+      )}
+
+      {mostra('palavras') && (
+        <SecaoRelatorio
+          titulo="Grupos e palavras-chave"
+          descricao={`Custo e cliques do Google Ads × o que aconteceu depois no sistema (crédito: última palavra-chave antes da conversa). ${d.detalhe_ads_ultimo ? `Detalhe do Ads atualizado ${dataHora(d.detalhe_ads_ultimo)}.` : ''} Palavra com custo e nenhuma conversa é candidata a pausar ou a negativar termos.`}
+          csv={{
+            nome: `palavras-chave_${desde}_${ate}`,
+            linhas: palavras.map((p) => ({
+              ...p,
+              ctr: p.ctr.valor,
+              cac: p.cac.valor,
+              roas30: p.roas30.valor,
+            })),
+            colunas: [
+              { chave: 'campanha_nome', titulo: 'Campanha' },
+              { chave: 'grupo_nome', titulo: 'Grupo' },
+              { chave: 'palavra', titulo: 'Palavra-chave' },
+              { chave: 'corresp', titulo: 'Correspondência' },
+              { chave: 'impressoes', titulo: 'Impressões' },
+              { chave: 'cliques', titulo: 'Cliques' },
+              { chave: 'visitas', titulo: 'Chegaram ao site' },
+              { chave: 'whatsapp', titulo: 'Clicaram no WhatsApp' },
+              { chave: 'custo', titulo: 'Custo' },
+              { chave: 'conversas', titulo: 'Conversas' },
+              { chave: 'agendaram', titulo: 'Agendaram' },
+              { chave: 'pacientes', titulo: 'Pacientes novos' },
+              { chave: 'receita_30d', titulo: 'Receita 30 dias' },
+              { chave: 'cac', titulo: 'CAC' },
+              { chave: 'roas30', titulo: 'ROAS 30 dias' },
+              { chave: 'citaram_convenio', titulo: 'Citaram convênio' },
+            ],
+          }}
+        >
+          {palavras.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhuma palavra-chave com custo ou conversa no período.
+            </p>
+          ) : (
+            <TabelaRelatorio<LinhaPalavra>
+              linhas={palavras}
+              colunas={[
+                { chave: 'campanha_nome', titulo: 'Campanha' },
+                {
+                  chave: 'grupo_nome',
+                  titulo: 'Grupo',
+                  formato: (v, l) => String(v ?? l.grupo_id ?? '—'),
+                },
+                {
+                  chave: 'palavra',
+                  titulo: 'Palavra-chave',
+                  formato: (v, l) => (
+                    <span>
+                      {String(v ?? '—')}{' '}
+                      {l.corresp && (
+                        <span className="text-xs text-muted-foreground">
+                          ({ROTULO_CORRESP[l.corresp]})
+                        </span>
+                      )}
+                    </span>
+                  ),
+                },
+                {
+                  chave: 'impressoes',
+                  titulo: 'Impr.',
+                  alinhar: 'direita',
+                  formato: (v) => num(Number(v)),
+                },
+                {
+                  chave: 'cliques',
+                  titulo: 'Cliques',
+                  alinhar: 'direita',
+                  formato: (v) => num(Number(v)),
+                },
+                {
+                  chave: 'visitas',
+                  titulo: 'Chegaram',
+                  alinhar: 'direita',
+                  formato: (v) => num(Number(v)),
+                },
+                {
+                  chave: 'whatsapp',
+                  titulo: 'WhatsApp',
+                  alinhar: 'direita',
+                  formato: (v, l) => (
+                    <span>
+                      {num(Number(v))}{' '}
+                      <CelulaIndicador
+                        ind={l.taxaWhatsapp}
+                        formato={(x) => pct(x)}
+                      />
+                    </span>
+                  ),
+                },
+                {
+                  chave: 'ctr',
+                  titulo: 'CTR',
+                  alinhar: 'direita',
+                  formato: (_, l) => (
+                    <CelulaIndicador ind={l.ctr} formato={(x) => pct(x)} />
+                  ),
+                },
+                {
+                  chave: 'custo',
+                  titulo: 'Custo',
+                  alinhar: 'direita',
+                  formato: (v) => brl(Number(v)),
+                },
+                { chave: 'conversas', titulo: 'Conversas', alinhar: 'direita' },
+                {
+                  chave: 'custoPorConversa',
+                  titulo: 'Custo/conversa',
+                  alinhar: 'direita',
+                  formato: (_, l) => (
+                    <CelulaIndicador ind={l.custoPorConversa} formato={brl} />
+                  ),
+                },
+                { chave: 'agendaram', titulo: 'Agendaram', alinhar: 'direita' },
+                { chave: 'pacientes', titulo: 'Pacientes', alinhar: 'direita' },
+                {
+                  chave: 'cac',
+                  titulo: 'CAC',
+                  alinhar: 'direita',
+                  formato: (_, l) => (
+                    <CelulaIndicador ind={l.cac} formato={brl} />
+                  ),
+                },
+                {
+                  chave: 'roas30',
+                  titulo: 'ROAS 30d',
+                  alinhar: 'direita',
+                  formato: (_, l) => (
+                    <CelulaIndicador ind={l.roas30} formato={vezes} />
+                  ),
+                },
+                {
+                  chave: 'citaram_convenio',
+                  titulo: 'Convênio',
                   alinhar: 'direita',
                 },
               ]}
             />
-          </div>
-        )}
-      </SecaoRelatorio>
+          )}
+        </SecaoRelatorio>
+      )}
 
-      <SecaoRelatorio
-        titulo="Funil do anúncio"
-        descricao={`Clique no anúncio (Google Ads) → chegou ao site → clicou no WhatsApp → conversa com origem identificada. "Chegaram" e "WhatsApp" são uma contagem anônima do site: valem para todos os visitantes, inclusive quem escolheu "Só o necessário" nos cookies, mas não dizem qual conversa veio de qual clique — nem todo clique no WhatsApp vira mensagem enviada. Conversas "por horário" foram ligadas ao clique sem o código na mensagem. ${d.contagem_ultima ? `Contagem atualizada ${dataHora(d.contagem_ultima)}.` : 'A contagem anônima ainda não chegou.'}`}
-        csv={{
-          nome: `funil-anuncio_${desde}_${ate}`,
-          linhas: funil.map((f) => ({
-            ...f,
-            taxaChegada: f.taxaChegada.valor,
-            taxaWhatsapp: f.taxaWhatsapp.valor,
-            taxaConversa: f.taxaConversa.valor,
-          })),
-          colunas: [
-            { chave: 'campanha_nome', titulo: 'Campanha' },
-            { chave: 'cliques_anuncio', titulo: 'Cliques no anúncio' },
-            { chave: 'custo', titulo: 'Custo' },
-            { chave: 'visitas', titulo: 'Chegaram ao site' },
-            { chave: 'taxaChegada', titulo: 'Taxa de chegada' },
-            { chave: 'whatsapp', titulo: 'Clicaram no WhatsApp' },
-            { chave: 'taxaWhatsapp', titulo: 'Taxa de clique no WhatsApp' },
-            { chave: 'conversas', titulo: 'Conversas com origem' },
-            { chave: 'conversas_por_horario', titulo: 'Conversas por horário' },
-            { chave: 'agendaram', titulo: 'Agendaram' },
-            {
-              chave: 'visitas_recusaram',
-              titulo: 'Visitas que recusaram cookies',
-            },
-            { chave: 'whatsapp_recusaram', titulo: 'WhatsApp de quem recusou' },
-          ],
-        }}
-      >
-        {funil.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhum clique de anúncio no período.
-          </p>
-        ) : (
-          <TabelaRelatorio<LinhaFunil>
-            linhas={funil}
-            colunas={[
-              { chave: 'campanha_nome', titulo: 'Campanha' },
-              {
-                chave: 'cliques_anuncio',
-                titulo: 'Cliques no anúncio',
-                alinhar: 'direita',
-                formato: (v) => num(Number(v)),
-              },
-              {
-                chave: 'visitas',
-                titulo: 'Chegaram',
-                alinhar: 'direita',
-                formato: (v, l) => (
-                  <span>
-                    {num(Number(v))}{' '}
-                    <CelulaIndicador
-                      ind={l.taxaChegada}
-                      formato={(x) => pct(x)}
-                    />
-                  </span>
-                ),
-              },
-              {
-                chave: 'whatsapp',
-                titulo: 'WhatsApp',
-                alinhar: 'direita',
-                formato: (v, l) => (
-                  <span>
-                    {num(Number(v))}{' '}
-                    <CelulaIndicador
-                      ind={l.taxaWhatsapp}
-                      formato={(x) => pct(x)}
-                    />
-                  </span>
-                ),
-              },
-              {
-                chave: 'conversas',
-                titulo: 'Conversas',
-                alinhar: 'direita',
-                formato: (v, l) =>
-                  l.conversas_por_horario > 0
-                    ? `${num(Number(v))} (${num(l.conversas_por_horario)} por horário)`
-                    : num(Number(v)),
-              },
-              { chave: 'agendaram', titulo: 'Agendaram', alinhar: 'direita' },
-              {
-                chave: 'visitas_recusaram',
-                titulo: 'Recusaram cookies',
-                alinhar: 'direita',
-                formato: (v, l) =>
-                  `${num(Number(v))} visita(s) · ${num(l.whatsapp_recusaram)} WhatsApp`,
-              },
-            ]}
-          />
-        )}
-      </SecaoRelatorio>
-
-      <SecaoRelatorio
-        titulo="Grupos e palavras-chave"
-        descricao={`Custo e cliques do Google Ads × o que aconteceu depois no sistema (crédito: última palavra-chave antes da conversa). ${d.detalhe_ads_ultimo ? `Detalhe do Ads atualizado ${dataHora(d.detalhe_ads_ultimo)}.` : ''} Palavra com custo e nenhuma conversa é candidata a pausar ou a negativar termos.`}
-        csv={{
-          nome: `palavras-chave_${desde}_${ate}`,
-          linhas: palavras.map((p) => ({
-            ...p,
-            ctr: p.ctr.valor,
-            cac: p.cac.valor,
-            roas30: p.roas30.valor,
-          })),
-          colunas: [
-            { chave: 'campanha_nome', titulo: 'Campanha' },
-            { chave: 'grupo_nome', titulo: 'Grupo' },
-            { chave: 'palavra', titulo: 'Palavra-chave' },
-            { chave: 'corresp', titulo: 'Correspondência' },
-            { chave: 'impressoes', titulo: 'Impressões' },
-            { chave: 'cliques', titulo: 'Cliques' },
-            { chave: 'visitas', titulo: 'Chegaram ao site' },
-            { chave: 'whatsapp', titulo: 'Clicaram no WhatsApp' },
-            { chave: 'custo', titulo: 'Custo' },
-            { chave: 'conversas', titulo: 'Conversas' },
-            { chave: 'agendaram', titulo: 'Agendaram' },
-            { chave: 'pacientes', titulo: 'Pacientes novos' },
-            { chave: 'receita_30d', titulo: 'Receita 30 dias' },
-            { chave: 'cac', titulo: 'CAC' },
-            { chave: 'roas30', titulo: 'ROAS 30 dias' },
-            { chave: 'citaram_convenio', titulo: 'Citaram convênio' },
-          ],
-        }}
-      >
-        {palavras.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma palavra-chave com custo ou conversa no período.
-          </p>
-        ) : (
-          <TabelaRelatorio<LinhaPalavra>
-            linhas={palavras}
-            colunas={[
-              { chave: 'campanha_nome', titulo: 'Campanha' },
-              {
-                chave: 'grupo_nome',
-                titulo: 'Grupo',
-                formato: (v, l) => String(v ?? l.grupo_id ?? '—'),
-              },
-              {
-                chave: 'palavra',
-                titulo: 'Palavra-chave',
-                formato: (v, l) => (
-                  <span>
-                    {String(v ?? '—')}{' '}
-                    {l.corresp && (
-                      <span className="text-xs text-muted-foreground">
-                        ({ROTULO_CORRESP[l.corresp]})
-                      </span>
-                    )}
-                  </span>
-                ),
-              },
-              {
-                chave: 'impressoes',
-                titulo: 'Impr.',
-                alinhar: 'direita',
-                formato: (v) => num(Number(v)),
-              },
-              {
-                chave: 'cliques',
-                titulo: 'Cliques',
-                alinhar: 'direita',
-                formato: (v) => num(Number(v)),
-              },
-              {
-                chave: 'visitas',
-                titulo: 'Chegaram',
-                alinhar: 'direita',
-                formato: (v) => num(Number(v)),
-              },
-              {
-                chave: 'whatsapp',
-                titulo: 'WhatsApp',
-                alinhar: 'direita',
-                formato: (v, l) => (
-                  <span>
-                    {num(Number(v))}{' '}
-                    <CelulaIndicador
-                      ind={l.taxaWhatsapp}
-                      formato={(x) => pct(x)}
-                    />
-                  </span>
-                ),
-              },
-              {
-                chave: 'ctr',
-                titulo: 'CTR',
-                alinhar: 'direita',
-                formato: (_, l) => (
-                  <CelulaIndicador ind={l.ctr} formato={(x) => pct(x)} />
-                ),
-              },
-              {
-                chave: 'custo',
-                titulo: 'Custo',
-                alinhar: 'direita',
-                formato: (v) => brl(Number(v)),
-              },
-              { chave: 'conversas', titulo: 'Conversas', alinhar: 'direita' },
-              {
-                chave: 'custoPorConversa',
-                titulo: 'Custo/conversa',
-                alinhar: 'direita',
-                formato: (_, l) => (
-                  <CelulaIndicador ind={l.custoPorConversa} formato={brl} />
-                ),
-              },
-              { chave: 'agendaram', titulo: 'Agendaram', alinhar: 'direita' },
-              { chave: 'pacientes', titulo: 'Pacientes', alinhar: 'direita' },
-              {
-                chave: 'cac',
-                titulo: 'CAC',
-                alinhar: 'direita',
-                formato: (_, l) => (
-                  <CelulaIndicador ind={l.cac} formato={brl} />
-                ),
-              },
-              {
-                chave: 'roas30',
-                titulo: 'ROAS 30d',
-                alinhar: 'direita',
-                formato: (_, l) => (
-                  <CelulaIndicador ind={l.roas30} formato={vezes} />
-                ),
-              },
-              {
-                chave: 'citaram_convenio',
-                titulo: 'Convênio',
-                alinhar: 'direita',
-              },
-            ]}
-          />
-        )}
-      </SecaoRelatorio>
-
-      <SecaoRelatorio
-        titulo="Termos de pesquisa"
-        descricao="O que as pessoas digitaram (o Google esconde termos de volume muito baixo). Termo com custo e sem relação com paciente → negativar na lista certa. Os 100 de maior custo."
-        csv={{
-          nome: `termos_${desde}_${ate}`,
-          linhas: d.termos.map((t) => ({
-            ...t,
-            convenio: (t.convenio ?? []).join(' '),
-          })),
-          colunas: [
-            { chave: 'termo', titulo: 'Termo' },
-            { chave: 'palavra', titulo: 'Palavra-chave' },
-            { chave: 'impressoes', titulo: 'Impressões' },
-            { chave: 'cliques', titulo: 'Cliques' },
-            { chave: 'custo', titulo: 'Custo' },
-            { chave: 'conversoes_ads', titulo: 'Conversões (Ads)' },
-            { chave: 'convenio', titulo: 'Convênio' },
-          ],
-        }}
-      >
-        {d.termos.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhum termo de pesquisa no período.
-          </p>
-        ) : (
-          <TabelaRelatorio
-            linhas={d.termos}
-            colunas={[
-              {
-                chave: 'termo',
-                titulo: 'Termo',
-                formato: (v, l) => (
-                  <span className="whitespace-normal">
-                    {String(v)}{' '}
-                    {(l.convenio ?? []).length > 0 && (
-                      <Badge variant="warning" className="ml-1">
-                        {(l.convenio ?? []).map(rotuloDetalhe).join(', ')}
-                      </Badge>
-                    )}
-                  </span>
-                ),
-              },
-              {
-                chave: 'palavra',
-                titulo: 'Palavra-chave',
-                formato: (v) => String(v ?? '—'),
-              },
-              {
-                chave: 'cliques',
-                titulo: 'Cliques',
-                alinhar: 'direita',
-                formato: (v) => num(Number(v)),
-              },
-              {
-                chave: 'custo',
-                titulo: 'Custo',
-                alinhar: 'direita',
-                formato: (v) => brl(Number(v)),
-              },
-              {
-                chave: 'conversoes_ads',
-                titulo: 'Conv. (Ads)',
-                alinhar: 'direita',
-                formato: (v) => num(Number(v)),
-              },
-            ]}
-          />
-        )}
-      </SecaoRelatorio>
+      {mostra('termos') && (
+        <SecaoRelatorio
+          titulo="Termos de pesquisa"
+          descricao="O que as pessoas digitaram (o Google esconde termos de volume muito baixo). Termo com custo e sem relação com paciente → negativar na lista certa. Os 100 de maior custo."
+          csv={{
+            nome: `termos_${desde}_${ate}`,
+            linhas: termos.map((t) => ({
+              ...t,
+              convenio: (t.convenio ?? []).join(' '),
+            })),
+            colunas: [
+              { chave: 'termo', titulo: 'Termo' },
+              { chave: 'palavra', titulo: 'Palavra-chave' },
+              { chave: 'impressoes', titulo: 'Impressões' },
+              { chave: 'cliques', titulo: 'Cliques' },
+              { chave: 'custo', titulo: 'Custo' },
+              { chave: 'conversoes_ads', titulo: 'Conversões (Ads)' },
+              { chave: 'convenio', titulo: 'Convênio' },
+            ],
+          }}
+        >
+          {termos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhum termo de pesquisa no período.
+            </p>
+          ) : (
+            <TabelaRelatorio
+              linhas={termos}
+              colunas={[
+                {
+                  chave: 'termo',
+                  titulo: 'Termo',
+                  formato: (v, l) => (
+                    <span className="whitespace-normal">
+                      {String(v)}{' '}
+                      {(l.convenio ?? []).length > 0 && (
+                        <Badge variant="warning" className="ml-1">
+                          {(l.convenio ?? []).map(rotuloDetalhe).join(', ')}
+                        </Badge>
+                      )}
+                    </span>
+                  ),
+                },
+                {
+                  chave: 'palavra',
+                  titulo: 'Palavra-chave',
+                  formato: (v) => String(v ?? '—'),
+                },
+                {
+                  chave: 'cliques',
+                  titulo: 'Cliques',
+                  alinhar: 'direita',
+                  formato: (v) => num(Number(v)),
+                },
+                {
+                  chave: 'custo',
+                  titulo: 'Custo',
+                  alinhar: 'direita',
+                  formato: (v) => brl(Number(v)),
+                },
+                {
+                  chave: 'conversoes_ads',
+                  titulo: 'Conv. (Ads)',
+                  alinhar: 'direita',
+                  formato: (v) => num(Number(v)),
+                },
+              ]}
+            />
+          )}
+        </SecaoRelatorio>
+      )}
     </div>
   );
 };

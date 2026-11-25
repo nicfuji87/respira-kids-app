@@ -1,8 +1,11 @@
-// AI dev note: Inteligência comercial (admin). Painel da atribuição v2: do
-// clique no anúncio à receita. Um único recorte (período, canal, campanha,
-// serviço) alimenta todas as abas — regras em src/lib/marketing-atribuicao.ts.
-// Sem dado suficiente o indicador fica "Indisponível" com o motivo; nunca
-// estimar. Dados só para admin (RLS + fn_atrib_pode_ver nas visões).
+// AI dev note: Inteligência comercial (admin). Do clique no anúncio à receita.
+// Cinco abas (P1 do redesenho, 25/11/2026): Resumo (indicadores + até 3 pontos de
+// atenção por regra), Canais, Google Ads, Oportunidades (funil + jornadas) e
+// Qualidade. "Painel anterior" guarda as abas antigas (visão geral, campanhas,
+// coortes) só para comparação até a conciliação ser aprovada; sai no P2.
+// Um único recorte (período, canal, campanha, serviço) alimenta todas as abas.
+// Sem dado suficiente o indicador fica "Indisponível" com o motivo; nunca estimar.
+// Dados só para admin (RLS + fn_atrib_pode_ver nas visões).
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
@@ -25,14 +28,16 @@ import {
 import { PageHeader } from '@/components/composed/PageHeader';
 import {
   CampanhasTab,
+  CanaisTab,
   CoortesTab,
   FunilTab,
+  GoogleAdsTab,
   JornadasTab,
-  OtimizacaoTab,
   QualidadeTab,
-  RetornoCanaisTab,
+  ResumoTab,
   VisaoGeralTab,
 } from '@/components/domain/marketing';
+import type { AbaMarketing, FocoMarketing } from '@/lib/marketing-insights';
 import {
   anoMes,
   carregarPainel,
@@ -50,15 +55,8 @@ import {
 } from '@/lib/marketing-atribuicao';
 
 const INICIO = '2026-10'; // o site passou a gerar o código RK em 14/10/2026
-type Aba =
-  | 'visao'
-  | 'retorno'
-  | 'funil'
-  | 'campanhas'
-  | 'jornadas'
-  | 'coortes'
-  | 'otimizacao'
-  | 'qualidade';
+type Aba = AbaMarketing | 'anterior';
+type AbaAnterior = 'visao' | 'campanhas' | 'coortes';
 
 const Filtro: React.FC<{
   rotulo: string;
@@ -93,7 +91,9 @@ export const MarketingPage: React.FC = () => {
   const [erro, setErro] = useState<string | null>(null);
   const [erroQ, setErroQ] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [aba, setAba] = useState<Aba>('visao');
+  const [aba, setAba] = useState<Aba>('resumo');
+  const [anterior, setAnterior] = useState<AbaAnterior>('visao');
+  const [foco, setFoco] = useState<FocoMarketing | undefined>();
   const [jornada, setJornada] = useState<number | null>(null);
   const [f, setF] = useState<Filtros>({
     mesInicio: INICIO,
@@ -172,7 +172,11 @@ export const MarketingPage: React.FC = () => {
 
   const abrirJornada = (id: number) => {
     setJornada(id);
-    setAba('jornadas');
+    setAba('oportunidades');
+  };
+  const irPara = (destino: AbaMarketing, novoFoco?: FocoMarketing) => {
+    setFoco(novoFoco);
+    setAba(destino);
   };
 
   return (
@@ -283,40 +287,64 @@ export const MarketingPage: React.FC = () => {
           <Skeleton className="h-64 w-full" />
         </div>
       ) : r ? (
-        <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="visao">Visão geral</TabsTrigger>
-            <TabsTrigger value="retorno">Retorno por canal</TabsTrigger>
-            <TabsTrigger value="funil">Funil</TabsTrigger>
-            <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
-            <TabsTrigger value="jornadas">Jornadas</TabsTrigger>
-            <TabsTrigger value="coortes">Receita e coortes</TabsTrigger>
-            <TabsTrigger value="otimizacao">Otimização</TabsTrigger>
-            <TabsTrigger value="qualidade">Qualidade dos dados</TabsTrigger>
+        <Tabs
+          value={aba}
+          onValueChange={(v) => {
+            setFoco(undefined);
+            setAba(v as Aba);
+          }}
+        >
+          <TabsList className="h-auto flex-wrap justify-start">
+            <TabsTrigger value="resumo">Resumo</TabsTrigger>
+            <TabsTrigger value="canais">Canais</TabsTrigger>
+            <TabsTrigger value="google">Google Ads</TabsTrigger>
+            <TabsTrigger value="oportunidades">Oportunidades</TabsTrigger>
+            <TabsTrigger value="qualidade">Qualidade</TabsTrigger>
+            <TabsTrigger value="anterior" className="text-muted-foreground">
+              Painel anterior
+            </TabsTrigger>
           </TabsList>
-          <TabsContent value="visao" className="mt-4">
-            <VisaoGeralTab r={r} />
+          <TabsContent value="resumo" className="mt-4">
+            {aba === 'resumo' && <ResumoTab r={r} irPara={irPara} />}
           </TabsContent>
-          <TabsContent value="retorno" className="mt-4">
-            {aba === 'retorno' && <RetornoCanaisTab r={r} />}
+          <TabsContent value="canais" className="mt-4">
+            {aba === 'canais' && <CanaisTab r={r} foco={foco} />}
           </TabsContent>
-          <TabsContent value="funil" className="mt-4">
+          <TabsContent value="google" className="mt-4">
+            {aba === 'google' && <GoogleAdsTab r={r} />}
+          </TabsContent>
+          <TabsContent value="oportunidades" className="mt-4 space-y-6">
             <FunilTab r={r} abrirJornada={abrirJornada} />
-          </TabsContent>
-          <TabsContent value="campanhas" className="mt-4">
-            <CampanhasTab r={r} />
-          </TabsContent>
-          <TabsContent value="jornadas" className="mt-4">
             <JornadasTab r={r} aberta={jornada} setAberta={setJornada} />
-          </TabsContent>
-          <TabsContent value="coortes" className="mt-4">
-            <CoortesTab r={r} />
-          </TabsContent>
-          <TabsContent value="otimizacao" className="mt-4">
-            {aba === 'otimizacao' && <OtimizacaoTab r={r} />}
           </TabsContent>
           <TabsContent value="qualidade" className="mt-4">
             <QualidadeTab q={qualidade} erro={erroQ} />
+          </TabsContent>
+          <TabsContent value="anterior" className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Abas do painel anterior, mantidas só para comparação até a
+              conciliação ser aprovada. Os números de presença e vínculo já
+              seguem a regra única; aqui a receita é a recebida (faturas pagas).
+            </p>
+            <Tabs
+              value={anterior}
+              onValueChange={(v) => setAnterior(v as AbaAnterior)}
+            >
+              <TabsList>
+                <TabsTrigger value="visao">Visão geral</TabsTrigger>
+                <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
+                <TabsTrigger value="coortes">Receita e coortes</TabsTrigger>
+              </TabsList>
+              <TabsContent value="visao" className="mt-4">
+                <VisaoGeralTab r={r} />
+              </TabsContent>
+              <TabsContent value="campanhas" className="mt-4">
+                <CampanhasTab r={r} />
+              </TabsContent>
+              <TabsContent value="coortes" className="mt-4">
+                <CoortesTab r={r} />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       ) : null}
