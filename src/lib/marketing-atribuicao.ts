@@ -161,7 +161,8 @@ export const CANAIS_PAGOS = ['google_ads', 'meta_ads'];
 export type Trafego = 'pago' | 'organico' | 'sem_origem';
 export const TRAFEGOS: Record<Trafego, string> = {
   pago: 'Mídia paga',
-  organico: 'Orgânico (origem identificada)',
+  // Não é só busca orgânica: inclui Instagram, acesso direto e outros sites.
+  organico: 'Não pago identificado',
   sem_origem: 'Sem origem identificada',
 };
 export const TRAFEGOS_DETALHE: Record<Trafego, string> = {
