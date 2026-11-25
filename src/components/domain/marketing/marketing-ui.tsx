@@ -23,24 +23,7 @@ import {
 } from 'recharts';
 import { Badge } from '@/components/primitives/badge';
 import { cn } from '@/lib/utils';
-import {
-  AMOSTRA_MIN_COBERTURA,
-  AMOSTRA_MIN_PACIENTES,
-  TRAFEGOS,
-  TRAFEGOS_DETALHE,
-  brl,
-  num,
-  rotuloCanal,
-  type CustoStatus,
-  type Indicador,
-  type lerAmostra,
-  type linhasCanal,
-  type linhasTrafego,
-} from '@/lib/marketing-atribuicao';
-
-type Amostra = ReturnType<typeof lerAmostra>;
-type LinhaCanal = ReturnType<typeof linhasCanal>[number];
-type LinhaTrafego = ReturnType<typeof linhasTrafego>[number];
+import { type Indicador } from '@/lib/marketing-atribuicao';
 
 /** Valor de um indicador ou "Indisponível" com o motivo visível. */
 export const ValorIndicador: React.FC<{
@@ -114,38 +97,6 @@ export const CartaoIndicador: React.FC<{
   </div>
 );
 
-const SELO: Record<
-  CustoStatus,
-  {
-    rotulo: string;
-    variante: 'success' | 'warning' | 'attention' | 'muted';
-    Icone: React.ElementType;
-  }
-> = {
-  completo: {
-    rotulo: 'Custo completo',
-    variante: 'success',
-    Icone: CheckCircle2,
-  },
-  desatualizado: {
-    rotulo: 'Custo desatualizado',
-    variante: 'warning',
-    Icone: Clock,
-  },
-  sem_dados: { rotulo: 'Sem custo', variante: 'attention', Icone: XCircle },
-  nao_se_aplica: { rotulo: 'Sem mídia', variante: 'muted', Icone: HelpCircle },
-};
-
-export const SeloCusto: React.FC<{ status: CustoStatus }> = ({ status }) => {
-  const s = SELO[status];
-  return (
-    <Badge variant={s.variante} className="gap-1 whitespace-nowrap">
-      <s.Icone className="h-3 w-3" aria-hidden />
-      {s.rotulo}
-    </Badge>
-  );
-};
-
 export type Situacao = 'ok' | 'atencao' | 'problema' | 'neutro';
 export const SeloSituacao: React.FC<{
   situacao: Situacao;
@@ -185,128 +136,6 @@ export const Aviso: React.FC<{
     <div className="text-muted-foreground">{children}</div>
   </div>
 );
-
-/**
- * Tamanho e cobertura da amostra. Fica SEMPRE visível (inclusive depois que
- * os custos chegarem): enquanto não houver pacientes e origem suficientes, a
- * comparação entre canais não é conclusiva.
- */
-export const AvisoAmostra: React.FC<{ a: Amostra; semMidia?: boolean }> = ({
-  a,
-  semMidia,
-}) => (
-  <Aviso tom={a.suficiente ? 'info' : 'atencao'}>
-    {!a.suficiente && (
-      <strong className="text-foreground">
-        {semMidia
-          ? 'Amostra ainda pequena para comparar origens.'
-          : 'Amostra ainda pequena para decidir investimento.'}{' '}
-      </strong>
-    )}
-    {a.novos} paciente{a.novos === 1 ? '' : 's'} novo
-    {a.novos === 1 ? '' : 's'} no período ({a.ligados} ligado
-    {a.ligados === 1 ? '' : 's'} a uma conversa) e {a.comOrigem} de{' '}
-    {a.comerciais} conversas com intenção de contratar com origem identificada (
-    {pctAmostra(a.coberturaOrigem)}).{' '}
-    {a.suficiente
-      ? 'Amostra dentro do mínimo do painel.'
-      : `A comparação entre canais${semMidia ? '' : ' e campanhas'} só passa a ser conclusiva a partir de ${AMOSTRA_MIN_PACIENTES} pacientes novos e ${Math.round(AMOSTRA_MIN_COBERTURA * 100)}% de origem identificada.`}
-  </Aviso>
-);
-
-/** Enquanto não há campanha no ar: tudo é orgânico e vira linha de base. */
-export const AvisoSemMidia: React.FC = () => (
-  <Aviso>
-    <strong className="text-foreground">
-      Nenhuma campanha paga no período: todo o movimento é orgânico.{' '}
-    </strong>
-    Estes números são a linha de base. Quando o Google Ads começar, é com eles
-    que se mede o que a campanha acrescentou (e não só o que ela recebeu de
-    crédito). Investimento, CAC e ROAS aparecem quando houver mídia paga.
-  </Aviso>
-);
-
-/**
- * Origens agrupadas por tipo de tráfego: uma linha-resumo por grupo (pago,
- * orgânico identificado, sem origem) e os canais dentro dele.
- */
-export const TabelaOrigens: React.FC<{
-  grupos: LinhaTrafego[];
-  canais: LinhaCanal[];
-  ocultarPagoVazio?: boolean;
-}> = ({ grupos, canais, ocultarPagoVazio }) => {
-  // Grupo vazio some; a mídia paga vazia fica (gasto sem resultado precisa
-  // aparecer), a não ser que não haja mídia nenhuma no período.
-  const visiveis = grupos.filter(
-    (g) =>
-      g.conversas + g.novos > 0 || (g.trafego === 'pago' && !ocultarPagoVazio)
-  );
-  const cel = 'px-3 py-2 text-right tabular-nums whitespace-nowrap';
-  return (
-    <div className="overflow-x-auto rounded-md border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-left text-muted-foreground">
-          <tr>
-            {[
-              'Origem',
-              'Conversas',
-              'Com intenção',
-              'Agendaram',
-              'Pacientes novos',
-              'Receita até hoje',
-            ].map((h, i) => (
-              <th
-                key={h}
-                className={cn(
-                  'whitespace-nowrap px-3 py-2 font-medium',
-                  i > 0 && 'text-right'
-                )}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {visiveis.map((g) => (
-            <React.Fragment key={g.trafego}>
-              <tr className="border-t bg-muted/30 font-medium">
-                <td className="px-3 py-2">
-                  <div>{TRAFEGOS[g.trafego]}</div>
-                  <div className="text-xs font-normal text-muted-foreground">
-                    {TRAFEGOS_DETALHE[g.trafego]}
-                  </div>
-                </td>
-                <td className={cel}>{num(g.conversas)}</td>
-                <td className={cel}>{num(g.comIntencao)}</td>
-                <td className={cel}>{num(g.agendaram)}</td>
-                <td className={cel}>{num(g.novos)}</td>
-                <td className={cel}>{brl(g.receitaTotal)}</td>
-              </tr>
-              {canais
-                .filter((c) => c.trafego === g.trafego)
-                .filter(() => g.trafego !== 'sem_origem' || g.canais.length > 1)
-                .map((c) => (
-                  <tr key={c.canal} className="border-t">
-                    <td className="py-2 pl-7 pr-3 text-muted-foreground">
-                      {rotuloCanal(c.canal)}
-                    </td>
-                    <td className={cel}>{num(c.conversas)}</td>
-                    <td className={cel}>{num(c.comIntencao)}</td>
-                    <td className={cel}>{num(c.agendaram)}</td>
-                    <td className={cel}>{num(c.novos)}</td>
-                    <td className={cel}>{brl(c.receitaTotal)}</td>
-                  </tr>
-                ))}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-const pctAmostra = (v: number | null) =>
-  v == null ? '—' : `${Math.round(v * 100)}%`;
 
 const COR = 'hsl(var(--serie-1))';
 
@@ -369,52 +198,6 @@ export const BarrasHorizontais: React.FC<{
             dataKey="valor"
             position="right"
             style={{ fontSize: 12, fill: 'hsl(var(--foreground))' }}
-          />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  </figure>
-);
-
-/** Colunas por mês, uma série. */
-export const ColunasMensais: React.FC<{
-  dados: { rotulo: string; valor: number; detalhe?: string }[];
-  titulo: string;
-}> = ({ dados, titulo }) => (
-  <figure aria-label={titulo} className="w-full">
-    <ResponsiveContainer width="100%" height={200}>
-      <BarChart
-        data={dados}
-        margin={{ left: 0, right: 8, top: 16, bottom: 0 }}
-        barCategoryGap="30%"
-      >
-        <CartesianGrid
-          vertical={false}
-          strokeDasharray="2 4"
-          stroke="hsl(var(--border))"
-        />
-        <XAxis
-          dataKey="rotulo"
-          tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          allowDecimals={false}
-          width={28}
-          tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          content={<DicaGrafico />}
-          cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
-        />
-        <Bar dataKey="valor" fill={COR} radius={[4, 4, 0, 0]} maxBarSize={36}>
-          <LabelList
-            dataKey="valor"
-            position="top"
-            style={{ fontSize: 11, fill: 'hsl(var(--foreground))' }}
           />
         </Bar>
       </BarChart>

@@ -475,9 +475,6 @@ export interface Midia {
   roas: Record<'r1' | 'r30' | 'r90' | 'r180', Indicador>;
 }
 
-/** Houve mídia paga no período? (independe do filtro de canal escolhido) */
-export const temMidiaPaga = (r: Recorte): boolean => r.midiaNoPeriodo;
-
 function motivoSemCusto(r: Recorte): string {
   if (
     r.filtros.canal !== 'todos' &&
@@ -674,107 +671,6 @@ export interface LinhaCampanha {
   familiasNovas: number;
   cac: Indicador;
   roas: Record<'r1' | 'r30' | 'r90' | 'r180', Indicador>;
-}
-
-const ordemStatus: CustoStatus[] = [
-  'sem_dados',
-  'desatualizado',
-  'completo',
-  'nao_se_aplica',
-];
-
-export function linhasCampanha(r: Recorte): LinhaCampanha[] {
-  const ids = new Set<string>();
-  r.campanhas.forEach((c) => c.campanha_id && ids.add(c.campanha_id));
-  r.aquisicoes.forEach((a) => a.campanha_id && ids.add(a.campanha_id));
-  r.oportunidades.forEach((o) => o.campanha_id && ids.add(o.campanha_id));
-
-  return [...ids]
-    .map((id) => {
-      const cs = r.campanhas.filter((c) => c.campanha_id === id);
-      const aqs = r.aquisicoes.filter((a) => a.campanha_id === id);
-      const ops = r.oportunidades.filter((o) => o.campanha_id === id);
-      const plataforma =
-        cs[0]?.plataforma ?? aqs[0]?.plataforma ?? ops[0]?.plataforma ?? null;
-      const status: CustoStatus = !plataforma
-        ? 'nao_se_aplica'
-        : cs.length === 0
-          ? 'sem_dados'
-          : (ordemStatus.find((s) => cs.some((c) => c.custo_status === s)) ??
-            'sem_dados');
-      const temNulo = cs.length === 0 || cs.some((c) => c.investimento == null);
-      const inv = temNulo
-        ? null
-        : cs.reduce((s, c) => s + (c.investimento ?? 0), 0);
-      const pode =
-        status === 'completo' && inv != null && r.filtros.servico === 'todos';
-      const motivo = !plataforma
-        ? 'Origem sem investimento.'
-        : status === 'sem_dados'
-          ? 'Custo não importado.'
-          : status === 'desatualizado'
-            ? 'Custo desatualizado.'
-            : r.filtros.servico !== 'todos'
-              ? 'O investimento não se divide por serviço.'
-              : undefined;
-      const roasDe = (
-        campo:
-          | 'receita_primeira_sessao'
-          | 'receita_30d'
-          | 'receita_90d'
-          | 'receita_180d',
-        dias: number
-      ): Indicador => {
-        if (!pode) return { valor: null, motivo };
-        if (!inv) return { valor: null, motivo: 'Investimento zero.' };
-        const imaturos = dias
-          ? aqs.filter((a) => a.dias_desde_aquisicao < dias).length
-          : 0;
-        return {
-          valor: aqs.reduce((s, a) => s + a[campo], 0) / inv,
-          aviso: imaturos
-            ? `Coorte em maturação (${imaturos} de ${aqs.length} com menos de ${dias} dias).`
-            : undefined,
-        };
-      };
-      return {
-        campanha_id: id,
-        nome:
-          cs.find((c) => c.campanha_nome)?.campanha_nome ??
-          aqs.find((a) => a.campanha_nome)?.campanha_nome ??
-          ops.find((o) => o.campanha_nome)?.campanha_nome ??
-          id,
-        plataforma,
-        custoStatus: status,
-        investimento: inv,
-        impressoes: cs.some((c) => c.impressoes != null)
-          ? cs.reduce((s, c) => s + (c.impressoes ?? 0), 0)
-          : null,
-        cliquesAnuncio: cs.some((c) => c.cliques_anuncio != null)
-          ? cs.reduce((s, c) => s + (c.cliques_anuncio ?? 0), 0)
-          : null,
-        conversas: ops.length,
-        agendaram: ops.filter((o) => o.etapa_maxima_ord >= 5).length,
-        novos: aqs.length,
-        familiasNovas: aqs.filter((a) => a.familia_nova).length,
-        cac: !pode
-          ? { valor: null, motivo }
-          : aqs.length
-            ? { valor: (inv ?? 0) / aqs.length }
-            : { valor: null, motivo: 'Nenhum paciente novo atribuído.' },
-        roas: {
-          r1: roasDe('receita_primeira_sessao', 0),
-          r30: roasDe('receita_30d', 30),
-          r90: roasDe('receita_90d', 90),
-          r180: roasDe('receita_180d', 180),
-        },
-      };
-    })
-    .sort(
-      (a, b) =>
-        (b.investimento ?? -1) - (a.investimento ?? -1) ||
-        b.conversas - a.conversas
-    );
 }
 
 const ORDEM_TRAFEGO: Trafego[] = ['pago', 'organico', 'sem_origem'];
