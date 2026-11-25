@@ -30,7 +30,7 @@ import {
   JornadasTab,
   OtimizacaoTab,
   QualidadeTab,
-  RetornoTab,
+  RetornoCanaisTab,
   VisaoGeralTab,
 } from '@/components/domain/marketing';
 import {
@@ -286,7 +286,7 @@ export const MarketingPage: React.FC = () => {
         <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="visao">Visão geral</TabsTrigger>
-            <TabsTrigger value="retorno">Retorno dos anúncios</TabsTrigger>
+            <TabsTrigger value="retorno">Retorno por canal</TabsTrigger>
             <TabsTrigger value="funil">Funil</TabsTrigger>
             <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
             <TabsTrigger value="jornadas">Jornadas</TabsTrigger>
@@ -298,7 +298,7 @@ export const MarketingPage: React.FC = () => {
             <VisaoGeralTab r={r} />
           </TabsContent>
           <TabsContent value="retorno" className="mt-4">
-            {aba === 'retorno' && <RetornoTab r={r} />}
+            {aba === 'retorno' && <RetornoCanaisTab r={r} />}
           </TabsContent>
           <TabsContent value="funil" className="mt-4">
             <FunilTab r={r} abrirJornada={abrirJornada} />
