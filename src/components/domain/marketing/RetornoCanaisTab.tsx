@@ -37,6 +37,7 @@ import {
   carregarCanais,
   indicadores,
   nomeCanal,
+  nomeOrigemDeclarada,
   RESULTADO_CONVERSA,
   somarCanais,
   VINCULO,
@@ -402,6 +403,18 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
                     formato: (x) => String(x ?? '—'),
                   },
                   {
+                    chave: 'origem_declarada',
+                    titulo: 'Disse que conheceu por',
+                    formato: (x) => (
+                      <span
+                        className="text-muted-foreground"
+                        title="Relato da família, não rastreio"
+                      >
+                        {nomeOrigemDeclarada(x as string | null)}
+                      </span>
+                    ),
+                  },
+                  {
                     chave: 'primeiro_contato',
                     titulo: '1º contato',
                     formato: (x) => dataParede(x as string | null),
@@ -447,6 +460,51 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
               ? 'Nenhuma conversa passou por dois canais no período, então primeira e última origem coincidem.'
               : `${num(v.multicanal)} conversa(s) passaram por mais de um canal: a tabela de pacientes mostra "primeira → última".`}
           </Aviso>
+
+          <SecaoRelatorio
+            titulo="O que as famílias sem rastreio disseram"
+            descricao="Resposta à pergunta da Ju (ou da equipe) sobre como conheceram a clínica. É relato, não rastreio: não entra nos canais acima e não deve, sozinho, mudar verba de anúncio."
+          >
+            {d.origens_declaradas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma resposta ainda no período. A Ju passou a perguntar em
+                25/11/2026, uma vez por conversa, só para contato novo sem
+                origem identificada.
+              </p>
+            ) : (
+              <TabelaRelatorio<(typeof d.origens_declaradas)[number]>
+                linhas={d.origens_declaradas}
+                colunas={[
+                  {
+                    chave: 'categoria',
+                    titulo: 'Disse que conheceu por',
+                    formato: (x) => nomeOrigemDeclarada(x as string),
+                  },
+                  {
+                    chave: 'conversas',
+                    titulo: 'Conversas',
+                    alinhar: 'direita',
+                  },
+                  {
+                    chave: 'agendaram',
+                    titulo: 'Agendaram',
+                    alinhar: 'direita',
+                  },
+                  {
+                    chave: 'atendidas',
+                    titulo: 'Atendidas',
+                    alinhar: 'direita',
+                  },
+                  {
+                    chave: 'receita_realizada',
+                    titulo: 'Realizada',
+                    alinhar: 'direita',
+                    formato: (x) => brl(Number(x)),
+                  },
+                ]}
+              />
+            )}
+          </SecaoRelatorio>
 
           <SecaoRelatorio
             titulo="Vínculos manuais"
