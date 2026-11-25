@@ -1,8 +1,8 @@
 // AI dev note: Inteligência comercial (admin). Do clique no anúncio à receita.
-// Cinco abas (P1 do redesenho, 25/11/2026): Resumo (indicadores + até 3 pontos de
-// atenção por regra), Canais, Google Ads, Oportunidades (funil + jornadas) e
-// Qualidade. "Painel anterior" guarda as abas antigas (visão geral, campanhas,
-// coortes) só para comparação até a conciliação ser aprovada; sai no P2.
+// Cinco abas (P1/P2 do redesenho, 25/11/2026): Resumo (indicadores + até 3 pontos de
+// atenção por regra), Canais, Google Ads, Oportunidades ("precisam de ação",
+// funil e jornadas) e Qualidade. "Avançado" guarda Receita e coortes e, só para
+// comparação até a conciliação ser aprovada, a visão geral e as campanhas antigas.
 // Um único recorte (período, canal, campanha, serviço) alimenta todas as abas.
 // Sem dado suficiente o indicador fica "Indisponível" com o motivo; nunca estimar.
 // Dados só para admin (RLS + fn_atrib_pode_ver nas visões).
@@ -30,9 +30,8 @@ import {
   CampanhasTab,
   CanaisTab,
   CoortesTab,
-  FunilTab,
   GoogleAdsTab,
-  JornadasTab,
+  OportunidadesTab,
   QualidadeTab,
   ResumoTab,
   VisaoGeralTab,
@@ -56,7 +55,7 @@ import {
 
 const INICIO = '2026-10'; // o site passou a gerar o código RK em 14/10/2026
 type Aba = AbaMarketing | 'anterior';
-type AbaAnterior = 'visao' | 'campanhas' | 'coortes';
+type AbaAnterior = 'coortes' | 'visao' | 'campanhas';
 
 const Filtro: React.FC<{
   rotulo: string;
@@ -92,7 +91,7 @@ export const MarketingPage: React.FC = () => {
   const [erroQ, setErroQ] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [aba, setAba] = useState<Aba>('resumo');
-  const [anterior, setAnterior] = useState<AbaAnterior>('visao');
+  const [anterior, setAnterior] = useState<AbaAnterior>('coortes');
   const [foco, setFoco] = useState<FocoMarketing | undefined>();
   const [jornada, setJornada] = useState<number | null>(null);
   const [f, setF] = useState<Filtros>({
@@ -170,10 +169,6 @@ export const MarketingPage: React.FC = () => {
     ] as [string, string][];
   }, [dados]);
 
-  const abrirJornada = (id: number) => {
-    setJornada(id);
-    setAba('oportunidades');
-  };
   const irPara = (destino: AbaMarketing, novoFoco?: FocoMarketing) => {
     setFoco(novoFoco);
     setAba(destino);
@@ -301,7 +296,7 @@ export const MarketingPage: React.FC = () => {
             <TabsTrigger value="oportunidades">Oportunidades</TabsTrigger>
             <TabsTrigger value="qualidade">Qualidade</TabsTrigger>
             <TabsTrigger value="anterior" className="text-muted-foreground">
-              Painel anterior
+              Avançado
             </TabsTrigger>
           </TabsList>
           <TabsContent value="resumo" className="mt-4">
@@ -313,36 +308,44 @@ export const MarketingPage: React.FC = () => {
           <TabsContent value="google" className="mt-4">
             {aba === 'google' && <GoogleAdsTab r={r} />}
           </TabsContent>
-          <TabsContent value="oportunidades" className="mt-4 space-y-6">
-            <FunilTab r={r} abrirJornada={abrirJornada} />
-            <JornadasTab r={r} aberta={jornada} setAberta={setJornada} />
+          <TabsContent value="oportunidades" className="mt-4">
+            {aba === 'oportunidades' && (
+              <OportunidadesTab
+                r={r}
+                jornada={jornada}
+                setJornada={setJornada}
+              />
+            )}
           </TabsContent>
           <TabsContent value="qualidade" className="mt-4">
-            <QualidadeTab q={qualidade} erro={erroQ} />
+            <QualidadeTab q={qualidade} erro={erroQ} irPara={irPara} />
           </TabsContent>
           <TabsContent value="anterior" className="mt-4 space-y-4">
             <p className="text-sm text-muted-foreground">
-              Abas do painel anterior, mantidas só para comparação até a
-              conciliação ser aprovada. Os números de presença e vínculo já
-              seguem a regra única; aqui a receita é a recebida (faturas pagas).
+              Análises de longo prazo. Visão geral e Campanhas são as abas
+              anteriores, mantidas só para comparação até a conciliação ser
+              aprovada: presença e vínculo já seguem a regra única; a receita
+              delas é a recebida (faturas pagas).
             </p>
             <Tabs
               value={anterior}
               onValueChange={(v) => setAnterior(v as AbaAnterior)}
             >
-              <TabsList>
-                <TabsTrigger value="visao">Visão geral</TabsTrigger>
-                <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
+              <TabsList className="h-auto flex-wrap justify-start">
                 <TabsTrigger value="coortes">Receita e coortes</TabsTrigger>
+                <TabsTrigger value="visao">Visão geral (anterior)</TabsTrigger>
+                <TabsTrigger value="campanhas">
+                  Campanhas (anterior)
+                </TabsTrigger>
               </TabsList>
+              <TabsContent value="coortes" className="mt-4">
+                <CoortesTab r={r} />
+              </TabsContent>
               <TabsContent value="visao" className="mt-4">
                 <VisaoGeralTab r={r} />
               </TabsContent>
               <TabsContent value="campanhas" className="mt-4">
                 <CampanhasTab r={r} />
-              </TabsContent>
-              <TabsContent value="coortes" className="mt-4">
-                <CoortesTab r={r} />
               </TabsContent>
             </Tabs>
           </TabsContent>

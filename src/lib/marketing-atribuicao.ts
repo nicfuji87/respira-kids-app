@@ -1025,6 +1025,13 @@ export interface Qualidade {
     de_90_a_179d: number;
     mais_180d: number;
   };
+  /** Conversas de contato novo sem código RK desde que a Ju passou a perguntar
+   *  como a família conheceu (25/11/2026), e quantas responderam. */
+  origem_declarada?: {
+    desde: string;
+    sem_origem: number;
+    com_declaracao: number;
+  } | null;
   inicio_rastreamento: string;
 }
 

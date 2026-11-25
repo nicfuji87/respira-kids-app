@@ -1,6 +1,7 @@
 export { ResumoTab } from './ResumoTab';
 export { CanaisTab } from './CanaisTab';
 export { GoogleAdsTab } from './GoogleAdsTab';
+export { OportunidadesTab } from './OportunidadesTab';
 export { VisaoGeralTab } from './VisaoGeralTab';
 export { FunilTab } from './FunilTab';
 export { CampanhasTab } from './CampanhasTab';
