@@ -1,7 +1,9 @@
-// AI dev note: aba Retorno dos anúncios (admin). Quem veio do Google Ads, quantas
-// sessões fez e quanto rendeu: investimento × receita realizada (sessões que já
-// aconteceram), recebida (faturas pagas) e agendada (futuras). Período do painel;
-// filtro de campanha do painel; a busca pela marca pode sair da conta (quem procura
+// AI dev note: sub-aba Google Ads do Retorno por canal (admin). Quem veio do Google
+// Ads, quantas sessões fez e quanto rendeu: investimento × receita realizada
+// (finalizadas + faltas), a conferir (passadas sem baixa), recebida (faturas pagas) e
+// agendada (futuras). Mesma base do Retorno por canal. Período, campanha e serviço do
+// filtro global vão para o banco; com canal que não inclui o Google Ads, a aba avisa
+// em vez de mostrar números. A busca pela marca pode sair da conta (quem procura
 // "Respira Kids" já conhecia a clínica). Regras em src/lib/marketing-retorno.ts.
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -31,51 +33,64 @@ import {
   type DadosRetorno,
   type PacienteRetorno,
 } from '@/lib/marketing-retorno';
+import { PRESENCA } from '@/lib/marketing-canais';
 import { Aviso, CartaoIndicador, ValorIndicador } from './marketing-ui';
+
+/** O filtro global de canal inclui o Google Ads? */
+const incluiGoogleAds = (canal: string) =>
+  canal === 'todos' || canal === 'google_ads' || canal === 'tipo:pago';
 
 export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
   const [d, setD] = useState<DadosRetorno | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [comMarca, setComMarca] = useState(true);
   const { desde, ate } = periodoDosMeses(r.filtros.mesInicio, r.filtros.mesFim);
+  const { canal, campanha, servico } = r.filtros;
+  const ativo = incluiGoogleAds(canal);
 
   useEffect(() => {
+    if (!ativo) return;
     let vivo = true;
     setD(null);
     setErro(null);
-    carregarRetorno(desde, ate)
+    carregarRetorno(desde, ate, { campanha, servico })
       .then((x) => vivo && setD(x))
       .catch((e: Error) => vivo && setErro(e.message));
     return () => {
       vivo = false;
     };
-  }, [desde, ate]);
+  }, [desde, ate, campanha, servico, ativo]);
 
   const v = useMemo(() => {
     if (!d) return null;
+    const porServico = d.recorte.servico != null;
     const nomes = new Map(d.campanhas.map((c) => [c.campanha_id, c.nome]));
-    const filtroCamp = (id: string | null) =>
-      r.filtros.campanha === 'todas' || id === r.filtros.campanha;
     const marca = new Set(
       d.campanhas.filter((c) => ehMarca(c.nome)).map((c) => c.campanha_id)
     );
-    const entra = (id: string | null) =>
-      filtroCamp(id) && (comMarca || !id || !marca.has(id));
+    // Campanha e serviço já vieram filtrados do banco; aqui só a marca.
+    const entra = (id: string | null) => comMarca || !id || !marca.has(id);
     const campanhas = d.campanhas.filter((c) => entra(c.campanha_id));
-    const semMarca = d.campanhas.filter(
-      (c) => filtroCamp(c.campanha_id) && !marca.has(c.campanha_id)
-    );
+    const semMarca = d.campanhas.filter((c) => !marca.has(c.campanha_id));
     return {
       nomes,
+      porServico,
       campanhas,
       pacientes: d.pacientes.filter((p) => entra(p.campanha_id)),
       conversas: d.conversas.filter((c) => entra(c.campanha_id)),
-      t: somar(campanhas),
-      tSemMarca: somar(semMarca),
+      t: somar(campanhas, porServico),
+      tSemMarca: somar(semMarca, porServico),
       temMarca: marca.size > 0,
     };
-  }, [d, r.filtros.campanha, comMarca]);
+  }, [d, comMarca]);
 
+  if (!ativo)
+    return (
+      <Aviso>
+        O filtro de canal do topo não inclui o Google Ads. Escolha "Todos os
+        canais", "Mídia paga" ou "Google Ads" para ver esta parte.
+      </Aviso>
+    );
   if (erro)
     return (
       <p className="text-sm text-destructive">
@@ -88,6 +103,12 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
   const nomeCamp = (id: string | null) =>
     id ? (nomes.get(id) ?? id).replace('RK | Pesquisa | ', '') : '—';
   const semBaixa = v.pacientes.reduce((a, p) => a + p.sessoes_sem_baixa, 0);
+  const aConferir = v.pacientes.filter(
+    (p) => p.presenca === 'provavel' || p.presenca === 'pendente'
+  ).length;
+  /** Número que fica indisponível no recorte por serviço. */
+  const qtd = (x: number | null) => (x == null ? '—' : num(x));
+  const dinheiro = (x: number | null) => (x == null ? '—' : brl(x));
   const porResultado = v.conversas.reduce<Record<string, number>>((a, c) => {
     a[c.resultado] = (a[c.resultado] ?? 0) + 1;
     return a;
@@ -118,38 +139,52 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
 
       <Aviso>
         <strong className="text-foreground">Como ler: </strong>
-        receita <strong>realizada</strong> = sessões que já aconteceram, pelo
-        valor da agenda (a cobrança é mensal, então o pagamento chega depois);
-        <strong> recebida</strong> = faturas já pagas; <strong>agendada</strong>{' '}
-        = sessões futuras, fora do ROAS realizado. Valores brutos, sem comissão,
-        imposto nem taxa. Quem buscou "Respira Kids" já conhecia a clínica: veja
-        os números sem a marca para medir o que o anúncio trouxe de novo.
+        paciente <strong>atendida</strong> = sessão finalizada na agenda.
+        Receita <strong>realizada</strong> = sessões finalizadas e faltas
+        (cobradas integral), pelo valor da agenda; <strong>a conferir</strong> =
+        sessões que já passaram sem baixa (mesmo pagas: pagamento não prova
+        presença);
+        <strong> recebida</strong> = faturas já pagas (a cobrança é mensal);
+        <strong> agendada</strong> = sessões futuras, fora do ROAS realizado.
+        Valores brutos, sem comissão, imposto nem taxa. Quem buscou "Respira
+        Kids" já conhecia a clínica: veja os números sem a marca para medir o
+        que o anúncio trouxe de novo.
       </Aviso>
+
+      {v.porServico && (
+        <Aviso>
+          <strong className="text-foreground">
+            Filtro de serviço aplicado.{' '}
+          </strong>
+          Investimento, cliques e conversas não se dividem por serviço: ROAS,
+          CAC e custo por conversa ficam indisponíveis neste recorte.
+        </Aviso>
+      )}
 
       {semBaixa > 0 && (
         <Aviso tom="atencao">
           <strong className="text-foreground">
             {num(semBaixa)} sessão(ões) já passaram sem baixa.{' '}
           </strong>
-          Elas contam como realizadas aqui, mas seguem "Agendado" ou
-          "Confirmado" na agenda. Dar baixa ("Finalizado") deixa o restante do
-          painel e a cobrança certos.
+          Ficam "a conferir": não contam como atendimento nem entram na receita
+          realizada enquanto seguirem "Agendado" ou "Confirmado" na agenda. Dar
+          baixa ("Finalizado" ou "Faltou") deixa o painel e a cobrança certos.
         </Aviso>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <CartaoIndicador
           rotulo="Investimento"
-          valor={brl(t.investimento)}
-          detalhe={`${num(t.cliques)} cliques · ${num(t.conversas)} conversas`}
+          valor={dinheiro(t.investimento)}
+          detalhe={`${qtd(t.cliques)} cliques · ${qtd(t.conversas)} conversas`}
         />
         <CartaoIndicador
-          rotulo="Pacientes que vieram dos anúncios"
+          rotulo="Atendimento confirmado"
           valor={num(t.pacientes)}
-          detalhe={`${num(t.pacientes_novas)} nova(s) · ${num(porResultado.agendada ?? 0)} com 1ª sessão marcada`}
+          detalhe={`${num(t.pacientes_novas)} nova(s) · ${num(aConferir)} com presença a conferir · ${num(porResultado.agendada ?? 0)} com 1ª sessão marcada`}
         />
         <CartaoIndicador
-          rotulo="Sessões realizadas"
+          rotulo="Sessões finalizadas"
           valor={num(t.sessoes_realizadas)}
           detalhe={
             <>
@@ -168,7 +203,7 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
         <CartaoIndicador
           rotulo="Receita realizada"
           valor={brl(t.receita_realizada)}
-          detalhe={`Recebida ${brl(t.receita_recebida)} · agendada ${brl(t.receita_agendada)}`}
+          detalhe={`A conferir ${brl(t.receita_a_conferir)} · recebida ${brl(t.receita_recebida)} · agendada ${brl(t.receita_agendada)}`}
         />
         <CartaoIndicador
           rotulo="ROAS realizado"
@@ -219,7 +254,11 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
           rotulo="Custo por conversa"
           ind={t.custo_conversa}
           formato={brl}
-          detalhe={`${num(t.convenio)} de ${num(t.conversas)} citaram convênio (${pct(t.conversas ? t.convenio / t.conversas : null)})`}
+          detalhe={
+            t.conversas == null || t.convenio == null
+              ? 'Conversas não se dividem por serviço.'
+              : `${num(t.convenio)} de ${num(t.conversas)} citaram convênio (${pct(t.conversas ? t.convenio / t.conversas : null)})`
+          }
         />
       </div>
 
@@ -244,7 +283,7 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
       >
         <TabelaRelatorio
           linhas={v.campanhas.map((c) => {
-            const x = somar([c]);
+            const x = somar([c], v.porServico);
             return { ...c, roas: x.roas_realizado, cac: x.cac };
           })}
           colunas={[
@@ -257,11 +296,38 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
               chave: 'investimento',
               titulo: 'Investimento',
               alinhar: 'direita',
-              formato: (x) => brl(Number(x)),
+              formato: (x) => dinheiro(x as number | null),
             },
-            { chave: 'cliques', titulo: 'Cliques', alinhar: 'direita' },
-            { chave: 'conversas', titulo: 'Conversas', alinhar: 'direita' },
-            { chave: 'pacientes', titulo: 'Pacientes', alinhar: 'direita' },
+            {
+              chave: 'cliques',
+              titulo: 'Cliques',
+              alinhar: 'direita',
+              formato: (x) => qtd(x as number | null),
+            },
+            {
+              chave: 'conversas',
+              titulo: 'Conversas',
+              alinhar: 'direita',
+              formato: (x) => qtd(x as number | null),
+            },
+            {
+              chave: 'pacientes',
+              titulo: 'Atendidas',
+              alinhar: 'direita',
+              formato: (x, l) => (
+                <span
+                  title={
+                    l.pacientes_provaveis
+                      ? `+${l.pacientes_provaveis} com presença provável (a conferir)`
+                      : undefined
+                  }
+                >
+                  {num(Number(x))}
+                  {l.pacientes_provaveis > 0 &&
+                    ` (+${l.pacientes_provaveis} a conferir)`}
+                </span>
+              ),
+            },
             {
               chave: 'sessoes_realizadas',
               titulo: 'Sessões',
@@ -298,9 +364,9 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
           ]}
           rodape={{
             nome: 'Total',
-            investimento: brl(t.investimento),
-            cliques: num(t.cliques),
-            conversas: num(t.conversas),
+            investimento: dinheiro(t.investimento),
+            cliques: qtd(t.cliques),
+            conversas: qtd(t.conversas),
             pacientes: num(t.pacientes),
             sessoes_realizadas: num(t.sessoes_realizadas),
             receita_realizada: brl(t.receita_realizada),
@@ -315,22 +381,26 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
 
       <SecaoRelatorio
         titulo="Pacientes que vieram dos anúncios"
-        descricao="Cada paciente ligada a uma conversa iniciada pelo anúncio, com todas as sessões desde a primeira. Sessões que já passaram contam como realizadas mesmo sem baixa; faltas entram na receita (cobradas integral)."
+        descricao="Cada paciente ligada a uma conversa iniciada pelo anúncio, com todas as sessões desde a primeira. Sessões = finalizadas; as que passaram sem baixa ficam a conferir (*). Faltas entram na receita (cobradas integral), mas não contam atendimento."
         csv={{
           nome: `retorno-pacientes_${desde}_${ate}`,
           linhas: v.pacientes.map((p) => ({
             ...p,
             campanha: nomeCamp(p.campanha_id),
+            presenca: PRESENCA[p.presenca].rotulo,
           })),
           colunas: [
             { chave: 'nome', titulo: 'Paciente' },
+            { chave: 'presenca', titulo: 'Presença' },
             { chave: 'campanha', titulo: 'Campanha' },
             { chave: 'palavra_chave', titulo: 'Palavra-chave' },
             { chave: 'primeiro_contato', titulo: '1º contato' },
             { chave: 'primeira_sessao', titulo: '1ª sessão' },
-            { chave: 'sessoes_realizadas', titulo: 'Sessões realizadas' },
+            { chave: 'sessoes_realizadas', titulo: 'Sessões finalizadas' },
+            { chave: 'sessoes_sem_baixa', titulo: 'Sessões sem baixa' },
             { chave: 'sessoes_agendadas', titulo: 'Sessões agendadas' },
             { chave: 'receita_realizada', titulo: 'Receita realizada' },
+            { chave: 'receita_a_conferir', titulo: 'Receita a conferir' },
             { chave: 'receita_recebida', titulo: 'Receita recebida' },
             { chave: 'receita_agendada', titulo: 'Receita agendada' },
           ],
@@ -355,6 +425,18 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
                     )}
                   </span>
                 ),
+              },
+              {
+                chave: 'presenca',
+                titulo: 'Presença',
+                formato: (x) => {
+                  const p = PRESENCA[x as keyof typeof PRESENCA];
+                  return (
+                    <Badge variant={p.variante} title={p.dica}>
+                      {p.rotulo}
+                    </Badge>
+                  );
+                },
               },
               {
                 chave: 'campanha_id',
@@ -384,7 +466,7 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
                   <span
                     title={
                       l.sessoes_sem_baixa
-                        ? `${l.sessoes_sem_baixa} sem baixa na agenda`
+                        ? `+${l.sessoes_sem_baixa} sem baixa na agenda (a conferir)`
                         : undefined
                     }
                   >
@@ -413,7 +495,17 @@ export const RetornoTab: React.FC<{ r: Recorte }> = ({ r }) => {
                 chave: 'receita_realizada',
                 titulo: 'Realizada',
                 alinhar: 'direita',
-                formato: (x) => brl(Number(x)),
+                formato: (x, l) => (
+                  <span
+                    title={
+                      l.receita_a_conferir
+                        ? `+ ${brl(l.receita_a_conferir)} a conferir (sessões sem baixa)`
+                        : undefined
+                    }
+                  >
+                    {brl(Number(x))}
+                  </span>
+                ),
               },
               {
                 chave: 'receita_recebida',

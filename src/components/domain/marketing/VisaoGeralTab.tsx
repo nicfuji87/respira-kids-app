@@ -58,9 +58,9 @@ export const VisaoGeralTab: React.FC<{ r: Recorte }> = ({ r }) => {
             detalhe={`${num(amostra.comOrigem)} das ${num(amostra.comerciais)} com intenção (Google, Instagram, site)`}
           />
           <CartaoIndicador
-            rotulo="Pacientes novos atendidos"
+            rotulo="Pacientes novos da clínica"
             valor={num(amostra.novos)}
-            detalhe={`1ª sessão finalizada na agenda · ${num(amostra.ligados)} ligado(s) a uma conversa`}
+            detalhe={`Toda a clínica, com ou sem conversa (o Retorno por canal conta só conversas novas). Atendimento confirmado: já tem sessão finalizada · ${num(amostra.ligados)} ligado(s) a uma conversa`}
           />
           <CartaoIndicador
             rotulo="Receita dos pacientes novos"
@@ -82,9 +82,9 @@ export const VisaoGeralTab: React.FC<{ r: Recorte }> = ({ r }) => {
               detalhe={`de ${num(amostra.conversas)} conversas no período · ${num(amostra.comOrigem)} com origem identificada`}
             />
             <CartaoIndicador
-              rotulo="Pacientes novos atendidos"
+              rotulo="Pacientes novos da clínica"
               valor={num(amostra.novos)}
-              detalhe={`1ª sessão finalizada na agenda · ${num(amostra.ligados)} ligado(s) a uma conversa · ${num(midia.novosPagos)} à mídia paga`}
+              detalhe={`Toda a clínica, com ou sem conversa (o Retorno por canal conta só conversas novas). Atendimento confirmado: já tem sessão finalizada · ${num(amostra.ligados)} ligado(s) a uma conversa · ${num(midia.novosPagos)} à mídia paga`}
             />
             <CartaoIndicador
               rotulo="CAC de mídia"
