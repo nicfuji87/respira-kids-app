@@ -51,17 +51,23 @@ const RECOMENDACAO: Record<
     texto:
       'Ainda não há contatos de anúncio suficientes que citaram convênio para decidir. Mantenha as operadoras liberadas e acompanhe.',
   },
-  negar: {
-    situacao: 'problema',
-    selo: 'Negar operadoras',
+  investigar_conversa: {
+    situacao: 'atencao',
+    selo: 'Investigar a conversa',
     texto:
-      'Quem cita convênio agenda menos da metade de quem não cita. Troque NEGAR_OPERADORAS para true (ou adicione as operadoras à lista "RK NEG | Convênio e planos").',
+      'Quem cita convênio agenda menos, mas não há gasto em buscas com nome de operadora: negativar operadoras não resolve. Revise como o atendimento particular aparece no anúncio e na página, e os motivos de perda (quem precisa usar o plano × quem só pergunta de reembolso, na tabela abaixo).',
+  },
+  revisar_termos: {
+    situacao: 'problema',
+    selo: 'Revisar termos com operadora',
+    texto:
+      'Quem cita convênio agenda menos e há gasto em buscas com nome de operadora. Revise esses termos em "Termos de pesquisa" antes de negativar: a negativa só se justifica com essa evidência.',
   },
   manter: {
     situacao: 'ok',
-    selo: 'Manter liberado',
+    selo: 'Nada a mudar',
     texto:
-      'Quem cita convênio agenda em ritmo parecido com quem não cita: essas buscas estão trazendo pacientes. Mantenha as operadoras liberadas.',
+      'Quem cita convênio agenda em ritmo parecido com quem não cita. Mantenha as operadoras liberadas.',
   },
 };
 
@@ -125,8 +131,8 @@ export const OtimizacaoTab: React.FC<{ r: Recorte }> = ({ r }) => {
       )}
 
       <SecaoRelatorio
-        titulo="Convênio: negar ou não as operadoras?"
-        descricao={`Contatos que citaram convênio, plano, operadora ou reembolso na conversa (detecção automática) × os que não citaram. Período ${desde} a ${ate}. Regra: com ${AMOSTRA_CONVENIO}+ contatos de anúncio que citaram, se agendarem menos da metade dos demais → negar. Alerta semanal no WhatsApp do dono.`}
+        titulo="Convênio: quem cita agenda menos?"
+        descricao={`Contatos que citaram convênio, plano, operadora ou reembolso na conversa (detecção automática) × os que não citaram. Período ${desde} a ${ate}. Com ${AMOSTRA_CONVENIO}+ contatos de anúncio que citaram e agendamento abaixo da metade dos demais, o diagnóstico depende dos termos de pesquisa: negativar operadora só com gasto em buscas com nome de operadora; sem isso, o problema está na conversa. Diagnóstico semanal no WhatsApp do dono.`}
       >
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <SeloSituacao situacao={rec.situacao}>{rec.selo}</SeloSituacao>

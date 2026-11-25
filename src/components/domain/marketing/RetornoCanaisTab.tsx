@@ -1,8 +1,10 @@
 // AI dev note: aba Retorno por canal (admin), evolução do "Retorno dos anúncios".
-// Geral = comparação de canais; Detalhamento = pacientes filtráveis por canal,
-// serviço e profissional; Atribuição = conversas sem origem e vínculos manuais;
-// Google Ads = o painel detalhado de antes (RetornoTab), sem mudança.
-// Regras em src/lib/marketing-canais.ts e na migration atribuicao_v2_retorno_canais.sql.
+// Geral = comparação de canais; Detalhamento = pacientes (filtro local só de
+// profissional: canal, campanha e serviço vêm do filtro GLOBAL e o banco aplica nos
+// totais); Atribuição = conversas sem origem e vínculos manuais; Google Ads = RetornoTab
+// (mesma base). "Atendida" = presença confirmada (Finalizado); prováveis e pendentes
+// aparecem à parte como "a conferir". Regras em src/lib/marketing-canais.ts e na
+// migration atribuicao_v2_p0_calculo_unico.sql.
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -38,7 +40,9 @@ import {
   indicadores,
   nomeCanal,
   nomeOrigemDeclarada,
+  PRESENCA,
   RESULTADO_CONVERSA,
+  SEM_DIVISAO_SERVICO,
   somarCanais,
   VINCULO,
   type BaseRetorno,
@@ -61,49 +65,41 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
   const [d, setD] = useState<DadosCanais | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [sub, setSub] = useState('geral');
-  const [fCanal, setFCanal] = useState(TODOS);
-  const [fServico, setFServico] = useState(TODOS);
   const [fProf, setFProf] = useState(TODOS);
   const { desde, ate } = periodoDosMeses(r.filtros.mesInicio, r.filtros.mesFim);
+  const { canal, campanha, servico } = r.filtros;
 
   useEffect(() => {
     let vivo = true;
     setD(null);
     setErro(null);
-    carregarCanais(desde, ate, base)
+    carregarCanais(desde, ate, base, { canal, campanha, servico })
       .then((x) => vivo && setD(x))
       .catch((e: Error) => vivo && setErro(e.message));
     return () => {
       vivo = false;
     };
-  }, [desde, ate, base]);
+  }, [desde, ate, base, canal, campanha, servico]);
 
   const v = useMemo(() => {
     if (!d) return null;
     const total = somarCanais(d.canais);
-    const servicos = [
-      ...new Set(d.pacientes.map((p) => p.servico).filter(Boolean)),
-    ] as string[];
     const profs = [
       ...new Set(d.pacientes.map((p) => p.profissional).filter(Boolean)),
     ] as string[];
     const pacientes = d.pacientes.filter(
-      (p) =>
-        (fCanal === TODOS || p.canal === fCanal) &&
-        (fServico === TODOS || p.servico === fServico) &&
-        (fProf === TODOS || p.profissional === fProf)
+      (p) => fProf === TODOS || p.profissional === fProf
     );
-    const semOrigem = d.conversas.filter((c) => c.canal === 'desconhecido');
+    const semOrigem = d.conversas.filter((c) => c.canal === 'nao_atribuido');
     const multicanal = d.canais.reduce((a, c) => a + c.multicanal, 0);
     return {
       total,
-      servicos: servicos.sort(),
       profs: profs.sort(),
       pacientes,
       semOrigem,
       multicanal,
     };
-  }, [d, fCanal, fServico, fProf]);
+  }, [d, fProf]);
 
   if (erro)
     return (
@@ -114,9 +110,22 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
   if (!d || !v) return <Skeleton className="h-64 w-full" />;
 
   const { total } = v;
-  const tTotal = indicadores(total);
+  const porServico = d.recorte.servico != null;
+  const tTotal = indicadores(total, porServico);
   const periodo = `${dataParede(`${desde}T00:00`).slice(0, 5)} a ${dataParede(`${ate}T00:00`).slice(0, 5)}`;
-  const linhasCanais = d.canais.map((c) => ({ ...c, ...indicadores(c) }));
+  const linhasCanais = d.canais.map((c) => ({
+    ...c,
+    ...indicadores(c, porServico),
+    a_conferir: c.atendidas_provaveis + c.presenca_pendente,
+  }));
+  const aConferir = total.atendidas_provaveis + total.presenca_pendente;
+  /** Número que pode estar indisponível no recorte (serviço). */
+  const qtd = (x: number | null) => (x == null ? '—' : num(x));
+  const recorteAtivo = [
+    canal !== 'todos' && 'canal',
+    campanha !== 'todas' && 'campanha',
+    servico !== 'todos' && 'serviço',
+  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-4">
@@ -162,17 +171,33 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
             Canal = primeira origem conhecida (código RK do site). Quem chamou
             direto no WhatsApp, sem passar pelo site, fica em{' '}
             <strong>Sem origem identificada</strong> e não é empurrado para
-            nenhum canal. Agendou, atendida e pagante são contadas à parte.
-            Valores brutos. Só o Google Ads tem custo importado: nos outros
-            canais o custo é "não informado", não zero. Ligações feitas direto
-            pelo anúncio ainda não entram.
+            nenhum canal. <strong>Atendida</strong> = sessão finalizada na
+            agenda. Sessão que já passou sem baixa fica{' '}
+            <strong>a conferir</strong>, mesmo paga: a falta também é cobrada,
+            então pagamento não prova presença. Valores brutos. Só o Google Ads
+            tem custo importado: nos outros canais o custo é "não informado",
+            não zero. Ligações feitas direto pelo anúncio ainda não entram.
           </Aviso>
+
+          {recorteAtivo.length > 0 && (
+            <Aviso>
+              <strong className="text-foreground">
+                Filtro de {recorteAtivo.join(', ')} aplicado aos totais.{' '}
+              </strong>
+              {porServico &&
+                'Com serviço, conversas e investimento ficam indisponíveis: a conversa e o anúncio não se dividem por serviço.'}
+            </Aviso>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <CartaoIndicador
               rotulo="Conversas de contato novo"
-              valor={num(total.conversas)}
-              detalhe={`${num(total.pediram_horario)} pediram horário e ainda não marcaram`}
+              valor={qtd(total.conversas)}
+              detalhe={
+                total.pediram_horario == null
+                  ? SEM_DIVISAO_SERVICO
+                  : `${num(total.pediram_horario)} pediram horário e ainda não marcaram`
+              }
             />
             <CartaoIndicador
               rotulo="Agendaram"
@@ -188,37 +213,37 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
               }
             />
             <CartaoIndicador
-              rotulo="Atendidas"
+              rotulo="Atendimento confirmado"
               valor={num(total.atendidas)}
-              detalhe={`${num(total.novas_atendidas)} nova(s) · ${num(total.pagantes)} já pagaram`}
+              detalhe={`${num(total.novas_atendidas)} nova(s) · ${num(aConferir)} com presença a conferir (${num(total.atendidas_provaveis)} paga(s), ${num(total.presenca_pendente)} sem pagamento)`}
             />
             <CartaoIndicador
               rotulo="Receita realizada"
               valor={brl(total.receita_realizada)}
-              detalhe={`Recebida ${brl(total.receita_recebida)} · agendada ${brl(total.receita_agendada)}`}
+              detalhe={`Sessões finalizadas e faltas. A conferir ${brl(total.receita_a_conferir)} · recebida ${brl(total.receita_recebida)} · agendada ${brl(total.receita_agendada)}`}
             />
           </div>
 
           <SecaoRelatorio
             titulo="Pacientes atendidas por canal"
-            descricao="Pacientes com ao menos uma sessão realizada, pelo canal da primeira origem conhecida."
+            descricao="Pacientes com presença confirmada (sessão finalizada), pelo canal da primeira origem conhecida. Presença a conferir aparece no detalhe."
           >
             <BarrasHorizontais
               titulo="Pacientes atendidas por canal"
               dados={d.canais
-                .filter((c) => c.conversas > 0)
+                .filter((c) => (c.conversas ?? c.agendaram) > 0)
                 .sort((a, b) => b.atendidas - a.atendidas)
                 .map((c) => ({
                   rotulo: nomeCanal(c.canal),
                   valor: c.atendidas,
-                  detalhe: `${num(c.conversas)} conversas · ${num(c.agendaram)} agendaram`,
+                  detalhe: `${c.conversas == null ? '' : `${num(c.conversas)} conversas · `}${num(c.agendaram)} agendaram · ${num(c.atendidas_provaveis + c.presenca_pendente)} a conferir`,
                 }))}
             />
           </SecaoRelatorio>
 
           <SecaoRelatorio
             titulo="Comparação de canais"
-            descricao={`Conversas → agendaram → atendidas → pagantes, com receita. ${num(total.descartadas)} conversa(s) não comerciais ou de quem já era paciente ficaram fora.`}
+            descricao={`Conversas → agendaram → atendidas (confirmadas) → pagantes, com receita. ${num(total.descartadas)} conversa(s) não comerciais ou de quem já era paciente ficaram fora.`}
             csv={{
               nome: `retorno-canais_${base}_${desde}_${ate}`,
               linhas: d.canais.map((c) => ({
@@ -229,10 +254,13 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
                 { chave: 'canal', titulo: 'Canal' },
                 { chave: 'conversas', titulo: 'Conversas' },
                 { chave: 'agendaram', titulo: 'Agendaram' },
-                { chave: 'atendidas', titulo: 'Atendidas' },
+                { chave: 'atendidas', titulo: 'Atendidas (confirmadas)' },
                 { chave: 'novas_atendidas', titulo: 'Novas atendidas' },
+                { chave: 'atendidas_provaveis', titulo: 'Presença provável' },
+                { chave: 'presenca_pendente', titulo: 'Presença pendente' },
                 { chave: 'pagantes', titulo: 'Pagantes' },
                 { chave: 'receita_realizada', titulo: 'Receita realizada' },
+                { chave: 'receita_a_conferir', titulo: 'Receita a conferir' },
                 { chave: 'receita_recebida', titulo: 'Receita recebida' },
                 { chave: 'receita_agendada', titulo: 'Receita agendada' },
                 { chave: 'investimento', titulo: 'Investimento' },
@@ -247,7 +275,22 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
                   titulo: 'Canal',
                   formato: (x) => nomeCanal(x as string),
                 },
-                { chave: 'conversas', titulo: 'Conversas', alinhar: 'direita' },
+                {
+                  chave: 'conversas',
+                  titulo: 'Conversas',
+                  alinhar: 'direita',
+                  formato: (x) =>
+                    x == null ? (
+                      <span
+                        className="text-muted-foreground"
+                        title={SEM_DIVISAO_SERVICO}
+                      >
+                        —
+                      </span>
+                    ) : (
+                      num(Number(x))
+                    ),
+                },
                 {
                   chave: 'agendaram',
                   titulo: 'Agendaram',
@@ -267,6 +310,18 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
                   ),
                 },
                 { chave: 'atendidas', titulo: 'Atendidas', alinhar: 'direita' },
+                {
+                  chave: 'a_conferir',
+                  titulo: 'A conferir',
+                  alinhar: 'direita',
+                  formato: (x, l) => (
+                    <span
+                      title={`${l.atendidas_provaveis} com sessão paga sem baixa · ${l.presenca_pendente} sem baixa e sem pagamento`}
+                    >
+                      {num(Number(x))}
+                    </span>
+                  ),
+                },
                 { chave: 'pagantes', titulo: 'Pagantes', alinhar: 'direita' },
                 {
                   chave: 'receita_realizada',
@@ -288,9 +343,13 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
                     x == null ? (
                       <span
                         className="text-muted-foreground"
-                        title="Sem custo de mídia informado"
+                        title={
+                          porServico
+                            ? SEM_DIVISAO_SERVICO
+                            : 'Sem custo de mídia informado'
+                        }
                       >
-                        não informado
+                        {porServico ? 'indisponível' : 'não informado'}
                       </span>
                     ) : (
                       brl(Number(x))
@@ -307,9 +366,10 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
               ]}
               rodape={{
                 canal: 'Total',
-                conversas: num(total.conversas),
+                conversas: qtd(total.conversas),
                 agendaram: num(total.agendaram),
                 atendidas: num(total.atendidas),
+                a_conferir: num(aConferir),
                 pagantes: num(total.pagantes),
                 receita_realizada: brl(total.receita_realizada),
                 receita_recebida: brl(total.receita_recebida),
@@ -322,45 +382,45 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
 
         {/* ── Detalhamento ──────────────────────────────────────── */}
         <TabsContent value="detalhe" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Filtro
-              rotulo="Canal"
-              valor={fCanal}
-              setValor={setFCanal}
-              opcoes={d.canais.map((c) => [c.canal, nomeCanal(c.canal)])}
-            />
-            <Filtro
-              rotulo="Serviço"
-              valor={fServico}
-              setValor={setFServico}
-              opcoes={v.servicos.map((s) => [s, s])}
-            />
+          <div className="flex flex-wrap items-center gap-2">
             <Filtro
               rotulo="Profissional"
               valor={fProf}
               setValor={setFProf}
               opcoes={v.profs.map((s) => [s, s])}
             />
+            <span className="text-xs text-muted-foreground">
+              Canal, campanha e serviço: use os filtros do topo.
+            </span>
           </div>
           <SecaoRelatorio
             titulo={`Pacientes (${num(v.pacientes.length)})`}
-            descricao="Cada paciente uma vez, na conversa mais antiga que levou a ela. Serviço e profissional da primeira sessão. Sessões que já passaram contam como realizadas mesmo sem baixa; faltas entram na receita (cobradas integral)."
+            descricao="Cada paciente uma vez, na conversa mais antiga que levou a ela. Serviço e profissional da primeira sessão. Sessões = finalizadas; as que já passaram sem baixa aparecem como a conferir. Faltas entram na receita (cobradas integral), mas não contam atendimento."
             csv={{
               nome: `retorno-canais-pacientes_${base}_${desde}_${ate}`,
               linhas: v.pacientes.map((p) => ({
                 ...p,
                 canal: nomeCanal(p.canal),
+                presenca: PRESENCA[p.presenca].rotulo,
                 vinculo: VINCULO[p.vinculo ?? ''] ?? p.vinculo,
               })),
               colunas: [
                 { chave: 'nome', titulo: 'Paciente' },
                 { chave: 'canal', titulo: 'Canal' },
+                { chave: 'presenca', titulo: 'Presença' },
                 { chave: 'servico', titulo: 'Serviço' },
                 { chave: 'profissional', titulo: 'Profissional' },
                 { chave: 'primeiro_contato', titulo: '1º contato' },
                 { chave: 'primeira_sessao', titulo: '1ª sessão' },
-                { chave: 'sessoes_realizadas', titulo: 'Sessões realizadas' },
+                { chave: 'sessoes_realizadas', titulo: 'Sessões finalizadas' },
+                { chave: 'sessoes_provaveis', titulo: 'Sem baixa, pagas' },
+                {
+                  chave: 'sessoes_pendentes',
+                  titulo: 'Sem baixa, sem pagamento',
+                },
+                { chave: 'faltas', titulo: 'Faltas' },
                 { chave: 'receita_realizada', titulo: 'Receita realizada' },
+                { chave: 'receita_a_conferir', titulo: 'Receita a conferir' },
                 { chave: 'receita_recebida', titulo: 'Receita recebida' },
                 { chave: 'vinculo', titulo: 'Vínculo' },
               ],
@@ -393,6 +453,18 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
                       `${nomeCanal(x as string)}${l.canal_ultima !== l.canal ? ` → ${nomeCanal(l.canal_ultima)}` : ''}`,
                   },
                   {
+                    chave: 'presenca',
+                    titulo: 'Presença',
+                    formato: (x) => {
+                      const p = PRESENCA[x as keyof typeof PRESENCA];
+                      return (
+                        <Badge variant={p.variante} title={p.dica}>
+                          {p.rotulo}
+                        </Badge>
+                      );
+                    },
+                  },
+                  {
                     chave: 'servico',
                     titulo: 'Serviço',
                     formato: (x) => String(x ?? '—'),
@@ -423,14 +495,26 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
                     chave: 'sessoes_realizadas',
                     titulo: 'Sessões',
                     alinhar: 'direita',
-                    formato: (x, l) =>
-                      `${num(Number(x))}${l.sessoes_agendadas ? ` (+${l.sessoes_agendadas} marcada)` : ''}`,
+                    formato: (x, l) => {
+                      const sem = l.sessoes_provaveis + l.sessoes_pendentes;
+                      return `${num(Number(x))}${sem ? ` (+${sem} a conferir)` : ''}${l.sessoes_agendadas ? ` (+${l.sessoes_agendadas} marcada)` : ''}`;
+                    },
                   },
                   {
                     chave: 'receita_realizada',
                     titulo: 'Realizada',
                     alinhar: 'direita',
-                    formato: (x) => brl(Number(x)),
+                    formato: (x, l) => (
+                      <span
+                        title={
+                          l.receita_a_conferir
+                            ? `+ ${brl(l.receita_a_conferir)} a conferir (sessões sem baixa)`
+                            : undefined
+                        }
+                      >
+                        {brl(Number(x))}
+                      </span>
+                    ),
                   },
                   {
                     chave: 'receita_recebida',
@@ -447,11 +531,13 @@ export const RetornoCanaisTab: React.FC<{ r: Recorte }> = ({ r }) => {
         {/* ── Atribuição ────────────────────────────────────────── */}
         <TabsContent value="atribuicao" className="mt-4 space-y-4">
           <Aviso
-            tom={v.semOrigem.length > total.conversas / 2 ? 'atencao' : 'info'}
+            tom={
+              v.semOrigem.length > d.conversas.length / 2 ? 'atencao' : 'info'
+            }
           >
             <strong className="text-foreground">
-              {num(v.semOrigem.length)} de {num(total.conversas)} conversas sem
-              origem identificada.{' '}
+              {num(v.semOrigem.length)} de {num(d.conversas.length)} conversas
+              sem origem identificada.{' '}
             </strong>
             São famílias que chamaram direto no WhatsApp, sem o código do site
             (indicação, perfil do Google, contato salvo, Instagram sem o botão).

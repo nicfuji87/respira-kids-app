@@ -7,8 +7,10 @@
 // custo por palavra-chave e termos de pesquisa do Google Ads (script
 // scripts/google-ads/atrib-detalhe.js) cruzados com conversas, agendamentos,
 // pacientes e receita do sistema, + sinal "citou convênio" das conversas
-// (atrib_sinais). A regra da recomendação de convênio é a MESMA do alerta
-// semanal no banco (fn_atrib_alerta_convenio) — mudou aqui, mude lá.
+// (atrib_sinais). A regra do diagnóstico de convênio é a MESMA do alerta
+// semanal no banco (fn_atrib_alerta_convenio) — mudou aqui, mude lá. Desde o P0
+// (25/11/2026) ela nunca recomenda negar operadoras só pela taxa de agendamento:
+// negativa só com gasto em buscas com nome de operadora (evidência nos termos).
 // Sem dado suficiente: indicador "indisponível" com motivo, nunca estimativa.
 
 import { supabase } from '@/lib/supabase';
@@ -238,7 +240,11 @@ export function linhasPalavra(
   });
 }
 
-export type Recomendacao = 'amostra_insuficiente' | 'negar' | 'manter';
+export type Recomendacao =
+  | 'amostra_insuficiente'
+  | 'investigar_conversa'
+  | 'revisar_termos'
+  | 'manter';
 
 export interface ResumoConvenio {
   pago: { citou: Taxa; nao: Taxa };
@@ -270,8 +276,10 @@ function taxa(g: ConvenioGrupo[], recorte: string, citou: boolean): Taxa {
   };
 }
 
-/** Mesma regra do alerta semanal: ≥ 10 contatos de anúncio que citaram convênio e
- *  taxa de agendamento deles < metade da dos demais → negar operadoras. */
+/** Mesma regra do alerta semanal (fn_atrib_alerta_convenio): com ≥ 10 contatos de
+ *  anúncio que citaram convênio e taxa de agendamento deles < metade da dos demais,
+ *  há gasto em buscas com nome de operadora → revisar esses termos; não há → o
+ *  problema está na conversa (atendimento particular, reembolso), não na busca. */
 export function resumoConvenio(d: DadosOtimizacao): ResumoConvenio {
   const pago = {
     citou: taxa(d.convenio, 'pago', true),
@@ -281,6 +289,7 @@ export function resumoConvenio(d: DadosOtimizacao): ResumoConvenio {
     citou: taxa(d.convenio, 'todos_novos', true),
     nao: taxa(d.convenio, 'todos_novos', false),
   };
+  const custoOperadora = n(d.termos_convenio?.custo);
   let recomendacao: Recomendacao = 'manter';
   if (pago.citou.conversas < AMOSTRA_CONVENIO)
     recomendacao = 'amostra_insuficiente';
@@ -288,7 +297,8 @@ export function resumoConvenio(d: DadosOtimizacao): ResumoConvenio {
     pago.nao.taxa != null &&
     (pago.citou.taxa ?? 0) < 0.5 * pago.nao.taxa
   )
-    recomendacao = 'negar';
+    recomendacao =
+      custoOperadora > 0 ? 'revisar_termos' : 'investigar_conversa';
   return {
     pago,
     novos,
