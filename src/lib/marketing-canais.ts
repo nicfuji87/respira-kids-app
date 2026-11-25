@@ -17,6 +17,8 @@ export interface CanalRetorno {
   conversas: number;
   convenio: number;
   multicanal: number;
+  /** Conversas com origem declarada pela família (relato, não rastreio). */
+  com_origem_declarada: number;
   pediram_horario: number;
   agendaram: number;
   atendidas: number;
@@ -44,6 +46,7 @@ export interface PacienteCanal {
   pagina: string | null;
   vinculo: string | null;
   confianca: string | null;
+  origem_declarada: string | null;
   primeiro_contato: string | null;
   primeira_sessao: string | null;
   proxima_sessao: string | null;
@@ -77,6 +80,15 @@ export interface ConversaCanal {
   convenio: boolean;
   resultado: ResultadoConversa;
   paciente_id: string | null;
+  origem_declarada: string | null;
+}
+
+export interface OrigemDeclarada {
+  categoria: string;
+  conversas: number;
+  agendaram: number;
+  atendidas: number;
+  receita_realizada: number;
 }
 
 export interface VinculoManual {
@@ -98,6 +110,8 @@ export interface DadosCanais {
   pacientes: PacienteCanal[];
   conversas: ConversaCanal[];
   vinculos_manuais: VinculoManual[];
+  /** O que as famílias SEM rastreio disseram (relato), por categoria. */
+  origens_declaradas: OrigemDeclarada[];
 }
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -122,6 +136,7 @@ export async function carregarCanais(
       conversas: n(c.conversas),
       convenio: n(c.convenio),
       multicanal: n(c.multicanal),
+      com_origem_declarada: n(c.com_origem_declarada),
       pediram_horario: n(c.pediram_horario),
       agendaram: n(c.agendaram),
       atendidas: n(c.atendidas),
@@ -147,6 +162,13 @@ export async function carregarCanais(
     })),
     conversas: d.conversas ?? [],
     vinculos_manuais: d.vinculos_manuais ?? [],
+    origens_declaradas: (d.origens_declaradas ?? []).map((o) => ({
+      ...o,
+      conversas: n(o.conversas),
+      agendaram: n(o.agendaram),
+      atendidas: n(o.atendidas),
+      receita_realizada: n(o.receita_realizada),
+    })),
   };
 }
 
@@ -188,6 +210,7 @@ export function somarCanais(cs: CanalRetorno[]): CanalRetorno {
     conversas: s('conversas'),
     convenio: s('convenio'),
     multicanal: s('multicanal'),
+    com_origem_declarada: s('com_origem_declarada'),
     pediram_horario: s('pediram_horario'),
     agendaram: s('agendaram'),
     atendidas: s('atendidas'),
@@ -218,6 +241,22 @@ export const RESULTADO_CONVERSA: Record<
   pediu_horario: { rotulo: 'Pediu horário', variante: 'attention' },
   conversa: { rotulo: 'Só conversa', variante: 'muted' },
 };
+
+/** Categorias de origem declarada (fn_ju_origem_declarada). Relato, não rastreio. */
+export const ORIGEM_DECLARADA: Record<string, string> = {
+  indicacao_profissional: 'Indicação de profissional',
+  indicacao_conhecido: 'Indicação de conhecido',
+  google_busca: 'Busca no Google',
+  google_maps: 'Google Maps / perfil',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  site: 'Site',
+  ja_conhecia: 'Já conhecia',
+  outro: 'Outro',
+  nao_lembra: 'Não lembra',
+};
+export const nomeOrigemDeclarada = (c: string | null | undefined) =>
+  c ? (ORIGEM_DECLARADA[c] ?? c) : '—';
 
 export const VINCULO: Record<string, string> = {
   pedido_ju: 'Pedido pela Ju',

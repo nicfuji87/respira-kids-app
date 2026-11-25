@@ -141,6 +141,7 @@ export const CANAIS: Record<string, string> = {
   google_ads: 'Google Ads',
   meta_ads: 'Meta Ads',
   google_organico: 'Google orgânico',
+  google_perfil: 'Perfil do Google',
   instagram: 'Instagram',
   facebook: 'Facebook',
   ia_assistente: 'Assistentes de IA',
