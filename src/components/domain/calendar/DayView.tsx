@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/primitives/card';
 import {
   CurrentTimeIndicator,
   WeekEventBlock,
+  WeekOverflowBlock,
+  WeekClosureBand,
   EventCard,
 } from '@/components/composed';
 import { EventListModal } from '../calendar';
@@ -16,9 +18,36 @@ import {
   eventoCobreDia,
   isCompromissoEvent,
 } from '@/lib/agenda-bloqueios-api';
+import {
+  ehFechamentoComHorario,
+  layoutColunas,
+  type LayoutColunas,
+} from '@/lib/calendar-layout';
 
-// AI dev note: DayView combina TimeSlot Composed
-// Vista diária com timeline detalhada
+// AI dev note: DayView — vista diária com UMA COLUNA POR PROFISSIONAL quando o
+// dia tem mais de um. Cada coluna leva as consultas, reservas e compromissos
+// daquele profissional, então "Exames da Flávia" fica só na coluna dela (antes
+// ocupava a largura toda e parecia fechar a clínica). Fechamento da clínica com
+// horário é faixa de fundo atravessando todas as colunas. Dentro da coluna, os
+// blocos ficam lado a lado (lib/calendar-layout), nunca um por cima do outro.
+
+const START_HOUR = 7;
+const END_HOUR = 20;
+const HOUR_HEIGHT = 64;
+const LARGURA_MIN_COLUNA = 140; // px; abaixo disso a grade rola na horizontal
+const SEM_PROFISSIONAL = '__sem_profissional__';
+
+interface Coluna {
+  id: string;
+  nome: string;
+  consultas: number;
+  layout: LayoutColunas;
+}
+
+const profissionalDoEvento = (e: CalendarEvent) => ({
+  id: (e.metadata?.profissionalId as string | null | undefined) || null,
+  nome: (e.metadata?.profissionalNome as string | null | undefined) || '',
+});
 
 export interface DayViewProps {
   currentDate: Date;
@@ -38,33 +67,22 @@ export const DayView = React.memo<DayViewProps>(
     className,
     userRole,
   }) => {
-    // Estado para modal de eventos múltiplos
     const [modalState, setModalState] = useState<{
       isOpen: boolean;
       date: Date | null;
       events: CalendarEvent[];
-    }>({
-      isOpen: false,
-      date: null,
-      events: [],
-    });
+    }>({ isOpen: false, date: null, events: [] });
 
-    // Ref para container de eventos (scroll automático)
-    const eventsContainerRef = React.useRef<HTMLDivElement>(null);
+    const scrollRef = React.useRef<HTMLDivElement>(null);
 
-    // Constantes do grid
-    const startHour = 7; // AI dev note: Alterado de 6 para 7 conforme solicitação
-    const endHour = 20;
-    // HourHeight responsivo: 48px mobile, 64px desktop (ajustado via CSS nos slots)
-    const hourHeight = 64; // Mantido para cálculos, mas slots usam altura responsiva via CSS
-
-    // Gerar array de horários
-    const timeSlots = useMemo(() => {
-      return Array.from({ length: endHour - startHour }, (_, i) => {
-        const hour = i + startHour;
-        return `${hour.toString().padStart(2, '0')}:00`;
-      });
-    }, [startHour, endHour]);
+    const timeSlots = useMemo(
+      () =>
+        Array.from({ length: END_HOUR - START_HOUR }, (_, i) => {
+          const hour = i + START_HOUR;
+          return `${hour.toString().padStart(2, '0')}:00`;
+        }),
+      []
+    );
 
     // Dia inteiro / vários dias (feriado, férias) vão para a faixa do topo
     const eventosFaixa = useMemo(
@@ -75,216 +93,76 @@ export const DayView = React.memo<DayViewProps>(
       [events, currentDate]
     );
 
-    // Compromissos com horário (almoço, terapia...) desenhados por baixo das
-    // consultas: ocupam a largura toda e a consulta por cima fica mais estreita,
-    // deixando o compromisso (e o conflito) visível.
-    const compromissosGrade = useMemo(
-      () =>
-        events.filter(
-          (e) =>
-            isCompromissoEvent(e) &&
-            !ehEventoDeFaixa(e) &&
-            isSameDay(e.start, currentDate)
-        ),
-      [events, currentDate]
-    );
-
-    // Filtrar eventos do dia atual (consultas)
-    const dayEvents = useMemo(() => {
-      const filtered = events.filter(
-        (event) =>
-          !isCompromissoEvent(event) &&
-          !ehEventoDeFaixa(event) &&
-          isSameDay(event.start, currentDate)
+    const { colunas, fechamentos } = useMemo(() => {
+      const doDia = events.filter(
+        (e) => !ehEventoDeFaixa(e) && isSameDay(e.start, currentDate)
       );
+      const fech = doDia.filter(ehFechamentoComHorario);
+      const resto = doDia.filter((e) => !ehFechamentoComHorario(e));
 
-      // AI dev note: Debug logs para identificar eventos faltando
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 DayView - Filtro de eventos:', {
-          currentDate: currentDate.toISOString(),
-          'total eventos recebidos': events.length,
-          'eventos filtrados para o dia': filtered.length,
-          'primeiros 3 eventos recebidos': events.slice(0, 3).map((e) => ({
-            id: e.id,
-            title: e.title,
-            start: e.start.toISOString(),
-            'isSameDay result': isSameDay(e.start, currentDate),
-          })),
-          'eventos filtrados': filtered.map((e) => ({
-            id: e.id,
-            title: e.title,
-            start: e.start.toISOString(),
-          })),
-        });
+      const grupos = new Map<string, { nome: string; evs: CalendarEvent[] }>();
+      for (const e of resto) {
+        const p = profissionalDoEvento(e);
+        const id = p.id ?? SEM_PROFISSIONAL;
+        const g = grupos.get(id) ?? { nome: p.nome, evs: [] };
+        if (!g.nome && p.nome) g.nome = p.nome;
+        g.evs.push(e);
+        grupos.set(id, g);
       }
 
-      return filtered;
+      const varias = grupos.size > 1;
+      const cols: Coluna[] = Array.from(grupos.entries())
+        .map(([id, g]) => ({
+          id,
+          nome:
+            id === SEM_PROFISSIONAL ? 'Sem profissional' : g.nome || 'Equipe',
+          consultas: g.evs.filter((e) => !isCompromissoEvent(e)).length,
+          layout: layoutColunas(g.evs, varias ? 3 : 4),
+        }))
+        .sort((a, b) =>
+          a.id === SEM_PROFISSIONAL
+            ? 1
+            : b.id === SEM_PROFISSIONAL
+              ? -1
+              : a.nome.localeCompare(b.nome, 'pt-BR')
+        );
+
+      return { colunas: cols, fechamentos: fech };
     }, [events, currentDate]);
 
-    // AI dev note: Scroll automático para hora atual quando visualizando hoje
+    const porProfissional = colunas.length > 1;
+    const totalColunas = Math.max(1, colunas.length);
+    const gridColunas = `3.5rem repeat(${totalColunas}, minmax(${
+      porProfissional ? LARGURA_MIN_COLUNA : 0
+    }px, 1fr))`;
+
+    // Hoje: rola até 1h antes de agora
     React.useEffect(() => {
-      if (!isToday(currentDate) || !eventsContainerRef.current) return;
-
-      const now = new Date();
-      const currentHour = now.getHours();
-
-      // Scroll para 1 hora antes da atual (para contexto)
-      const targetHour = Math.max(startHour, currentHour - 1);
-      const scrollPosition = (targetHour - startHour) * hourHeight;
-
-      // Delay para garantir que o DOM foi renderizado
-      setTimeout(() => {
-        eventsContainerRef.current?.scrollTo({
-          top: scrollPosition,
+      if (!isToday(currentDate) || !scrollRef.current) return;
+      const alvo = Math.max(START_HOUR, new Date().getHours() - 1);
+      const t = setTimeout(() => {
+        scrollRef.current?.scrollTo({
+          top: (alvo - START_HOUR) * HOUR_HEIGHT,
           behavior: 'smooth',
         });
       }, 100);
-    }, [currentDate, startHour, hourHeight]);
+      return () => clearTimeout(t);
+    }, [currentDate]);
 
-    // AI dev note: Detecta eventos no MESMO HORÁRIO EXATO (não sobreposição temporal)
-    const getEventsWithOverlapData = (events: CalendarEvent[]) => {
-      return events.map((event) => {
-        // Encontra eventos que COMEÇAM no mesmo horário exato (mesmo minuto)
-        const sameTimeEvents = events.filter((otherEvent) => {
-          if (otherEvent.id === event.id) return false;
-
-          // Comparar apenas o horário de início (timestamp exato)
-          return event.start.getTime() === otherEvent.start.getTime();
-        });
-
-        // Todos os eventos do mesmo horário incluindo o atual
-        const allSameTime = [event, ...sameTimeEvents].sort(
-          (a, b) => a.id.localeCompare(b.id) // Ordenar por ID para consistência
-        );
-
-        return {
-          event,
-          overlapIndex: allSameTime.findIndex((e) => e.id === event.id),
-          totalOverlapping: allSameTime.length,
-        };
-      });
-    };
-
-    // Agrupa eventos por time slot para detectar múltiplos
-    const getEventsPerTimeSlot = (events: CalendarEvent[], time: string) => {
-      const [hours] = time.split(':').map(Number);
-      return events.filter((event) => {
-        const eventHour = event.start.getHours();
-        return eventHour === hours;
-      });
-    };
-
-    // AI dev note: Limita renderização quando há muitos eventos no mesmo slot
-    // Mas sempre mostra pelo menos os 2 primeiros lado a lado
-    const shouldShowEvent = (
-      event: CalendarEvent,
-      allEvents: CalendarEvent[]
-    ): boolean => {
-      // Eventos no mesmo horário exato (mesmo minuto)
-      const sameTimeEvents = allEvents
-        .filter((e) => e.start.getTime() === event.start.getTime())
-        .sort((a, b) => a.id.localeCompare(b.id)); // Ordenar por ID para consistência
-
-      // Se há <= 2 eventos no mesmo horário, mostrar todos
-      if (sameTimeEvents.length <= 2) return true;
-
-      // Se há > 2, mostrar apenas os 2 primeiros (por ordem de ID)
-      const eventIndex = sameTimeEvents.findIndex((e) => e.id === event.id);
-      return eventIndex < 2;
-    };
-
-    const handleTimeSlotClick = (time: string) => {
-      const slotEvents = getEventsPerTimeSlot(dayEvents, time);
-
-      // Se há mais de 2 eventos, abre modal
-      if (slotEvents.length > 2) {
-        setModalState({
-          isOpen: true,
-          date: currentDate,
-          events: slotEvents,
-        });
-        return;
-      }
-
-      onTimeSlotClick?.(time, currentDate);
-    };
-
-    const handleEventClick = (event: CalendarEvent) => {
-      onEventClick?.(event);
-    };
-
-    const closeModal = () => {
+    const handleEventClick = (event: CalendarEvent) => onEventClick?.(event);
+    const closeModal = () =>
       setModalState({ isOpen: false, date: null, events: [] });
-    };
 
     const dayLabel = format(currentDate, "EEEE, dd 'de' MMMM", {
       locale: ptBR,
     });
-
     const isCurrentDay = isToday(currentDate);
-    const eventsWithOverlap = getEventsWithOverlapData(dayEvents);
-
-    // AI dev note: Debug - verificar se className h-full foi passada
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🎨 DayView - Renderização:', {
-        className,
-        'tem h-full': className?.includes('h-full'),
-        'timeSlots count': timeSlots.length,
-        startHour: startHour,
-      });
-    }
-
-    // AI dev note: Debug - verificar eventos com overlap calculado
-    if (
-      process.env.NODE_ENV === 'development' &&
-      eventsWithOverlap.length > 0
-    ) {
-      console.log('🔍 DayView - Eventos com dados de sobreposição:', {
-        'total eventos com overlap': eventsWithOverlap.length,
-        detalhes: eventsWithOverlap.map((e) => ({
-          id: e.event.id,
-          title: e.event.title,
-          start: e.event.start.toISOString(),
-          overlapIndex: e.overlapIndex,
-          totalOverlapping: e.totalOverlapping,
-          'será renderizado': shouldShowEvent(e.event, dayEvents),
-        })),
-      });
-    }
-
-    // AI dev note: Agrupar eventos por horário para detectar quando há mais eventos ocultos
-    const hiddenEventsByTime = useMemo(() => {
-      const map = new Map<string, number>();
-
-      // Agrupar eventos por timestamp exato
-      const eventsByExactTime = new Map<number, CalendarEvent[]>();
-      dayEvents.forEach((event) => {
-        const timestamp = event.start.getTime();
-        if (!eventsByExactTime.has(timestamp)) {
-          eventsByExactTime.set(timestamp, []);
-        }
-        eventsByExactTime.get(timestamp)!.push(event);
-      });
-
-      // Para cada grupo com > 2 eventos, adicionar ao map de ocultos
-      eventsByExactTime.forEach((events, timestamp) => {
-        if (events.length > 2) {
-          const timeKey = format(new Date(timestamp), 'HH:mm'); // Usar minuto exato
-          map.set(timeKey, events.length);
-        }
-      });
-
-      return map;
-    }, [dayEvents]);
 
     return (
       <>
-        {/* Grid diário - estrutura Card igual ao CalendarGrid */}
         <Card className={cn('w-full overflow-hidden', className)}>
           <CardContent className="p-0">
-            {/* Header com dia - responsivo.
-                AI dev note: DS — título roxo-titulo; "Hoje" vira chip teal
-                (superfície), teal nunca como cor de texto */}
+            {/* Header com dia. DS — título roxo-titulo; "Hoje" vira chip teal */}
             <div className="border-b border-border/60 bg-muted/30 p-2 md:p-3">
               <h2 className="flex items-center gap-2 text-sm md:text-base font-semibold capitalize text-roxo-titulo">
                 <span className="md:hidden">
@@ -301,7 +179,7 @@ export const DayView = React.memo<DayViewProps>(
 
             {/* Faixa "dia inteiro": feriado/clínica fechada, férias */}
             {eventosFaixa.length > 0 && (
-              <div className="grid w-full grid-cols-[3rem_1fr] border-b border-border/60 md:grid-cols-[3.5rem_1fr]">
+              <div className="grid w-full grid-cols-[3.5rem_1fr] border-b border-border/60">
                 <div className="flex items-center justify-end border-r border-border/50 pr-1.5 text-right text-xs leading-tight text-muted-foreground">
                   Dia todo
                 </div>
@@ -311,6 +189,7 @@ export const DayView = React.memo<DayViewProps>(
                       <EventCard
                         event={e}
                         variant="week"
+                        umaLinha
                         onClick={handleEventClick}
                         className="h-full"
                       />
@@ -320,144 +199,170 @@ export const DayView = React.memo<DayViewProps>(
               </div>
             )}
 
-            {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
-            <div className="w-full grid grid-cols-[3rem_1fr] md:grid-cols-[3.5rem_1fr] h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">
-              {/* Coluna de horários - estreita, rótulo à direita sobre a linha
-                  da hora (-translate-y-1/2), estilo Google Agenda */}
-              <div className="border-r border-border/50">
-                {timeSlots.map((time, index) => (
-                  <div
-                    key={time}
-                    className="relative border-b border-border/50"
-                    style={{ height: `${hourHeight}px` }}
-                  >
-                    <span
-                      className={cn(
-                        'absolute right-1.5 text-xs text-muted-foreground tabular-nums',
-                        index === 0 ? 'top-0.5' : 'top-0 -translate-y-1/2'
-                      )}
-                    >
-                      {time}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Coluna de eventos */}
+            <div
+              ref={scrollRef}
+              className="h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-auto"
+            >
               <div
-                ref={eventsContainerRef}
-                className="relative"
                 style={{
-                  minHeight: `${timeSlots.length * hourHeight}px`,
+                  minWidth: porProfissional
+                    ? `calc(3.5rem + ${totalColunas * LARGURA_MIN_COLUNA}px)`
+                    : undefined,
                 }}
               >
-                {/* Slots de horário clicáveis */}
-                {timeSlots.map((time) => {
-                  const slotEvents = getEventsPerTimeSlot(dayEvents, time);
-                  // Verificar se algum horário exato dentro deste slot tem eventos ocultos
-                  const hasHiddenEventsInSlot = Array.from(
-                    hiddenEventsByTime.keys()
-                  ).some((exactTime) =>
-                    exactTime.startsWith(time.split(':')[0] + ':')
-                  );
-                  const totalEventsInSlot = hasHiddenEventsInSlot
-                    ? Math.max(
-                        ...Array.from(hiddenEventsByTime.entries())
-                          .filter(([k]) =>
-                            k.startsWith(time.split(':')[0] + ':')
-                          )
-                          .map(([, v]) => v)
-                      )
-                    : 0;
+                {/* Nome de cada profissional no topo da coluna */}
+                {porProfissional && (
+                  <div
+                    className="sticky top-0 z-30 grid border-b border-border/60 bg-card"
+                    style={{ gridTemplateColumns: gridColunas }}
+                  >
+                    <div className="border-r border-border/50" />
+                    {colunas.map((c) => (
+                      <div
+                        key={c.id}
+                        className="flex min-w-0 items-baseline gap-1.5 border-r border-border/50 px-2 py-1.5 last:border-r-0"
+                        title={c.nome}
+                      >
+                        <span className="truncate text-sm font-semibold text-roxo-titulo dark:text-foreground">
+                          {c.nome.split(' ')[0]}
+                        </span>
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {c.consultas === 1
+                            ? '1 consulta'
+                            : `${c.consultas} consultas`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                  return (
-                    <div
-                      key={time}
-                      className={cn(
-                        'border-b border-border/50 hover:bg-primary/5 cursor-pointer',
-                        'transition-colors group relative'
-                      )}
-                      style={{ height: `${hourHeight}px` }}
-                      onClick={() => handleTimeSlotClick(time)}
-                    >
-                      {hasHiddenEventsInSlot && totalEventsInSlot > 2 && (
-                        <div
-                          className="absolute top-0.5 right-0.5 md:top-1 md:right-1 text-xs bg-primary text-primary-foreground px-1.5 md:px-2 py-0.5 rounded-full font-medium z-10 hover:bg-primary/90 transition-colors cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setModalState({
-                              isOpen: true,
-                              date: currentDate,
-                              events: slotEvents,
-                            });
-                          }}
-                          title={`Ver todos os ${totalEventsInSlot} eventos`}
+                <div
+                  className="grid"
+                  style={{ gridTemplateColumns: gridColunas }}
+                >
+                  {/* Coluna de horários: rótulo sobre a linha da hora */}
+                  <div className="border-r border-border/50">
+                    {timeSlots.map((time, index) => (
+                      <div
+                        key={time}
+                        className="relative border-b border-border/50"
+                        style={{ height: HOUR_HEIGHT }}
+                      >
+                        <span
+                          className={cn(
+                            'absolute right-1.5 text-xs text-muted-foreground tabular-nums',
+                            index === 0 ? 'top-0.5' : 'top-0 -translate-y-1/2'
+                          )}
                         >
-                          +{totalEventsInSlot - 2}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                          {time}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
 
-                {/* Compromissos com horário: camada de baixo, largura total */}
-                {compromissosGrade.map((event) => (
-                  <WeekEventBlock
-                    key={event.id}
-                    event={event}
-                    startHour={startHour}
-                    endHour={endHour}
-                    hourHeight={hourHeight}
-                    onClick={handleEventClick}
-                    zIndex={1}
-                    userRole={userRole}
-                  />
-                ))}
+                  <div
+                    className="relative"
+                    style={{
+                      gridColumn: '2 / -1',
+                      height: timeSlots.length * HOUR_HEIGHT,
+                    }}
+                  >
+                    {/* Slots clicáveis (largura toda) */}
+                    {timeSlots.map((time) => (
+                      <div
+                        key={time}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Agendar ${format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })} às ${time}`}
+                        className="border-b border-border/50 hover:bg-primary/5 focus-visible:bg-primary/5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                        style={{ height: HOUR_HEIGHT }}
+                        onClick={() => onTimeSlotClick?.(time, currentDate)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onTimeSlotClick?.(time, currentDate);
+                          }
+                        }}
+                      />
+                    ))}
 
-                {/* Eventos renderizados sobre os slots */}
-                {/* AI dev note: Filtra e renderiza eventos (max 2 por horário exato) */}
-                {eventsWithOverlap
-                  .filter(({ event }) => shouldShowEvent(event, dayEvents))
-                  .map(({ event, overlapIndex, totalOverlapping }) => {
-                    // Ajustar para máximo 2 colunas visíveis; consulta sobre um
-                    // compromisso fica mais estreita para o compromisso aparecer
-                    const sobreCompromisso = compromissosGrade.some(
-                      (c) => c.start < event.end && c.end > event.start
-                    );
-                    const adjustedTotal = Math.max(
-                      Math.min(totalOverlapping, 2),
-                      sobreCompromisso ? 2 : 1
-                    );
-                    const adjustedIndex = Math.min(overlapIndex, 1);
-
-                    return (
-                      <WeekEventBlock
+                    {fechamentos.map((event) => (
+                      <WeekClosureBand
                         key={event.id}
                         event={event}
-                        startHour={startHour}
-                        endHour={endHour}
-                        hourHeight={hourHeight}
+                        startHour={START_HOUR}
+                        endHour={END_HOUR}
+                        hourHeight={HOUR_HEIGHT}
                         onClick={handleEventClick}
-                        overlapIndex={adjustedIndex}
-                        totalOverlapping={adjustedTotal}
-                        zIndex={2}
-                        userRole={userRole}
                       />
-                    );
-                  })}
+                    ))}
 
-                {/* Indicador de tempo atual */}
-                <CurrentTimeIndicator
-                  startHour={startHour}
-                  endHour={endHour}
-                  className="ml-0" // Sem offset pois já está na coluna correta
-                />
+                    {/* Uma coluna por profissional; pointer-events só nos
+                        blocos, para o clique no vazio continuar agendando */}
+                    <div
+                      className="pointer-events-none absolute inset-0 grid"
+                      style={{
+                        gridTemplateColumns: `repeat(${totalColunas}, minmax(0, 1fr))`,
+                      }}
+                    >
+                      {colunas.map((c) => (
+                        <div
+                          key={c.id}
+                          className="relative border-r border-border/50 last:border-r-0"
+                        >
+                          {c.layout.blocos.map((b) => (
+                            <WeekEventBlock
+                              key={b.event.id}
+                              event={b.event}
+                              startHour={START_HOUR}
+                              endHour={END_HOUR}
+                              hourHeight={HOUR_HEIGHT}
+                              onClick={handleEventClick}
+                              coluna={b.coluna}
+                              span={b.span}
+                              colunas={b.colunas}
+                              estreito={b.estreito}
+                              segundaLinha={
+                                porProfissional ? 'servico' : 'profissional'
+                              }
+                              userRole={userRole}
+                            />
+                          ))}
+                          {c.layout.excedentes.map((x) => (
+                            <WeekOverflowBlock
+                              key={`mais-${x.inicio.getTime()}`}
+                              inicio={x.inicio}
+                              fim={x.fim}
+                              quantidade={x.events.length}
+                              coluna={x.coluna}
+                              colunas={x.colunas}
+                              startHour={START_HOUR}
+                              endHour={END_HOUR}
+                              hourHeight={HOUR_HEIGHT}
+                              onClick={() =>
+                                setModalState({
+                                  isOpen: true,
+                                  date: currentDate,
+                                  events: x.events,
+                                })
+                              }
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+
+                    <CurrentTimeIndicator
+                      startHour={START_HOUR}
+                      endHour={END_HOUR}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Modal para eventos múltiplos */}
         {modalState.date && (
           <EventListModal
             isOpen={modalState.isOpen}

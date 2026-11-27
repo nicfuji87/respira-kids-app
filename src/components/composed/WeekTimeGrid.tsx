@@ -12,14 +12,30 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/primitives/card';
 import { CurrentTimeIndicator } from './CurrentTimeIndicator';
-import { WeekEventBlock } from './WeekEventBlock';
+import {
+  WeekEventBlock,
+  WeekOverflowBlock,
+  WeekClosureBand,
+} from './WeekEventBlock';
 import { EventCard } from './EventCard';
 import { EventListModal } from '../domain/calendar';
 import type { CalendarEvent } from '@/types/calendar';
 import { ehEventoDeFaixa, eventoCobreDia } from '@/lib/agenda-bloqueios-api';
+import {
+  ehFechamentoComHorario,
+  layoutColunas,
+  type LayoutColunas,
+} from '@/lib/calendar-layout';
 
-// AI dev note: WeekTimeGrid simplificado e limpo
-// Grid semanal com layout simples e funcional
+// Altura de 1h na grade. 56px: sessão de 30 min (28px) vira bloco de uma linha;
+// de 45 min para cima mostra paciente e profissional.
+const HOUR_HEIGHT = 56;
+// Máximo de blocos lado a lado por dia; acima disso vira "+N"
+const MAX_COLUNAS_SEMANA = 3;
+
+// AI dev note: WeekTimeGrid — grade semanal. Posicionamento em
+// lib/calendar-layout (blocos lado a lado, nunca sobrepostos; "+N" quando passa
+// de MAX_COLUNAS_SEMANA). Fechamento da clínica com horário vira faixa de fundo.
 
 export interface WeekTimeGridProps {
   currentDate: Date;
@@ -80,116 +96,44 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
       return { eventosFaixa: faixa, eventosGrade: grade };
     }, [events]);
 
-    // Agrupa eventos por dia
-    const eventsGroupedByDay = useMemo(() => {
-      const grouped: Record<string, CalendarEvent[]> = {};
+    // Por dia: layout dos blocos + faixas de fechamento da clínica
+    const porDia = useMemo(() => {
+      const grouped: Record<
+        string,
+        { layout: LayoutColunas; fechamentos: CalendarEvent[] }
+      > = {};
 
       weekDays.forEach((day) => {
-        const dayKey = day.toISOString().split('T')[0];
-        grouped[dayKey] = eventosGrade.filter((event) =>
+        const dayKey = format(day, 'yyyy-MM-dd');
+        const doDia = eventosGrade.filter((event) =>
           isSameDay(event.start, day)
         );
+        grouped[dayKey] = {
+          layout: layoutColunas(
+            doDia.filter((e) => !ehFechamentoComHorario(e)),
+            MAX_COLUNAS_SEMANA
+          ),
+          fechamentos: doDia.filter(ehFechamentoComHorario),
+        };
       });
 
       return grouped;
     }, [weekDays, eventosGrade]);
 
-    // AI dev note: Detecção de sobreposições estilo Google Agenda
-    // Eventos se sobrepõem parcialmente, mantendo largura mínima legível
-    // Eventos que começam depois ficam "por cima" (maior z-index)
-    const getEventsWithOverlapData = (dayEvents: CalendarEvent[]) => {
-      if (dayEvents.length === 0) return [];
-
-      // Função para verificar se dois eventos se sobrepõem no tempo
-      const eventsOverlap = (a: CalendarEvent, b: CalendarEvent): boolean => {
-        return a.start < b.end && a.end > b.start;
-      };
-
-      // Ordenar por horário de início
-      const sortedEvents = [...dayEvents].sort(
-        (a, b) => a.start.getTime() - b.start.getTime()
-      );
-
-      // Para cada evento, calcular quantos eventos estão ativos no mesmo momento
-      // e qual a posição horizontal (coluna) do evento
-      const layoutInfo: Map<
-        string,
-        { column: number; maxColumns: number; zIndex: number }
-      > = new Map();
-
-      // Algoritmo de colunas: cada evento ocupa a primeira coluna livre
-      const columns: CalendarEvent[][] = [];
-
-      sortedEvents.forEach((event, eventIndex) => {
-        // Encontrar a primeira coluna onde o evento não sobrepõe nenhum outro
-        let columnIndex = 0;
-        let placed = false;
-
-        while (!placed) {
-          if (!columns[columnIndex]) {
-            columns[columnIndex] = [];
-          }
-
-          // Verificar se há conflito nesta coluna
-          const hasConflict = columns[columnIndex].some((e) =>
-            eventsOverlap(e, event)
-          );
-
-          if (!hasConflict) {
-            columns[columnIndex].push(event);
-            placed = true;
-          } else {
-            columnIndex++;
-          }
-        }
-
-        // Contar quantas colunas são necessárias no momento deste evento
-        let maxCols = 1;
-        for (let i = 0; i < columns.length; i++) {
-          if (columns[i].some((e) => eventsOverlap(e, event))) {
-            maxCols = Math.max(maxCols, i + 1);
-          }
-        }
-        // Incluir a própria coluna do evento
-        maxCols = Math.max(maxCols, columnIndex + 1);
-
-        layoutInfo.set(event.id, {
-          column: columnIndex,
-          maxColumns: maxCols,
-          zIndex: eventIndex + 1, // Eventos posteriores ficam por cima
+    // Semana atual: rola até 1h antes de agora
+    const scrollRef = React.useRef<HTMLDivElement>(null);
+    const semanaTemHoje = weekDays.some((d) => isToday(d));
+    React.useEffect(() => {
+      if (!semanaTemHoje || !scrollRef.current) return;
+      const alvo = Math.max(startHour, new Date().getHours() - 1);
+      const t = setTimeout(() => {
+        scrollRef.current?.scrollTo({
+          top: (alvo - startHour) * HOUR_HEIGHT,
+          behavior: 'smooth',
         });
-      });
-
-      // Segunda passada: recalcular maxColumns considerando todos os vizinhos
-      sortedEvents.forEach((event) => {
-        const info = layoutInfo.get(event.id)!;
-        let trueMaxCols = info.maxColumns;
-
-        // Verificar todos os eventos que sobrepõem este
-        sortedEvents.forEach((other) => {
-          if (other.id !== event.id && eventsOverlap(event, other)) {
-            const otherInfo = layoutInfo.get(other.id)!;
-            trueMaxCols = Math.max(trueMaxCols, otherInfo.column + 1);
-          }
-        });
-
-        layoutInfo.set(event.id, { ...info, maxColumns: trueMaxCols });
-      });
-
-      return dayEvents.map((event) => {
-        const info = layoutInfo.get(event.id) || {
-          column: 0,
-          maxColumns: 1,
-          zIndex: 1,
-        };
-        return {
-          event,
-          overlapIndex: info.column,
-          totalOverlapping: info.maxColumns,
-          zIndex: info.zIndex,
-        };
-      });
-    };
+      }, 100);
+      return () => clearTimeout(t);
+    }, [semanaTemHoje, startHour]);
 
     const handleTimeSlotClick = (time: string, date: Date) => {
       onTimeSlotClick?.(time, date);
@@ -277,6 +221,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                           <EventCard
                             event={e}
                             variant="week"
+                            umaLinha
                             onClick={handleEventClick}
                             className="h-full"
                           />
@@ -304,7 +249,10 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
             )}
 
             {/* Grid de horários - altura e overflow EXATOS do CalendarGrid */}
-            <div className="w-full grid grid-cols-[3rem_repeat(7,minmax(0,1fr))] md:grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] relative h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto">
+            <div
+              ref={scrollRef}
+              className="w-full grid grid-cols-[3rem_repeat(7,minmax(0,1fr))] md:grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] relative content-start h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)] overflow-y-auto"
+            >
               {/* Coluna de horários - altura fixa para consistência com posicionamento de eventos.
                   AI dev note: Rótulo alinhado à direita e deslocado (-translate-y-1/2)
                   para "sentar" sobre a linha da hora, estilo Google Agenda. */}
@@ -312,7 +260,8 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                 {timeSlots.map((time, index) => (
                   <div
                     key={time}
-                    className="relative h-12 border-b border-border/50"
+                    className="relative border-b border-border/50"
+                    style={{ height: HOUR_HEIGHT }}
                   >
                     <span
                       className={cn(
@@ -327,14 +276,18 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
               </div>
 
               {/* Container para colunas dos dias com indicador */}
-              <div className="col-span-7 relative">
+              <div
+                className="col-span-7 relative"
+                style={{ height: timeSlots.length * HOUR_HEIGHT }}
+              >
                 {/* Grid interno para os dias */}
                 <div className="grid grid-cols-7 h-full">
                   {weekDays.map((day) => {
-                    const dayKey = day.toISOString().split('T')[0];
-                    const dayEvents = eventsGroupedByDay[dayKey] || [];
-                    const eventsWithOverlap =
-                      getEventsWithOverlapData(dayEvents);
+                    const dayKey = format(day, 'yyyy-MM-dd');
+                    const { layout, fechamentos } = porDia[dayKey] ?? {
+                      layout: { blocos: [], excedentes: [] },
+                      fechamentos: [],
+                    };
                     const isCurrentDay = isToday(day);
 
                     return (
@@ -345,7 +298,7 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                           isCurrentDay && 'bg-primary/5'
                         )}
                         style={{
-                          minHeight: `${timeSlots.length * 48}px`, // 48px no mobile (h-12)
+                          minHeight: `${timeSlots.length * HOUR_HEIGHT}px`,
                         }}
                       >
                         {/* Slots de horário clicáveis - altura fixa para consistência.
@@ -357,7 +310,8 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                             role="button"
                             tabIndex={0}
                             aria-label={`Agendar ${format(day, "EEEE, d 'de' MMMM", { locale: ptBR })} às ${time}`}
-                            className="h-12 border-b border-border/50 hover:bg-primary/5 focus-visible:bg-primary/5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                            style={{ height: HOUR_HEIGHT }}
+                            className="border-b border-border/50 hover:bg-primary/5 focus-visible:bg-primary/5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                             onClick={() => handleTimeSlotClick(time, day)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' || e.key === ' ') {
@@ -368,33 +322,56 @@ export const WeekTimeGrid = React.memo<WeekTimeGridProps>(
                           />
                         ))}
 
-                        {/* Eventos renderizados sobre os slots */}
-                        {eventsWithOverlap.map(
-                          ({
-                            event,
-                            overlapIndex,
-                            totalOverlapping,
-                            zIndex,
-                          }) => {
-                            // AI dev note: Altura fixa de 48px (h-12) consistente com slots
-                            const hourHeight = 48;
+                        {fechamentos.map((event) => (
+                          <WeekClosureBand
+                            key={event.id}
+                            event={event}
+                            startHour={startHour}
+                            endHour={endHour}
+                            hourHeight={HOUR_HEIGHT}
+                            onClick={handleEventClick}
+                          />
+                        ))}
 
-                            return (
-                              <WeekEventBlock
-                                key={event.id}
-                                event={event}
-                                startHour={startHour}
-                                endHour={endHour}
-                                hourHeight={hourHeight}
-                                onClick={handleEventClick}
-                                overlapIndex={overlapIndex}
-                                totalOverlapping={totalOverlapping}
-                                zIndex={zIndex}
-                                userRole={userRole}
-                              />
-                            );
-                          }
-                        )}
+                        {/* Blocos lado a lado (pointer-events só nos blocos,
+                            para o clique no vazio continuar criando evento) */}
+                        <div className="pointer-events-none absolute inset-0">
+                          {layout.blocos.map((b) => (
+                            <WeekEventBlock
+                              key={b.event.id}
+                              event={b.event}
+                              startHour={startHour}
+                              endHour={endHour}
+                              hourHeight={HOUR_HEIGHT}
+                              onClick={handleEventClick}
+                              coluna={b.coluna}
+                              span={b.span}
+                              colunas={b.colunas}
+                              estreito={b.estreito}
+                              userRole={userRole}
+                            />
+                          ))}
+                          {layout.excedentes.map((x) => (
+                            <WeekOverflowBlock
+                              key={`mais-${x.inicio.getTime()}`}
+                              inicio={x.inicio}
+                              fim={x.fim}
+                              quantidade={x.events.length}
+                              coluna={x.coluna}
+                              colunas={x.colunas}
+                              startHour={startHour}
+                              endHour={endHour}
+                              hourHeight={HOUR_HEIGHT}
+                              onClick={() =>
+                                setModalState({
+                                  isOpen: true,
+                                  date: day,
+                                  events: x.events,
+                                })
+                              }
+                            />
+                          ))}
+                        </div>
                       </div>
                     );
                   })}

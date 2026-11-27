@@ -19,7 +19,11 @@ export { CalendarFilters } from './CalendarFilters';
 export { DatePicker } from './DatePicker';
 export { TimeSlot } from './TimeSlot';
 export { EventCard } from './EventCard';
-export { WeekEventBlock } from './WeekEventBlock';
+export {
+  WeekEventBlock,
+  WeekOverflowBlock,
+  WeekClosureBand,
+} from './WeekEventBlock';
 export { WeekTimeGrid } from './WeekTimeGrid';
 export { CurrentTimeIndicator } from './CurrentTimeIndicator';
 
