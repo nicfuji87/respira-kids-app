@@ -90,14 +90,42 @@ const padrao =
   d.acao === 'nao_suportado'
     ? 'Por aqui eu consigo agendar, gerar a cobrança das sessões, cuidar da nota fiscal e contar como está o paciente.'
     : 'Me confirma o dia, o horário e com qual fisio?';
-return [
-  {
-    json: {
-      texto: String(d.mensagem || padrao).trim(),
-      status: STATUS[d.acao] || 'pergunta',
+const texto = String(d.mensagem || padrao).trim();
+// 27/11/2026 (caso atestado): pedido que o @ju não faz, escrito na conversa de uma família, não vai para a família.
+// A resposta vai só para o 🔔 e o @ju é apagado da conversa (igual ao agendamento recusado).
+const rec = $('Recebe').first().json;
+const ctx = $('Contexto').first().json;
+const naFamilia =
+  rec.canal !== 'chatwoot' &&
+  rec.canal !== 'recado' &&
+  !ctx.conversa_com &&
+  !String(rec.wa_chatid || '').endsWith('@g.us');
+if (d.acao === 'nao_suportado' && naFamilia) {
+  const tel = String(rec.wa_chatid || '')
+    .split('@')[0]
+    .replace(/^55(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3');
+  const cmd = String(ctx.comando || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+  return [
+    {
+      json: {
+        so_equipe: true,
+        apagar_comando: true,
+        status: 'nao_suportado',
+        texto:
+          '⚠️ *@ju não faz esse pedido*\n' +
+          tel +
+          (cmd ? '\nPedido: ' + cmd : '') +
+          '\n' +
+          texto +
+          '\n_A família não viu esta mensagem; o @ju foi apagado da conversa._',
+      },
     },
-  },
-];
+  ];
+}
+return [{ json: { texto, status: STATUS[d.acao] || 'pergunta' } }];
 
 // ── Nó "Resposta da execução" (cobrar e nota, depois da edge ju-comando) ─────────────────────────
 // Texto montado só com o que a edge devolveu (nada da IA). A família também lê.
