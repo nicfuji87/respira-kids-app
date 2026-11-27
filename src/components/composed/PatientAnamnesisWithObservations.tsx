@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Lightbulb } from 'lucide-react';
+import { Bot, FileText, Lightbulb } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -14,6 +14,7 @@ import {
 } from '@/components/primitives/tabs';
 import { PatientAnamnesis } from './PatientAnamnesis';
 import { PatientObservations } from './PatientObservations';
+import { AnotacoesJu } from './AnotacoesJu';
 import { cn } from '@/lib/utils';
 
 // AI dev note: PatientAnamnesisWithObservations - Component Composed com abas
@@ -42,9 +43,9 @@ export const PatientAnamnesisWithObservations =
       className,
     }) => {
       const actualId = patientId || personId;
-      const [activeTab, setActiveTab] = useState<'anamnese' | 'observacoes'>(
-        'anamnese'
-      );
+      const [activeTab, setActiveTab] = useState<
+        'anamnese' | 'observacoes' | 'ju'
+      >('anamnese');
 
       if (!actualId) {
         return null;
@@ -62,11 +63,11 @@ export const PatientAnamnesisWithObservations =
             <Tabs
               value={activeTab}
               onValueChange={(value) =>
-                setActiveTab(value as 'anamnese' | 'observacoes')
+                setActiveTab(value as 'anamnese' | 'observacoes' | 'ju')
               }
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
                 <TabsTrigger value="anamnese" className="gap-2">
                   <FileText className="h-4 w-4" />
                   <span className="hidden sm:inline">Anamnese</span>
@@ -75,7 +76,12 @@ export const PatientAnamnesisWithObservations =
                 <TabsTrigger value="observacoes" className="gap-2">
                   <Lightbulb className="h-4 w-4" />
                   <span className="hidden sm:inline">Observações</span>
-                  <span className="sm:hidden">Observações</span>
+                  <span className="sm:hidden">Obs.</span>
+                </TabsTrigger>
+                <TabsTrigger value="ju" className="gap-2">
+                  <Bot className="h-4 w-4" />
+                  <span className="hidden sm:inline">Para a Ju</span>
+                  <span className="sm:hidden">Ju</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -107,6 +113,10 @@ export const PatientAnamnesisWithObservations =
                     className="border-0 shadow-none p-0"
                   />
                 </div>
+              </TabsContent>
+
+              <TabsContent value="ju" className="mt-0">
+                <AnotacoesJu pessoaId={actualId} />
               </TabsContent>
             </Tabs>
           </CardContent>
