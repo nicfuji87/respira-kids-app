@@ -355,6 +355,28 @@ export async function fetchLinkPublico(
   }
 }
 
+// === LINK QUE SUBSTITUIU O ANTIGO (por token) ===
+// AI dev note: quando a recepção gera um link novo, o antigo é cancelado e a
+// família que toca na mensagem antiga caía em "link não disponível" (visto
+// em 27/11/2026). A RPC devolve o token do ÚNICO link ativo da mesma
+// família criado depois — com 0 ou 2+ candidatos devolve null e a página
+// mantém o aviso. Falha aqui nunca bloqueia: só deixa de redirecionar.
+export async function fetchLinkSubstituto(
+  token: string
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.rpc(
+      'get_pagamento_link_substituto',
+      { p_token: token }
+    );
+    if (error || typeof data !== 'string' || !data) return null;
+    return data;
+  } catch (error) {
+    console.error('❌ Erro ao buscar link substituto:', error);
+    return null;
+  }
+}
+
 // === CONFIRMAR FORMA (cliente) ===
 export async function confirmarPagamento(
   token: string,
