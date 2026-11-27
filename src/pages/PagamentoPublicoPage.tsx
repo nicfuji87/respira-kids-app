@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Loader2,
   AlertTriangle,
@@ -24,7 +24,11 @@ import { Button } from '@/components/primitives/button';
 import { Skeleton } from '@/components/primitives/skeleton';
 import { useToast } from '@/components/primitives/use-toast';
 import { cn } from '@/lib/utils';
-import { fetchLinkPublico, confirmarPagamento } from '@/lib/payment-links-api';
+import {
+  fetchLinkPublico,
+  fetchLinkSubstituto,
+  confirmarPagamento,
+} from '@/lib/payment-links-api';
 import type {
   PagamentoLinkPublico,
   FormaPagamento,
@@ -64,6 +68,7 @@ type Selecao = { tipo: 'pix' } | { tipo: 'credit_card'; parcelas: number };
 
 export const PagamentoPublicoPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   const [link, setLink] = useState<PagamentoLinkPublico | null>(null);
@@ -89,17 +94,32 @@ export const PagamentoPublicoPage: React.FC = () => {
     window.setTimeout(() => setCtaHighlight(false), 1500);
   }, []);
 
-  const load = useCallback(async (t: string) => {
-    setIsLoading(true);
-    setError(null);
-    const res = await fetchLinkPublico(t);
-    if (!res.success || !res.data) {
-      setError(res.error || 'Link de pagamento não encontrado');
-    } else {
-      setLink(res.data);
-    }
-    setIsLoading(false);
-  }, []);
+  const load = useCallback(
+    async (t: string) => {
+      setIsLoading(true);
+      setError(null);
+      setLink(null);
+      const res = await fetchLinkPublico(t);
+
+      // Link cancelado porque a recepção gerou outro: abre direto o novo, em vez
+      // de mostrar "não está mais disponível" para quem tocou na mensagem antiga.
+      if (!res.success || !res.data || res.data.status === 'cancelado') {
+        const novoToken = await fetchLinkSubstituto(t);
+        if (novoToken && novoToken !== t) {
+          navigate(`/pagamento/${novoToken}`, { replace: true });
+          return;
+        }
+      }
+
+      if (!res.success || !res.data) {
+        setError(res.error || 'Link de pagamento não encontrado');
+      } else {
+        setLink(res.data);
+      }
+      setIsLoading(false);
+    },
+    [navigate]
+  );
 
   useEffect(() => {
     if (!token) {
