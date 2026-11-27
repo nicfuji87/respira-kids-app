@@ -457,3 +457,28 @@ nenhuma agendada ainda)**
   "fisioterapia bebê", "fisioterapia para bebê", "fisioterapia pediátrica", "fisioterapia infantil
   brasília" etc. Comparar 14–30 dias: conversas qualificadas, convênio/fora do escopo e pacientes do
   grupo. Para desfazer: o mesmo script com ACAO = 'ATIVAR'. Script "Campanhas" restaurado.
+- 27/11 — **análise (só leitura), 26/10–27/11:** Respiratória R$ 379, 12 conversas, 4 agendaram,
+  3 pacientes confirmadas, R$ 2.220 realizados. Desenvolvimento R$ 948 (70% do gasto), 28
+  conversas, 2 agendaram, 0 confirmadas (Isaac com 3 sessões sem baixa, R$ 1.770 a conferir). Marca
+  R$ 31, 2 pacientes. No Desenvolvimento, 21 de 28 conversas pararam no 1º contato, quase sempre
+  depois do valor da avaliação (R$ 370) ou de "particular, sem convênio" (8 de 28 citaram convênio).
+  Leitura da conta (14 dias): Respiratória IS 80%, perde 0,5% por verba e 19% por classificação;
+  Desenvolvimento IS 56%, perde 5% por verba e 39% por classificação.
+- 27/11 12:37 — **foco na Respiratória** (`ajustes-2026-11-27-foco-respiratoria.js`, decisão do
+  dono: serviço mais urgente para a família; motora reduzida até a estratégia amadurecer). Site PR #30
+  publicado antes (página com #catarro, #bronquiolite, #pos-internacao e R$ 260). Executado e
+  conferido, 63 alterações, 0 erros:
+  - orçamentos: Desenvolvimento R$ 35 → 15/dia, Respiratória R$ 20 → 35/dia (total 60 → 55);
+  - Desenvolvimento: grupos "Fisioterapia pediátrica" e "Torcicolo congênito" pausados; palavras
+    genéricas ou informativas pausadas em "Desenvolvimento motor" (fisioterapia motora, bebê não
+    anda/engatinha/senta, atraso motor…) e "Assimetria craniana" ([plagiocefalia], [braquicefalia],
+    [assimetria craniana]). Ficam estimulação precoce, prematuro, plagiocefalia/assimetria + bebê;
+  - Respiratória: genéricas pausadas no grupo geral (fisioterapia respiratória, fisioterapeuta
+    respiratório, clínica de fisioterapia respiratória, … brasília, perto de mim, asa sul). Ficam as
+    15 com infantil/pediátrica/bebê/criança;
+  - grupos novos **ativos**: A "Catarro e secreções", B "Bronquiolite em bebês" (o antigo pausado,
+    renomeado e limpo), C "Pós-pneumonia e pós-internação", com anúncio novo e palavras (em revisão
+    do Google). Título "Técnica Suave, Sem Bater" trocado por "Atendimento a Prematuros" e descrição
+    sem "bater nas costas" (o dono não gosta da expressão). Negativa "sibilância" no grupo geral.
+  Script "Campanhas" restaurado e conferido. Reavaliar em 14 dias: conversas e agendamentos por
+  grupo da Respiratória, gasto real (a verba só é usada se houver busca) e o que sobrou da motora.
